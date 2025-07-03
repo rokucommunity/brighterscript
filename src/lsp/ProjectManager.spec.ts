@@ -126,7 +126,11 @@ describe('ProjectManager', () => {
         it('finds bsconfig in a folder', async () => {
             fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, '');
             await manager.syncProjects([workspaceSettings]);
-            expect(manager.projects[0].projectPath).to.eql(s`${rootDir}`);
+            expect(
+                manager.projects.map(x => x.projectKey).sort()
+            ).to.eql([
+                s`${rootDir}/bsconfig.json`
+            ]);
         });
 
         it('finds bsconfig at root and also in subfolder', async () => {
@@ -134,10 +138,10 @@ describe('ProjectManager', () => {
             fsExtra.outputFileSync(`${rootDir}/subdir/bsconfig.json`, '');
             await manager.syncProjects([workspaceSettings]);
             expect(
-                manager.projects.map(x => x.projectPath).sort()
+                manager.projects.map(x => x.projectKey).sort()
             ).to.eql([
-                s`${rootDir}`,
-                s`${rootDir}/subdir`
+                s`${rootDir}/bsconfig.json`,
+                s`${rootDir}/subdir/bsconfig.json`
             ]);
         });
 
@@ -149,9 +153,9 @@ describe('ProjectManager', () => {
                 excludePatterns: ['**/subdir/**/*']
             }]);
             expect(
-                manager.projects.map(x => x.projectPath)
+                manager.projects.map(x => x.projectKey)
             ).to.eql([
-                s`${rootDir}`
+                s`${rootDir}/bsconfig.json`
             ]);
         });
 
@@ -159,7 +163,7 @@ describe('ProjectManager', () => {
             fsExtra.outputFileSync(`${rootDir}/subdir/manifest`, '');
             await manager.syncProjects([workspaceSettings]);
             expect(
-                manager.projects.map(x => x.projectPath)
+                manager.projects.map(x => x.projectKey)
             ).to.eql([
                 s`${rootDir}`
             ]);
@@ -176,7 +180,7 @@ describe('ProjectManager', () => {
                 }
             }]);
             expect(
-                manager.projects.map(x => x.projectPath)
+                manager.projects.map(x => x.projectKey)
             ).to.eql([
                 s`${rootDir}`
             ]);
@@ -222,7 +226,7 @@ describe('ProjectManager', () => {
             fsExtra.outputFileSync(`${rootDir}/subdir/source/main.brs`, '');
             await manager.syncProjects([workspaceSettings]);
             expect(
-                manager.projects.map(x => x.projectPath)
+                manager.projects.map(x => x.projectKey)
             ).to.eql([
                 s`${rootDir}/subdir`
             ]);
@@ -233,18 +237,18 @@ describe('ProjectManager', () => {
             fsExtra.outputFileSync(`${rootDir}/subdir2/bsconfig.json`, '');
             await manager.syncProjects([workspaceSettings]);
             expect(
-                manager.projects.map(x => x.projectPath).sort()
+                manager.projects.map(x => x.projectKey).sort()
             ).to.eql([
-                s`${rootDir}/subdir1`,
-                s`${rootDir}/subdir2`
+                s`${rootDir}/subdir1/bsconfig.json`,
+                s`${rootDir}/subdir2/bsconfig.json`
             ]);
             fsExtra.removeSync(`${rootDir}/subdir1/bsconfig.json`);
 
             await manager.syncProjects([workspaceSettings]);
             expect(
-                manager.projects.map(x => x.projectPath).sort()
+                manager.projects.map(x => x.projectKey).sort()
             ).to.eql([
-                s`${rootDir}/subdir2`
+                s`${rootDir}/subdir2/bsconfig.json`
             ]);
         });
 
@@ -253,18 +257,72 @@ describe('ProjectManager', () => {
             fsExtra.outputFileSync(`${rootDir}/subdir2/bsconfig.json`, '');
             await manager.syncProjects([workspaceSettings]);
             expect(
-                manager.projects.map(x => x.projectPath).sort()
+                manager.projects.map(x => x.projectKey).sort()
             ).to.eql([
-                s`${rootDir}/subdir1`,
-                s`${rootDir}/subdir2`
+                s`${rootDir}/subdir1/bsconfig.json`,
+                s`${rootDir}/subdir2/bsconfig.json`
             ]);
 
             await manager.syncProjects([workspaceSettings]);
             expect(
-                manager.projects.map(x => x.projectPath).sort()
+                manager.projects.map(x => x.projectKey).sort()
             ).to.eql([
-                s`${rootDir}/subdir1`,
-                s`${rootDir}/subdir2`
+                s`${rootDir}/subdir1/bsconfig.json`,
+                s`${rootDir}/subdir2/bsconfig.json`
+            ]);
+        });
+
+        it('uses nonstandard json naming when specified in projects array', async () => {
+            fsExtra.outputFileSync(`${rootDir}/project1/testBrighterScriptConfig.json`, '');
+            fsExtra.outputFileSync(`${rootDir}/project1/bsconfig.json`, '');
+            await manager.syncProjects([{
+                ...workspaceSettings,
+                projects: [
+                    { path: s`${rootDir}/project1/testBrighterScriptConfig.json` }
+                ]
+            }]);
+
+            //we should NOT have found the `project1/bsconfig.json` file because it's not in the projects array
+            expect(
+                manager.projects.map(x => x.projectKey)
+            ).to.eql([
+                s`${rootDir}/project1/testBrighterScriptConfig.json`
+            ]);
+        });
+
+        it('supports pointing to a folder AND a bsconfig.json in projects array', async () => {
+            fsExtra.outputFileSync(`${rootDir}/project1/testBrighterScriptConfig.json`, '');
+            await manager.syncProjects([{
+                ...workspaceSettings,
+                projects: [
+                    { path: s`${rootDir}/project1/testBrighterScriptConfig.json` },
+                    { path: s`${rootDir}/project1` }
+                ]
+            }]);
+
+            expect(
+                manager.projects.map(x => x.projectKey).sort()
+            ).to.eql([
+                s`${rootDir}/project1`,
+                s`${rootDir}/project1/testBrighterScriptConfig.json`
+            ]);
+        });
+
+        it('supports project with AND without bsconfig.json in same location in projects array', async () => {
+            fsExtra.outputFileSync(`${rootDir}/project1/bsconfig.json`, '');
+            await manager.syncProjects([{
+                ...workspaceSettings,
+                projects: [
+                    { path: s`${rootDir}/project1` },
+                    { path: s`${rootDir}/project1/bsconfig.json` }
+                ]
+            }]);
+
+            expect(
+                manager.projects.map(x => x.projectKey).sort()
+            ).to.eql([
+                s`${rootDir}/project1`,
+                s`${rootDir}/project1/bsconfig.json`
             ]);
         });
     });
@@ -638,15 +696,13 @@ describe('ProjectManager', () => {
     });
 
     describe('getProject', () => {
-        it('uses .projectPath if param is not a string', async () => {
+        it('uses .projectKey if param is not a string', async () => {
             await manager.syncProjects([workspaceSettings]);
             expect(
                 manager['getProject']({
-                    projectPath: rootDir
-                })
-            ).to.include({
-                projectPath: rootDir
-            });
+                    projectKey: rootDir
+                }).projectKey
+            ).to.eql(rootDir);
         });
     });
 
@@ -655,15 +711,22 @@ describe('ProjectManager', () => {
             await manager.syncProjects([workspaceSettings]);
 
             await manager['createAndActivateProject']({
-                projectPath: rootDir
-            } as any);
-            expect(manager.projects).to.be.length(1);
+                projectKey: rootDir,
+                projectDir: rootDir,
+                workspaceFolder: rootDir,
+                bsconfigPath: undefined
+            });
+            expect(manager.projects.map(x => x.projectKey)).to.eql([
+                s`${rootDir}`
+            ]);
         });
 
         it('uses given projectNumber', async () => {
             await manager['createAndActivateProject']({
-                projectPath: rootDir,
+                projectKey: rootDir,
+                projectDir: rootDir,
                 workspaceFolder: rootDir,
+                bsconfigPath: undefined,
                 projectNumber: 3
             });
             expect(manager.projects[0].projectNumber).to.eql(3);
@@ -677,7 +740,8 @@ describe('ProjectManager', () => {
             let error;
             try {
                 await manager['createAndActivateProject']({
-                    projectPath: rootDir,
+                    projectKey: rootDir,
+                    projectDir: rootDir,
                     workspaceFolder: rootDir,
                     bsconfigPath: 'subdir1/brsconfig.json'
                 });

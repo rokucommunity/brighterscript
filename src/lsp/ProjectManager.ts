@@ -19,6 +19,7 @@ import { createLogger } from '../logging';
 import { Cache } from '../Cache';
 import { ActionQueue } from './ActionQueue';
 import * as fsExtra from 'fs-extra';
+import type { BrightScriptProjectConfiguration } from '../LanguageServer';
 
 const FileChangeTypeLookup = Object.entries(FileChangeType).reduce((acc, [key, value]) => {
     acc[value] = key;
@@ -140,7 +141,7 @@ export class ProjectManager {
                 if (this.getStandaloneProject(action.srcPath, false)) {
                     this.logger.debug(
                         `flushDocumentChanges: removing standalone project because the following normal projects handled the file: '${action.srcPath}', projects:`,
-                        normalProjectsThatHandledThisFile.map(x => x.project.projectIdentifier)
+                        normalProjectsThatHandledThisFile.map(x => util.getProjectLogName(x.project))
                     );
                     this.removeStandaloneProject(action.srcPath);
                 }
@@ -184,10 +185,13 @@ export class ProjectManager {
 
         const projectNumber = ProjectManager.projectNumberSequence++;
         const rootDir = path.join(__dirname, `standalone-project-${projectNumber}`);
-        const projectOptions = {
+        const projectConfig: ProjectConfig = {
             //these folders don't matter for standalone projects
             workspaceFolder: rootDir,
-            projectPath: rootDir,
+            projectDir: rootDir,
+            //there's no bsconfig.json for standalone projects, so projectKey is the same as the dir
+            projectKey: rootDir,
+            bsconfigPath: undefined,
             enableThreading: false,
             projectNumber: projectNumber,
             files: [{
@@ -196,12 +200,12 @@ export class ProjectManager {
             }]
         };
 
-        const project = this.constructProject(projectOptions) as StandaloneProject;
+        const project = this.constructProject(projectConfig) as StandaloneProject;
         project.srcPath = srcPath;
         project.isStandaloneProject = true;
 
         this.standaloneProjects.set(srcPath, project);
-        await this.activateProject(project, projectOptions);
+        await this.activateProject(project, projectConfig);
     }
 
     private removeStandaloneProject(srcPath: string) {
@@ -279,9 +283,12 @@ export class ProjectManager {
             //build a list of unique projects across all workspace folders
             let projectConfigs = (await Promise.all(
                 workspaceConfigs.map(async workspaceConfig => {
-                    const projectPaths = await this.getProjectPaths(workspaceConfig);
-                    return projectPaths.map(projectPath => ({
-                        projectPath: s`${projectPath}`,
+                    const discoveredProjects = await this.discoverProjectsForWorkspace(workspaceConfig);
+                    return discoveredProjects.map<ProjectConfig>(discoveredProject => ({
+                        name: discoveredProject?.name,
+                        projectKey: s`${discoveredProject.bsconfigPath ?? discoveredProject.dir}`,
+                        projectDir: s`${discoveredProject.dir}`,
+                        bsconfigPath: discoveredProject?.bsconfigPath,
                         workspaceFolder: s`${workspaceConfig.workspaceFolder}`,
                         excludePatterns: workspaceConfig.excludePatterns,
                         enableThreading: workspaceConfig.languageServer.enableThreading
@@ -289,26 +296,27 @@ export class ProjectManager {
                 })
             )).flat(1);
 
+            //TODO handle when a project came from the workspace config .projects array (it should probably never be filtered out)
             //filter the project paths to only include those that are allowed by the path filterer
-            projectConfigs = this.pathFilterer.filter(projectConfigs, x => x.projectPath);
+            projectConfigs = this.pathFilterer.filter(projectConfigs, x => x.projectKey);
 
             //delete projects not represented in the list
             for (const project of this.projects) {
                 //we can't find this existing project in our new list, so scrap it
-                if (!projectConfigs.find(x => x.projectPath === project.projectPath)) {
+                if (!projectConfigs.find(x => x.projectKey === project.projectKey)) {
                     this.removeProject(project);
                 }
             }
 
             // skip projects we already have (they're already loaded...no need to reload them)
             projectConfigs = projectConfigs.filter(x => {
-                return !this.hasProject(x.projectPath);
+                return !this.hasProject(x);
             });
 
-            //dedupe by project path
+            //dedupe by projectKey
             projectConfigs = [
                 ...projectConfigs.reduce(
-                    (acc, x) => acc.set(x.projectPath, x),
+                    (acc, x) => acc.set(x.projectKey, x),
                     new Map<string, typeof projectConfigs[0]>()
                 ).values()
             ];
@@ -440,7 +448,7 @@ export class ProjectManager {
      * Given a project, forcibly reload it by removing it and re-adding it
      */
     private async reloadProject(project: LspProject) {
-        this.logger.log('Reloading project', { projectPath: project.projectPath });
+        this.logger.log('Reloading project', { projectPath: project.projectKey });
 
         this.removeProject(project);
         project = await this.createAndActivateProject(project.activateOptions);
@@ -645,10 +653,56 @@ export class ProjectManager {
      * Scan a given workspace for all `bsconfig.json` files. If at least one is found, then only folders who have bsconfig.json are returned.
      * If none are found, then the workspaceFolder itself is treated as a project
      */
-    private async getProjectPaths(workspaceConfig: WorkspaceConfig) {
+    private async discoverProjectsForWorkspace(workspaceConfig: WorkspaceConfig): Promise<DiscoveredProject[]> {
+        //config may provide a list of project paths. If we have these, no other discovery is permitted
+        if (Array.isArray(workspaceConfig.projects)) {
+            this.logger.debug(`Using project paths from workspace config`, workspaceConfig.projects);
+            const projectConfigs = workspaceConfig.projects.reduce<DiscoveredProject[]>((acc, project) => {
+                //skip this project if it's disabled or we don't have a path
+                if (project.disabled || !project.path) {
+                    return acc;
+                }
+                //ensure the project path is absolute
+                if (!path.isAbsolute(project.path)) {
+                    project.path = path.resolve(workspaceConfig.workspaceFolder, project.path);
+                }
+
+                //skip this project if the path does't exist
+                if (!fsExtra.existsSync(project.path)) {
+                    return acc;
+                }
+
+                //if the project is a directory
+                if (fsExtra.statSync(project.path).isDirectory()) {
+                    acc.push({
+                        name: project.name,
+                        bsconfigPath: undefined,
+                        dir: project.path
+                    });
+                    //it's a path to a file (hopefully bsconfig.json)
+                } else {
+                    acc.push({
+                        name: project.name,
+                        dir: path.dirname(project.path),
+                        bsconfigPath: project.path
+                    });
+                }
+                return acc;
+            }, []);
+
+            //if we didn't find any valid project paths, log a warning. having zero projects is acceptable, it typically means the user wanted to disable discovery or
+            //disabled all their projects on purpose
+            if (projectConfigs.length === 0) {
+                this.logger.warn(`No valid project paths found in workspace config`, JSON.stringify(workspaceConfig.projects, null, 4));
+            }
+            return projectConfigs;
+        }
+
         //automatic discovery disabled?
         if (!workspaceConfig.languageServer.enableDiscovery) {
-            return [workspaceConfig.workspaceFolder];
+            return [{
+                dir: workspaceConfig.workspaceFolder
+            }];
         }
 
         //get the list of exclude patterns, negate them so they actually work like excludes), and coerce to forward slashes since that's what fast-glob expects
@@ -666,7 +720,10 @@ export class ProjectManager {
 
         //if we found at least one bsconfig.json, then ALL projects must have a bsconfig.json.
         if (files.length > 0) {
-            return files.map(file => s`${path.dirname(file)}`);
+            return files.map(file => ({
+                dir: s`${path.dirname(file)}`,
+                bsconfigPath: s`${file}`
+            }));
         }
 
         //look for roku project folders
@@ -685,7 +742,7 @@ export class ProjectManager {
                     ...excludePatterns
                 ], manifestDir);
                 if (files.length > 0) {
-                    return manifestDir;
+                    return s`${manifestDir}`;
                 }
             })
             //throw out nulls
@@ -695,20 +752,23 @@ export class ProjectManager {
         rokuLikeDirs = this.pathFilterer.filter(rokuLikeDirs, srcPath => srcPath);
 
         if (rokuLikeDirs.length > 0) {
-            return rokuLikeDirs;
+            return rokuLikeDirs.map(file => ({
+                dir: file
+            }));
         }
 
         //treat the workspace folder as a brightscript project itself
-        return [workspaceConfig.workspaceFolder];
+        return [{
+            dir: workspaceConfig.workspaceFolder
+        }];
     }
 
     /**
      * Returns true if we have this project, or false if we don't
-     * @param projectPath path to the project
      * @returns true if the project exists, or false if it doesn't
      */
-    private hasProject(projectPath: string) {
-        return !!this.getProject(projectPath);
+    private hasProject(config: Partial<ProjectConfig>) {
+        return !!this.getProject(config);
     }
 
     /**
@@ -716,20 +776,23 @@ export class ProjectManager {
      * @param param path to the project or an obj that has `projectPath` prop
      * @returns a project, or undefined if no project was found
      */
-    private getProject(param: string | { projectPath: string }) {
-        const projectPath = util.standardizePath(
-            (typeof param === 'string') ? param : param.projectPath
+    private getProject(param: string | Partial<ProjectConfig>) {
+        const projectKey = util.standardizePath(
+            (typeof param === 'string') ? param : (param?.projectKey ?? param?.bsconfigPath ?? param?.projectDir)
         );
-        return this.projects.find(x => x.projectPath === projectPath);
+        if (!projectKey) {
+            return;
+        }
+        return this.projects.find(x => x.projectKey === projectKey);
     }
 
     /**
      * Remove a project from the language server
      */
     private removeProject(project: LspProject) {
-        const idx = this.projects.findIndex(x => x.projectPath === project?.projectPath);
+        const idx = this.projects.findIndex(x => x.projectKey === project?.projectKey);
         if (idx > -1) {
-            this.logger.log('Removing project', { projectPath: project.projectPath, projectNumber: project.projectNumber });
+            this.logger.log('Removing project', { projectKey: project.projectKey, projectNumber: project.projectNumber });
             this.projects.splice(idx, 1);
         }
         //anytime we remove a project, we should emit an event that clears all of its diagnostics
@@ -754,7 +817,8 @@ export class ProjectManager {
         if (config.projectNumber !== undefined) {
             return config.projectNumber;
         }
-        return ProjectManager.projectNumberCache.getOrAdd(`${s(config.projectPath)}-${s(config.workspaceFolder)}-${config.bsconfigPath}`, () => {
+        const key = s`${config.projectKey}` + '-' + s`${config.workspaceFolder}` + '-' + s`${config.bsconfigPath}`;
+        return ProjectManager.projectNumberCache.getOrAdd(key, () => {
             return ProjectManager.projectNumberSequence++;
         });
     }
@@ -765,24 +829,21 @@ export class ProjectManager {
      */
     private constructProject(config: ProjectConfig): LspProject {
         //skip this project if we already have it
-        if (this.hasProject(config.projectPath)) {
-            return this.getProject(config.projectPath);
+        if (this.hasProject(config)) {
+            return this.getProject(config);
         }
 
         config.projectNumber = this.getProjectNumber(config);
-        const projectIdentifier = `prj${config.projectNumber}`;
 
         let project: LspProject = config.enableThreading
             ? new WorkerThreadProject({
-                logger: this.logger.createLogger(),
-                projectIdentifier: projectIdentifier
+                logger: this.logger.createLogger()
             })
             : new Project({
-                logger: this.logger.createLogger(),
-                projectIdentifier: projectIdentifier
+                logger: this.logger.createLogger()
             });
 
-        this.logger.log(`Created project #${config.projectNumber} for: "${config.projectPath}" (${config.enableThreading ? 'worker thread' : 'main thread'})`);
+        this.logger.log(`Created project #${config.projectNumber} for: "${config.projectKey}" (${config.enableThreading ? 'worker thread' : 'main thread'})`);
 
         this.projects.push(project);
 
@@ -803,8 +864,8 @@ export class ProjectManager {
     @TrackBusyStatus
     private async createAndActivateProject(config: ProjectConfig): Promise<LspProject> {
         //skip this project if we already have it
-        if (this.hasProject(config.projectPath)) {
-            return this.getProject(config.projectPath);
+        if (this.hasProject(config)) {
+            return this.getProject(config.projectKey);
         }
         const project = this.constructProject(config);
         await this.activateProject(project, config);
@@ -813,8 +874,8 @@ export class ProjectManager {
 
     @TrackBusyStatus
     private async activateProject(project: LspProject, config: ProjectConfig) {
-        this.logger.debug('Activating project', project.projectIdentifier, {
-            projectPath: config?.projectPath,
+        this.logger.debug('Activating project', util.getProjectLogName(project), {
+            projectPath: config?.projectKey,
             bsconfigPath: config.bsconfigPath
         });
         await project.activate(config);
@@ -869,9 +930,9 @@ export interface WorkspaceConfig {
      */
     excludePatterns?: string[];
     /**
-     * Path to a bsconfig that should be used instead of the auto-discovery algorithm. If this is present, no bsconfig discovery should be used. and an error should be emitted if this file is missing
+     * A list of project paths that should be used to create projects in place of discovery.
      */
-    bsconfigPath?: string;
+    projects?: BrightScriptProjectConfiguration[];
     /**
      * Language server configuration options
      */
@@ -910,4 +971,10 @@ function TrackBusyStatus(target: any, propertyKey: string, descriptor: PropertyD
             return originalMethod.apply(this, args);
         }, originalMethod.name);
     };
+}
+
+interface DiscoveredProject {
+    name?: string;
+    bsconfigPath?: string;
+    dir: string;
 }

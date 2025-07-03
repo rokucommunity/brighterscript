@@ -129,7 +129,7 @@ export class LanguageServer {
             //resend all open document changes
             const documents = [...this.documents.all()];
             if (documents.length > 0) {
-                this.logger.log(`[${event.project?.projectIdentifier}] loaded or changed. Resending all open document changes.`, documents.map(x => x.uri));
+                this.logger.log(`[${util.getProjectLogName(event.project)}] loaded or changed. Resending all open document changes.`, documents.map(x => x.uri));
                 for (const document of this.documents.all()) {
                     this.onTextDocumentDidChangeContent({
                         document: document
@@ -430,17 +430,34 @@ export class LanguageServer {
                 return {
                     workspaceFolder: workspaceFolder,
                     excludePatterns: await this.getWorkspaceExcludeGlobs(workspaceFolder),
-                    bsconfigPath: brightscriptConfig.configFile,
+                    projects: this.normalizeProjectPaths(workspaceFolder, brightscriptConfig.projects),
                     languageServer: {
                         enableThreading: brightscriptConfig.languageServer?.enableThreading ?? LanguageServer.enableThreadingDefault,
                         enableDiscovery: brightscriptConfig.languageServer?.enableDiscovery ?? LanguageServer.enableDiscoveryDefault,
                         logLevel: brightscriptConfig?.languageServer?.logLevel
                     }
-
                 };
             })
         );
         return workspaces;
+    }
+
+    /**
+     * Extract project paths from settings' projects list, expanding the workspaceFolder variable if necessary
+     */
+    private normalizeProjectPaths(workspaceFolder: string, projects: (string | BrightScriptProjectConfiguration)[]): BrightScriptProjectConfiguration[] | undefined {
+        return projects?.reduce((acc, project) => {
+            if (typeof project === 'string') {
+                acc.push({ path: project });
+            } else if (typeof project.path === 'string') {
+                acc.push(project);
+            }
+            return acc;
+        }, []).map(project => ({
+            ...project,
+            // eslint-disable-next-line no-template-curly-in-string
+            path: util.standardizePath(project.path.replace('${workspaceFolder}', workspaceFolder))
+        }));
     }
 
     private workspaceConfigsCache = new Map<string, WorkspaceConfig>();
@@ -591,7 +608,7 @@ export class LanguageServer {
             activeRuns: [
                 //extract only specific information from the active run so we know what's going on
                 ...this.projectManager.busyStatusTracker.activeRuns.map(x => ({
-                    scope: x.scope?.projectIdentifier,
+                    scope: util.getProjectLogName(x.scope),
                     label: x.label,
                     startTime: x.startTime.getTime()
                 }))
@@ -796,8 +813,14 @@ export type OnHandler<T> = {
     [K in keyof Handler<T>]: Handler<T>[K] extends (arg: infer U) => void ? U : never;
 };
 
-interface BrightScriptClientConfiguration {
-    configFile: string;
+export interface BrightScriptProjectConfiguration {
+    name?: string;
+    path: string;
+    disabled?: boolean;
+}
+
+export interface BrightScriptClientConfiguration {
+    projects?: (string | BrightScriptProjectConfiguration)[];
     languageServer: {
         enableThreading: boolean;
         enableDiscovery: boolean;

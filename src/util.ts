@@ -1757,6 +1757,18 @@ export class Util {
         }
         return components[typeNameLower] || interfaces[typeNameLower] || events[typeNameLower];
     }
+
+    /**
+     * Get a short name that can be used to reference the project in logs. (typically something like `prj1`, `prj8`, etc...)
+     */
+    public getProjectLogName(config: { projectNumber: number }) {
+        //if we have a project number, use it
+        if (config?.projectNumber !== undefined) {
+            return `prj${config.projectNumber}`;
+        }
+        //just return empty string so log functions don't crash with undefined project numbers
+        return '';
+    }
 }
 
 /**
@@ -1765,7 +1777,7 @@ export class Util {
  */
 export function standardizePath(stringParts, ...expressions: any[]) {
     let result: string[] = [];
-    for (let i = 0; i < stringParts.length; i++) {
+    for (let i = 0; i < stringParts?.length; i++) {
         result.push(stringParts[i], expressions[i]);
     }
     return util.standardizePath(
