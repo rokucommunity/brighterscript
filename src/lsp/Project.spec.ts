@@ -49,7 +49,7 @@ describe('Project', () => {
             }
             await project.activate({
                 projectKey: rootDir,
-                projectDir2: rootDir,
+                projectDir: rootDir,
                 bsconfigPath: undefined,
                 workspaceFolder: rootDir,
                 enableThreading: false
@@ -113,7 +113,7 @@ describe('Project', () => {
                 end sub
             `);
             await project.activate({
-                projectDir2: rootDir,
+                projectDir: rootDir,
                 projectKey: undefined,
                 workspaceFolder: undefined,
                 bsconfigPath: undefined
@@ -128,7 +128,7 @@ describe('Project', () => {
 
         it('prevents creating package on first run', async () => {
             await project.activate({
-                projectDir2: rootDir,
+                projectDir: rootDir,
                 projectKey: undefined,
                 workspaceFolder: undefined,
                 bsconfigPath: undefined
@@ -140,7 +140,7 @@ describe('Project', () => {
     describe('applyFileChanges', () => {
         it('skips setting the file if the contents have not changed', async () => {
             await project.activate({
-                projectDir2: rootDir,
+                projectDir: rootDir,
                 projectKey: undefined,
                 workspaceFolder: undefined,
                 bsconfigPath: undefined
@@ -175,7 +175,7 @@ describe('Project', () => {
 
         it('always includes a status', async () => {
             await project.activate({
-                projectDir2: rootDir,
+                projectDir: rootDir,
                 projectKey: undefined,
                 workspaceFolder: undefined,
                 bsconfigPath: undefined
@@ -218,7 +218,7 @@ describe('Project', () => {
         it('finds bsconfig.json at root', async () => {
             fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, '');
             await project.activate({
-                projectDir2: rootDir,
+                projectDir: rootDir,
                 projectKey: undefined,
                 workspaceFolder: undefined,
                 bsconfigPath: undefined
@@ -234,7 +234,7 @@ describe('Project', () => {
             `);
 
             await project.activate({
-                projectDir2: rootDir,
+                projectDir: rootDir,
                 projectKey: undefined,
                 workspaceFolder: undefined,
                 bsconfigPath: undefined
@@ -251,7 +251,7 @@ describe('Project', () => {
     describe('createProject', () => {
         it('uses given projectNumber', async () => {
             await project.activate({
-                projectDir2: rootDir,
+                projectDir: rootDir,
                 projectNumber: 123,
                 projectKey: undefined,
                 workspaceFolder: undefined,
@@ -264,7 +264,7 @@ describe('Project', () => {
             fsExtra.outputFileSync(`${rootDir}/subdir1/brsconfig.json`, '');
             await project.activate({
                 bsconfigPath: 'subdir1/brsconfig.json',
-                projectDir2: rootDir,
+                projectDir: rootDir,
                 workspaceFolder: rootDir,
                 projectKey: undefined
             });
@@ -281,7 +281,7 @@ describe('Project', () => {
                 deferred.resolve(event.message);
             });
             await project['getConfigFilePath']({
-                projectDir2: rootDir,
+                projectDir: rootDir,
                 bsconfigPath: s`${rootDir}/bsconfig.json`
             });
             expect(
@@ -293,7 +293,7 @@ describe('Project', () => {
             fsExtra.outputFileSync(`${rootDir}/brsconfig.json`, '');
             expect(
                 await project['getConfigFilePath']({
-                    projectDir2: rootDir,
+                    projectDir: rootDir,
                     bsconfigPath: undefined
                 })
             ).to.eql(s`${rootDir}/brsconfig.json`);

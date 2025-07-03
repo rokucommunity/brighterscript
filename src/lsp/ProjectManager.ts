@@ -188,7 +188,7 @@ export class ProjectManager {
         const projectConfig: ProjectConfig = {
             //these folders don't matter for standalone projects
             workspaceFolder: rootDir,
-            projectDir2: rootDir,
+            projectDir: rootDir,
             //there's no bsconfig.json for standalone projects, so projectKey is the same as the dir
             projectKey: rootDir,
             bsconfigPath: undefined,
@@ -287,7 +287,7 @@ export class ProjectManager {
                     return discoveredProjects.map<ProjectConfig>(discoveredProject => ({
                         name: discoveredProject?.name,
                         projectKey: s`${discoveredProject.bsconfigPath ?? discoveredProject.dir}`,
-                        projectDir2: s`${discoveredProject.dir}`,
+                        projectDir: s`${discoveredProject.dir}`,
                         bsconfigPath: discoveredProject?.bsconfigPath,
                         workspaceFolder: s`${workspaceConfig.workspaceFolder}`,
                         excludePatterns: workspaceConfig.excludePatterns,
@@ -778,7 +778,7 @@ export class ProjectManager {
      */
     private getProject(param: string | Partial<ProjectConfig>) {
         const projectKey = util.standardizePath(
-            (typeof param === 'string') ? param : (param?.projectKey ?? param?.bsconfigPath ?? param?.projectDir2)
+            (typeof param === 'string') ? param : (param?.projectKey ?? param?.bsconfigPath ?? param?.projectDir)
         );
         if (!projectKey) {
             return;

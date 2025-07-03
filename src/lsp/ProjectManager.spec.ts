@@ -712,7 +712,7 @@ describe('ProjectManager', () => {
 
             await manager['createAndActivateProject']({
                 projectKey: rootDir,
-                projectDir2: rootDir,
+                projectDir: rootDir,
                 workspaceFolder: rootDir,
                 bsconfigPath: undefined
             });
@@ -724,7 +724,7 @@ describe('ProjectManager', () => {
         it('uses given projectNumber', async () => {
             await manager['createAndActivateProject']({
                 projectKey: rootDir,
-                projectDir2: rootDir,
+                projectDir: rootDir,
                 workspaceFolder: rootDir,
                 bsconfigPath: undefined,
                 projectNumber: 3
@@ -741,7 +741,7 @@ describe('ProjectManager', () => {
             try {
                 await manager['createAndActivateProject']({
                     projectKey: rootDir,
-                    projectDir2: rootDir,
+                    projectDir: rootDir,
                     workspaceFolder: rootDir,
                     bsconfigPath: 'subdir1/brsconfig.json'
                 });

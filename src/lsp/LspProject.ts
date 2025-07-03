@@ -34,7 +34,7 @@ export interface LspProject {
     /**
      * The directory for the root of this project (typically where the bsconfig.json or manifest is located)
      */
-    projectDir2: string;
+    projectDir: string;
 
     /**
      * A unique number for this project, generated during this current language server session. Mostly used so we can identify which project is doing logging
@@ -185,7 +185,7 @@ export interface ProjectConfig {
     /**
      * The directory for the root of this project (typically where the bsconfig.json or manifest is located)
      */
-    projectDir2: string;
+    projectDir: string;
     /**
      * Path to the workspace in which all project files reside or are referenced by
      */

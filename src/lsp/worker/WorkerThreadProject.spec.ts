@@ -57,7 +57,7 @@ describe('WorkerThreadProject', () => {
 
             await project.activate({
                 projectKey: undefined,
-                projectDir2: rootDir,
+                projectDir: rootDir,
                 workspaceFolder: rootDir,
                 bsconfigPath: undefined,
                 projectNumber: 1

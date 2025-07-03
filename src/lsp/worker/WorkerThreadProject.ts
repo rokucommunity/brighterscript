@@ -51,8 +51,8 @@ export class WorkerThreadProject implements LspProject {
     public async activate(options: ProjectConfig) {
         this.activateOptions = options;
         this.bsconfigPath = options.bsconfigPath ? util.standardizePath(options.bsconfigPath) : options.bsconfigPath;
-        this.projectDir2 = options.projectDir2 ? util.standardizePath(options.projectDir2) : options.projectDir2;
-        this.projectKey = options.projectKey ? util.standardizePath(options.projectKey) : options.bsconfigPath ?? options.projectDir2;
+        this.projectDir = options.projectDir ? util.standardizePath(options.projectDir) : options.projectDir;
+        this.projectKey = options.projectKey ? util.standardizePath(options.projectKey) : options.bsconfigPath ?? options.projectDir;
         this.workspaceFolder = options.workspaceFolder ? util.standardizePath(options.workspaceFolder) : options.workspaceFolder;
         this.projectNumber = options.projectNumber;
 
@@ -128,7 +128,7 @@ export class WorkerThreadProject implements LspProject {
     /**
      * The directory for the root of this project (typically where the bsconfig.json or manifest is located)
      */
-    projectDir2: string;
+    projectDir: string;
 
     /**
      * A unique number for this project, generated during this current language server session. Mostly used so we can identify which project is doing logging
