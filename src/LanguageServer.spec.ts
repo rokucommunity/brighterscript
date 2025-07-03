@@ -190,7 +190,7 @@ describe('LanguageServer', () => {
             await doTest([{
                 languageServer: {
                     enableThreading: false,
-                    enableDiscovery: true,
+                    enableProjectDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: workspacePath,
@@ -198,7 +198,7 @@ describe('LanguageServer', () => {
             }], [{
                 languageServer: {
                     enableThreading: false,
-                    enableDiscovery: true,
+                    enableProjectDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: workspacePath,
@@ -212,7 +212,7 @@ describe('LanguageServer', () => {
             await doTest([], [{
                 languageServer: {
                     enableThreading: false,
-                    enableDiscovery: true,
+                    enableProjectDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: workspacePath,
@@ -226,7 +226,7 @@ describe('LanguageServer', () => {
             await doTest([{
                 languageServer: {
                     enableThreading: false,
-                    enableDiscovery: true,
+                    enableProjectDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: workspacePath,
@@ -234,7 +234,7 @@ describe('LanguageServer', () => {
             }, {
                 languageServer: {
                     enableThreading: false,
-                    enableDiscovery: true,
+                    enableProjectDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: s`${tempDir}/project2`,
@@ -242,7 +242,7 @@ describe('LanguageServer', () => {
             }], [{
                 languageServer: {
                     enableThreading: false,
-                    enableDiscovery: true,
+                    enableProjectDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: workspacePath,
@@ -256,7 +256,7 @@ describe('LanguageServer', () => {
             await doTest([{
                 languageServer: {
                     enableThreading: false,
-                    enableDiscovery: true,
+                    enableProjectDiscovery: true,
                     logLevel: 'trace'
                 },
                 workspaceFolder: workspacePath,
@@ -264,7 +264,7 @@ describe('LanguageServer', () => {
             }], [{
                 languageServer: {
                     enableThreading: false,
-                    enableDiscovery: true,
+                    enableProjectDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: workspacePath,
@@ -513,7 +513,7 @@ describe('LanguageServer', () => {
             const workspaceSettings: BrightScriptClientConfiguration = {
                 languageServer: {
                     enableThreading: false,
-                    enableDiscovery: true,
+                    enableProjectDiscovery: true,
                     logLevel: 'info'
                 },
                 projects: [
@@ -543,7 +543,7 @@ describe('LanguageServer', () => {
                     ],
                     languageServer: {
                         enableThreading: false,
-                        enableDiscovery: true,
+                        enableProjectDiscovery: true,
                         logLevel: 'info'
                     }
                 }
@@ -711,7 +711,7 @@ describe('LanguageServer', () => {
                 {
                     languageServer: {
                         enableThreading: false,
-                        enableDiscovery: true,
+                        enableProjectDiscovery: true,
                         logLevel: 'info'
                     },
                     workspaceFolder: workspacePath,
@@ -792,7 +792,7 @@ describe('LanguageServer', () => {
             workspaceConfigs = [{
                 languageServer: {
                     enableThreading: false,
-                    enableDiscovery: true,
+                    enableProjectDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: s`${tempDir}/flavor1`,
@@ -800,7 +800,7 @@ describe('LanguageServer', () => {
             }, {
                 languageServer: {
                     enableThreading: false,
-                    enableDiscovery: true,
+                    enableProjectDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: s`${tempDir}/flavor2`,

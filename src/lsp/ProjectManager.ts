@@ -699,7 +699,7 @@ export class ProjectManager {
         }
 
         //automatic discovery disabled?
-        if (!workspaceConfig.languageServer.enableDiscovery) {
+        if (!workspaceConfig.languageServer.enableProjectDiscovery) {
             return [{
                 dir: workspaceConfig.workspaceFolder
             }];
@@ -944,7 +944,7 @@ export interface WorkspaceConfig {
         /**
          * Should the language server automatically discover projects in this workspace?
          */
-        enableDiscovery: boolean;
+        enableProjectDiscovery: boolean;
         /**
          * The log level to use for this workspace
          */
