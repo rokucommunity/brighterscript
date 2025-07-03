@@ -23,7 +23,7 @@ export const workspaceSettings: WorkspaceConfig = {
     workspaceFolder: rootDir,
     languageServer: {
         enableThreading: false,
-        enableDiscovery: true
+        enableProjectDiscovery: true
     }
 };
 

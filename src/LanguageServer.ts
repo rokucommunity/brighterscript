@@ -64,7 +64,7 @@ export class LanguageServer {
     /**
      * The default project discovery setting for the language server. Can be overridden by per-workspace settings
      */
-    public static enableDiscoveryDefault = true;
+    public static enableProjectDiscoveryDefault = true;
     /**
      * The language server protocol connection, used to send and receive all requests and responses
      */
@@ -433,7 +433,7 @@ export class LanguageServer {
                     projects: this.normalizeProjectPaths(workspaceFolder, brightscriptConfig.projects),
                     languageServer: {
                         enableThreading: brightscriptConfig.languageServer?.enableThreading ?? LanguageServer.enableThreadingDefault,
-                        enableDiscovery: brightscriptConfig.languageServer?.enableDiscovery ?? LanguageServer.enableDiscoveryDefault,
+                        enableProjectDiscovery: brightscriptConfig.languageServer?.enableProjectDiscovery ?? LanguageServer.enableProjectDiscoveryDefault,
                         logLevel: brightscriptConfig?.languageServer?.logLevel
                     }
                 };
@@ -823,7 +823,7 @@ export interface BrightScriptClientConfiguration {
     projects?: (string | BrightScriptProjectConfiguration)[];
     languageServer: {
         enableThreading: boolean;
-        enableDiscovery: boolean;
+        enableProjectDiscovery: boolean;
         logLevel: LogLevel | string;
     };
 }

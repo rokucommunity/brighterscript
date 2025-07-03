@@ -176,7 +176,7 @@ describe('ProjectManager', () => {
                 ...workspaceSettings,
                 languageServer: {
                     ...workspaceSettings.languageServer,
-                    enableDiscovery: false
+                    enableProjectDiscovery: false
                 }
             }]);
             expect(
