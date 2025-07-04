@@ -195,15 +195,26 @@ describe('UnionType', () => {
     });
 
     describe('toTypeString', () => {
-        it('should reduce primitive types to the most generic if reducible', () => {
-            let ut = new UnionType([FloatType.instance, IntegerType.instance]);
+        it('should give single type when unions of same type', () => {
+            let ut = new UnionType([FloatType.instance, FloatType.instance]);
             expect(ut.toTypeString()).to.eq('float');
-            ut = new UnionType([FloatType.instance, IntegerType.instance, DoubleType.instance]);
-            expect(ut.toTypeString()).to.eq('double');
-            ut = new UnionType([LongIntegerType.instance, IntegerType.instance]);
+            ut = new UnionType([IntegerType.instance, IntegerType.instance, IntegerType.instance]);
+            expect(ut.toTypeString()).to.eq('integer');
+            ut = new UnionType([LongIntegerType.instance, LongIntegerType.instance]);
             expect(ut.toTypeString()).to.eq('longinteger');
-            ut = new UnionType([DoubleType.instance, LongIntegerType.instance]);
+            ut = new UnionType([DoubleType.instance, DoubleType.instance]);
             expect(ut.toTypeString()).to.eq('double');
+        });
+
+        it('should give dynamic if types are not the same', () => {
+            let ut = new UnionType([FloatType.instance, IntegerType.instance]);
+            expect(ut.toTypeString()).to.eq('dynamic');
+            ut = new UnionType([FloatType.instance, IntegerType.instance, DoubleType.instance]);
+            expect(ut.toTypeString()).to.eq('dynamic');
+            ut = new UnionType([LongIntegerType.instance, IntegerType.instance]);
+            expect(ut.toTypeString()).to.eq('dynamic');
+            ut = new UnionType([DoubleType.instance, LongIntegerType.instance]);
+            expect(ut.toTypeString()).to.eq('dynamic');
         });
 
         it('should reduce object types to object', () => {

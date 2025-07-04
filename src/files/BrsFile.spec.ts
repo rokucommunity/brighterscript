@@ -4256,7 +4256,7 @@ describe('BrsFile', () => {
 
     describe('union types', () => {
 
-        it('use most reducible type for union of primitives', async () => {
+        it('use dynamic for union of unlike primitives', async () => {
             await testTranspile(`
                 function test1() as string or integer
                     return "hello"
@@ -4278,11 +4278,11 @@ describe('BrsFile', () => {
                     return "hello"
                 end function
 
-                function test2() as double
+                function test2() as dynamic
                     return 1.23
                 end function
 
-                function test3() as longinteger
+                function test3() as dynamic
                     return 5
                 end function
 
