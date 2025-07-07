@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.69.12](https://github.com/rokucommunity/brighterscript/compare/0.69.11...v0.69.12) - 2025-07-07
+### Fixed
+ - Fix discovery when `projects` is empty ([#1529](https://github.com/rokucommunity/brighterscript/pull/1529))
+
+
+
 ## [0.69.11](https://github.com/rokucommunity/brighterscript/compare/0.69.10...v0.69.11) - 2025-07-03
 ### Added
  - Add `enableProjectDiscovery` language server option ([#1520](https://github.com/rokucommunity/brighterscript/pull/1520), [#1525](https://github.com/rokucommunity/brighterscript/pull/1525))
