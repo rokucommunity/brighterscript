@@ -655,7 +655,7 @@ export class ProjectManager {
      */
     private async discoverProjectsForWorkspace(workspaceConfig: WorkspaceConfig): Promise<DiscoveredProject[]> {
         //config may provide a list of project paths. If we have these, no other discovery is permitted
-        if (Array.isArray(workspaceConfig.projects)) {
+        if (Array.isArray(workspaceConfig.projects) && workspaceConfig.projects.length > 0) {
             this.logger.debug(`Using project paths from workspace config`, workspaceConfig.projects);
             const projectConfigs = workspaceConfig.projects.reduce<DiscoveredProject[]>((acc, project) => {
                 //skip this project if it's disabled or we don't have a path

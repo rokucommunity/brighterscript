@@ -325,6 +325,20 @@ describe('ProjectManager', () => {
                 s`${rootDir}/project1/bsconfig.json`
             ]);
         });
+
+        it('ignores empty projects array configuration', async () => {
+            fsExtra.outputFileSync(`${rootDir}/project1/bsconfig.json`, '');
+            await manager.syncProjects([{
+                ...workspaceSettings,
+                projects: []
+            }]);
+
+            expect(
+                manager.projects.map(x => x.projectKey).sort()
+            ).to.eql([
+                s`${rootDir}/project1/bsconfig.json`
+            ]);
+        });
     });
 
     describe('getCompletions', () => {
