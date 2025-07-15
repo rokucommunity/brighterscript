@@ -76,7 +76,7 @@ export default class PluginInterface<T extends Plugin = Plugin> {
     /**
      * Call `event` on plugins, but allow the plugins to return promises that will be awaited before the next plugin is notified
      */
-    public async emitAsync<K extends keyof PluginEventArgs<T> & string>(event: K, ...args: PluginEventArgs<T>[K]): Promise< PluginEventArgs<T>[K][0]> {
+    public async emitAsync<K extends keyof PluginEventArgs<T> & string>(event: K, ...args: PluginEventArgs<T>[K]): Promise<PluginEventArgs<T>[K][0]> {
         this.logger.debug(`Emitting async plugin event: ${event}`);
         for (let plugin of this.plugins) {
             if ((plugin as any)[event]) {
@@ -87,7 +87,10 @@ export default class PluginInterface<T extends Plugin = Plugin> {
                         );
                     });
                 } catch (err) {
-                    this.logger?.error(`Error when calling plugin ${plugin.name}.${event}:`, err);
+                    this.logger?.error(`Error when calling plugin ${plugin.name}.${event}:`, (err as Error).stack);
+                    if (!this.suppressErrors) {
+                        throw err;
+                    }
                 }
             }
         }

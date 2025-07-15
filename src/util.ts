@@ -2683,12 +2683,12 @@ export class Util {
 
     public hasLeadingComments(input: Token | AstNode) {
         const leadingTrivia = isToken(input) ? input?.leadingTrivia : input?.leadingTrivia ?? [];
-        return !!leadingTrivia.find(t => t.kind === TokenKind.Comment);
+        return !!leadingTrivia.find(t => t?.kind === TokenKind.Comment);
     }
 
     public getLeadingComments(input: Token | AstNode) {
         const leadingTrivia = isToken(input) ? input?.leadingTrivia : input?.leadingTrivia ?? [];
-        return leadingTrivia.filter(t => t.kind === TokenKind.Comment);
+        return leadingTrivia.filter(t => t?.kind === TokenKind.Comment);
     }
 
     public isLeadingCommentOnSameLine(line: RangeLike, input: Token | AstNode) {
