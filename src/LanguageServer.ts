@@ -62,6 +62,10 @@ export class LanguageServer {
      */
     public static enableThreadingDefault = true;
     /**
+     * The default project discovery setting for the language server. Can be overridden by per-workspace settings
+     */
+    public static enableProjectDiscoveryDefault = true;
+    /**
      * The language server protocol connection, used to send and receive all requests and responses
      */
     private connection = undefined as Connection;
@@ -125,7 +129,7 @@ export class LanguageServer {
             //resend all open document changes
             const documents = [...this.documents.all()];
             if (documents.length > 0) {
-                this.logger.log(`[${event.project?.projectIdentifier}] loaded or changed. Resending all open document changes.`, documents.map(x => x.uri));
+                this.logger.log(`[${util.getProjectLogName(event.project)}] loaded or changed. Resending all open document changes.`, documents.map(x => x.uri));
                 for (const document of this.documents.all()) {
                     this.onTextDocumentDidChangeContent({
                         document: document
@@ -417,7 +421,7 @@ export class LanguageServer {
      * Get a list of workspaces, and their configurations.
      * Get only the settings for the workspace that are relevant to the language server. We do this so we can cache this object for use in change detection in the future.
      */
-    private async getWorkspaceConfigs(): Promise<WorkspaceConfigWithExtras[]> {
+    private async getWorkspaceConfigs(): Promise<WorkspaceConfig[]> {
         //get all workspace folders (we'll use these to get settings)
         let workspaces = await Promise.all(
             (await this.connection.workspace.getWorkspaceFolders() ?? []).map(async (x) => {
@@ -426,19 +430,37 @@ export class LanguageServer {
                 return {
                     workspaceFolder: workspaceFolder,
                     excludePatterns: await this.getWorkspaceExcludeGlobs(workspaceFolder),
-                    bsconfigPath: brightscriptConfig.configFile,
+                    projects: this.normalizeProjectPaths(workspaceFolder, brightscriptConfig.projects),
                     languageServer: {
                         enableThreading: brightscriptConfig.languageServer?.enableThreading ?? LanguageServer.enableThreadingDefault,
+                        enableProjectDiscovery: brightscriptConfig.languageServer?.enableProjectDiscovery ?? LanguageServer.enableProjectDiscoveryDefault,
                         logLevel: brightscriptConfig?.languageServer?.logLevel
                     }
-
-                } as WorkspaceConfigWithExtras;
+                };
             })
         );
         return workspaces;
     }
 
-    private workspaceConfigsCache = new Map<string, WorkspaceConfigWithExtras>();
+    /**
+     * Extract project paths from settings' projects list, expanding the workspaceFolder variable if necessary
+     */
+    private normalizeProjectPaths(workspaceFolder: string, projects: (string | BrightScriptProjectConfiguration)[]): BrightScriptProjectConfiguration[] | undefined {
+        return projects?.reduce((acc, project) => {
+            if (typeof project === 'string') {
+                acc.push({ path: project });
+            } else if (typeof project.path === 'string') {
+                acc.push(project);
+            }
+            return acc;
+        }, []).map(project => ({
+            ...project,
+            // eslint-disable-next-line no-template-curly-in-string
+            path: util.standardizePath(project.path.replace('${workspaceFolder}', workspaceFolder))
+        }));
+    }
+
+    private workspaceConfigsCache = new Map<string, WorkspaceConfig>();
 
     @AddStackToErrorMessage
     public async onDidChangeConfiguration(args: DidChangeConfigurationParams) {
@@ -586,7 +608,7 @@ export class LanguageServer {
             activeRuns: [
                 //extract only specific information from the active run so we know what's going on
                 ...this.projectManager.busyStatusTracker.activeRuns.map(x => ({
-                    scope: x.scope?.projectIdentifier,
+                    scope: util.getProjectLogName(x.scope),
                     label: x.label,
                     startTime: x.startTime.getTime()
                 }))
@@ -653,10 +675,22 @@ export class LanguageServer {
      * Ask the client for the list of `files.exclude` patterns. Useful when determining if we should process a file
      */
     private async getWorkspaceExcludeGlobs(workspaceFolder: string): Promise<string[]> {
-        const config = await this.getClientConfiguration<{ exclude: string[] }>(workspaceFolder, 'files');
-        const result = Object
-            .keys(config?.exclude ?? {})
-            .filter(x => config?.exclude?.[x])
+        const filesConfig = await this.getClientConfiguration<{ exclude: string[] }>(workspaceFolder, 'files');
+        const fileExcludes = this.extractExcludes(filesConfig);
+
+        const searchConfig = await this.getClientConfiguration<{ exclude: string[] }>(workspaceFolder, 'search');
+        const searchExcludes = this.extractExcludes(searchConfig);
+
+        return [...fileExcludes, ...searchExcludes];
+    }
+
+    private extractExcludes(config: { exclude: string[] }): string[] {
+        if (!config?.exclude) {
+            return [];
+        }
+        return Object
+            .keys(config.exclude)
+            .filter(x => config.exclude[x])
             //vscode files.exclude patterns support ignoring folders without needing to add `**/*`. So for our purposes, we need to
             //append **/* to everything without a file extension or magic at the end
             .map(pattern => [
@@ -666,7 +700,6 @@ export class LanguageServer {
                 `${pattern}/**/*`
             ])
             .flat(1);
-        return result;
     }
 
     /**
@@ -780,10 +813,17 @@ export type OnHandler<T> = {
     [K in keyof Handler<T>]: Handler<T>[K] extends (arg: infer U) => void ? U : never;
 };
 
-interface BrightScriptClientConfiguration {
-    configFile: string;
+export interface BrightScriptProjectConfiguration {
+    name?: string;
+    path: string;
+    disabled?: boolean;
+}
+
+export interface BrightScriptClientConfiguration {
+    projects?: (string | BrightScriptProjectConfiguration)[];
     languageServer: {
         enableThreading: boolean;
+        enableProjectDiscovery: boolean;
         logLevel: LogLevel | string;
     };
 }
@@ -794,11 +834,3 @@ function logAndIgnoreError(error: Error) {
     }
     console.error(error);
 }
-
-export type WorkspaceConfigWithExtras = WorkspaceConfig & {
-    bsconfigPath: string;
-    languageServer: {
-        enableThreading: boolean;
-        logLevel: LogLevel | string | undefined;
-    };
-};

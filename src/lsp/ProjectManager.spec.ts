@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import { ProjectManager } from './ProjectManager';
-import { tempDir, rootDir, expectZeroDiagnostics, expectDiagnostics, expectCompletionsIncludes } from '../testHelpers.spec';
+import { tempDir, rootDir, expectZeroDiagnostics, expectDiagnostics, expectCompletionsIncludes, workspaceSettings } from '../testHelpers.spec';
 import * as fsExtra from 'fs-extra';
 import util, { standardizePath as s } from '../util';
 import type { SinonStub } from 'sinon';
@@ -93,10 +93,8 @@ describe('ProjectManager', () => {
 
     describe('validation tracking', () => {
         it('tracks validation state', async () => {
-            await manager.syncProjects([{
-                workspaceFolder: rootDir
-            }]);
-            const project = manager.projects[0] as unknown as Project;
+            await manager.syncProjects([workspaceSettings]);
+            const project = manager.projects[0] as Project;
 
             //force validation to take a while
             sinon.stub(project['builder'].program, 'validate').callsFake(async () => {
@@ -127,6 +125,10 @@ describe('ProjectManager', () => {
                 end sub
             `);
             await manager.syncProjects([{
+                languageServer: {
+                    enableProjectDiscovery: false,
+                    enableThreading: false
+                },
                 workspaceFolder: rootDir
             }]);
             sinon.stub(manager.projects[0], 'getHover').returns(Promise.resolve([{
@@ -154,23 +156,23 @@ describe('ProjectManager', () => {
 
         it('finds bsconfig in a folder', async () => {
             fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, '');
-            await manager.syncProjects([{
-                workspaceFolder: rootDir
-            }]);
-            expect(manager.projects[0].projectPath).to.eql(s`${rootDir}`);
+            await manager.syncProjects([workspaceSettings]);
+            expect(
+                manager.projects.map(x => x.projectKey).sort()
+            ).to.eql([
+                s`${rootDir}/bsconfig.json`
+            ]);
         });
 
         it('finds bsconfig at root and also in subfolder', async () => {
             fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, '');
             fsExtra.outputFileSync(`${rootDir}/subdir/bsconfig.json`, '');
-            await manager.syncProjects([{
-                workspaceFolder: rootDir
-            }]);
+            await manager.syncProjects([workspaceSettings]);
             expect(
-                manager.projects.map(x => x.projectPath).sort()
+                manager.projects.map(x => x.projectKey).sort()
             ).to.eql([
-                s`${rootDir}`,
-                s`${rootDir}/subdir`
+                s`${rootDir}/bsconfig.json`,
+                s`${rootDir}/subdir/bsconfig.json`
             ]);
         });
 
@@ -178,23 +180,38 @@ describe('ProjectManager', () => {
             fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, '');
             fsExtra.outputFileSync(`${rootDir}/subdir/bsconfig.json`, '');
             await manager.syncProjects([{
-                workspaceFolder: rootDir,
-                excludePatterns: ['subdir/**/*']
+                ...workspaceSettings,
+                excludePatterns: ['**/subdir/**/*']
             }]);
             expect(
-                manager.projects.map(x => x.projectPath)
+                manager.projects.map(x => x.projectKey)
             ).to.eql([
-                s`${rootDir}`
+                s`${rootDir}/bsconfig.json`
             ]);
         });
 
         it('uses rootDir when manifest found but no brightscript file', async () => {
             fsExtra.outputFileSync(`${rootDir}/subdir/manifest`, '');
+            await manager.syncProjects([workspaceSettings]);
+            expect(
+                manager.projects.map(x => x.projectKey)
+            ).to.eql([
+                s`${rootDir}`
+            ]);
+        });
+
+        it('returns root folder when automatic discovery is disabled', async () => {
+            fsExtra.outputFileSync(`${rootDir}/project1/bsconfig.json`, '');
+            fsExtra.outputFileSync(`${rootDir}/project2/bsconfig.json`, '');
             await manager.syncProjects([{
-                workspaceFolder: rootDir
+                ...workspaceSettings,
+                languageServer: {
+                    ...workspaceSettings.languageServer,
+                    enableProjectDiscovery: false
+                }
             }]);
             expect(
-                manager.projects.map(x => x.projectPath)
+                manager.projects.map(x => x.projectKey)
             ).to.eql([
                 s`${rootDir}`
             ]);
@@ -229,9 +246,7 @@ describe('ProjectManager', () => {
                 end sub
             `);
             fsExtra.outputFileSync(`${rootDir}/manifest`, '');
-            await manager.syncProjects([{
-                workspaceFolder: rootDir
-            }]);
+            await manager.syncProjects([workspaceSettings]);
             expectDiagnostics(await onNextDiagnostics(), [
                 DiagnosticMessages.cannotFindName('nameNotDefined').message,
                 'Test diagnostic (location unknown, added here for visibility)'
@@ -241,11 +256,9 @@ describe('ProjectManager', () => {
         it('uses subdir when manifest and brightscript file found', async () => {
             fsExtra.outputFileSync(`${rootDir}/subdir/manifest`, '');
             fsExtra.outputFileSync(`${rootDir}/subdir/source/main.brs`, '');
-            await manager.syncProjects([{
-                workspaceFolder: rootDir
-            }]);
+            await manager.syncProjects([workspaceSettings]);
             expect(
-                manager.projects.map(x => x.projectPath)
+                manager.projects.map(x => x.projectKey)
             ).to.eql([
                 s`${rootDir}/subdir`
             ]);
@@ -254,48 +267,108 @@ describe('ProjectManager', () => {
         it('removes stale projects', async () => {
             fsExtra.outputFileSync(`${rootDir}/subdir1/bsconfig.json`, '');
             fsExtra.outputFileSync(`${rootDir}/subdir2/bsconfig.json`, '');
-            await manager.syncProjects([{
-                workspaceFolder: rootDir
-            }]);
+            await manager.syncProjects([workspaceSettings]);
             expect(
-                manager.projects.map(x => x.projectPath).sort()
+                manager.projects.map(x => x.projectKey).sort()
             ).to.eql([
-                s`${rootDir}/subdir1`,
-                s`${rootDir}/subdir2`
+                s`${rootDir}/subdir1/bsconfig.json`,
+                s`${rootDir}/subdir2/bsconfig.json`
             ]);
             fsExtra.removeSync(`${rootDir}/subdir1/bsconfig.json`);
 
-            await manager.syncProjects([{
-                workspaceFolder: rootDir
-            }]);
+            await manager.syncProjects([workspaceSettings]);
             expect(
-                manager.projects.map(x => x.projectPath).sort()
+                manager.projects.map(x => x.projectKey).sort()
             ).to.eql([
-                s`${rootDir}/subdir2`
+                s`${rootDir}/subdir2/bsconfig.json`
             ]);
         });
 
         it('keeps existing projects on subsequent sync calls', async () => {
             fsExtra.outputFileSync(`${rootDir}/subdir1/bsconfig.json`, '');
             fsExtra.outputFileSync(`${rootDir}/subdir2/bsconfig.json`, '');
-            await manager.syncProjects([{
-                workspaceFolder: rootDir
-            }]);
+            await manager.syncProjects([workspaceSettings]);
             expect(
-                manager.projects.map(x => x.projectPath).sort()
+                manager.projects.map(x => x.projectKey).sort()
             ).to.eql([
-                s`${rootDir}/subdir1`,
-                s`${rootDir}/subdir2`
+                s`${rootDir}/subdir1/bsconfig.json`,
+                s`${rootDir}/subdir2/bsconfig.json`
             ]);
 
-            await manager.syncProjects([{
-                workspaceFolder: rootDir
-            }]);
+            await manager.syncProjects([workspaceSettings]);
             expect(
-                manager.projects.map(x => x.projectPath).sort()
+                manager.projects.map(x => x.projectKey).sort()
             ).to.eql([
-                s`${rootDir}/subdir1`,
-                s`${rootDir}/subdir2`
+                s`${rootDir}/subdir1/bsconfig.json`,
+                s`${rootDir}/subdir2/bsconfig.json`
+            ]);
+        });
+
+        it('uses nonstandard json naming when specified in projects array', async () => {
+            fsExtra.outputFileSync(`${rootDir}/project1/testBrighterScriptConfig.json`, '');
+            fsExtra.outputFileSync(`${rootDir}/project1/bsconfig.json`, '');
+            await manager.syncProjects([{
+                ...workspaceSettings,
+                projects: [
+                    { path: s`${rootDir}/project1/testBrighterScriptConfig.json` }
+                ]
+            }]);
+
+            //we should NOT have found the `project1/bsconfig.json` file because it's not in the projects array
+            expect(
+                manager.projects.map(x => x.projectKey)
+            ).to.eql([
+                s`${rootDir}/project1/testBrighterScriptConfig.json`
+            ]);
+        });
+
+        it('supports pointing to a folder AND a bsconfig.json in projects array', async () => {
+            fsExtra.outputFileSync(`${rootDir}/project1/testBrighterScriptConfig.json`, '');
+            await manager.syncProjects([{
+                ...workspaceSettings,
+                projects: [
+                    { path: s`${rootDir}/project1/testBrighterScriptConfig.json` },
+                    { path: s`${rootDir}/project1` }
+                ]
+            }]);
+
+            expect(
+                manager.projects.map(x => x.projectKey).sort()
+            ).to.eql([
+                s`${rootDir}/project1`,
+                s`${rootDir}/project1/testBrighterScriptConfig.json`
+            ]);
+        });
+
+        it('supports project with AND without bsconfig.json in same location in projects array', async () => {
+            fsExtra.outputFileSync(`${rootDir}/project1/bsconfig.json`, '');
+            await manager.syncProjects([{
+                ...workspaceSettings,
+                projects: [
+                    { path: s`${rootDir}/project1` },
+                    { path: s`${rootDir}/project1/bsconfig.json` }
+                ]
+            }]);
+
+            expect(
+                manager.projects.map(x => x.projectKey).sort()
+            ).to.eql([
+                s`${rootDir}/project1`,
+                s`${rootDir}/project1/bsconfig.json`
+            ]);
+        });
+
+        it('ignores empty projects array configuration', async () => {
+            fsExtra.outputFileSync(`${rootDir}/project1/bsconfig.json`, '');
+            await manager.syncProjects([{
+                ...workspaceSettings,
+                projects: []
+            }]);
+
+            expect(
+                manager.projects.map(x => x.projectKey).sort()
+            ).to.eql([
+                s`${rootDir}/project1/bsconfig.json`
             ]);
         });
     });
@@ -303,9 +376,7 @@ describe('ProjectManager', () => {
     describe('getCompletions', () => {
         it('works for quick file changes', async () => {
             //set up the project
-            await manager.syncProjects([{
-                workspaceFolder: rootDir
-            }]);
+            await manager.syncProjects([workspaceSettings]);
 
             //add the namespace first
             await setFile(s`${rootDir}/source/alpha.bs`, `
@@ -362,9 +433,7 @@ describe('ProjectManager', () => {
             fsExtra.outputJsonSync(`${rootDir}/project1/bsconfig.json`, {
                 rootDir: rootDir
             });
-            await manager.syncProjects([{
-                workspaceFolder: rootDir
-            }]);
+            await manager.syncProjects([workspaceSettings]);
 
             sinon.stub(manager.projects[0], 'applyFileChanges').returns(Promise.resolve([
                 //return an undefined item, which used to cause a specific crash
@@ -403,9 +472,7 @@ describe('ProjectManager', () => {
                 ]
             });
 
-            await manager.syncProjects([{
-                workspaceFolder: rootDir
-            }]);
+            await manager.syncProjects([workspaceSettings]);
 
             let deferred1 = new Deferred();
             let deferred2 = new Deferred();
@@ -459,9 +526,7 @@ describe('ProjectManager', () => {
                 ]
             });
 
-            await manager.syncProjects([{
-                workspaceFolder: rootDir
-            }]);
+            await manager.syncProjects([workspaceSettings]);
 
             const stub = sinon.stub(manager as any, 'handleFileChange').callThrough();
 
@@ -506,9 +571,7 @@ describe('ProjectManager', () => {
                 files: ['source/**/*']
             });
 
-            await manager.syncProjects([{
-                workspaceFolder: rootDir
-            }]);
+            await manager.syncProjects([workspaceSettings]);
 
             const stub = sinon.stub(manager['projects'][0], 'applyFileChanges').callThrough();
 
@@ -533,9 +596,7 @@ describe('ProjectManager', () => {
         it('does not create a standalone project for files that exist in a known project', async () => {
             fsExtra.outputFileSync(s`${rootDir}/source/main.brs`, `sub main() : end sub`);
 
-            await manager.syncProjects([{
-                workspaceFolder: rootDir
-            }]);
+            await manager.syncProjects([workspaceSettings]);
 
             await onNextDiagnostics();
 
@@ -550,9 +611,7 @@ describe('ProjectManager', () => {
         });
 
         it('converts a missing file to a delete', async () => {
-            await manager.syncProjects([{
-                workspaceFolder: rootDir
-            }]);
+            await manager.syncProjects([workspaceSettings]);
             await onNextDiagnostics();
 
             let applyFileChangesDeferred = new Deferred<DocumentActionWithStatus[]>();
@@ -596,9 +655,7 @@ describe('ProjectManager', () => {
         it('properly syncs changes', async () => {
             fsExtra.outputFileSync(`${rootDir}/source/lib1.brs`, `sub test1():print "alpha":end sub`);
             fsExtra.outputFileSync(`${rootDir}/source/lib2.brs`, `sub test2():print "beta":end sub`);
-            await manager.syncProjects([{
-                workspaceFolder: rootDir
-            }]);
+            await manager.syncProjects([workspaceSettings]);
             expectZeroDiagnostics(await onNextDiagnostics());
 
             await manager.handleFileChanges([
@@ -622,9 +679,7 @@ describe('ProjectManager', () => {
         it('adds all new files in a folder', async () => {
             fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `sub main():print "main":end sub`);
 
-            await manager.syncProjects([{
-                workspaceFolder: rootDir
-            }]);
+            await manager.syncProjects([workspaceSettings]);
             expectZeroDiagnostics(await onNextDiagnostics());
 
             //add a few files to a folder, then register that folder as an "add"
@@ -650,9 +705,7 @@ describe('ProjectManager', () => {
             fsExtra.outputFileSync(`${rootDir}/source/libs/alpha/charlie/delta.brs`, `sub delta():print two:end sub`);
             fsExtra.outputFileSync(`${rootDir}/source/libs/echo/foxtrot.brs`, `sub foxtrot():print three:end sub`);
 
-            await manager.syncProjects([{
-                workspaceFolder: rootDir
-            }]);
+            await manager.syncProjects([workspaceSettings]);
 
             expectDiagnostics(await onNextDiagnostics(), [
                 DiagnosticMessages.cannotFindName('one').message,
@@ -678,44 +731,48 @@ describe('ProjectManager', () => {
 
         it('spawns a worker thread when threading is enabled', async () => {
             await manager.syncProjects([{
-                workspaceFolder: rootDir,
-                enableThreading: true
+                ...workspaceSettings,
+                languageServer: {
+                    ...workspaceSettings.languageServer,
+                    enableThreading: true
+                }
             }]);
             expect(manager.projects[0]).instanceof(WorkerThreadProject);
         });
     });
 
     describe('getProject', () => {
-        it('uses .projectPath if param is not a string', async () => {
-            await manager.syncProjects([{
-                workspaceFolder: rootDir
-            }]);
+        it('uses .projectKey if param is not a string', async () => {
+            await manager.syncProjects([workspaceSettings]);
             expect(
                 manager['getProject']({
-                    projectPath: rootDir
-                })
-            ).to.include({
-                projectPath: rootDir
-            });
+                    projectKey: rootDir
+                }).projectKey
+            ).to.eql(rootDir);
         });
     });
 
     describe('createAndActivateProject', () => {
         it('skips creating project if we already have it', async () => {
-            await manager.syncProjects([{
-                workspaceFolder: rootDir
-            }]);
+            await manager.syncProjects([workspaceSettings]);
 
             await manager['createAndActivateProject']({
-                projectPath: rootDir
-            } as any);
-            expect(manager.projects).to.be.length(1);
+                projectKey: rootDir,
+                projectDir: rootDir,
+                workspaceFolder: rootDir,
+                bsconfigPath: undefined
+            });
+            expect(manager.projects.map(x => x.projectKey)).to.eql([
+                s`${rootDir}`
+            ]);
         });
 
         it('uses given projectNumber', async () => {
             await manager['createAndActivateProject']({
-                projectPath: rootDir,
+                projectKey: rootDir,
+                projectDir: rootDir,
                 workspaceFolder: rootDir,
+                bsconfigPath: undefined,
                 projectNumber: 3
             });
             expect(manager.projects[0].projectNumber).to.eql(3);
@@ -729,7 +786,8 @@ describe('ProjectManager', () => {
             let error;
             try {
                 await manager['createAndActivateProject']({
-                    projectPath: rootDir,
+                    projectKey: rootDir,
+                    projectDir: rootDir,
                     workspaceFolder: rootDir,
                     bsconfigPath: 'subdir1/brsconfig.json'
                 });
@@ -743,9 +801,7 @@ describe('ProjectManager', () => {
     describe('removeProject', () => {
         it('handles undefined', async () => {
             manager['removeProject'](undefined);
-            await manager.syncProjects([{
-                workspaceFolder: rootDir
-            }]);
+            await manager.syncProjects([workspaceSettings]);
             manager['removeProject'](undefined);
         });
 
@@ -840,7 +896,7 @@ describe('ProjectManager', () => {
         const host = '127.0.0.1';
 
         //write a small brighterscript plugin to allow this test to communicate with the thread
-        fsExtra.outputFileSync(`${rootDir}/plugin.js`, `
+        fsExtra.outputFileSync(`${rootDir}/pluginsocket.js`, `
             ${Plugin.toString()};
             exports.default = function() {
                 return new Plugin(${port}, "${host}");
@@ -849,14 +905,17 @@ describe('ProjectManager', () => {
         //write a bsconfig that will load this plugin
         fsExtra.outputJsonSync(`${rootDir}/bsconfig.json`, {
             plugins: [
-                `${rootDir}/plugin.js`
+                `${rootDir}/pluginsocket.js`
             ]
         });
 
         //wait for the projects to finish syncing/loading
         await manager.syncProjects([{
-            workspaceFolder: rootDir,
-            enableThreading: true
+            ...workspaceSettings,
+            languageServer: {
+                ...workspaceSettings.languageServer,
+                enableThreading: true
+            }
         }]);
 
         //establish the connection with the plugin
@@ -899,10 +958,7 @@ describe('ProjectManager', () => {
         });
 
         //wait for the projects to finish syncing/loading
-        await manager.syncProjects([{
-            workspaceFolder: rootDir,
-            enableThreading: false
-        }]);
+        await manager.syncProjects([workspaceSettings]);
 
         const stub = sinon.stub(manager as any, 'reloadProject').callThrough();
 

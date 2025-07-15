@@ -1044,7 +1044,9 @@ export class Util {
      * If the two items both start on the same line
      */
     public sameStartLine(first: { range: Range }, second: { range: Range }) {
-        if (first && second && first.range.start.line === second.range.start.line) {
+        if (first && second && (first.range !== undefined) && (second.range !== undefined) &&
+            first.range.start.line === second.range.start.line
+        ) {
             return true;
         } else {
             return false;
@@ -2971,6 +2973,18 @@ export class Util {
         }
         return resultType;
     }
+
+    /**
+     * Get a short name that can be used to reference the project in logs. (typically something like `prj1`, `prj8`, etc...)
+     */
+    public getProjectLogName(config: { projectNumber: number }) {
+        //if we have a project number, use it
+        if (config?.projectNumber !== undefined) {
+            return `prj${config.projectNumber}`;
+        }
+        //just return empty string so log functions don't crash with undefined project numbers
+        return '';
+    }
 }
 
 /**
@@ -2979,7 +2993,7 @@ export class Util {
  */
 export function standardizePath(stringParts, ...expressions: any[]) {
     let result: string[] = [];
-    for (let i = 0; i < stringParts.length; i++) {
+    for (let i = 0; i < stringParts?.length; i++) {
         result.push(stringParts[i], expressions[i]);
     }
     return util.standardizePath(

@@ -48,7 +48,9 @@ describe('Project', () => {
                 fsExtra.outputFileSync(`${rootDir}/components/component${i}.xml`, `<component name="component${i}"></component>`);
             }
             await project.activate({
-                projectPath: rootDir,
+                projectKey: rootDir,
+                projectDir: rootDir,
+                bsconfigPath: undefined,
                 workspaceFolder: rootDir,
                 enableThreading: false
             });
@@ -112,8 +114,11 @@ describe('Project', () => {
                 end sub
             `);
             await project.activate({
-                projectPath: rootDir
-            } as any);
+                projectDir: rootDir,
+                projectKey: undefined,
+                workspaceFolder: undefined,
+                bsconfigPath: undefined
+            });
 
             await once(project, 'diagnostics');
 
@@ -124,15 +129,23 @@ describe('Project', () => {
 
         it('prevents creating package on first run', async () => {
             await project.activate({
-                projectPath: rootDir
-            } as any);
+                projectDir: rootDir,
+                projectKey: undefined,
+                workspaceFolder: undefined,
+                bsconfigPath: undefined
+            });
             expect(project['builder'].program.options.copyToStaging).to.be.false;
         });
     });
 
     describe('applyFileChanges', () => {
         it('skips setting the file if the contents have not changed', async () => {
-            await project.activate({ projectPath: rootDir } as any);
+            await project.activate({
+                projectDir: rootDir,
+                projectKey: undefined,
+                workspaceFolder: undefined,
+                bsconfigPath: undefined
+            });
             //initial set should be true
             expect(
                 (await project.applyFileChanges([{
@@ -163,8 +176,11 @@ describe('Project', () => {
 
         it('always includes a status', async () => {
             await project.activate({
-                projectPath: rootDir
-            } as any);
+                projectDir: rootDir,
+                projectKey: undefined,
+                workspaceFolder: undefined,
+                bsconfigPath: undefined
+            });
 
             project['builder'].options.files = [
                 'source/**/*',
@@ -203,8 +219,11 @@ describe('Project', () => {
         it('finds bsconfig.json at root', async () => {
             fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, '');
             await project.activate({
-                projectPath: rootDir
-            } as any);
+                projectDir: rootDir,
+                projectKey: undefined,
+                workspaceFolder: undefined,
+                bsconfigPath: undefined
+            });
             expect(project.bsconfigPath).to.eql(s`${rootDir}/bsconfig.json`);
         });
 
@@ -216,8 +235,11 @@ describe('Project', () => {
             `);
 
             await project.activate({
-                projectPath: rootDir
-            } as any);
+                projectDir: rootDir,
+                projectKey: undefined,
+                workspaceFolder: undefined,
+                bsconfigPath: undefined
+            });
 
             await once(project, 'diagnostics');
 
@@ -230,9 +252,12 @@ describe('Project', () => {
     describe('createProject', () => {
         it('uses given projectNumber', async () => {
             await project.activate({
-                projectPath: rootDir,
-                projectNumber: 123
-            } as any);
+                projectDir: rootDir,
+                projectNumber: 123,
+                projectKey: undefined,
+                workspaceFolder: undefined,
+                bsconfigPath: undefined
+            });
             expect(project.projectNumber).to.eql(123);
         });
     });
@@ -244,12 +269,22 @@ describe('Project', () => {
                 deferred.resolve(event.message);
             });
             await project['getConfigFilePath']({
-                projectPath: rootDir,
-                configFilePath: s`${rootDir}/bsconfig.json`
+                projectDir: rootDir,
+                bsconfigPath: s`${rootDir}/bsconfig.json`
             });
             expect(
                 (await deferred.promise).startsWith('Cannot find config file')
             ).to.be.true;
+        });
+
+        it('finds brsconfig.json', async () => {
+            fsExtra.outputFileSync(`${rootDir}/brsconfig.json`, '');
+            expect(
+                await project['getConfigFilePath']({
+                    projectDir: rootDir,
+                    bsconfigPath: undefined
+                })
+            ).to.eql(s`${rootDir}/brsconfig.json`);
         });
 
         it('does not crash on undefined', async () => {
