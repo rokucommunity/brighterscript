@@ -78,12 +78,18 @@ export class BrsFileValidator {
 
                 this.validateEnumDeclaration(node);
 
+                if (!node.tokens.name) {
+                    return;
+                }
                 //register this enum declaration
                 const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });
                 // eslint-disable-next-line no-bitwise
                 node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, { definingNode: node }, nodeType, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
             },
             ClassStatement: (node) => {
+                if (!node?.tokens?.name) {
+                    return;
+                }
                 this.validateDeclarationLocations(node, 'class', () => util.createBoundingRange(node.tokens.class, node.tokens.name));
 
                 //register this class
@@ -106,6 +112,9 @@ export class BrsFileValidator {
                 }
             },
             AssignmentStatement: (node) => {
+                if (!node?.tokens?.name) {
+                    return;
+                }
                 const data: ExtraSymbolData = {};
                 //register this variable
                 let nodeType = node.getType({ flags: SymbolTypeFlag.runtime, data: data });
@@ -128,6 +137,9 @@ export class BrsFileValidator {
                 node.parent.getSymbolTable()?.addSymbol(node.tokens.item.text, { definingNode: node, isInstance: true, canUseInDefinedAstNode: true }, loopVarType, SymbolTypeFlag.runtime);
             },
             NamespaceStatement: (node) => {
+                if (!node?.nameExpression) {
+                    return;
+                }
                 this.validateDeclarationLocations(node, 'namespace', () => util.createBoundingRange(node.tokens.namespace, node.nameExpression));
                 //Namespace Types are added at the Scope level - This is handled when the SymbolTables get linked
             },
@@ -153,6 +165,9 @@ export class BrsFileValidator {
                         funcType,
                         SymbolTypeFlag.runtime
                     );
+                    if (!node.tokens?.name) {
+                        return;
+                    }
                     //add the transpiled name for namespaced functions to the root symbol table
                     const transpiledNamespaceFunctionName = node.getName(ParseMode.BrightScript);
 
@@ -180,7 +195,10 @@ export class BrsFileValidator {
                 this.validateFunctionParameterCount(node);
             },
             FunctionParameterExpression: (node) => {
-                const paramName = node.tokens.name?.text;
+                const paramName = node.tokens?.name?.text;
+                if (!paramName) {
+                    return;
+                }
                 const data: ExtraSymbolData = {};
                 const nodeType = node.getType({ flags: SymbolTypeFlag.typetime, data: data });
                 // add param symbol at expression level, so it can be used as default value in other params
@@ -192,6 +210,9 @@ export class BrsFileValidator {
                 funcExpr.body.getSymbolTable()?.addSymbol(paramName, { definingNode: node, isInstance: true, isFromDocComment: data.isFromDocComment }, nodeType, SymbolTypeFlag.runtime);
             },
             InterfaceStatement: (node) => {
+                if (!node.tokens.name) {
+                    return;
+                }
                 this.validateDeclarationLocations(node, 'interface', () => util.createBoundingRange(node.tokens.interface, node.tokens.name));
 
                 const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });
@@ -199,6 +220,9 @@ export class BrsFileValidator {
                 node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node }, nodeType, SymbolTypeFlag.typetime);
             },
             ConstStatement: (node) => {
+                if (!node.tokens.name) {
+                    return;
+                }
                 this.validateDeclarationLocations(node, 'const', () => util.createBoundingRange(node.tokens.const, node.tokens.name));
                 const nodeType = node.getType({ flags: SymbolTypeFlag.runtime });
                 node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node, isInstance: true }, nodeType, SymbolTypeFlag.runtime);

@@ -1,9 +1,10 @@
 import { expect } from './chai-config.spec';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { DidChangeWatchedFilesParams, Location, PublishDiagnosticsParams, WorkspaceFolder } from 'vscode-languageserver';
+import type { ConfigurationItem, DidChangeWatchedFilesParams, Location, PublishDiagnosticsParams, WorkspaceFolder } from 'vscode-languageserver';
 import { FileChangeType } from 'vscode-languageserver';
 import { Deferred } from './deferred';
+import type { BrightScriptClientConfiguration } from './LanguageServer';
 import { CustomCommands, LanguageServer } from './LanguageServer';
 import { createSandbox } from 'sinon';
 import { standardizePath as s, util } from './util';
@@ -16,13 +17,14 @@ import { isBrsFile, isLiteralString } from './astUtils/reflection';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { tempDir, rootDir } from './testHelpers.spec';
 import { BusyStatusTracker } from './BusyStatusTracker';
-import type { BscFile, WorkspaceConfigWithExtras } from '.';
+import type { BscFile } from './files/BscFile';
 import type { Project } from './lsp/Project';
 import { LogLevel, Logger, createLogger } from './logging';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { standardizePath } from 'roku-deploy';
 import undent from 'undent';
 import { ProjectManager } from './lsp/ProjectManager';
+import type { WorkspaceConfig } from './lsp/ProjectManager';
 
 const sinon = createSandbox();
 
@@ -166,7 +168,7 @@ describe('LanguageServer', () => {
     });
 
     describe('onDidChangeConfiguration', () => {
-        async function doTest(startingConfigs: WorkspaceConfigWithExtras[], endingConfigs: WorkspaceConfigWithExtras[]) {
+        async function doTest(startingConfigs: WorkspaceConfig[], endingConfigs: WorkspaceConfig[]) {
             (server as any)['connection'] = connection;
             server['workspaceConfigsCache'] = new Map(startingConfigs.map(x => [x.workspaceFolder, x]));
 
@@ -185,17 +187,17 @@ describe('LanguageServer', () => {
         it('does not reload project when: 1 project is unchanged', async () => {
             const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
             await doTest([{
-                bsconfigPath: undefined,
                 languageServer: {
-                    enableThreading: true,
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: workspacePath,
                 excludePatterns: []
             }], [{
-                bsconfigPath: undefined,
                 languageServer: {
-                    enableThreading: true,
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: workspacePath,
@@ -207,9 +209,9 @@ describe('LanguageServer', () => {
         it('reloads project when adding new project', async () => {
             const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
             await doTest([], [{
-                bsconfigPath: undefined,
                 languageServer: {
-                    enableThreading: true,
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: workspacePath,
@@ -221,25 +223,25 @@ describe('LanguageServer', () => {
         it('reloads project when deleting a project', async () => {
             const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
             await doTest([{
-                bsconfigPath: undefined,
                 languageServer: {
-                    enableThreading: true,
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: workspacePath,
                 excludePatterns: []
             }, {
-                bsconfigPath: undefined,
                 languageServer: {
-                    enableThreading: true,
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: s`${tempDir}/project2`,
                 excludePatterns: []
             }], [{
-                bsconfigPath: undefined,
                 languageServer: {
-                    enableThreading: true,
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: workspacePath,
@@ -251,17 +253,17 @@ describe('LanguageServer', () => {
         it('reloads project when changing specific settings', async () => {
             const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
             await doTest([{
-                bsconfigPath: undefined,
                 languageServer: {
-                    enableThreading: true,
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
                     logLevel: 'trace'
                 },
                 workspaceFolder: workspacePath,
                 excludePatterns: []
             }], [{
-                bsconfigPath: undefined,
                 languageServer: {
-                    enableThreading: true,
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: workspacePath,
@@ -361,7 +363,7 @@ describe('LanguageServer', () => {
 
             //no child bsconfig.json files, use the workspacePath
             expect(
-                server['projectManager'].projects.map(x => x.projectPath)
+                server['projectManager'].projects.map(x => x.projectKey)
             ).to.eql([
                 workspacePath
             ]);
@@ -373,10 +375,10 @@ describe('LanguageServer', () => {
 
             //2 child bsconfig.json files. Use those folders as projects, and don't use workspacePath
             expect(
-                server['projectManager'].projects.map(x => x.projectPath).sort()
+                server['projectManager'].projects.map(x => x.projectKey).sort()
             ).to.eql([
-                s`${workspacePath}/project1`,
-                s`${workspacePath}/project2`
+                s`${workspacePath}/project1/bsconfig.json`,
+                s`${workspacePath}/project2/bsconfig.json`
             ]);
 
             fsExtra.removeSync(s`${workspacePath}/project2/bsconfig.json`);
@@ -384,9 +386,9 @@ describe('LanguageServer', () => {
 
             //1 child bsconfig.json file. Still don't use workspacePath
             expect(
-                server['projectManager'].projects.map(x => x.projectPath)
+                server['projectManager'].projects.map(x => x.projectKey)
             ).to.eql([
-                s`${workspacePath}/project1`
+                s`${workspacePath}/project1/bsconfig.json`
             ]);
 
             fsExtra.removeSync(s`${workspacePath}/project1/bsconfig.json`);
@@ -394,29 +396,55 @@ describe('LanguageServer', () => {
 
             //back to no child bsconfig.json files. use workspacePath again
             expect(
-                server['projectManager'].projects.map(x => x.projectPath)
+                server['projectManager'].projects.map(x => x.projectKey)
             ).to.eql([
                 workspacePath
             ]);
         });
 
         it('ignores bsconfig.json files from vscode ignored paths', async () => {
-            server.run();
-            sinon.stub(server['connection'].workspace, 'getConfiguration').returns(Promise.resolve({
-                exclude: {
-                    '**/vendor': true
+            const mapItem = (item: ConfigurationItem) => {
+                if (item.section === 'files') {
+                    return {
+                        exclude: {
+                            '**/vendor': true
+                        }
+                    };
+                } else if (item.section === 'search') {
+                    return {
+                        exclude: {
+                            '**/temp': true
+                        }
+                    };
+                } else {
+                    return {};
                 }
-            }) as any);
+            };
+
+            server.run();
+            sinon.stub(server['connection'].workspace, 'getConfiguration').callsFake(
+                // @ts-expect-error Sinon incorrectly infers the type of this function
+                (items: any) => {
+                    if (typeof items === 'string') {
+                        return Promise.resolve({});
+                    }
+                    if (Array.isArray(items)) {
+                        return Promise.resolve(items.map(mapItem));
+                    }
+                    return Promise.resolve(mapItem(items));
+                }
+            );
             await server.onInitialized();
 
             fsExtra.outputJsonSync(s`${workspacePath}/vendor/someProject/bsconfig.json`, {});
+            fsExtra.outputJsonSync(s`${workspacePath}/temp/someProject/bsconfig.json`, {});
             //it always ignores node_modules
             fsExtra.outputJsonSync(s`${workspacePath}/node_modules/someProject/bsconfig.json`, {});
             await server['syncProjects']();
 
             //no child bsconfig.json files, use the workspacePath
             expect(
-                server['projectManager'].projects.map(x => x.projectPath)
+                server['projectManager'].projects.map(x => x.projectKey)
             ).to.eql([
                 workspacePath
             ]);
@@ -435,10 +463,10 @@ describe('LanguageServer', () => {
             await server['syncProjects']();
 
             expect(
-                server['projectManager'].projects.map(x => x.projectPath).sort()
+                server['projectManager'].projects.map(x => x.projectKey).sort()
             ).to.eql([
-                s`${tempDir}/root`,
-                s`${tempDir}/root/subdir`
+                s`${tempDir}/root/bsconfig.json`,
+                s`${tempDir}/root/subdir/bsconfig.json`
             ]);
         });
 
@@ -460,10 +488,64 @@ describe('LanguageServer', () => {
             await server['syncProjects']();
 
             expect(
-                server['projectManager'].projects.map(x => x.projectPath).sort()
+                server['projectManager'].projects.map(x => x.projectKey).sort()
             ).to.eql([
                 s`${tempDir}/project1`,
                 s`${tempDir}/sub/dir/project2`
+            ]);
+        });
+
+        it('uses explicit projects list', async () => {
+            fsExtra.outputJsonSync(s`${tempDir}/project1/bsconfig.json`, {});
+            fsExtra.outputFileSync(s`${tempDir}/project1/source/main.brs`, '');
+
+            fsExtra.outputJsonSync(s`${tempDir}/sub/dir/project2/bsconfig.json`, {});
+            fsExtra.outputFileSync(s`${tempDir}/sub/dir/project2/source/main.bs`, '');
+
+            //not in projects list
+            fsExtra.outputJsonSync(s`${tempDir}/project3/bsconfig.json`, {});
+            fsExtra.outputFileSync(s`${tempDir}/project3/source/main.brs`, '');
+
+            workspaceFolders = [
+                s`${tempDir}/`
+            ];
+            const workspaceSettings: BrightScriptClientConfiguration = {
+                languageServer: {
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
+                    logLevel: 'info'
+                },
+                projects: [
+                    // eslint-disable-next-line no-template-curly-in-string
+                    'project1',
+                    // eslint-disable-next-line no-template-curly-in-string
+                    '${workspaceFolder}/sub/dir/project2/bsconfig.json',
+                    // eslint-disable-next-line no-template-curly-in-string
+                    { name: 'p3', path: '${workspaceFolder}/project3', disabled: true }
+                ]
+            };
+
+            server.run();
+
+            sinon.stub(server as any, 'getClientConfiguration').returns(Promise.resolve(workspaceSettings));
+
+            expect(
+                await server['getWorkspaceConfigs']()
+            ).to.eql([
+                {
+                    workspaceFolder: s`${tempDir}/`,
+                    excludePatterns: [],
+                    projects: [
+                        { path: 'project1' },
+                        { path: s`${tempDir}/sub/dir/project2/bsconfig.json` },
+                        { name: 'p3', path: s`${tempDir}/project3`, disabled: true }
+                    ],
+                    languageServer: {
+                        enableThreading: false,
+                        enableProjectDiscovery: true,
+                        logLevel: 'info'
+                    }
+                }
             ]);
         });
     });
@@ -622,18 +704,18 @@ describe('LanguageServer', () => {
     });
 
     describe('rebuildPathFilterer', () => {
-        let workspaceConfigs: WorkspaceConfigWithExtras[] = [];
+        let workspaceConfigs: WorkspaceConfig[] = [];
         beforeEach(() => {
             workspaceConfigs = [
                 {
-                    bsconfigPath: undefined,
                     languageServer: {
-                        enableThreading: true,
+                        enableThreading: false,
+                        enableProjectDiscovery: true,
                         logLevel: 'info'
                     },
                     workspaceFolder: workspacePath,
                     excludePatterns: []
-                } as WorkspaceConfigWithExtras
+                }
             ];
             server['connection'] = connection as any;
             sinon.stub(server as any, 'getWorkspaceConfigs').callsFake(() => Promise.resolve(workspaceConfigs));
@@ -707,22 +789,22 @@ describe('LanguageServer', () => {
 
         it('a gitignore file from any workspace will apply to all workspaces', async () => {
             workspaceConfigs = [{
-                bsconfigPath: undefined,
                 languageServer: {
-                    enableThreading: true,
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: s`${tempDir}/flavor1`,
                 excludePatterns: []
             }, {
-                bsconfigPath: undefined,
                 languageServer: {
-                    enableThreading: true,
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
                     logLevel: 'info'
                 },
                 workspaceFolder: s`${tempDir}/flavor2`,
                 excludePatterns: []
-            }] as WorkspaceConfigWithExtras[];
+            }];
             fsExtra.outputFileSync(s`${workspaceConfigs[0].workspaceFolder}/.gitignore`, undent`
                 dist/
             `);

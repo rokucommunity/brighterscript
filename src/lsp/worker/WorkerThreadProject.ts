@@ -43,19 +43,18 @@ export class WorkerThreadProject implements LspProject {
     public constructor(
         options?: {
             logger?: Logger;
-            projectIdentifier?: string;
         }
     ) {
         this.logger = options?.logger ?? createLogger();
-        this.projectIdentifier = options?.projectIdentifier ?? '';
     }
 
     public async activate(options: ProjectConfig) {
         this.activateOptions = options;
-        this.projectPath = options.projectPath ? util.standardizePath(options.projectPath) : options.projectPath;
+        this.bsconfigPath = options.bsconfigPath ? util.standardizePath(options.bsconfigPath) : options.bsconfigPath;
+        this.projectDir = options.projectDir ? util.standardizePath(options.projectDir) : options.projectDir;
+        this.projectKey = options.projectKey ? util.standardizePath(options.projectKey) : options.bsconfigPath ?? options.projectDir;
         this.workspaceFolder = options.workspaceFolder ? util.standardizePath(options.workspaceFolder) : options.workspaceFolder;
         this.projectNumber = options.projectNumber;
-        this.bsconfigPath = options.bsconfigPath ? util.standardizePath(options.bsconfigPath) : options.bsconfigPath;
 
         // start a new worker thread or get an unused existing thread
         this.worker = workerPool.getWorker();
@@ -123,19 +122,18 @@ export class WorkerThreadProject implements LspProject {
     private worker: Worker;
 
     /**
-     * The path to where the project resides
+     * Path to the project. For directory-only projects, this is the path to the dir. For bsconfig.json projects, this is the path to the config.
      */
-    public projectPath: string;
+    projectKey: string;
+    /**
+     * The directory for the root of this project (typically where the bsconfig.json or manifest is located)
+     */
+    projectDir: string;
 
     /**
      * A unique number for this project, generated during this current language server session. Mostly used so we can identify which project is doing logging
      */
     public projectNumber: number;
-
-    /**
-     * A unique name for this project used in logs to help keep track of everything
-     */
-    public projectIdentifier: string;
 
     /**
      * The path to the workspace where this project resides. A workspace can have multiple projects (by adding a bsconfig.json to each folder).

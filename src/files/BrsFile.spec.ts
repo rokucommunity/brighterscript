@@ -27,7 +27,8 @@ import * as fileUrl from 'file-url';
 import type { AALiteralExpression } from '../parser/Expression';
 import { CallExpression, FunctionExpression, LiteralExpression } from '../parser/Expression';
 import { Logger } from '@rokucommunity/logger';
-import { isFunctionExpression, isAALiteralExpression, isBlock } from '../astUtils/reflection';
+import { isFunctionExpression, isAALiteralExpression, isBlock, isBrsFile } from '../astUtils/reflection';
+import { createVisitor, WalkMode } from '../astUtils/visitors';
 
 let sinon = sinonImport.createSandbox();
 
@@ -3074,6 +3075,50 @@ describe('BrsFile', () => {
                     NameA_NameB_alert()
                 end sub
             `, 'trim', 'source/main.bs');
+        });
+
+        it('does not crash on undefined trivia', async () => {
+            //plugin that mangles trivia collections
+            program.plugins.add({
+                name: 'test-plugin',
+                prepareFile: (event) => {
+                    if (isBrsFile(event.file)) {
+                        //delete trivia from the eof token
+                        event.file.parser.eofToken.leadingTrivia = [];
+                        event.file.ast.walk(createVisitor({
+                            AstNode: (node) => {
+                                //delete all trivia from the node
+                                for (let i = 0; i < (node.leadingTrivia.length ?? 0); i++) {
+                                    delete node.leadingTrivia[i];
+                                }
+                                for (let i = 0; i < (node.endTrivia.length ?? 0); i++) {
+                                    delete node.endTrivia[i];
+                                }
+                            }
+                        }), {
+                            walkMode: WalkMode.visitAllRecursive
+                        });
+                        console.log('trivia removed');
+                    }
+                }
+            });
+
+            //ensure plugin errors are not suppressed
+            program.plugins['suppressErrors'] = false;
+
+            await testTranspile(`
+                'comment 1
+                sub main() 'comment 2
+                    'comment 3
+                    'comment 4
+                    print "main" 'comment 5
+                end sub 'comment 6
+                'comment 7
+            `, `
+                sub main()
+                    print "main"
+                end sub
+            `, undefined, 'source/main.bs');
         });
 
         it('includes annotation comments for class', async () => {

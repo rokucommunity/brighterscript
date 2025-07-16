@@ -17,11 +17,19 @@ import type { BscType } from './types/BscType';
 import type { LspDiagnostic } from './lsp/LspProject';
 import { Project } from './lsp/Project';
 import { isProgram, isProject } from './astUtils/reflection';
+import type { WorkspaceConfig } from './lsp/ProjectManager';
 
 export const cwd = s`${__dirname}/../`;
 export const tempDir = s`${__dirname}/../.tmp`;
 export const rootDir = s`${tempDir}/rootDir`;
 export const stagingDir = s`${tempDir}/stagingDir`;
+export const workspaceSettings: WorkspaceConfig = {
+    workspaceFolder: rootDir,
+    languageServer: {
+        enableThreading: false,
+        enableProjectDiscovery: true
+    }
+};
 
 export const trim = undent;
 const sinon = createSandbox();

@@ -1604,4 +1604,52 @@ describe('util', () => {
             util.isClassUsedAsFunction(new ClassType(undefined), undefined, { flags: SymbolTypeFlag.runtime });
         });
     });
+
+    describe('hasLeadingComments', () => {
+        it('does not crash on undefined trivia', () => {
+            expect(util.hasLeadingComments(undefined)).to.be.false;
+        });
+
+        it('returns false when there are no leading comments', () => {
+            const token = createToken(TokenKind.Identifier);
+            token.leadingTrivia = [];
+            expect(util.hasLeadingComments(token)).to.be.false;
+        });
+
+        it('returns true when there are leading comments', () => {
+            const token = createToken(TokenKind.Identifier);
+            token.leadingTrivia = [createToken(TokenKind.Comment, `'comment`)];
+            expect(util.hasLeadingComments(token)).to.be.true;
+        });
+
+        it('does not crash on unexpected trivia item types', () => {
+            const token = createToken(TokenKind.Identifier);
+            token.leadingTrivia = [undefined, null, 1, true, 'string', {}, createToken(TokenKind.Comment, `'comment`)] as any[];
+            expect(util.hasLeadingComments(token)).to.be.true;
+        });
+    });
+
+    describe('getLeadingComments', () => {
+        it('does not crash on undefined trivia', () => {
+            expect(util.getLeadingComments(undefined)).to.eql([]);
+        });
+
+        it('returns [] when there are no leading comments', () => {
+            const token = createToken(TokenKind.Identifier);
+            token.leadingTrivia = [];
+            expect(util.getLeadingComments(token)).to.eql([]);
+        });
+
+        it('returns true when there are leading comments', () => {
+            const token = createToken(TokenKind.Identifier);
+            token.leadingTrivia = [createToken(TokenKind.Comment, `'comment 1`)];
+            expect(util.getLeadingComments(token)).eql([createToken(TokenKind.Comment, `'comment 1`)]);
+        });
+
+        it('does not crash on unexpected trivia item types', () => {
+            const token = createToken(TokenKind.Identifier);
+            token.leadingTrivia = [undefined, null, 1, true, 'string', {}, createToken(TokenKind.Comment, `'comment 2`)] as any[];
+            expect(util.getLeadingComments(token)).eql([createToken(TokenKind.Comment, `'comment 2`)]);
+        });
+    });
 });
