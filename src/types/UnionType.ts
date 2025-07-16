@@ -2,7 +2,7 @@ import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { isDynamicType, isObjectType, isTypedFunctionType, isUnionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { ReferenceType } from './ReferenceType';
-import { addAssociatedTypesTableAsSiblingToMemberTable, findTypeUnion, findTypeUnionDeepCheck, getUniqueType, isEnumTypeCompatible } from './helpers';
+import { addAssociatedTypesTableAsSiblingToMemberTable, findTypeUnion, findTypeUnionDeepCheck, getAllTypesFromUnionType, getUniqueType, isEnumTypeCompatible } from './helpers';
 import { BscTypeKind } from './BscTypeKind';
 import type { TypeCacheEntry } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
@@ -144,7 +144,16 @@ export class UnionType extends BscType {
     toString(): string {
         return joinTypesString(this.types);
     }
+
+    /**
+     * Used for transpilation
+     */
     toTypeString(): string {
+        const uniqueTypeStrings = new Set<string>(getAllTypesFromUnionType(this).map(t => t.toTypeString()));
+
+        if (uniqueTypeStrings.size === 1) {
+            return uniqueTypeStrings.values().next().value;
+        }
         return 'dynamic';
     }
 

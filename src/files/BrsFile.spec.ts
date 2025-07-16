@@ -4299,6 +4299,73 @@ describe('BrsFile', () => {
         });
     });
 
+    describe('union types', () => {
+
+        it('use dynamic for union of unlike primitives', async () => {
+            await testTranspile(`
+                function test1() as string or integer
+                    return "hello"
+                end function
+
+                function test2() as double or float
+                    return 1.23
+                end function
+
+                function test3() as integer or longinteger
+                    return 5
+                end function
+
+                function test4() as integer or integer or integer
+                    return 5
+                end function
+            `, `
+                function test1() as dynamic
+                    return "hello"
+                end function
+
+                function test2() as dynamic
+                    return 1.23
+                end function
+
+                function test3() as dynamic
+                    return 5
+                end function
+
+                function test4() as integer
+                    return 5
+                end function
+            `);
+        });
+
+        it('use object for union of object', async () => {
+            await testTranspile(`
+                function test1() as object
+                    return 1
+                end function
+
+                function test2() as object or object
+                    return 1
+                end function
+
+                function test3() as object or object or object
+                    return 1
+                end function
+                `, `
+                function test1() as object
+                    return 1
+                end function
+
+                function test2() as object
+                    return 1
+                end function
+
+                function test3() as object
+                    return 1
+                end function
+            `);
+        });
+    });
+
     describe('callfunc operator', () => {
         describe('transpile', () => {
             it('does not produce diagnostics on plain roSGNode', () => {
