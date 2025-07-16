@@ -633,35 +633,38 @@ Another common use case is to remove print statements and comments. Here's a plu
 Note: Comments are not regular nodes in the AST. They're considered "trivia". To access them, you need to ask each AstNode for its trivia. to help with this, we've included the `AstNode` visitor method. Here's how you'd do that:
 
 ```typescript
-import { isBrsFile, createVisitor, WalkMode, BeforeFileTranspileEvent, CompilerPlugin } from 'brighterscript';
+import { Plugin, BeforePrepareFileEvent, isBrsFile, WalkMode, createVisitor, TokenKind, AstNode, EmptyStatement } from 'brighterscript';
 
-export default function plugin() {
+export default function (): Plugin {
     return {
         name: 'removeCommentAndPrintStatements',
-        beforeFileTranspile: (event: BeforeFileTranspileEvent) => {
-            if (isBrsFile(event.file)) {
-                // visit functions bodies
-                event.file.ast.walk(createVisitor({
-                    PrintStatement: (statement) => {
-                        //replace `PrintStatement` transpilation with empty string
-                        event.editor.overrideTranspileResult(statement, '');
-                    },
-                    AstNode: (node: AstNode, _parent, owner, key) => {
-                        const trivia = node.getLeadingTrivia();
-                        for(let i = 0; i < trivia.length; i++) {
-                            let triviaItem = trivia[i].
-                            if (triviaItem.kind === TokenKind.Comment) {
-                                //remove comment tokens
-                                event.editor.removeProperty(trivia, i);
-                            }
+        beforePrepareFile: (event: BeforePrepareFileEvent) => {
+            if (!isBrsFile(event.file)) {
+                return;
+            }
+            //delete comments from the EOF token
+            event.editor.arraySplice(event.file.parser.eofToken.leadingTrivia, 0, Number.MAX_SAFE_INTEGER);
+
+            event.file.ast.walk(createVisitor({
+                PrintStatement: (node: AstNode, _parent, owner, key) => {
+                    return new EmptyStatement();
+                },
+                AstNode: (node: AstNode, _parent, owner, key) => {
+                    const trivia = node.leadingTrivia;
+                    for (let i = 0; i < trivia.length; i++) {
+                        if (trivia[i]?.kind === TokenKind.Comment) {
+                            //remove this token
+                            event.editor.arraySplice(trivia, i, 1);
+                            //replay this index again for the new item that took our spot since we deleted from the array
+                            i--;
                         }
                     }
-                }), {
-                    walkMode: WalkMode.visitStatements | WalkMode.visitComments
-                });
-            }
+                }
+            }), {
+                walkMode: WalkMode.visitAllRecursive
+            });
         }
-    } as CompilerPlugin;
+    };
 }
 ```
 
