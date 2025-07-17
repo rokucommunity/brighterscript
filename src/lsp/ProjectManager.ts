@@ -713,7 +713,7 @@ export class ProjectManager {
             followSymbolicLinks: false,
             absolute: true,
             onlyFiles: true,
-            deep: workspaceConfig.languageServer.maxDepth ?? 15
+            deep: workspaceConfig.languageServer.projectDiscoveryMaxDepth ?? 15
         });
 
         //filter the files to only include those that are allowed by the path filterer
@@ -735,7 +735,7 @@ export class ProjectManager {
                 followSymbolicLinks: false,
                 absolute: true,
                 onlyFiles: true,
-                deep: workspaceConfig.languageServer.maxDepth ?? 15
+                deep: workspaceConfig.languageServer.projectDiscoveryMaxDepth ?? 15
             })).map(async manifestEntry => {
                 const manifestDir = path.dirname(manifestEntry);
                 //TODO validate that manifest is a Roku manifest
@@ -954,7 +954,7 @@ export interface WorkspaceConfig {
         /**
          * Maximum depth to search for Roku projects
          */
-        maxDepth?: number;
+        projectDiscoveryMaxDepth?: number;
     };
 }
 

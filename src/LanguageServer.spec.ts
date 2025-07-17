@@ -545,7 +545,7 @@ describe('LanguageServer', () => {
                         enableThreading: false,
                         enableProjectDiscovery: true,
                         logLevel: 'info',
-                        maxDepth: 15
+                        projectDiscoveryMaxDepth: 15
                     }
                 }
             ]);
