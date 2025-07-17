@@ -544,10 +544,54 @@ describe('LanguageServer', () => {
                     languageServer: {
                         enableThreading: false,
                         enableProjectDiscovery: true,
+                        projectDiscoveryExclude: undefined,
                         logLevel: 'info'
                     }
                 }
             ]);
+        });
+    });
+
+    describe('projectDiscoveryExclude and files.watcherExclude', () => {
+        it('includes projectDiscoveryExclude in workspace configuration', async () => {
+            const projectDiscoveryExclude = ['**/test/**', 'node_modules/**'];
+
+            sinon.stub(server as any, 'getClientConfiguration').callsFake((workspaceFolder, section) => {
+                if (section === 'brightscript') {
+                    return Promise.resolve({
+                        languageServer: {
+                            projectDiscoveryExclude: projectDiscoveryExclude
+                        }
+                    });
+                }
+                return Promise.resolve({});
+            });
+
+            server.run();
+            const configs = await server['getWorkspaceConfigs']();
+            expect(configs[0].languageServer.projectDiscoveryExclude).to.deep.equal(projectDiscoveryExclude);
+        });
+
+        it('includes files.watcherExclude in workspace exclude patterns', async () => {
+            const watcherExclude = {
+                '**/tmp/**': true,
+                '**/cache/**': true
+            };
+
+            sinon.stub(server as any, 'getClientConfiguration').callsFake((workspaceFolder, section) => {
+                if (section === 'files') {
+                    return Promise.resolve({
+                        exclude: { 'node_modules': true },
+                        watcherExclude: watcherExclude
+                    });
+                }
+                return Promise.resolve({});
+            });
+
+            server.run();
+            const excludeGlobs = await server['getWorkspaceExcludeGlobs'](workspaceFolders[0]);
+            expect(excludeGlobs).to.include('**/tmp/**');
+            expect(excludeGlobs).to.include('**/cache/**');
         });
     });
 

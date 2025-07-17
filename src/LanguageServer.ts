@@ -434,6 +434,7 @@ export class LanguageServer {
                     languageServer: {
                         enableThreading: brightscriptConfig.languageServer?.enableThreading ?? LanguageServer.enableThreadingDefault,
                         enableProjectDiscovery: brightscriptConfig.languageServer?.enableProjectDiscovery ?? LanguageServer.enableProjectDiscoveryDefault,
+                        projectDiscoveryExclude: brightscriptConfig.languageServer?.projectDiscoveryExclude,
                         logLevel: brightscriptConfig?.languageServer?.logLevel
                     }
                 };
@@ -647,6 +648,13 @@ export class LanguageServer {
                 this.pathFilterer.registerExcludeList(rootDir, workspaceConfig.excludePatterns)
             );
 
+            //get any `projectDiscoveryExclude` patterns from the client from this workspace
+            if (workspaceConfig.languageServer?.projectDiscoveryExclude) {
+                this.pathFiltererDisposables.push(
+                    this.pathFilterer.registerExcludeList(rootDir, workspaceConfig.languageServer.projectDiscoveryExclude)
+                );
+            }
+
             //get any .gitignore patterns from the client from this workspace
             const gitignorePath = path.resolve(rootDir, '.gitignore');
             if (await fsExtra.pathExists(gitignorePath)) {
@@ -672,16 +680,17 @@ export class LanguageServer {
     }
 
     /**
-     * Ask the client for the list of `files.exclude` patterns. Useful when determining if we should process a file
+     * Ask the client for the list of `files.exclude` and `files.watcherExclude` patterns. Useful when determining if we should process a file
      */
     private async getWorkspaceExcludeGlobs(workspaceFolder: string): Promise<string[]> {
-        const filesConfig = await this.getClientConfiguration<{ exclude: string[] }>(workspaceFolder, 'files');
+        const filesConfig = await this.getClientConfiguration<{ exclude: string[]; watcherExclude: string[] }>(workspaceFolder, 'files');
         const fileExcludes = this.extractExcludes(filesConfig);
+        const watcherExcludes = this.extractExcludes({ exclude: filesConfig?.watcherExclude });
 
         const searchConfig = await this.getClientConfiguration<{ exclude: string[] }>(workspaceFolder, 'search');
         const searchExcludes = this.extractExcludes(searchConfig);
 
-        return [...fileExcludes, ...searchExcludes];
+        return [...fileExcludes, ...watcherExcludes, ...searchExcludes];
     }
 
     private extractExcludes(config: { exclude: string[] }): string[] {
@@ -824,6 +833,7 @@ export interface BrightScriptClientConfiguration {
     languageServer: {
         enableThreading: boolean;
         enableProjectDiscovery: boolean;
+        projectDiscoveryExclude?: string[];
         logLevel: LogLevel | string;
     };
 }
