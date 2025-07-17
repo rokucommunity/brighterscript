@@ -430,11 +430,11 @@ export class LanguageServer {
                 return {
                     workspaceFolder: workspaceFolder,
                     excludePatterns: await this.getWorkspaceExcludeGlobs(workspaceFolder),
-                    projects: this.normalizeProjectPaths(workspaceFolder, brightscriptConfig.projects),
+                    projects: this.normalizeProjectPaths(workspaceFolder, brightscriptConfig?.projects),
                     languageServer: {
-                        enableThreading: brightscriptConfig.languageServer?.enableThreading ?? LanguageServer.enableThreadingDefault,
-                        enableProjectDiscovery: brightscriptConfig.languageServer?.enableProjectDiscovery ?? LanguageServer.enableProjectDiscoveryDefault,
-                        projectDiscoveryExclude: brightscriptConfig.languageServer?.projectDiscoveryExclude,
+                        enableThreading: brightscriptConfig?.languageServer?.enableThreading ?? LanguageServer.enableThreadingDefault,
+                        enableProjectDiscovery: brightscriptConfig?.languageServer?.enableProjectDiscovery ?? LanguageServer.enableProjectDiscoveryDefault,
+                        projectDiscoveryExclude: brightscriptConfig?.languageServer?.projectDiscoveryExclude,
                         logLevel: brightscriptConfig?.languageServer?.logLevel
                     }
                 };
