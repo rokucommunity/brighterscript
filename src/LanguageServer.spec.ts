@@ -574,16 +574,14 @@ describe('LanguageServer', () => {
         });
 
         it('includes files.watcherExclude in workspace exclude patterns', async () => {
-            const watcherExclude = {
-                '**/tmp/**': true,
-                '**/cache/**': true
-            };
-
             sinon.stub(server as any, 'getClientConfiguration').callsFake((workspaceFolder, section) => {
                 if (section === 'files') {
                     return Promise.resolve({
                         exclude: { 'node_modules': true },
-                        watcherExclude: watcherExclude
+                        watcherExclude: {
+                            '**/tmp/**': true,
+                            '**/cache/**': true
+                        }
                     });
                 }
                 return Promise.resolve({});

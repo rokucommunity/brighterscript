@@ -686,22 +686,23 @@ export class LanguageServer {
      */
     private async getWorkspaceExcludeGlobs(workspaceFolder: string): Promise<string[]> {
         const filesConfig = await this.getClientConfiguration<{ exclude: string[]; watcherExclude: string[] }>(workspaceFolder, 'files');
-        const fileExcludes = this.extractExcludes(filesConfig);
-        const watcherExcludes = this.extractExcludes({ exclude: filesConfig?.watcherExclude });
-
         const searchConfig = await this.getClientConfiguration<{ exclude: string[] }>(workspaceFolder, 'search');
-        const searchExcludes = this.extractExcludes(searchConfig);
 
-        return [...fileExcludes, ...watcherExcludes, ...searchExcludes];
+        return [
+            ...this.extractExcludes(filesConfig?.exclude),
+            ...this.extractExcludes(filesConfig?.watcherExclude),
+            ...this.extractExcludes(searchConfig?.exclude)
+        ];
     }
 
-    private extractExcludes(config: { exclude: string[] }): string[] {
-        if (!config?.exclude) {
+    private extractExcludes(exclude: string[]): string[] {
+        //if the exclude is not defined, return an empty array
+        if (!exclude) {
             return [];
         }
         return Object
-            .keys(config.exclude)
-            .filter(x => config.exclude[x])
+            .keys(exclude)
+            .filter(x => exclude[x])
             //vscode files.exclude patterns support ignoring folders without needing to add `**/*`. So for our purposes, we need to
             //append **/* to everything without a file extension or magic at the end
             .map(pattern => [
