@@ -497,11 +497,11 @@ export class ProjectManager {
 
         //if the request has been cancelled since originally requested due to idle time being slow, skip the rest of the wor
         if (options?.cancellationToken?.isCancellationRequested) {
-            this.logger.log('ProjectManager getCompletions cancelled', options);
+            this.logger.debug('ProjectManager getCompletions cancelled', options);
             return;
         }
 
-        this.logger.log('ProjectManager getCompletions', options);
+        this.logger.debug('ProjectManager getCompletions', options);
         //Ask every project for results, keep whichever one responds first that has a valid response
         let result = await util.promiseRaceMatch(
             this.projects.map(x => x.getCompletions(options)),
