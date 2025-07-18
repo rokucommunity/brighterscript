@@ -219,5 +219,44 @@ describe('HoverProcessor', () => {
             expect(hover?.range).to.eql(util.createRange(2, 40, 2, 50));
             expect(hover?.contents).to.eql(fence('const name.sp.a.c.e.SOME_VALUE = true'));
         });
+
+        it('finds hover for global function', () => {
+            const file = program.setFile('source/main.brs', `
+                sub main()
+                    result = Abs(-5)
+                end sub
+            `);
+            program.validate();
+
+            // hover over the `Abs` function call
+            let hover = program.getHover(file.pathAbsolute, util.createPosition(2, 29))[0];
+            expect(hover).to.exist;
+            expect(hover.range).to.eql(util.createRange(2, 29, 2, 32));
+            expect(hover.contents).to.contain('function Abs(x as float) as float');
+        });
+
+        it('finds hover for global function when file has no scopes', () => {
+            // Create a program with no manifest and no scopes to ensure global scope fallback
+            const testProgram = new Program({ rootDir: rootDir });
+
+            const file = testProgram.setFile('standalone/main.brs', `
+                sub main()
+                    result = Abs(-5)
+                end sub
+            `);
+
+            // Don't validate - this simulates a file that might not be in any scopes
+            const scopes = testProgram.getScopesForFile(file);
+
+            // hover over the `Abs` function call
+            let hover = testProgram.getHover(file.pathAbsolute, util.createPosition(2, 29))[0];
+
+            testProgram.dispose();
+
+            // After the fix, this should now work even when file has no scopes
+            expect(hover).to.exist;
+            expect(hover.range).to.eql(util.createRange(2, 29, 2, 32));
+            expect(hover.contents).to.contain('function Abs(x as float) as float');
+        });
     });
 });
