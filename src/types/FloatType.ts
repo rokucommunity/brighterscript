@@ -1,44 +1,43 @@
-import type { BscType } from './BscType';
-import { DoubleType } from './DoubleType';
-import { DynamicType } from './DynamicType';
-import { IntegerType } from './IntegerType';
-import { LongIntegerType } from './LongIntegerType';
+import { isDynamicType, isFloatTypeLike, isNumberType, isObjectType } from '../astUtils/reflection';
+import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
+import { isEnumTypeCompatible, isNativeInterfaceCompatibleNumber, isUnionTypeCompatible } from './helpers';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
+import type { TypeCompatibilityData } from '../interfaces';
 
-export class FloatType implements BscType {
-    constructor(
-        public typeText?: string
-    ) { }
+export class FloatType extends BscType {
 
-    public isAssignableTo(targetType: BscType) {
+    public readonly kind = BscTypeKind.FloatType;
+
+    public static instance = new FloatType();
+
+    public isBuiltIn = true;
+
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
-            targetType instanceof FloatType ||
-            targetType instanceof DynamicType
+            isDynamicType(targetType) ||
+            isObjectType(targetType) ||
+            isNumberType(targetType) ||
+            isUnionTypeCompatible(this, targetType, data) ||
+            isEnumTypeCompatible(this, targetType, data) ||
+            isNativeInterfaceCompatibleNumber(this, targetType, data)
         );
-    }
 
-    public isConvertibleTo(targetType: BscType) {
-        if (
-            targetType instanceof DynamicType ||
-            targetType instanceof IntegerType ||
-            targetType instanceof FloatType ||
-            targetType instanceof DoubleType ||
-            targetType instanceof LongIntegerType
-        ) {
-            return true;
-        } else {
-            return false;
-        }
     }
 
     public toString() {
-        return this.typeText ?? 'float';
+        return 'float';
     }
 
     public toTypeString(): string {
         return this.toString();
     }
 
-    public clone() {
-        return new FloatType(this.typeText);
+    public isEqual(targetType: BscType): boolean {
+        return isFloatTypeLike(targetType);
     }
+
+    readonly binaryOpPriorityLevel = 2;
 }
+
+BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('float', FloatType.instance);

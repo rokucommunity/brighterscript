@@ -1,14 +1,24 @@
 import { expect } from './chai-config.spec';
 import * as path from 'path';
-import util, { standardizePath as s } from './util';
+import { util, standardizePath as s } from './util';
 import { Position, Range } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import { tempDir, rootDir } from './testHelpers.spec';
-import { Program } from './Program';
-import type { BsDiagnostic } from '.';
+import { tempDir, rootDir, expectTypeToBe } from './testHelpers.spec';
+import { TypeChainEntry } from './interfaces';
+import { NamespaceType } from './types/NamespaceType';
+import { ClassType } from './types/ClassType';
+import { ReferenceType } from './types/ReferenceType';
+import { SymbolTypeFlag } from './SymbolTypeFlag';
+import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InterfaceType, InvalidType, LongIntegerType, ObjectType, StringType, TypedFunctionType, UnionType, VoidType } from './types';
+import { TokenKind } from './lexer/TokenKind';
+import { createToken } from './astUtils/creators';
+import { createDottedIdentifier, createVariableExpression } from './astUtils/creators';
+import { Parser } from './parser/Parser';
+import type { FunctionStatement } from './parser/Statement';
+import { ComponentType } from './types/ComponentType';
 
 const sinon = createSandbox();
 
@@ -40,34 +50,29 @@ describe('util', () => {
         });
     });
 
-    describe('diagnosticIsSuppressed', () => {
-        it('does not crash when diagnostic is missing location information', () => {
-            const program = new Program({});
-            const file = program.setFile('source/main.brs', '');
-            const diagnostic: BsDiagnostic = {
-                file: file,
-                message: 'crash',
-                //important part of the test. range must be missing
-                range: undefined as any
-            };
+    describe('getAllDottedGetPartsAsString', () => {
+        it('returns undefined when no value found', () => {
+            expect(
+                util.getAllDottedGetPartsAsString(undefined)
+            ).to.eql(undefined);
+        });
 
-            file.commentFlags.push({
-                affectedRange: util.createRange(1, 2, 3, 4),
-                codes: [1, 2, 3],
-                file: file,
-                range: util.createRange(1, 2, 3, 4)
-            });
-            file.diagnostics.push(diagnostic);
+        it('returns var name', () => {
+            expect(
+                util.getAllDottedGetPartsAsString(createVariableExpression('alpha'))
+            ).to.eql('alpha');
+        });
 
-            util.diagnosticIsSuppressed(diagnostic);
-
-            //test passes if there's no crash
+        it('returns dotted get name', () => {
+            expect(
+                util.getAllDottedGetPartsAsString(createDottedIdentifier(['alpha', 'beta']))
+            ).to.eql('alpha.beta');
         });
     });
 
-    describe('getRokuPkgPath', () => {
+    describe('sanitizePkgPath', () => {
         it('replaces more than one windows slash in a path', () => {
-            expect(util.getRokuPkgPath('source\\folder1\\folder2\\file.brs')).to.eql('pkg:/source/folder1/folder2/file.brs');
+            expect(util.sanitizePkgPath('source\\folder1\\folder2\\file.brs')).to.eql('pkg:/source/folder1/folder2/file.brs');
         });
     });
 
@@ -654,25 +659,26 @@ describe('util', () => {
         });
     });
 
-    describe('copyBslibToStaging', () => {
-        it('copies from local bslib dependency', async () => {
-            await util.copyBslibToStaging(tempDir);
-            expect(fsExtra.pathExistsSync(`${tempDir}/source/bslib.brs`)).to.be.true;
-            expect(
-                /^function bslib_toString\(/mg.exec(
-                    fsExtra.readFileSync(`${tempDir}/source/bslib.brs`).toString()
-                )
-            ).not.to.be.null;
+    describe('range creation', () => {
+        it('createRangeFromPositions', () => {
+            const pos11 = { line: 1, character: 1 };
+            const pos99 = { line: 9, character: 9 };
+
+            expect(util.createRangeFromPositions(pos11, pos99)).to.eql(util.createRange(1, 1, 9, 9));
+            expect(util.createRangeFromPositions(null, pos99)).to.eql(util.createRange(9, 9, 9, 9));
+            expect(util.createRangeFromPositions(pos11, null)).to.eql(util.createRange(1, 1, 1, 1));
         });
 
-        it('copies from local bslib dependency to optionally specified destination directory', async () => {
-            await util.copyBslibToStaging(tempDir, 'source/opt');
-            expect(fsExtra.pathExistsSync(`${tempDir}/source/opt/bslib.brs`)).to.be.true;
-            expect(
-                /^function bslib_toString\(/mg.exec(
-                    fsExtra.readFileSync(`${tempDir}/source/opt/bslib.brs`).toString()
-                )
-            ).not.to.be.null;
+
+        it('createBoundingRange', () => {
+            const range1 = util.createRange(1, 1, 2, 2);
+            const range2 = util.createRange(2, 2, 3, 3);
+            const range3 = util.createRange(100, 100, 100, 100);
+
+            expect(util.createBoundingRange(range1)).to.eql(util.createRange(1, 1, 2, 2));
+            expect(util.createBoundingRange(range1, range2)).to.eql(util.createRange(1, 1, 3, 3));
+            expect(util.createBoundingRange(range2, range1)).to.eql(util.createRange(1, 1, 3, 3));
+            expect(util.createBoundingRange(range2, range3, range1)).to.eql(util.createRange(1, 1, 100, 100));
         });
     });
 
@@ -874,6 +880,18 @@ describe('util', () => {
         });
     });
 
+    it('isRangeInRange', () => {
+        expect(util.isRangeInRange(
+            util.createRange(0, 1, 1, 3),
+            util.createRange(0, 0, 2, 0)
+        )).to.be.true;
+
+        expect(util.isRangeInRange(
+            util.createRange(0, 0, 2, 0),
+            util.createRange(0, 1, 1, 3)
+        )).to.be.false;
+    });
+
     it('sortByRange', () => {
         const front = {
             range: util.createRange(1, 1, 1, 2)
@@ -937,8 +955,7 @@ describe('util', () => {
             expect(
                 util.toDiagnostic({
                     ...DiagnosticMessages.cannotFindName('someVar'),
-                    file: undefined as any,
-                    range: util.createRange(1, 2, 3, 4),
+                    location: { uri: null, range: util.createRange(1, 2, 3, 4) },
                     relatedInformation: [{
                         message: 'Alpha',
                         location: undefined as any
@@ -946,7 +963,7 @@ describe('util', () => {
                 }, 'u/r/i').relatedInformation
             ).to.eql([{
                 message: 'Alpha',
-                location: util.createLocation(
+                location: util.createLocationFromRange(
                     'u/r/i', util.createRange(1, 2, 3, 4)
                 )
             }]);
@@ -956,11 +973,10 @@ describe('util', () => {
             expect(
                 util.toDiagnostic({
                     ...DiagnosticMessages.cannotFindName('someVar'),
-                    file: undefined as any,
-                    range: util.createRange(1, 2, 3, 4),
+                    location: { uri: null, range: util.createRange(1, 2, 3, 4) },
                     relatedInformation: [{
                         message: 'Alpha',
-                        location: util.createLocation(
+                        location: util.createLocationFromRange(
                             'uri', util.createRange(2, 3, 4, 5)
                         )
                     }, {
@@ -970,13 +986,400 @@ describe('util', () => {
                 }, undefined as any).relatedInformation
             ).to.eql([{
                 message: 'Alpha',
-                location: util.createLocation(
+                location: util.createLocationFromRange(
                     'uri', util.createRange(2, 3, 4, 5)
                 )
             }]);
         });
     });
 
+    describe('processTypeChain', () => {
+        it('should  find the correct details in a list of type resolutions', () => {
+            const nodes = [
+                createVariableExpression('Alpha', util.createLocation(1, 1, 2, 2)),
+                createVariableExpression('Beta', util.createLocation(2, 2, 3, 3)),
+                createVariableExpression('CharlieProp', util.createLocation(3, 3, 4, 4))
+            ];
+
+            const chain = [
+                new TypeChainEntry({ name: 'AlphaNamespace', type: new NamespaceType('Alpha'), data: { flags: SymbolTypeFlag.runtime }, astNode: nodes[0] }),
+                new TypeChainEntry({ name: 'BetaProp', type: new ClassType('Beta'), data: { flags: SymbolTypeFlag.runtime }, astNode: nodes[1] }),
+                new TypeChainEntry({ name: 'CharlieProp', type: new ReferenceType('Charlie', 'Alpha.Beta.CharlieProp', SymbolTypeFlag.runtime, () => null), data: { flags: SymbolTypeFlag.runtime }, astNode: nodes[2] })
+            ];
+
+            const result = util.processTypeChain(chain);
+            expect(result.itemName).to.eql('CharlieProp');
+            expect(result.fullChainName).to.eql('AlphaNamespace.BetaProp.CharlieProp');
+            expect(result.itemParentTypeName).to.eql('Beta');
+            expect(result.fullNameOfItem).to.eql('Beta.CharlieProp');
+            expect(result.location.range).to.eql(util.createRange(3, 3, 4, 4));
+        });
+
+        it('respects the separatorToken', () => {
+            const nodes = [
+                createVariableExpression('Custom', util.createLocation(1, 1, 2, 2)),
+                createVariableExpression('someCallFunc', util.createLocation(2, 2, 3, 3))
+            ];
+            const chain = [
+                new TypeChainEntry({ name: 'roSGNodeCustom', type: new ComponentType('Custom'), data: { flags: SymbolTypeFlag.runtime }, astNode: nodes[0] }),
+                new TypeChainEntry({ name: 'someCallFunc', type: new TypedFunctionType(VoidType.instance), data: { flags: SymbolTypeFlag.runtime }, astNode: nodes[1], separatorToken: createToken(TokenKind.Callfunc) })
+            ];
+
+            const result = util.processTypeChain(chain);
+            expect(result.fullChainName).to.eql('roSGNodeCustom@.someCallFunc');
+        });
+    });
+
+    describe('binaryOperatorResultType', () => {
+        it('returns the correct type for math operations', () => {
+            // String + String is string
+            expectTypeToBe(util.binaryOperatorResultType(StringType.instance, createToken(TokenKind.Plus), StringType.instance), StringType);
+            // string plus anything else is an error - return dynamic
+            expect(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Plus), StringType.instance)).to.be.undefined;
+
+            const boxedInt = new InterfaceType('roInt');
+            boxedInt.isBuiltIn = true;
+            const boxedFloat = new InterfaceType('roFloat');
+            boxedFloat.isBuiltIn = true;
+
+            // Plus
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Plus), IntegerType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Plus), FloatType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Plus), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Plus), boxedFloat), FloatType);
+
+            // Subtract
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Minus), IntegerType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Minus), FloatType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Minus), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Minus), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Plus), boxedFloat), FloatType);
+
+            // Multiply
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Star), IntegerType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Star), FloatType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Star), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Star), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Star), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Star), boxedFloat), FloatType);
+
+            // Mod
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Mod), IntegerType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Mod), FloatType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Mod), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Mod), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Mod), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Mod), boxedFloat), FloatType);
+
+            // Divide
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Forwardslash), IntegerType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Forwardslash), FloatType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Forwardslash), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Forwardslash), IntegerType.instance), FloatType); // int/int -> float
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Plus), boxedFloat), FloatType);
+
+
+            // Exponent
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Caret), IntegerType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Caret), FloatType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Caret), LongIntegerType.instance), DoubleType);// long^int -> Double, int^long -> Double
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Caret), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Caret), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Caret), boxedFloat), FloatType);
+        });
+
+        it('returns the correct type for Bitshift operations', () => {
+            const boxedInt = new InterfaceType('roInt');
+            boxedInt.isBuiltIn = true;
+            const boxedFloat = new InterfaceType('roFloat');
+            boxedFloat.isBuiltIn = true;
+
+            // <<
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.LeftShift), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.LeftShift), FloatType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.LeftShift), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.LeftShift), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.LeftShift), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.LeftShift), boxedFloat), IntegerType);
+
+            // >>
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.RightShift), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.RightShift), FloatType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.RightShift), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.RightShift), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.RightShift), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.RightShift), boxedFloat), IntegerType);
+        });
+
+        it('returns the correct type for Comparison operations', () => {
+            const boxedInt = new InterfaceType('roInt');
+            boxedInt.isBuiltIn = true;
+            const boxedFloat = new InterfaceType('roFloat');
+            boxedFloat.isBuiltIn = true;
+
+            // =
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Equal), IntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Equal), FloatType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Equal), LongIntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Equal), IntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.Equal), IntegerType.instance), BooleanType); // = accepts invalid
+            expect(util.binaryOperatorResultType(StringType.instance, createToken(TokenKind.Equal), IntegerType.instance)).to.be.undefined; // only one string is not accepted
+            expectTypeToBe(util.binaryOperatorResultType(StringType.instance, createToken(TokenKind.Equal), StringType.instance), BooleanType); // both strings is accepted
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Equal), IntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Equal), boxedFloat), BooleanType);
+            // <>
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.LessGreater), InvalidType.instance), BooleanType); // <> accepts invalid
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.LessGreater), InvalidType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedFloat, createToken(TokenKind.LessGreater), InvalidType.instance), BooleanType);
+            // > - does not accept invalid
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Greater), IntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Greater), FloatType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Greater), LongIntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Greater), IntegerType.instance), BooleanType);
+            expect(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.Greater), IntegerType.instance)).to.be.undefined; // invalid not accepted
+            // etc. - all should be boolean
+        });
+
+        it('returns the correct type for Logical/bitwise operations', () => {
+            // and
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.And), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.And), FloatType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.And), BooleanType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(BooleanType.instance, createToken(TokenKind.And), IntegerType.instance), BooleanType);
+            expect(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.And), IntegerType.instance)).to.be.undefined; // invalid not accepted
+            expect(util.binaryOperatorResultType(StringType.instance, createToken(TokenKind.And), IntegerType.instance)).to.be.undefined; // strings are not accepted
+            // or
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Or), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Or), FloatType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Or), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Or), IntegerType.instance), IntegerType);
+            expect(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.Or), IntegerType.instance)).to.be.undefined;
+        });
+
+        it('assumes a dynamic type is a valid type', () => {
+            expectTypeToBe(util.binaryOperatorResultType(StringType.instance, createToken(TokenKind.Plus), DynamicType.instance), StringType);
+            expectTypeToBe(util.binaryOperatorResultType(DynamicType.instance, createToken(TokenKind.Plus), StringType.instance), StringType);
+            expectTypeToBe(util.binaryOperatorResultType(FloatType.instance, createToken(TokenKind.ForwardslashEqual), DynamicType.instance), FloatType);
+
+            // "and" / "or" are logic operators with booleans
+            expectTypeToBe(util.binaryOperatorResultType(DynamicType.instance, createToken(TokenKind.And), BooleanType.instance), BooleanType);
+
+            // "and" / "or" are bitwise operators with number
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Or), DynamicType.instance), IntegerType);
+        });
+
+        it('handles union types ', () => {
+            const floatIntUnion = new UnionType([IntegerType.instance, FloatType.instance]);
+            expectTypeToBe(util.binaryOperatorResultType(floatIntUnion, createToken(TokenKind.Plus), DoubleType.instance), DoubleType);
+        });
+
+        it('handles 2 union types', () => {
+            const floatIntUnion = new UnionType([IntegerType.instance, FloatType.instance]);
+            expectTypeToBe(util.binaryOperatorResultType(floatIntUnion, createToken(TokenKind.Plus), floatIntUnion), FloatType);
+        });
+
+        it('handles union types with diverse member types', () => {
+            const myUnion = new UnionType([FloatType.instance, StringType.instance, BooleanType.instance]);
+            expectTypeToBe(util.binaryOperatorResultType(myUnion, createToken(TokenKind.Plus), myUnion), DynamicType);
+        });
+
+        it('handles union types with self-referencing unions', () => {
+            const myUnion = new UnionType([FloatType.instance, StringType.instance, DynamicType.instance]);
+            myUnion.addType(myUnion);
+            expectTypeToBe(util.binaryOperatorResultType(myUnion, createToken(TokenKind.Plus), myUnion), DynamicType);
+        });
+
+        it('handles object Types', () => {
+            expectTypeToBe(util.binaryOperatorResultType(new ObjectType(), createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+        });
+
+        it('handles object Types', () => {
+            expectTypeToBe(util.binaryOperatorResultType(new ObjectType(), createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+        });
+    });
+
+    describe('unaryOperatorResultType', () => {
+        it('returns the correct type for minus operation', () => {
+            let minus = createToken(TokenKind.Minus);
+            expectTypeToBe(util.unaryOperatorResultType(minus, IntegerType.instance), IntegerType);
+            expectTypeToBe(util.unaryOperatorResultType(minus, FloatType.instance), FloatType);
+            expect(util.unaryOperatorResultType(minus, BooleanType.instance)).to.be.undefined;
+            expectTypeToBe(util.unaryOperatorResultType(minus, DoubleType.instance), DoubleType);
+            expect(util.unaryOperatorResultType(minus, StringType.instance)).to.be.undefined;
+            expectTypeToBe(util.unaryOperatorResultType(minus, DynamicType.instance), DynamicType);
+            expect(util.unaryOperatorResultType(minus, VoidType.instance)).to.be.undefined;
+
+            const boxedFloat = new InterfaceType('roFloat');
+            boxedFloat.isBuiltIn = true;
+            expectTypeToBe(util.unaryOperatorResultType(minus, boxedFloat), FloatType);
+        });
+
+        it('returns the correct type for not operation', () => {
+            let notToken = createToken(TokenKind.Not);
+            const boxedFloat = new InterfaceType('roFloat');
+            boxedFloat.isBuiltIn = true;
+            expectTypeToBe(util.unaryOperatorResultType(notToken, IntegerType.instance), IntegerType);
+            expectTypeToBe(util.unaryOperatorResultType(notToken, FloatType.instance), IntegerType);
+            expectTypeToBe(util.unaryOperatorResultType(notToken, BooleanType.instance), BooleanType);
+            expectTypeToBe(util.unaryOperatorResultType(notToken, DoubleType.instance), IntegerType);
+            expect(util.unaryOperatorResultType(notToken, StringType.instance)).to.be.undefined;
+            expectTypeToBe(util.unaryOperatorResultType(notToken, LongIntegerType.instance), LongIntegerType);
+            expect(util.unaryOperatorResultType(notToken, VoidType.instance)).to.be.undefined;
+            expectTypeToBe(util.unaryOperatorResultType(notToken, boxedFloat), IntegerType);
+        });
+
+        it('handles object Types', () => {
+            expectTypeToBe(util.unaryOperatorResultType(createToken(TokenKind.Minus), new ObjectType()), ObjectType);
+        });
+    });
+
+    describe('getTokenDocumentation', () => {
+        it('should return a string of the comment', () => {
+            const { ast } = Parser.parse(`
+                ' This is a comment.
+                ' it has two lines
+                function getOne() as integer
+                    return 1
+                end function
+            `);
+            const func = (ast.statements[0] as FunctionStatement).func;
+            const docs = util.getNodeDocumentation(func);
+            expect(docs).to.eql('This is a comment.\nit has two lines');
+        });
+
+        it('should pay attention to @param, @return, etc. (jsdoc tags)', () => {
+            const { ast } = Parser.parse(`
+                ' Add 1 to a number
+                '
+                ' @public
+                ' @param {integer} the number to add to
+                ' @return {integer} the result
+                function addOne(num as integer) as integer
+                    return num + 1
+                end function
+            `);
+            const func = (ast.statements[0] as FunctionStatement).func;
+            const docs = util.getNodeDocumentation(func);
+            expect(docs).to.eql('Add 1 to a number\n\n\n_@public_\n\n_@param_ {integer} the number to add to\n\n_@return_ {integer} the result');
+        });
+
+
+        it('only includes comments directly above token', () => {
+            const { ast } = Parser.parse(`
+                const abc = "ABC" ' comment at end of line
+
+                ' plus one
+                function addOne(num as integer) as integer
+                    return num + 1
+                end function
+            `);
+            const func = (ast.statements[1] as FunctionStatement).func;
+            const docs = util.getNodeDocumentation(func);
+            expect(docs).to.eql('plus one');
+        });
+
+        it('allows jsdoc style comment blocks', () => {
+            const { ast } = Parser.parse(`
+                ' /**
+                '  plus one
+                ' */
+                function addOne(num as integer) as integer
+                    return num + 1
+                end function
+            `);
+            const func = (ast.statements[0] as FunctionStatement).func;
+            const docs = util.getNodeDocumentation(func);
+            expect(docs).to.eql('plus one');
+        });
+
+        it('allows jsdoc style comment blocks with leading *', () => {
+            const { ast } = Parser.parse(`
+                ' /**
+                '  * plus one
+                '  */
+                function addOne(num as integer) as integer
+                    return num + 1
+                end function
+            `);
+            const func = (ast.statements[0] as FunctionStatement).func;
+            const docs = util.getNodeDocumentation(func);
+            expect(docs).to.eql('plus one');
+        });
+    });
+
+    describe('truncate', () => {
+        const items = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty'];
+
+        it('returns whole string when under the limit', () => {
+            expect(
+                util.truncate({
+                    leadingText: 'We have numbers: ',
+                    items: items,
+                    partBuilder: (item) => item,
+                    maxLength: 1000
+                })
+            ).to.eql(
+                'We have numbers: ' + items.join(', ')
+            );
+        });
+
+        it('truncates to max length', () => {
+            expect(
+                util.truncate({
+                    leadingText: 'We have numbers: ',
+                    items: items,
+                    partBuilder: (item) => item,
+                    maxLength: 50
+                })
+            ).to.eql(
+                'We have numbers: one, two, three, ...and 17 more'
+            );
+        });
+
+        it('shows at least 2 items, even if going over the length', () => {
+            expect(
+                util.truncate({
+                    leadingText: 'We have numbers: ',
+                    items: items,
+                    partBuilder: (item) => item,
+                    maxLength: 30
+                })
+            ).to.eql(
+                'We have numbers: one, two, ...and 18 more'
+            );
+        });
+
+        it('Accounts for extra wrapping around items', () => {
+            expect(
+                util.truncate({
+                    leadingText: 'We have numbers: ',
+                    items: items,
+                    partBuilder: (item) => `--${item}--`,
+                    maxLength: 60
+                })
+            ).to.eql(
+                'We have numbers: --one--, --two--, --three--, ...and 17 more'
+            );
+        });
+
+        it('includes trailing text', () => {
+            expect(
+                util.truncate({
+                    leadingText: 'We have numbers: ',
+                    trailingText: '!',
+                    items: items,
+                    partBuilder: (item) => item,
+                    maxLength: 50
+                })
+            ).to.eql(
+                'We have numbers: one, two, three, ...and 17 more!'
+            );
+        });
+    });
     describe('promiseRaceMatch', () => {
         async function resolveAfter<T = any>(value: T, timeout: number) {
             await util.sleep(timeout);
@@ -1192,6 +1595,61 @@ describe('util', () => {
                 test('/one//two///three//', '/one/two/three/');
                 test('\\\\one\\\\two\\\\three\\\\', '/one/two/three/');
             });
+
+        });
+    });
+
+    describe('isClassUsedAsFunction', () => {
+        it('does not crash when class type has no name', () => {
+            util.isClassUsedAsFunction(new ClassType(undefined), undefined, { flags: SymbolTypeFlag.runtime });
+        });
+    });
+
+    describe('hasLeadingComments', () => {
+        it('does not crash on undefined trivia', () => {
+            expect(util.hasLeadingComments(undefined)).to.be.false;
+        });
+
+        it('returns false when there are no leading comments', () => {
+            const token = createToken(TokenKind.Identifier);
+            token.leadingTrivia = [];
+            expect(util.hasLeadingComments(token)).to.be.false;
+        });
+
+        it('returns true when there are leading comments', () => {
+            const token = createToken(TokenKind.Identifier);
+            token.leadingTrivia = [createToken(TokenKind.Comment, `'comment`)];
+            expect(util.hasLeadingComments(token)).to.be.true;
+        });
+
+        it('does not crash on unexpected trivia item types', () => {
+            const token = createToken(TokenKind.Identifier);
+            token.leadingTrivia = [undefined, null, 1, true, 'string', {}, createToken(TokenKind.Comment, `'comment`)] as any[];
+            expect(util.hasLeadingComments(token)).to.be.true;
+        });
+    });
+
+    describe('getLeadingComments', () => {
+        it('does not crash on undefined trivia', () => {
+            expect(util.getLeadingComments(undefined)).to.eql([]);
+        });
+
+        it('returns [] when there are no leading comments', () => {
+            const token = createToken(TokenKind.Identifier);
+            token.leadingTrivia = [];
+            expect(util.getLeadingComments(token)).to.eql([]);
+        });
+
+        it('returns true when there are leading comments', () => {
+            const token = createToken(TokenKind.Identifier);
+            token.leadingTrivia = [createToken(TokenKind.Comment, `'comment 1`)];
+            expect(util.getLeadingComments(token)).eql([createToken(TokenKind.Comment, `'comment 1`)]);
+        });
+
+        it('does not crash on unexpected trivia item types', () => {
+            const token = createToken(TokenKind.Identifier);
+            token.leadingTrivia = [undefined, null, 1, true, 'string', {}, createToken(TokenKind.Comment, `'comment 2`)] as any[];
+            expect(util.getLeadingComments(token)).eql([createToken(TokenKind.Comment, `'comment 2`)]);
         });
     });
 });

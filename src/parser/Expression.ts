@@ -1,45 +1,72 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
+import type { PrintSeparatorToken } from '../lexer/TokenKind';
 import { TokenKind } from '../lexer/TokenKind';
-import type { Block, CommentStatement, FunctionStatement, NamespaceStatement } from './Statement';
-import type { Range } from 'vscode-languageserver';
+import type { Block, NamespaceStatement } from './Statement';
+import type { Location } from 'vscode-languageserver';
 import util from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
-import { createVisitor, WalkMode } from '../astUtils/visitors';
+import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isStringType, isTemplateStringExpression, isTypeCastExpression, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
-import type { TranspileResult, TypedefProvider } from '../interfaces';
+import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallableType, isCallExpression, isCallfuncExpression, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
+import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
-import { FunctionType } from '../types/FunctionType';
 import type { AstNode } from './AstNode';
-import { Expression } from './AstNode';
+import { AstNodeKind, Expression } from './AstNode';
 import { SymbolTable } from '../SymbolTable';
 import { SourceNode } from 'source-map';
+import type { TranspileState } from './TranspileState';
+import { StringType } from '../types/StringType';
+import { TypePropertyReferenceType } from '../types/ReferenceType';
+import { UnionType } from '../types/UnionType';
+import { ArrayType } from '../types/ArrayType';
+import { AssociativeArrayType } from '../types/AssociativeArrayType';
+import { TypedFunctionType } from '../types/TypedFunctionType';
+import { InvalidType } from '../types/InvalidType';
+import { UninitializedType } from '../types/UninitializedType';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
+import { FunctionType } from '../types/FunctionType';
+import type { BaseFunctionType } from '../types/BaseFunctionType';
+import { brsDocParser } from './BrightScriptDocParser';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
 export class BinaryExpression extends Expression {
-    constructor(
-        public left: Expression,
-        public operator: Token,
-        public right: Expression
-    ) {
+    constructor(options: {
+        left: Expression;
+        operator: Token;
+        right: Expression;
+    }) {
         super();
-        this.range = util.createBoundingRange(this.left, this.operator, this.right);
+        this.tokens = {
+            operator: options.operator
+        };
+        this.left = options.left;
+        this.right = options.right;
+        this.location = util.createBoundingLocation(this.left, this.tokens.operator, this.right);
     }
+    readonly tokens: {
+        readonly operator: Token;
+    };
 
-    public readonly range: Range | undefined;
+    public readonly left: Expression;
+    public readonly right: Expression;
 
-    transpile(state: BrsTranspileState) {
+    public readonly kind = AstNodeKind.BinaryExpression;
+
+    public readonly location: Location | undefined;
+
+    transpile(state: BrsTranspileState): TranspileResult {
         return [
             state.sourceNode(this.left, this.left.transpile(state)),
             ' ',
-            state.transpileToken(this.operator),
+            state.transpileToken(this.tokens.operator),
             ' ',
             state.sourceNode(this.right, this.right.transpile(state))
         ];
@@ -52,17 +79,41 @@ export class BinaryExpression extends Expression {
         }
     }
 
+
+    public getType(options: GetTypeOptions): BscType {
+        const operatorKind = this.tokens.operator.kind;
+        if (options.flags & SymbolTypeFlag.typetime) {
+            // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+            switch (operatorKind) {
+                case TokenKind.Or:
+                    return new UnionType([this.left.getType(options), this.right.getType(options)]);
+                //TODO: Intersection Types?, eg. case TokenKind.And:
+            }
+        } else if (options.flags & SymbolTypeFlag.runtime) {
+            return util.binaryOperatorResultType(
+                this.left.getType(options),
+                this.tokens.operator,
+                this.right.getType(options)) ?? DynamicType.instance;
+        }
+        return DynamicType.instance;
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.left.leadingTrivia;
+    }
+
     public clone() {
         return this.finalizeClone(
-            new BinaryExpression(
-                this.left?.clone(),
-                util.cloneToken(this.operator),
-                this.right?.clone()
-            ),
+            new BinaryExpression({
+                left: this.left?.clone(),
+                operator: util.cloneToken(this.tokens.operator),
+                right: this.right?.clone()
+            }),
             ['left', 'right']
         );
     }
 }
+
 
 export class CallExpression extends Expression {
     /**
@@ -73,42 +124,52 @@ export class CallExpression extends Expression {
      */
     static MaximumArguments = 63;
 
-    constructor(
-        readonly callee: Expression,
-        /**
-         * Can either be `(`, or `?(` for optional chaining
-         */
-        readonly openingParen: Token,
-        readonly closingParen: Token,
-        readonly args: Expression[],
-        unused?: any
-    ) {
+    constructor(options: {
+        callee: Expression;
+        openingParen?: Token;
+        args?: Expression[];
+        closingParen?: Token;
+    }) {
         super();
-        this.range = util.createBoundingRange(this.callee, this.openingParen, ...args ?? [], this.closingParen);
+        this.tokens = {
+            openingParen: options.openingParen,
+            closingParen: options.closingParen
+        };
+        this.callee = options.callee;
+        this.args = options.args ?? [];
+        this.location = util.createBoundingLocation(this.callee, this.tokens.openingParen, ...this.args ?? [], this.tokens.closingParen);
     }
 
-    public readonly range: Range | undefined;
+    readonly callee: Expression;
+    readonly args: Expression[];
+    readonly tokens: {
+        /**
+         * Can either be `(`, or `?(` for optional chaining - defaults to '('
+         */
+        readonly openingParen?: Token;
+        readonly closingParen?: Token;
+    };
 
-    /**
-     * Get the name of the wrapping namespace (if it exists)
-     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
-     */
-    public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
-    }
+    public readonly kind = AstNodeKind.CallExpression;
+
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState, nameOverride?: string) {
         let result: TranspileResult = [];
 
         //transpile the name
         if (nameOverride) {
-            result.push(state.sourceNode(this.callee, nameOverride));
+            result.push(
+                //transpile leading comments since we're bypassing callee.transpile (which would normally do this)
+                ...state.transpileLeadingCommentsForAstNode(this),
+                state.sourceNode(this.callee, nameOverride)
+            );
         } else {
             result.push(...this.callee.transpile(state));
         }
 
         result.push(
-            state.transpileToken(this.openingParen)
+            state.transpileToken(this.tokens.openingParen, '(')
         );
         for (let i = 0; i < this.args.length; i++) {
             //add comma between args
@@ -118,11 +179,9 @@ export class CallExpression extends Expression {
             let arg = this.args[i];
             result.push(...arg.transpile(state));
         }
-        if (this.closingParen) {
-            result.push(
-                state.transpileToken(this.closingParen)
-            );
-        }
+        result.push(
+            state.transpileToken(this.tokens.closingParen, ')')
+        );
         return result;
     }
 
@@ -133,105 +192,119 @@ export class CallExpression extends Expression {
         }
     }
 
+    getType(options: GetTypeOptions) {
+        const calleeType = this.callee.getType(options);
+        if (options.ignoreCall) {
+            return calleeType;
+        }
+        if (isNewExpression(this.parent)) {
+            return calleeType;
+        }
+        const specialCaseReturnType = util.getSpecialCaseCallExpressionReturnType(this, options);
+        if (specialCaseReturnType) {
+            return specialCaseReturnType;
+        }
+        if (isCallableType(calleeType) && (!isReferenceType(calleeType.returnType) || calleeType.returnType?.isResolvable())) {
+            if (isVoidType(calleeType.returnType)) {
+                if (options.data?.isBuiltIn) {
+                    // built in functions that return `as void` will not initialize the result
+                    return UninitializedType.instance;
+                }
+                // non-built in functions with return type`as void` actually return `invalid`
+                return InvalidType.instance;
+            }
+            return calleeType.returnType;
+        }
+        if (util.isUnionOfFunctions(calleeType, true)) {
+            return util.getReturnTypeOfUnionOfFunctions(calleeType);
+        }
+        if (!isReferenceType(calleeType) && (calleeType as BaseFunctionType)?.returnType?.isResolvable()) {
+            return (calleeType as BaseFunctionType).returnType;
+        }
+        return new TypePropertyReferenceType(calleeType, 'returnType');
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.callee.leadingTrivia;
+    }
+
     public clone() {
         return this.finalizeClone(
-            new CallExpression(
-                this.callee?.clone(),
-                util.cloneToken(this.openingParen),
-                util.cloneToken(this.closingParen),
-                this.args?.map(e => e?.clone())
-            ),
+            new CallExpression({
+                callee: this.callee?.clone(),
+                openingParen: util.cloneToken(this.tokens.openingParen),
+                closingParen: util.cloneToken(this.tokens.closingParen),
+                args: this.args?.map(e => e?.clone())
+            }),
             ['callee', 'args']
         );
     }
 }
 
 export class FunctionExpression extends Expression implements TypedefProvider {
-    constructor(
-        readonly parameters: FunctionParameterExpression[],
-        public body: Block,
-        readonly functionType: Token | null,
-        public end: Token,
-        readonly leftParen: Token,
-        readonly rightParen: Token,
-        readonly asToken?: Token,
-        readonly returnTypeToken?: Token
-    ) {
+    constructor(options: {
+        functionType?: Token;
+        leftParen?: Token;
+        parameters?: FunctionParameterExpression[];
+        rightParen?: Token;
+        as?: Token;
+        returnTypeExpression?: TypeExpression;
+        body: Block;
+        endFunctionType?: Token;
+    }) {
         super();
-        this.setReturnType(); // set the initial return type that we parse
+        this.tokens = {
+            functionType: options.functionType,
+            leftParen: options.leftParen,
+            rightParen: options.rightParen,
+            as: options.as,
+            endFunctionType: options.endFunctionType
+        };
+        this.parameters = options.parameters ?? [];
+        this.body = options.body;
+        this.returnTypeExpression = options.returnTypeExpression;
 
-        //if there's a body, and it doesn't have a SymbolTable, assign one
-        if (this.body && !this.body.symbolTable) {
-            this.body.symbolTable = new SymbolTable(`Function Body`);
+        if (this.body) {
+            this.body.parent = this;
         }
         this.symbolTable = new SymbolTable('FunctionExpression', () => this.parent?.getSymbolTable());
     }
 
-    /**
-     * The type this function returns
-     */
-    public returnType: BscType;
+    public readonly kind = AstNodeKind.FunctionExpression;
 
-    /**
-     * Does this method require the return type to be present after transpile (useful for `as void` or the `as boolean` in `onKeyEvent`)
-     */
-    private requiresReturnType: boolean;
+    readonly parameters: FunctionParameterExpression[];
+    public readonly body: Block;
+    public readonly returnTypeExpression?: TypeExpression;
 
-    /**
-     * Get the name of the wrapping namespace (if it exists)
-     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
-     */
-    public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+    readonly tokens: {
+        readonly functionType?: Token;
+        readonly endFunctionType?: Token;
+        readonly leftParen?: Token;
+        readonly rightParen?: Token;
+        readonly as?: Token;
+    };
+
+    public get leadingTrivia(): Token[] {
+        return this.tokens.functionType?.leadingTrivia;
     }
 
-    /**
-     * Get the name of the wrapping namespace (if it exists)
-     * @deprecated use `.findAncestor(isFunctionExpression)` instead.
-     */
-    public get parentFunction() {
-        return this.findAncestor<FunctionExpression>(isFunctionExpression);
-    }
-
-    /**
-     * The list of function calls that are declared within this function scope. This excludes CallExpressions
-     * declared in child functions
-     */
-    public callExpressions = [] as CallExpression[];
-
-    /**
-     * If this function is part of a FunctionStatement, this will be set. Otherwise this will be undefined
-     */
-    public functionStatement?: FunctionStatement;
-
-    /**
-     * A list of all child functions declared directly within this function
-     * @deprecated use `.walk(createVisitor({ FunctionExpression: ()=>{}), { walkMode: WalkMode.visitAllRecursive })` instead
-     */
-    public get childFunctionExpressions() {
-        const expressions = [] as FunctionExpression[];
-        this.walk(createVisitor({
-            FunctionExpression: (expression) => {
-                expressions.push(expression);
-            }
-        }), {
-            walkMode: WalkMode.visitAllRecursive
-        });
-        return expressions;
+    public get endTrivia(): Token[] {
+        return this.tokens.endFunctionType?.leadingTrivia;
     }
 
     /**
      * The range of the function, starting at the 'f' in function or 's' in sub (or the open paren if the keyword is missing),
      * and ending with the last n' in 'end function' or 'b' in 'end sub'
      */
-    public get range() {
-        return util.createBoundingRange(
-            this.functionType, this.leftParen,
+    public get location(): Location {
+        return util.createBoundingLocation(
+            this.tokens.functionType,
+            this.tokens.leftParen,
             ...this.parameters ?? [],
-            this.rightParen,
-            this.asToken,
-            this.returnTypeToken,
-            this.end
+            this.tokens.rightParen,
+            this.tokens.as,
+            this.returnTypeExpression,
+            this.tokens.endFunctionType
         );
     }
 
@@ -239,7 +312,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         let results = [] as TranspileResult;
         //'function'|'sub'
         results.push(
-            state.transpileToken(this.functionType!)
+            state.transpileToken(this.tokens.functionType, 'function', false, state.skipLeadingComments)
         );
         //functionName?
         if (name) {
@@ -250,7 +323,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
         //leftParen
         results.push(
-            state.transpileToken(this.leftParen)
+            state.transpileToken(this.tokens.leftParen, '(')
         );
         //parameters
         for (let i = 0; i < this.parameters.length; i++) {
@@ -264,31 +337,32 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
         //right paren
         results.push(
-            state.transpileToken(this.rightParen)
+            state.transpileToken(this.tokens.rightParen, ')')
         );
         //as [Type]
-        this.setReturnType(); // check one more time before transpile
-        if (this.asToken && !(state.options.removeParameterTypes && !this.requiresReturnType)) {
+
+        if (this.tokens.as && this.returnTypeExpression && (this.requiresReturnType || !state.options.removeParameterTypes)) {
             results.push(
                 ' ',
                 //as
-                state.transpileToken(this.asToken),
+                state.transpileToken(this.tokens.as, 'as'),
                 ' ',
                 //return type
-                state.sourceNode(this.returnTypeToken!, this.returnType.toTypeString())
+                ...this.returnTypeExpression.transpile(state)
             );
         }
+        let hasBody = false;
         if (includeBody) {
             state.lineage.unshift(this);
             let body = this.body.transpile(state);
+            hasBody = body.length > 0;
             state.lineage.shift();
             results.push(...body);
         }
-        results.push('\n');
-        //'end sub'|'end function'
+
+        const lastLocatable = hasBody ? this.body : this.returnTypeExpression ?? this.tokens.leftParen ?? this.tokens.functionType;
         results.push(
-            state.indent(),
-            state.transpileToken(this.end)
+            ...state.transpileEndBlockToken(lastLocatable, this.tokens.endFunctionType, `end ${this.tokens.functionType ?? 'function'}`)
         );
         return results;
     }
@@ -297,9 +371,9 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         let results = [
             new SourceNode(1, 0, null, [
                 //'function'|'sub'
-                this.functionType?.text,
+                this.tokens.functionType?.text ?? 'function',
                 //functionName?
-                ...(isFunctionStatement(this.parent) || isMethodStatement(this.parent) ? [' ', this.parent.name?.text ?? ''] : []),
+                ...(isFunctionStatement(this.parent) || isMethodStatement(this.parent) ? [' ', this.parent.tokens.name?.text ?? ''] : []),
                 //leftParen
                 '(',
                 //parameters
@@ -313,14 +387,16 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 //right paren
                 ')',
                 //as <ReturnType>
-                ...(this.asToken ? [
-                    ' as ',
-                    this.returnTypeToken?.text
+                ...(this.returnTypeExpression ? [
+                    ' ',
+                    this.tokens.as?.text ?? 'as',
+                    ' ',
+                    ...this.returnTypeExpression.getTypedef(state)
                 ] : []),
                 '\n',
                 state.indent(),
                 //'end sub'|'end function'
-                this.end.text
+                this.tokens.endFunctionType?.text ?? `end ${this.tokens.functionType ?? 'function'}`
             ])
         ];
         return results;
@@ -329,7 +405,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walkArray(this.parameters, visitor, options, this);
-
+            walk(this, 'returnTypeExpression', visitor, options);
             //This is the core of full-program walking...it allows us to step into sub functions
             if (options.walkMode & InternalWalkMode.recurseChildFunctions) {
                 walk(this, 'body', visitor, options);
@@ -337,17 +413,48 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
     }
 
-    getFunctionType(): FunctionType {
-        let functionType = new FunctionType(this.returnType);
-        functionType.isSub = this.functionType?.text === 'sub';
-        for (let param of this.parameters) {
-            functionType.addParameter(param.name.text, param.type, !!param.typeToken);
+    public getType(options: GetTypeOptions): TypedFunctionType {
+        //if there's a defined return type, use that
+        let returnType: BscType;
+
+        const docs = brsDocParser.parseNode(this.findAncestor(isFunctionStatement));
+
+        returnType = util.chooseTypeFromCodeOrDocComment(
+            this.returnTypeExpression?.getType({ ...options, typeChain: undefined }),
+            docs.getReturnBscType({ ...options, tableProvider: () => this.getSymbolTable() }),
+            options
+        );
+
+        const isSub = this.tokens.functionType?.kind === TokenKind.Sub;
+        //if we don't have a return type and this is a sub, set the return type to `void`. else use `dynamic`
+        if (!returnType) {
+            returnType = isSub ? VoidType.instance : DynamicType.instance;
         }
-        return functionType;
+
+        const resultType = new TypedFunctionType(returnType);
+        resultType.isSub = isSub;
+        for (let param of this.parameters) {
+            resultType.addParameter(param.tokens.name.text, param.getType({ ...options, typeChain: undefined }), !!param.defaultValue);
+        }
+        // Figure out this function's name if we can
+        let funcName = '';
+        if (isMethodStatement(this.parent) || isInterfaceMethodStatement(this.parent)) {
+            funcName = this.parent.getName(ParseMode.BrighterScript);
+            if (options.typeChain) {
+                // Get the typechain info from the parent class
+                this.parent.parent?.getType(options);
+            }
+        } else if (isFunctionStatement(this.parent)) {
+            funcName = this.parent.getName(ParseMode.BrighterScript);
+        }
+        if (funcName) {
+            resultType.setName(funcName);
+        }
+        options.typeChain?.push(new TypeChainEntry({ name: funcName, type: resultType, data: options.data, astNode: this }));
+        return resultType;
     }
 
-    private setReturnType() {
-
+    private get requiresReturnType() {
         /**
          * RokuOS methods can be written several different ways:
          * 1. Function() : return withValue
@@ -364,112 +471,134 @@ export class FunctionExpression extends Expression implements TypedefProvider {
          * 7. Additionally, as a special case, the OS requires that `onKeyEvent()` be defined with `as boolean`
          */
 
-        const isSub = this.functionType?.text.toLowerCase() === 'sub';
 
-        if (this.returnTypeToken) {
-            this.returnType = util.tokenToBscType(this.returnTypeToken);
-        } else if (isSub) {
-            this.returnType = new VoidType();
-        } else {
-            this.returnType = DynamicType.instance;
-        }
-
-        if ((isFunctionStatement(this.parent) || isMethodStatement(this.parent)) && this.parent?.name?.text.toLowerCase() === 'onkeyevent') {
+        if ((isFunctionStatement(this.parent) || isMethodStatement(this.parent)) && this.parent?.tokens?.name?.text.toLowerCase() === 'onkeyevent') {
             // onKeyEvent() requires 'as Boolean' otherwise RokuOS throws errors
-            this.requiresReturnType = true;
-        } else if (isSub && !isVoidType(this.returnType)) { // format (6)
-            this.requiresReturnType = true;
-        } else if (this.returnTypeToken && isVoidType(this.returnType)) { // format (3)
-            this.requiresReturnType = true;
+            return true;
         }
+        const isSub = this.tokens.functionType?.text.toLowerCase() === 'sub';
+        const returnType = this.returnTypeExpression?.getType({ flags: SymbolTypeFlag.typetime });
+        const isVoidReturnType = isVoidType(returnType);
+
+
+        if (isSub && !isVoidReturnType) { // format (6)
+            return true;
+        } else if (isVoidReturnType) { // format (3)
+            return true;
+        }
+
+        return false;
     }
 
     public clone() {
-        const clone = this.finalizeClone(
-            new FunctionExpression(
-                this.parameters?.map(e => e?.clone()),
-                this.body?.clone(),
-                util.cloneToken(this.functionType),
-                util.cloneToken(this.end),
-                util.cloneToken(this.leftParen),
-                util.cloneToken(this.rightParen),
-                util.cloneToken(this.asToken),
-                util.cloneToken(this.returnTypeToken)
-            ),
-            ['body']
+        return this.finalizeClone(
+            new FunctionExpression({
+                parameters: this.parameters?.map(e => e?.clone()),
+                body: this.body?.clone(),
+                functionType: util.cloneToken(this.tokens.functionType),
+                endFunctionType: util.cloneToken(this.tokens.endFunctionType),
+                leftParen: util.cloneToken(this.tokens.leftParen),
+                rightParen: util.cloneToken(this.tokens.rightParen),
+                as: util.cloneToken(this.tokens.as),
+                returnTypeExpression: this.returnTypeExpression?.clone()
+            }),
+            ['body', 'returnTypeExpression']
         );
-
-        //rebuild the .callExpressions list in the clone
-        clone.body?.walk?.((node) => {
-            if (isCallExpression(node) && !isNewExpression(node.parent)) {
-                clone.callExpressions.push(node);
-            }
-        }, { walkMode: WalkMode.visitExpressions });
-        return clone;
     }
 }
 
 export class FunctionParameterExpression extends Expression {
-    constructor(
-        public name: Identifier,
-        public typeToken?: Token,
-        public defaultValue?: Expression,
-        public asToken?: Token
-    ) {
+    constructor(options: {
+        name: Identifier;
+        equals?: Token;
+        defaultValue?: Expression;
+        as?: Token;
+        typeExpression?: TypeExpression;
+    }) {
         super();
-        if (typeToken) {
-            this.type = util.tokenToBscType(typeToken);
-        } else {
-            this.type = new DynamicType();
-        }
+        this.tokens = {
+            name: options.name,
+            equals: options.equals,
+            as: options.as
+        };
+        this.defaultValue = options.defaultValue;
+        this.typeExpression = options.typeExpression;
     }
 
-    public type: BscType;
+    public readonly kind = AstNodeKind.FunctionParameterExpression;
 
-    public get range(): Range | undefined {
-        return util.createBoundingRange(
-            this.name,
-            this.asToken,
-            this.typeToken,
+    readonly tokens: {
+        readonly name: Identifier;
+        readonly equals?: Token;
+        readonly as?: Token;
+    };
+
+    public readonly defaultValue?: Expression;
+    public readonly typeExpression?: TypeExpression;
+
+    public getType(options: GetTypeOptions) {
+        const docs = brsDocParser.parseNode(this.findAncestor(isFunctionStatement));
+        const paramName = this.tokens.name.text;
+
+        let paramTypeFromCode = this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
+            util.getDefaultTypeFromValueType(this.defaultValue?.getType({ ...options, flags: SymbolTypeFlag.runtime, typeChain: undefined }));
+        if (isInvalidType(paramTypeFromCode) || isVoidType(paramTypeFromCode)) {
+            paramTypeFromCode = undefined;
+        }
+        const paramTypeFromDoc = docs.getParamBscType(paramName, { ...options, fullName: paramName, typeChain: undefined, tableProvider: () => this.getSymbolTable() });
+
+        let paramType = util.chooseTypeFromCodeOrDocComment(paramTypeFromCode, paramTypeFromDoc, options) ?? DynamicType.instance;
+        options.typeChain?.push(new TypeChainEntry({ name: paramName, type: paramType, data: options.data, astNode: this }));
+        return paramType;
+    }
+
+    public get location(): Location | undefined {
+        return util.createBoundingLocation(
+            this.tokens.name,
+            this.tokens.as,
+            this.typeExpression,
+            this.tokens.equals,
             this.defaultValue
         );
     }
 
     public transpile(state: BrsTranspileState) {
-        let result = [
+        let result: TranspileResult = [
             //name
-            state.transpileToken(this.name)
-        ] as any[];
+            state.transpileToken(this.tokens.name)
+        ];
         //default value
         if (this.defaultValue) {
             result.push(' = ');
             result.push(this.defaultValue.transpile(state));
         }
         //type declaration
-        if (this.asToken && !state.options.removeParameterTypes) {
+        if (this.typeExpression && !state.options.removeParameterTypes) {
             result.push(' ');
-            result.push(state.transpileToken(this.asToken));
+            result.push(state.transpileToken(this.tokens.as, 'as'));
             result.push(' ');
-            result.push(state.sourceNode(this.typeToken!, this.type.toTypeString()));
+            result.push(
+                ...(this.typeExpression?.transpile(state) ?? [])
+            );
         }
 
         return result;
     }
 
     public getTypedef(state: BrsTranspileState): TranspileResult {
-        const results = [this.name.text] as TranspileResult;
+        const results = [this.tokens.name.text] as TranspileResult;
 
         if (this.defaultValue) {
             results.push(' = ', ...this.defaultValue.transpile(state));
         }
 
-        if (this.asToken) {
+        if (this.tokens.as) {
             results.push(' as ');
 
             // TODO: Is this conditional needed? Will typeToken always exist
             // so long as `asToken` exists?
-            if (this.typeToken) {
-                results.push(this.typeToken.text);
+            if (this.typeExpression) {
+                results.push(...(this.typeExpression?.getTypedef(state) ?? ['']));
             }
         }
 
@@ -478,105 +607,71 @@ export class FunctionParameterExpression extends Expression {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         // eslint-disable-next-line no-bitwise
-        if (this.defaultValue && options.walkMode & InternalWalkMode.walkExpressions) {
-            walk(this, 'defaultValue', visitor, options);
-        }
-    }
-
-    public clone() {
-        return this.finalizeClone(
-            new FunctionParameterExpression(
-                util.cloneToken(this.name),
-                util.cloneToken(this.typeToken),
-                this.defaultValue?.clone(),
-                util.cloneToken(this.asToken)
-            ),
-            ['defaultValue']
-        );
-    }
-}
-
-export class NamespacedVariableNameExpression extends Expression {
-    constructor(
-        //if this is a `DottedGetExpression`, it must be comprised only of `VariableExpression`s
-        readonly expression: DottedGetExpression | VariableExpression
-    ) {
-        super();
-        this.range = expression?.range;
-    }
-    range: Range | undefined;
-
-    transpile(state: BrsTranspileState) {
-        return [
-            state.sourceNode(this, this.getName(ParseMode.BrightScript))
-        ];
-    }
-
-    public getNameParts() {
-        let parts = [] as string[];
-        if (isVariableExpression(this.expression)) {
-            parts.push(this.expression.name.text);
-        } else {
-            let expr = this.expression;
-
-            parts.push(expr.name.text);
-
-            while (isVariableExpression(expr) === false) {
-                expr = expr.obj as DottedGetExpression;
-                parts.unshift(expr.name.text);
-            }
-        }
-        return parts;
-    }
-
-    getName(parseMode: ParseMode) {
-        if (parseMode === ParseMode.BrighterScript) {
-            return this.getNameParts().join('.');
-        } else {
-            return this.getNameParts().join('_');
-        }
-    }
-
-    walk(visitor: WalkVisitor, options: WalkOptions) {
-        this.expression?.link();
         if (options.walkMode & InternalWalkMode.walkExpressions) {
-            walk(this, 'expression', visitor, options);
+            walk(this, 'defaultValue', visitor, options);
+            walk(this, 'typeExpression', visitor, options);
         }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.name.leadingTrivia;
     }
 
     public clone() {
         return this.finalizeClone(
-            new NamespacedVariableNameExpression(
-                this.expression?.clone()
-            )
+            new FunctionParameterExpression({
+                name: util.cloneToken(this.tokens.name),
+                as: util.cloneToken(this.tokens.as),
+                typeExpression: this.typeExpression?.clone(),
+                equals: util.cloneToken(this.tokens.equals),
+                defaultValue: this.defaultValue?.clone()
+            }),
+            ['typeExpression', 'defaultValue']
         );
     }
 }
 
 export class DottedGetExpression extends Expression {
-    constructor(
-        readonly obj: Expression,
-        readonly name: Identifier,
+    constructor(options: {
+        obj: Expression;
+        name: Identifier;
         /**
-         * Can either be `.`, or `?.` for optional chaining
+         * Can either be `.`, or `?.` for optional chaining - defaults in transpile to '.'
          */
-        readonly dot: Token
-    ) {
+        dot?: Token;
+    }) {
         super();
-        this.range = util.createBoundingRange(this.obj, this.dot, this.name);
+        this.tokens = {
+            name: options.name,
+            dot: options.dot
+        };
+        this.obj = options.obj;
+
+        this.location = util.createBoundingLocation(this.obj, this.tokens.dot, this.tokens.name);
     }
 
-    public readonly range: Range | undefined;
+    readonly tokens: {
+        readonly name: Identifier;
+        readonly dot?: Token;
+    };
+    readonly obj: Expression;
+
+    public readonly kind = AstNodeKind.DottedGetExpression;
+
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
         //if the callee starts with a namespace name, transpile the name
         if (state.file.calleeStartsWithNamespace(this)) {
-            return new NamespacedVariableNameExpression(this as DottedGetExpression | VariableExpression).transpile(state);
+            return [
+                ...state.transpileLeadingCommentsForAstNode(this),
+                state.sourceNode(this, this.getName(ParseMode.BrightScript))
+            ];
         } else {
             return [
                 ...this.obj.transpile(state),
-                state.transpileToken(this.dot),
-                state.transpileToken(this.name)
+                state.transpileToken(this.tokens.dot, '.'),
+                state.transpileToken(this.tokens.name)
             ];
         }
     }
@@ -587,38 +682,83 @@ export class DottedGetExpression extends Expression {
         }
     }
 
+    getType(options: GetTypeOptions) {
+        const objType = this.obj?.getType(options);
+        let result = objType?.getMemberType(this.tokens.name?.text, options);
+
+        if (util.isClassUsedAsFunction(result, this, options)) {
+            // treat this class constructor as a function
+            result = FunctionType.instance;
+        }
+        options.typeChain?.push(new TypeChainEntry({
+            name: this.tokens.name?.text,
+            type: result,
+            data: options.data,
+            location: this.tokens.name?.location ?? this.location,
+            astNode: this
+        }));
+        if (result ||
+            options.flags & SymbolTypeFlag.typetime ||
+            (isPrimitiveType(objType) || isCallableType(objType))) {
+            // All types should be known at typeTime, or the obj is well known
+            return result;
+        }
+        // It is possible at runtime that a value has been added dynamically to an object, or something
+        // TODO: maybe have a strict flag on this?
+        return DynamicType.instance;
+    }
+
+    getName(parseMode: ParseMode) {
+        return util.getAllDottedGetPartsAsString(this, parseMode);
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.obj.leadingTrivia;
+    }
+
     public clone() {
         return this.finalizeClone(
-            new DottedGetExpression(
-                this.obj?.clone(),
-                util.cloneToken(this.name),
-                util.cloneToken(this.dot)
-            ),
+            new DottedGetExpression({
+                obj: this.obj?.clone(),
+                dot: util.cloneToken(this.tokens.dot),
+                name: util.cloneToken(this.tokens.name)
+            }),
             ['obj']
         );
     }
 }
 
 export class XmlAttributeGetExpression extends Expression {
-    constructor(
-        readonly obj: Expression,
-        readonly name: Identifier,
+    constructor(options: {
+        obj: Expression;
         /**
-         * Can either be `@`, or `?@` for optional chaining
+         * Can either be `@`, or `?@` for optional chaining - defaults to '@'
          */
-        readonly at: Token
-    ) {
+        at?: Token;
+        name: Identifier;
+    }) {
         super();
-        this.range = util.createBoundingRange(this.obj, this.at, this.name);
+        this.obj = options.obj;
+        this.tokens = { at: options.at, name: options.name };
+        this.location = util.createBoundingLocation(this.obj, this.tokens.at, this.tokens.name);
     }
 
-    public readonly range: Range | undefined;
+    public readonly kind = AstNodeKind.XmlAttributeGetExpression;
+
+    public readonly tokens: {
+        name: Identifier;
+        at?: Token;
+    };
+
+    public readonly obj: Expression;
+
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
             ...this.obj.transpile(state),
-            state.transpileToken(this.at),
-            state.transpileToken(this.name)
+            state.transpileToken(this.tokens.at, '@'),
+            state.transpileToken(this.tokens.name)
         ];
     }
 
@@ -628,60 +768,86 @@ export class XmlAttributeGetExpression extends Expression {
         }
     }
 
+    get leadingTrivia(): Token[] {
+        return this.obj.leadingTrivia;
+    }
+
     public clone() {
         return this.finalizeClone(
-            new XmlAttributeGetExpression(
-                this.obj?.clone(),
-                util.cloneToken(this.name),
-                util.cloneToken(this.at)
-            ),
+            new XmlAttributeGetExpression({
+                obj: this.obj?.clone(),
+                at: util.cloneToken(this.tokens.at),
+                name: util.cloneToken(this.tokens.name)
+            }),
             ['obj']
         );
     }
 }
 
 export class IndexedGetExpression extends Expression {
-    constructor(
-        public obj: Expression,
-        public index: Expression,
+    constructor(options: {
+        obj: Expression;
+        indexes: Expression[];
         /**
-         * Can either be `[` or `?[`. If `?.[` is used, this will be `[` and `optionalChainingToken` will be `?.`
+         * Can either be `[` or `?[`. If `?.[` is used, this will be `[` and `optionalChainingToken` will be `?.` - defaults to '[' in transpile
          */
-        public openingSquare: Token,
-        public closingSquare: Token,
-        public questionDotToken?: Token, //  ? or ?.
-        /**
-         * More indexes, separated by commas
-         */
-        public additionalIndexes?: Expression[]
-    ) {
+        openingSquare?: Token;
+        closingSquare?: Token;
+        questionDot?: Token;//  ? or ?.
+    }) {
         super();
-        this.range = util.createBoundingRange(this.obj, this.openingSquare, this.questionDotToken, this.openingSquare, this.index, this.closingSquare);
-        this.additionalIndexes ??= [];
+        this.tokens = {
+            openingSquare: options.openingSquare,
+            closingSquare: options.closingSquare,
+            questionDot: options.questionDot
+        };
+        this.obj = options.obj;
+        this.indexes = options.indexes;
+        this.location = util.createBoundingLocation(
+            this.obj,
+            this.tokens.openingSquare,
+            this.tokens.questionDot,
+            this.tokens.openingSquare,
+            ...this.indexes ?? [],
+            this.tokens.closingSquare
+        );
     }
 
-    public readonly range: Range | undefined;
+    public readonly kind = AstNodeKind.IndexedGetExpression;
+
+    public readonly obj: Expression;
+    public readonly indexes: Expression[];
+
+    readonly tokens: {
+        /**
+         * Can either be `[` or `?[`. If `?.[` is used, this will be `[` and `optionalChainingToken` will be `?.` - defaults to '[' in transpile
+         */
+        readonly openingSquare?: Token;
+        readonly closingSquare?: Token;
+        readonly questionDot?: Token; //  ? or ?.
+    };
+
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
         const result = [];
         result.push(
             ...this.obj.transpile(state),
-            this.questionDotToken ? state.transpileToken(this.questionDotToken) : '',
-            state.transpileToken(this.openingSquare)
+            this.tokens.questionDot ? state.transpileToken(this.tokens.questionDot) : '',
+            state.transpileToken(this.tokens.openingSquare, '[')
         );
-        const indexes = [this.index, ...this.additionalIndexes ?? []];
-        for (let i = 0; i < indexes.length; i++) {
+        for (let i = 0; i < this.indexes.length; i++) {
             //add comma between indexes
             if (i > 0) {
                 result.push(', ');
             }
-            let index = indexes[i];
+            let index = this.indexes[i];
             result.push(
                 ...(index?.transpile(state) ?? [])
             );
         }
         result.push(
-            this.closingSquare ? state.transpileToken(this.closingSquare) : ''
+            state.transpileToken(this.tokens.closingSquare, ']')
         );
         return result;
     }
@@ -689,48 +855,70 @@ export class IndexedGetExpression extends Expression {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'obj', visitor, options);
-            walk(this, 'index', visitor, options);
-            walkArray(this.additionalIndexes, visitor, options, this);
+            walkArray(this.indexes, visitor, options, this);
         }
+    }
+
+    getType(options: GetTypeOptions): BscType {
+        const objType = this.obj.getType(options);
+        if (isArrayType(objType)) {
+            // This is used on an array. What is the default type of that array?
+            return objType.defaultType;
+        }
+        return super.getType(options);
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.obj.leadingTrivia;
     }
 
     public clone() {
         return this.finalizeClone(
-            new IndexedGetExpression(
-                this.obj?.clone(),
-                this.index?.clone(),
-                util.cloneToken(this.openingSquare),
-                util.cloneToken(this.closingSquare),
-                util.cloneToken(this.questionDotToken),
-                this.additionalIndexes?.map(e => e?.clone())
-            ),
-            ['obj', 'index', 'additionalIndexes']
+            new IndexedGetExpression({
+                obj: this.obj?.clone(),
+                questionDot: util.cloneToken(this.tokens.questionDot),
+                openingSquare: util.cloneToken(this.tokens.openingSquare),
+                indexes: this.indexes?.map(x => x?.clone()),
+                closingSquare: util.cloneToken(this.tokens.closingSquare)
+            }),
+            ['obj', 'indexes']
         );
     }
 }
 
 export class GroupingExpression extends Expression {
-    constructor(
-        readonly tokens: {
-            left: Token;
-            right: Token;
-        },
-        public expression: Expression
-    ) {
+    constructor(options: {
+        leftParen?: Token;
+        rightParen?: Token;
+        expression: Expression;
+    }) {
         super();
-        this.range = util.createBoundingRange(this.tokens.left, this.expression, this.tokens.right);
+        this.tokens = {
+            rightParen: options.rightParen,
+            leftParen: options.leftParen
+        };
+        this.expression = options.expression;
+        this.location = util.createBoundingLocation(this.tokens.leftParen, this.expression, this.tokens.rightParen);
     }
 
-    public readonly range: Range | undefined;
+    public readonly tokens: {
+        readonly leftParen?: Token;
+        readonly rightParen?: Token;
+    };
+    public readonly expression: Expression;
+
+    public readonly kind = AstNodeKind.GroupingExpression;
+
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
-        if (isTypeCastExpression(this.expression)) {
+        if (isTypecastExpression(this.expression)) {
             return this.expression.transpile(state);
         }
         return [
-            state.transpileToken(this.tokens.left),
+            state.transpileToken(this.tokens.leftParen, '('),
             ...this.expression.transpile(state),
-            state.transpileToken(this.tokens.right)
+            state.transpileToken(this.tokens.rightParen, ')')
         ];
     }
 
@@ -740,55 +928,68 @@ export class GroupingExpression extends Expression {
         }
     }
 
+    getType(options: GetTypeOptions) {
+        return this.expression.getType(options);
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.leftParen?.leadingTrivia;
+    }
+
     public clone() {
         return this.finalizeClone(
-            new GroupingExpression(
-                {
-                    left: util.cloneToken(this.tokens.left),
-                    right: util.cloneToken(this.tokens.right)
-                },
-                this.expression?.clone()
-            ),
+            new GroupingExpression({
+                leftParen: util.cloneToken(this.tokens.leftParen),
+                expression: this.expression?.clone(),
+                rightParen: util.cloneToken(this.tokens.rightParen)
+            }),
             ['expression']
         );
     }
 }
 
 export class LiteralExpression extends Expression {
-    constructor(
-        public token: Token
-    ) {
+    constructor(options: {
+        value: Token;
+    }) {
         super();
-        this.type = util.tokenToBscType(token);
+        this.tokens = {
+            value: options.value
+        };
     }
 
-    public get range() {
-        return this.token.range;
+    public readonly tokens: {
+        readonly value: Token;
+    };
+
+    public readonly kind = AstNodeKind.LiteralExpression;
+
+    public get location() {
+        return this.tokens.value.location;
     }
 
-    /**
-     * The (data) type of this expression
-     */
-    public type: BscType;
+    public getType(options?: GetTypeOptions) {
+        return util.tokenToBscType(this.tokens.value);
+    }
 
     transpile(state: BrsTranspileState) {
         let text: string;
-        if (this.token.kind === TokenKind.TemplateStringQuasi) {
+        if (this.tokens.value.kind === TokenKind.TemplateStringQuasi) {
             //wrap quasis with quotes (and escape inner quotemarks)
-            text = `"${this.token.text.replace(/"/g, '""')}"`;
+            text = `"${this.tokens.value.text.replace(/"/g, '""')}"`;
 
-        } else if (isStringType(this.type)) {
-            text = this.token.text;
+        } else if (this.tokens.value.kind === TokenKind.StringLiteral) {
+            text = this.tokens.value.text;
             //add trailing quotemark if it's missing. We will have already generated a diagnostic for this.
             if (text.endsWith('"') === false) {
                 text += '"';
             }
         } else {
-            text = this.token.text;
+            text = this.tokens.value.text;
         }
 
         return [
-            state.sourceNode(this, text)
+            state.transpileToken({ ...this.tokens.value, text: text })
         ];
     }
 
@@ -796,31 +997,89 @@ export class LiteralExpression extends Expression {
         //nothing to walk
     }
 
+    get leadingTrivia(): Token[] {
+        return this.tokens.value.leadingTrivia;
+    }
+
     public clone() {
         return this.finalizeClone(
-            new LiteralExpression(
-                util.cloneToken(this.token)
-            )
+            new LiteralExpression({
+                value: util.cloneToken(this.tokens.value)
+            })
         );
     }
 }
+
+/**
+ * The print statement can have a mix of expressions and separators. These separators represent actual output to the screen,
+ * so this AstNode represents those separators (comma, semicolon, and whitespace)
+ */
+export class PrintSeparatorExpression extends Expression {
+    constructor(options: {
+        separator: PrintSeparatorToken;
+    }) {
+        super();
+        this.tokens = {
+            separator: options.separator
+        };
+        this.location = this.tokens.separator.location;
+    }
+
+    public readonly tokens: {
+        readonly separator: PrintSeparatorToken;
+    };
+
+    public readonly kind = AstNodeKind.PrintSeparatorExpression;
+
+    public location: Location;
+
+    transpile(state: BrsTranspileState) {
+        return [
+            ...this.tokens.separator.leadingWhitespace ?? [],
+            ...state.transpileToken(this.tokens.separator)
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.separator.leadingTrivia;
+    }
+
+    public clone() {
+        return new PrintSeparatorExpression({
+            separator: util.cloneToken(this.tokens?.separator)
+        });
+    }
+}
+
 
 /**
  * This is a special expression only used within template strings. It exists so we can prevent producing lots of empty strings
  * during template string transpile by identifying these expressions explicitly and skipping the bslib_toString around them
  */
 export class EscapedCharCodeLiteralExpression extends Expression {
-    constructor(
-        readonly token: Token & { charCode: number }
-    ) {
+    constructor(options: {
+        value: Token & { charCode: number };
+    }) {
         super();
-        this.range = token.range;
+        this.tokens = { value: options.value };
+        this.location = util.cloneLocation(this.tokens.value.location);
     }
-    readonly range: Range;
+
+    public readonly kind = AstNodeKind.EscapedCharCodeLiteralExpression;
+
+    public readonly tokens: {
+        readonly value: Token & { charCode: number };
+    };
+
+    public readonly location: Location;
 
     transpile(state: BrsTranspileState) {
         return [
-            state.sourceNode(this, `chr(${this.token.charCode})`)
+            state.sourceNode(this, `chr(${this.tokens.value.charCode})`)
         ];
     }
 
@@ -830,30 +1089,43 @@ export class EscapedCharCodeLiteralExpression extends Expression {
 
     public clone() {
         return this.finalizeClone(
-            new EscapedCharCodeLiteralExpression(
-                util.cloneToken(this.token)
-            )
+            new EscapedCharCodeLiteralExpression({
+                value: util.cloneToken(this.tokens.value)
+            })
         );
     }
 }
 
 export class ArrayLiteralExpression extends Expression {
-    constructor(
-        readonly elements: Array<Expression | CommentStatement>,
-        readonly open: Token,
-        readonly close: Token,
-        readonly hasSpread = false
-    ) {
+    constructor(options: {
+        elements: Array<Expression>;
+        open?: Token;
+        close?: Token;
+    }) {
         super();
-        this.range = util.createBoundingRange(this.open, ...this.elements ?? [], this.close);
+        this.tokens = {
+            open: options.open,
+            close: options.close
+        };
+        this.elements = options.elements;
+        this.location = util.createBoundingLocation(this.tokens.open, ...this.elements ?? [], this.tokens.close);
     }
 
-    public readonly range: Range | undefined;
+    public readonly elements: Array<Expression>;
+
+    public readonly tokens: {
+        readonly open?: Token;
+        readonly close?: Token;
+    };
+
+    public readonly kind = AstNodeKind.ArrayLiteralExpression;
+
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
-        let result = [] as TranspileResult;
+        let result: TranspileResult = [];
         result.push(
-            state.transpileToken(this.open)
+            state.transpileToken(this.tokens.open, '[')
         );
         let hasChildren = this.elements.length > 0;
         state.blockDepth++;
@@ -862,39 +1134,23 @@ export class ArrayLiteralExpression extends Expression {
             let previousElement = this.elements[i - 1];
             let element = this.elements[i];
 
-            if (isCommentStatement(element)) {
-                //if the comment is on the same line as opening square or previous statement, don't add newline
-                if (util.linesTouch(this.open, element) || util.linesTouch(previousElement, element)) {
-                    result.push(' ');
-                } else {
-                    result.push(
-                        '\n',
-                        state.indent()
-                    );
-                }
-                state.lineage.unshift(this);
-                result.push(element.transpile(state));
-                state.lineage.shift();
+            if (util.isLeadingCommentOnSameLine(previousElement ?? this.tokens.open, element)) {
+                result.push(' ');
             } else {
-                result.push('\n');
-
                 result.push(
-                    state.indent(),
-                    ...element.transpile(state)
+                    '\n',
+                    state.indent()
                 );
             }
+            result.push(
+                ...element.transpile(state)
+            );
         }
         state.blockDepth--;
         //add a newline between open and close if there are elements
-        if (hasChildren) {
-            result.push('\n');
-            result.push(state.indent());
-        }
-        if (this.close) {
-            result.push(
-                state.transpileToken(this.close)
-            );
-        }
+        const lastLocatable = this.elements[this.elements.length - 1] ?? this.tokens.open;
+        result.push(...state.transpileEndBlockToken(lastLocatable, this.tokens.close, ']', hasChildren));
+
         return result;
     }
 
@@ -904,32 +1160,60 @@ export class ArrayLiteralExpression extends Expression {
         }
     }
 
+    getType(options: GetTypeOptions): BscType {
+        const innerTypes = this.elements.map(expr => expr.getType(options));
+        return new ArrayType(...innerTypes);
+    }
+    get leadingTrivia(): Token[] {
+        return this.tokens.open?.leadingTrivia;
+    }
+
+    get endTrivia(): Token[] {
+        return this.tokens.close?.leadingTrivia;
+    }
+
     public clone() {
         return this.finalizeClone(
-            new ArrayLiteralExpression(
-                this.elements?.map(e => e?.clone()),
-                util.cloneToken(this.open),
-                util.cloneToken(this.close),
-                this.hasSpread
-            ),
+            new ArrayLiteralExpression({
+                elements: this.elements?.map(e => e?.clone()),
+                open: util.cloneToken(this.tokens.open),
+                close: util.cloneToken(this.tokens.close)
+            }),
             ['elements']
         );
     }
 }
 
 export class AAMemberExpression extends Expression {
-    constructor(
-        public keyToken: Token,
-        public colonToken: Token,
+    constructor(options: {
+        key: Token;
+        colon?: Token;
         /** The expression evaluated to determine the member's initial value. */
-        public value: Expression
-    ) {
+        value: Expression;
+        comma?: Token;
+    }) {
         super();
-        this.range = util.createBoundingRange(this.keyToken, this.colonToken, this.value);
+        this.tokens = {
+            key: options.key,
+            colon: options.colon,
+            comma: options.comma
+        };
+        this.value = options.value;
+        this.location = util.createBoundingLocation(this.tokens.key, this.tokens.colon, this.value);
     }
 
-    public range: Range | undefined;
-    public commaToken?: Token;
+    public readonly kind = AstNodeKind.AAMemberExpression;
+
+    public readonly location: Location | undefined;
+
+    public readonly tokens: {
+        readonly key: Token;
+        readonly colon?: Token;
+        readonly comma?: Token;
+    };
+
+    /** The expression evaluated to determine the member's initial value. */
+    public readonly value: Expression;
 
     transpile(state: BrsTranspileState) {
         //TODO move the logic from AALiteralExpression loop into this function
@@ -940,40 +1224,60 @@ export class AAMemberExpression extends Expression {
         walk(this, 'value', visitor, options);
     }
 
+    getType(options: GetTypeOptions): BscType {
+        return this.value.getType(options);
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.key.leadingTrivia;
+    }
+
     public clone() {
         return this.finalizeClone(
-            new AAMemberExpression(
-                util.cloneToken(this.keyToken),
-                util.cloneToken(this.colonToken),
-                this.value?.clone()
-            ),
+            new AAMemberExpression({
+                key: util.cloneToken(this.tokens.key),
+                colon: util.cloneToken(this.tokens.colon),
+                value: this.value?.clone()
+            }),
             ['value']
         );
     }
-
 }
 
 export class AALiteralExpression extends Expression {
-    constructor(
-        readonly elements: Array<AAMemberExpression | CommentStatement>,
-        readonly open: Token,
-        readonly close: Token
-    ) {
+    constructor(options: {
+        elements: Array<AAMemberExpression>;
+        open?: Token;
+        close?: Token;
+    }) {
         super();
-        this.range = util.createBoundingRange(this.open, ...this.elements ?? [], this.close);
+        this.tokens = {
+            open: options.open,
+            close: options.close
+        };
+        this.elements = options.elements;
+        this.location = util.createBoundingLocation(this.tokens.open, ...this.elements ?? [], this.tokens.close);
     }
 
-    public readonly range: Range | undefined;
+    public readonly elements: Array<AAMemberExpression>;
+    public readonly tokens: {
+        readonly open?: Token;
+        readonly close?: Token;
+    };
+
+    public readonly kind = AstNodeKind.AALiteralExpression;
+
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
-        let result = [] as TranspileResult;
+        let result: TranspileResult = [];
         //open curly
         result.push(
-            state.transpileToken(this.open)
+            state.transpileToken(this.tokens.open, '{')
         );
         let hasChildren = this.elements.length > 0;
         //add newline if the object has children and the first child isn't a comment starting on the same line as opening curly
-        if (hasChildren && (isCommentStatement(this.elements[0]) === false || !util.linesTouch(this.elements[0], this.open))) {
+        if (hasChildren && !util.isLeadingCommentOnSameLine(this.tokens.open, this.elements[0])) {
             result.push('\n');
         }
         state.blockDepth++;
@@ -983,55 +1287,37 @@ export class AALiteralExpression extends Expression {
             let nextElement = this.elements[i + 1];
 
             //don't indent if comment is same-line
-            if (isCommentStatement(element as any) &&
-                (util.linesTouch(this.open, element) || util.linesTouch(previousElement, element))
-            ) {
+            if (util.isLeadingCommentOnSameLine(this.tokens.open, element) ||
+                util.isLeadingCommentOnSameLine(previousElement, element)) {
                 result.push(' ');
-
-                //indent line
             } else {
+                //indent line
                 result.push(state.indent());
             }
 
-            //render comments
-            if (isCommentStatement(element)) {
-                result.push(...element.transpile(state));
-            } else {
-                //key
-                result.push(
-                    state.transpileToken(element.keyToken)
-                );
-                //colon
-                result.push(
-                    state.transpileToken(element.colonToken),
-                    ' '
-                );
-
-                //value
-                result.push(...element.value.transpile(state));
-            }
-
+            //key
+            result.push(
+                state.transpileToken(element.tokens.key)
+            );
+            //colon
+            result.push(
+                state.transpileToken(element.tokens.colon, ':'),
+                ' '
+            );
+            //value
+            result.push(...element.value.transpile(state));
 
             //if next element is a same-line comment, skip the newline
-            if (nextElement && isCommentStatement(nextElement) && nextElement.range?.start.line === element.range?.start.line) {
-
+            if (nextElement && !util.isLeadingCommentOnSameLine(element, nextElement)) {
                 //add a newline between statements
-            } else {
                 result.push('\n');
             }
         }
         state.blockDepth--;
 
-        //only indent the closing curly if we have children
-        if (hasChildren) {
-            result.push(state.indent());
-        }
-        //close curly
-        if (this.close) {
-            result.push(
-                state.transpileToken(this.close)
-            );
-        }
+        const lastElement = this.elements[this.elements.length - 1] ?? this.tokens.open;
+        result.push(...state.transpileEndBlockToken(lastElement, this.tokens.close, '}', hasChildren));
+
         return result;
     }
 
@@ -1041,40 +1327,78 @@ export class AALiteralExpression extends Expression {
         }
     }
 
+    getType(options: GetTypeOptions): BscType {
+        const resultType = new AssociativeArrayType();
+        resultType.addBuiltInInterfaces();
+        for (const element of this.elements) {
+            if (isAAMemberExpression(element)) {
+                let memberName = element.tokens?.key?.text ?? '';
+                if (element.tokens.key.kind === TokenKind.StringLiteral) {
+                    memberName = memberName.replace(/"/g, ''); // remove quotes if it was a stringLiteral
+                }
+                if (memberName) {
+                    resultType.addMember(memberName, { definingNode: element }, element.getType(options), SymbolTypeFlag.runtime);
+                }
+            }
+        }
+        return resultType;
+    }
+
+    public get leadingTrivia(): Token[] {
+        return this.tokens.open?.leadingTrivia;
+    }
+
+    public get endTrivia(): Token[] {
+        return this.tokens.close?.leadingTrivia;
+    }
+
     public clone() {
         return this.finalizeClone(
-            new AALiteralExpression(
-                this.elements?.map(e => e?.clone()),
-                util.cloneToken(this.open),
-                util.cloneToken(this.close)
-            ),
+            new AALiteralExpression({
+                elements: this.elements?.map(e => e?.clone()),
+                open: util.cloneToken(this.tokens.open),
+                close: util.cloneToken(this.tokens.close)
+            }),
             ['elements']
         );
     }
 }
 
 export class UnaryExpression extends Expression {
-    constructor(
-        public operator: Token,
-        public right: Expression
-    ) {
+    constructor(options: {
+        operator: Token;
+        right: Expression;
+    }) {
         super();
-        this.range = util.createBoundingRange(this.operator, this.right);
+        this.tokens = {
+            operator: options.operator
+        };
+        this.right = options.right;
+        this.location = util.createBoundingLocation(this.tokens.operator, this.right);
     }
 
-    public readonly range: Range | undefined;
+    public readonly kind = AstNodeKind.UnaryExpression;
+
+    public readonly location: Location | undefined;
+
+    public readonly tokens: {
+        readonly operator: Token;
+    };
+    public readonly right: Expression;
 
     transpile(state: BrsTranspileState) {
         let separatingWhitespace: string | undefined;
         if (isVariableExpression(this.right)) {
-            separatingWhitespace = this.right.name.leadingWhitespace;
+            separatingWhitespace = this.right.tokens.name.leadingWhitespace;
         } else if (isLiteralExpression(this.right)) {
-            separatingWhitespace = this.right.token.leadingWhitespace;
+            separatingWhitespace = this.right.tokens.value.leadingWhitespace;
+        } else {
+            separatingWhitespace = ' ';
         }
 
         return [
-            state.transpileToken(this.operator),
-            separatingWhitespace ?? ' ',
+            state.transpileToken(this.tokens.operator),
+            separatingWhitespace,
             ...this.right.transpile(state)
         ];
     }
@@ -1085,48 +1409,66 @@ export class UnaryExpression extends Expression {
         }
     }
 
+    getType(options: GetTypeOptions): BscType {
+        return util.unaryOperatorResultType(this.tokens.operator, this.right.getType(options));
+    }
+
+    public get leadingTrivia(): Token[] {
+        return this.tokens.operator.leadingTrivia;
+    }
+
     public clone() {
         return this.finalizeClone(
-            new UnaryExpression(
-                util.cloneToken(this.operator),
-                this.right?.clone()
-            ),
+            new UnaryExpression({
+                operator: util.cloneToken(this.tokens.operator),
+                right: this.right?.clone()
+            }),
             ['right']
         );
     }
 }
 
 export class VariableExpression extends Expression {
-    constructor(
-        readonly name: Identifier
-    ) {
+    constructor(options: {
+        name: Identifier;
+    }) {
         super();
-        this.range = this.name?.range;
+        this.tokens = {
+            name: options.name
+        };
+        this.location = util.cloneLocation(this.tokens.name?.location);
     }
 
-    public readonly range: Range;
+    public readonly tokens: {
+        readonly name: Identifier;
+    };
 
-    public getName(parseMode: ParseMode) {
-        return this.name.text;
+    public readonly kind = AstNodeKind.VariableExpression;
+
+    public readonly location: Location;
+
+    public getName(parseMode?: ParseMode) {
+        return this.tokens.name.text;
     }
 
     transpile(state: BrsTranspileState) {
-        let result = [] as TranspileResult;
+        let result: TranspileResult = [];
         const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
         //if the callee is the name of a known namespace function
-        if (namespace && state.file.calleeIsKnownNamespaceFunction(this, namespace.getName(ParseMode.BrighterScript))) {
+        if (namespace && util.isCalleeMemberOfNamespace(this.tokens.name.text, this, namespace)) {
             result.push(
+                //transpile leading comments since the token isn't being transpiled directly
+                ...state.transpileLeadingCommentsForAstNode(this),
                 state.sourceNode(this, [
                     namespace.getName(ParseMode.BrightScript),
                     '_',
                     this.getName(ParseMode.BrightScript)
                 ])
             );
-
             //transpile  normally
         } else {
             result.push(
-                state.transpileToken(this.name)
+                state.transpileToken(this.tokens.name)
             );
         }
         return result;
@@ -1136,37 +1478,93 @@ export class VariableExpression extends Expression {
         //nothing to walk
     }
 
+
+    getType(options: GetTypeOptions) {
+        let resultType: BscType = util.tokenToBscType(this.tokens.name);
+        const nameKey = this.getName();
+        if (!resultType) {
+            const symbolTable = this.getSymbolTable();
+            resultType = symbolTable?.getSymbolType(nameKey, {
+                ...options,
+                statementIndex: this.statementIndex,
+                fullName: nameKey,
+                tableProvider: () => this.getSymbolTable()
+            });
+
+            if (util.isClassUsedAsFunction(resultType, this, options)) {
+                resultType = FunctionType.instance;
+            }
+
+        }
+        options?.typeChain?.push(new TypeChainEntry({ name: nameKey, type: resultType, data: options.data, astNode: this }));
+        return resultType;
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.name.leadingTrivia;
+    }
+
     public clone() {
         return this.finalizeClone(
-            new VariableExpression(
-                util.cloneToken(this.name)
-            )
+            new VariableExpression({
+                name: util.cloneToken(this.tokens.name)
+            })
         );
     }
 }
 
 export class SourceLiteralExpression extends Expression {
-    constructor(
-        readonly token: Token
-    ) {
+    constructor(options: {
+        value: Token;
+    }) {
         super();
-        this.range = token?.range;
+        this.tokens = {
+            value: options.value
+        };
+        this.location = util.cloneLocation(this.tokens.value?.location);
     }
 
-    public readonly range: Range;
+    public readonly location: Location;
+
+    public readonly kind = AstNodeKind.SourceLiteralExpression;
+
+    public readonly tokens: {
+        readonly value: Token;
+    };
+
+    /**
+     * Find the index of the function in its parent
+     */
+    private findFunctionIndex(parentFunction: FunctionExpression, func: FunctionExpression) {
+        let index = -1;
+        parentFunction.findChild((node) => {
+            if (isFunctionExpression(node)) {
+                index++;
+                if (node === func) {
+                    return true;
+                }
+            }
+        }, {
+            walkMode: WalkMode.visitAllRecursive
+        });
+        return index;
+    }
 
     private getFunctionName(state: BrsTranspileState, parseMode: ParseMode) {
         let func = this.findAncestor<FunctionExpression>(isFunctionExpression);
         let nameParts = [] as TranspileResult;
-        while (func.parentFunction) {
-            let index = func.parentFunction.childFunctionExpressions.indexOf(func);
+        let parentFunction: FunctionExpression;
+        while ((parentFunction = func.findAncestor<FunctionExpression>(isFunctionExpression))) {
+            let index = this.findFunctionIndex(parentFunction, func);
             nameParts.unshift(`anon${index}`);
-            func = func.parentFunction;
+            func = parentFunction;
         }
         //get the index of this function in its parent
-        nameParts.unshift(
-            func.functionStatement!.getName(parseMode)
-        );
+        if (isFunctionStatement(func.parent)) {
+            nameParts.unshift(
+                func.parent.getName(parseMode)
+            );
+        }
         return nameParts.join('$');
     }
 
@@ -1176,8 +1574,8 @@ export class SourceLiteralExpression extends Expression {
     private getClosestLineNumber() {
         let node: AstNode = this;
         while (node) {
-            if (node.range) {
-                return node.range.start.line + 1;
+            if (node.location?.range) {
+                return node.location.range.start.line + 1;
             }
             node = node.parent;
         }
@@ -1186,7 +1584,7 @@ export class SourceLiteralExpression extends Expression {
 
     transpile(state: BrsTranspileState) {
         let text: string;
-        switch (this.token.kind) {
+        switch (this.tokens.value.kind) {
             case TokenKind.SourceFilePathLiteral:
                 const pathUrl = fileUrl(state.srcPath);
                 text = `"${pathUrl.substring(0, 4)}" + "${pathUrl.substring(4)}"`;
@@ -1220,23 +1618,15 @@ export class SourceLiteralExpression extends Expression {
                 text = `"${locationUrl.substring(0, 4)}" + "${locationUrl.substring(4)}:${this.getClosestLineNumber()}"`;
                 break;
             case TokenKind.PkgPathLiteral:
-                let pkgPath1 = `pkg:/${state.file.pkgPath}`
-                    .replace(/\\/g, '/')
-                    .replace(/\.bs$/i, '.brs');
-
-                text = `"${pkgPath1}"`;
+                text = `"${util.sanitizePkgPath(state.file.pkgPath)}"`;
                 break;
             case TokenKind.PkgLocationLiteral:
-                let pkgPath2 = `pkg:/${state.file.pkgPath}`
-                    .replace(/\\/g, '/')
-                    .replace(/\.bs$/i, '.brs');
-
-                text = `"${pkgPath2}:" + str(LINE_NUM)`;
+                text = `"${util.sanitizePkgPath(state.file.pkgPath)}:" + str(LINE_NUM)`;
                 break;
             case TokenKind.LineNumLiteral:
             default:
                 //use the original text (because it looks like a variable)
-                text = this.token.text;
+                text = this.tokens.value.text;
                 break;
 
         }
@@ -1249,11 +1639,15 @@ export class SourceLiteralExpression extends Expression {
         //nothing to walk
     }
 
+    get leadingTrivia(): Token[] {
+        return this.tokens.value.leadingTrivia;
+    }
+
     public clone() {
         return this.finalizeClone(
-            new SourceLiteralExpression(
-                util.cloneToken(this.token)
-            )
+            new SourceLiteralExpression({
+                value: util.cloneToken(this.tokens.value)
+            })
         );
     }
 }
@@ -1264,24 +1658,35 @@ export class SourceLiteralExpression extends Expression {
  * do more type checking.
  */
 export class NewExpression extends Expression {
-    constructor(
-        readonly newKeyword: Token,
-        readonly call: CallExpression
-    ) {
+    constructor(options: {
+        new?: Token;
+        call: CallExpression;
+    }) {
         super();
-        this.range = util.createBoundingRange(this.newKeyword, this.call);
+        this.tokens = {
+            new: options.new
+        };
+        this.call = options.call;
+        this.location = util.createBoundingLocation(this.tokens.new, this.call);
     }
+
+    public readonly kind = AstNodeKind.NewExpression;
+
+    public readonly location: Location | undefined;
+
+    public readonly tokens: {
+        readonly new?: Token;
+    };
+    public readonly call: CallExpression;
 
     /**
      * The name of the class to initialize (with optional namespace prefixed)
      */
     public get className() {
         //the parser guarantees the callee of a new statement's call object will be
-        //a NamespacedVariableNameExpression
-        return this.call.callee as NamespacedVariableNameExpression;
+        //either a VariableExpression or a DottedGet
+        return this.call.callee as (VariableExpression | DottedGetExpression);
     }
-
-    public readonly range: Range | undefined;
 
     public transpile(state: BrsTranspileState) {
         const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
@@ -1300,62 +1705,88 @@ export class NewExpression extends Expression {
         }
     }
 
+    getType(options: GetTypeOptions) {
+        const result = this.call.getType(options);
+        if (options.typeChain) {
+            // modify last typechain entry to show it is a new ...()
+            const lastEntry = options.typeChain[options.typeChain.length - 1];
+            if (lastEntry) {
+                lastEntry.astNode = this;
+            }
+        }
+        return result;
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.new.leadingTrivia;
+    }
+
     public clone() {
         return this.finalizeClone(
-            new NewExpression(
-                util.cloneToken(this.newKeyword),
-                this.call?.clone()
-            ),
+            new NewExpression({
+                new: util.cloneToken(this.tokens.new),
+                call: this.call?.clone()
+            }),
             ['call']
         );
     }
 }
 
 export class CallfuncExpression extends Expression {
-    constructor(
-        readonly callee: Expression,
-        readonly operator: Token,
-        readonly methodName: Identifier,
-        readonly openingParen: Token,
-        readonly args: Expression[],
-        readonly closingParen: Token
-    ) {
+    constructor(options: {
+        callee: Expression;
+        operator?: Token;
+        methodName: Identifier;
+        openingParen?: Token;
+        args?: Expression[];
+        closingParen?: Token;
+    }) {
         super();
-        this.range = util.createBoundingRange(
-            callee,
-            operator,
-            methodName,
-            openingParen,
-            ...args ?? [],
-            closingParen
+        this.tokens = {
+            operator: options.operator,
+            methodName: options.methodName,
+            openingParen: options.openingParen,
+            closingParen: options.closingParen
+        };
+        this.callee = options.callee;
+        this.args = options.args ?? [];
+
+        this.location = util.createBoundingLocation(
+            this.callee,
+            this.tokens.operator,
+            this.tokens.methodName,
+            this.tokens.openingParen,
+            ...this.args ?? [],
+            this.tokens.closingParen
         );
     }
 
-    public readonly range: Range | undefined;
+    public readonly callee: Expression;
+    public readonly args: Expression[];
 
-    /**
-     * Get the name of the wrapping namespace (if it exists)
-     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
-     */
-    public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
-    }
+    public readonly tokens: {
+        readonly operator: Token;
+        readonly methodName: Identifier;
+        readonly openingParen?: Token;
+        readonly closingParen?: Token;
+    };
+
+    public readonly kind = AstNodeKind.CallfuncExpression;
+
+    public readonly location: Location | undefined;
 
     public transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
         result.push(
             ...this.callee.transpile(state),
-            state.sourceNode(this.operator, '.callfunc'),
-            state.transpileToken(this.openingParen),
+            state.sourceNode(this.tokens.operator, '.callfunc'),
+            state.transpileToken(this.tokens.openingParen, '('),
             //the name of the function
-            state.sourceNode(this.methodName, ['"', this.methodName.text, '"']),
-            ', '
+            state.sourceNode(this.tokens.methodName, ['"', this.tokens.methodName.text, '"'])
         );
-        //transpile args
-        //callfunc with zero args never gets called, so pass invalid as the first parameter if there are no args
-        if (this.args.length === 0) {
-            result.push('invalid');
-        } else {
+        if (this.args?.length > 0) {
+            result.push(', ');
+            //transpile args
             for (let i = 0; i < this.args.length; i++) {
                 //add comma between args
                 if (i > 0) {
@@ -1364,9 +1795,12 @@ export class CallfuncExpression extends Expression {
                 let arg = this.args[i];
                 result.push(...arg.transpile(state));
             }
+        } else if (state.options.legacyCallfuncHandling) {
+            result.push(', ', 'invalid');
         }
+
         result.push(
-            state.transpileToken(this.closingParen)
+            state.transpileToken(this.tokens.closingParen, ')')
         );
         return result;
     }
@@ -1378,16 +1812,25 @@ export class CallfuncExpression extends Expression {
         }
     }
 
+    getType(options: GetTypeOptions) {
+        const result = util.getCallFuncType(this, this.tokens.methodName, options) ?? DynamicType.instance;
+        return result;
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.callee.leadingTrivia;
+    }
+
     public clone() {
         return this.finalizeClone(
-            new CallfuncExpression(
-                this.callee?.clone(),
-                util.cloneToken(this.operator),
-                util.cloneToken(this.methodName),
-                util.cloneToken(this.openingParen),
-                this.args?.map(e => e?.clone()),
-                util.cloneToken(this.closingParen)
-            ),
+            new CallfuncExpression({
+                callee: this.callee?.clone(),
+                operator: util.cloneToken(this.tokens.operator),
+                methodName: util.cloneToken(this.tokens.methodName),
+                openingParen: util.cloneToken(this.tokens.openingParen),
+                args: this.args?.map(e => e?.clone()),
+                closingParen: util.cloneToken(this.tokens.closingParen)
+            }),
             ['callee', 'args']
         );
     }
@@ -1398,15 +1841,20 @@ export class CallfuncExpression extends Expression {
  * This is a single expression that represents the string contatenation of all parts of a single quasi.
  */
 export class TemplateStringQuasiExpression extends Expression {
-    constructor(
-        readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteralExpression>
-    ) {
+    constructor(options: {
+        expressions: Array<LiteralExpression | EscapedCharCodeLiteralExpression>;
+    }) {
         super();
-        this.range = util.createBoundingRange(
-            ...expressions ?? []
+        this.expressions = options.expressions;
+        this.location = util.createBoundingLocation(
+            ...this.expressions ?? []
         );
     }
-    readonly range: Range | undefined;
+
+    public readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteralExpression>;
+    public readonly kind = AstNodeKind.TemplateStringQuasiExpression;
+
+    readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState, skipEmptyStrings = true) {
         let result = [] as TranspileResult;
@@ -1414,7 +1862,7 @@ export class TemplateStringQuasiExpression extends Expression {
         for (let expression of this.expressions) {
             //skip empty strings
             //TODO what does an empty string literal expression look like?
-            if (expression.token.text === '' && skipEmptyStrings === true) {
+            if (expression.tokens.value.text === '' && skipEmptyStrings === true) {
                 continue;
             }
             result.push(
@@ -1434,31 +1882,50 @@ export class TemplateStringQuasiExpression extends Expression {
 
     public clone() {
         return this.finalizeClone(
-            new TemplateStringQuasiExpression(
-                this.expressions?.map(e => e?.clone())
-            ),
+            new TemplateStringQuasiExpression({
+                expressions: this.expressions?.map(e => e?.clone())
+            }),
             ['expressions']
         );
     }
 }
 
 export class TemplateStringExpression extends Expression {
-    constructor(
-        readonly openingBacktick: Token,
-        readonly quasis: TemplateStringQuasiExpression[],
-        readonly expressions: Expression[],
-        readonly closingBacktick: Token
-    ) {
+    constructor(options: {
+        openingBacktick?: Token;
+        quasis: TemplateStringQuasiExpression[];
+        expressions: Expression[];
+        closingBacktick?: Token;
+    }) {
         super();
-        this.range = util.createBoundingRange(
-            openingBacktick,
-            quasis?.[0],
-            quasis?.[quasis?.length - 1],
-            closingBacktick
+        this.tokens = {
+            openingBacktick: options.openingBacktick,
+            closingBacktick: options.closingBacktick
+        };
+        this.quasis = options.quasis;
+        this.expressions = options.expressions;
+        this.location = util.createBoundingLocation(
+            this.tokens.openingBacktick,
+            this.quasis?.[0],
+            this.quasis?.[this.quasis?.length - 1],
+            this.tokens.closingBacktick
         );
     }
 
-    public readonly range: Range | undefined;
+    public readonly kind = AstNodeKind.TemplateStringExpression;
+
+    public readonly tokens: {
+        readonly openingBacktick?: Token;
+        readonly closingBacktick?: Token;
+    };
+    public readonly quasis: TemplateStringQuasiExpression[];
+    public readonly expressions: Expression[];
+
+    public readonly location: Location | undefined;
+
+    public getType(options: GetTypeOptions) {
+        return StringType.instance;
+    }
 
     transpile(state: BrsTranspileState) {
         //if this is essentially just a normal brightscript string but with backticks, transpile it as a normal string without parens
@@ -1492,7 +1959,7 @@ export class TemplateStringExpression extends Expression {
                 //skip the toString wrapper around certain expressions
                 if (
                     isEscapedCharCodeLiteralExpression(expression) ||
-                    (isLiteralExpression(expression) && isStringType(expression.type))
+                    (isLiteralExpression(expression) && isStringType(expression.getType()))
                 ) {
                     add(
                         ...expression.transpile(state)
@@ -1530,41 +1997,60 @@ export class TemplateStringExpression extends Expression {
 
     public clone() {
         return this.finalizeClone(
-            new TemplateStringExpression(
-                util.cloneToken(this.openingBacktick),
-                this.quasis?.map(e => e?.clone()),
-                this.expressions?.map(e => e?.clone()),
-                util.cloneToken(this.closingBacktick)
-            ),
+            new TemplateStringExpression({
+                openingBacktick: util.cloneToken(this.tokens.openingBacktick),
+                quasis: this.quasis?.map(e => e?.clone()),
+                expressions: this.expressions?.map(e => e?.clone()),
+                closingBacktick: util.cloneToken(this.tokens.closingBacktick)
+            }),
             ['quasis', 'expressions']
         );
     }
 }
 
 export class TaggedTemplateStringExpression extends Expression {
-    constructor(
-        readonly tagName: Identifier,
-        readonly openingBacktick: Token,
-        readonly quasis: TemplateStringQuasiExpression[],
-        readonly expressions: Expression[],
-        readonly closingBacktick: Token
-    ) {
+    constructor(options: {
+        tagName: Identifier;
+        openingBacktick?: Token;
+        quasis: TemplateStringQuasiExpression[];
+        expressions: Expression[];
+        closingBacktick?: Token;
+    }) {
         super();
-        this.range = util.createBoundingRange(
-            tagName,
-            openingBacktick,
-            quasis?.[0],
-            quasis?.[quasis?.length - 1],
-            closingBacktick
+        this.tokens = {
+            tagName: options.tagName,
+            openingBacktick: options.openingBacktick,
+            closingBacktick: options.closingBacktick
+        };
+        this.quasis = options.quasis;
+        this.expressions = options.expressions;
+
+        this.location = util.createBoundingLocation(
+            this.tokens.tagName,
+            this.tokens.openingBacktick,
+            this.quasis?.[0],
+            this.quasis?.[this.quasis?.length - 1],
+            this.tokens.closingBacktick
         );
     }
 
-    public readonly range: Range | undefined;
+    public readonly kind = AstNodeKind.TaggedTemplateStringExpression;
+
+    public readonly tokens: {
+        readonly tagName: Identifier;
+        readonly openingBacktick?: Token;
+        readonly closingBacktick?: Token;
+    };
+
+    public readonly quasis: TemplateStringQuasiExpression[];
+    public readonly expressions: Expression[];
+
+    public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
         result.push(
-            state.transpileToken(this.tagName),
+            state.transpileToken(this.tokens.tagName),
             '(['
         );
 
@@ -1598,7 +2084,7 @@ export class TaggedTemplateStringExpression extends Expression {
             );
         }
         result.push(
-            state.sourceNode(this.closingBacktick, '])')
+            state.sourceNode(this.tokens.closingBacktick, '])')
         );
         return result;
     }
@@ -1619,37 +2105,51 @@ export class TaggedTemplateStringExpression extends Expression {
 
     public clone() {
         return this.finalizeClone(
-            new TaggedTemplateStringExpression(
-                util.cloneToken(this.tagName),
-                util.cloneToken(this.openingBacktick),
-                this.quasis?.map(e => e?.clone()),
-                this.expressions?.map(e => e?.clone()),
-                util.cloneToken(this.closingBacktick)
-            ),
+            new TaggedTemplateStringExpression({
+                tagName: util.cloneToken(this.tokens.tagName),
+                openingBacktick: util.cloneToken(this.tokens.openingBacktick),
+                quasis: this.quasis?.map(e => e?.clone()),
+                expressions: this.expressions?.map(e => e?.clone()),
+                closingBacktick: util.cloneToken(this.tokens.closingBacktick)
+            }),
             ['quasis', 'expressions']
         );
     }
 }
 
 export class AnnotationExpression extends Expression {
-    constructor(
-        readonly atToken: Token,
-        readonly nameToken: Token
-    ) {
+    constructor(options: {
+        at?: Token;
+        name: Token;
+        call?: CallExpression;
+    }) {
         super();
-        this.name = nameToken.text;
+        this.tokens = {
+            at: options.at,
+            name: options.name
+        };
+        this.call = options.call;
+        this.name = this.tokens.name.text;
     }
 
-    public get range() {
-        return util.createBoundingRange(
-            this.atToken,
-            this.nameToken,
+    public readonly kind = AstNodeKind.AnnotationExpression;
+
+    public readonly tokens: {
+        readonly at: Token;
+        readonly name: Token;
+    };
+
+    public get location(): Location | undefined {
+        return util.createBoundingLocation(
+            this.tokens.at,
+            this.tokens.name,
             this.call
         );
     }
 
-    public name: string;
-    public call: CallExpression | undefined;
+    public readonly name: string;
+
+    public call: CallExpression;
 
     /**
      * Convert annotation arguments to JavaScript types
@@ -1662,8 +2162,13 @@ export class AnnotationExpression extends Expression {
         return this.call.args.map(e => expressionToValue(e, strict));
     }
 
+    public get leadingTrivia(): Token[] {
+        return this.tokens.at?.leadingTrivia;
+    }
+
     transpile(state: BrsTranspileState) {
-        return [];
+        //transpile only our leading comments
+        return state.transpileComments(this.leadingTrivia);
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -1679,34 +2184,52 @@ export class AnnotationExpression extends Expression {
 
     public clone() {
         const clone = this.finalizeClone(
-            new AnnotationExpression(
-                util.cloneToken(this.atToken),
-                util.cloneToken(this.nameToken)
-            )
+            new AnnotationExpression({
+                at: util.cloneToken(this.tokens.at),
+                name: util.cloneToken(this.tokens.name)
+            })
         );
         return clone;
     }
 }
 
 export class TernaryExpression extends Expression {
-    constructor(
-        readonly test: Expression,
-        readonly questionMarkToken: Token,
-        readonly consequent?: Expression,
-        readonly colonToken?: Token,
-        readonly alternate?: Expression
-    ) {
+    constructor(options: {
+        test: Expression;
+        questionMark?: Token;
+        consequent?: Expression;
+        colon?: Token;
+        alternate?: Expression;
+    }) {
         super();
-        this.range = util.createBoundingRange(
-            test,
-            questionMarkToken,
-            consequent,
-            colonToken,
-            alternate
+        this.tokens = {
+            questionMark: options.questionMark,
+            colon: options.colon
+        };
+        this.test = options.test;
+        this.consequent = options.consequent;
+        this.alternate = options.alternate;
+        this.location = util.createBoundingLocation(
+            this.test,
+            this.tokens.questionMark,
+            this.consequent,
+            this.tokens.colon,
+            this.alternate
         );
     }
 
-    public range: Range | undefined;
+    public readonly kind = AstNodeKind.TernaryExpression;
+
+    public readonly location: Location | undefined;
+
+    public readonly tokens: {
+        readonly questionMark?: Token;
+        readonly colon?: Token;
+    };
+
+    public readonly test: Expression;
+    public readonly consequent?: Expression;
+    public readonly alternate?: Expression;
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -1729,7 +2252,7 @@ export class TernaryExpression extends Expression {
         if (mutatingExpressions.length > 0) {
             result.push(
                 state.sourceNode(
-                    this.questionMarkToken,
+                    this.tokens.questionMark,
                     //write all the scope variables as parameters.
                     //TODO handle when there are more than 31 parameters
                     `(function(${['__bsCondition', ...allUniqueVarNames].join(', ')})`
@@ -1740,23 +2263,23 @@ export class TernaryExpression extends Expression {
                 state.sourceNode(this.test, `if __bsCondition then`),
                 state.newline,
                 state.indent(1),
-                state.sourceNode(this.consequent ?? this.questionMarkToken, 'return '),
-                ...this.consequent?.transpile(state) ?? [state.sourceNode(this.questionMarkToken, 'invalid')],
+                state.sourceNode(this.consequent ?? this.tokens.questionMark, 'return '),
+                ...this.consequent?.transpile(state) ?? [state.sourceNode(this.tokens.questionMark, 'invalid')],
                 state.newline,
                 state.indent(-1),
-                state.sourceNode(this.consequent ?? this.questionMarkToken, 'else'),
+                state.sourceNode(this.consequent ?? this.tokens.questionMark, 'else'),
                 state.newline,
                 state.indent(1),
-                state.sourceNode(this.consequent ?? this.questionMarkToken, 'return '),
-                ...this.alternate?.transpile(state) ?? [state.sourceNode(this.consequent ?? this.questionMarkToken, 'invalid')],
+                state.sourceNode(this.consequent ?? this.tokens.questionMark, 'return '),
+                ...this.alternate?.transpile(state) ?? [state.sourceNode(this.consequent ?? this.tokens.questionMark, 'invalid')],
                 state.newline,
                 state.indent(-1),
-                state.sourceNode(this.questionMarkToken, 'end if'),
+                state.sourceNode(this.tokens.questionMark, 'end if'),
                 state.newline,
                 state.indent(-1),
-                state.sourceNode(this.questionMarkToken, 'end function)('),
+                state.sourceNode(this.tokens.questionMark, 'end function)('),
                 ...this.test.transpile(state),
-                state.sourceNode(this.questionMarkToken, `${['', ...allUniqueVarNames].join(', ')})`)
+                state.sourceNode(this.tokens.questionMark, `${['', ...allUniqueVarNames].join(', ')})`)
             );
             state.blockDepth--;
         } else {
@@ -1781,34 +2304,53 @@ export class TernaryExpression extends Expression {
         }
     }
 
+    get leadingTrivia(): Token[] {
+        return this.test.leadingTrivia;
+    }
+
     public clone() {
         return this.finalizeClone(
-            new TernaryExpression(
-                this.test?.clone(),
-                util.cloneToken(this.questionMarkToken),
-                this.consequent?.clone(),
-                util.cloneToken(this.colonToken),
-                this.alternate?.clone()
-            ),
+            new TernaryExpression({
+                test: this.test?.clone(),
+                questionMark: util.cloneToken(this.tokens.questionMark),
+                consequent: this.consequent?.clone(),
+                colon: util.cloneToken(this.tokens.colon),
+                alternate: this.alternate?.clone()
+            }),
             ['test', 'consequent', 'alternate']
         );
     }
 }
 
 export class NullCoalescingExpression extends Expression {
-    constructor(
-        public consequent: Expression,
-        public questionQuestionToken: Token,
-        public alternate: Expression
-    ) {
+    constructor(options: {
+        consequent: Expression;
+        questionQuestion?: Token;
+        alternate: Expression;
+    }) {
         super();
-        this.range = util.createBoundingRange(
-            consequent,
-            questionQuestionToken,
-            alternate
+        this.tokens = {
+            questionQuestion: options.questionQuestion
+        };
+        this.consequent = options.consequent;
+        this.alternate = options.alternate;
+        this.location = util.createBoundingLocation(
+            this.consequent,
+            this.tokens.questionQuestion,
+            this.alternate
         );
     }
-    public readonly range: Range | undefined;
+
+    public readonly kind = AstNodeKind.NullCoalescingExpression;
+
+    public readonly location: Location | undefined;
+
+    public readonly tokens: {
+        readonly questionQuestion?: Token;
+    };
+
+    public readonly consequent: Expression;
+    public readonly alternate: Expression;
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -1882,29 +2424,39 @@ export class NullCoalescingExpression extends Expression {
         }
     }
 
+    get leadingTrivia(): Token[] {
+        return this.consequent.leadingTrivia;
+    }
+
     public clone() {
         return this.finalizeClone(
-            new NullCoalescingExpression(
-                this.consequent?.clone(),
-                util.cloneToken(this.questionQuestionToken),
-                this.alternate?.clone()
-            ),
+            new NullCoalescingExpression({
+                consequent: this.consequent?.clone(),
+                questionQuestion: util.cloneToken(this.tokens.questionQuestion),
+                alternate: this.alternate?.clone()
+            }),
             ['consequent', 'alternate']
         );
     }
 }
 
 export class RegexLiteralExpression extends Expression {
-    public constructor(
-        public tokens: {
-            regexLiteral: Token;
-        }
-    ) {
+    constructor(options: {
+        regexLiteral: Token;
+    }) {
         super();
+        this.tokens = {
+            regexLiteral: options.regexLiteral
+        };
     }
 
-    public get range() {
-        return this.tokens?.regexLiteral?.range;
+    public readonly kind = AstNodeKind.RegexLiteralExpression;
+    public readonly tokens: {
+        readonly regexLiteral: Token;
+    };
+
+    public get location(): Location {
+        return this.tokens?.regexLiteral?.location;
     }
 
     public transpile(state: BrsTranspileState): TranspileResult {
@@ -1943,43 +2495,9 @@ export class RegexLiteralExpression extends Expression {
             })
         );
     }
-}
 
-
-export class TypeCastExpression extends Expression {
-    constructor(
-        public obj: Expression,
-        public asToken: Token,
-        public typeToken: Token
-    ) {
-        super();
-        this.range = util.createBoundingRange(
-            this.obj,
-            this.asToken,
-            this.typeToken
-        );
-    }
-
-    public range: Range;
-
-    public transpile(state: BrsTranspileState): TranspileResult {
-        return this.obj.transpile(state);
-    }
-    public walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkMode & InternalWalkMode.walkExpressions) {
-            walk(this, 'obj', visitor, options);
-        }
-    }
-
-    public clone() {
-        return this.finalizeClone(
-            new TypeCastExpression(
-                this.obj?.clone(),
-                util.cloneToken(this.asToken),
-                util.cloneToken(this.typeToken)
-            ),
-            ['obj']
-        );
+    get leadingTrivia(): Token[] {
+        return this.tokens.regexLiteral?.leadingTrivia;
     }
 }
 
@@ -1991,46 +2509,227 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
         return null;
     }
     if (isUnaryExpression(expr) && isLiteralNumber(expr.right)) {
-        return numberExpressionToValue(expr.right, expr.operator.text);
+        return numberExpressionToValue(expr.right, expr.tokens.operator.text);
     }
     if (isLiteralString(expr)) {
         //remove leading and trailing quotes
-        return expr.token.text.replace(/^"/, '').replace(/"$/, '');
+        return expr.tokens.value.text.replace(/^"/, '').replace(/"$/, '');
     }
     if (isLiteralNumber(expr)) {
         return numberExpressionToValue(expr);
     }
 
     if (isLiteralBoolean(expr)) {
-        return expr.token.text.toLowerCase() === 'true';
+        return expr.tokens.value.text.toLowerCase() === 'true';
     }
     if (isArrayLiteralExpression(expr)) {
         return expr.elements
-            .filter(e => !isCommentStatement(e))
             .map(e => expressionToValue(e, strict));
     }
     if (isAALiteralExpression(expr)) {
         return expr.elements.reduce((acc, e) => {
-            if (!isCommentStatement(e)) {
-                acc[e.keyToken.text] = expressionToValue(e.value, strict);
-            }
+            acc[e.tokens.key.text] = expressionToValue(e.value, strict);
             return acc;
         }, {});
     }
     //for annotations, we only support serializing pure string values
     if (isTemplateStringExpression(expr)) {
         if (expr.quasis?.length === 1 && expr.expressions.length === 0) {
-            return expr.quasis[0].expressions.map(x => x.token.text).join('');
+            return expr.quasis[0].expressions.map(x => x.tokens.value.text).join('');
         }
     }
     return strict ? null : expr;
 }
 
 function numberExpressionToValue(expr: LiteralExpression, operator = '') {
-    if (isIntegerType(expr.type) || isLongIntegerType(expr.type)) {
-        return parseInt(operator + expr.token.text);
+    if (isIntegerType(expr.getType()) || isLongIntegerType(expr.getType())) {
+        return parseInt(operator + expr.tokens.value.text);
     } else {
-        return parseFloat(operator + expr.token.text);
+        return parseFloat(operator + expr.tokens.value.text);
+    }
+}
+
+export class TypeExpression extends Expression implements TypedefProvider {
+    constructor(options: {
+        /**
+         * The standard AST expression that represents the type for this TypeExpression.
+         */
+        expression: Expression;
+    }) {
+        super();
+        this.expression = options.expression;
+        this.location = util.cloneLocation(this.expression?.location);
+    }
+
+    public readonly kind = AstNodeKind.TypeExpression;
+
+    /**
+     * The standard AST expression that represents the type for this TypeExpression.
+     */
+    public readonly expression: Expression;
+
+    public readonly location: Location;
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        const exprType = this.getType({ flags: SymbolTypeFlag.typetime });
+        if (isNativeType(exprType)) {
+            return this.expression.transpile(state);
+        }
+        return [exprType.toTypeString()];
+    }
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'expression', visitor, options);
+        }
+    }
+
+    public getType(options: GetTypeOptions): BscType {
+        return this.expression.getType({ ...options, flags: SymbolTypeFlag.typetime });
+    }
+
+    getTypedef(state: TranspileState): TranspileResult {
+        // TypeDefs should pass through any valid type names
+        return this.expression.transpile(state as BrsTranspileState);
+    }
+
+    getName(parseMode = ParseMode.BrighterScript): string {
+        //TODO: this may not support Complex Types, eg. generics or Unions
+        return util.getAllDottedGetPartsAsString(this.expression, parseMode);
+    }
+
+    getNameParts(): string[] {
+        //TODO: really, this code is only used to get Namespaces. It could be more clear.
+        return util.getAllDottedGetParts(this.expression).map(x => x.text);
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new TypeExpression({
+                expression: this.expression?.clone()
+            }),
+            ['expression']
+        );
+    }
+}
+
+export class TypecastExpression extends Expression {
+    constructor(options: {
+        obj: Expression;
+        as?: Token;
+        typeExpression?: TypeExpression;
+    }) {
+        super();
+        this.tokens = {
+            as: options.as
+        };
+        this.obj = options.obj;
+        this.typeExpression = options.typeExpression;
+        this.location = util.createBoundingLocation(
+            this.obj,
+            this.tokens.as,
+            this.typeExpression
+        );
+    }
+
+    public readonly kind = AstNodeKind.TypecastExpression;
+
+    public readonly obj: Expression;
+
+    public readonly tokens: {
+        readonly as?: Token;
+    };
+
+    public typeExpression?: TypeExpression;
+
+    public readonly location: Location;
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return this.obj.transpile(state);
+    }
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'obj', visitor, options);
+            walk(this, 'typeExpression', visitor, options);
+        }
+    }
+
+    public getType(options: GetTypeOptions): BscType {
+        const result = this.typeExpression.getType(options);
+        if (options.typeChain) {
+            // modify last typechain entry to show it is a typecast
+            const lastEntry = options.typeChain[options.typeChain.length - 1];
+            if (lastEntry) {
+                lastEntry.astNode = this;
+            }
+        }
+        return result;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new TypecastExpression({
+                obj: this.obj?.clone(),
+                as: util.cloneToken(this.tokens.as),
+                typeExpression: this.typeExpression?.clone()
+            }),
+            ['obj', 'typeExpression']
+        );
+    }
+}
+
+export class TypedArrayExpression extends Expression {
+    constructor(options: {
+        innerType: Expression;
+        leftBracket?: Token;
+        rightBracket?: Token;
+    }) {
+        super();
+        this.tokens = {
+            leftBracket: options.leftBracket,
+            rightBracket: options.rightBracket
+        };
+        this.innerType = options.innerType;
+        this.location = util.createBoundingLocation(
+            this.innerType,
+            this.tokens.leftBracket,
+            this.tokens.rightBracket
+        );
+    }
+
+    public readonly tokens: {
+        readonly leftBracket?: Token;
+        readonly rightBracket?: Token;
+    };
+
+    public readonly innerType: Expression;
+
+    public readonly kind = AstNodeKind.TypedArrayExpression;
+
+    public readonly location: Location;
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return [this.getType({ flags: SymbolTypeFlag.typetime }).toTypeString()];
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'innerType', visitor, options);
+        }
+    }
+
+    public getType(options: GetTypeOptions): BscType {
+        return new ArrayType(this.innerType.getType(options));
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new TypedArrayExpression({
+                innerType: this.innerType?.clone(),
+                leftBracket: util.cloneToken(this.tokens.leftBracket),
+                rightBracket: util.cloneToken(this.tokens.rightBracket)
+            }),
+            ['innerType']
+        );
     }
 }
 

@@ -94,22 +94,9 @@ export interface BsConfig {
     retainStagingDir?: boolean;
 
     /**
-     * Prevent the staging folder from being deleted after creating the package
-     * @default false
-     * @deprecated use `retainStagingDir` instead
-     */
-    retainStagingFolder?: boolean;
-
-    /**
      * The path to the staging directory (wehre the output files are copied immediately before creating the zip)
      */
     stagingDir?: string;
-
-    /**
-     * The path to the staging folder (where all files are copied to right before creating the zip package)
-     * @deprecated use `stagingDir` instead
-     */
-    stagingFolderPath?: string;
 
     /**
      * A list of error codes the compiler should NOT emit, even if encountered.
@@ -141,7 +128,12 @@ export interface BsConfig {
     /**
      * A list of filters used to exclude diagnostics from the output
      */
-    diagnosticFilters?: Array<number | string | { src: string; codes: (number | string)[] } | { src: string } | { codes: (number | string)[] }>;
+    diagnosticFilters?: Array<string | number | { files?: string | Array<string | { src: string } | { dest: string }>; codes?: Array<number | string> }>;
+
+    /**
+     * Use the deprecated diagnosticFilters format from v0. This is useful for backwards compatibility.
+     */
+    diagnosticFiltersV0Compatibility?: boolean;
 
     /**
      * Specify what diagnostic types should be printed to the console. Defaults to 'warn'
@@ -213,6 +205,12 @@ export interface BsConfig {
      * scripts inside `source` that depend on bslib.brs.  Defaults to `source`.
      */
     bslibDestinationDir?: string;
+
+    /* Legacy RokuOS versions required at least one argument in callfunc() invocations.
+     * Previous brighterscript versions handled this by inserting invalid as an argument when no other args are present.
+     * This is not necessary in modern RokuOS versions.
+     */
+    legacyCallfuncHandling?: boolean;
 }
 
 type OptionalBsConfigFields =
@@ -225,7 +223,7 @@ type OptionalBsConfigFields =
     | 'host'
     | 'password'
     | 'require'
-    | 'stagingFolderPath'
+    | 'stagingDir'
     | 'diagnosticLevel'
     | 'rootDir'
     | 'stagingDir';

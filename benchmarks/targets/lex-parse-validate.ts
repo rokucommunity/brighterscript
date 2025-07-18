@@ -28,7 +28,8 @@ module.exports = (options: TargetOptions) => {
             copyToStaging: false,
             //disable diagnostic reporting (they still get collected)
             diagnosticFilters: ['**/*'],
-            logLevel: 'error'
+            logLevel: 'error',
+            ...options.additionalConfig
         }).then(() => {
             if (Object.keys(builder.program.files).length === 0) {
                 throw new Error('No files found in program');

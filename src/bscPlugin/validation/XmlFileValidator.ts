@@ -12,7 +12,7 @@ export class XmlFileValidator {
 
     public process() {
         util.validateTooDeepFile(this.event.file);
-        if (this.event.file.parser.ast.root) {
+        if (this.event.file.parser.ast.rootElement) {
             this.validateComponent(this.event.file.parser.ast);
         } else {
             //skip empty XML
@@ -20,46 +20,28 @@ export class XmlFileValidator {
     }
 
     private validateComponent(ast: SGAst) {
-        const { root, component } = ast;
-        if (!component) {
+        const { rootElement, componentElement } = ast;
+        if (!componentElement) {
             //not a SG component
-            this.event.file.diagnostics.push({
+            this.event.program.diagnostics.register({
                 ...DiagnosticMessages.xmlComponentMissingComponentDeclaration(),
-                range: root.range,
-                file: this.event.file
+                location: rootElement.location
             });
             return;
         }
 
         //component name/extends
-        if (!component.name) {
-            this.event.file.diagnostics.push({
+        if (!componentElement.name) {
+            this.event.program.diagnostics.register({
                 ...DiagnosticMessages.xmlComponentMissingNameAttribute(),
-                range: component.tag.range,
-                file: this.event.file
+                location: componentElement.tokens.startTagName.location
             });
         }
-        if (!component.extends) {
-            this.event.file.diagnostics.push({
+        if (!componentElement.extends) {
+            this.event.program.diagnostics.register({
                 ...DiagnosticMessages.xmlComponentMissingExtendsAttribute(),
-                range: component.tag.range,
-                file: this.event.file
-            });
-        }
-
-
-        //catch script imports with same path as the auto-imported codebehind file
-        const scriptTagImports = this.event.file.parser.references.scriptTagImports;
-        let explicitCodebehindScriptTag = this.event.file.program.options.autoImportComponentScript === true
-            ? scriptTagImports.find(x => this.event.file.possibleCodebehindPkgPaths.includes(x.pkgPath))
-            : undefined;
-        if (explicitCodebehindScriptTag) {
-            this.event.file.diagnostics.push({
-                ...DiagnosticMessages.unnecessaryCodebehindScriptImport(),
-                file: this.event.file,
-                range: explicitCodebehindScriptTag.filePathRange
+                location: componentElement.tokens.startTagName.location
             });
         }
     }
-
 }

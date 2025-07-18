@@ -1,7 +1,7 @@
-import type { BscFile, BsDiagnostic } from './interfaces';
+import type { BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
 import chalk from 'chalk';
-import type { CodeDescription, CompletionItem, CompletionList, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, integer, Range } from 'vscode-languageserver';
+import type { CodeDescription, CompletionItem, CompletionList, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, Location } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
 import { expect } from './chai-config.spec';
 import type { CodeActionShorthand } from './CodeActionUtil';
@@ -9,10 +9,14 @@ import { codeActionUtil } from './CodeActionUtil';
 import type { BrsFile } from './files/BrsFile';
 import type { Program } from './Program';
 import { standardizePath as s } from './util';
-import type { CodeWithSourceMap } from 'source-map';
 import { getDiagnosticLine } from './diagnosticUtils';
 import { firstBy } from 'thenby';
 import undent from 'undent';
+import type { BscFile } from './files/BscFile';
+import type { BscType } from './types/BscType';
+import type { LspDiagnostic } from './lsp/LspProject';
+import { Project } from './lsp/Project';
+import { isProgram, isProject } from './astUtils/reflection';
 import type { WorkspaceConfig } from './lsp/ProjectManager';
 
 export const cwd = s`${__dirname}/../`;
@@ -37,12 +41,25 @@ afterEach(() => {
     sinon.restore();
 });
 
-type DiagnosticCollection = { getDiagnostics(): Array<Diagnostic> } | { diagnostics: Diagnostic[] } | Diagnostic[];
+type DiagnosticCollection = { getDiagnostics(): Array<BsDiagnostic | LspDiagnostic>; getFile?: (path: string, normalize: boolean) => BscFile } | { diagnostics?: BsDiagnostic[] } | BsDiagnostic[] | LspDiagnostic[];
 type DiagnosticCollectionAsync = DiagnosticCollection | { getDiagnostics(): Promise<Array<Diagnostic>> };
 
 function getDiagnostics(arg: DiagnosticCollection): BsDiagnostic[] {
     if (Array.isArray(arg)) {
         return arg as BsDiagnostic[];
+
+        //project.getDiagnostics() returns LspDiagonstics
+    } else if (arg instanceof Project) {
+        const diagnostics = arg.getDiagnostics();
+        return diagnostics.map(diagnostic => {
+            return {
+                ...diagnostic,
+                location: {
+                    uri: diagnostic.uri,
+                    range: diagnostic.range
+                }
+            } as BsDiagnostic;
+        });
     } else if ((arg as any).getDiagnostics) {
         return (arg as any).getDiagnostics();
     } else if ((arg as any).diagnostics) {
@@ -56,10 +73,10 @@ function sortDiagnostics(diagnostics: BsDiagnostic[]) {
     return diagnostics.sort(
         firstBy<BsDiagnostic>('code')
             .thenBy<BsDiagnostic>('message')
-            .thenBy<BsDiagnostic>((a, b) => (a.range?.start?.line ?? 0) - (b.range?.start?.line ?? 0))
-            .thenBy<BsDiagnostic>((a, b) => (a.range?.start?.character ?? 0) - (b.range?.start?.character ?? 0))
-            .thenBy<BsDiagnostic>((a, b) => (a.range?.end?.line ?? 0) - (b.range?.end?.line ?? 0))
-            .thenBy<BsDiagnostic>((a, b) => (a.range?.end?.character ?? 0) - (b.range?.end?.character ?? 0))
+            .thenBy<BsDiagnostic>((a, b) => (a.location?.range?.start?.line ?? 0) - (b.location?.range?.start?.line ?? 0))
+            .thenBy<BsDiagnostic>((a, b) => (a.location?.range?.start?.character ?? 0) - (b.location?.range?.start?.character ?? 0))
+            .thenBy<BsDiagnostic>((a, b) => (a.location?.range?.end?.line ?? 0) - (b.location?.range?.end?.line ?? 0))
+            .thenBy<BsDiagnostic>((a, b) => (a.location?.range?.end?.character ?? 0) - (b.location?.range?.end?.character ?? 0))
     );
 }
 
@@ -77,9 +94,9 @@ function cloneObject<TOriginal, TTemplate>(original: TOriginal, template: TTempl
 }
 
 export interface PartialDiagnostic {
-    range?: Range;
+    location?: Partial<Location>;
     severity?: DiagnosticSeverity;
-    code?: integer | string;
+    code?: number | string;
     codeDescription?: Partial<CodeDescription>;
     source?: string;
     message?: string;
@@ -87,6 +104,7 @@ export interface PartialDiagnostic {
     relatedInformation?: Partial<DiagnosticRelatedInformation>[];
     data?: unknown;
     file?: Partial<BscFile>;
+    legacyCode?: number | string;
 }
 
 /**
@@ -96,8 +114,14 @@ export function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDia
     const actualDiagnostic = cloneObject(
         actualDiagnosticInput,
         expectedDiagnostic,
-        ['message', 'code', 'range', 'severity', 'relatedInformation']
+        ['message', 'code', 'severity', 'relatedInformation', 'legacyCode']
     );
+    //clone Location if available
+    if (expectedDiagnostic?.location) {
+        actualDiagnostic.location = actualDiagnosticInput.location
+            ? cloneObject(actualDiagnosticInput.location, expectedDiagnostic.location, ['uri', 'range']) as any
+            : undefined;
+    }
     //deep clone relatedInformation if available
     if (actualDiagnostic.relatedInformation) {
         for (let j = 0; j < actualDiagnostic.relatedInformation.length; j++) {
@@ -107,14 +131,6 @@ export function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDia
                 ['location', 'message']
             ) as any;
         }
-    }
-    //deep clone file info if available
-    if (actualDiagnostic.file) {
-        actualDiagnostic.file = cloneObject(
-            actualDiagnostic.file,
-            expectedDiagnostic?.file,
-            ['srcPath', 'pkgPath']
-        ) as any;
     }
     return actualDiagnostic;
 }
@@ -153,9 +169,14 @@ export function normalizeDiagnostics(actualDiagnostics: BsDiagnostic[], expected
         expectedDiagnostics.map(x => {
             let result = x;
             if (typeof x === 'string') {
-                result = { message: x };
+                if (!x.includes(' ') && x.toLowerCase() === x) {
+                    // it's all lowercase and there's no spaces, so probably a code
+                    result = { code: x };
+                } else {
+                    result = { message: x };
+                }
             } else if (typeof x === 'number') {
-                result = { code: x };
+                result = { legacyCode: x };
             }
             return result as unknown as BsDiagnostic;
         })
@@ -166,7 +187,8 @@ export function normalizeDiagnostics(actualDiagnostics: BsDiagnostic[], expected
         const actualDiagnostic = cloneDiagnostic(actualDiagnostics[i], expectedDiagnostic);
         actualDiagnostics[i] = actualDiagnostic as any;
     }
-    return [actualDiagnostics, expectedDiagnostics];
+    const sortedActual = sortDiagnostics(actualDiagnostics);
+    return [sortedActual, expectedDiagnostics];
 }
 
 /**
@@ -174,32 +196,38 @@ export function normalizeDiagnostics(actualDiagnostics: BsDiagnostic[], expected
  * @param arg - any object that contains diagnostics (such as `Program`, `Scope`, or even an array of diagnostics)
  * @param expected an array of expected diagnostics. if it's a string, assume that's a diagnostic error message
  */
-export function expectDiagnosticsIncludes(arg: DiagnosticCollection, expected: Array<PartialDiagnostic | string | number>) {
+export function expectDiagnosticsIncludes(arg: DiagnosticCollection, expected: PartialDiagnostic | string | number | Array<PartialDiagnostic | string | number>) {
+    let actualExpected = Array.isArray(expected) ? expected : [expected];
     const actualDiagnostics = getDiagnostics(arg);
     const expectedDiagnostics =
-        expected.map(x => {
+        actualExpected.map(x => {
             let result = x;
             if (typeof x === 'string') {
-                result = { message: x };
+                if (!x.includes(' ') && x.toLowerCase() === x) {
+                    // it's all lowercase and there's no spaces, so probably a code
+                    result = { code: x };
+                } else {
+                    result = { message: x };
+                }
             } else if (typeof x === 'number') {
-                result = { code: x };
+                result = { legacyCode: x };
             }
             return result as unknown as BsDiagnostic;
         });
 
-    let expectedFound = 0;
 
+    const foundDiagnostics: PartialDiagnostic | string | number | Array<PartialDiagnostic | string | number> = [];
     for (const expectedDiagnostic of expectedDiagnostics) {
-        const foundDiag = actualDiagnostics.find((actualDiag) => {
+        actualDiagnostics.find((actualDiag) => {
             const actualDiagnosticClone = cloneDiagnostic(actualDiag, expectedDiagnostic);
-            return JSON.stringify(actualDiagnosticClone) === JSON.stringify(expectedDiagnostic);
+            if (JSON.stringify(actualDiagnosticClone) === JSON.stringify(expectedDiagnostic)) {
+                foundDiagnostics.push(actualDiagnosticClone);
+                return true;
+            }
+            return false;
         });
-        if (foundDiag) {
-            expectedFound++;
-        }
-
     }
-    expect(expectedFound).to.eql(expectedDiagnostics.length);
+    expect(foundDiagnostics).to.eql(expectedDiagnostics);
 }
 
 /**
@@ -212,11 +240,22 @@ export function expectZeroDiagnostics(arg: DiagnosticCollection) {
         for (const diagnostic of diagnostics) {
             //escape any newlines
             diagnostic.message = diagnostic.message.replace(/\r/g, '\\r').replace(/\n/g, '\\n');
-            message += `\n        • bs${diagnostic.code} "${diagnostic.message}" at ${diagnostic.file?.srcPath ?? ''}#(${diagnostic.range?.start.line}:${diagnostic.range?.start.character})-(${diagnostic.range?.end.line}:${diagnostic.range?.end.character})`;
-            //print the line containing the error (if we can find it)srcPath
-            const line = diagnostic.file?.fileContents?.split(/\r?\n/g)?.[diagnostic.range?.start.line];
-            if (line) {
-                message += '\n' + getDiagnosticLine(diagnostic, line, chalk.red);
+            message += `\n        • bs:${diagnostic.code} "${diagnostic.message}" at ${diagnostic.location?.uri ?? ''}#(${diagnostic.location?.range?.start.line}:${diagnostic.location?.range?.start.character})-(${diagnostic.location?.range?.end.line}:${diagnostic.location?.range?.end.character})`;
+
+            let program: Program;
+            if (isProject(arg)) {
+                program = arg['builder'].program;
+            } else if (isProgram(arg)) {
+                program = arg;
+            }
+
+            if (program) {
+                const file = program.getFile(diagnostic.location.uri);
+                const line = (file as BrsFile)?.fileContents?.split(/\r?\n/g)?.[diagnostic.location.range?.start.line];
+                //print the line containing the error (if we can find it)
+                if (line) {
+                    message += '\n' + getDiagnosticLine(diagnostic, line, chalk.red);
+                }
             }
         }
         assert.fail(message);
@@ -273,32 +312,43 @@ export function expectInstanceOf<T>(items: any[], constructors: Array<new (...ar
 
 export function getTestTranspile(scopeGetter: () => [program: Program, rootDir: string]) {
     return getTestFileAction((file) => {
-        return file.program['_getTranspiledFileContents'](file);
+        return (file as BrsFile).program.getTranspiledFileContents(file.srcPath);
     }, scopeGetter);
 }
 
 export function getTestGetTypedef(scopeGetter: () => [program: Program, rootDir: string]) {
-    return getTestFileAction((file) => {
+    return getTestFileAction(async (file) => {
+        const program = (file as BrsFile).program;
+        program.options.emitDefinitions = true;
+        const result = await program.getTranspiledFileContents(file.srcPath);
         return {
-            code: (file as BrsFile).getTypedef(),
+            code: result.typedef,
             map: undefined
-        } as any as CodeWithSourceMap;
+        };
     }, scopeGetter);
 }
 
 function getTestFileAction(
-    action: (file: BscFile) => CodeWithSourceMap,
+    action: (file: BscFile) => Promise<{ code: string; map?: string }>,
     scopeGetter: () => [program: Program, rootDir: string]
 ) {
-    return function testFileAction(source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs', failOnDiagnostic = true) {
+    return async function testFileAction<TFile extends BscFile = BscFile>(sourceOrFile: string | TFile, expected?: string, formatType: 'trim' | 'none' = 'trim', destPath = 'source/main.bs', failOnDiagnostic = true) {
         let [program, rootDir] = scopeGetter();
-        expected = expected ? expected : source;
-        let file = program.setFile<BrsFile>({ src: s`${rootDir}/${pkgPath}`, dest: pkgPath }, source);
+        let file: TFile;
+        if (typeof sourceOrFile === 'string') {
+            expected = expected ? expected : sourceOrFile;
+            file = program.setFile<TFile>({ src: s`${rootDir}/${destPath}`, dest: destPath }, sourceOrFile);
+        } else {
+            file = sourceOrFile;
+            if (!expected) {
+                throw new Error('`expected` is required when passing a file');
+            }
+        }
         program.validate();
         if (failOnDiagnostic !== false) {
             expectZeroDiagnostics(program);
         }
-        let codeWithMap = action(file);
+        let codeWithMap = await action(file);
 
         let sources = [trimMap(codeWithMap.code), expected];
 
@@ -311,7 +361,7 @@ function getTestFileAction(
         expect(sources[0]).to.equal(sources[1]);
         return {
             file: file,
-            source: source,
+            source: sourceOrFile,
             expected: expected,
             actual: codeWithMap.code,
             map: codeWithMap.map
@@ -415,6 +465,13 @@ export function mapToObject<T>(map: Map<any, T>) {
         result[key] = value;
     }
     return result;
+}
+
+/**
+ * Test that a type is what was expected
+ */
+export function expectTypeToBe(someType: BscType, expectedTypeClass: any) {
+    expect(someType?.constructor?.name).to.eq(expectedTypeClass.name);
 }
 
 export function stripConsoleColors(inputString) {

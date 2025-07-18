@@ -96,8 +96,8 @@ describe('parser continue statements', () => {
         expectZeroDiagnostics(program);
     });
 
-    it('transpiles properly', () => {
-        testTranspile(`
+    it('transpiles properly', async () => {
+        await testTranspile(`
             sub main()
                 while true
                     continue while

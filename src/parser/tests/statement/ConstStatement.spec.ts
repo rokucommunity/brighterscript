@@ -1,5 +1,5 @@
 import { expectCompletionsIncludes, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile } from '../../../testHelpers.spec';
-import { util } from '../../../util';
+import { util, standardizePath as s } from '../../../util';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
 import { ParseMode, Parser } from '../../Parser';
@@ -7,8 +7,8 @@ import { expect } from '../../../chai-config.spec';
 import type { ConstStatement } from '../../Statement';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { LiteralExpression } from '../../Expression';
-import { CompletionItemKind } from 'vscode-languageserver-protocol';
 import { rootDir } from '../../../testHelpers.spec';
+import { CompletionItemKind } from 'vscode-languageserver';
 
 const sinon = createSandbox();
 
@@ -33,7 +33,7 @@ describe('ConstStatement', () => {
                 const = {
                     name: "Bob"
                 }
-                print const.name = {}
+                print const.name = "John"
             end sub
         `);
         program.validate();
@@ -41,7 +41,7 @@ describe('ConstStatement', () => {
     });
 
     it('supports basic structure', () => {
-        parser.parse('const API_KEY = "abc"', { mode: ParseMode.BrighterScript });
+        parser.parse('const API_KEY = "abc"', { mode: ParseMode.BrighterScript, srcPath: s`${rootDir}/source/main.bs` });
         expectZeroDiagnostics(parser);
         const statement = parser.ast.statements[0] as ConstStatement;
         expect(statement.tokens.const?.kind).to.eql(TokenKind.Const);
@@ -51,13 +51,13 @@ describe('ConstStatement', () => {
         });
         const value = statement.value as LiteralExpression;
         expect(value).to.be.instanceof(LiteralExpression);
-        expect(value.token?.text).to.eql('"abc"');
+        expect(value.tokens.value?.text).to.eql('"abc"');
         //ensure range is correct
-        expect(statement.range).to.eql(util.createRange(0, 0, 0, 21));
+        expect(statement.location?.range).to.eql(util.createRange(0, 0, 0, 21));
     });
 
-    it('produces typedef', () => {
-        testGetTypedef(`
+    it('produces typedef', async () => {
+        await testGetTypedef(`
             const API_KEY = "abc"
             const SOME_OBJ = {}
             const SOME_ARR = []
@@ -67,11 +67,20 @@ describe('ConstStatement', () => {
     it('allows const with the name `optional`', () => {
         program.setFile('source/main.bs', `
             const optional = true
+            sub main()
+                print optional
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
+    it('allows const with the name `optional` in a namespace', () => {
+        program.setFile('source/main.bs', `
             namespace alpha
                 const optional = true
             end namespace
             sub main()
-                print optional
                 print alpha.optional
             end sub
         `);
@@ -81,8 +90,8 @@ describe('ConstStatement', () => {
 
     describe('transpile', () => {
 
-        it('transpiles simple consts', () => {
-            testTranspile(`
+        it('transpiles simple consts', async () => {
+            await testTranspile(`
                 const API_KEY = "abc"
                 sub main()
                     print API_KEY
@@ -94,8 +103,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('transpiles arrays', () => {
-            testTranspile(`
+        it('transpiles arrays', async () => {
+            await testTranspile(`
                 const WORDS = [
                     "alpha"
                     "beta"
@@ -113,8 +122,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('transpiles objects', () => {
-            testTranspile(`
+        it('transpiles objects', async () => {
+            await testTranspile(`
                 const DEFAULTS = {
                     alpha: true
                     beta: true
@@ -132,8 +141,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('supports consts inside namespaces', () => {
-            testTranspile(`
+        it('supports consts inside namespaces', async () => {
+            await testTranspile(`
                 namespace network
                     const API_KEY = "abc"
                     sub get()
@@ -154,8 +163,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('supports property access on complex objects', () => {
-            testTranspile(`
+        it('supports property access on complex objects', async () => {
+            await testTranspile(`
                 const DEFAULTS = {
                     enabled: true
                 }
@@ -171,21 +180,21 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('supports calling methods on consts', () => {
-            testTranspile(`
+        it('supports calling methods on consts', async () => {
+            await testTranspile(`
                 const API_KEY ="ABC"
                 sub main()
-                    print API_KEY.toString()
+                    print API_KEY.toStr()
                 end sub
             `, `
                 sub main()
-                    print "ABC".toString()
+                    print "ABC".toStr()
                 end sub
             `);
         });
 
-        it('transpiles within += operator', () => {
-            testTranspile(`
+        it('transpiles within += operator', async () => {
+            await testTranspile(`
                 namespace constants
                     const API_KEY = "test"
                 end namespace
@@ -213,10 +222,10 @@ describe('ConstStatement', () => {
                     log()
                 end sub
             `);
-
+            program.validate();
+            // log(|)
             expectCompletionsIncludes(
-                // log(|)
-                program.getCompletions('source/main.bs', util.createPosition(3, 24)),
+                program.getCompletions('source/main.bs', util.createPosition(3, 34)),
                 [{
                     label: 'API_KEY',
                     kind: CompletionItemKind.Constant
@@ -224,8 +233,8 @@ describe('ConstStatement', () => {
             );
         });
 
-        it('transpiles simple const in a unary expression', () => {
-            testTranspile(`
+        it('transpiles simple const in a unary expression', async () => {
+            await testTranspile(`
                 const foo = 1
                 sub main()
                     bar = -foo
@@ -237,8 +246,8 @@ describe('ConstStatement', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('transpiles complex const in a unary expression', () => {
-            testTranspile(`
+        it('transpiles complex const in a unary expression', async () => {
+            await testTranspile(`
                 namespace some.consts
                     const foo = 1
                 end namespace
@@ -261,7 +270,7 @@ describe('ConstStatement', () => {
                     log(constants.)
                 end sub
             `);
-
+            program.validate();
             expectCompletionsIncludes(
                 // log(|)
                 program.getCompletions('source/main.bs', util.createPosition(5, 34)),

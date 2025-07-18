@@ -41,12 +41,12 @@ describe('parser library statements', () => {
                 library = "Gotham City Library"
             end sub
         `);
-        const { statements, diagnostics } = Parser.parse(tokens) as any;
+        const { ast, diagnostics } = Parser.parse(tokens) as any;
         //make sure the assignment is present in the function body
-        let assignment = statements[0].func.body.statements[0];
+        let assignment = ast.statements[0].func.body.statements[0];
         expect(diagnostics).to.be.lengthOf(0);
         expect(assignment).to.be.instanceOf(AssignmentStatement);
-        expect(assignment.name.text).to.equal('library');
+        expect(assignment.tokens.name.text).to.equal('library');
     });
 
     it('does not prevent usage of `library` as object property name', () => {
@@ -57,9 +57,9 @@ describe('parser library statements', () => {
                 }
             end sub
         `);
-        const { statements, diagnostics } = Parser.parse(tokens) as any;
+        const { ast, diagnostics } = Parser.parse(tokens) as any;
         //make sure the assignment is present in the function body
-        expect(statements[0].func.body.statements[0].value.elements[0].keyToken.text).to.equal('library');
+        expect(ast.statements[0].func.body.statements[0].value.elements[0].tokens.key.text).to.equal('library');
         expect(diagnostics).to.be.lengthOf(0);
     });
 
@@ -70,9 +70,9 @@ describe('parser library statements', () => {
                 library = "Your Library"
             end sub
         `);
-        const { statements, diagnostics } = Parser.parse(tokens);
+        const { ast, diagnostics } = Parser.parse(tokens);
         expect(diagnostics).to.be.lengthOf(1);
         //function statement should still exist
-        expect(statements[statements.length - 1]).to.be.instanceOf(BrsFunction);
+        expect(ast.statements[ast.statements.length - 1]).to.be.instanceOf(BrsFunction);
     });
 });

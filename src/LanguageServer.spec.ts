@@ -16,9 +16,8 @@ import { createInactivityStub, expectZeroDiagnostics, normalizeDiagnostics, trim
 import { isBrsFile, isLiteralString } from './astUtils/reflection';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { tempDir, rootDir } from './testHelpers.spec';
-import { URI } from 'vscode-uri';
 import { BusyStatusTracker } from './BusyStatusTracker';
-import type { BscFile } from './interfaces';
+import type { BscFile } from './files/BscFile';
 import type { Project } from './lsp/Project';
 import { LogLevel, Logger, createLogger } from './logging';
 import { DiagnosticMessages } from './DiagnosticMessages';
@@ -1572,13 +1571,14 @@ describe('LanguageServer', () => {
                 //make a plugin that changes string text
                 (server['projectManager'].projects[0] as Project)['builder'].program.plugins.add({
                     name: 'test-plugin',
-                    beforeProgramTranspile: (program, entries, editor) => {
-                        const file = program.getFile('source/main.bs')!;
+                    beforeProgramTranspile: (event) => {
+                        const { program, editor } = event;
+                        const file = program.getFile('source/main.bs');
                         if (isBrsFile(file)) {
                             file.ast.walk(createVisitor({
                                 LiteralExpression: (expression) => {
                                     if (isLiteralString(expression)) {
-                                        editor.setProperty(expression.token, 'text', 'hello moon');
+                                        editor.setProperty(expression.tokens.value, 'text', 'hello moon');
                                     }
                                 }
                             }), {
@@ -1626,7 +1626,7 @@ describe('LanguageServer', () => {
             `;
         };
 
-        const uri = URI.file(s`${rootDir}/source/sgnode.bs`).toString();
+        const uri = util.pathToUri(s`${rootDir}/source/sgnode.bs`);
 
         fsExtra.outputFileSync(s`${rootDir}/source/sgnode.bs`, getContents());
         server.run();
@@ -1694,7 +1694,7 @@ describe('LanguageServer', () => {
             for (let collection of [actualDiagnostics, expectedDiagnostics]) {
                 //convert a URI-like string to an fsPath
                 for (let key in collection) {
-                    let keyNormalized = key.startsWith('file:') ? URI.parse(key).fsPath : key;
+                    let keyNormalized = key.startsWith('file:') ? util.uriToPath(key) : key;
                     keyNormalized = standardizePath(
                         path.isAbsolute(keyNormalized) ? keyNormalized : s`${rootDir}/${keyNormalized}`
                     );
@@ -1730,7 +1730,7 @@ describe('LanguageServer', () => {
                 end sub
             `);
             fsExtra.outputFileSync(`${rootDir}/source/lib.bs`, `
-                    namespace alpha
+                namespace alpha
                     sub beta()
                     end sub
                 end namespace
@@ -1753,7 +1753,7 @@ describe('LanguageServer', () => {
             });
 
             const document = TextDocument.create(
-                URI.file(s`${rootDir}/source/main.bs`).toString(),
+                util.pathToUri(s`${rootDir}/source/main.bs`),
                 'brightscript',
                 0, `
                     sub main()
@@ -1786,7 +1786,7 @@ describe('LanguageServer', () => {
             await server['onDidChangeWatchedFiles']({
                 changes: [{
                     type: FileChangeType.Changed,
-                    uri: URI.file(`${rootDir}/bsconfig.json`).toString()
+                    uri: util.uriToPath(`${rootDir}/bsconfig.json`)
                 }]
             });
 
@@ -1802,7 +1802,7 @@ describe('LanguageServer', () => {
                     DiagnosticMessages.cannotFindName('missing2').message
                 ],
                 'bsconfig.json': [
-                    'Encountered syntax errors in bsconfig.json: CloseBraceExpected'
+                    'Syntax errors in bsconfig.json: CloseBraceExpected'
                 ]
             });
 
@@ -1820,7 +1820,7 @@ describe('LanguageServer', () => {
             await server['onDidChangeWatchedFiles']({
                 changes: [{
                     type: FileChangeType.Changed,
-                    uri: URI.file(`${rootDir}/bsconfig.json`).toString()
+                    uri: util.uriToPath(`${rootDir}/bsconfig.json`)
                 }]
             });
 
@@ -1833,6 +1833,46 @@ describe('LanguageServer', () => {
                     DiagnosticMessages.cannotFindName('missing2').message
                 ]
             });
+        });
+    });
+
+    describe('onCompletion', () => {
+        it('should remove duplicate items across projects', async () => {
+            server['connection'] = server['establishConnection']();
+            fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `
+                function pi()
+                    return 3.141592653589793
+                end function
+
+                function buildAwesome()
+                    return 42
+                end function
+            `);
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {});
+            const subProjectConfig = {
+                files: [
+                    '**/*',
+                    { src: '../source/**/*', dest: 'source/common' }
+                ]
+            };
+
+            fsExtra.outputJsonSync(s`${rootDir}/alpha/bsconfig.json`, subProjectConfig);
+            fsExtra.outputJsonSync(s`${rootDir}/beta/bsconfig.json`, subProjectConfig);
+            server.run();
+
+            await server['onInitialize']({ capabilities: {} } as any);
+            await server['onInitialized']();
+            await server['syncProjects']();
+
+            const result = await server['onCompletion']({
+                textDocument: {
+                    uri: util.pathToUri(s`${rootDir}/source/main.brs`)
+                },
+                position: util.createPosition(2, 26)
+            });
+            expect(result.items.filter(compItem => compItem.label === 'buildAwesome')).to.length(1);
+            expect(result.items.filter(compItem => compItem.label === 'pi')).to.length(1);
+            expect(result.items.filter(compItem => compItem.label === 'LCase')).to.length(1);
         });
     });
 });

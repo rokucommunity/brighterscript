@@ -1,16 +1,20 @@
-import type { BscType } from './BscType';
-import { DynamicType } from './DynamicType';
+import { isUninitializedType } from '../astUtils/reflection';
+import type { TypeCompatibilityData } from '../interfaces';
+import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
 
-export class UninitializedType implements BscType {
+export class UninitializedType extends BscType {
     public isAssignableTo(targetType: BscType) {
-        return (
-            targetType instanceof UninitializedType ||
-            targetType instanceof DynamicType
-        );
+        return false;
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
+    public readonly kind = BscTypeKind.UninitializedType;
+
+    public isBuiltIn = true;
+    public static instance = new UninitializedType();
+
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
+        return false;
     }
 
     public toString() {
@@ -18,10 +22,15 @@ export class UninitializedType implements BscType {
     }
 
     public toTypeString(): string {
-        return this.toString();
+        throw new Error('Uninitialized type cannot be used in code');
     }
 
-    public clone() {
-        return new UninitializedType();
+    public isEqual(targetType: BscType): boolean {
+        return isUninitializedType(targetType);
     }
+}
+
+
+export function uninitializedTypeFactory() {
+    return UninitializedType.instance;
 }

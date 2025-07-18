@@ -1,44 +1,41 @@
-import type { BscType } from './BscType';
-import { DoubleType } from './DoubleType';
-import { DynamicType } from './DynamicType';
-import { FloatType } from './FloatType';
-import { IntegerType } from './IntegerType';
+import { isDynamicType, isLongIntegerTypeLike, isNumberType, isObjectType } from '../astUtils/reflection';
+import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
+import { isEnumTypeCompatible, isNativeInterfaceCompatibleNumber, isUnionTypeCompatible } from './helpers';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
+import type { TypeCompatibilityData } from '../interfaces';
 
-export class LongIntegerType implements BscType {
-    constructor(
-        public typeText?: string
-    ) { }
+export class LongIntegerType extends BscType {
+    public readonly kind = BscTypeKind.LongIntegerType;
 
-    public isAssignableTo(targetType: BscType) {
+    public static instance = new LongIntegerType();
+
+    public isBuiltIn = true;
+
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
-            targetType instanceof LongIntegerType ||
-            targetType instanceof DynamicType
+            isDynamicType(targetType) ||
+            isObjectType(targetType) ||
+            isNumberType(targetType) ||
+            isUnionTypeCompatible(this, targetType, data) ||
+            isEnumTypeCompatible(this, targetType, data) ||
+            isNativeInterfaceCompatibleNumber(this, targetType, data)
         );
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        if (
-            targetType instanceof DynamicType ||
-            targetType instanceof IntegerType ||
-            targetType instanceof FloatType ||
-            targetType instanceof DoubleType ||
-            targetType instanceof LongIntegerType
-        ) {
-            return true;
-        } else {
-            return false;
-        }
-    }
-
     public toString() {
-        return this.typeText ?? 'longinteger';
+        return 'longinteger';
     }
 
     public toTypeString(): string {
         return this.toString();
     }
 
-    public clone() {
-        return new LongIntegerType(this.typeText);
+    isEqual(targetType: BscType): boolean {
+        return isLongIntegerTypeLike(targetType);
     }
+
+    readonly binaryOpPriorityLevel = 3;
 }
+
+BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('longinteger', LongIntegerType.instance);

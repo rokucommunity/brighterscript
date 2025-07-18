@@ -3,7 +3,7 @@ import * as path from 'path';
 import { rokuDeploy } from 'roku-deploy';
 import type { LogLevel as RokuDeployLogLevel } from 'roku-deploy/dist/Logger';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
-import type { BscFile, BsDiagnostic, FileObj, FileResolver } from './interfaces';
+import type { BsDiagnostic, FileObj, FileResolver } from './interfaces';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { Watcher } from './Watcher';
@@ -15,7 +15,8 @@ import * as diagnosticUtils from './diagnosticUtils';
 import * as fsExtra from 'fs-extra';
 import * as requireRelative from 'require-relative';
 import { Throttler } from './Throttler';
-import { URI } from 'vscode-uri';
+import type { BrsFile } from './files/BrsFile';
+import { DiagnosticManager } from './DiagnosticManager';
 
 /**
  * A runner class that handles
@@ -32,9 +33,7 @@ export class ProgramBuilder {
 
         //add the default file resolver (used to load source file contents).
         this.addFileResolver((filePath) => {
-            return fsExtra.readFile(filePath).then((value) => {
-                return value.toString();
-            });
+            return fsExtra.readFile(filePath);
         });
     }
     /**
@@ -68,60 +67,38 @@ export class ProgramBuilder {
         let reversedResolvers = [...this.fileResolvers].reverse();
         for (let fileResolver of reversedResolvers) {
             let result = await fileResolver(srcPath);
-            if (typeof result === 'string') {
+            if (typeof result === 'string' || Buffer.isBuffer(result)) {
                 return result;
             }
         }
         throw new Error(`Could not load file "${srcPath}"`);
     }
 
-    /**
-     * A list of diagnostics that are always added to the `getDiagnostics()` call.
-     */
-    private staticDiagnostics = [] as BsDiagnostic[];
+    public diagnostics = new DiagnosticManager();
 
     public addDiagnostic(srcPath: string, diagnostic: Partial<BsDiagnostic>) {
         if (!this.program) {
             throw new Error('Cannot call `ProgramBuilder.addDiagnostic` before `ProgramBuilder.run()`');
         }
-        let file: BscFile | undefined = this.program.getFile(srcPath);
-        if (!file) {
-            file = {
-                pkgPath: path.basename(srcPath),
-                pathAbsolute: srcPath, //keep this for backwards-compatibility. TODO remove in v1
-                srcPath: srcPath,
-                getDiagnostics: () => {
-                    return [<any>diagnostic];
-                }
-            } as BscFile;
+        if (!diagnostic.location) {
+            diagnostic.location = {
+                uri: util.pathToUri(srcPath),
+                range: util.createRange(0, 0, 0, 0)
+            };
+        } else {
+            diagnostic.location.uri = util.pathToUri(srcPath);
         }
-        diagnostic.file = file;
-        this.staticDiagnostics.push(<any>diagnostic);
+        this.diagnostics.register(<any>diagnostic, { tags: ['ProgramBuilder'] });
     }
 
-    public getDiagnostics() {
-        return [
-            ...this.staticDiagnostics,
-            ...(this.program?.getDiagnostics() ?? [])
-        ];
+    public getDiagnostics(): BsDiagnostic[] {
+        return this.diagnostics.getDiagnostics();
     }
 
-    public async run(options: BsConfig & {
-        /**
-         * Should validation run? Default is `true`. You must set exlicitly to `false` to disable.
-         * @deprecated this is an experimental flag, and its behavior may change in a future release
-         * @default true
-         */
-        validate?: boolean;
-    }) {
-        if (options?.logLevel) {
-            this.logger.logLevel = options.logLevel;
-        }
-
-        if (this.isRunning) {
-            throw new Error('Server is already running');
-        }
-        this.isRunning = true;
+    /**
+     * Load the project and all the files, but don't run the validation, transpile, or watch cycles
+     */
+    public async load(options: BsConfig) {
         try {
             this.options = util.normalizeAndResolveConfig(options);
             if (this.options?.logLevel !== undefined) {
@@ -143,9 +120,9 @@ export class ProgramBuilder {
                 showDiagnosticsInConsole: options?.showDiagnosticsInConsole
             });
 
-            if (e?.file && e.message && e.code) {
+            if (e?.location && e.message && e.code) {
                 let err = e as BsDiagnostic;
-                this.staticDiagnostics.push(err);
+                this.diagnostics.register(err);
             } else {
                 //if this is not a diagnostic, something else is wrong...
                 throw e;
@@ -158,7 +135,27 @@ export class ProgramBuilder {
         this.createProgram();
 
         //parse every file in the entire project
-        await this.loadAllFilesAST();
+        await this.loadFiles();
+    }
+
+    public async run(options: BsConfig & {
+        /**
+         * Should validation run? Default is `true`. You must set exlicitly to `false` to disable.
+         * @deprecated this is an experimental flag, and its behavior may change in a future release
+         * @default true
+         */
+        validate?: boolean;
+    }) {
+        if (options?.logLevel) {
+            this.logger.logLevel = options.logLevel;
+        }
+
+        if (this.isRunning) {
+            throw new Error('Server is already running');
+        }
+        this.isRunning = true;
+
+        await this.load(options);
 
         if (this.options.watch) {
             this.logger.log('Starting compilation in watch mode...');
@@ -174,9 +171,12 @@ export class ProgramBuilder {
     }
 
     protected createProgram() {
-        this.program = new Program(this.options, this.logger, this.plugins);
+        this.program = new Program(this.options, this.logger, this.plugins, this.diagnostics);
 
-        this.plugins.emit('afterProgramCreate', this.program);
+        this.plugins.emit('afterProgramCreate', {
+            builder: this,
+            program: this.program
+        });
 
         return this.program;
     }
@@ -193,7 +193,9 @@ export class ProgramBuilder {
             this.plugins.add(plugin);
         }
 
-        this.plugins.emit('beforeProgramCreate', this);
+        this.plugins.emit('beforeProgramCreate', {
+            builder: this
+        });
     }
 
     /**
@@ -325,41 +327,42 @@ export class ProgramBuilder {
         //group the diagnostics by file
         let diagnosticsByFile = {} as Record<string, BsDiagnostic[]>;
         for (let diagnostic of diagnostics) {
-            if (!diagnosticsByFile[diagnostic.file.srcPath]) {
-                diagnosticsByFile[diagnostic.file.srcPath] = [];
+            const diagnosticFileKey = diagnostic.location?.uri ?? 'no-uri';
+            if (!diagnosticsByFile[diagnosticFileKey]) {
+                diagnosticsByFile[diagnosticFileKey] = [];
             }
-            diagnosticsByFile[diagnostic.file.srcPath].push(diagnostic);
+            diagnosticsByFile[diagnosticFileKey].push(diagnostic);
         }
 
         //get printing options
         const options = diagnosticUtils.getPrintDiagnosticOptions(this.options);
         const { cwd, emitFullPaths } = options;
 
-        let srcPaths = Object.keys(diagnosticsByFile).sort();
-        for (let srcPath of srcPaths) {
-            let diagnosticsForFile = diagnosticsByFile[srcPath];
+        let fileUris = Object.keys(diagnosticsByFile).sort();
+        for (let fileUri of fileUris) {
+            let diagnosticsForFile = diagnosticsByFile[fileUri];
             //sort the diagnostics in line and column order
             let sortedDiagnostics = diagnosticsForFile.sort((a, b) => {
                 return (
-                    (a.range?.start.line ?? -1) - (b.range?.start.line ?? -1) ||
-                    (a.range?.start.character ?? -1) - (b.range?.start.character ?? -1)
+                    (a.location?.range?.start.line ?? -1) - (b.location?.range?.start.line ?? -1) ||
+                    (a.location?.range?.start.character ?? -1) - (b.location?.range?.start.character ?? -1)
                 );
             });
 
-            let filePath = srcPath;
+            let filePath = util.uriToPath(fileUri);
             if (!emitFullPaths) {
                 filePath = path.relative(cwd, filePath);
             }
             //load the file text
-            const file = this.program?.getFile(srcPath);
+            const file = this.program?.getFile(fileUri);
             //get the file's in-memory contents if available
-            const lines = file?.fileContents?.split(/\r?\n/g) ?? [];
+            const lines = (file as BrsFile)?.fileContents?.split(/\r?\n/g) ?? [];
 
             for (let diagnostic of sortedDiagnostics) {
                 //default the severity to error if undefined
                 let severity = typeof diagnostic.severity === 'number' ? diagnostic.severity : DiagnosticSeverity.Error;
-                let relatedInformation = (diagnostic.relatedInformation ?? []).map(x => {
-                    let relatedInfoFilePath = URI.parse(x.location.uri).fsPath;
+                let relatedInformation = (util.toDiagnostic(diagnostic, diagnostic.source)?.relatedInformation ?? []).map(x => {
+                    let relatedInfoFilePath = util.uriToPath(x.location?.uri);
                     if (!emitFullPaths) {
                         relatedInfoFilePath = path.relative(cwd, relatedInfoFilePath);
                     }
@@ -446,25 +449,20 @@ export class ProgramBuilder {
         }
     }
 
-    private transpileThrottler = new Throttler(0);
+    private buildThrottler = new Throttler(0);
+
     /**
-     * Transpiles the entire program into the staging folder
+     * Build the entire project and place the contents into the staging directory
      */
-    public async transpile() {
-        await this.transpileThrottler.run(async () => {
-            let options = util.cwdWork(this.options.cwd, () => {
-                return rokuDeploy.getOptions({
-                    ...this.options,
-                    logLevel: this.options.logLevel as unknown as RokuDeployLogLevel,
-                    outDir: util.getOutDir(this.options),
-                    outFile: path.basename(this.options.outFile)
-
-                    //rokuDeploy's return type says all its fields can be nullable, but it sets values for all of them.
-                }) as any as Required<ReturnType<typeof rokuDeploy.getOptions>>;
-            });
-
+    public async build() {
+        await this.buildThrottler.run(async () => {
             //get every file referenced by the files array
-            let fileMap = await rokuDeploy.getFilePaths(options.files, options.rootDir);
+            let fileMap = Object.values(this.program.files).map(x => {
+                return {
+                    src: x.srcPath,
+                    dest: x.destPath
+                };
+            });
 
             //remove files currently loaded in the program, we will transpile those instead (even if just for source maps)
             let filteredFileMap = [] as FileObj[];
@@ -475,26 +473,19 @@ export class ProgramBuilder {
                 }
             }
 
-            this.plugins.emit('beforePrepublish', this, filteredFileMap);
-
-            await this.logger.time(LogLevel.log, ['Copying to staging directory'], async () => {
-                //prepublish all non-program-loaded files to staging
-                await rokuDeploy.prepublishToStaging({
-                    ...options,
-                    files: filteredFileMap
-                });
-            });
-
-            this.plugins.emit('afterPrepublish', this, filteredFileMap);
-            this.plugins.emit('beforePublish', this, fileMap);
-
-            await this.logger.time(LogLevel.log, ['Transpiling'], async () => {
+            await this.logger.time(LogLevel.log, ['Building'], async () => {
                 //transpile any brighterscript files
-                await this.program!.transpile(fileMap, options.stagingDir);
+                await this.program!.build();
             });
-
-            this.plugins.emit('afterPublish', this, fileMap);
         });
+    }
+
+    /**
+     * Transpiles the entire program into the staging folder
+     * @deprecated use `.build()` instead
+     */
+    public async transpile() {
+        return this.build();
     }
 
     private async deployPackageIfEnabled() {
@@ -512,34 +503,35 @@ export class ProgramBuilder {
     }
 
     /**
-     * Parse and load the AST for every file in the project
+     * Load every file into the project
      */
-    private async loadAllFilesAST() {
-        await this.logger.time(LogLevel.log, ['Parsing files'], async () => {
+    private async loadFiles() {
+        await this.logger.time(LogLevel.log, ['load files'], async () => {
             let files = await this.logger.time(LogLevel.debug, ['getFilePaths'], async () => {
                 return util.getFilePaths(this.options);
             });
-            this.logger.trace('ProgramBuilder.loadAllFilesAST() files:', files);
+            this.logger.trace('ProgramBuilder.loadFiles() files:', files);
 
             const typedefFiles = [] as FileObj[];
-            const sourceFiles = [] as FileObj[];
+            const allOtherFiles = [] as FileObj[];
             let manifestFile: FileObj | null = null;
 
             for (const file of files) {
-                // source files (.brs, .bs, .xml)
-                if (/(?<!\.d)\.(bs|brs|xml)$/i.test(file.dest)) {
-                    sourceFiles.push(file);
-
-                    // typedef files (.d.bs)
-                } else if (/\.d\.bs$/i.test(file.dest)) {
+                // typedef files
+                if (/\.d\.bs$/i.test(file.dest)) {
                     typedefFiles.push(file);
 
-                    // manifest file
-                } else if (/^manifest$/i.test(file.dest)) {
-                    manifestFile = file;
+                    // all other files
+                } else {
+                    if (/^manifest$/i.test(file.dest)) {
+                        //manifest file
+                        manifestFile = file;
+                    }
+                    allOtherFiles.push(file);
                 }
             }
 
+            //load the manifest file first
             if (manifestFile) {
                 this.program!.loadManifest(manifestFile, false);
             }
@@ -551,8 +543,10 @@ export class ProgramBuilder {
                     this.logger.log(e); // log the error, but don't fail this process because the file might be fixable later
                 }
             };
-            await Promise.all(typedefFiles.map(loadFile)); // preload every type definition file, which eliminates duplicate file loading
-            await Promise.all(sourceFiles.map(loadFile)); // parse source files
+            // preload every type definition file, which eliminates duplicate file loading
+            await Promise.all(typedefFiles.map(loadFile));
+            // load all other files
+            await Promise.all(allOtherFiles.map(loadFile));
         });
     }
 

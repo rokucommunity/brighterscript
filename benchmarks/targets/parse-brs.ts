@@ -12,12 +12,13 @@ module.exports = async (options: TargetOptions) => {
         copyToStaging: false,
         //disable diagnostic reporting (they still get collected)
         diagnosticFilters: ['**/*'],
-        logLevel: 'error'
+        logLevel: 'error',
+        ...options.additionalConfig
     });
     //collect all the brs file contents
-    const files = Object.values(builder.program.files).filter(x => ['.brs', '.bs', '.d.bs'].includes(x.extension)).map(x => ({
-        pkgPath: x.pkgPath,
-        fileContents: x.fileContents
+    const files = Object.values(builder.program.files).filter(x => ['.brs', '.bs', '.d.bs'].includes(brighterscript.util.getExtension(x.srcPath)!)).map(x => ({
+        destPath: x.destPath ?? x.pkgPath,
+        fileContents: (x as any).fileContents
     }));
     if (files.length === 0) {
         console.log('[parse-brs] No brs files found in program');
@@ -27,10 +28,10 @@ module.exports = async (options: TargetOptions) => {
     const setFileFuncName = builder.program['setFile'] ? 'setFile' : 'addOrReplaceFile';
 
     suite.add(fullName, (deferred) => {
-        const promises = [];
+        const promises: unknown[] = [];
         for (const file of files) {
             promises.push(
-                builder.program[setFileFuncName](file.pkgPath, file.fileContents)
+                builder.program[setFileFuncName](file.destPath, file.fileContents)
             );
         }
         // eslint-disable-next-line @typescript-eslint/no-floating-promises

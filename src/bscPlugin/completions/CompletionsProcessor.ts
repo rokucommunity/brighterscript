@@ -1,9 +1,30 @@
-import { isBrsFile, isXmlScope } from '../../astUtils/reflection';
-import type { ProvideCompletionsEvent } from '../../interfaces';
-import { TokenKind } from '../../lexer/TokenKind';
+import { isAliasStatement, isBrsFile, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isTypedFunctionType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
+import type { ExtraSymbolData, FileReference, ProvideCompletionsEvent } from '../../interfaces';
+import type { BscFile } from '../../files/BscFile';
+import { AllowedTriviaTokens, DeclarableTypes, Keywords, TokenKind } from '../../lexer/TokenKind';
 import type { XmlScope } from '../../XmlScope';
 import { util } from '../../util';
-import { firstBy } from 'thenby';
+import type { Scope } from '../../Scope';
+import { ParseMode } from '../../parser/Parser';
+import type { CompletionItem, Position } from 'vscode-languageserver';
+import { CompletionItemKind, TextEdit } from 'vscode-languageserver';
+import type { BscSymbol } from '../../SymbolTable';
+import { SymbolTypeFlag } from '../../SymbolTypeFlag';
+import type { XmlFile } from '../../files/XmlFile';
+import type { Program } from '../../Program';
+import type { BrsFile } from '../../files/BrsFile';
+import type { FunctionScope } from '../../FunctionScope';
+import { BooleanType } from '../../types/BooleanType';
+import { InvalidType } from '../../types/InvalidType';
+import type { BscType } from '../../types/BscType';
+import type { AstNode } from '../../parser/AstNode';
+import type { ClassStatement, FunctionStatement, NamespaceStatement, AliasStatement } from '../../parser/Statement';
+import type { Token } from '../../lexer/Token';
+import { createIdentifier } from '../../astUtils/creators';
+import type { FunctionExpression } from '../../parser/Expression';
+import { LogLevel } from '../../Logger';
+
+const SCOPES_FOR_COMPLETION = 3;
 
 export class CompletionsProcessor {
     constructor(
@@ -13,58 +34,664 @@ export class CompletionsProcessor {
     }
 
     public process() {
-        let completionsArray = [];
-        if (isBrsFile(this.event.file) && this.event.file.isPositionNextToTokenKind(this.event.position, TokenKind.Callfunc)) {
-            const xmlScopes = this.event.program.getScopes().filter((s) => isXmlScope(s)) as XmlScope[];
-            // is next to a @. callfunc invocation - must be an interface method.
-            //TODO refactor this to utilize the actual variable's component type (when available)
-            for (const scope of xmlScopes) {
-                let fileLinks = this.event.program.getStatementsForXmlFile(scope);
-                for (let fileLink of fileLinks) {
-                    let pushItem = scope.createCompletionFromFunctionStatement(fileLink.item);
-                    if (!completionsArray.includes(pushItem.label)) {
-                        completionsArray.push(pushItem.label);
-                        this.event.completions.push(pushItem);
-                    }
+        let file = this.event.file;
+        this.event.program.logger.time(LogLevel.log, ['Processing completions'], () => {
+
+            // Find the scopes for this file - Only process the first few scopes
+            const scopesToProcess = this.getScopesForCompletion();
+
+            //get the completions from all scopes for this file
+            let completionResults: CompletionItem[] = [];
+            let globalResults: CompletionItem[] = [];
+
+            if (isXmlFile(file)) {
+                completionResults = this.getXmlFileCompletions(this.event.position, file);
+            } else if (isBrsFile(file)) {
+                //handle script import completions
+                let scriptImport = util.getScriptImportAtPosition(file.ownScriptImports, this.event.position);
+                if (scriptImport) {
+                    this.event.completions.push(...this.getScriptImportCompletions(file.program, file.pkgPath, scriptImport));
+                    return;
+                }
+
+                const results = this.getBrsFileCompletions(this.event.position, file, scopesToProcess);
+                completionResults = results.scoped;
+                globalResults = results.global;
+            }
+
+            //push any global results to the completions array
+            this.event.completions.push(...globalResults);
+
+            //only keep completions common to every scope for this file (the global results are not considered in this filter and will always be included)
+            let allCompletions = completionResults.flat();
+            let keyCounts = new Map<string, number>();
+            for (let completion of allCompletions) {
+                let key = `${completion.label}-${completion.kind}`;
+                keyCounts.set(key, keyCounts.has(key) ? keyCounts.get(key) + 1 : 1);
+                if (keyCounts.get(key) === scopesToProcess.length) {
+                    this.event.completions.push(completion);
                 }
             }
-            //no other result is possible in this case
-            return;
-        }
+        });
+    }
 
-        //find the scopes for this file (sort by name so these results are always consistent)
-        let scopesForFile = this.event.program.getScopesForFile(this.event.file).sort(firstBy(x => x.name));
+    private getScopesForCompletion() {
+        //the scopes for this file
+        let scopesForFile = this.event.scopes ?? [];
 
-        //if there are no scopes, include the global scope so we at least get the built-in functions
-        scopesForFile = scopesForFile.length > 0 ? scopesForFile : [this.event.program.globalScope];
+        // //if there are no scopes, include the global scope so we at least get the built-in functions
+        // if (this.event.program) {
+        //     scopesForFile = scopesForFile.length > 0 ? scopesForFile : [];
+        // }
 
         // Only process the first few scopes. This might result in missing completions,
         // but it's better than wasting TONS of cycles building essentially the same completions over and over
-        const scopesToProcess = scopesForFile.slice(0, 3);
+        const scopesToProcess = scopesForFile.slice(0, SCOPES_FOR_COMPLETION);
 
         // always include the source scope if applicable to this file
         let sourceScope = scopesForFile.find(x => x.name === 'source');
         if (sourceScope && !scopesToProcess.includes(sourceScope)) {
-            //replace the first scope with the source scope so we always process exactly 3 scopes
+            //replace the first scope with the source scope so we process a consistent number of scopes if possible
             scopesToProcess[0] = sourceScope;
         }
+        return scopesToProcess;
+    }
 
-        //get the completions from all scopes for this file
-        let allCompletions = util.flatMap(
-            scopesToProcess.map(scope => {
-                return this.event.file.getCompletions(this.event.position, scope);
-            }),
-            c => c
-        );
 
-        //only keep completions common to every scope for this file
-        let keyCounts = new Map<string, number>();
-        for (let completion of allCompletions) {
-            let key = `${completion.label}-${completion.kind}`;
-            keyCounts.set(key, keyCounts.has(key) ? keyCounts.get(key) + 1 : 1);
-            if (keyCounts.get(key) === scopesToProcess.length) {
-                this.event.completions.push(completion);
-            }
+    /**
+     * Get all available completions for the specified position
+     * @param position the position to get completions
+     */
+    public getXmlFileCompletions(position: Position, file: XmlFile): CompletionItem[] {
+        let scriptImport = util.getScriptImportAtPosition(file.scriptTagImports, position);
+        if (scriptImport) {
+            return this.getScriptImportCompletions(file.program, file.pkgPath, scriptImport);
+        } else {
+            return [];
         }
     }
+
+    /**
+     * Get a list of all script imports, relative to the specified pkgPath
+     * @param program - reference to the program
+     * @param sourcePkgPath - the pkgPath of the source that wants to resolve script imports
+     * @param scriptImport - example script import
+     */
+    public getScriptImportCompletions(program: Program, sourcePkgPath: string, scriptImport: FileReference) {
+        let lowerSourcePkgPath = sourcePkgPath.toLowerCase();
+
+        let result = [] as CompletionItem[];
+        /**
+         * hashtable to prevent duplicate results
+         */
+        let resultPkgPaths = {} as Record<string, boolean>;
+
+        //restrict to only .brs files
+        for (let key in program.files) {
+            let file = program.files[key];
+            const ext = util.getExtension(file.srcPath);
+            if (
+                //is a BrightScript or BrighterScript file
+                (ext === '.bs' || ext === '.brs') &&
+                //this file is not the current file
+                lowerSourcePkgPath !== file.pkgPath.toLowerCase()
+            ) {
+                //add the relative path
+                let relativePath = util.getRelativePath(sourcePkgPath, file.destPath).replace(/\\/g, '/');
+                let pkgPathStandardized = file.pkgPath.replace(/\\/g, '/');
+                let filePkgPath = `pkg:/${pkgPathStandardized}`;
+                let importPkgPath = util.getImportPackagePath(file.srcPath, filePkgPath);
+                let lowerFilePkgPath = filePkgPath.toLowerCase();
+                if (!resultPkgPaths[lowerFilePkgPath]) {
+                    resultPkgPaths[lowerFilePkgPath] = true;
+
+                    result.push({
+                        label: relativePath,
+                        detail: file.srcPath,
+                        kind: CompletionItemKind.File,
+                        textEdit: {
+                            newText: relativePath,
+                            range: scriptImport.filePathRange
+                        }
+                    });
+
+                    //add the absolute path
+                    result.push({
+                        label: importPkgPath,
+                        detail: file.srcPath,
+                        kind: CompletionItemKind.File,
+                        textEdit: {
+                            newText: importPkgPath,
+                            range: scriptImport.filePathRange
+                        }
+                    });
+                }
+            }
+        }
+        return result;
+    }
+
+
+    /**
+     * Get completions available at the given cursor. This aggregates all values from this file and the current scope.
+     */
+    public getBrsFileCompletions(position: Position, file: BrsFile, scopesToProcess: Scope[]): { global: CompletionItem[]; scoped: CompletionItem[] } {
+        let result = [] as CompletionItem[];
+        const currentTokenByFilePosition = file.getTokenAt(position);
+        const currentToken = currentTokenByFilePosition ?? file.getTokenAt(file.getClosestExpression(position)?.location?.range.start);
+
+        const emptyResult = { global: [], scoped: [] };
+
+        if (!currentToken) {
+            return emptyResult;
+        }
+        const tokenKind = currentToken?.kind;
+
+        //if cursor is after a comment, disable completions
+        if (this.isPostionInComment(file, position)) {
+            return emptyResult;
+        }
+
+        let expression: AstNode;
+        let shouldLookForMembers = false;
+        let shouldLookForCallFuncMembers = false;
+        let symbolTableLookupFlag = SymbolTypeFlag.runtime;
+        let beforeDotToken: Token;
+
+        if (file.tokenFollows(currentToken, TokenKind.Goto)) {
+            let functionScope = file.getFunctionScopeAtPosition(position);
+            return { global: [], scoped: this.getLabelCompletion(functionScope) };
+        }
+
+        if (this.isTokenAdjacentTo(file, currentToken, TokenKind.Dot)) {
+            const dotToken = this.getAdjacentToken(file, currentToken, TokenKind.Dot);
+            beforeDotToken = file.getTokenBefore(dotToken);
+            expression = file.getClosestExpression(beforeDotToken?.location?.range.end);
+            shouldLookForMembers = true;
+        } else if (this.isTokenAdjacentTo(file, currentToken, TokenKind.Callfunc)) {
+            const dotToken = this.getAdjacentToken(file, currentToken, TokenKind.Callfunc);
+            beforeDotToken = file.getTokenBefore(dotToken);
+            expression = file.getClosestExpression(beforeDotToken?.location?.range.end);
+            shouldLookForCallFuncMembers = true;
+        } else if (this.isTokenAdjacentTo(file, currentToken, TokenKind.As)) {
+            if (file.parseMode === ParseMode.BrightScript) {
+                return { global: NativeTypeCompletions, scoped: [] };
+            }
+            expression = file.getClosestExpression(this.event.position);
+            symbolTableLookupFlag = SymbolTypeFlag.typetime;
+        } else if (this.isTokenAdjacentTo(file, currentToken, TokenKind.Equal)) {
+            expression = file.getClosestExpression(this.event.position);
+            if (expression?.findAncestor<AliasStatement>(isAliasStatement)) {
+                // allow runtime and typetime lookups in alias statements
+                // eslint-disable-next-line no-bitwise
+                symbolTableLookupFlag = SymbolTypeFlag.runtime | SymbolTypeFlag.typetime;
+            }
+        } else {
+            expression = file.getClosestExpression(this.event.position);
+        }
+
+        if (isFunctionExpression(expression)) {
+            // if completion is the last character of the function, use the completions of the body of the function
+            expression = expression.body;
+        }
+
+        if (!expression) {
+            return emptyResult;
+        }
+
+        const tokenBefore = file.getTokenBefore(file.getClosestToken(expression.location?.range?.start));
+
+        // helper to check get correct symbol tables for look ups
+        function getSymbolTableForLookups() {
+            if (shouldLookForMembers) {
+                let type = expression.getType({ flags: SymbolTypeFlag.runtime });
+                if (isEnumType(type) && !isEnumType(expression.getType({ flags: SymbolTypeFlag.typetime }))) {
+                    // enum members are registered in the symbol table as enum type
+                    // an enum type should ONLY use the enum type's members when called directly
+                    // since this is not a typetime enum, the actual type is actually an enum member!
+                    type = type.defaultMemberType;
+                }
+                // Make sure built in interfaces are added.
+                if (type.isResolvable()) {
+                    type.addBuiltInInterfaces();
+                }
+                return type?.getMemberTable();
+            } else if (shouldLookForCallFuncMembers) {
+                let type = expression.getType({ flags: SymbolTypeFlag.runtime });
+                if (isComponentType(type)) {
+                    // it's a component and you're doing a callFunc - only let it do functions from that table
+                    return type.getCallFuncTable();
+                }
+                // this is not a component type - there should be no callfunc members
+                return undefined;
+            }
+            const symbolTableToUse = expression.getSymbolTable();
+            return symbolTableToUse;
+        }
+
+        const areMembers = (shouldLookForMembers || shouldLookForCallFuncMembers);
+        const notMembers = !areMembers;
+        const isAfterNew = tokenBefore?.kind === TokenKind.New;
+        const shouldLookInNamespace: NamespaceStatement = notMembers && expression.findAncestor(isNamespaceStatement);
+
+        const containingClassStmt = expression.findAncestor<ClassStatement>(isClassStatement);
+        const containingNamespace = expression.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        const containingNamespaceName = containingNamespace?.getName(ParseMode.BrighterScript);
+        const containingFunctionExpression = expression.findAncestor<FunctionExpression>(isFunctionExpression);
+        const tokenIsLiteralString = (tokenKind === TokenKind.StringLiteral || tokenKind === TokenKind.TemplateStringQuasi);
+
+        const globalCompletions: CompletionItem[] = [];
+        if (!tokenIsLiteralString && notMembers && !isAfterNew && this.event.program?.globalScope) {
+            let globalSymbols: BscSymbol[] = this.event.program.globalScope.symbolTable.getAllSymbols(symbolTableLookupFlag) ?? [];
+            if (symbolTableLookupFlag === SymbolTypeFlag.runtime) {
+                globalSymbols.push(...this.getGlobalValues());
+            }
+            globalCompletions.push(...this.getSymbolsCompletion(globalSymbols));
+        }
+
+        for (const scope of scopesToProcess) {
+            if (tokenKind === TokenKind.StringLiteral || tokenKind === TokenKind.TemplateStringQuasi) {
+                result.push(...this.getStringLiteralCompletions(scope, currentToken));
+                continue;
+            }
+            scope.linkSymbolTable();
+            const symbolTable = getSymbolTableForLookups();
+            let currentSymbols: BscSymbol[] = [];
+
+            if (areMembers) {
+                currentSymbols = symbolTable?.getAllSymbols(symbolTableLookupFlag) ?? [];
+                const tokenType = expression.getType({ flags: SymbolTypeFlag.runtime });
+                if (isClassType(tokenType)) {
+                    currentSymbols = currentSymbols.filter((symbol) => {
+                        if (symbol.name === 'new') {
+                            // don't return the constructor as a property
+                            return false;
+                        }
+                        return this.isMemberAccessible(scope, symbol, containingClassStmt, containingNamespaceName);
+                    });
+                }
+            } else {
+                currentSymbols = symbolTable?.getOwnSymbols(symbolTableLookupFlag) ?? [];
+                if (containingFunctionExpression) {
+                    if (symbolTable !== containingFunctionExpression.body.symbolTable) {
+                        // this is a pocket table - get all symbols defined in full function
+                        currentSymbols.push(...containingFunctionExpression.body.getSymbolTable().getOwnSymbols(symbolTableLookupFlag));
+                    }
+                    currentSymbols.push(...containingFunctionExpression.getSymbolTable().getOwnSymbols(symbolTableLookupFlag));
+                }
+
+                if (shouldLookInNamespace) {
+                    const nsNameParts = shouldLookInNamespace.getNameParts();
+                    let nameSpaceTypeSofar: BscType;
+                    let nsNameLookupTable = scope.symbolTable;
+                    for (const namePart of nsNameParts) {
+                        nameSpaceTypeSofar = nsNameLookupTable?.getSymbolType(namePart.text, { flags: symbolTableLookupFlag });
+                        if (isNamespaceType(nameSpaceTypeSofar)) {
+                            nsNameLookupTable = nameSpaceTypeSofar.getMemberTable();
+                        } else {
+                            break;
+                        }
+                    }
+                    if (isNamespaceType(nameSpaceTypeSofar)) {
+                        currentSymbols.push(...nameSpaceTypeSofar.getMemberTable().getAllSymbols(symbolTableLookupFlag));
+                    }
+                }
+                currentSymbols.push(...this.getScopeSymbolCompletions(file, scope, symbolTableLookupFlag));
+            }
+
+            let ignoreAllPropertyNames = false;
+
+            if (isAfterNew) {
+                //we are after a new keyword; so we can only be namespaces that have a class or classes at this point
+                currentSymbols = currentSymbols.filter(symbol => isClassType(symbol.type) || this.isNamespaceTypeWithMemberType(symbol.type, isClassType));
+                ignoreAllPropertyNames = true;
+            }
+
+            result.push(...this.getSymbolsCompletion(currentSymbols, areMembers));
+            if (shouldLookForMembers && currentSymbols.length === 0 && !ignoreAllPropertyNames) {
+                // could not find members of actual known types.. just try everything
+                result.push(...this.getPropertyNameCompletions(scope),
+                    ...this.getAllClassMemberCompletions(scope).values());
+            } else if (shouldLookForCallFuncMembers && currentSymbols.length === 0) {
+                // could not find members of actual known types.. just try everything
+                result.push(...this.getCallFuncNameCompletions(scope));
+            }
+            scope.unlinkSymbolTable();
+        }
+        return { global: globalCompletions, scoped: result };
+    }
+
+    private getScopeSymbolCompletions(file: BrsFile, scope: Scope, symbolTableLookupFlag: SymbolTypeFlag) {
+        // get all scope available symbols
+
+        const scopeSymbols = file.parseMode === ParseMode.BrighterScript
+            ? [...scope.symbolTable.getOwnSymbols(symbolTableLookupFlag), ...scope.allNamespaceTypeTable.getOwnSymbols(symbolTableLookupFlag)]
+            : scope.symbolTable.getOwnSymbols(symbolTableLookupFlag);
+
+        const fileSymbols = file.ast.getSymbolTable().getOwnSymbols(symbolTableLookupFlag);
+        scopeSymbols.push(...fileSymbols);
+
+        const scopeAvailableSymbols = scopeSymbols.filter(sym => {
+            if (file.parseMode === ParseMode.BrighterScript) {
+                // eslint-disable-next-line no-bitwise
+                if (sym.flags & SymbolTypeFlag.postTranspile) {
+                    // underscored symbols should not be available in Brighterscript files
+                    return false;
+                }
+            } else if (file.parseMode === ParseMode.BrightScript) {
+                if (isNamespaceType(sym.type)) {
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        return scopeAvailableSymbols;
+    }
+
+    private getSymbolsCompletion(symbols: BscSymbol[], areMembers = false): CompletionItem[] {
+        return symbols.map(symbol => {
+            // if this is low priority, sort it at the end of the list
+            const sortText = symbol.data?.completionPriority ? 'z'.repeat(symbol.data?.completionPriority) + symbol.name : undefined;
+            return {
+                label: symbol.name,
+                kind: this.getCompletionKindFromSymbol(symbol, areMembers),
+                detail: symbol?.type?.toString(),
+                documentation: this.getDocumentation(symbol),
+                sortText: sortText
+            };
+        });
+    }
+
+    private getDocumentation(symbol: BscSymbol) {
+        if (symbol.data?.description) {
+            return symbol.data?.description;
+        }
+        return util.getNodeDocumentation(symbol.data?.definingNode);
+    }
+
+
+    private getCompletionKindFromSymbol(symbol: BscSymbol, areMembers = false) {
+        let type = symbol?.type;
+        const extraData = symbol?.data;
+        let definingNode = extraData?.definingNode;
+        let isAlias = extraData?.isAlias;
+        let isInstance = extraData?.isInstance;
+
+        if (isAliasStatement(extraData?.definingNode)) {
+            isAlias = true;
+            const aliasExtraData: ExtraSymbolData = {};
+            type = extraData.definingNode.value.getType({ flags: symbol.flags, data: aliasExtraData });
+            definingNode = aliasExtraData?.definingNode;
+        }
+
+        if (isConstStatement(definingNode)) {
+            return CompletionItemKind.Constant;
+        } else if (isClassType(type) && !isInstance) {
+            return CompletionItemKind.Class;
+        } else if (isCallableType(type)) {
+            const finalTypeNameLower = type?.toString().split('.').pop().toLowerCase();
+            const symbolNameLower = symbol?.name.toLowerCase();
+            let nameMatchesType = symbolNameLower === finalTypeNameLower;
+            if (isTypedFunctionType(type) && !nameMatchesType) {
+                if (symbolNameLower === type.name?.replace(/\./gi, '_').toLowerCase()) {
+                    nameMatchesType = true;
+                }
+            }
+            if (nameMatchesType || isAlias) {
+                return areMembers ? CompletionItemKind.Method : CompletionItemKind.Function;
+            }
+        } else if (isInterfaceType(type) && !isInstance) {
+            return CompletionItemKind.Interface;
+        } else if (isEnumType(type) && !isInstance) {
+            return CompletionItemKind.Enum;
+        } else if (isEnumMemberType(type)) {
+            return CompletionItemKind.EnumMember;
+        } else if (isNamespaceType(type)) {
+            return CompletionItemKind.Module;
+        } else if (isComponentType(type) && (!isInstance)) {
+            return CompletionItemKind.Interface;
+        }
+        if (areMembers) {
+            return CompletionItemKind.Field;
+        }
+        const lowerSymbolName = symbol.name.toLowerCase();
+        if (lowerSymbolName === 'true' ||
+            lowerSymbolName === 'false' ||
+            lowerSymbolName === 'invalid') {
+            return CompletionItemKind.Value;
+
+        }
+        const tokenIdentifier = util.tokenToBscType(createIdentifier(symbol.name));
+        if (isNativeType(tokenIdentifier)) {
+            return CompletionItemKind.Keyword;
+
+        }
+        return CompletionItemKind.Variable;
+    }
+
+    private isNamespaceTypeWithMemberType(nsType: BscType, predicate: (t: BscType) => boolean): boolean {
+        if (!isNamespaceType(nsType)) {
+            return false;
+        }
+        const members = nsType.memberTable.getAllSymbols(SymbolTypeFlag.runtime);
+        for (const member of members) {
+            if (predicate(member.type)) {
+                return true;
+            } else if (isNamespaceType(member.type)) {
+                if (this.isNamespaceTypeWithMemberType(member.type, predicate)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+
+    }
+
+    private isMemberAccessible(scope: Scope, member: BscSymbol, containingClassStmt: ClassStatement, containingNamespaceName: string): boolean {
+        // eslint-disable-next-line no-bitwise
+        const isPrivate = member.flags & SymbolTypeFlag.private;
+        // eslint-disable-next-line no-bitwise
+        const isProtected = member.flags & SymbolTypeFlag.protected;
+
+        if (!containingClassStmt || !(isPrivate || isProtected)) {
+            // not in a class - no private or protected members allowed
+            return !(isPrivate || isProtected);
+        }
+        const containingClassName = containingClassStmt.getName(ParseMode.BrighterScript);
+        const classStmtThatDefinedMember = member.data?.definingNode?.findAncestor<ClassStatement>(isClassStatement);
+        if (isPrivate) {
+            return containingClassStmt === classStmtThatDefinedMember;
+
+        } else if (isProtected) {
+            const ancestorClasses = scope.getClassHierarchy(containingClassName, containingNamespaceName).map(link => link.item);
+            return ancestorClasses.includes(classStmtThatDefinedMember);
+        }
+        return true;
+    }
+
+    private getLabelCompletion(functionScope: FunctionScope) {
+        return functionScope.labelStatements.map(label => ({
+            label: label.name,
+            kind: CompletionItemKind.Reference
+        }));
+    }
+
+    public createCompletionFromFunctionStatement(statement: FunctionStatement, completionKind: CompletionItemKind = CompletionItemKind.Function): CompletionItem {
+        const funcType = statement.getType({ flags: SymbolTypeFlag.runtime });
+        return {
+            label: statement.getName(ParseMode.BrighterScript),
+            kind: completionKind,
+            detail: funcType.toString(),
+            documentation: util.getNodeDocumentation(statement)
+        };
+    }
+
+    private getStringLiteralCompletions(scope: Scope, currentToken: Token) {
+        const match = /^("?)(pkg|libpkg):/.exec(currentToken.text);
+        let result = [] as CompletionItem[];
+        if (match) {
+            // Get file path locations
+            const [, openingQuote, fileProtocol] = match;
+            //include every absolute file path from this scope
+            for (const file of scope.getAllFiles()) {
+                const pkgPath = `${fileProtocol}:/${file.pkgPath.replace(/\\/g, '/')}`;
+                result.push({
+                    label: pkgPath,
+                    textEdit: TextEdit.replace(
+                        util.createRange(
+                            currentToken.location?.range.start.line,
+                            //+1 to step past the opening quote
+                            currentToken.location?.range.start.character + (openingQuote ? 1 : 0),
+                            currentToken.location?.range.end.line,
+                            //-1 to exclude the closing quotemark (or the end character if there is no closing quotemark)
+                            currentToken.location?.range.end.character + (currentToken.text.endsWith('"') ? -1 : 0)
+                        ),
+                        pkgPath
+                    ),
+                    kind: CompletionItemKind.File
+                });
+            }
+            return result;
+        } else {
+            //do nothing. we don't want to show completions inside of strings...
+            return [];
+        }
+    }
+
+
+    /**
+     * Scan all files for property names, and return them as completions
+     */
+    public getPropertyNameCompletions(scope: Scope) {
+        let results = [] as CompletionItem[];
+        scope.enumerateBrsFiles((file) => {
+            results.push(...file.propertyNameCompletions);
+        });
+        return results;
+    }
+
+    public getAllClassMemberCompletions(scope: Scope) {
+        let results = new Map<string, CompletionItem>();
+        let filesSearched = new Set<BscFile>();
+        for (const file of scope.getAllFiles()) {
+            if (isBrsFile(file) && !filesSearched.has(file)) {
+                // eslint-disable-next-line @typescript-eslint/dot-notation
+                for (let cs of file['_cachedLookups'].classStatements) {
+                    for (let s of [...cs.methods, ...cs.fields]) {
+                        if (!results.has(s.tokens.name.text) && s.tokens.name.text.toLowerCase() !== 'new') {
+                            results.set(s.tokens.name.text, {
+                                label: s.tokens.name.text,
+                                kind: isMethodStatement(s) ? CompletionItemKind.Method : CompletionItemKind.Field
+                            });
+                        }
+                    }
+                }
+            }
+            filesSearched.add(file);
+        }
+        return results;
+    }
+
+    /**
+     * Scan all xmlScopes for call funcs
+     */
+    public getCallFuncNameCompletions(scope: Scope) {
+        let completionsArray = [] as CompletionItem[];
+        let completetionsLabels = [];
+        const xmlScopes = this.event.program.getScopes().filter((s) => isXmlScope(s)) as XmlScope[];
+        // is next to a @. callfunc invocation - must be an component interface method.
+
+        for (const scope of xmlScopes) {
+            let fileLinks = this.event.program.getStatementsForXmlFile(scope);
+            for (let fileLink of fileLinks) {
+                let pushItem = this.createCompletionFromFunctionStatement(fileLink.item, CompletionItemKind.Method);
+                if (!completetionsLabels.includes(pushItem.label)) {
+                    completetionsLabels.push(pushItem.label);
+                    completionsArray.push(pushItem);
+                }
+            }
+        }
+        //no other result is possible in this case
+        return completionsArray;
+    }
+
+
+    private getGlobalValues(): BscSymbol[] {
+        return [
+            {
+                name: 'true',
+                type: BooleanType.instance,
+                flags: SymbolTypeFlag.runtime,
+                data: {}
+            },
+            {
+                name: 'false',
+                type: BooleanType.instance,
+                flags: SymbolTypeFlag.runtime,
+                data: {}
+            },
+            {
+                name: 'invalid',
+                type: InvalidType.instance,
+                flags: SymbolTypeFlag.runtime,
+                data: {}
+            }
+        ];
+    }
+
+    private isPostionInComment(file: BrsFile, position: Position) {
+        const currentToken = file.getCurrentOrNextTokenAt(position);
+        const tokenKind = currentToken?.kind;
+        if (!currentToken) {
+            return true;
+        }
+        if (tokenKind === TokenKind.Comment) {
+            return true;
+        }
+
+        const nextNonComment = file.getNextTokenByPredicate(currentToken, (t: Token) => !AllowedTriviaTokens.includes(t.kind), 1);
+        const firstComment = nextNonComment?.leadingTrivia.find(t => t.kind === TokenKind.Comment);
+        if (firstComment && util.comparePosition(position, firstComment?.location?.range.start) >= 0) {
+            return true;
+        }
+        return false;
+    }
+
+    private isTokenAdjacentTo(file: BrsFile, currentToken: Token, targetKind: TokenKind) {
+        return file.getPreviousToken(currentToken)?.kind === targetKind || file.isTokenNextToTokenKind(currentToken, targetKind);
+    }
+
+    private getAdjacentToken(file: BrsFile, currentToken: Token, targetKind: TokenKind) {
+        return currentToken.kind === targetKind ? currentToken : file.getTokenBefore(currentToken, targetKind);
+    }
 }
+
+/**
+ * List of completions for all valid keywords/reserved words.
+ * Build this list once because it won't change for the lifetime of this process
+ */
+export const KeywordCompletions = Object.keys(Keywords)
+    //remove any keywords with whitespace
+    .filter(x => !x.includes(' '))
+    //create completions
+    .map(x => {
+        return {
+            label: x,
+            kind: CompletionItemKind.Keyword
+        } as CompletionItem;
+    });
+
+
+/**
+ * List of completions for all valid intrinsic types.
+ * Build this list once because it won't change for the lifetime of this process
+ */
+export const NativeTypeCompletions = DeclarableTypes
+    //create completions
+    .map(x => {
+        return {
+            label: x.toLowerCase(),
+            kind: CompletionItemKind.Keyword
+        } as CompletionItem;
+    });

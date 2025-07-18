@@ -4,8 +4,6 @@ import util, { standardizePath as s } from '../util';
 import * as path from 'path';
 import type { ProjectConfig, ActivateResponse, LspDiagnostic, LspProject } from './LspProject';
 import type { Plugin, Hover, MaybePromise } from '../interfaces';
-import { DiagnosticMessages } from '../DiagnosticMessages';
-import { URI } from 'vscode-uri';
 import { Deferred } from '../deferred';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import { rokuDeploy } from 'roku-deploy';
@@ -18,6 +16,8 @@ import type { BsConfig } from '../BsConfig';
 import type { Logger, LogLevel } from '../logging';
 import { createLogger } from '../logging';
 import * as fsExtra from 'fs-extra';
+import type { XmlFile } from '../files/XmlFile';
+import type { BrsFile } from '../files/BrsFile';
 
 export class Project implements LspProject {
     public constructor(
@@ -102,14 +102,6 @@ export class Project implements LspProject {
                 });
             }
         } as Plugin);
-
-        //if we found a deprecated brsconfig.json, add a diagnostic warning the user
-        if (this.bsconfigPath && path.basename(this.bsconfigPath) === 'brsconfig.json') {
-            this.builder.addDiagnostic(this.bsconfigPath, {
-                ...DiagnosticMessages.brsConfigJsonIsDeprecated(),
-                range: util.createRange(0, 0, 0, 0)
-            });
-        }
 
         //trigger a validation (but don't wait for it. That way we can cancel it sooner if we get new incoming data or requests)
         void this.validate();
@@ -196,15 +188,22 @@ export class Project implements LspProject {
         delete this.validationCancelToken;
     }
 
-    public getDiagnostics() {
-        const diagnostics = this.builder.getDiagnostics();
-        return diagnostics.map(x => {
-            const uri = URI.file(x.file.srcPath).toString();
-            return {
-                ...util.toDiagnostic(x, uri),
-                uri: uri
-            };
-        });
+    public getDiagnostics(): LspDiagnostic[] {
+        const result: LspDiagnostic[] = [];
+        for (const diagnostic of this.builder.getDiagnostics()) {
+            //skip diagnostics that have no location
+            if (!diagnostic?.location?.uri) {
+                this.logger.debug('Skipping diagnostic that has no location', diagnostic);
+                continue;
+            }
+
+            const srcPath = util.uriToPath(diagnostic.location.uri);
+            result.push({
+                ...util.toDiagnostic(diagnostic, srcPath),
+                uri: diagnostic.location.uri
+            });
+        }
+        return result;
     }
 
     /**
@@ -307,7 +306,7 @@ export class Project implements LspProject {
         let destPath = rokuDeploy.getDestPath(srcPath, files, rootDir);
 
         //if we have a file and the contents haven't changed
-        let file = this.builder.program.getFile(destPath);
+        let file = this.builder.program.getFile<XmlFile | BrsFile>(destPath);
         if (file && file.fileContents === fileContents) {
             return false;
         }

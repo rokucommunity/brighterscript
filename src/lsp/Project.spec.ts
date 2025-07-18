@@ -85,6 +85,7 @@ describe('Project', () => {
                 //each of these needs to take about 1ms to complete
                 const startTime = Date.now();
                 while (Date.now() - startTime < 2) { }
+                return true;
             });
 
             //validate 3 times in quick succession
@@ -259,19 +260,6 @@ describe('Project', () => {
             });
             expect(project.projectNumber).to.eql(123);
         });
-
-        it('warns about deprecated brsconfig.json', async () => {
-            fsExtra.outputFileSync(`${rootDir}/subdir1/brsconfig.json`, '');
-            await project.activate({
-                bsconfigPath: 'subdir1/brsconfig.json',
-                projectDir: rootDir,
-                workspaceFolder: rootDir,
-                projectKey: undefined
-            });
-            await expectDiagnosticsAsync(project, [
-                DiagnosticMessages.brsConfigJsonIsDeprecated()
-            ]);
-        });
     });
 
     describe('getConfigPath', () => {
@@ -301,6 +289,24 @@ describe('Project', () => {
 
         it('does not crash on undefined', async () => {
             await project['getConfigFilePath'](undefined);
+        });
+    });
+
+    describe('getDiagnostics', () => {
+        it('does not crash when diagnostic is missing location', async () => {
+            await project.activate({
+                projectPath: rootDir
+            } as any);
+            await project.validate();
+
+            //register a diagnostic with no location
+            project['builder'].diagnostics.register({
+                message: 'test diagnostic',
+                location: undefined
+            });
+
+            //this should not throw
+            project.getDiagnostics();
         });
     });
 });

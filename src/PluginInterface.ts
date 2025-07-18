@@ -23,41 +23,27 @@ export type PluginEventArgs<T> = {
 };
 
 export default class PluginInterface<T extends Plugin = Plugin> {
-
-    constructor();
-    /**
-     * @deprecated use the `options` parameter pattern instead
-     */
-    constructor(
-        plugins?: Plugin[],
-        logger?: Logger
-    );
     constructor(
         plugins?: Plugin[],
         options?: {
             logger?: Logger;
             suppressErrors?: boolean;
         }
-    );
-    constructor(
-        private plugins?: Plugin[],
-        options?: {
-            logger?: Logger;
-            suppressErrors?: boolean;
-        } | Logger
     ) {
-        this.plugins ??= [];
-        if (options?.constructor.name === 'Logger') {
-            this.logger = options as unknown as Logger;
-        } else {
-            this.logger = (options as any)?.logger;
-            this.suppressErrors = (options as any)?.suppressErrors === false ? false : true;
+        this.logger = options?.logger;
+        this.suppressErrors = (options as any)?.suppressErrors === false ? false : true;
+        for (const plugin of plugins ?? []) {
+            this.add(plugin);
+        }
+        if (!this.logger) {
+            this.logger = createLogger();
         }
         if (!this.logger) {
             this.logger = createLogger();
         }
     }
 
+    private plugins: Plugin[] = [];
     private logger: Logger;
 
     /**
@@ -69,20 +55,46 @@ export default class PluginInterface<T extends Plugin = Plugin> {
      * Call `event` on plugins
      */
     public emit<K extends keyof PluginEventArgs<T> & string>(event: K, ...args: PluginEventArgs<T>[K]) {
+        this.logger.debug(`Emitting plugin event: ${event}`);
         for (let plugin of this.plugins) {
             if ((plugin as any)[event]) {
                 try {
-                    this.logger.time(LogLevel.debug, [plugin.name, event], () => {
+                    this.logger?.time(LogLevel.debug, [plugin.name, event], () => {
                         (plugin as any)[event](...args);
                     });
                 } catch (err) {
-                    this.logger.error(`Error when calling plugin ${plugin.name}.${event}:`, err);
+                    this.logger?.error(`Error when calling plugin ${plugin.name}.${event}:`, (err as Error).stack);
                     if (!this.suppressErrors) {
                         throw err;
                     }
                 }
             }
         }
+        return args[0];
+    }
+
+    /**
+     * Call `event` on plugins, but allow the plugins to return promises that will be awaited before the next plugin is notified
+     */
+    public async emitAsync<K extends keyof PluginEventArgs<T> & string>(event: K, ...args: PluginEventArgs<T>[K]): Promise<PluginEventArgs<T>[K][0]> {
+        this.logger.debug(`Emitting async plugin event: ${event}`);
+        for (let plugin of this.plugins) {
+            if ((plugin as any)[event]) {
+                try {
+                    await this.logger?.time(LogLevel.debug, [plugin.name, event], async () => {
+                        await Promise.resolve(
+                            (plugin as any)[event](...args)
+                        );
+                    });
+                } catch (err) {
+                    this.logger?.error(`Error when calling plugin ${plugin.name}.${event}:`, (err as Error).stack);
+                    if (!this.suppressErrors) {
+                        throw err;
+                    }
+                }
+            }
+        }
+        return args[0];
     }
 
     /**
@@ -100,9 +112,50 @@ export default class PluginInterface<T extends Plugin = Plugin> {
      */
     public add<T extends Plugin = Plugin>(plugin: T) {
         if (!this.has(plugin)) {
+            this.sanitizePlugin(plugin);
             this.plugins.push(plugin);
         }
         return plugin;
+    }
+
+    /**
+     * Find deprecated or removed historic plugin hooks, and warn about them.
+     * Some events can be forwards-converted
+     */
+    private sanitizePlugin(plugin: Plugin) {
+        const removedHooks = [
+            'beforePrepublish',
+            'afterPrepublish'
+        ];
+        for (const removedHook of removedHooks) {
+            if (plugin[removedHook]) {
+                this.logger?.error(`Plugin "${plugin.name}": event ${removedHook} is no longer supported and will never be called`);
+            }
+        }
+
+        const upgradeWithWarn = {
+            beforePublish: 'beforeSerializeProgram',
+            afterPublish: 'afterSerializeProgram',
+            beforeProgramTranspile: 'beforeBuildProgram',
+            afterProgramTranspile: 'afterBuildProgram',
+            beforeFileParse: 'beforeProvideFile',
+            afterFileParse: 'afterProvideFile',
+            beforeFileTranspile: 'beforePrepareFile',
+            afterFileTranspile: 'afterPrepareFile',
+            beforeFileDispose: 'beforeFileRemove',
+            afterFileDispose: 'afterFileRemove'
+        };
+
+        for (const [oldEvent, newEvent] of Object.entries(upgradeWithWarn)) {
+            if (plugin[oldEvent]) {
+                if (!plugin[newEvent]) {
+                    plugin[newEvent] = plugin[oldEvent];
+                    this.logger?.warn(`Plugin '${plugin.name}': event '${oldEvent}' is no longer supported. It has been converted to '${newEvent}' but you may encounter issues as their signatures do not match.`);
+                } else {
+                    this.logger?.warn(`Plugin "${plugin.name}": event '${oldEvent}' is no longer supported and will never be called`);
+                }
+            }
+        }
     }
 
     public has(plugin: Plugin) {
@@ -111,7 +164,7 @@ export default class PluginInterface<T extends Plugin = Plugin> {
 
     public remove<T extends Plugin = Plugin>(plugin: T) {
         if (this.has(plugin)) {
-            this.plugins.splice(this.plugins.indexOf(plugin));
+            this.plugins.splice(this.plugins.indexOf(plugin), 1);
         }
         return plugin;
     }

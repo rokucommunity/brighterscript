@@ -405,7 +405,7 @@ export class LanguageServer {
      * Provide a list of completion items based on the current cursor position
      */
     @AddStackToErrorMessage
-    public async onCompletion(params: CompletionParams, cancellationToken: CancellationToken, workDoneProgress: WorkDoneProgressReporter, resultProgress: ResultProgressReporter<CompletionItem[]>): Promise<CompletionList> {
+    public async onCompletion(params: CompletionParams, cancellationToken?: CancellationToken, workDoneProgress?: WorkDoneProgressReporter, resultProgress?: ResultProgressReporter<CompletionItem[]>): Promise<CompletionList> {
         this.logger.debug('onCompletion', params, cancellationToken);
 
         const srcPath = util.uriToPath(params.textDocument.uri);

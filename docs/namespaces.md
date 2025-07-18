@@ -110,14 +110,18 @@ end sub
 ```
 </details>
 
-## Sharing name of namespaced item and non-namespaced item is prohibited
-The compiler will throw an error whenever it encounters a namespaced function with the same name as a global function. The same rule applies to classes.
+## Sharing name of namespaced item and non-namespaced items
+The compiler allows a namespaced function with the same name as a global function. As per the [name-shadowing](./variable-shadowing.md) rules, the function inside the namespace will be used in the transpiled code. The same rule applies to classes.
 
 ```BrighterScript
 sub Quack()
 end sub
 namespace Vertibrates.Birds
-    sub Quack() ' this will result in a compile error.
+    sub Quack()
+    end sub
+
+    sub Speak()
+        Quack() ' calls the function Vertibrates.Birds.Quack()
     end sub
 end namespace
 ```
@@ -128,7 +132,10 @@ end namespace
 ```BrightScript
 sub Quack()
 end sub
-sub Vertibrates_Birds_Quack() ' this will result in a compile error.
+sub Vertibrates_Birds_Quack()
+end sub
+sub Vertibrates_Birds_Speak()
+    Vertibrates_Birds_Quack() ' calls the function Vertibrates.Birds.Quack()
 end sub
 ```
 </details>
@@ -162,6 +169,36 @@ end sub
 ```
 </details>
 
+## Calling parent namespace functions
+
+Brighterscript does not support accessing a function (or other entity) of a parent namespace without fully qualifying the name of the function.
+
+```BrighterScript
+namespace Vertibrates
+    sub Move()
+    end sub
+
+    namespace Birds
+        sub Fly()
+            Move() ' this is an error - no global Move() function
+            Vertibrates.Move() ' this is allowed
+        end sub
+    end namespace
+end namespace
+```
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
+```BrightScript
+sub Vertibrates_Move()
+end sub
+sub Vertibrates_Birds_Fly()
+     Move() ' this is an error - no global Move() function
+     Vertibrates_Move() ' this is allowed
+end sub
+```
+</details>
 
 ## Caveats
 ### ObserveField and ObserveFieldScoped

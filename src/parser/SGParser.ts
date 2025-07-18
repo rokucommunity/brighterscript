@@ -1,11 +1,12 @@
 import type { AttributeCstNode, ContentCstNode, DocumentCstNode, ElementCstNode } from '@xml-tools/parser';
 import * as parser from '@xml-tools/parser';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import type { Diagnostic, Range } from 'vscode-languageserver';
 import util from '../util';
-import { SGAst, SGProlog, SGChildren, SGComponent, SGField, SGFunction, SGInterface, SGNode, SGScript } from './SGTypes';
-import type { SGTag, SGToken, SGAttribute, SGReferences } from './SGTypes';
+import { SGAst, SGProlog, SGChildren, SGComponent, SGInterfaceField, SGInterfaceFunction, SGInterface, SGNode, SGScript, SGAttribute } from './SGTypes';
+import type { SGElement, SGToken, SGReferences } from './SGTypes';
 import { isSGComponent } from '../astUtils/xml';
+import type { BsDiagnostic } from '../interfaces';
+import type { Location, Range } from 'vscode-languageserver';
 
 export default class SGParser {
 
@@ -19,9 +20,12 @@ export default class SGParser {
     /**
      * The list of diagnostics found during the parse process
      */
-    public diagnostics = [] as Diagnostic[];
+    public diagnostics = [] as BsDiagnostic[];
 
-    private pkgPath: string;
+    /**
+     * The options used to parse the file
+     */
+    public options: SGParseOptions;
 
     private _references: SGReferences;
 
@@ -49,37 +53,44 @@ export default class SGParser {
      * Walk the AST to extract references to useful bits of information
      */
     private findReferences() {
-        this._references = emptySGReferences();
+        this._references = this.emptySGReferences();
 
-        const { component } = this.ast;
-        if (!component) {
+        const { componentElement } = this.ast;
+        if (!componentElement) {
             return;
         }
 
-        const nameAttr = component.getAttribute('name');
-        if (nameAttr?.value) {
-            this._references.name = nameAttr.value;
-        }
-        const extendsAttr = component.getAttribute('extends');
-        if (extendsAttr?.value) {
-            this._references.extends = extendsAttr.value;
+        const nameAttr = componentElement.getAttribute('name');
+        this._references.name = nameAttr?.tokens.value;
+        const extendsAttr = componentElement.getAttribute('extends');
+        if (extendsAttr?.tokens.value) {
+            this._references.extends = extendsAttr.tokens.value;
         }
 
-        for (const script of component.scripts) {
+        for (const script of componentElement.scriptElements) {
             const uriAttr = script.getAttribute('uri');
-            if (uriAttr) {
-                const uri = uriAttr.value.text;
+            if (uriAttr?.tokens.value) {
+                const uri = uriAttr.tokens.value.text;
                 this._references.scriptTagImports.push({
-                    filePathRange: uriAttr.value.range,
+                    filePathRange: uriAttr.tokens.value.location?.range,
                     text: uri,
-                    pkgPath: util.getPkgPathFromTarget(this.pkgPath, uri)
+                    destPath: util.getPkgPathFromTarget(this.options.destPath, uri)
                 });
             }
         }
     }
 
-    public parse(pkgPath: string, fileContents: string) {
-        this.pkgPath = pkgPath;
+    private sanitizeParseOptions(options: SGParseOptions) {
+        options ??= {
+            destPath: undefined
+        };
+        options.trackLocations ??= true;
+        return options;
+    }
+
+
+    public parse(fileContents: string, options?: SGParseOptions) {
+        this.options = this.sanitizeParseOptions(options);
         this.diagnostics = [];
 
         const { cst, tokenVector, lexErrors, parseErrors } = parser.parse(fileContents);
@@ -88,13 +99,13 @@ export default class SGParser {
         if (lexErrors.length) {
             for (const err of lexErrors) {
                 this.diagnostics.push({
-                    ...DiagnosticMessages.xmlGenericParseError(`Syntax error: ${err.message}`),
-                    range: util.createRange(
+                    ...DiagnosticMessages.syntaxError(`Syntax error: ${err.message}`),
+                    location: this.getLocationFromRange(util.createRange(
                         err.line - 1,
                         err.column,
                         err.line - 1,
                         err.column + err.length
-                    )
+                    ))
                 });
             }
         }
@@ -102,12 +113,12 @@ export default class SGParser {
             const err = parseErrors[0];
             const token = err.token;
             this.diagnostics.push({
-                ...DiagnosticMessages.xmlGenericParseError(`Syntax error: ${err.message}`),
-                range: !isNaN(token.startLine) ? rangeFromTokens(token) : util.createRange(0, 0, 0, Number.MAX_VALUE)
+                ...DiagnosticMessages.syntaxError(`Syntax error: ${err.message}`),
+                location: this.getLocationFromRange(!isNaN(token.startLine) ? this.rangeFromToken(token) : util.createRange(0, 0, 0, Number.MAX_VALUE))
             });
         }
 
-        const { prolog, root } = buildAST(cst as any, this.diagnostics);
+        const { prolog, root } = this.buildAST(cst as any);
         if (!root) {
             const token1 = tokenVector[0];
             const token2 = tokenVector[1];
@@ -117,49 +128,273 @@ export default class SGParser {
                 token2?.image.trim() === '<?xml'
             ) {
                 this.diagnostics.push({
-                    ...DiagnosticMessages.xmlGenericParseError('Syntax error: whitespace found before the XML prolog'),
-                    range: rangeFromTokens(token1)
+                    ...DiagnosticMessages.syntaxError('Syntax error: whitespace found before the XML prolog'),
+                    location: this.getLocationFromRange(this.rangeFromToken(token1))
                 });
             }
         }
 
         if (isSGComponent(root)) {
-            this.ast = new SGAst(prolog, root, root);
+            this.ast = new SGAst({ prologElement: prolog, rootElement: root, componentElement: root });
         } else {
             if (root) {
                 //error: not a component
                 this.diagnostics.push({
-                    ...DiagnosticMessages.xmlUnexpectedTag(root.tag.text),
-                    range: root.tag.range
+                    ...DiagnosticMessages.xmlUnexpectedTag(root.tokens.startTagName.text),
+                    location: root.tokens.startTagName.location
                 });
             }
-            this.ast = new SGAst(prolog, root);
+            this.ast = new SGAst({ prologElement: prolog, rootElement: root });
         }
     }
-}
 
-function buildAST(cst: DocumentCstNode, diagnostics: Diagnostic[]) {
-    const { prolog: cstProlog, element } = cst.children;
+    buildAST(cst: DocumentCstNode) {
+        const { prolog: cstProlog, element } = cst.children;
 
-    let prolog: SGProlog;
-    if (cstProlog?.[0]) {
-        const ctx = cstProlog[0].children;
-        prolog = new SGProlog(
-            mapToken(ctx.XMLDeclOpen[0]),
-            mapAttributes(ctx.attribute),
-            rangeFromTokens(ctx.XMLDeclOpen[0], ctx.SPECIAL_CLOSE[0])
+        let prolog: SGProlog;
+        if (cstProlog?.[0]) {
+            const ctx = cstProlog[0].children;
+            prolog = new SGProlog({
+                // <?
+                startTagOpen: this.createPartialToken(ctx.XMLDeclOpen[0], 0, 2),
+                // xml
+                startTagName: this.createPartialToken(ctx.XMLDeclOpen[0], 2, 3),
+                attributes: this.mapAttributes(ctx.attribute),
+                // ?>
+                startTagClose: this.mapToken(ctx.SPECIAL_CLOSE[0])
+            });
+        }
+
+        let root: SGElement;
+        if (element.length > 0 && element[0]?.children?.Name) {
+            root = this.mapElement(element[0]);
+        }
+
+        return {
+            prolog: prolog,
+            root: root
+        };
+    }
+
+    mapElement({ children }: ElementCstNode): SGElement {
+        const startTagOpen = this.mapToken(children.OPEN[0]);
+        const startTagName = this.mapToken(children.Name[0]);
+        const attributes = this.mapAttributes(children.attribute);
+        const startTagClose = this.mapToken((children.SLASH_CLOSE ?? children.START_CLOSE)?.[0]);
+        const endTagOpen = this.mapToken(children.SLASH_OPEN?.[0]);
+        const endTagName = this.mapToken(children.END_NAME?.[0]);
+        const endTagClose = this.mapToken(children.END?.[0]);
+
+        const content = children.content?.[0];
+
+        let constructorOptions = {
+            startTagOpen: startTagOpen,
+            startTagName: startTagName,
+            attributes: attributes,
+            startTagClose: startTagClose,
+            elements: [],
+            endTagOpen: endTagOpen,
+            endTagName: endTagName,
+            endTagClose: endTagClose
+        };
+
+        switch (startTagName.text) {
+            case 'component':
+                constructorOptions.elements = this.mapElements(content, ['interface', 'script', 'children', 'customization']);
+                return new SGComponent(constructorOptions);
+            case 'interface':
+                constructorOptions.elements = this.mapElements(content, ['field', 'function']);
+                return new SGInterface(constructorOptions);
+            case 'field':
+                if (this.hasElements(content)) {
+                    this.diagnostics.push({
+                        location: startTagName.location,
+                        ...DiagnosticMessages.xmlUnexpectedChildren(startTagName.text)
+                    });
+                }
+                return new SGInterfaceField(constructorOptions);
+            case 'function':
+                if (this.hasElements(content)) {
+                    this.diagnostics.push({
+                        location: startTagName.location,
+                        ...DiagnosticMessages.xmlUnexpectedChildren(startTagName.text)
+                    });
+                }
+                return new SGInterfaceFunction(constructorOptions);
+            case 'script':
+                if (this.hasElements(content)) {
+                    this.diagnostics.push({
+                        location: startTagName.location,
+                        ...DiagnosticMessages.xmlUnexpectedChildren(startTagName.text)
+                    });
+                }
+                const script = new SGScript(constructorOptions);
+                script.cdata = this.getCdata(content);
+                return script;
+            case 'children':
+                constructorOptions.elements = this.mapNodes(content);
+                return new SGChildren(constructorOptions);
+            default:
+                constructorOptions.elements = this.mapNodes(content);
+                return new SGNode(constructorOptions);
+        }
+    }
+
+    mapNode({ children }: ElementCstNode): SGNode {
+        return new SGNode({
+            //<
+            startTagOpen: this.mapToken(children.OPEN[0]),
+            // TagName
+            startTagName: this.mapToken(children.Name[0]),
+            attributes: this.mapAttributes(children.attribute),
+            // > or />
+            startTagClose: this.mapToken((children.SLASH_CLOSE ?? children.START_CLOSE)?.[0]),
+            elements: this.mapNodes(children.content?.[0]),
+            // </
+            endTagOpen: this.mapToken(children.SLASH_OPEN?.[0]),
+            // TagName
+            endTagName: this.mapToken(children.END_NAME?.[0]),
+            // >
+            endTagClose: this.mapToken(children.END?.[0])
+        });
+    }
+
+    mapElements(content: ContentCstNode, allow: string[]): SGElement[] {
+        if (!content) {
+            return [];
+        }
+        const { element } = content.children;
+        const tags: SGElement[] = [];
+        if (element) {
+            for (const entry of element) {
+                const name = entry.children.Name?.[0];
+                if (name?.image) {
+                    if (!allow.includes(name.image)) {
+                        //unexpected tag
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.xmlUnexpectedTag(name.image),
+                            location: this.getLocationFromRange(this.rangeFromToken(name))
+                        });
+                    }
+                    tags.push(this.mapElement(entry));
+                } else {
+                    //bad xml syntax...
+                }
+            }
+        }
+        return tags;
+    }
+
+    mapNodes(content: ContentCstNode): SGNode[] {
+        if (!content) {
+            return [];
+        }
+        const { element } = content.children;
+        return element?.map(element => this.mapNode(element));
+    }
+
+    hasElements(content: ContentCstNode): boolean {
+        return !!content?.children.element?.length;
+    }
+
+    getCdata(content: ContentCstNode): SGToken {
+        if (!content) {
+            return undefined;
+        }
+        const { CData } = content.children;
+        return this.mapToken(CData?.[0]);
+    }
+
+    private mapToken(token: IToken): SGToken {
+        if (token) {
+            return {
+                text: token.image,
+                //TODO should this be coerced into a uri?
+                location: util.createLocationFromRange(this.options.srcPath, this.rangeFromToken(token))
+            };
+        } else {
+            return undefined;
+        }
+    }
+
+    /**
+     * Build SGAttributes from the underlying XML parser attributes array
+     */
+    mapAttributes(attributes: AttributeCstNode[]) {
+        // this is a hot function and has been optimized, so don't refactor unless you know what you're doing...
+        const result = [] as SGAttribute[];
+        if (attributes) {
+            // eslint-disable-next-line @typescript-eslint/prefer-for-of
+            for (let i = 0; i < attributes.length; i++) {
+
+                const children = attributes[i].children;
+                const attr = new SGAttribute({ key: this.mapToken(children.Name[0]) });
+
+                if (children.EQUALS) {
+                    attr.tokens.equals = this.mapToken(children.EQUALS[0]);
+                }
+                if (children.STRING) {
+                    const valueToken = children.STRING[0];
+                    attr.tokens.openingQuote = this.createPartialToken(valueToken, 0, 1);
+                    attr.tokens.value = this.createPartialToken(valueToken, 1, -2);
+                    attr.tokens.closingQuote = this.createPartialToken(valueToken, -1, 1);
+                }
+                result.push(attr);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Create a partial token from the given token. This only supports single-line tokens.
+     * @param token the offset to start the new token. If negative, subtracts from token.length
+     * @param startOffset the offset to start the new token. If negative, subtracts from token.length
+     * @param length the length of the text to keep. If negative, subtracts from token.length
+     */
+    public createPartialToken(token: IToken, startOffset: number, length?: number): SGToken {
+        if (startOffset < 0) {
+            startOffset = token.image.length + startOffset;
+        }
+        if (length === undefined) {
+            length = token.image.length - startOffset;
+        }
+        if (length < 0) {
+            length = token.image.length + length;
+        }
+        return {
+            text: token.image.substring(startOffset, startOffset + length),
+            //xmltools startLine is 1-based, we need 0-based which is why we subtract 1 below
+            location: util.createLocation(
+                token.startLine - 1,
+                token.startColumn - 1 + startOffset,
+                token.endLine - 1,
+                token.startColumn - 1 + (startOffset + length),
+                this.options.srcPath
+            )
+        };
+    }
+
+    /**
+     * Create a range based on the xmltools token
+     */
+    public rangeFromToken(token: IToken) {
+        return util.createRange(
+            token.startLine - 1,
+            token.startColumn - 1,
+            token.endLine - 1,
+            token.endColumn
         );
     }
 
-    let root: SGTag;
-    if (element.length > 0 && element[0]?.children?.Name) {
-        root = mapElement(element[0], diagnostics);
+    private emptySGReferences(): SGReferences {
+        return {
+            scriptTagImports: []
+        };
     }
 
-    return {
-        prolog: prolog,
-        root: root
-    };
+    private getLocationFromRange(range: Range): Location {
+        return util.createLocationFromRange(util.pathToUri(this.options.srcPath), range);
+    }
 }
 
 //not exposed by @xml-tools/parser
@@ -173,199 +408,25 @@ interface IToken {
     endColumn?: number;
 }
 
-function mapElement({ children }: ElementCstNode, diagnostics: Diagnostic[]): SGTag {
-    const nameToken = children.Name[0];
-    let range: Range;
-    const selfClosing = !!children.SLASH_CLOSE;
-    if (selfClosing) {
-        const scToken = children.SLASH_CLOSE[0];
-        range = rangeFromTokens(nameToken, scToken);
-    } else {
-        const endToken = children.END?.[0];
-        range = rangeFromTokens(nameToken, endToken);
-    }
-    const name = mapToken(nameToken);
-    const attributes = mapAttributes(children.attribute);
-    const content = children.content?.[0];
-    switch (name.text) {
-        case 'component':
-            const componentContent = mapElements(content, ['interface', 'script', 'children', 'customization'], diagnostics);
-            return new SGComponent(name, attributes, componentContent, range);
-        case 'interface':
-            const interfaceContent = mapElements(content, ['field', 'function'], diagnostics);
-            return new SGInterface(name, interfaceContent, range);
-        case 'field':
-            if (hasElements(content)) {
-                reportUnexpectedChildren(name, diagnostics);
-            }
-            return new SGField(name, attributes, range);
-        case 'function':
-            if (hasElements(content)) {
-                reportUnexpectedChildren(name, diagnostics);
-            }
-            return new SGFunction(name, attributes, range);
-        case 'script':
-            if (hasElements(content)) {
-                reportUnexpectedChildren(name, diagnostics);
-            }
-            const cdata = getCdata(content);
-            return new SGScript(name, attributes, cdata, range);
-        case 'children':
-            const childrenContent = mapNodes(content);
-            return new SGChildren(name, childrenContent, range);
-        default:
-            const nodeContent = mapNodes(content);
-            return new SGNode(name, attributes, nodeContent, range);
-    }
+export interface CstNodeLocation {
+    startOffset: number;
+    startLine: number;
+    startColumn?: number;
+    endOffset?: number;
+    endLine?: number;
+    endColumn?: number;
 }
 
-function reportUnexpectedChildren(name: SGToken, diagnostics: Diagnostic[]) {
-    diagnostics.push({
-        ...DiagnosticMessages.xmlUnexpectedChildren(name.text),
-        range: name.range
-    });
-}
+export interface SGParseOptions {
+    /**
+     * Path to the file where this source code originated
+     */
+    srcPath?: string;
 
-function mapNode({ children }: ElementCstNode): SGNode {
-    const nameToken = children.Name[0];
-    let range: Range;
-    const selfClosing = !!children.SLASH_CLOSE;
-    if (selfClosing) {
-        const scToken = children.SLASH_CLOSE[0];
-        range = rangeFromTokens(nameToken, scToken);
-    } else {
-        const endToken = children.END?.[0];
-        range = rangeFromTokens(nameToken, endToken);
-    }
-    const name = mapToken(nameToken);
-    const attributes = mapAttributes(children.attribute);
-    const content = children.content?.[0];
-    const nodeContent = mapNodes(content);
-    return new SGNode(name, attributes, nodeContent, range);
-}
-
-function mapElements(content: ContentCstNode, allow: string[], diagnostics: Diagnostic[]): SGTag[] {
-    if (!content) {
-        return [];
-    }
-    const { element } = content.children;
-    const tags: SGTag[] = [];
-    if (element) {
-        for (const entry of element) {
-            const name = entry.children.Name?.[0];
-            if (name?.image) {
-                if (allow.includes(name.image)) {
-                    tags.push(mapElement(entry, diagnostics));
-                } else {
-                    //unexpected tag
-                    diagnostics.push({
-                        ...DiagnosticMessages.xmlUnexpectedTag(name.image),
-                        range: rangeFromTokens(name)
-                    });
-                }
-            } else {
-                //bad xml syntax...
-            }
-        }
-    }
-    return tags;
-}
-
-function mapNodes(content: ContentCstNode): SGNode[] {
-    if (!content) {
-        return [];
-    }
-    const { element } = content.children;
-    return element?.map(element => mapNode(element));
-}
-
-function hasElements(content: ContentCstNode): boolean {
-    return !!content?.children.element?.length;
-}
-
-function getCdata(content: ContentCstNode): SGToken {
-    if (!content) {
-        return undefined;
-    }
-    const { CData } = content.children;
-    return mapToken(CData?.[0]);
-}
-
-function mapToken(token: IToken, unquote = false): SGToken {
-    if (!token) {
-        return undefined;
-    }
-    return {
-        text: unquote ? stripQuotes(token.image) : token.image,
-        range: unquote ? rangeFromTokenValue(token) : rangeFromTokens(token)
-    };
-}
-
-function mapAttributes(attributes: AttributeCstNode[]): SGAttribute[] {
-    return attributes?.map(({ children }) => {
-        const key = children.Name[0];
-        const value = children.STRING?.[0];
-
-        let openQuote: SGToken;
-        let closeQuote: SGToken;
-        //capture the leading and trailing quote tokens
-        const match = /^(["']).*?(["'])$/.exec(value?.image);
-        if (match) {
-            const range = rangeFromTokenValue(value);
-            openQuote = {
-                text: match[1],
-                range: util.createRange(range.start.line, range.start.character, range.start.line, range.start.character + 1)
-            };
-            closeQuote = {
-                text: match[1],
-                range: util.createRange(range.end.line, range.end.character - 1, range.end.line, range.end.character)
-            };
-        }
-        return {
-            key: mapToken(key),
-            openQuote: openQuote,
-            value: mapToken(value, true),
-            closeQuote: closeQuote,
-            range: rangeFromTokens(key, value)
-        };
-    }) || [];
-}
-
-//make range from `start` to `end` tokens
-function rangeFromTokens(start: IToken, end?: IToken) {
-    if (!end) {
-        end = start;
-    }
-    return util.createRange(
-        start.startLine - 1,
-        start.startColumn - 1,
-        end.endLine - 1,
-        end.endColumn
-    );
-}
-
-//make range not including quotes
-export function rangeFromTokenValue(token: IToken) {
-    if (!token) {
-        return undefined;
-    }
-    return util.createRange(
-        token.startLine - 1,
-        token.startColumn,
-        token.endLine - 1,
-        token.endColumn - 1
-    );
-}
-
-function stripQuotes(value: string) {
-    if (value?.length > 1) {
-        return value.substr(1, value.length - 2);
-    }
-    return '';
-}
-
-function emptySGReferences(): SGReferences {
-    return {
-        scriptTagImports: []
-    };
+    destPath: string;
+    /**
+     * Should locations be tracked. If false, the `range` property will be omitted
+     * @default true
+     */
+    trackLocations?: boolean;
 }

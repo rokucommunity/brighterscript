@@ -1,6 +1,7 @@
 import type { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { BscFile, BsDiagnostic, CommentFlag, DiagnosticCode } from './interfaces';
+import type { BscFile } from './files/BscFile';
+import type { BsDiagnostic, CommentFlag, DiagnosticCode } from './interfaces';
 import { util } from './util';
 
 export class CommentFlagProcessor {
@@ -85,8 +86,7 @@ export class CommentFlagProcessor {
                 } else {
                     this.diagnostics.push({
                         ...DiagnosticMessages.unknownDiagnosticCode(codeInt),
-                        file: this.file,
-                        range: codeToken.range
+                        location: util.createLocationFromFileRange(this.file, codeToken.range)
                     });
                 }
             }

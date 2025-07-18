@@ -4,38 +4,54 @@ import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
 import { rokuDeploy, DefaultFiles } from 'roku-deploy';
-import type { Diagnostic, Position, Range, Location, DiagnosticRelatedInformation } from 'vscode-languageserver';
+import type { Diagnostic, Position, DiagnosticRelatedInformation } from 'vscode-languageserver';
+import { Range, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, Plugin, ExpressionInfo, TranspileResult, MaybePromise, DisposableLike, PluginFactory } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, Plugin, ExpressionInfo, TranspileResult, MaybePromise, DisposableLike, ExtraSymbolData, GetTypeOptions, TypeChainProcessResult, PluginFactory } from './interfaces';
+import { TypeChainEntry } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
 import { FloatType } from './types/FloatType';
-import { FunctionType } from './types/FunctionType';
 import { IntegerType } from './types/IntegerType';
-import { InvalidType } from './types/InvalidType';
 import { LongIntegerType } from './types/LongIntegerType';
 import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
-import type { DottedGetExpression, VariableExpression } from './parser/Expression';
+import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionParameterExpression, IndexedGetExpression, LiteralExpression, NewExpression, TypeExpression, VariableExpression, XmlAttributeGetExpression } from './parser/Expression';
 import { LogLevel, createLogger } from './logging';
-import type { Identifier, Locatable, Token } from './lexer/Token';
+import { isToken, type Identifier, type Locatable, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAssignmentStatement, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isFunctionParameterExpression, isIndexedGetExpression, isNamespacedVariableNameExpression, isNewExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
-import { CustomType } from './types/CustomType';
 import { SourceNode } from 'source-map';
-import type { SGAttribute } from './parser/SGTypes';
 import * as requireRelative from 'require-relative';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import type { AstNode, Expression, Statement } from './parser/AstNode';
-import { components, events, interfaces } from './roku-types';
+import { AstNodeKind } from './parser/AstNode';
+import type { UnresolvedSymbol } from './AstValidationSegmenter';
+import type { BscSymbol, GetSymbolTypeOptions, SymbolTable } from './SymbolTable';
+import { SymbolTypeFlag } from './SymbolTypeFlag';
+import { createIdentifier, createToken } from './astUtils/creators';
+import { MAX_RELATED_INFOS_COUNT } from './diagnosticUtils';
+import type { BscType } from './types/BscType';
+import { UnionType, unionTypeFactory } from './types/UnionType';
+import { ArrayType } from './types/ArrayType';
+import { BinaryOperatorReferenceType, TypePropertyReferenceType, ParamTypeFromValueReferenceType } from './types/ReferenceType';
+import { AssociativeArrayType } from './types/AssociativeArrayType';
+import { ComponentType } from './types/ComponentType';
+import { FunctionType } from './types/FunctionType';
+import type { AssignmentStatement, NamespaceStatement } from './parser/Statement';
+import type { BscFile } from './files/BscFile';
+import type { NamespaceType } from './types/NamespaceType';
+import { getUniqueType } from './types/helpers';
+import { InvalidType } from './types/InvalidType';
+import { TypedFunctionType } from './types';
 
 export class Util {
     public clearConsole() {
@@ -114,12 +130,10 @@ export class Util {
      * Given a pkg path of any kind, transform it to a roku-specific pkg path (i.e. "pkg:/some/path.brs")
      */
     public sanitizePkgPath(pkgPath: string) {
-        pkgPath = pkgPath.replace(/\\/g, '/');
-        //if there's no protocol, assume it's supposed to start with `pkg:/`
-        if (!this.startsWithProtocol(pkgPath)) {
-            pkgPath = 'pkg:/' + pkgPath;
-        }
-        return pkgPath;
+        //convert all slashes to forwardslash
+        pkgPath = pkgPath.replace(/[\/\\]+/g, '/');
+        //ensure every path has the leading pkg:/
+        return 'pkg:/' + pkgPath.replace(/^pkg:\//i, '');
     }
 
     /**
@@ -131,10 +145,10 @@ export class Util {
 
     /**
      * Given a pkg path of any kind, transform it to a roku-specific pkg path (i.e. "pkg:/some/path.brs")
+     * @deprecated use `sanitizePkgPath instead. Will be removed in v1
      */
     public getRokuPkgPath(pkgPath: string) {
-        pkgPath = pkgPath.replace(/\\/g, '/');
-        return 'pkg:/' + pkgPath;
+        return this.sanitizePkgPath(pkgPath);
     }
 
     /**
@@ -222,11 +236,11 @@ export class Util {
             if (parseErrors.length > 0) {
                 let err = parseErrors[0];
                 let diagnostic = {
-                    ...DiagnosticMessages.bsConfigJsonHasSyntaxErrors(printParseErrorCode(parseErrors[0].error)),
-                    file: {
-                        srcPath: configFilePath
-                    },
-                    range: this.getRangeFromOffsetLength(projectFileContents, err.offset, err.length)
+                    ...DiagnosticMessages.syntaxError(`Syntax errors in bsconfig.json: ${printParseErrorCode(parseErrors[0].error)}`),
+                    location: {
+                        uri: this.pathToUri(configFilePath),
+                        range: this.getRangeFromOffsetLength(projectFileContents, err.offset, err.length)
+                    }
                 } as BsDiagnostic;
                 throw diagnostic; //eslint-disable-line @typescript-eslint/no-throw-literal
             }
@@ -362,7 +376,7 @@ export class Util {
 
         const cwd = config.cwd ?? process.cwd();
         const rootFolderName = path.basename(cwd);
-        const retainStagingDir = (config.retainStagingDir ?? config.retainStagingFolder) === true ? true : false;
+        const retainStagingDir = (config.retainStagingDir ?? config.retainStagingDir) === true ? true : false;
 
         let logLevel: LogLevel = LogLevel.log;
 
@@ -388,11 +402,11 @@ export class Util {
             watch: config.watch === true ? true : false,
             emitFullPaths: config.emitFullPaths === true ? true : false,
             retainStagingDir: retainStagingDir,
-            retainStagingFolder: retainStagingDir,
             copyToStaging: config.copyToStaging === false ? false : true,
             ignoreErrorCodes: config.ignoreErrorCodes ?? [],
             diagnosticSeverityOverrides: config.diagnosticSeverityOverrides ?? {},
             diagnosticFilters: config.diagnosticFilters ?? [],
+            diagnosticFiltersV0Compatibility: config.diagnosticFiltersV0Compatibility === true ? true : false,
             plugins: config.plugins ?? [],
             pruneEmptyCodeFiles: config.pruneEmptyCodeFiles === true ? true : false,
             autoImportComponentScript: config.autoImportComponentScript === true ? true : false,
@@ -403,7 +417,8 @@ export class Util {
             emitDefinitions: config.emitDefinitions === true ? true : false,
             removeParameterTypes: config.removeParameterTypes === true ? true : false,
             logLevel: logLevel,
-            bslibDestinationDir: bslibDestinationDir
+            bslibDestinationDir: bslibDestinationDir,
+            legacyCallfuncHandling: config.legacyCallfuncHandling === true ? true : false
         };
 
         //mutate `config` in case anyone is holding a reference to the incomplete one
@@ -542,6 +557,17 @@ export class Util {
         return path.join(...resultParts);
     }
 
+    public getImportPackagePath(srcPath: string, pkgTargetPath: string) {
+        const srcExt = this.getExtension(srcPath);
+        const lowerSrcExt = srcExt.toLowerCase();
+        const lowerTargetExt = this.getExtension(pkgTargetPath).toLowerCase();
+        if (lowerSrcExt === '.bs' && lowerTargetExt === '.brs') {
+            // if source is .bs, use that as the import extenstion
+            return pkgTargetPath.substring(0, pkgTargetPath.length - lowerTargetExt.length) + srcExt;
+        }
+        return pkgTargetPath;
+    }
+
     /**
      * Walks left in a DottedGetExpression and returns a VariableExpression if found, or undefined if not found
      */
@@ -624,18 +650,128 @@ export class Util {
     }
 
     public comparePositionToRange(position: Position | undefined, range: Range | undefined) {
-        //stop if the either range is misisng
+        //stop if the either range is missng
         if (!position || !range) {
             return 0;
         }
 
-        if (position.line < range.start.line || (position.line === range.start.line && position.character < range.start.character)) {
+        if (this.comparePosition(position, range.start) < 0) {
             return -1;
         }
-        if (position.line > range.end.line || (position.line === range.end.line && position.character > range.end.character)) {
+        if (this.comparePosition(position, range.end) > 0) {
             return 1;
         }
         return 0;
+    }
+
+    public comparePosition(a: Position | undefined, b: Position) {
+        //stop if the either position is missing
+        if (!a || !b) {
+            return 0;
+        }
+
+        if (a.line < b.line || (a.line === b.line && a.character < b.character)) {
+            return -1;
+        }
+        if (a.line > b.line || (a.line === b.line && a.character > b.character)) {
+            return 1;
+        }
+        return 0;
+    }
+
+    /**
+     * Is the inner range completely enclosed in the outer range
+     */
+    public isRangeInRange(inner: Range, outer: Range) {
+        return this.comparePosition(inner.start, outer.start) === 1 &&
+            this.comparePosition(inner.end, outer.end) === -1;
+    }
+
+    /**
+     * Combine all the documentation for a node - uses the AstNode's leadingTrivia property
+     * @param node the node to get the documentation for
+     * @param options extra options
+     * @param options.prettyPrint if true, will format the comment text for markdown
+     * @param options.commentTokens out Array of tokens that match the comment lines
+     */
+    public getNodeDocumentation(node: AstNode, options: { prettyPrint?: boolean; commentTokens?: Token[] } = { prettyPrint: true }) {
+        if (!node) {
+            return '';
+        }
+        options = options ?? { prettyPrint: true };
+        options.commentTokens = options.commentTokens ?? [];
+        const nodeTrivia = node.leadingTrivia ?? [];
+        const leadingTrivia = isStatement(node)
+            ? [...(node.annotations?.map(anno => anno.leadingTrivia ?? []).flat() ?? []), ...nodeTrivia]
+            : nodeTrivia;
+        const tokens = leadingTrivia?.filter(t => t.kind === TokenKind.Newline || t.kind === TokenKind.Comment);
+        const comments = [] as Token[];
+
+        let newLinesInRow = 0;
+        for (let i = tokens.length - 1; i >= 0; i--) {
+            const token = tokens[i];
+            //skip whitespace and newline chars
+            if (token.kind === TokenKind.Comment) {
+                comments.push(token);
+                newLinesInRow = 0;
+            } else if (token.kind === TokenKind.Newline) {
+                //skip these tokens
+                newLinesInRow++;
+
+                if (newLinesInRow > 1) {
+                    // stop processing on empty line.
+                    break;
+                }
+                //any other token means there are no more comments
+            } else {
+                break;
+            }
+        }
+        const jsDocCommentBlockLine = /(\/\*{2,}|\*{1,}\/)/i;
+        let usesjsDocCommentBlock = false;
+        if (comments.length === 0) {
+            return '';
+        }
+        return comments.reverse()
+            .map(x => ({ line: x.text.replace(/^('|rem)/i, '').trim(), token: x }))
+            .filter(({ line }) => {
+                if (jsDocCommentBlockLine.exec(line)) {
+                    usesjsDocCommentBlock = true;
+                    return false;
+                }
+                return true;
+            }).map(({ line, token }) => {
+                if (usesjsDocCommentBlock) {
+                    if (line.startsWith('*')) {
+                        //remove jsDoc leading '*'
+                        line = line.slice(1).trim();
+                    }
+                }
+                if (options.prettyPrint && line.startsWith('@')) {
+                    // Handle jsdoc/brightscriptdoc tags specially
+                    // make sure they are on their own markdown line, and add italics
+                    const firstSpaceIndex = line.indexOf(' ');
+                    if (firstSpaceIndex === -1) {
+                        return `\n_${line}_`;
+                    }
+                    const firstWord = line.substring(0, firstSpaceIndex);
+                    return `\n_${firstWord}_ ${line.substring(firstSpaceIndex + 1)}`;
+                }
+                if (options.commentTokens) {
+                    options.commentTokens.push(token);
+                }
+                return line;
+            }).join('\n');
+    }
+
+    /**
+     * Prefixes a component name so it can be used as type in the symbol table, without polluting available symbols
+     *
+     * @param sgNodeName the Name of the component
+     * @returns the node name, prefixed with `roSGNode`
+     */
+    public getSgNodeTypeName(sgNodeName: string) {
+        return 'roSGNode' + sgNodeName;
     }
 
     /**
@@ -797,21 +933,6 @@ export class Util {
         }
     }
 
-    /**
-     * Determine whether this diagnostic should be supressed or not, based on brs comment-flags
-     */
-    public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
-        const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code;
-        for (let flag of diagnostic.file?.commentFlags ?? []) {
-            //this diagnostic is affected by this flag
-            if (diagnostic.range && this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
-                //if the flag acts upon this diagnostic's code
-                if (flag.codes === null || (diagnosticCode !== undefined && flag.codes.includes(diagnosticCode))) {
-                    return true;
-                }
-            }
-        }
-    }
 
     /**
      * Walks up the chain to find the closest bsconfig.json file
@@ -892,9 +1013,27 @@ export class Util {
     }
 
     /**
+     * Get a range back from an object that contains (or is) a range
+     */
+    public extractRange(rangeIsh: RangeLike): Range | undefined {
+        if (!rangeIsh) {
+            return undefined;
+        } else if ('location' in rangeIsh) {
+            return rangeIsh.location?.range;
+        } else if ('range' in rangeIsh) {
+            return rangeIsh.range;
+        } else if (Range.is(rangeIsh)) {
+            return rangeIsh;
+        } else {
+            return undefined;
+        }
+    }
+
+
+    /**
      * Get a location object back by extracting location information from other objects that contain location
      */
-    public getRange(startObj: { range: Range }, endObj: { range: Range }): Range {
+    public getRange(startObj: | { range: Range }, endObj: { range: Range }): Range {
         if (!startObj?.range || !endObj?.range) {
             return undefined;
         }
@@ -917,12 +1056,14 @@ export class Util {
     /**
      * If the two items have lines that touch
      */
-    public linesTouch(first: { range?: Range | undefined }, second: { range?: Range | undefined }) {
-        if (first && second && (first.range !== undefined) && (second.range !== undefined) && (
-            first.range.start.line === second.range.start.line ||
-            first.range.start.line === second.range.end.line ||
-            first.range.end.line === second.range.start.line ||
-            first.range.end.line === second.range.end.line
+    public linesTouch(first: RangeLike, second: RangeLike) {
+        const firstRange = this.extractRange(first);
+        const secondRange = this.extractRange(second);
+        if (firstRange && secondRange && (
+            firstRange.start.line === secondRange.start.line ||
+            firstRange.start.line === secondRange.end.line ||
+            firstRange.end.line === secondRange.start.line ||
+            firstRange.end.line === secondRange.end.line
         )) {
             return true;
         } else {
@@ -1006,15 +1147,41 @@ export class Util {
     /**
      * Helper for creating `Location` objects. Prefer using this function because vscode-languageserver's `Location.create()` is significantly slower at scale
      */
-    public createLocation(uri: string, range: Range): Location {
+    public createLocationFromRange(uri: string, range: Range): Location {
         return {
-            uri: uri,
+            uri: util.pathToUri(uri),
             range: range
         };
     }
 
     /**
-     * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `Range.create()` is significantly slower
+     * Helper for creating `Location` objects from a file and range
+     */
+    public createLocationFromFileRange(file: BscFile, range: Range): Location {
+        return this.createLocationFromRange(this.pathToUri(file?.srcPath), range);
+    }
+
+    /**
+     * Helper for creating `Location` objects by passing each range value in directly. Prefer using this function because vscode-languageserver's `Location.create()` is significantly slower at scale
+     */
+    public createLocation(startLine: number, startCharacter: number, endLine: number, endCharacter: number, uri?: string): Location {
+        return {
+            uri: util.pathToUri(uri),
+            range: {
+                start: {
+                    line: startLine,
+                    character: startCharacter
+                },
+                end: {
+                    line: endLine,
+                    character: endCharacter
+                }
+            }
+        };
+    }
+
+    /**
+     * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `Range.create()` is significantly slower.
      */
     public createRange(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Range {
         return {
@@ -1032,94 +1199,160 @@ export class Util {
     /**
      * Create a `Range` from two `Position`s
      */
-    public createRangeFromPositions(startPosition: Position, endPosition: Position): Range {
-        return {
-            start: {
-                line: startPosition.line,
-                character: startPosition.character
-            },
-            end: {
-                line: endPosition.line,
-                character: endPosition.character
-            }
-        };
+    public createRangeFromPositions(startPosition: Position, endPosition: Position): Range | undefined {
+        startPosition = startPosition ?? endPosition;
+        endPosition = endPosition ?? startPosition;
+        if (!startPosition && !endPosition) {
+            return undefined;
+        }
+        return this.createRange(startPosition.line, startPosition.character, endPosition.line, endPosition.character);
     }
 
     /**
      * Clone a range
      */
-    public cloneRange(range: Range) {
-        if (range) {
-            return this.createRange(range.start.line, range.start.character, range.end.line, range.end.character);
+    public cloneLocation(location: Location) {
+        if (location) {
+            return {
+                uri: location.uri,
+                range: {
+                    start: {
+                        line: location.range.start.line,
+                        character: location.range.start.character
+                    },
+                    end: {
+                        line: location.range.end.line,
+                        character: location.range.end.character
+                    }
+                }
+            };
         } else {
-            return range;
+            return location;
         }
     }
 
     /**
      * Clone every token
      */
-    public cloneToken<T extends Token>(token: T) {
+    public cloneToken<T extends Token>(token: T): T {
         if (token) {
             const result = {
                 kind: token.kind,
-                range: this.cloneRange(token.range),
+                location: this.cloneLocation(token.location),
                 text: token.text,
                 isReserved: token.isReserved,
-                leadingWhitespace: token.leadingWhitespace
-            } as T;
+                leadingWhitespace: token.leadingWhitespace,
+                leadingTrivia: token.leadingTrivia.map(x => this.cloneToken(x))
+            } as Token;
             //handle those tokens that have charCode
             if ('charCode' in token) {
                 (result as any).charCode = (token as any).charCode;
             }
-            return result;
+            return result as T;
         } else {
             return token;
         }
     }
 
     /**
-     * Given a list of ranges, create a range that starts with the first non-null lefthand range, and ends with the first non-null
-     * righthand range. Returns undefined if none of the items have a range.
+     *  Gets the bounding range of a bunch of ranges or objects that have ranges
+     *  TODO: this does a full iteration of the args. If the args were guaranteed to be in range order, we could optimize this
      */
-    public createBoundingRange(...locatables: Array<{ range?: Range } | null | undefined>): Range | undefined {
-        let leftmostRange: Range | undefined;
-        let rightmostRange: Range | undefined;
+    public createBoundingLocation(...locatables: Array<{ location?: Location } | Location | { range?: Range } | Range | undefined>): Location | undefined {
+        let uri: string | undefined;
+        let startPosition: Position | undefined;
+        let endPosition: Position | undefined;
 
-        for (let i = 0; i < locatables.length; i++) {
-            //set the leftmost non-null-range item
-            const left = locatables[i];
-            //the range might be a getter, so access it exactly once
-            const leftRange = left?.range;
-            if (!leftmostRange && leftRange) {
-                leftmostRange = leftRange;
+        for (let locatable of locatables) {
+            let range: Range;
+            if (!locatable) {
+                continue;
+            } else if ('location' in locatable) {
+                range = locatable.location?.range;
+                if (!uri) {
+                    uri = locatable.location?.uri;
+                }
+            } else if (Location.is(locatable)) {
+                range = locatable.range;
+                if (!uri) {
+                    uri = locatable.uri;
+                }
+            } else if ('range' in locatable) {
+                range = locatable.range;
+            } else {
+                range = locatable as Range;
             }
 
-            //set the rightmost non-null-range item
-            const right = locatables[locatables.length - 1 - i];
-            //the range might be a getter, so access it exactly once
-            const rightRange = right?.range;
-            if (!rightmostRange && rightRange) {
-                rightmostRange = rightRange;
+            //skip undefined locations or locations without a range
+            if (!range) {
+                continue;
             }
 
-            //if we have both sides, quit
-            if (leftmostRange && rightmostRange) {
-                break;
+            if (!startPosition) {
+                startPosition = range.start;
+            } else if (this.comparePosition(range.start, startPosition) < 0) {
+                startPosition = range.start;
+            }
+            if (!endPosition) {
+                endPosition = range.end;
+            } else if (this.comparePosition(range.end, endPosition) > 0) {
+                endPosition = range.end;
             }
         }
-        if (leftmostRange) {
-            //if we don't have a rightmost range, use the leftmost range for both the start and end
-            return this.createRangeFromPositions(
-                leftmostRange.start,
-                rightmostRange ? rightmostRange.end : leftmostRange.end);
+        if (startPosition && endPosition) {
+            return util.createLocation(startPosition.line, startPosition.character, endPosition.line, endPosition.character, uri);
         } else {
             return undefined;
         }
     }
 
     /**
-     * Create a `Position` object. Prefer this over `Position.create` for performance reasons
+     *  Gets the bounding range of a bunch of ranges or objects that have ranges
+     *  TODO: this does a full iteration of the args. If the args were guaranteed to be in range order, we could optimize this
+     */
+    public createBoundingRange(...locatables: Array<RangeLike>): Range | undefined {
+        return this.createBoundingLocation(...locatables)?.range;
+    }
+
+    /**
+     * Gets the bounding range of an object that contains a bunch of tokens
+     * @param tokens Object with tokens in it
+     * @returns Range containing all the tokens
+     */
+    public createBoundingLocationFromTokens(tokens: Record<string, { location?: Location }>): Location | undefined {
+        let uri: string;
+        let startPosition: Position | undefined;
+        let endPosition: Position | undefined;
+        for (let key in tokens) {
+            let token = tokens?.[key];
+            let locatableRange = token?.location?.range;
+            if (!locatableRange) {
+                continue;
+            }
+
+            if (!startPosition) {
+                startPosition = locatableRange.start;
+            } else if (this.comparePosition(locatableRange.start, startPosition) < 0) {
+                startPosition = locatableRange.start;
+            }
+            if (!endPosition) {
+                endPosition = locatableRange.end;
+            } else if (this.comparePosition(locatableRange.end, endPosition) > 0) {
+                endPosition = locatableRange.end;
+            }
+            if (!uri) {
+                uri = token.location.uri;
+            }
+        }
+        if (startPosition && endPosition) {
+            return this.createLocation(startPosition.line, startPosition.character, endPosition.line, endPosition.character, uri);
+        } else {
+            return undefined;
+        }
+    }
+
+    /**
+     * Create a `Position` object. Prefer this over `Position.create` for performance reasons.
      */
     public createPosition(line: number, character: number) {
         return {
@@ -1143,90 +1376,529 @@ export class Util {
     /**
      * Convert a token into a BscType
      */
-    public tokenToBscType(token: Token, allowCustomType = true) {
+    public tokenToBscType(token: Token) {
         // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
         switch (token.kind) {
             case TokenKind.Boolean:
-                return new BooleanType(token.text);
+                return BooleanType.instance;
             case TokenKind.True:
             case TokenKind.False:
-                return new BooleanType();
+                return BooleanType.instance;
             case TokenKind.Double:
-                return new DoubleType(token.text);
+                return DoubleType.instance;
             case TokenKind.DoubleLiteral:
-                return new DoubleType();
+                return DoubleType.instance;
             case TokenKind.Dynamic:
-                return new DynamicType(token.text);
+                return DynamicType.instance;
             case TokenKind.Float:
-                return new FloatType(token.text);
+                return FloatType.instance;
             case TokenKind.FloatLiteral:
-                return new FloatType();
+                return FloatType.instance;
             case TokenKind.Function:
-                //TODO should there be a more generic function type without a signature that's assignable to all other function types?
-                return new FunctionType(new DynamicType(token.text));
+                return FunctionType.instance;
             case TokenKind.Integer:
-                return new IntegerType(token.text);
+                return IntegerType.instance;
             case TokenKind.IntegerLiteral:
-                return new IntegerType();
+                return IntegerType.instance;
             case TokenKind.Invalid:
-                return new InvalidType(token.text);
+                return InvalidType.instance;
             case TokenKind.LongInteger:
-                return new LongIntegerType(token.text);
+                return LongIntegerType.instance;
             case TokenKind.LongIntegerLiteral:
-                return new LongIntegerType();
+                return LongIntegerType.instance;
             case TokenKind.Object:
-                return new ObjectType(token.text);
+                return ObjectType.instance;
             case TokenKind.String:
-                return new StringType(token.text);
+                return StringType.instance;
             case TokenKind.StringLiteral:
             case TokenKind.TemplateStringExpressionBegin:
             case TokenKind.TemplateStringExpressionEnd:
             case TokenKind.TemplateStringQuasi:
-                return new StringType();
+                return StringType.instance;
             case TokenKind.Void:
-                return new VoidType(token.text);
+                return VoidType.instance;
             case TokenKind.Identifier:
                 switch (token.text.toLowerCase()) {
                     case 'boolean':
-                        return new BooleanType(token.text);
+                        return BooleanType.instance;
                     case 'double':
-                        return new DoubleType(token.text);
+                        return DoubleType.instance;
+                    case 'dynamic':
+                        return DynamicType.instance;
                     case 'float':
-                        return new FloatType(token.text);
+                        return FloatType.instance;
                     case 'function':
-                        return new FunctionType(new DynamicType(token.text));
+                        return FunctionType.instance;
                     case 'integer':
-                        return new IntegerType(token.text);
+                        return IntegerType.instance;
                     case 'invalid':
-                        return new InvalidType(token.text);
+                        return InvalidType.instance;
                     case 'longinteger':
-                        return new LongIntegerType(token.text);
+                        return LongIntegerType.instance;
                     case 'object':
-                        return new ObjectType(token.text);
+                        return ObjectType.instance;
                     case 'string':
-                        return new StringType(token.text);
+                        return StringType.instance;
                     case 'void':
-                        return new VoidType(token.text);
-                }
-                if (allowCustomType) {
-                    return new CustomType(token.text);
+                        return VoidType.instance;
                 }
         }
     }
 
     /**
+     * Deciphers the correct types for fields based on docs
+     * https://developer.roku.com/en-ca/docs/references/scenegraph/xml-elements/interface.md
+     * @param typeDescriptor the type descriptor from the docs
+     * @returns {BscType} the known type, or dynamic
+     */
+    public getNodeFieldType(typeDescriptor: string, lookupTable?: SymbolTable): BscType {
+        let typeDescriptorLower = typeDescriptor.toLowerCase().trim().replace(/\*/g, '');
+
+        if (typeDescriptorLower.startsWith('as ')) {
+            typeDescriptorLower = typeDescriptorLower.substring(3).trim();
+        }
+        const nodeFilter = (new RegExp(/^\[?(.* node)/, 'i')).exec(typeDescriptorLower);
+        if (nodeFilter?.[1]) {
+            typeDescriptorLower = nodeFilter[1].trim();
+        }
+        const parensFilter = (new RegExp(/(.*)\(.*\)/, 'gi')).exec(typeDescriptorLower);
+        if (parensFilter?.[1]) {
+            typeDescriptorLower = parensFilter[1].trim();
+        }
+
+        const bscType = this.tokenToBscType(createToken(TokenKind.Identifier, typeDescriptorLower));
+        if (bscType) {
+            return bscType;
+        }
+
+        function getRect2dType() {
+            const rect2dType = new AssociativeArrayType();
+            rect2dType.addMember('height', {}, FloatType.instance, SymbolTypeFlag.runtime);
+            rect2dType.addMember('width', {}, FloatType.instance, SymbolTypeFlag.runtime);
+            rect2dType.addMember('x', {}, FloatType.instance, SymbolTypeFlag.runtime);
+            rect2dType.addMember('y', {}, FloatType.instance, SymbolTypeFlag.runtime);
+            return rect2dType;
+        }
+
+        function getColorType() {
+            return unionTypeFactory([IntegerType.instance, StringType.instance]);
+        }
+
+        //check for uniontypes
+        const multipleTypes = typeDescriptorLower.split(' or ').map(s => s.trim());
+        if (multipleTypes.length > 1) {
+            const individualTypes = multipleTypes.map(t => this.getNodeFieldType(t, lookupTable));
+            return unionTypeFactory(individualTypes);
+        }
+
+        const typeIsArray = typeDescriptorLower.startsWith('array of ') || typeDescriptorLower.startsWith('roarray of ');
+
+        if (typeIsArray) {
+            const ofSearch = ' of ';
+            const arrayPrefixLength = typeDescriptorLower.indexOf(ofSearch) + ofSearch.length;
+            let arrayOfTypeName = typeDescriptorLower.substring(arrayPrefixLength); //cut off beginnin, eg. 'array of' or 'roarray of'
+            if (arrayOfTypeName.endsWith('s')) {
+                // remove "s" in "floats", etc.
+                arrayOfTypeName = arrayOfTypeName.substring(0, arrayOfTypeName.length - 1);
+            }
+            if (arrayOfTypeName.endsWith('\'')) {
+                // remove "'" in "float's", etc.
+                arrayOfTypeName = arrayOfTypeName.substring(0, arrayOfTypeName.length - 1);
+            }
+            if (arrayOfTypeName === 'rectangle') {
+                arrayOfTypeName = 'rect2d';
+            }
+            let arrayType = this.getNodeFieldType(arrayOfTypeName, lookupTable);
+            return new ArrayType(arrayType);
+        } else if (typeDescriptorLower.startsWith('option ')) {
+            const actualTypeName = typeDescriptorLower.substring('option '.length); //cut off beginning 'option '
+            return this.getNodeFieldType(actualTypeName, lookupTable);
+        } else if (typeDescriptorLower.startsWith('value ')) {
+            const actualTypeName = typeDescriptorLower.substring('value '.length); //cut off beginning 'value '
+            return this.getNodeFieldType(actualTypeName, lookupTable);
+        } else if (typeDescriptorLower === 'n/a') {
+            return DynamicType.instance;
+        } else if (typeDescriptorLower === 'uri') {
+            return StringType.instance;
+        } else if (typeDescriptorLower === 'color') {
+            return getColorType();
+        } else if (typeDescriptorLower === 'vector2d' || typeDescriptorLower === 'floatarray') {
+            return new ArrayType(FloatType.instance);
+        } else if (typeDescriptorLower === 'vector2darray') {
+            return new ArrayType(new ArrayType(FloatType.instance));
+        } else if (typeDescriptorLower === 'intarray') {
+            return new ArrayType(IntegerType.instance);
+        } else if (typeDescriptorLower === 'colorarray') {
+            return new ArrayType(getColorType());
+        } else if (typeDescriptorLower === 'boolarray') {
+            return new ArrayType(BooleanType.instance);
+        } else if (typeDescriptorLower === 'stringarray' || typeDescriptorLower === 'strarray') {
+            return new ArrayType(StringType.instance);
+        } else if (typeDescriptorLower === 'int') {
+            return IntegerType.instance;
+        } else if (typeDescriptorLower === 'time') {
+            return DoubleType.instance;
+        } else if (typeDescriptorLower === 'str') {
+            return StringType.instance;
+        } else if (typeDescriptorLower === 'bool') {
+            return BooleanType.instance;
+        } else if (typeDescriptorLower === 'array' || typeDescriptorLower === 'roarray') {
+            return new ArrayType();
+        } else if (typeDescriptorLower === 'assocarray' ||
+            typeDescriptorLower === 'associative array' ||
+            typeDescriptorLower === 'associativearray' ||
+            typeDescriptorLower === 'roassociativearray' ||
+            typeDescriptorLower.startsWith('associative array of') ||
+            typeDescriptorLower.startsWith('associativearray of') ||
+            typeDescriptorLower.startsWith('roassociativearray of')
+        ) {
+            return new AssociativeArrayType();
+        } else if (typeDescriptorLower === 'node') {
+            return ComponentType.instance;
+        } else if (typeDescriptorLower === 'nodearray') {
+            return new ArrayType(ComponentType.instance);
+        } else if (typeDescriptorLower === 'rect2d') {
+            return getRect2dType();
+        } else if (typeDescriptorLower === 'rect2darray') {
+            return new ArrayType(getRect2dType());
+        } else if (typeDescriptorLower === 'font') {
+            return this.getNodeFieldType('roSGNodeFont', lookupTable);
+        } else if (typeDescriptorLower === 'contentnode') {
+            return this.getNodeFieldType('roSGNodeContentNode', lookupTable);
+        } else if (typeDescriptorLower.endsWith(' node')) {
+            return this.getNodeFieldType('roSgNode' + typeDescriptorLower.substring(0, typeDescriptorLower.length - 5), lookupTable);
+        } else if (lookupTable) {
+            //try doing a lookup
+            return lookupTable.getSymbolType(typeDescriptorLower, {
+                flags: SymbolTypeFlag.typetime,
+                fullName: typeDescriptor,
+                tableProvider: () => lookupTable
+            });
+        }
+
+        return DynamicType.instance;
+    }
+
+    /**
+     * Return the type of the result of a binary operator
+     * Note: compound assignments (eg. +=) internally use a binary expression, so that's why TokenKind.PlusEqual, etc. are here too
+     */
+    public binaryOperatorResultType(leftType: BscType, operator: Token, rightType: BscType): BscType {
+        if ((isAnyReferenceType(leftType) && !leftType.isResolvable()) ||
+            (isAnyReferenceType(rightType) && !rightType.isResolvable())) {
+            return new BinaryOperatorReferenceType(leftType, operator, rightType, (lhs, op, rhs) => {
+                return this.binaryOperatorResultType(lhs, op, rhs);
+            });
+        }
+
+        // Try to find a common value of union type
+        leftType = getUniqueType([leftType], unionTypeFactory);
+        rightType = getUniqueType([rightType], unionTypeFactory);
+
+        if (isUnionType(leftType)) {
+            leftType = this.getHighestPriorityType(leftType.types);
+        }
+        if (isUnionType(rightType)) {
+            rightType = this.getHighestPriorityType(rightType.types);
+        }
+
+        if (isVoidType(leftType) || isVoidType(rightType) || isUninitializedType(leftType) || isUninitializedType(rightType)) {
+            return undefined;
+        }
+
+        if (isEnumMemberType(leftType)) {
+            leftType = leftType.underlyingType;
+        }
+        if (isEnumMemberType(rightType)) {
+            rightType = rightType.underlyingType;
+        }
+
+        // treat object type like dynamic
+        if (isObjectType(leftType)) {
+            leftType = DynamicType.instance;
+        }
+        if (isObjectType(rightType)) {
+            rightType = DynamicType.instance;
+        }
+
+        let hasDouble = isDoubleTypeLike(leftType) || isDoubleTypeLike(rightType);
+        let hasFloat = isFloatTypeLike(leftType) || isFloatTypeLike(rightType);
+        let hasLongInteger = isLongIntegerTypeLike(leftType) || isLongIntegerTypeLike(rightType);
+        let hasInvalid = isInvalidTypeLike(leftType) || isInvalidTypeLike(rightType);
+        let hasDynamic = isDynamicType(leftType) || isDynamicType(rightType);
+        let bothDynamic = isDynamicType(leftType) && isDynamicType(rightType);
+        let bothNumbers = isNumberType(leftType) && isNumberType(rightType);
+        let hasNumber = isNumberType(leftType) || isNumberType(rightType);
+        let bothStrings = isStringTypeLike(leftType) && isStringTypeLike(rightType);
+        let hasString = isStringTypeLike(leftType) || isStringTypeLike(rightType);
+        let hasBoolean = isBooleanTypeLike(leftType) || isBooleanTypeLike(rightType);
+        let eitherBooleanOrNum = (isNumberType(leftType) || isBooleanTypeLike(leftType)) && (isNumberType(rightType) || isBooleanTypeLike(rightType));
+
+        let leftIsPrimitive = isPrimitiveType(leftType);
+        let rightIsPrimitive = isPrimitiveType(rightType);
+        let hasPrimitive = leftIsPrimitive || rightIsPrimitive;
+
+        let nonDynamicType: BscType;
+        if (hasPrimitive) {
+            nonDynamicType = leftIsPrimitive ? leftType : rightType;
+        }
+
+        // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+        switch (operator.kind) {
+            // Math operators
+            case TokenKind.Plus:
+            case TokenKind.PlusEqual:
+                if (bothStrings) {
+                    // "string" + "string" is the only binary expression allowed with strings
+                    return StringType.instance;
+                } else if (hasString && hasDynamic) {
+                    // assume dynamicValue is a string
+                    return StringType.instance;
+                }
+            // eslint-disable-next-line no-fallthrough
+            case TokenKind.Minus:
+            case TokenKind.MinusEqual:
+            case TokenKind.Star:
+            case TokenKind.StarEqual:
+            case TokenKind.Mod:
+                if (bothNumbers) {
+                    if (hasDouble) {
+                        return DoubleType.instance;
+                    } else if (hasFloat) {
+                        return FloatType.instance;
+
+                    } else if (hasLongInteger) {
+                        return LongIntegerType.instance;
+                    }
+                    return IntegerType.instance;
+                } else if (hasNumber && hasDynamic) {
+                    // assume dynamic is a number
+                    return nonDynamicType;
+                }
+                break;
+            case TokenKind.Forwardslash:
+            case TokenKind.ForwardslashEqual:
+                if (bothNumbers) {
+                    if (hasDouble) {
+                        return DoubleType.instance;
+                    } else if (hasFloat) {
+                        return FloatType.instance;
+
+                    } else if (hasLongInteger) {
+                        return LongIntegerType.instance;
+                    }
+                    return FloatType.instance;
+                } else if (hasNumber && hasDynamic) {
+                    // assume dynamic is a number
+                    return nonDynamicType;
+                }
+                break;
+            case TokenKind.Backslash:
+            case TokenKind.BackslashEqual:
+                if (bothNumbers) {
+                    if (hasLongInteger) {
+                        return LongIntegerType.instance;
+                    }
+                    return IntegerType.instance;
+                } else if (hasNumber && hasDynamic) {
+                    // assume dynamic is a number
+                    return IntegerType.instance;
+                }
+                break;
+            case TokenKind.Caret:
+                if (bothNumbers) {
+                    if (hasDouble || hasLongInteger) {
+                        return DoubleType.instance;
+                    } else if (hasFloat) {
+                        return FloatType.instance;
+                    }
+                    return IntegerType.instance;
+                } else if (hasNumber && hasDynamic) {
+                    // assume dynamic is a number
+                    return IntegerType.instance;
+                }
+                break;
+            // Bitshift operators
+            case TokenKind.LeftShift:
+            case TokenKind.LeftShiftEqual:
+            case TokenKind.RightShift:
+            case TokenKind.RightShiftEqual:
+                if (bothNumbers) {
+                    if (hasLongInteger) {
+                        return LongIntegerType.instance;
+                    }
+                    // Bitshifts are allowed with non-integer numerics
+                    // but will always truncate to ints
+                    return IntegerType.instance;
+                } else if (hasNumber && hasDynamic) {
+                    // assume dynamic is a number
+                    return IntegerType.instance;
+                }
+                break;
+            // Comparison operators
+            // All comparison operators result in boolean
+            case TokenKind.Equal:
+            case TokenKind.LessGreater:
+                // = and <> can accept invalid / dynamic
+                if (hasDynamic || hasInvalid || bothStrings || eitherBooleanOrNum) {
+                    return BooleanType.instance;
+                }
+                break;
+            case TokenKind.Greater:
+            case TokenKind.Less:
+            case TokenKind.GreaterEqual:
+            case TokenKind.LessEqual:
+                if (bothStrings || bothNumbers) {
+                    return BooleanType.instance;
+                } else if ((hasNumber || hasString) && hasDynamic) {
+                    // assume dynamic is a valid type
+                    return BooleanType.instance;
+                }
+                break;
+            // Logical or bitwise operators
+            case TokenKind.Or:
+            case TokenKind.And:
+                if (bothNumbers) {
+                    // "and"/"or" represent bitwise operators
+                    if (hasLongInteger && !hasDouble && !hasFloat) {
+                        // 2 long ints or long int and int
+                        return LongIntegerType.instance;
+                    }
+                    return IntegerType.instance;
+                } else if (eitherBooleanOrNum) {
+                    // "and"/"or" represent logical operators
+                    return BooleanType.instance;
+                } else if (hasNumber && hasDynamic) {
+                    // assume dynamic is a valid type
+                    return IntegerType.instance;
+                } else if (hasBoolean && hasDynamic) {
+                    // assume dynamic is a valid type
+                    return BooleanType.instance;
+                }
+                break;
+        }
+        if (bothDynamic) {
+            return DynamicType.instance;
+        }
+        return undefined;
+    }
+
+    public getHighestPriorityType(types: BscType[], depth = 0): BscType {
+        let result: BscType;
+        if (depth > 4) {
+            // shortcut for very complicated types, or self-referencing union types
+            return DynamicType.instance;
+        }
+        for (let type of types) {
+            if (isUnionType(type)) {
+                type = getUniqueType([type], unionTypeFactory);
+                if (isUnionType(type)) {
+                    type = this.getHighestPriorityType(type.types, depth + 1);
+                }
+            }
+            if (!result) {
+                result = type;
+            } else {
+                if (type.binaryOpPriorityLevel < result.binaryOpPriorityLevel) {
+                    result = type;
+                } else if (type.binaryOpPriorityLevel === result.binaryOpPriorityLevel && !result.isEqual(type)) {
+                    // equal priority types, but not equal types, like Boolean and String... just be dynamic at this point
+                    result = DynamicType.instance;
+                }
+            }
+            if (isUninitializedType(type)) {
+                return type;
+            }
+            if (isVoidType(type)) {
+                return type;
+            }
+            if (isInvalidTypeLike(type)) {
+                return type;
+            }
+            if (isObjectType(type) && !isDynamicType(type)) {
+                result = type;
+            }
+            if (isDynamicType(type)) {
+                result = type;
+            }
+        }
+        return result ?? DynamicType.instance;
+    }
+
+    /**
+     * Return the type of the result of a unary operator
+     */
+    public unaryOperatorResultType(operator: Token, exprType: BscType): BscType {
+
+        if (isUnionType(exprType)) {
+            exprType = this.getHighestPriorityType(exprType.types);
+        }
+
+        if (isVoidType(exprType) || isInvalidTypeLike(exprType) || isUninitializedType(exprType)) {
+            return undefined;
+        }
+
+
+        if (isDynamicType(exprType) || isObjectType(exprType)) {
+            return exprType;
+        }
+
+        // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+        switch (operator.kind) {
+            // Math operators
+            case TokenKind.Plus: // (`num = +num` is valid syntax)
+            case TokenKind.Minus:
+                if (isNumberType(exprType)) {
+                    // a negative number will be the same type, eg, double->double, int->int, etc.
+                    return this.getUnboxedType(exprType);
+                }
+                break;
+            case TokenKind.Not:
+                if (isBooleanTypeLike(exprType)) {
+                    return BooleanType.instance;
+                } else if (isNumberType(exprType)) {
+                    //numbers can be "notted"
+                    // by default they go to ints, except longints, which stay that way
+                    if (isLongIntegerTypeLike(exprType)) {
+                        return LongIntegerType.instance;
+                    }
+                    return IntegerType.instance;
+                }
+                break;
+        }
+        return undefined;
+    }
+
+    public getUnboxedType(boxedType: BscType): BscType {
+        if (isIntegerTypeLike(boxedType)) {
+            return IntegerType.instance;
+        } else if (isLongIntegerTypeLike(boxedType)) {
+            return LongIntegerType.instance;
+        } else if (isFloatTypeLike(boxedType)) {
+            return FloatType.instance;
+        } else if (isDoubleTypeLike(boxedType)) {
+            return DoubleType.instance;
+        } else if (isBooleanTypeLike(boxedType)) {
+            return BooleanType.instance;
+        } else if (isStringTypeLike(boxedType)) {
+            return StringType.instance;
+        } else if (isInvalidTypeLike(boxedType)) {
+            return InvalidType.instance;
+        }
+        return boxedType;
+    }
+
+    /**
      * Get the extension for the given file path. Basically the part after the final dot, except for
      * `d.bs` which is treated as single extension
+     * @returns the file extension (i.e. ".d.bs", ".bs", ".brs", ".xml", ".jpg", etc...)
      */
     public getExtension(filePath: string) {
         filePath = filePath.toLowerCase();
         if (filePath.endsWith('.d.bs')) {
             return '.d.bs';
         } else {
-            const idx = filePath.lastIndexOf('.');
-            if (idx > -1) {
-                return filePath.substring(idx);
-            }
+            return path.extname(filePath).toLowerCase();
         }
     }
 
@@ -1289,7 +1961,7 @@ export class Util {
             }
             if (isVariableExpression(expression)) {
                 variableExpressions.push(expression);
-                uniqueVarNames.add(expression.name.text);
+                uniqueVarNames.add(expression.tokens.name.text);
             }
         }
 
@@ -1317,6 +1989,10 @@ export class Util {
     }
 
 
+    public concatAnnotationLeadingTrivia(stmt: Statement): Token[] {
+        return [...(stmt.annotations?.map(anno => anno.leadingTrivia ?? []).flat() ?? []), ...stmt.leadingTrivia];
+    }
+
     /**
      * Create a SourceNode that maps every line to itself. Useful for creating maps for files
      * that haven't changed at all, but we still need the map
@@ -1333,23 +2009,6 @@ export class Util {
             );
         }
         return new SourceNode(null, null, source, chunks);
-    }
-
-    /**
-     * Creates a new SGAttribute object, but keeps the existing Range references (since those shouldn't ever get changed directly)
-     */
-    public cloneSGAttribute(attr: SGAttribute, value: string) {
-        return {
-            key: {
-                text: attr.key.text,
-                range: attr.range
-            },
-            value: {
-                text: value,
-                range: attr.value.range
-            },
-            range: attr.range
-        } as SGAttribute;
     }
 
     private isWindows = process.platform === 'win32';
@@ -1395,49 +2054,36 @@ export class Util {
     }
 
     /**
-     * Copy the version of bslib from local node_modules to the staging folder
-     */
-    public async copyBslibToStaging(stagingDir: string, bslibDestinationDir = 'source') {
-        //copy bslib to the output directory
-        await fsExtra.ensureDir(standardizePath(`${stagingDir}/${bslibDestinationDir}`));
-        // eslint-disable-next-line
-        const bslib = require('@rokucommunity/bslib');
-        let source = bslib.source as string;
-
-        //apply the `bslib_` prefix to the functions
-        let match: RegExpExecArray | null;
-        const positions = [] as number[];
-        const regexp = /^(\s*(?:function|sub)\s+)([a-z0-9_]+)/mg;
-        // eslint-disable-next-line no-cond-assign
-        while (match = regexp.exec(source)) {
-            positions.push(match.index + match[1].length);
-        }
-
-        for (let i = positions.length - 1; i >= 0; i--) {
-            const position = positions[i];
-            source = source.slice(0, position) + 'bslib_' + source.slice(position);
-        }
-        await fsExtra.writeFile(`${stagingDir}/${bslibDestinationDir}/bslib.brs`, source);
-    }
-
-    /**
      * Given a Diagnostic or BsDiagnostic, return a deep clone of the diagnostic.
      * @param diagnostic the diagnostic to clone
      * @param relatedInformationFallbackLocation a default location to use for all `relatedInformation` entries that are missing a location
      */
     public toDiagnostic(diagnostic: Diagnostic | BsDiagnostic, relatedInformationFallbackLocation: string): Diagnostic {
-        return {
+        let relatedInformation = diagnostic.relatedInformation ?? [];
+        if (relatedInformation.length > MAX_RELATED_INFOS_COUNT) {
+            const relatedInfoLength = relatedInformation.length;
+            relatedInformation = relatedInformation.slice(0, MAX_RELATED_INFOS_COUNT);
+            relatedInformation.push({
+                message: `...and ${relatedInfoLength - MAX_RELATED_INFOS_COUNT} more`,
+                location: util.createLocationFromRange('   ', util.createRange(0, 0, 0, 0))
+            });
+        }
+
+        const range = (diagnostic as BsDiagnostic).location?.range ??
+            (diagnostic as Diagnostic).range;
+
+        let result = {
             severity: diagnostic.severity,
-            range: diagnostic.range,
+            range: range,
             message: diagnostic.message,
-            relatedInformation: diagnostic.relatedInformation?.map(x => {
+            relatedInformation: relatedInformation.map(x => {
 
                 //clone related information just in case a plugin added circular ref info here
                 const clone = { ...x };
                 if (!clone.location) {
                     // use the fallback location if available
                     if (relatedInformationFallbackLocation) {
-                        clone.location = util.createLocation(relatedInformationFallbackLocation, diagnostic.range);
+                        clone.location = util.createLocationFromRange(relatedInformationFallbackLocation, range);
                     } else {
                         //remove this related information so it doesn't bring crash the language server
                         return undefined;
@@ -1446,9 +2092,13 @@ export class Util {
                 return clone;
                 //filter out null relatedInformation items
             }).filter((x): x is DiagnosticRelatedInformation => Boolean(x)),
-            code: diagnostic.code,
+            code: diagnostic.code ? diagnostic.code : (diagnostic as BsDiagnostic).legacyCode,
             source: diagnostic.source ?? 'brs'
-        };
+        } as Diagnostic;
+        if (diagnostic?.tags?.length > 0) {
+            result.tags = diagnostic.tags;
+        }
+        return result;
     }
 
     /**
@@ -1458,7 +2108,7 @@ export class Util {
      */
     public getFirstLocatableAt(locatables: Locatable[], position: Position) {
         for (let token of locatables) {
-            if (util.rangeContains(token.range, position)) {
+            if (util.rangeContains(token.location?.range, position)) {
                 return token;
             }
         }
@@ -1467,9 +2117,17 @@ export class Util {
     /**
      * Sort an array of objects that have a Range
      */
-    public sortByRange<T extends Locatable>(locatables: T[]) {
+    public sortByRange<T extends { range: Range | undefined }>(locatables: T[]) {
         //sort the tokens by range
         return locatables?.sort((a, b) => {
+            //handle undefined tokens to prevent crashes
+            if (!a?.range) {
+                return 1;
+            }
+            if (!b?.range) {
+                return -1;
+            }
+
             //start line
             if (a.range.start.line < b.range.start.line) {
                 return -1;
@@ -1539,28 +2197,76 @@ export class Util {
      * @param node any ast expression
      * @returns an array of the parts of the dotted get. If not fully a dotted get, then returns undefined
      */
-    public getAllDottedGetParts(node: Expression | Statement): Identifier[] | undefined {
+    public getAllDottedGetParts(node: AstNode): Identifier[] | undefined {
+        //this is a hot function and has been optimized. Don't rewrite unless necessary
         const parts: Identifier[] = [];
-        let nextPart: AstNode | undefined = node;
-        while (nextPart) {
-            if (isAssignmentStatement(node)) {
-                return [node.name];
-            } else if (isDottedGetExpression(nextPart)) {
-                parts.push(nextPart?.name);
-                nextPart = nextPart.obj;
-            } else if (isNamespacedVariableNameExpression(nextPart)) {
-                nextPart = nextPart.expression;
-            } else if (isVariableExpression(nextPart)) {
-                parts.push(nextPart?.name);
-                break;
-            } else if (isFunctionParameterExpression(nextPart)) {
-                return [nextPart.name];
-            } else {
-                //we found a non-DottedGet expression, so return because this whole operation is invalid.
-                return undefined;
+        let nextPart = node;
+        loop: while (nextPart) {
+            switch (nextPart?.kind) {
+                case AstNodeKind.AssignmentStatement:
+                    return [(node as AssignmentStatement).tokens.name];
+                case AstNodeKind.DottedGetExpression:
+                    parts.push((nextPart as DottedGetExpression)?.tokens.name);
+                    nextPart = (nextPart as DottedGetExpression).obj;
+                    continue;
+                case AstNodeKind.CallExpression:
+                    nextPart = (nextPart as CallExpression).callee;
+                    continue;
+                case AstNodeKind.CallfuncExpression:
+                    parts.push((nextPart as CallfuncExpression)?.tokens.methodName);
+                    nextPart = (nextPart as CallfuncExpression).callee;
+                    continue;
+                case AstNodeKind.TypeExpression:
+                    nextPart = (nextPart as TypeExpression).expression;
+                    continue;
+                case AstNodeKind.VariableExpression:
+                    parts.push((nextPart as VariableExpression)?.tokens.name);
+                    break loop;
+                case AstNodeKind.LiteralExpression:
+                    parts.push((nextPart as LiteralExpression)?.tokens.value as Identifier);
+                    break loop;
+                case AstNodeKind.IndexedGetExpression:
+                    nextPart = (nextPart as unknown as IndexedGetExpression).obj;
+                    continue;
+                case AstNodeKind.FunctionParameterExpression:
+                    return [(nextPart as FunctionParameterExpression).tokens.name];
+                case AstNodeKind.GroupingExpression:
+                    parts.push(createIdentifier('()', nextPart.location));
+                    break loop;
+                default:
+                    //we found a non-DottedGet expression, so return because this whole operation is invalid.
+                    return undefined;
             }
         }
         return parts.reverse();
+    }
+
+    /**
+     * Given an expression, return all the DottedGet name parts as a string.
+     * Mostly used to convert namespaced item full names to a strings
+     */
+    public getAllDottedGetPartsAsString(node: Expression | Statement, parseMode = ParseMode.BrighterScript, lastSep = '.'): string {
+        //this is a hot function and has been optimized. Don't rewrite unless necessary
+        /* eslint-disable no-var */
+        var sep = parseMode === ParseMode.BrighterScript ? '.' : '_';
+
+        const parts = this.getAllDottedGetParts(node) ?? [];
+        var result = parts[0]?.text;
+        for (var i = 1; i < parts.length; i++) {
+            result += (i === parts.length - 1 && parseMode === ParseMode.BrighterScript ? lastSep : sep) + parts[i].text;
+        }
+        return result;
+        /* eslint-enable no-var */
+    }
+
+    public stringJoin(strings: string[], separator: string) {
+        // eslint-disable-next-line no-var
+        var result = strings[0] ?? '';
+        // eslint-disable-next-line no-var
+        for (var i = 1; i < strings.length; i++) {
+            result += separator + strings[i];
+        }
+        return result;
     }
 
     /**
@@ -1576,7 +2282,7 @@ export class Util {
             } else if (isCallExpression(nextPart) || isCallfuncExpression(nextPart)) {
                 nextPart = nextPart.callee;
 
-            } else if (isNamespacedVariableNameExpression(nextPart)) {
+            } else if (isTypeExpression(nextPart)) {
                 nextPart = nextPart.expression;
             } else {
                 break;
@@ -1592,35 +2298,37 @@ export class Util {
     public getDottedGetPath(expression: Expression): [VariableExpression, ...DottedGetExpression[]] {
         let parts: Expression[] = [];
         let nextPart = expression;
-        while (nextPart) {
-            if (isDottedGetExpression(nextPart)) {
-                parts.unshift(nextPart);
-                nextPart = nextPart.obj;
-
-            } else if (isIndexedGetExpression(nextPart) || isXmlAttributeGetExpression(nextPart)) {
-                nextPart = nextPart.obj;
-                parts = [];
-
-            } else if (isCallExpression(nextPart) || isCallfuncExpression(nextPart)) {
-                nextPart = nextPart.callee;
-                parts = [];
-
-            } else if (isNewExpression(nextPart)) {
-                nextPart = nextPart.call.callee;
-                parts = [];
-
-            } else if (isNamespacedVariableNameExpression(nextPart)) {
-                nextPart = nextPart.expression;
-
-            } else if (isVariableExpression(nextPart)) {
-                parts.unshift(nextPart);
-                break;
-            } else {
-                parts = [];
-                break;
+        loop: while (nextPart) {
+            switch (nextPart?.kind) {
+                case AstNodeKind.DottedGetExpression:
+                    parts.push(nextPart);
+                    nextPart = (nextPart as DottedGetExpression).obj;
+                    continue;
+                case AstNodeKind.IndexedGetExpression:
+                case AstNodeKind.XmlAttributeGetExpression:
+                    nextPart = (nextPart as IndexedGetExpression | XmlAttributeGetExpression).obj;
+                    parts = [];
+                    continue;
+                case AstNodeKind.CallExpression:
+                case AstNodeKind.CallfuncExpression:
+                    nextPart = (nextPart as CallExpression | CallfuncExpression).callee;
+                    parts = [];
+                    continue;
+                case AstNodeKind.NewExpression:
+                    nextPart = (nextPart as NewExpression).call.callee;
+                    parts = [];
+                    continue;
+                case AstNodeKind.TypeExpression:
+                    nextPart = (nextPart as TypeExpression).expression;
+                    continue;
+                case AstNodeKind.VariableExpression:
+                    parts.push(nextPart);
+                    break loop;
+                default:
+                    return [] as any;
             }
         }
-        return parts as any;
+        return parts.reverse() as any;
     }
 
     /**
@@ -1644,8 +2352,8 @@ export class Util {
 
     public validateTooDeepFile(file: (BrsFile | XmlFile)) {
         //find any files nested too deep
-        let pkgPath = file.pkgPath ?? (file.pkgPath as any).toString();
-        let rootFolder = pkgPath.replace(/^pkg:/, '').split(/[\\\/]/)[0].toLowerCase();
+        let destPath = file?.destPath?.toString();
+        let rootFolder = destPath?.replace(/^pkg:/, '').split(/[\\\/]/)[0].toLowerCase();
 
         if (isBrsFile(file) && rootFolder !== 'source') {
             return;
@@ -1655,13 +2363,12 @@ export class Util {
             return;
         }
 
-        let fileDepth = this.getParentDirectoryCount(pkgPath);
+        let fileDepth = this.getParentDirectoryCount(destPath);
         if (fileDepth >= 8) {
-            file.addDiagnostics([{
+            file.program?.diagnostics.register({
                 ...DiagnosticMessages.detectedTooDeepFileSource(fileDepth),
-                file: file,
-                range: this.createRange(0, 0, 0, Number.MAX_VALUE)
-            }]);
+                location: util.createLocationFromFileRange(file, this.createRange(0, 0, 0, Number.MAX_VALUE))
+            });
         }
     }
 
@@ -1749,13 +2456,522 @@ export class Util {
         return new SourceNode(line, column, source, chunks as any, name);
     }
 
-    public isBuiltInType(typeName: string) {
-        const typeNameLower = typeName.toLowerCase();
-        if (typeNameLower.startsWith('rosgnode')) {
-            // NOTE: this is unsafe and only used to avoid validation errors in backported v1 type syntax
+    /**
+     * Find the index of the last item in the array that matches.
+     */
+    public findLastIndex<T>(array: T[], matcher: (T) => boolean) {
+        for (let i = array.length - 1; i >= 0; i--) {
+            if (matcher(array[i])) {
+                return i;
+            }
+        }
+    }
+
+    public processTypeChain(typeChain: TypeChainEntry[]): TypeChainProcessResult {
+        let fullChainName = '';
+        let fullErrorName = '';
+        let itemName = '';
+        let previousTypeName = '';
+        let parentTypeName = '';
+        let itemTypeKind = '';
+        let parentTypeKind = '';
+        let astNode: AstNode;
+        let errorLocation: Location;
+        let containsDynamic = false;
+        let continueResolvingAllItems = true;
+        let crossedCallFunc = false;
+        for (let i = 0; i < typeChain.length; i++) {
+            const chainItem = typeChain[i];
+            const dotSep = chainItem.separatorToken?.text ?? '.';
+            if (i > 0) {
+                fullChainName += dotSep;
+            }
+            fullChainName += chainItem.name;
+            if (continueResolvingAllItems) {
+                parentTypeName = previousTypeName;
+                parentTypeKind = itemTypeKind;
+                fullErrorName = previousTypeName ? `${previousTypeName}${dotSep}${chainItem.name}` : chainItem.name;
+                itemTypeKind = (chainItem.type as any)?.kind;
+
+                let typeString = chainItem.type?.toString();
+                let typeToFindStringFor = chainItem.type;
+                while (typeToFindStringFor) {
+                    if (isUnionType(chainItem.type)) {
+                        typeString = `(${typeToFindStringFor.toString()})`;
+                        break;
+                    } else if (isCallableType(typeToFindStringFor)) {
+                        if (isTypedFunctionType(typeToFindStringFor) && i < typeChain.length - 1) {
+                            typeToFindStringFor = typeToFindStringFor.returnType;
+                        } else {
+                            typeString = 'function';
+                            break;
+                        }
+                        parentTypeName = previousTypeName;
+                    } else if (isNamespaceType(typeToFindStringFor) && parentTypeName) {
+                        const chainItemTypeName = typeToFindStringFor.toString();
+                        typeString = parentTypeName + '.' + chainItemTypeName;
+                        if (chainItemTypeName.toLowerCase().startsWith(parentTypeName.toLowerCase())) {
+                            // the following namespace already knows...
+                            typeString = chainItemTypeName;
+                        }
+                        break;
+                    } else {
+                        typeString = typeToFindStringFor?.toString();
+                        break;
+                    }
+                }
+
+                previousTypeName = typeString ?? '';
+                itemName = chainItem.name;
+                astNode = chainItem.astNode;
+                containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isAnyReferenceType(chainItem.type));
+                crossedCallFunc = crossedCallFunc || chainItem.data?.isFromCallFunc;
+                if (!chainItem.isResolved) {
+                    errorLocation = chainItem.location;
+                    continueResolvingAllItems = false;
+                }
+            }
+        }
+        return {
+            itemName: itemName,
+            itemTypeKind: itemTypeKind,
+            itemParentTypeName: parentTypeName,
+            itemParentTypeKind: parentTypeKind,
+            fullNameOfItem: fullErrorName,
+            fullChainName: fullChainName,
+            location: errorLocation,
+            containsDynamic: containsDynamic,
+            astNode: astNode,
+            crossedCallFunc: crossedCallFunc
+        };
+    }
+
+
+    public isInTypeExpression(expression: AstNode): boolean {
+        //TODO: this is much faster than node.findAncestor(), but may need to be updated for "complicated" type expressions
+        if (isTypeExpression(expression) ||
+            isTypeExpression(expression?.parent) ||
+            isTypedArrayExpression(expression) ||
+            isTypedArrayExpression(expression?.parent)) {
             return true;
         }
-        return components[typeNameLower] || interfaces[typeNameLower] || events[typeNameLower];
+        if (isBinaryExpression(expression?.parent)) {
+            let currentExpr: AstNode = expression.parent;
+            while (isBinaryExpression(currentExpr) && currentExpr.tokens.operator.kind === TokenKind.Or) {
+                currentExpr = currentExpr.parent;
+            }
+            return isTypeExpression(currentExpr) || isTypedArrayExpression(currentExpr);
+        }
+        return false;
+    }
+
+    public isGenericNodeType(type: BscType) {
+        if (isComponentType(type)) {
+            const lowerName = type.toString().toLowerCase();
+            if (lowerName === 'rosgnode' || lowerName === 'rosgnodenode') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+    public hasAnyRequiredSymbolChanged(requiredSymbols: UnresolvedSymbol[], changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
+        if (!requiredSymbols || !changedSymbols) {
+            return false;
+        }
+        const runTimeChanges = changedSymbols.get(SymbolTypeFlag.runtime);
+        const typeTimeChanges = changedSymbols.get(SymbolTypeFlag.typetime);
+
+        for (const symbol of requiredSymbols) {
+            if (this.setContainsUnresolvedSymbol(runTimeChanges, symbol) || this.setContainsUnresolvedSymbol(typeTimeChanges, symbol)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public setContainsUnresolvedSymbol(symbolLowerNameSet: Set<string>, symbol: UnresolvedSymbol) {
+        if (!symbolLowerNameSet || symbolLowerNameSet.size === 0) {
+            return false;
+        }
+
+        for (const possibleNameLower of symbol.lookups) {
+            if (symbolLowerNameSet.has(possibleNameLower)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public getCustomTypesInSymbolTree(setToFill: Set<BscType>, type: BscType, filter?: (t: BscSymbol) => boolean) {
+        const subSymbols = type.getMemberTable()?.getAllSymbols(SymbolTypeFlag.runtime) ?? [];
+        for (const subSymbol of subSymbols) {
+            if (!subSymbol.type?.isBuiltIn && !setToFill.has(subSymbol.type)) {
+                if (filter && !filter(subSymbol)) {
+                    continue;
+                }
+                // if this is a custom type, and we haven't added it to the types to check to see if can add it to the additional types
+                // add the type, and investigate any members
+                setToFill.add(subSymbol.type);
+                this.getCustomTypesInSymbolTree(setToFill, subSymbol.type, filter);
+            }
+
+        }
+    }
+
+    public truncate<T>(options: {
+        leadingText: string;
+        items: T[];
+        trailingText?: string;
+        maxLength: number;
+        itemSeparator?: string;
+        partBuilder?: (item: T) => string;
+    }): string {
+        let leadingText = options.leadingText;
+        let items = options?.items ?? [];
+        let trailingText = options?.trailingText ?? '';
+        let maxLength = options?.maxLength ?? 160;
+        let itemSeparator = options?.itemSeparator ?? ', ';
+        let partBuilder = options?.partBuilder ?? ((x) => x.toString());
+
+        let parts = [];
+        let length = leadingText.length + (trailingText?.length ?? 0);
+
+        //calculate the max number of items we could fit in the given space
+        for (let i = 0; i < items.length; i++) {
+            let part = partBuilder(items[i]);
+            if (i > 0) {
+                part = itemSeparator + part;
+            }
+            parts.push(part);
+            length += part.length;
+            //exit the loop if we've maxed out our length
+            if (length >= maxLength) {
+                break;
+            }
+        }
+        let message: string;
+        //we have enough space to include all the parts
+        if (parts.length >= items.length) {
+            message = leadingText + parts.join('') + trailingText;
+
+            //we require truncation
+        } else {
+            //account for truncation message length including max possible "more" items digits, trailing text length, and the separator between last item and trailing text
+            length = leadingText.length + `...and ${items.length} more`.length + itemSeparator.length + (trailingText?.length ?? 0);
+            message = leadingText;
+            for (let i = 0; i < parts.length; i++) {
+                //always include at least 2 items. if this part would overflow the max, then skip it and finalize the message
+                if (i > 1 && length + parts[i].length > maxLength) {
+                    message += itemSeparator + `...and ${items.length - i} more` + trailingText;
+                    return message;
+                } else {
+                    message += parts[i];
+                    length += parts[i].length;
+                }
+            }
+        }
+        return message;
+    }
+
+    public getAstNodeFriendlyName(node: AstNode) {
+        return node?.kind.replace(/Statement|Expression/g, '');
+    }
+
+
+    public hasLeadingComments(input: Token | AstNode) {
+        const leadingTrivia = isToken(input) ? input?.leadingTrivia : input?.leadingTrivia ?? [];
+        return !!leadingTrivia.find(t => t?.kind === TokenKind.Comment);
+    }
+
+    public getLeadingComments(input: Token | AstNode) {
+        const leadingTrivia = isToken(input) ? input?.leadingTrivia : input?.leadingTrivia ?? [];
+        return leadingTrivia.filter(t => t?.kind === TokenKind.Comment);
+    }
+
+    public isLeadingCommentOnSameLine(line: RangeLike, input: Token | AstNode) {
+        const leadingCommentRange = this.getLeadingComments(input)?.[0];
+        if (leadingCommentRange) {
+            return this.linesTouch(line, leadingCommentRange?.location);
+        }
+        return false;
+    }
+
+    public isClassUsedAsFunction(potentialClassType: BscType, expression: Expression, options: GetTypeOptions) {
+        // eslint-disable-next-line no-bitwise
+        if ((options?.flags ?? 0) & SymbolTypeFlag.runtime &&
+            isClassType(potentialClassType) &&
+            !options.isExistenceTest &&
+            potentialClassType.name?.toLowerCase() === this.getAllDottedGetPartsAsString(expression)?.toLowerCase() &&
+            !expression?.findAncestor(isNewExpression)) {
+            return true;
+        }
+        return false;
+    }
+
+    public getSpecialCaseCallExpressionReturnType(callExpr: CallExpression, options: GetSymbolTypeOptions) {
+        if (isVariableExpression(callExpr.callee) && callExpr.callee.tokens.name.text.toLowerCase() === 'createobject') {
+            const componentName = isLiteralString(callExpr.args[0]) ? callExpr.args[0].tokens.value?.text?.replace(/"/g, '') : '';
+            const nodeType = componentName.toLowerCase() === 'rosgnode' && isLiteralString(callExpr.args[1]) ? callExpr.args[1].tokens.value?.text?.replace(/"/g, '') : '';
+            if (componentName?.toLowerCase().startsWith('ro')) {
+                let fullName = componentName + nodeType;
+
+                if (nodeType.includes(':')) {
+                    // This node has a colon in its name, most likely from a component Library
+                    // This componentType is most likely unknown, so return `roSGNode`
+                    fullName = 'roSGNode';
+                }
+
+                const data = {};
+                const symbolTable = callExpr.getSymbolTable();
+                const foundType = symbolTable.getSymbolType(fullName, {
+                    flags: SymbolTypeFlag.typetime,
+                    data: data,
+                    tableProvider: () => callExpr?.getSymbolTable(),
+                    fullName: fullName
+                });
+                if (foundType) {
+                    return foundType;
+                }
+            }
+        } else if (isDottedGetExpression(callExpr.callee) &&
+            callExpr.callee.tokens?.name?.text?.toLowerCase() === 'callfunc' &&
+            isLiteralString(callExpr.args?.[0])) {
+            return this.getCallFuncType(callExpr, callExpr.args?.[0]?.tokens.value, options);
+        } else if (isDottedGetExpression(callExpr.callee) &&
+            callExpr.callee.tokens?.name?.text?.toLowerCase() === 'createchild' &&
+            isComponentType(callExpr.callee.obj?.getType({ flags: SymbolTypeFlag.runtime })) &&
+            isLiteralString(callExpr.args?.[0])) {
+            const fullName = `roSGNode${callExpr.args?.[0].tokens?.value?.text?.replace(/"/g, '')}`;
+            const data = {};
+            const symbolTable = callExpr.getSymbolTable();
+            return symbolTable.getSymbolType(fullName, {
+                flags: SymbolTypeFlag.typetime,
+                data: data,
+                tableProvider: () => callExpr?.getSymbolTable(),
+                fullName: fullName
+            });
+        }
+    }
+
+    public getCallFuncType(callExpr: CallExpression | CallfuncExpression, methodNameToken: Token | Identifier, options: GetSymbolTypeOptions) {
+        let result: BscType;
+        let methodName = methodNameToken?.text?.replace(/"/g, ''); // remove quotes if it was the first arg of .callFunc()
+
+        // a little hacky here with checking options.ignoreCall because callFuncExpression has the method name
+        // It's nicer for CallExpression, because it's a call on any expression.
+        let calleeType: BscType;
+        if (isCallfuncExpression(callExpr)) {
+            calleeType = callExpr.callee.getType({ ...options, flags: SymbolTypeFlag.runtime, ignoreCall: false });
+        } else if (isCallExpression(callExpr) && isDottedGetExpression(callExpr.callee)) {
+            calleeType = callExpr.callee.obj.getType({ ...options, flags: SymbolTypeFlag.runtime, ignoreCall: false });
+        }
+        const funcType = calleeType.getCallFuncType?.(methodName, options);
+        if (funcType) {
+            options.typeChain?.push(new TypeChainEntry({
+                name: methodName,
+                type: funcType,
+                data: options.data,
+                location: methodNameToken.location,
+                separatorToken: createToken(TokenKind.Callfunc),
+                astNode: callExpr
+            }));
+            if (options.ignoreCall) {
+                result = funcType;
+            } else if (isCallableType(funcType) && (!isReferenceType(funcType.returnType) || funcType.returnType.isResolvable())) {
+                result = funcType.returnType;
+            } else if (!isReferenceType(funcType) && (funcType as any)?.returnType?.isResolvable()) {
+                result = (funcType as any).returnType;
+            } else if (this.isUnionOfFunctions(funcType)) {
+                result = this.getReturnTypeOfUnionOfFunctions(funcType);
+            } else {
+                result = new TypePropertyReferenceType(funcType, 'returnType');
+            }
+        }
+        if (isVoidType(result)) {
+            // CallFunc will always return invalid, even if function called is `as void`
+            result = DynamicType.instance;
+        }
+        if (options.data && !options.ignoreCall) {
+            options.data.isFromCallFunc = true;
+        }
+        return result;
+    }
+
+    public isUnionOfFunctions(type: BscType, allowReferenceTypes = false): type is UnionType {
+        if (isUnionType(type)) {
+            const callablesInUnion = type.types.filter(t => isCallableType(t) || (allowReferenceTypes && isReferenceType(t)));
+            return callablesInUnion.length === type.types.length && callablesInUnion.length > 0;
+        }
+        return false;
+    }
+
+    public getFunctionTypeFromUnion(type: BscType): BscType {
+        if (this.isUnionOfFunctions(type)) {
+            const typedFuncsInUnion = type.types.filter(isTypedFunctionType);
+            if (typedFuncsInUnion.length < type.types.length) {
+                // has non-typedFuncs in union
+                return FunctionType.instance;
+            }
+            const exampleFunc = typedFuncsInUnion[0];
+            const cumulativeFunction = new TypedFunctionType(getUniqueType(typedFuncsInUnion.map(f => f.returnType), (types) => new UnionType(types)))
+                .setName(exampleFunc.name)
+                .setSub(exampleFunc.isSub);
+            for (const param of exampleFunc.params) {
+                cumulativeFunction.addParameter(param.name, param.type, param.isOptional);
+            }
+            return cumulativeFunction;
+        }
+        return undefined;
+    }
+
+    public getReturnTypeOfUnionOfFunctions(type: UnionType): BscType {
+        if (this.isUnionOfFunctions(type, true)) {
+            const typedFuncsInUnion = type.types.filter(t => isTypedFunctionType(t) || isReferenceType(t)) as TypedFunctionType[];
+            if (typedFuncsInUnion.length < type.types.length) {
+                // is non-typedFuncs in union
+                return DynamicType.instance;
+            }
+            const funcReturns = typedFuncsInUnion.map(f => f.returnType);
+            return getUniqueType(funcReturns, (types) => new UnionType(types));
+        }
+        return InvalidType.instance;
+    }
+
+    public symbolComesFromSameNode(symbolName: string, definingNode: AstNode, symbolTable: SymbolTable) {
+        let nsData: ExtraSymbolData = {};
+        let foundType = symbolTable?.getSymbolType(symbolName, { flags: SymbolTypeFlag.runtime, data: nsData });
+        if (foundType && definingNode === nsData?.definingNode) {
+            return true;
+        }
+        return false;
+    }
+
+    public isCalleeMemberOfNamespace(symbolName: string, nodeWhereUsed: AstNode, namespace?: NamespaceStatement) {
+        namespace = namespace ?? nodeWhereUsed.findAncestor<NamespaceStatement>(isNamespaceStatement);
+
+        if (!this.isVariableMemberOfNamespace(symbolName, nodeWhereUsed, namespace)) {
+            return false;
+        }
+        const exprType = nodeWhereUsed.getType({ flags: SymbolTypeFlag.runtime });
+
+        if (isCallableType(exprType) || isClassType(exprType)) {
+            return true;
+        }
+        return false;
+    }
+
+    public isVariableMemberOfNamespace(symbolName: string, nodeWhereUsed: AstNode, namespace?: NamespaceStatement) {
+        namespace = namespace ?? nodeWhereUsed.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        if (!isNamespaceStatement(namespace)) {
+            return false;
+        }
+        const namespaceParts = namespace.getNameParts();
+        let namespaceType: NamespaceType;
+        let symbolTable: SymbolTable = namespace.getSymbolTable();
+        for (const part of namespaceParts) {
+            namespaceType = symbolTable.getSymbolType(part.text, { flags: SymbolTypeFlag.runtime }) as NamespaceType;
+            if (namespaceType) {
+                symbolTable = namespaceType.getMemberTable();
+            } else {
+                return false;
+            }
+        }
+
+        let varData: ExtraSymbolData = {};
+        nodeWhereUsed.getType({ flags: SymbolTypeFlag.runtime, data: varData });
+        const isFromSameNodeInMemberTable = this.symbolComesFromSameNode(symbolName, varData?.definingNode, namespaceType?.getMemberTable());
+        return isFromSameNodeInMemberTable;
+    }
+
+    public isVariableShadowingSomething(symbolName: string, nodeWhereUsed: AstNode) {
+        let varData: ExtraSymbolData = {};
+        let exprType = nodeWhereUsed.getType({ flags: SymbolTypeFlag.runtime, data: varData });
+        if (isReferenceType(exprType)) {
+            exprType = (exprType as any).getTarget();
+        }
+        const namespace = nodeWhereUsed?.findAncestor<NamespaceStatement>(isNamespaceStatement);
+
+        if (isNamespaceStatement(namespace)) {
+            let namespaceHasSymbol = namespace.getSymbolTable().hasSymbol(symbolName, SymbolTypeFlag.runtime);
+            // check if the namespace has a symbol with the same name, but different definiton
+            if (namespaceHasSymbol && !this.symbolComesFromSameNode(symbolName, varData.definingNode, namespace.getSymbolTable())) {
+                return true;
+            }
+        }
+        const bodyTable = nodeWhereUsed.getRoot().getSymbolTable();
+        const hasSymbolAtFileLevel = bodyTable.hasSymbol(symbolName, SymbolTypeFlag.runtime);
+        if (hasSymbolAtFileLevel && !this.symbolComesFromSameNode(symbolName, varData.definingNode, bodyTable)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public chooseTypeFromCodeOrDocComment(codeType: BscType, docType: BscType, options: GetTypeOptions) {
+        let returnType: BscType;
+        if (options.preferDocType && docType) {
+            returnType = docType;
+            if (options.data) {
+                options.data.isFromDocComment = true;
+            }
+        } else {
+            returnType = codeType;
+            if (!returnType && docType) {
+                returnType = docType;
+                if (options.data) {
+                    options.data.isFromDocComment = true;
+                }
+            }
+        }
+        return returnType;
+    }
+
+    /**
+     * Gets the type for a default value (eg. as a function param, class member or typed array)
+     */
+    public getDefaultTypeFromValueType(valueType: (BscType | BscType[])) {
+        if (!valueType) {
+            return undefined;
+        }
+        let resultType: BscType = DynamicType.instance;
+        if (Array.isArray(valueType)) {
+            // passed an array opf types, potential from ArrayType.innerTypes
+            if (valueType.length > 0) {
+                //at least one, use it
+                resultType = valueType[0];
+                if (valueType?.length > 1) {
+                    // more than 1, find union
+                    resultType = getUniqueType(valueType, unionTypeFactory);
+                }
+            }
+        } else {
+            resultType = valueType;
+        }
+        if (!resultType.isResolvable()) {
+            if (isUnionType(resultType)) {
+                resultType = DynamicType.instance;
+            } else {
+                resultType = new ParamTypeFromValueReferenceType(resultType);
+            }
+
+        } else if (isEnumMemberType(resultType)) {
+            // the type was an enum member... Try to get the parent enum type
+            resultType = resultType.parentEnumType ?? resultType;
+        } else if (isUnionType(resultType)) {
+            // it was a union -- I wonder if they're resolvable now?
+            const moddedTypes = resultType.types.map(t => {
+                if (isEnumMemberType(t)) {
+                    // the type was an enum member... Try to get the parent enum type
+                    return t.parentEnumType ?? resultType;
+                }
+                return t;
+            });
+            resultType = getUniqueType(moddedTypes, unionTypeFactory);
+        }
+        return resultType;
     }
 
     /**
@@ -1784,6 +3000,11 @@ export function standardizePath(stringParts, ...expressions: any[]) {
         result.join('')
     );
 }
+
+/**
+ * An item that can be coerced into a `Range`
+ */
+export type RangeLike = { location?: Location } | Location | { range?: Range } | Range | undefined;
 
 export let util = new Util();
 export default util;

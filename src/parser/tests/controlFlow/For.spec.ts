@@ -3,12 +3,15 @@ import { Parser } from '../../Parser';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
+import type { FunctionStatement } from '../../Statement';
 import type { ForStatement } from '../../Statement';
 import { LiteralExpression } from '../../Expression';
+import { isFunctionStatement } from '../../../astUtils/reflection';
+import util from '../../../util';
 
 describe('parser for loops', () => {
     it('accepts a \'step\' clause', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.For, 'for'),
             identifier('i'),
             token(TokenKind.Equal, '='),
@@ -22,16 +25,16 @@ describe('parser for loops', () => {
             token(TokenKind.EndFor, 'end for'),
             token(TokenKind.Newline, '\n'),
             EOF
-        ]) as any;
+        ]);
 
-        const statement = statements[0] as ForStatement;
+        const statement = ast.statements[0] as ForStatement;
         expect(diagnostics[0]?.message).not.to.exist;
         expect(statement.increment).to.be.instanceof(LiteralExpression);
-        expect((statement.increment as LiteralExpression).token.text).to.equal('2');
+        expect((statement.increment as LiteralExpression).tokens.value.text).to.equal('2');
     });
 
     it('supports omitted \'step\' clause', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.For, 'for'),
             identifier('i'),
             token(TokenKind.Equal, '='),
@@ -43,10 +46,10 @@ describe('parser for loops', () => {
             token(TokenKind.EndFor, 'end for'),
             token(TokenKind.Newline, '\n'),
             EOF
-        ]) as any;
+        ]);
 
         expect(diagnostics[0]?.message).not.to.exist;
-        expect((statements[0] as ForStatement).increment).not.to.exist;
+        expect((ast.statements[0] as ForStatement).increment).not.to.exist;
     });
 
     it('catches unterminated for reaching function boundary', () => {
@@ -57,12 +60,13 @@ describe('parser for loops', () => {
             end function
         `);
         expect(parser.diagnostics).to.be.lengthOf(1);
-        expect(parser.statements).to.be.lengthOf(1);
-        expect(parser.references.functionStatements[0].func.body.statements).to.be.lengthOf(1);
+        expect(parser.ast.statements).to.be.lengthOf(1);
+        const functionStatements = parser.ast.findChildren<FunctionStatement>(isFunctionStatement);
+        expect(functionStatements[0].func.body.statements).to.be.lengthOf(1);
     });
 
     it('allows \'next\' to terminate loop', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.For, 'for'),
             identifier('i'),
             token(TokenKind.Equal, '='),
@@ -77,7 +81,7 @@ describe('parser for loops', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.length.greaterThan(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
     });
 
     it('supports a single trailing colon after the `to` expression', () => {
@@ -98,51 +102,55 @@ describe('parser for loops', () => {
          * 1|   Rnd(i)
          * 2| end for
          */
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             {
                 kind: TokenKind.For,
                 text: 'for',
                 isReserved: true,
-                range: Range.create(0, 0, 0, 3)
+                location: util.createLocation(0, 0, 0, 3),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'i',
                 isReserved: false,
-                range: Range.create(0, 4, 0, 5)
+                location: util.createLocation(0, 4, 0, 5),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
-                range: Range.create(0, 6, 0, 7)
+                location: util.createLocation(0, 6, 0, 7),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '0',
                 isReserved: false,
-                range: Range.create(0, 8, 0, 9)
+                location: util.createLocation(0, 8, 0, 9),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.To,
                 text: 'to',
                 isReserved: false,
-                range: {
-                    start: { line: 0, character: 10 },
-                    end: { line: 0, character: 12 }
-                }
+                location: util.createLocation(0, 10, 0, 12),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '10',
                 isReserved: false,
-                range: Range.create(0, 13, 0, 15)
+                location: util.createLocation(0, 13, 0, 15),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
-                range: Range.create(0, 15, 0, 16)
+                location: util.createLocation(0, 15, 0, 16),
+                leadingTrivia: []
             },
             // loop body isn't significant for location tracking, so helper functions are safe
             identifier('Rnd'),
@@ -154,14 +162,15 @@ describe('parser for loops', () => {
                 kind: TokenKind.EndFor,
                 text: 'end for',
                 isReserved: false,
-                range: Range.create(2, 0, 2, 8)
+                location: util.createLocation(2, 0, 2, 8),
+                leadingTrivia: []
             },
             EOF
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.lengthOf(1);
-        expect(statements[0].range).to.deep.include(
+        expect(ast.statements).to.be.lengthOf(1);
+        expect(ast.statements[0].location.range).to.deep.include(
             Range.create(0, 0, 2, 8)
         );
     });

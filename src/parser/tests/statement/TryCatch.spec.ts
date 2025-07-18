@@ -1,6 +1,10 @@
 import { expect } from '../../../chai-config.spec';
 import { Parser } from '../../Parser';
 import { TryCatchStatement } from '../../Statement';
+import { isFunctionExpression } from '../../../astUtils/reflection';
+import type { FunctionExpression, VariableExpression } from '../../Expression';
+import { expectDiagnosticsIncludes } from '../../../testHelpers.spec';
+import { DiagnosticMessages } from '../../../DiagnosticMessages';
 
 describe('parser try/catch', () => {
     it('can parse try catch statements', () => {
@@ -14,14 +18,16 @@ describe('parser try/catch', () => {
             end sub
         `);
         expect(parser.diagnostics[0]?.message).not.to.exist;
-        const stmt = parser.references.functionExpressions[0].body.statements[0] as TryCatchStatement;
+
+        const functionExpressions = parser.ast.findChildren<FunctionExpression>(isFunctionExpression);
+        const stmt = functionExpressions[0].body.statements[0] as TryCatchStatement;
         expect(stmt).to.be.instanceof(TryCatchStatement);
         expect(stmt.tokens.try?.text).to.eql('try');
         expect(stmt.tryBranch).to.exist.and.ownProperty('statements').to.be.lengthOf(1);
         expect(stmt.catchStatement).to.exist;
         const cstmt = stmt.catchStatement;
         expect(cstmt!.tokens.catch?.text).to.eql('catch');
-        expect(cstmt!.exceptionVariable!.text).to.eql('e');
+        expect((cstmt!.exceptionVariableExpression as VariableExpression).getName()).to.eql('e');
         expect(cstmt!.catchBranch).to.exist.and.ownProperty('statements').to.be.lengthOf(1);
         expect(stmt.tokens.endTry?.text).to.eql('end try');
     });
@@ -138,7 +144,9 @@ describe('parser try/catch', () => {
                 end try
             end sub
         `);
-        expect(parser.diagnostics).to.be.lengthOf(1);
+        expectDiagnosticsIncludes(parser, [
+            DiagnosticMessages.expectedCatchBlockInTryCatch().message
+        ]);
     });
 
     it('recovers from missing catch and end-try when reaching function boundary', () => {
@@ -149,6 +157,9 @@ describe('parser try/catch', () => {
                     print "error"
             end sub
         `);
-        expect(parser.diagnostics).to.be.lengthOf(1);
+        expectDiagnosticsIncludes(parser, [
+            DiagnosticMessages.expectedCatchBlockInTryCatch().message,
+            DiagnosticMessages.expectedTerminator('end try', 'try-catch', 'statement').message
+        ]);
     });
 });

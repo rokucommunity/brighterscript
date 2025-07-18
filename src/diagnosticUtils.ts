@@ -2,8 +2,10 @@ import type { Chalk } from 'chalk';
 import chalk from 'chalk';
 import type { BsConfig } from './BsConfig';
 import { DiagnosticSeverity } from 'vscode-languageserver';
-import type { BsDiagnostic } from '.';
+import type { BsDiagnostic } from './interfaces';
 import type { Range } from 'vscode-languageserver';
+
+export const MAX_RELATED_INFOS_COUNT = 3;
 
 /**
  * Prepare print diagnostic formatting options
@@ -70,18 +72,20 @@ export function printDiagnostic(
     let severityText = severityTextMap[severity];
 
     console.log('');
+    const printableDiagnosticCode = diagnostic.code ? diagnostic.code.toString() : 'BS' + ((diagnostic as BsDiagnostic).legacyCode ?? '');
+
     console.log(
         chalk.cyan(filePath ?? '<unknown file>') +
         ':' +
         chalk.yellow(
-            diagnostic.range
-                ? (diagnostic.range.start.line + 1) + ':' + (diagnostic.range.start.character + 1)
+            diagnostic.location?.range
+                ? (diagnostic.location.range.start.line + 1) + ':' + (diagnostic.location.range.start.character + 1)
                 : 'line?:col?'
         ) +
         ' - ' +
         typeColor[severity](severityText) +
         ' ' +
-        chalk.grey('BS' + diagnostic.code) +
+        chalk.grey(printableDiagnosticCode) +
         ': ' +
         chalk.white(diagnostic.message)
     );
@@ -89,7 +93,7 @@ export function printDiagnostic(
 
     //Get the line referenced by the diagnostic. if we couldn't find a line,
     // default to an empty string so it doesn't crash the error printing below
-    let diagnosticLine = lines[diagnostic.range?.start?.line ?? -1] ?? '';
+    let diagnosticLine = lines[diagnostic.location?.range?.start?.line ?? -1] ?? '';
     console.log(
         getDiagnosticLine(diagnostic, diagnosticLine, typeColor[severity])
     );
@@ -99,8 +103,8 @@ export function printDiagnostic(
     let indent = '    ';
     for (let i = 0; i < relatedInfoList.length; i++) {
         let relatedInfo = relatedInfoList[i];
-        //only show the first 5 relatedInfo links
-        if (i < 5) {
+        //only show the first MAX_RELATED_INFOS_COUNT relatedInfo links
+        if (i < MAX_RELATED_INFOS_COUNT) {
             console.log('');
             console.log(
                 indent,
@@ -125,14 +129,14 @@ export function getDiagnosticLine(diagnostic: BsDiagnostic, diagnosticLine: stri
     let result = '';
 
     //only print the line information if we have some
-    if (diagnostic.range && diagnosticLine) {
-        const lineNumberText = chalk.bgWhite(' ' + chalk.black((diagnostic.range.start.line + 1).toString()) + ' ') + ' ';
-        const blankLineNumberText = chalk.bgWhite(' ' + chalk.white(' '.repeat((diagnostic.range.start.line + 1).toString().length)) + ' ') + ' ';
+    if (diagnostic.location?.range && diagnosticLine) {
+        const lineNumberText = chalk.bgWhite(' ' + chalk.black((diagnostic.location.range.start.line + 1).toString()) + ' ') + ' ';
+        const blankLineNumberText = chalk.bgWhite(' ' + chalk.white(' '.repeat((diagnostic.location.range.start.line + 1).toString().length)) + ' ') + ' ';
 
         //remove tabs in favor of spaces to make diagnostic printing more consistent
-        let leadingText = diagnosticLine.slice(0, diagnostic.range.start.character);
+        let leadingText = diagnosticLine.slice(0, diagnostic.location.range.start.character);
         let leadingTextNormalized = leadingText.replace(/\t/g, '    ');
-        let actualText = diagnosticLine.slice(diagnostic.range.start.character, diagnostic.range.end.character);
+        let actualText = diagnosticLine.slice(diagnostic.location.range.start.character, diagnostic.location.range.end.character);
         let actualTextNormalized = actualText.replace(/\t/g, '    ');
         let startIndex = leadingTextNormalized.length;
         let endIndex = leadingTextNormalized.length + actualTextNormalized.length;

@@ -45,8 +45,9 @@ describe('DocumentSymbolProcessor', () => {
             for (let i = 0; i < nameTokenPath.length - 1; i++) {
                 node = node[nameTokenPath[i]];
             }
-            delete node[nameTokenPath[nameTokenPath.length - 1]];
 
+            const lastTokenPath = nameTokenPath[nameTokenPath.length - 1];
+            delete node[lastTokenPath];
             expectSymbols(
                 program.getDocumentSymbols('source/main.brs'),
                 expected
@@ -57,20 +58,20 @@ describe('DocumentSymbolProcessor', () => {
         testMissingToken(`
             sub alpha()
             end sub
-        `, ['name']);
+        `, ['tokens', 'name']);
 
         //class name is missing
         testMissingToken(`
             class alpha
             end class
-        `, ['name']);
+        `, ['tokens', 'name']);
 
         //class field name is missing
         testMissingToken(`
             class alpha
                 name as string
             end class
-        `, ['body', '0', 'name'], {
+        `, ['body', '0', 'tokens', 'name'], {
             alpha: SymbolKind.Class
         });
 
@@ -80,7 +81,7 @@ describe('DocumentSymbolProcessor', () => {
                 sub test()
                 end sub
             end class
-        `, ['body', '0', 'name'], {
+        `, ['body', '0', 'tokens', 'name'], {
             alpha: SymbolKind.Class
         });
 

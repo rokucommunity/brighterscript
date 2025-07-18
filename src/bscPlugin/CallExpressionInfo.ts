@@ -1,12 +1,12 @@
 import type { Expression } from '../parser/AstNode';
-import type { CallExpression, CallfuncExpression, NewExpression } from '../parser/Expression';
+import type { CallExpression, CallfuncExpression, NewExpression, VariableExpression } from '../parser/Expression';
 import type { ClassStatement } from '../parser/Statement';
 import { isCallExpression, isCallfuncExpression, isVariableExpression, isDottedGetExpression, isClassStatement, isNewExpression } from '../astUtils/reflection';
 import type { BrsFile } from '../files/BrsFile';
 import type { Position } from 'vscode-languageserver-protocol';
 import { util } from '../util';
 import { ParseMode } from '../parser/Parser';
-import type { NamespaceContainer } from '../Scope';
+import type { NamespaceContainer } from '../interfaces';
 
 
 export enum CallExpressionType {
@@ -25,7 +25,7 @@ export class CallExpressionInfo {
     expression?: Expression;
 
     //the contextually relevant callExpression, which relates to it
-    callExpression?: CallExpression;
+    callExpression?: CallExpression | CallfuncExpression;
     type: CallExpressionType;
 
     file: BrsFile;
@@ -67,15 +67,15 @@ export class CallExpressionInfo {
             this.newExpression = callExpression.parent;
         }
         if (isCallfuncExpression(callExpression)) {
-            this.name = callExpression.methodName.text;
+            this.name = callExpression.tokens.methodName.text;
         } else if (isVariableExpression(callExpression.callee)) {
-            this.name = callExpression.callee.name.text;
+            this.name = callExpression.callee.tokens.name.text;
         } else if (isVariableExpression(callExpression)) {
-            this.name = callExpression.name.text;
+            this.name = (callExpression as VariableExpression).tokens.name.text;
         } else if (isDottedGetExpression(callExpression.callee)) {
-            this.name = callExpression.callee.name.text;
+            this.name = callExpression.callee.tokens.name.text;
             if (isDottedGetExpression(callExpression.callee) && isVariableExpression(callExpression.callee.obj)) {
-                this.isCallingMethodOnMyClass = callExpression.callee.obj.name.text === 'm';
+                this.isCallingMethodOnMyClass = callExpression.callee.obj.tokens.name.text === 'm';
 
             } else {
                 let parts = util.getAllDottedGetParts(callExpression.callee);
@@ -93,11 +93,11 @@ export class CallExpressionInfo {
     }
 
     isPositionBetweenParentheses() {
-        let boundingRange = util.createBoundingRange(this.callExpression.openingParen, this.callExpression.closingParen);
+        let boundingRange = util.createBoundingRange(this.callExpression.tokens.openingParen?.location, this.callExpression.tokens.closingParen?.location);
         return util.rangeContains(boundingRange, this.position);
     }
 
-    ascertainCallExpression(): CallExpression {
+    ascertainCallExpression(): CallExpression | CallfuncExpression {
         let expression = this.expression;
         function isCallFuncOrCallExpression(expression: Expression) {
             return isCallfuncExpression(expression) || isCallExpression(expression);
@@ -113,7 +113,7 @@ export class CallExpressionInfo {
 
         if (!callExpression && isCallExpression(expression)) {
             //let's check to see if we are in a space, in the args of a valid CallExpression
-            let boundingRange = util.createBoundingRange(expression.openingParen, expression.closingParen);
+            let boundingRange = util.createBoundingRange(expression.tokens.openingParen, expression.tokens.closingParen);
             if (util.rangeContains(boundingRange, this.position)) {
                 callExpression = expression;
             }
@@ -147,13 +147,13 @@ export class CallExpressionInfo {
 
     private getNamespace(): NamespaceContainer {
         let scope = this.file.program.getFirstScopeForFile(this.file);
-        return scope.namespaceLookup.get(this.dotPart);
+        return scope.namespaceLookup.get(this.dotPart)?.firstInstance;
     }
 
     private getParameterIndex() {
         for (let i = this.callExpression.args.length - 1; i > -1; i--) {
             let argExpression = this.callExpression.args[i];
-            let comparison = util.comparePositionToRange(this.position, argExpression.range);
+            let comparison = util.comparePositionToRange(this.position, argExpression.location?.range);
             if (comparison >= 0) {
                 return i + comparison;
             }
