@@ -612,9 +612,28 @@ export class Lexer {
                 this.advance();
                 this.advance();
                 this.addToken(TokenKind.TemplateStringExpressionBegin);
-                while (!this.isAtEnd() && !this.check('}')) {
-                    this.start = this.current;
-                    this.scanToken();
+                let braceDepth = 0;
+                while (!this.isAtEnd()) {
+                    if (this.check('}')) {
+                        if (braceDepth === 0) {
+                            // This is the closing brace for the template expression
+                            break;
+                        } else {
+                            // This is a regular right brace inside the expression
+                            braceDepth--;
+                            this.start = this.current;
+                            this.advance();
+                            this.addToken(TokenKind.RightCurlyBrace);
+                        }
+                    } else if (this.check('{')) {
+                        // Track nested braces
+                        braceDepth++;
+                        this.start = this.current;
+                        this.scanToken();
+                    } else {
+                        this.start = this.current;
+                        this.scanToken();
+                    }
                 }
                 if (this.check('}')) {
                     this.advance();
