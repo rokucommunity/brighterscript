@@ -864,6 +864,32 @@ describe('lexer', () => {
                 TokenKind.Eof
             ]);
         });
+
+        it('handles nested template expressions', () => {
+            let tokens = Lexer.scan('print `one${`two${`three${`four`}`}`}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Print,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, // one
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, // two
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, // three
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, // four
+                TokenKind.BackTick,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
     }); // string literals
 
     describe('double literals', () => {
