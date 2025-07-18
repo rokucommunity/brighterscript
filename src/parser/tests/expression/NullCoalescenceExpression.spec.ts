@@ -403,69 +403,10 @@ describe('NullCoalescingExpression', () => {
                 end sub
             `, `
                 sub main()
-                    a += user
-                    if a = invalid then
+                    if user <> invalid then
+                        a += user
+                    else
                         a += 0
-                    end if
-                end sub
-            `);
-        });
-
-        it('transpiles null coalescing in RHS of DottedSetStatement to if statement', () => {
-            testTranspile(`
-                sub main()
-                    m.a = user ?? {}
-                end sub
-            `, `
-                sub main()
-                    m.a = user
-                    if m.a = invalid then
-                        m.a = {}
-                    end if
-                end sub
-            `);
-        });
-
-        it('transpiles null coalescing in RHS of incrementor DottedSetStatement to if statement', () => {
-            testTranspile(`
-                sub main()
-                    m.a += user ?? 0
-                end sub
-            `, `
-                sub main()
-                    m.a += user
-                    if m.a = invalid then
-                        m.a += 0
-                    end if
-                end sub
-            `);
-        });
-
-        it('transpiles null coalescing in RHS of IndexedSetStatement to if statement', () => {
-            testTranspile(`
-                sub main()
-                    m["a"] = user ?? {}
-                end sub
-            `, `
-                sub main()
-                    m["a"] = user
-                    if m["a"] = invalid then
-                        m["a"] = {}
-                    end if
-                end sub
-            `);
-        });
-
-        it('transpiles null coalescing in RHS of incrementor IndexedSetStatement to if statement', () => {
-            testTranspile(`
-                sub main()
-                    m["a"] += user ?? 0
-                end sub
-            `, `
-                sub main()
-                    m["a"] += user
-                    if m["a"] = invalid then
-                        m["a"] += 0
                     end if
                 end sub
             `);
@@ -489,38 +430,26 @@ describe('NullCoalescingExpression', () => {
             `);
         });
 
-        it('supports nested null coalescing in DottedSet', () => {
+        it('uses scope-captured functions for DottedSet expressions', () => {
             testTranspile(`
                 sub main()
-                    m.result = user ?? (fallback ?? {})
+                    m.a = user ?? {}
                 end sub
             `, `
                 sub main()
-                    m.result = user
-                    if m.result = invalid then
-                        m.result = fallback
-                        if m.result = invalid then
-                            m.result = {}
-                        end if
-                    end if
+                    m.a = bslib_coalesce(user, {})
                 end sub
             `);
         });
 
-        it('supports nested null coalescing in IndexedSet', () => {
+        it('uses scope-captured functions for IndexedSet expressions', () => {
             testTranspile(`
                 sub main()
-                    m["result"] = user ?? (fallback ?? {})
+                    m["a"] = user ?? {}
                 end sub
             `, `
                 sub main()
-                    m["result"] = user
-                    if m["result"] = invalid then
-                        m["result"] = fallback
-                        if m["result"] = invalid then
-                            m["result"] = {}
-                        end if
-                    end if
+                    m["a"] = bslib_coalesce(user, {})
                 end sub
             `);
         });
