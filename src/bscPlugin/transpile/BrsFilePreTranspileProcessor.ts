@@ -208,102 +208,48 @@ export class BrsFilePreTranspileProcessor {
 
         //if the null coalescing expression is part of a simple assignment to a local variable, rewrite it as an `IfStatement`
         let parent = nullCoalescingExpression.findAncestor(x => !isGroupingExpression(x));
-        let operator: Token;
-        //operators like `+=` will cause the RHS to be a BinaryExpression due to how the parser handles this. let's do a little magic to detect this situation
-        if (
-            //parent is a binary expression
-            isBinaryExpression(parent) &&
-            isAssignmentStatement(parent.parent) && isVariableExpression(parent.left) && parent.left.name === parent.parent.name
-        ) {
-            //keep the correct operator (i.e. `+=`)
-            operator = parent.operator;
-            //use the outer parent and skip this BinaryExpression
-            parent = parent.parent;
-        }
         let ifStatement: IfStatement;
 
-        // Only support AssignmentStatement to local variables
+        // Only support simple AssignmentStatement to local variables
         if (isAssignmentStatement(parent)) {
-            if (operator) {
-                // For compound assignments like `a += user ?? 0`, we need to check the left side value first
-                // Create condition: user <> invalid
-                const condition = new BinaryExpression(
-                    nullCoalescingExpression.consequent,
-                    createToken(TokenKind.LessGreater, '<>', nullCoalescingExpression.questionQuestionToken.range),
-                    createInvalidLiteral('invalid', nullCoalescingExpression.questionQuestionToken.range)
-                );
+            // For simple assignments like `a = user ?? {}`, use the original logic
+            // Create condition: variableName = invalid
+            const condition = new BinaryExpression(
+                createVariableExpression(parent.name.text),
+                createToken(TokenKind.Equal, '=', nullCoalescingExpression.questionQuestionToken.range),
+                createInvalidLiteral('invalid', nullCoalescingExpression.questionQuestionToken.range)
+            );
 
-                ifStatement = createIfStatement({
-                    if: createToken(TokenKind.If, 'if', nullCoalescingExpression.questionQuestionToken.range),
-                    condition: condition,
-                    then: createToken(TokenKind.Then, 'then', nullCoalescingExpression.questionQuestionToken.range),
-                    thenBranch: createBlock({
-                        statements: [
-                            createAssignmentStatement({
-                                name: parent.name,
-                                equals: operator,
-                                value: nullCoalescingExpression.consequent
-                            })
-                        ]
-                    }),
-                    else: createToken(TokenKind.Else, 'else', nullCoalescingExpression.questionQuestionToken.range),
-                    elseBranch: createBlock({
-                        statements: [
-                            createAssignmentStatement({
-                                name: parent.name,
-                                equals: operator,
-                                value: nullCoalescingExpression.alternate
-                            })
-                        ]
-                    }),
-                    endIf: createToken(TokenKind.EndIf, 'end if', nullCoalescingExpression.questionQuestionToken.range)
-                });
+            ifStatement = createIfStatement({
+                if: createToken(TokenKind.If, 'if', nullCoalescingExpression.questionQuestionToken.range),
+                condition: condition,
+                then: createToken(TokenKind.Then, 'then', nullCoalescingExpression.questionQuestionToken.range),
+                thenBranch: createBlock({
+                    statements: [
+                        createAssignmentStatement({
+                            name: parent.name,
+                            equals: parent.equals,
+                            value: nullCoalescingExpression.alternate
+                        })
+                    ]
+                }),
+                endIf: createToken(TokenKind.EndIf, 'end if', nullCoalescingExpression.questionQuestionToken.range)
+            });
 
-                // Replace the parent statement with the if statement
-                let { owner, key } = getOwnerAndKey(parent as Statement) ?? {};
-                if (owner && key !== undefined) {
-                    this.event.editor.setProperty(owner, key, ifStatement);
-                }
-            } else {
-                // For simple assignments like `a = user ?? {}`, use the original logic
-                // Create condition: variableName = invalid
-                const condition = new BinaryExpression(
-                    createVariableExpression(parent.name.text),
-                    createToken(TokenKind.Equal, '=', nullCoalescingExpression.questionQuestionToken.range),
-                    createInvalidLiteral('invalid', nullCoalescingExpression.questionQuestionToken.range)
-                );
+            // First, we need to create the initial assignment statement
+            const initialAssignment = createAssignmentStatement({
+                name: parent.name,
+                equals: parent.equals,
+                value: nullCoalescingExpression.consequent
+            });
 
-                ifStatement = createIfStatement({
-                    if: createToken(TokenKind.If, 'if', nullCoalescingExpression.questionQuestionToken.range),
-                    condition: condition,
-                    then: createToken(TokenKind.Then, 'then', nullCoalescingExpression.questionQuestionToken.range),
-                    thenBranch: createBlock({
-                        statements: [
-                            createAssignmentStatement({
-                                name: parent.name,
-                                equals: parent.equals,
-                                value: nullCoalescingExpression.alternate
-                            })
-                        ]
-                    }),
-                    endIf: createToken(TokenKind.EndIf, 'end if', nullCoalescingExpression.questionQuestionToken.range)
-                });
-
-                // First, we need to create the initial assignment statement
-                const initialAssignment = createAssignmentStatement({
-                    name: parent.name,
-                    equals: parent.equals,
-                    value: nullCoalescingExpression.consequent
-                });
-
-                // Replace the parent with a sequence: first the initial assignment, then the if statement
-                let { owner, key } = getOwnerAndKey(parent as Statement) ?? {};
-                if (owner && key !== undefined) {
-                    // Replace with initial assignment first
-                    this.event.editor.setProperty(owner, key, initialAssignment);
-                    // Insert the if statement after
-                    this.event.editor.addToArray(owner, key + 1, ifStatement);
-                }
+            // Replace the parent with a sequence: first the initial assignment, then the if statement
+            let { owner, key } = getOwnerAndKey(parent as Statement) ?? {};
+            if (owner && key !== undefined) {
+                // Replace with initial assignment first
+                this.event.editor.setProperty(owner, key, initialAssignment);
+                // Insert the if statement after
+                this.event.editor.addToArray(owner, key + 1, ifStatement);
             }
         }
 

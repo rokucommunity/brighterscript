@@ -396,18 +396,14 @@ describe('NullCoalescingExpression', () => {
             `);
         });
 
-        it('transpiles null coalescing in RHS of incrementor AssignmentStatement to if statement', () => {
+        it('uses bslib_coalesce for compound assignment operators', () => {
             testTranspile(`
                 sub main()
                     a += user ?? 0
                 end sub
             `, `
                 sub main()
-                    if user <> invalid then
-                        a += user
-                    else
-                        a += 0
-                    end if
+                    a += bslib_coalesce(user, 0)
                 end sub
             `);
         });
