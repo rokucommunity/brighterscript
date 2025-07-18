@@ -32,7 +32,7 @@ const sinon = createSandbox();
 const workspacePath = rootDir;
 const enableThreadingDefault = LanguageServer.enableThreadingDefault;
 
-describe('LanguageServer', () => {
+describe.only('LanguageServer', () => {
     let server: LanguageServer;
     let program: Program;
 

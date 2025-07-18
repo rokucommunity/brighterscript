@@ -650,13 +650,6 @@ export class LanguageServer {
                 this.pathFilterer.registerExcludeList(rootDir, workspaceConfig.excludePatterns)
             );
 
-            //get any `projectDiscoveryExclude` patterns from the client from this workspace
-            if (workspaceConfig.languageServer?.projectDiscoveryExclude) {
-                this.pathFiltererDisposables.push(
-                    this.pathFilterer.registerExcludeList(rootDir, workspaceConfig.languageServer.projectDiscoveryExclude)
-                );
-            }
-
             //get any .gitignore patterns from the client from this workspace
             const gitignorePath = path.resolve(rootDir, '.gitignore');
             if (await fsExtra.pathExists(gitignorePath)) {
@@ -687,11 +680,13 @@ export class LanguageServer {
     private async getWorkspaceExcludeGlobs(workspaceFolder: string): Promise<string[]> {
         const filesConfig = await this.getClientConfiguration<{ exclude: string[]; watcherExclude: string[] }>(workspaceFolder, 'files');
         const searchConfig = await this.getClientConfiguration<{ exclude: string[] }>(workspaceFolder, 'search');
+        const languageServerConfig = await this.getClientConfiguration<BrightScriptClientConfiguration>(workspaceFolder, 'brightscript');
 
         return [
             ...this.extractExcludes(filesConfig?.exclude),
             ...this.extractExcludes(filesConfig?.watcherExclude),
-            ...this.extractExcludes(searchConfig?.exclude)
+            ...this.extractExcludes(searchConfig?.exclude),
+            ...this.extractExcludes(languageServerConfig?.languageServer?.projectDiscoveryExclude)
         ];
     }
 
