@@ -434,8 +434,10 @@ export class LanguageServer {
                     languageServer: {
                         enableThreading: brightscriptConfig?.languageServer?.enableThreading ?? LanguageServer.enableThreadingDefault,
                         enableProjectDiscovery: brightscriptConfig?.languageServer?.enableProjectDiscovery ?? LanguageServer.enableProjectDiscoveryDefault,
+                        projectDiscoveryMaxDepth: brightscriptConfig?.languageServer?.projectDiscoveryMaxDepth ?? 15
                         projectDiscoveryExclude: brightscriptConfig?.languageServer?.projectDiscoveryExclude,
                         logLevel: brightscriptConfig?.languageServer?.logLevel
+                        
                     }
                 };
             })
@@ -835,6 +837,7 @@ export interface BrightScriptClientConfiguration {
         enableProjectDiscovery: boolean;
         projectDiscoveryExclude?: string[];
         logLevel: LogLevel | string;
+        projectDiscoveryMaxDepth?: number;
     };
 }
 
