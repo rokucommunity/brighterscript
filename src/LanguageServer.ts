@@ -700,12 +700,17 @@ export class LanguageServer {
             .filter(x => exclude[x])
             //vscode files.exclude patterns support ignoring folders without needing to add `**/*`. So for our purposes, we need to
             //append **/* to everything without a file extension or magic at the end
-            .map(pattern => [
-                //send the pattern as-is (this handles weird cases and exact file matches)
-                pattern,
+            .map(pattern => {
+                const result = [
+                    //send the pattern as-is (this handles weird cases and exact file matches)
+                    pattern
+                ];
                 //treat the pattern as a directory (no harm in doing this because if it's a file, the pattern will just never match anything)
-                `${pattern}/**/*`
-            ])
+                if (!pattern.endsWith('/**/*')) {
+                    result.push(`${pattern}/**/*`);
+                }
+                return result;
+            })
             .flat(1);
     }
 

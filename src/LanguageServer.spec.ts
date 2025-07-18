@@ -555,7 +555,10 @@ describe('LanguageServer', () => {
 
     describe('projectDiscoveryExclude and files.watcherExclude', () => {
         it('includes projectDiscoveryExclude in workspace configuration', async () => {
-            const projectDiscoveryExclude = ['**/test/**', 'node_modules/**'];
+            const projectDiscoveryExclude = {
+                '**/test/**': true,
+                'node_modules/**': true
+            };
 
             sinon.stub(server as any, 'getClientConfiguration').callsFake((workspaceFolder, section) => {
                 if (section === 'brightscript') {
@@ -642,7 +645,7 @@ describe('LanguageServer', () => {
             sinon.stub(server as any, 'getClientConfiguration').callsFake((workspaceFolder, section) => {
                 if (section === 'files') {
                     return Promise.resolve({
-                        exclude: { 'node_modules': true }
+                        exclude: { '**/node_modules/**/*': true }
                         // watcherExclude is undefined
                     });
                 }
@@ -651,8 +654,9 @@ describe('LanguageServer', () => {
 
             server.run();
             const excludeGlobs = await server['getWorkspaceExcludeGlobs'](workspaceFolders[0]);
-            expect(excludeGlobs).to.be.an('array');
-            expect(excludeGlobs).to.include('node_modules');
+            expect(excludeGlobs).to.eql([
+                '**/node_modules/**/*'
+            ]);
         });
 
         it('handles null/undefined configuration sections without crashing', async () => {
@@ -665,8 +669,7 @@ describe('LanguageServer', () => {
             expect(configs[0].languageServer.projectDiscoveryExclude).to.be.undefined;
 
             const excludeGlobs = await server['getWorkspaceExcludeGlobs'](workspaceFolders[0]);
-            expect(excludeGlobs).to.be.an('array');
-            expect(excludeGlobs).to.be.empty;
+            expect(excludeGlobs).to.eql([]);
         });
 
         it('handles empty objects for configuration sections without crashing', async () => {
@@ -679,8 +682,7 @@ describe('LanguageServer', () => {
             expect(configs[0].languageServer.projectDiscoveryExclude).to.be.undefined;
 
             const excludeGlobs = await server['getWorkspaceExcludeGlobs'](workspaceFolders[0]);
-            expect(excludeGlobs).to.be.an('array');
-            expect(excludeGlobs).to.be.empty;
+            expect(excludeGlobs).to.eql([]);
         });
 
         it('handles mixed defined/undefined settings without crashing', async () => {
@@ -688,12 +690,14 @@ describe('LanguageServer', () => {
                 if (section === 'brightscript') {
                     return Promise.resolve({
                         languageServer: {
-                            projectDiscoveryExclude: ['**/test/**']
+                            projectDiscoveryExclude: {
+                                '**/test/**/*': true
+                            }
                         }
                     });
                 } else if (section === 'files') {
                     return Promise.resolve({
-                        exclude: { 'node_modules': true }
+                        exclude: { '**/excludeMe/**/*': true }
                         // watcherExclude is undefined
                     });
                 }
@@ -701,12 +705,12 @@ describe('LanguageServer', () => {
             });
 
             server.run();
-            const configs = await server['getWorkspaceConfigs']();
-            expect(configs[0].languageServer.projectDiscoveryExclude).to.deep.equal(['**/test/**']);
 
             const excludeGlobs = await server['getWorkspaceExcludeGlobs'](workspaceFolders[0]);
-            expect(excludeGlobs).to.be.an('array');
-            expect(excludeGlobs).to.include('node_modules');
+            expect(excludeGlobs).to.eql([
+                '**/excludeMe/**/*',
+                '**/test/**/*'
+            ]);
 
             // Should not crash during pathFilterer rebuild
             await server['rebuildPathFilterer']();
