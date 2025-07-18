@@ -233,6 +233,7 @@ describe('HoverProcessor', () => {
             expect(hover).to.exist;
             expect(hover.range).to.eql(util.createRange(2, 29, 2, 32));
             expect(hover.contents).to.contain('function Abs(x as float) as float');
+            expect(hover.contents).to.contain('Returns the absolute value of the argument.');
         });
 
         it('finds hover for global function when file has no scopes', () => {
@@ -246,7 +247,6 @@ describe('HoverProcessor', () => {
             `);
 
             // Don't validate - this simulates a file that might not be in any scopes
-            const scopes = testProgram.getScopesForFile(file);
 
             // hover over the `Abs` function call
             let hover = testProgram.getHover(file.pathAbsolute, util.createPosition(2, 29))[0];
@@ -257,6 +257,24 @@ describe('HoverProcessor', () => {
             expect(hover).to.exist;
             expect(hover.range).to.eql(util.createRange(2, 29, 2, 32));
             expect(hover.contents).to.contain('function Abs(x as float) as float');
+            expect(hover.contents).to.contain('Returns the absolute value of the argument.');
+        });
+
+        it('finds hover for global function with both shortDescription and documentation', () => {
+            const file = program.setFile('source/main.brs', `
+                sub main()
+                    result = Atn(-5)
+                end sub
+            `);
+            program.validate();
+
+            // hover over the `Atn` function call
+            let hover = program.getHover(file.pathAbsolute, util.createPosition(2, 29))[0];
+            expect(hover).to.exist;
+            expect(hover.range).to.eql(util.createRange(2, 29, 2, 32));
+            expect(hover.contents).to.contain('function Atn(x as float) as float');
+            expect(hover.contents).to.contain('Returns the arctangent (in radians) of the argument.');
+            expect(hover.contents).to.contain('ATN(X)` returns "the angle whose tangent is X"');
         });
     });
 });

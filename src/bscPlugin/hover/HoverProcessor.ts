@@ -1,7 +1,7 @@
 import { isBrsFile, isFunctionType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
-import type { Hover, ProvideHoverEvent } from '../../interfaces';
+import type { Hover, ProvideHoverEvent, Callable } from '../../interfaces';
 import type { Token } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
 import { BrsTranspileState } from '../../parser/BrsTranspileState';
@@ -36,6 +36,32 @@ export class HoverProcessor {
         if (docs) {
             parts.push('***', docs);
         }
+        return parts.join('\n');
+    }
+
+    private buildCallableContents(callable: Callable, fence: (code: string) => string) {
+        const parts = [fence(callable.type.toString())];
+        
+        // For global callables, use shortDescription and documentation properties
+        if (callable.shortDescription || callable.documentation) {
+            const docs = [];
+            if (callable.shortDescription) {
+                docs.push(callable.shortDescription);
+            }
+            if (callable.documentation) {
+                docs.push(callable.documentation);
+            }
+            if (docs.length > 0) {
+                parts.push('***', docs.join('\n\n'));
+            }
+        } else {
+            // For regular callables, use token-based documentation
+            const tokenDocs = this.getTokenDocumentation((this.event.file as BrsFile).parser.tokens, callable.functionStatement?.func?.functionType);
+            if (tokenDocs) {
+                parts.push('***', tokenDocs);
+            }
+        }
+        
         return parts.join('\n');
     }
 
@@ -115,7 +141,7 @@ export class HoverProcessor {
             if (callable) {
                 return {
                     range: token.range,
-                    contents: this.buildContentsWithDocs(fence(callable.type.toString()), callable.functionStatement?.func?.functionType)
+                    contents: this.buildCallableContents(callable, fence)
                 };
             }
         }
