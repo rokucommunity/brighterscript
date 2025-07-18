@@ -594,7 +594,11 @@ describe('LanguageServer', () => {
         });
 
         it('includes projectDiscoveryExclude in workspace exclude patterns', async () => {
-            const projectDiscoveryExclude = ['**/test/**', '**/node_modules/**', '**/.build/**'];
+            const projectDiscoveryExclude = {
+                '**/test/**': true,
+                '**/node_modules/**': true,
+                '**/.build/**': true
+            };
 
             sinon.stub(server as any, 'getClientConfiguration').callsFake((workspaceFolder, section) => {
                 if (section === 'brightscript') {

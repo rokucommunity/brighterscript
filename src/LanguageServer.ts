@@ -678,8 +678,8 @@ export class LanguageServer {
      * Ask the client for the list of `files.exclude` and `files.watcherExclude` patterns. Useful when determining if we should process a file
      */
     private async getWorkspaceExcludeGlobs(workspaceFolder: string): Promise<string[]> {
-        const filesConfig = await this.getClientConfiguration<{ exclude: string[]; watcherExclude: string[] }>(workspaceFolder, 'files');
-        const searchConfig = await this.getClientConfiguration<{ exclude: string[] }>(workspaceFolder, 'search');
+        const filesConfig = await this.getClientConfiguration<{ exclude: Record<string, boolean>; watcherExclude: Record<string, boolean> }>(workspaceFolder, 'files');
+        const searchConfig = await this.getClientConfiguration<{ exclude: Record<string, boolean> }>(workspaceFolder, 'search');
         const languageServerConfig = await this.getClientConfiguration<BrightScriptClientConfiguration>(workspaceFolder, 'brightscript');
 
         return [
@@ -690,25 +690,14 @@ export class LanguageServer {
         ];
     }
 
-    private extractExcludes(exclude: string[] | Record<string, boolean>): string[] {
+    private extractExcludes(exclude: Record<string, boolean>): string[] {
         //if the exclude is not defined, return an empty array
         if (!exclude) {
             return [];
         }
-
-        let patterns: string[];
-
-        // Handle array format (e.g., projectDiscoveryExclude)
-        if (Array.isArray(exclude)) {
-            patterns = exclude;
-        } else {
-            // Handle object format (e.g., files.exclude, files.watcherExclude)
-            patterns = Object
-                .keys(exclude)
-                .filter(x => exclude[x]);
-        }
-
-        return patterns
+        return Object
+            .keys(exclude)
+            .filter(x => exclude[x])
             //vscode files.exclude patterns support ignoring folders without needing to add `**/*`. So for our purposes, we need to
             //append **/* to everything without a file extension or magic at the end
             .map(pattern => [
@@ -842,7 +831,7 @@ export interface BrightScriptClientConfiguration {
     languageServer: {
         enableThreading: boolean;
         enableProjectDiscovery: boolean;
-        projectDiscoveryExclude?: string[];
+        projectDiscoveryExclude?: Record<string, boolean>;
         logLevel: LogLevel | string;
         projectDiscoveryMaxDepth?: number;
     };

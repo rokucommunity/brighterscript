@@ -950,7 +950,7 @@ export interface WorkspaceConfig {
         /**
          * A list of glob patterns used to _exclude_ files from project discovery
          */
-        projectDiscoveryExclude?: string[];
+        projectDiscoveryExclude?: Record<string, boolean>;
         /**
          * The log level to use for this workspace
          */

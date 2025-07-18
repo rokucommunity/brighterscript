@@ -10,19 +10,19 @@ All language server settings are configured under the `brightscript.languageServ
 
 The `projectDiscoveryExclude` setting allows you to exclude files and directories from project discovery using glob patterns. This is useful when you want to prevent the language server from creating projects for certain directories or files.
 
-**Type:** `string[]`
+**Type:** `Record<string, boolean>`
 
 **Default:** `undefined`
 
 **Example:**
 ```json
 {
-  "brightscript.languageServer.projectDiscoveryExclude": [
-    "**/test/**",
-    "**/node_modules/**",
-    "**/.build/**",
-    "**/dist/**"
-  ]
+  "brightscript.languageServer.projectDiscoveryExclude": {
+    "**/test/**": true,
+    "**/node_modules/**": true,
+    "**/.build/**": true,
+    "**/dist/**": true
+  }
 }
 ```
 
