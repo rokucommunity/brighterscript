@@ -41,27 +41,19 @@ export class HoverProcessor {
 
     private buildCallableContents(callable: Callable, fence: (code: string) => string) {
         const parts = [fence(callable.type.toString())];
-        
-        // For global callables, use shortDescription and documentation properties
-        if (callable.shortDescription || callable.documentation) {
-            const docs = [];
-            if (callable.shortDescription) {
-                docs.push(callable.shortDescription);
-            }
-            if (callable.documentation) {
-                docs.push(callable.documentation);
-            }
-            if (docs.length > 0) {
-                parts.push('***', docs.join('\n\n'));
-            }
-        } else {
-            // For regular callables, use token-based documentation
-            const tokenDocs = this.getTokenDocumentation((this.event.file as BrsFile).parser.tokens, callable.functionStatement?.func?.functionType);
-            if (tokenDocs) {
-                parts.push('***', tokenDocs);
-            }
+
+        // Use shortDescription and documentation for all callables (both global and user-defined)
+        const docs = [];
+        if (callable.shortDescription) {
+            docs.push(callable.shortDescription);
         }
-        
+        if (callable.documentation) {
+            docs.push(callable.documentation);
+        }
+        if (docs.length > 0) {
+            parts.push('***', docs.join('\n\n'));
+        }
+
         return parts.join('\n');
     }
 
@@ -151,31 +143,7 @@ export class HoverProcessor {
      * Combine all the documentation found before a token (i.e. comment tokens)
      */
     private getTokenDocumentation(tokens: Token[], token?: Token) {
-        const comments = [] as Token[];
-        if (!token) {
-            return undefined;
-        }
-        const idx = tokens?.indexOf(token);
-        if (!idx || idx === -1) {
-            return undefined;
-        }
-        for (let i = idx - 1; i >= 0; i--) {
-            const token = tokens[i];
-            //skip whitespace and newline chars
-            if (token.kind === TokenKind.Comment) {
-                comments.push(token);
-            } else if (token.kind === TokenKind.Newline || token.kind === TokenKind.Whitespace) {
-                //skip these tokens
-                continue;
-
-                //any other token means there are no more comments
-            } else {
-                break;
-            }
-        }
-        if (comments.length > 0) {
-            return comments.reverse().map(x => x.text.replace(/^('|rem)/i, '')).join('\n');
-        }
+        return util.getTokenDocumentation(tokens, token);
     }
 
     private getXmlFileHover(file: XmlFile): Hover | undefined {
