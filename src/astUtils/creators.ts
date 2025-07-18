@@ -203,7 +203,7 @@ export function createIfStatement(options: {
         {
             if: options.if ?? createToken(TokenKind.If),
             then: options.then ?? createToken(TokenKind.Then),
-            else: options.else ?? createToken(TokenKind.Else),
+            else: options.elseBranch ? (options.else ?? createToken(TokenKind.Else)) : undefined,
             endIf: options.endIf ?? createToken(TokenKind.EndIf)
         },
         options.condition,

@@ -1,0 +1,5 @@
+sub main()
+    user = invalid
+    m["chosenUser"] = user ?? {}
+    print m["chosenUser"]
+end sub
