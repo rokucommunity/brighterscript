@@ -796,6 +796,100 @@ describe('lexer', () => {
                 TokenKind.Eof
             ]);
         });
+
+        it('handles nested curly braces', () => {
+            let tokens = Lexer.scan('thing = `${{}}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.RightCurlyBrace,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('handles deeply nested curly braces', () => {
+            let tokens = Lexer.scan('thing = `${{a: {b: 1}}}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.Identifier, // a
+                TokenKind.Colon,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.Identifier, // b
+                TokenKind.Colon,
+                TokenKind.IntegerLiteral, // 1
+                TokenKind.RightCurlyBrace,
+                TokenKind.RightCurlyBrace,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('handles mixed expressions with nested braces', () => {
+            let tokens = Lexer.scan('thing = `${arr[0]} and ${{key: value}}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.Identifier, // arr
+                TokenKind.LeftSquareBracket,
+                TokenKind.IntegerLiteral, // 0
+                TokenKind.RightSquareBracket,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi, // " and "
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.Identifier, // key
+                TokenKind.Colon,
+                TokenKind.Identifier, // value
+                TokenKind.RightCurlyBrace,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('handles nested template expressions', () => {
+            let tokens = Lexer.scan('print `one${`two${`three${`four`}`}`}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Print,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, // one
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, // two
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, // three
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, // four
+                TokenKind.BackTick,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
     }); // string literals
 
     describe('double literals', () => {
