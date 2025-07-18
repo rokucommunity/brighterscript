@@ -75,7 +75,7 @@ export class XmlFileValidator {
     private validateComponentTagCasing(component: SGComponent) {
         // Validate component-level tags
         const componentLevelTags = ['children', 'interface', 'script', 'customization'];
-        
+
         // Check interface tag
         if (component.api) {
             this.validateTagNameCasing(component.api.tag, componentLevelTags);
@@ -100,7 +100,7 @@ export class XmlFileValidator {
 
     private validateInterfaceTagCasing(interfaceTag: SGInterface) {
         const interfaceLevelTags = ['field', 'function'];
-        
+
         // Check field tags
         for (const field of interfaceTag.fields) {
             this.validateTagNameCasing(field.tag, interfaceLevelTags);

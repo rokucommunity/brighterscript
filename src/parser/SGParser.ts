@@ -187,7 +187,7 @@ function mapElement({ children }: ElementCstNode, diagnostics: Diagnostic[]): SG
     const name = mapToken(nameToken);
     const attributes = mapAttributes(children.attribute);
     const content = children.content?.[0];
-    
+
     // Use case-insensitive matching to handle incorrect casing
     const lowerCaseName = name.text.toLowerCase();
     switch (lowerCaseName) {
@@ -264,7 +264,7 @@ function mapElements(content: ContentCstNode, allow: string[], diagnostics: Diag
                     // Check if this is a case mismatch for a known tag
                     const lowerCaseTag = name.image.toLowerCase();
                     const matchingAllowedTag = allow.find(allowedTag => allowedTag.toLowerCase() === lowerCaseTag);
-                    
+
                     if (matchingAllowedTag) {
                         // Case mismatch for a known tag - create the AST object but validation will catch the casing issue
                         tags.push(mapElement(entry, diagnostics));
