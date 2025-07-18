@@ -113,7 +113,7 @@ describe('SGParser', () => {
         });
     });
 
-    it('Adds error when incorrect casing is used for children tag', () => {
+    it('Does not add case mismatch error during parsing (now handled in validation)', () => {
         const parser = new SGParser();
         parser.parse(
             'pkg:/components/ParentScene.xml', trim`
@@ -124,14 +124,10 @@ describe('SGParser', () => {
                 </Children>
             </component>
         `);
-        expect(parser.diagnostics).to.be.lengthOf(1);
-        expect(parser.diagnostics[0]).to.deep.include({
-            ...DiagnosticMessages.xmlTagCaseMismatch('Children', 'children'),
-            range: Range.create(2, 5, 2, 13)
-        });
+        expect(parser.diagnostics).to.be.lengthOf(0);
     });
 
-    it('Adds error when incorrect casing is used for interface tag', () => {
+    it('Does not add case mismatch error during parsing for interface tag (now handled in validation)', () => {
         const parser = new SGParser();
         parser.parse(
             'pkg:/components/ParentScene.xml', trim`
@@ -142,14 +138,10 @@ describe('SGParser', () => {
                 </Interface>
             </component>
         `);
-        expect(parser.diagnostics).to.be.lengthOf(1);
-        expect(parser.diagnostics[0]).to.deep.include({
-            ...DiagnosticMessages.xmlTagCaseMismatch('Interface', 'interface'),
-            range: Range.create(2, 5, 2, 14)
-        });
+        expect(parser.diagnostics).to.be.lengthOf(0);
     });
 
-    it('Adds error when incorrect casing is used for script tag', () => {
+    it('Does not add case mismatch error during parsing for script tag (now handled in validation)', () => {
         const parser = new SGParser();
         parser.parse(
             'pkg:/components/ParentScene.xml', trim`
@@ -158,11 +150,7 @@ describe('SGParser', () => {
                 <Script type="text/brightscript" uri="./test.brs" />
             </component>
         `);
-        expect(parser.diagnostics).to.be.lengthOf(1);
-        expect(parser.diagnostics[0]).to.deep.include({
-            ...DiagnosticMessages.xmlTagCaseMismatch('Script', 'script'),
-            range: Range.create(2, 5, 2, 11)
-        });
+        expect(parser.diagnostics).to.be.lengthOf(0);
     });
 
     it('Adds error when a leaf tag is found to have children', () => {
