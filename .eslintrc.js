@@ -64,7 +64,6 @@ module.exports = {
         '@typescript-eslint/no-shadow': 'off',
         '@typescript-eslint/no-this-alias': 'off',
         //possibly disable this once we have converted all throw statements to actual errors
-        '@typescript-eslint/no-throw-literal': 'off',
         '@typescript-eslint/no-invalid-void': 'off',
         '@typescript-eslint/no-invalid-void-type': 'off',
         '@typescript-eslint/no-type-alias': 'off',
@@ -221,6 +220,8 @@ module.exports = {
             '@typescript-eslint/no-unused-vars-experimental': 'off',
             '@typescript-eslint/dot-notation': 'off',
             '@typescript-eslint/no-unsafe-argument': 'off',
+            'import/no-extraneous-dependencies': 'off',
+            'func-names': 'off',
             'new-cap': 'off',
             'no-shadow': 'off',
             'no-void': 'off'

@@ -130,6 +130,7 @@ export class Preprocessor implements CC.Visitor {
      * @throws a JavaScript error with the provided message
      */
     public visitError(chunk: CC.ErrorChunk): never {
+        // eslint-disable-next-line @typescript-eslint/no-throw-literal
         throw this.addError({
             ...DiagnosticMessages.hashError(chunk.message.text),
             range: chunk.range

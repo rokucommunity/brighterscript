@@ -1,7 +1,7 @@
 import { assert, expect } from './chai-config.spec';
 import * as pick from 'object.pick';
 import * as sinonImport from 'sinon';
-import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
+import { CancellationTokenSource, CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile } from './files/BrsFile';
@@ -13,15 +13,17 @@ import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import type { FunctionStatement, PrintStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
-import { expectCompletionsExcludes, expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
+import { expectCompletionsExcludes, expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectThrows, expectThrowsAsync, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { isBrsFile } from './astUtils/reflection';
 import type { LiteralExpression } from './parser/Expression';
 import type { AstEditor } from './astUtils/AstEditor';
 import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
-import type { BsDiagnostic } from './interfaces';
+import type { BsDiagnostic, Plugin } from './interfaces';
 import { createLogger } from './logging';
+import { Scope } from './Scope';
+import undent from 'undent';
 
 let sinon = sinonImport.createSandbox();
 
@@ -44,7 +46,16 @@ describe('Program', () => {
         program.dispose();
     });
 
-    it('Does not crazy for file not referenced by any other scope', async () => {
+    it('does not throw exception after calling validate() after dispose()', () => {
+        program.setFile('source/themes/alpha.bs', `
+            sub main()
+            end sub
+        `);
+        program.dispose();
+        program.validate();
+    });
+
+    it('Does not crash for file not referenced by any other scope', async () => {
         program.setFile('tests/testFile.spec.bs', `
             function main(args as object) as object
                 return roca(args).describe("test suite", sub()
@@ -216,6 +227,98 @@ describe('Program', () => {
     });
 
     describe('validate', () => {
+        it('does not lose scope diagnostics in second validation after cancelling the previous validation', async () => {
+            program.setFile('source/Direction.bs', `
+                enum Direction
+                    up = "up"
+                end enum
+            `);
+            program.setFile('source/test.bs', `
+                import "Direction.bs"
+                sub test()
+                    print Direction.down
+                end sub
+            `);
+
+            //add several scopes so we have time to cancel the validation
+            for (let i = 0; i < 3; i++) {
+                program.setFile(`components/Component${i}.xml`, undent`
+                    <component name="Component${i}" extends="Group">
+                        <script uri="pkg:/source/test.bs" />
+                    </component>
+                `);
+            }
+            program.validate();
+            //ensure the diagnostic is there during normal run
+            expectDiagnostics(program, [
+                DiagnosticMessages.unknownEnumValue('down', 'Direction').message
+            ]);
+
+            const cancel = new CancellationTokenSource();
+
+            let count = 0;
+            const plugin = {
+                name: 'cancel validation',
+                beforeProgramValidate: () => {
+                    count++;
+                    //if this is the second validate, remove the plugin and change the file to invalidate the scopes again
+                    if (count === 2) {
+                        program.plugins.remove(plugin);
+                        program.setFile('source/test.bs', program.getFile('source/test.bs').fileContents + `'comment`);
+                    }
+                },
+                afterScopeValidate: () => {
+                    //if the diagnostic is avaiable, we know it's safe to cancel
+                    if (program.getDiagnostics().find(x => x.code === DiagnosticMessages.unknownEnumValue('down', 'Direction').code)) {
+                        cancel.cancel();
+                    }
+                }
+            } as Plugin;
+            //add a plugin that monitors where we are in the process, so we can cancel the validate at the correct time
+            program.plugins.add(plugin);
+
+            //change the file so it forces a reload
+            program.setFile('source/test.bs', program.getFile('source/test.bs').fileContents + `'comment`);
+
+            //now trigger two validations, the first one will be cancelled, the second one will run to completion
+            await Promise.all([
+                program.validate({
+                    async: true,
+                    cancellationToken: cancel.token
+                }),
+                program.validate({
+                    async: true
+                })
+            ]);
+
+            //ensure the diagnostic is there after a cancelled run (with a subsequent completed run)
+            expectDiagnostics(program, [
+                DiagnosticMessages.unknownEnumValue('down', 'Direction').message
+            ]);
+        });
+
+        it('validate (sync) passes along inner exception', () => {
+            program.setFile('source/main.brs', ``);
+            sinon.stub(Scope.prototype, 'validate').callsFake(() => {
+                throw new Error('Scope crash');
+            });
+            expectThrows(() => {
+                program.validate();
+            }, 'Scope crash');
+        });
+
+        it('validate (async) passes along inner exception', async () => {
+            program.setFile('source/main.brs', ``);
+            sinon.stub(Scope.prototype, 'validate').callsFake(() => {
+                throw new Error('Scope crash');
+            });
+            await expectThrowsAsync(async () => {
+                await program.validate({
+                    async: true
+                });
+            }, 'Scope crash');
+        });
+
         it('retains expressions after validate', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
                 sub test()
@@ -529,9 +632,9 @@ describe('Program', () => {
         it('supports using `m` vars in parameter default values', () => {
             //call a function that doesn't exist
             program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
-                sub findNode(nodeId as string, parentNode = m.top as object)
+                function findNode(nodeId as string, parentNode = m.top as object)
                     return parentNode.findNode(nodeId)
-                end sub
+                end function
             `);
 
             program.validate();
@@ -551,6 +654,20 @@ describe('Program', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
+        });
+
+        it('properly handles errors in async mode', async () => {
+            const file = program.setFile<BrsFile>('source/main.brs', ``);
+            file.validate = () => {
+                throw new Error('Crash for test');
+            };
+            let error: Error;
+            try {
+                await program.validate({ async: true });
+            } catch (e) {
+                error = e as any;
+            }
+            expect(error?.message).to.eql('Crash for test');
         });
     });
 
@@ -900,6 +1017,43 @@ describe('Program', () => {
             program.validate();
             let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(4, 28)).map(x => x.label);
             expect(completions).to.include('thing');
+        });
+
+        it('finds enum member after dot', () => {
+            program.setFile('source/main.bs', `
+                sub test()
+                    thing = alpha.Direction.
+                end sub
+                namespace alpha
+                    enum Direction
+                        up
+                    end enum
+                end namespace
+            `);
+            program.validate();
+            const completions = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 44));
+            expect(completions.map(x => ({ kind: x.kind, label: x.label }))).to.eql([{
+                label: 'up',
+                kind: CompletionItemKind.EnumMember
+            }]);
+        });
+
+        it('finds enum member after dot in if statement', () => {
+            program.setFile('source/main.bs', `
+                sub test()
+                    if alpha.beta. then
+                    end if
+                end sub
+                namespace alpha.beta
+                    const isEnabled = true
+                end namespace
+            `);
+            program.validate();
+            const completions = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 34));
+            expect(completions.map(x => ({ kind: x.kind, label: x.label }))).to.eql([{
+                label: 'isEnabled',
+                kind: CompletionItemKind.Constant
+            }]);
         });
 
         it('includes `for` variable', () => {
@@ -1958,9 +2112,9 @@ describe('Program', () => {
             src: s`${rootDir}/source/main.bs`,
             dest: 'source/main.bs'
         }, {
-            src: s`${rootDir}/source/main.bs`,
-            dest: 'source/main.bs'
-        }], program.options.stagingDir!);
+            src: s`${rootDir}/source/common.bs`,
+            dest: 'source/common.bs'
+        }], program.options.stagingDir);
 
         //entries should now be in alphabetic order
         expect(

@@ -26,6 +26,7 @@ import { URI } from 'vscode-uri';
 import undent from 'undent';
 import { tempDir, rootDir } from '../testHelpers.spec';
 import * as fileUrl from 'file-url';
+import { LiteralExpression } from '../parser/Expression';
 
 let sinon = sinonImport.createSandbox();
 
@@ -45,6 +46,15 @@ describe('BrsFile', () => {
     afterEach(() => {
         sinon.restore();
         program.dispose();
+    });
+
+    describe('dispose', () => {
+        it('does not crash the program after it has been disposed', () => {
+            const file = program.setFile('source/main.bs', `sub main(): end sub`);
+            file.dispose();
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('allowBrighterScriptInBrightScript', () => {
@@ -1993,7 +2003,7 @@ describe('BrsFile', () => {
             ).to.equal([
                 '```brightscript',
                 //TODO this really shouldn't be returning the global function, but it does...so make sure it doesn't crash right now.
-                'function Instr(start as integer, text as string, substring as string) as integer',
+                'function Instr(startOrText as dynamic, textOrSubstring as string, substring? as string) as integer',
                 '```'
             ].join('\n'));
         });
@@ -2264,9 +2274,9 @@ describe('BrsFile', () => {
                         print (1 + 2)
                     end sub
 
-                    sub test(p1)
+                    function test(p1)
                         return p1
-                    end sub
+                    end function
                 `);
             });
 
@@ -2522,7 +2532,7 @@ describe('BrsFile', () => {
 
         it('handles when only some of the statements have `then`', () => {
             testTranspile(`
-                sub main()
+                function main()
                     if true
                     else if true then
                     else if true
@@ -2531,7 +2541,7 @@ describe('BrsFile', () => {
                             return true
                         end if
                     end if
-                end sub
+                end function
             `);
         });
 
@@ -2737,6 +2747,53 @@ describe('BrsFile', () => {
             `, `
                 function one()
                     return ""
+                end function
+            `);
+        });
+
+        it('does not remove `as void` when removeParameterTypes is true', () => {
+            program.options.removeParameterTypes = true;
+            testTranspile(`
+                function one() as void
+                    return
+                end function
+            `, `
+                function one() as void
+                    return
+                end function
+            `);
+        });
+
+        it('does not remove `as <type>` for sub when removeParameterTypes is true', () => {
+            program.options.removeParameterTypes = true;
+            testTranspile(`
+                sub one() as string
+                    return "hello"
+                end sub
+            `, `
+                sub one() as string
+                    return "hello"
+                end sub
+            `);
+        });
+
+        it('does not remove `as boolean` from onKeyEvent when removeParameterTypes is true', () => {
+            program.options.removeParameterTypes = true;
+            testTranspile(`
+                function onKeyEvent(p1) as boolean
+                    return true
+                end function
+
+                function somethingElse() as string
+                    return "hello"
+                end function
+            `, `
+                function onKeyEvent(p1) as boolean
+                    return true
+                end function
+
+                function somethingElse()
+                    return "hello"
                 end function
             `);
         });
@@ -4247,6 +4304,20 @@ describe('BrsFile', () => {
                 end sub
             `);
         });
+
+        it('allows typecast statements', () => {
+            testTranspile(`
+                typecast m as whatever
+
+                sub foo(node as object)
+                    print node[m.keyProp]
+                end sub
+            `, `
+                sub foo(node as object)
+                    print node[m.keyProp]
+                end sub
+            `);
+        });
     });
 
     it('allows up to 63 function params', () => {
@@ -4283,6 +4354,30 @@ describe('BrsFile', () => {
             ...DiagnosticMessages.tooManyCallableParameters(65, 63),
             range: util.createRange(1, 648, 1, 651)
         }]);
+    });
+
+    describe('getClosestExpression', () => {
+        it('returns undefined for missing Position', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub Main()
+                    if true THEN
+                        print "works"
+                    end if
+                end sub
+            `);
+            expect(file.getClosestExpression(undefined)).to.be.undefined;
+        });
+
+        it('returns the closest expression at Position', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub Main()
+                    if true THEN
+                        print "works"
+                    end if
+                end sub
+            `);
+            expect(file.getClosestExpression({ line: 3, character: 34 })).to.be.instanceOf(LiteralExpression);
+        });
     });
 
 });

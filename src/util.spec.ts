@@ -579,7 +579,7 @@ describe('util', () => {
         let id = 1;
 
         beforeEach(() => {
-            // `require` caches plugins, so  generate a unique plugin name for every test
+            // `require` caches plugins, so generate a unique plugin name for every test
             pluginPath = `${tempDir}/plugin${id++}.js`;
         });
 
@@ -635,6 +635,22 @@ describe('util', () => {
             expect(plugins[0].name).to.eql('AwesomePlugin');
             //does not warn about factory pattern
             expect(stub.callCount).to.equal(0);
+        });
+
+        it('passes factory options', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports.default = function(options) {
+                    return {
+                        name: 'AwesomePlugin',
+                        initOptions: options
+                    };
+                };
+            `);
+            sinon.stub(console, 'warn').callThrough();
+            const plugins = util.loadPlugins(cwd, [pluginPath]);
+            expect((plugins[0] as any).initOptions).to.eql({
+                version: util.getBrighterScriptVersion()
+            });
         });
     });
 
@@ -958,6 +974,224 @@ describe('util', () => {
                     'uri', util.createRange(2, 3, 4, 5)
                 )
             }]);
+        });
+    });
+
+    describe('promiseRaceMatch', () => {
+        async function resolveAfter<T = any>(value: T, timeout: number) {
+            await util.sleep(timeout);
+            return value;
+        }
+
+        it('returns the value from the first promise that resolves that matches the matcher', async () => {
+            expect(
+                await util.promiseRaceMatch([
+                    resolveAfter('a', 1),
+                    resolveAfter('b', 20),
+                    resolveAfter('c', 30)
+                ], x => true)
+            ).to.eql('a');
+
+            expect(
+                await util.promiseRaceMatch([
+                    resolveAfter('a', 30),
+                    resolveAfter('b', 1),
+                    resolveAfter('c', 20)
+                ], x => true)
+            ).to.eql('b');
+
+            expect(
+                await util.promiseRaceMatch([
+                    resolveAfter('a', 20),
+                    resolveAfter('b', 30),
+                    resolveAfter('c', 1)
+                ], x => true)
+            ).to.eql('c');
+        });
+
+        it('does not throw when there were zero promises', async () => {
+            expect(
+                await util.promiseRaceMatch([], x => true)
+            ).to.be.undefined;
+        });
+
+        it('returns a value even if one of the promises never resolves', async () => {
+            expect(
+                await util.promiseRaceMatch([
+                    new Promise(() => {
+                        //i will never resolve
+                    }),
+                    resolveAfter('a', 1)
+                ], x => true)
+            ).to.eql('a');
+        });
+
+        it('rejects if all the promises fail', async () => {
+            let error: Error;
+            try {
+                await util.promiseRaceMatch([
+                    Promise.reject(new Error('error 1')),
+                    Promise.reject(new Error('error 2')),
+                    Promise.reject(new Error('error 3'))
+                ], x => true);
+            } catch (e) {
+                error = e as any;
+            }
+            expect(
+                (error as AggregateError).errors.map(x => x.message)
+            ).to.eql([
+                'error 1',
+                'error 2',
+                'error 3'
+            ]);
+        });
+
+        it('returns a value when one of the promises rejects', async () => {
+            expect(
+                await util.promiseRaceMatch([
+                    Promise.reject(new Error('crash')),
+                    resolveAfter('a', 1)
+                ], x => true)
+            ).to.eql('a');
+        });
+
+        it('returns undefined if no valuees match the matcher', async () => {
+            expect(
+                await util.promiseRaceMatch([
+                    resolveAfter('a', 1),
+                    resolveAfter('b', 20),
+                    resolveAfter('c', 30)
+                ], x => false)
+            ).to.be.undefined;
+        });
+
+        it('returns undefined if no matcher is provided', async () => {
+            expect(
+                await util.promiseRaceMatch([
+                    resolveAfter('a', 1),
+                    resolveAfter('b', 20),
+                    resolveAfter('c', 30)
+                ], undefined)
+            ).to.be.undefined;
+        });
+    });
+
+    describe('standardizePath', () => {
+        let isWindowsOrig = util['isWindows'];
+        let isWindows = isWindowsOrig;
+
+        beforeEach(() => {
+            util['standardizePathCache'].clear();
+        });
+        afterEach(() => {
+            util['standardizePathCache'].clear();
+            util['isWindows'] = isWindowsOrig;
+        });
+
+        function test(incoming: string, expected: string) {
+            util['isWindows'] = isWindows;
+            expect(
+                util.standardizePath(incoming)
+            ).to.eql(
+                expected
+            );
+            util['isWindows'] = isWindowsOrig;
+        }
+
+        describe('windows paths on windows', () => {
+            beforeEach(() => {
+                isWindows = true;
+            });
+
+            it('mismatched slashes', () => {
+                test('c:/one/two/three', 'c:\\one\\two\\three');
+                test('c:\\one\\two\\three', 'c:\\one\\two\\three');
+                test('c:/one\\two/three', 'c:\\one\\two\\three');
+            });
+
+            it('trailing slashes', () => {
+                test('c:/one/two/three/', 'c:\\one\\two\\three\\');
+                test('c:/one/two/three\\', 'c:\\one\\two\\three\\');
+            });
+
+            it('drive letter case', () => {
+                test('D:/one/two/three', 'd:\\one\\two\\three');
+            });
+
+            it('consecutive slashes', () => {
+                test('c://one//two//three//', 'c:\\one\\two\\three\\');
+                test('c:\\\\one\\\\two\\\\three\\\\', 'c:\\one\\two\\three\\');
+            });
+        });
+
+        describe('windows paths on unix', () => {
+            beforeEach(() => {
+                isWindows = false;
+            });
+
+            it('mismatched slashes', () => {
+                test('c:/one/two/three', 'c:/one/two/three');
+                test('c:\\one\\two\\three', 'c:/one/two/three');
+                test('c:/one\\two/three', 'c:/one/two/three');
+            });
+
+            it('trailing slashes', () => {
+                test('c:/one/two/three/', 'c:/one/two/three/');
+                test('c:/one/two/three\\', 'c:/one/two/three/');
+            });
+
+            it('drive letter case', () => {
+                test('D:/one/two/three', 'd:/one/two/three');
+            });
+
+            it('consecutive slashes', () => {
+                test('c://one//two//three//', 'c:/one/two/three/');
+                test('c:\\\\one\\\\two\\\\three\\\\', 'c:/one/two/three/');
+            });
+        });
+
+        describe('unix paths on windows', () => {
+            beforeEach(() => {
+                isWindows = true;
+            });
+
+            it('mismatched slashes', () => {
+                test('/one/two/three', '\\one\\two\\three');
+                test('\\one\\two\\three', '\\one\\two\\three');
+                test('/one\\two/three', '\\one\\two\\three');
+            });
+
+            it('trailing slashes', () => {
+                test('/one/two/three/', '\\one\\two\\three\\');
+                test('/one/two/three\\', '\\one\\two\\three\\');
+            });
+
+            it('consecutive slashes', () => {
+                test('/one//two///three//', '\\one\\two\\three\\');
+                test('\\one\\\\two\\\\\\three\\\\', '\\one\\two\\three\\');
+            });
+        });
+
+        describe('unix paths on unix', () => {
+            beforeEach(() => {
+                isWindows = false;
+            });
+
+            it('mismatched slashes', () => {
+                test('/one/two/three', '/one/two/three');
+                test('\\one\\two\\three', '/one/two/three');
+                test('/one\\two/three', '/one/two/three');
+            });
+
+            it('trailing slashes', () => {
+                test('/one/two/three/', '/one/two/three/');
+                test('/one/two/three\\', '/one/two/three/');
+            });
+
+            it('consecutive slashes', () => {
+                test('/one//two///three//', '/one/two/three/');
+                test('\\\\one\\\\two\\\\three\\\\', '/one/two/three/');
+            });
         });
     });
 });

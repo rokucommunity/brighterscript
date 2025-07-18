@@ -1,5 +1,6 @@
-import type { CompilerPlugin } from './interfaces';
-import { LogLevel, createLogger, type Logger } from './logging';
+import type { Plugin } from './interfaces';
+import { LogLevel, createLogger } from './logging';
+import type { Logger } from './logging';
 /*
  * we use `Required` everywhere here because we expect that the methods on plugin objects will
  * be optional, and we don't want to deal with `undefined`.
@@ -21,25 +22,25 @@ export type PluginEventArgs<T> = {
     Required<T>[K] extends (...args: any[]) => any ? Parameters<Required<T>[K]> : never
 };
 
-export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> {
+export default class PluginInterface<T extends Plugin = Plugin> {
 
     constructor();
     /**
      * @deprecated use the `options` parameter pattern instead
      */
     constructor(
-        plugins?: CompilerPlugin[],
+        plugins?: Plugin[],
         logger?: Logger
     );
     constructor(
-        plugins?: CompilerPlugin[],
+        plugins?: Plugin[],
         options?: {
             logger?: Logger;
             suppressErrors?: boolean;
         }
     );
     constructor(
-        private plugins?: CompilerPlugin[],
+        private plugins?: Plugin[],
         options?: {
             logger?: Logger;
             suppressErrors?: boolean;
@@ -87,7 +88,7 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
     /**
      * Add a plugin to the beginning of the list of plugins
      */
-    public addFirst<T extends CompilerPlugin = CompilerPlugin>(plugin: T) {
+    public addFirst<T extends Plugin = Plugin>(plugin: T) {
         if (!this.has(plugin)) {
             this.plugins.unshift(plugin);
         }
@@ -97,18 +98,18 @@ export default class PluginInterface<T extends CompilerPlugin = CompilerPlugin> 
     /**
      * Add a plugin to the end of the list of plugins
      */
-    public add<T extends CompilerPlugin = CompilerPlugin>(plugin: T) {
+    public add<T extends Plugin = Plugin>(plugin: T) {
         if (!this.has(plugin)) {
             this.plugins.push(plugin);
         }
         return plugin;
     }
 
-    public has(plugin: CompilerPlugin) {
+    public has(plugin: Plugin) {
         return this.plugins.includes(plugin);
     }
 
-    public remove<T extends CompilerPlugin = CompilerPlugin>(plugin: T) {
+    public remove<T extends Plugin = Plugin>(plugin: T) {
         if (this.has(plugin)) {
             this.plugins.splice(this.plugins.indexOf(plugin));
         }

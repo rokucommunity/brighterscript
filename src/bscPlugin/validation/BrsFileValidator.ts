@@ -1,4 +1,4 @@
-import { isBody, isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isBody, isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isTypecastStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -52,17 +52,23 @@ export class BrsFileValidator {
                 this.validateEnumDeclaration(node);
 
                 //register this enum declaration
-                node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, node.tokens.name.range, DynamicType.instance);
+                if (node.tokens.name) {
+                    node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, node.tokens.name.range, DynamicType.instance);
+                }
             },
             ClassStatement: (node) => {
                 this.validateDeclarationLocations(node, 'class', () => util.createBoundingRange(node.classKeyword, node.name));
 
                 //register this class
-                node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, DynamicType.instance);
+                if (node.name) {
+                    node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, DynamicType.instance);
+                }
             },
             AssignmentStatement: (node) => {
                 //register this variable
-                node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, DynamicType.instance);
+                if (node.name) {
+                    node.parent.getSymbolTable()?.addSymbol(node.name.text, node.name.range, DynamicType.instance);
+                }
             },
             DottedSetStatement: (node) => {
                 this.validateNoOptionalChainingInVarSet(node, [node.obj]);
@@ -77,11 +83,13 @@ export class BrsFileValidator {
             NamespaceStatement: (node) => {
                 this.validateDeclarationLocations(node, 'namespace', () => util.createBoundingRange(node.keyword, node.nameExpression));
 
-                node.parent.getSymbolTable().addSymbol(
-                    node.name.split('.')[0],
-                    node.nameExpression.range,
-                    DynamicType.instance
-                );
+                if (node.name) {
+                    node.parent.getSymbolTable().addSymbol(
+                        node.name.split('.')[0],
+                        node.nameExpression.range,
+                        DynamicType.instance
+                    );
+                }
             },
             FunctionStatement: (node) => {
                 this.validateDeclarationLocations(node, 'function', () => util.createBoundingRange(node.func.functionType, node.name));
@@ -101,11 +109,13 @@ export class BrsFileValidator {
                     const funcType = node.func.getFunctionType();
                     funcType.setName(transpiledNamespaceFunctionName);
 
-                    this.event.file.parser.ast.symbolTable.addSymbol(
-                        transpiledNamespaceFunctionName,
-                        node.name.range,
-                        funcType
-                    );
+                    if (node.name) {
+                        this.event.file.parser.ast.symbolTable.addSymbol(
+                            transpiledNamespaceFunctionName,
+                            node.name.range,
+                            funcType
+                        );
+                    }
                 }
             },
             FunctionExpression: (node) => {
@@ -115,17 +125,23 @@ export class BrsFileValidator {
                 this.validateFunctionParameterCount(node);
             },
             FunctionParameterExpression: (node) => {
-                const paramName = node.name?.text;
-                const symbolTable = node.getSymbolTable();
-                symbolTable?.addSymbol(paramName, node.name.range, node.type);
+                if (node.name) {
+                    const paramName = node.name.text;
+                    const symbolTable = node.getSymbolTable();
+                    symbolTable?.addSymbol(paramName, node.name.range, node.type);
+                }
             },
             InterfaceStatement: (node) => {
                 this.validateDeclarationLocations(node, 'interface', () => util.createBoundingRange(node.tokens.interface, node.tokens.name));
-                node.parent?.getSymbolTable()?.addSymbol(node.tokens.name.text, node.tokens.name.range, new InterfaceType(new Map()));
+                if (node.tokens.name) {
+                    node.parent?.getSymbolTable()?.addSymbol(node.tokens.name.text, node.tokens.name.range, new InterfaceType(new Map()));
+                }
             },
             ConstStatement: (node) => {
                 this.validateDeclarationLocations(node, 'const', () => util.createBoundingRange(node.tokens.const, node.tokens.name));
-                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, DynamicType.instance);
+                if (node.tokens.name) {
+                    node.parent.getSymbolTable().addSymbol(node.tokens.name.text, node.tokens.name.range, DynamicType.instance);
+                }
             },
             CatchStatement: (node) => {
                 node.parent.getSymbolTable().addSymbol(node.exceptionVariable.text, node.exceptionVariable.range, DynamicType.instance);
@@ -133,6 +149,33 @@ export class BrsFileValidator {
             DimStatement: (node) => {
                 if (node.identifier) {
                     node.parent.getSymbolTable().addSymbol(node.identifier.text, node.identifier.range, DynamicType.instance);
+                }
+            },
+            ReturnStatement: (node) => {
+                const func = node.findAncestor<FunctionExpression>(isFunctionExpression);
+                //these situations cannot have a value next to `return`
+                if (
+                    //`function as void`, `sub as void`
+                    func?.returnTypeToken?.kind === TokenKind.Void ||
+                    //`sub` <without return value>
+                    (func.functionType?.kind === TokenKind.Sub && !func.returnTypeToken)
+                ) {
+                    //there may not be a return value
+                    if (node.value) {
+                        this.event.file.addDiagnostic({
+                            ...DiagnosticMessages.voidFunctionMayNotReturnValue(func.functionType?.text),
+                            range: node.range
+                        });
+                    }
+
+                } else {
+                    //there MUST be a return value
+                    if (!node.value) {
+                        this.event.file.addDiagnostic({
+                            ...DiagnosticMessages.nonVoidFunctionMustReturnValue(func?.functionType?.text),
+                            range: node.range
+                        });
+                    }
                 }
             },
             ContinueStatement: (node) => {
@@ -273,7 +316,9 @@ export class BrsFileValidator {
                     !isCommentStatement(statement) &&
                     !isLibraryStatement(statement) &&
                     !isImportStatement(statement) &&
-                    !isConstStatement(statement)
+                    !isConstStatement(statement) &&
+                    !isTypecastStatement(statement) &&
+                    !isAliasStatement(statement)
                 ) {
                     this.event.file.addDiagnostic({
                         ...DiagnosticMessages.unexpectedStatementOutsideFunction(),

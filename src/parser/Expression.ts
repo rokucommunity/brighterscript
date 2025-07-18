@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isStringType, isTemplateStringExpression, isTypeCastExpression, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isStringType, isTemplateStringExpression, isTypeCastExpression, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
@@ -158,13 +158,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         readonly returnTypeToken?: Token
     ) {
         super();
-        if (this.returnTypeToken) {
-            this.returnType = util.tokenToBscType(this.returnTypeToken);
-        } else if (this.functionType?.text.toLowerCase() === 'sub') {
-            this.returnType = new VoidType();
-        } else {
-            this.returnType = DynamicType.instance;
-        }
+        this.setReturnType(); // set the initial return type that we parse
 
         //if there's a body, and it doesn't have a SymbolTable, assign one
         if (this.body && !this.body.symbolTable) {
@@ -177,6 +171,11 @@ export class FunctionExpression extends Expression implements TypedefProvider {
      * The type this function returns
      */
     public returnType: BscType;
+
+    /**
+     * Does this method require the return type to be present after transpile (useful for `as void` or the `as boolean` in `onKeyEvent`)
+     */
+    private requiresReturnType: boolean;
 
     /**
      * Get the name of the wrapping namespace (if it exists)
@@ -268,7 +267,8 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             state.transpileToken(this.rightParen)
         );
         //as [Type]
-        if (this.asToken && !state.options.removeParameterTypes) {
+        this.setReturnType(); // check one more time before transpile
+        if (this.asToken && !(state.options.removeParameterTypes && !this.requiresReturnType)) {
             results.push(
                 ' ',
                 //as
@@ -344,6 +344,44 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             functionType.addParameter(param.name.text, param.type, !!param.typeToken);
         }
         return functionType;
+    }
+
+    private setReturnType() {
+
+        /**
+         * RokuOS methods can be written several different ways:
+         * 1. Function() : return withValue
+         * 2. Function() as type : return withValue
+         * 3. Function() as void : return
+         *
+         * 4. Sub() : return
+         * 5. Sub () as void : return
+         * 6. Sub() as type : return withValue
+         *
+         * Formats (1), (2), and (6) throw a compile error if there IS NOT a return value in the function body.
+         * Formats (3), (4), and (5) throw a compile error if there IS a return value in the function body.
+         *
+         * 7. Additionally, as a special case, the OS requires that `onKeyEvent()` be defined with `as boolean`
+         */
+
+        const isSub = this.functionType?.text.toLowerCase() === 'sub';
+
+        if (this.returnTypeToken) {
+            this.returnType = util.tokenToBscType(this.returnTypeToken);
+        } else if (isSub) {
+            this.returnType = new VoidType();
+        } else {
+            this.returnType = DynamicType.instance;
+        }
+
+        if ((isFunctionStatement(this.parent) || isMethodStatement(this.parent)) && this.parent?.name?.text.toLowerCase() === 'onkeyevent') {
+            // onKeyEvent() requires 'as Boolean' otherwise RokuOS throws errors
+            this.requiresReturnType = true;
+        } else if (isSub && !isVoidType(this.returnType)) { // format (6)
+            this.requiresReturnType = true;
+        } else if (this.returnTypeToken && isVoidType(this.returnType)) { // format (3)
+            this.requiresReturnType = true;
+        }
     }
 
     public clone() {
@@ -1423,7 +1461,8 @@ export class TemplateStringExpression extends Expression {
     public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
-        if (this.quasis.length === 1 && this.expressions.length === 0) {
+        //if this is essentially just a normal brightscript string but with backticks, transpile it as a normal string without parens
+        if (this.expressions.length === 0 && this.quasis.length === 1 && this.quasis[0].expressions.length === 1) {
             return this.quasis[0].transpile(state);
         }
         let result = ['('];
@@ -1677,6 +1716,11 @@ export class TernaryExpression extends Expression {
 
         //get all unique variable names used in the consequent and alternate, and sort them alphabetically so the output is consistent
         let allUniqueVarNames = [...new Set([...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])].sort();
+        //discard names of global functions that cannot be passed by reference
+        allUniqueVarNames = allUniqueVarNames.filter(name => {
+            return !nonReferenceableFunctions.includes(name.toLowerCase());
+        });
+
         let mutatingExpressions = [
             ...consequentInfo.expressions,
             ...alternateInfo.expressions
@@ -1773,6 +1817,11 @@ export class NullCoalescingExpression extends Expression {
 
         //get all unique variable names used in the consequent and alternate, and sort them alphabetically so the output is consistent
         let allUniqueVarNames = [...new Set([...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])].sort();
+        //discard names of global functions that cannot be passed by reference
+        allUniqueVarNames = allUniqueVarNames.filter(name => {
+            return !nonReferenceableFunctions.includes(name.toLowerCase());
+        });
+
         let hasMutatingExpression = [
             ...consequentInfo.expressions,
             ...alternateInfo.expressions
@@ -1984,3 +2033,21 @@ function numberExpressionToValue(expr: LiteralExpression, operator = '') {
         return parseFloat(operator + expr.token.text);
     }
 }
+
+/**
+ * A list of names of functions that are restricted from being stored to a
+ * variable, property, or passed as an argument. (i.e. `type` or `createobject`).
+ * Names are stored in lower case.
+ */
+const nonReferenceableFunctions = [
+    'createobject',
+    'type',
+    'getglobalaa',
+    'box',
+    'run',
+    'eval',
+    'getlastruncompileerror',
+    'getlastrunruntimeerror',
+    'tab',
+    'pos'
+];

@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol } from 'vscode-languageserver-protocol';
+import type { Range, Diagnostic, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol, Disposable, FileChangeType } from 'vscode-languageserver-protocol';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -186,9 +186,24 @@ export interface CommentFlag {
 
 type ValidateHandler = (scope: Scope, files: BscFile[], callables: CallableContainerMap) => void;
 
-export type CompilerPluginFactory = () => CompilerPlugin;
+export interface PluginFactoryOptions {
+    /**
+     * What version of brighterscript is activating this plugin? (Useful for picking different plugins or behavior based on the version of brighterscript)
+     */
+    version: string;
+}
+export type PluginFactory = (options?: PluginFactoryOptions) => Plugin;
+/**
+ * @deprecated use `PluginFactory` instead
+ */
+export type CompilerPluginFactory = PluginFactory;
 
-export interface CompilerPlugin {
+/**
+ * @deprecated use `Plugin` instead
+ */
+export type CompilerPlugin = Plugin;
+
+export interface Plugin {
     name: string;
     //program events
     beforeProgramCreate?: (builder: ProgramBuilder) => void;
@@ -198,7 +213,7 @@ export interface CompilerPlugin {
     afterPublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
     afterProgramCreate?: (program: Program) => void;
     beforeProgramValidate?: (program: Program) => void;
-    afterProgramValidate?: (program: Program) => void;
+    afterProgramValidate?: (program: Program, wasCancelled: boolean) => void;
     beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     beforeProgramDispose?: PluginHandler<BeforeProgramDisposeEvent>;
@@ -545,4 +560,27 @@ export type DiagnosticCode = number | string;
 export interface FileLink<T> {
     item: T;
     file: BrsFile;
+}
+
+export type DisposableLike = Disposable | (() => any);
+
+export type MaybePromise<T> = T | Promise<T>;
+
+export interface FileChange {
+    /**
+     * Absolute path to the source file
+     */
+    srcPath: string;
+    /**
+     * What type of change was this.
+     */
+    type: FileChangeType;
+    /**
+     * If provided, this is the new contents of the file. If not provided, the file will be read from disk
+     */
+    fileContents?: string;
+    /**
+     * If true, this file change can have a project created exclusively for it, it no other projects handled it
+     */
+    allowStandaloneProject?: boolean;
 }

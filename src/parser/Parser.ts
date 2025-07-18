@@ -54,7 +54,9 @@ import {
     StopStatement,
     ThrowStatement,
     TryCatchStatement,
-    WhileStatement
+    WhileStatement,
+    TypecastStatement,
+    AliasStatement
 } from './Statement';
 import type { DiagnosticInfo } from '../DiagnosticMessages';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -1089,6 +1091,24 @@ export class Parser {
         }
     }
 
+    private checkAlias() {
+        let isAliasToken = this.check(TokenKind.Alias);
+
+        //if we are at the top level, any line that starts with "alias" should be considered a alias statement
+        if (this.isAtRootLevel() && isAliasToken) {
+            return true;
+
+            //not at root level, alias statements are all invalid here, but try to detect if the tokens look
+            //like a alias statement (and let the alias function handle emitting the diagnostics)
+        } else if (isAliasToken && this.checkNext(TokenKind.Identifier)) {
+            return true;
+
+            //definitely not a alias statement
+        } else {
+            return false;
+        }
+    }
+
     private statement(): Statement | undefined {
         if (this.checkLibrary()) {
             return this.libraryStatement();
@@ -1096,6 +1116,14 @@ export class Parser {
 
         if (this.check(TokenKind.Import)) {
             return this.importStatement();
+        }
+
+        if (this.check(TokenKind.Typecast) && this.checkAnyNext(TokenKind.Identifier, ...this.allowedLocalIdentifiers)) {
+            return this.typecastStatement();
+        }
+
+        if (this.checkAlias()) {
+            return this.aliasStatement();
         }
 
         if (this.check(TokenKind.Stop)) {
@@ -1535,6 +1563,34 @@ export class Parser {
 
         this._references.importStatements.push(importStatement);
         return importStatement;
+    }
+
+    private typecastStatement() {
+        this.warnIfNotBrighterScriptMode('typecast statements');
+        const typecastToken = this.advance();
+        const obj = this.identifier(...this.allowedLocalIdentifiers);
+        const asToken = this.advance();
+        const typeToken = this.typeToken();
+        return new TypecastStatement({
+            typecast: typecastToken,
+            obj: obj,
+            as: asToken,
+            type: typeToken
+        });
+    }
+
+    private aliasStatement() {
+        this.warnIfNotBrighterScriptMode('alias statements');
+        const aliasToken = this.advance();
+        const name = this.identifier(...this.allowedLocalIdentifiers);
+        const equals = this.consumeToken(TokenKind.Equal);
+        const value = this.identifier(...this.allowedLocalIdentifiers);
+        return new AliasStatement({
+            alias: aliasToken,
+            name: name,
+            equals: equals,
+            value: value
+        });
     }
 
     private annotationExpression() {
