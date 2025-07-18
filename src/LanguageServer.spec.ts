@@ -610,7 +610,7 @@ describe('LanguageServer', () => {
             server.run();
             const configs = await server['getWorkspaceConfigs']();
             expect(configs[0].languageServer.projectDiscoveryExclude).to.be.undefined;
-            
+
             // Should not crash during pathFilterer rebuild
             await server['rebuildPathFilterer']();
         });
@@ -640,7 +640,7 @@ describe('LanguageServer', () => {
             server.run();
             const configs = await server['getWorkspaceConfigs']();
             expect(configs[0].languageServer.projectDiscoveryExclude).to.be.undefined;
-            
+
             const excludeGlobs = await server['getWorkspaceExcludeGlobs'](workspaceFolders[0]);
             expect(excludeGlobs).to.be.an('array');
             expect(excludeGlobs).to.be.empty;
@@ -654,7 +654,7 @@ describe('LanguageServer', () => {
             server.run();
             const configs = await server['getWorkspaceConfigs']();
             expect(configs[0].languageServer.projectDiscoveryExclude).to.be.undefined;
-            
+
             const excludeGlobs = await server['getWorkspaceExcludeGlobs'](workspaceFolders[0]);
             expect(excludeGlobs).to.be.an('array');
             expect(excludeGlobs).to.be.empty;
@@ -680,11 +680,11 @@ describe('LanguageServer', () => {
             server.run();
             const configs = await server['getWorkspaceConfigs']();
             expect(configs[0].languageServer.projectDiscoveryExclude).to.deep.equal(['**/test/**']);
-            
+
             const excludeGlobs = await server['getWorkspaceExcludeGlobs'](workspaceFolders[0]);
             expect(excludeGlobs).to.be.an('array');
             expect(excludeGlobs).to.include('node_modules');
-            
+
             // Should not crash during pathFilterer rebuild
             await server['rebuildPathFilterer']();
         });
