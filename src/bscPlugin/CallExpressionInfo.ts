@@ -62,7 +62,7 @@ export class CallExpressionInfo {
         }
         this.isCallingMethodOnMyClass = false;
 
-        if (callExpression.parent && isNewExpression(callExpression.parent)) {
+        if (isNewExpression(callExpression.parent)) {
             this.name = callExpression.parent.className.getName(ParseMode.BrighterScript);
             this.newExpression = callExpression.parent;
         }
