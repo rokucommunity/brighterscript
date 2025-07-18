@@ -690,14 +690,25 @@ export class LanguageServer {
         ];
     }
 
-    private extractExcludes(exclude: string[]): string[] {
+    private extractExcludes(exclude: string[] | Record<string, boolean>): string[] {
         //if the exclude is not defined, return an empty array
         if (!exclude) {
             return [];
         }
-        return Object
-            .keys(exclude)
-            .filter(x => exclude[x])
+
+        let patterns: string[];
+
+        // Handle array format (e.g., projectDiscoveryExclude)
+        if (Array.isArray(exclude)) {
+            patterns = exclude;
+        } else {
+            // Handle object format (e.g., files.exclude, files.watcherExclude)
+            patterns = Object
+                .keys(exclude)
+                .filter(x => exclude[x]);
+        }
+
+        return patterns
             //vscode files.exclude patterns support ignoring folders without needing to add `**/*`. So for our purposes, we need to
             //append **/* to everything without a file extension or magic at the end
             .map(pattern => [

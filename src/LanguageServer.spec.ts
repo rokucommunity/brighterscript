@@ -32,7 +32,7 @@ const sinon = createSandbox();
 const workspacePath = rootDir;
 const enableThreadingDefault = LanguageServer.enableThreadingDefault;
 
-describe.only('LanguageServer', () => {
+describe('LanguageServer', () => {
     let server: LanguageServer;
     let program: Program;
 
@@ -591,6 +591,27 @@ describe.only('LanguageServer', () => {
             const excludeGlobs = await server['getWorkspaceExcludeGlobs'](workspaceFolders[0]);
             expect(excludeGlobs).to.include('**/tmp/**');
             expect(excludeGlobs).to.include('**/cache/**');
+        });
+
+        it('includes projectDiscoveryExclude in workspace exclude patterns', async () => {
+            const projectDiscoveryExclude = ['**/test/**', '**/node_modules/**', '**/.build/**'];
+
+            sinon.stub(server as any, 'getClientConfiguration').callsFake((workspaceFolder, section) => {
+                if (section === 'brightscript') {
+                    return Promise.resolve({
+                        languageServer: {
+                            projectDiscoveryExclude: projectDiscoveryExclude
+                        }
+                    });
+                }
+                return Promise.resolve({});
+            });
+
+            server.run();
+            const excludeGlobs = await server['getWorkspaceExcludeGlobs'](workspaceFolders[0]);
+            expect(excludeGlobs).to.include('**/test/**');
+            expect(excludeGlobs).to.include('**/node_modules/**');
+            expect(excludeGlobs).to.include('**/.build/**');
         });
 
         it('handles undefined projectDiscoveryExclude without crashing', async () => {
