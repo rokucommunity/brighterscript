@@ -354,6 +354,11 @@ export let DiagnosticMessages = {
         code: 1065,
         severity: DiagnosticSeverity.Error
     }),
+    xmlTagCaseMismatch: (tagName: string, expectedTagName: string) => ({
+        message: `Tag '${tagName}' must be all lower case. Use '${expectedTagName}' instead.`,
+        code: 1143,
+        severity: DiagnosticSeverity.Error
+    }),
     expectedStatementOrFunctionCallButReceivedExpression: () => ({
         message: `Expected statement or function call but instead found expression`,
         code: 1066,

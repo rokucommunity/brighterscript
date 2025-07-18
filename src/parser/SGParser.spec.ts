@@ -113,6 +113,58 @@ describe('SGParser', () => {
         });
     });
 
+    it('Adds error when incorrect casing is used for children tag', () => {
+        const parser = new SGParser();
+        parser.parse(
+            'pkg:/components/ParentScene.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="ChildScene" extends="ParentScene">
+                <Children>
+                    <Label id="test" />
+                </Children>
+            </component>
+        `);
+        expect(parser.diagnostics).to.be.lengthOf(1);
+        expect(parser.diagnostics[0]).to.deep.include({
+            ...DiagnosticMessages.xmlTagCaseMismatch('Children', 'children'),
+            range: Range.create(2, 5, 2, 13)
+        });
+    });
+
+    it('Adds error when incorrect casing is used for interface tag', () => {
+        const parser = new SGParser();
+        parser.parse(
+            'pkg:/components/ParentScene.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="ChildScene" extends="ParentScene">
+                <Interface>
+                    <field id="test" type="string" />
+                </Interface>
+            </component>
+        `);
+        expect(parser.diagnostics).to.be.lengthOf(1);
+        expect(parser.diagnostics[0]).to.deep.include({
+            ...DiagnosticMessages.xmlTagCaseMismatch('Interface', 'interface'),
+            range: Range.create(2, 5, 2, 14)
+        });
+    });
+
+    it('Adds error when incorrect casing is used for script tag', () => {
+        const parser = new SGParser();
+        parser.parse(
+            'pkg:/components/ParentScene.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="ChildScene" extends="ParentScene">
+                <Script type="text/brightscript" uri="./test.brs" />
+            </component>
+        `);
+        expect(parser.diagnostics).to.be.lengthOf(1);
+        expect(parser.diagnostics[0]).to.deep.include({
+            ...DiagnosticMessages.xmlTagCaseMismatch('Script', 'script'),
+            range: Range.create(2, 5, 2, 11)
+        });
+    });
+
     it('Adds error when a leaf tag is found to have children', () => {
         const parser = new SGParser();
         parser.parse(

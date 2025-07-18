@@ -257,11 +257,23 @@ function mapElements(content: ContentCstNode, allow: string[], diagnostics: Diag
                 if (allow.includes(name.image)) {
                     tags.push(mapElement(entry, diagnostics));
                 } else {
-                    //unexpected tag
-                    diagnostics.push({
-                        ...DiagnosticMessages.xmlUnexpectedTag(name.image),
-                        range: rangeFromTokens(name)
-                    });
+                    // Check if this is a case mismatch for a known tag
+                    const lowerCaseTag = name.image.toLowerCase();
+                    const matchingAllowedTag = allow.find(allowedTag => allowedTag.toLowerCase() === lowerCaseTag);
+
+                    if (matchingAllowedTag && matchingAllowedTag !== name.image) {
+                        // Case mismatch for a known tag
+                        diagnostics.push({
+                            ...DiagnosticMessages.xmlTagCaseMismatch(name.image, matchingAllowedTag),
+                            range: rangeFromTokens(name)
+                        });
+                    } else {
+                        // Truly unexpected tag
+                        diagnostics.push({
+                            ...DiagnosticMessages.xmlUnexpectedTag(name.image),
+                            range: rangeFromTokens(name)
+                        });
+                    }
                 }
             } else {
                 //bad xml syntax...
