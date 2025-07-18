@@ -1,5 +1,0 @@
-sub main()
-    user = invalid
-    count += user ?? 0
-    print count
-end sub

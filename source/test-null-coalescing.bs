@@ -1,5 +1,0 @@
-sub main()
-    user = invalid
-    chosenUser = user ?? {}
-    print chosenUser
-end sub
