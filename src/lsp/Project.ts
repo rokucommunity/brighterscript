@@ -23,24 +23,23 @@ export class Project implements LspProject {
     public constructor(
         options?: {
             logger?: Logger;
-            projectIdentifier?: string;
         }
     ) {
         this.logger = options?.logger ?? createLogger({
             //when running inside a worker thread, we don't want to use colors
             enableColor: false
         });
-        this.projectIdentifier = options?.projectIdentifier ?? '';
     }
 
     /**
      * Activates this project. Every call to `activate` should completely reset the project, clear all used ram and start from scratch.
      */
     public async activate(options: ProjectConfig): Promise<ActivateResponse> {
-        this.logger.info('Project.activate', options.projectPath);
+        this.logger.info(`Project.activate. projectKey: ${options.projectKey}`);
 
         this.activateOptions = options;
-        this.projectPath = options.projectPath ? util.standardizePath(options.projectPath) : options.projectPath;
+        this.projectKey = options.projectKey ? util.standardizePath(options.projectKey) : options.projectKey;
+        this.projectDir = options.projectDir ? util.standardizePath(options.projectDir) : options.projectDir;
         this.workspaceFolder = options.workspaceFolder ? util.standardizePath(options.workspaceFolder) : options.workspaceFolder;
         this.projectNumber = options.projectNumber;
         this.bsconfigPath = await this.getConfigFilePath(options);
@@ -50,7 +49,7 @@ export class Project implements LspProject {
             logger: this.logger
         });
 
-        this.builder.logger.prefix = `[${this.projectIdentifier}]`;
+        this.builder.logger.prefix = util.getProjectLogName(this);
         this.disposables.push(this.builder);
 
         let cwd: string;
@@ -63,7 +62,7 @@ export class Project implements LspProject {
             } catch { }
 
         } else {
-            cwd = this.projectPath;
+            cwd = this.projectDir;
             //config file doesn't exist...let `brighterscript` resolve the default way
             this.bsconfigPath = undefined;
         }
@@ -455,19 +454,21 @@ export class Project implements LspProject {
     private builder: ProgramBuilder;
 
     /**
-     * The path to where the project resides
+     * A unique key to represent this project. The format of this key may change, but it will always be unique to this project and can be used for comparison purposes.
+     *
+     * For directory-only projects, this is the path to the dir. For bsconfig.json projects, this is the path to the config file (typically bsconfig.json).
      */
-    public projectPath: string;
+    projectKey: string;
+
+    /**
+     * The directory for the root of this project (typically where the bsconfig.json or manifest is located)
+     */
+    projectDir: string;
 
     /**
      * A unique number for this project, generated during this current language server session. Mostly used so we can identify which project is doing logging
      */
     public projectNumber: number;
-
-    /**
-     * A unique name for this project used in logs to help keep track of everything
-     */
-    public projectIdentifier: string;
 
     /**
      * The path to the workspace where this project resides. A workspace can have multiple projects (by adding a bsconfig.json to each folder).
@@ -492,35 +493,35 @@ export class Project implements LspProject {
      * Find the path to the bsconfig.json file for this project
      * @returns path to bsconfig.json, or undefined if unable to find it
      */
-    private async getConfigFilePath(config: { configFilePath?: string; projectPath: string }) {
-        let configFilePath: string;
+    private async getConfigFilePath(config: { bsconfigPath: string; projectDir: string }) {
+        let bsconfigPath: string;
         //if there's a setting, we need to find the file or show error if it can't be found
-        if (config?.configFilePath) {
-            configFilePath = path.resolve(config.projectPath, config.configFilePath);
-            if (await util.pathExists(configFilePath)) {
-                return util.standardizePath(configFilePath);
+        if (config?.bsconfigPath) {
+            bsconfigPath = path.resolve(config.projectDir, config.bsconfigPath);
+            if (await util.pathExists(bsconfigPath)) {
+                return util.standardizePath(bsconfigPath);
             } else {
                 this.emit('critical-failure', {
-                    message: `Cannot find config file specified in user or workspace settings at '${configFilePath}'`
+                    message: `Cannot find config file specified in user or workspace settings at '${bsconfigPath}'`
                 });
             }
         }
 
-        //the rest of these require a projectPath, so return early if we don't have one
-        if (!config?.projectPath) {
+        //the rest of these require a path to a project directory, so return early if we don't have one
+        if (!config?.projectDir) {
             return undefined;
         }
 
         //default to config file path found in the root of the workspace
-        configFilePath = s`${config.projectPath}/bsconfig.json`;
-        if (await util.pathExists(configFilePath)) {
-            return util.standardizePath(configFilePath);
+        bsconfigPath = s`${config.projectDir}/bsconfig.json`;
+        if (await util.pathExists(bsconfigPath)) {
+            return util.standardizePath(bsconfigPath);
         }
 
         //look for the deprecated `brsconfig.json` file
-        configFilePath = s`${config.projectPath}/brsconfig.json`;
-        if (await util.pathExists(configFilePath)) {
-            return util.standardizePath(configFilePath);
+        bsconfigPath = s`${config.projectDir}/brsconfig.json`;
+        if (await util.pathExists(bsconfigPath)) {
+            return util.standardizePath(bsconfigPath);
         }
 
         //no config file could be found

@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.69.12](https://github.com/rokucommunity/brighterscript/compare/0.69.11...v0.69.12) - 2025-07-07
+### Fixed
+ - Fix discovery when `projects` is empty ([#1529](https://github.com/rokucommunity/brighterscript/pull/1529))
+
+
+
+## [0.69.11](https://github.com/rokucommunity/brighterscript/compare/0.69.10...v0.69.11) - 2025-07-03
+### Added
+ - Add `enableProjectDiscovery` language server option ([#1520](https://github.com/rokucommunity/brighterscript/pull/1520), [#1525](https://github.com/rokucommunity/brighterscript/pull/1525))
+### Changed
+ - chore: add some docs about `ObserveField` namespace caveats ([#1513](https://github.com/rokucommunity/brighterscript/pull/1513))
+ - Support `projects` array in settings ([#1521](https://github.com/rokucommunity/brighterscript/pull/1521))
+ - Improve `manifest` discovery ([#1518](https://github.com/rokucommunity/brighterscript/pull/1518))
+ - Improve `bsconfig.json` auto-discovery ([#1512](https://github.com/rokucommunity/brighterscript/pull/1512))
+
+
+
 ## [0.69.10](https://github.com/rokucommunity/brighterscript/compare/0.69.9...v0.69.10) - 2025-06-03
 ### Changed
  - upgrade to [roku-deploy@3.12.6](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3126---2025-06-03). Notable changes since 3.12.5:

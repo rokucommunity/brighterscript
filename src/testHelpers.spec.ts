@@ -13,11 +13,19 @@ import type { CodeWithSourceMap } from 'source-map';
 import { getDiagnosticLine } from './diagnosticUtils';
 import { firstBy } from 'thenby';
 import undent from 'undent';
+import type { WorkspaceConfig } from './lsp/ProjectManager';
 
 export const cwd = s`${__dirname}/../`;
 export const tempDir = s`${__dirname}/../.tmp`;
 export const rootDir = s`${tempDir}/rootDir`;
 export const stagingDir = s`${tempDir}/stagingDir`;
+export const workspaceSettings: WorkspaceConfig = {
+    workspaceFolder: rootDir,
+    languageServer: {
+        enableThreading: false,
+        enableProjectDiscovery: true
+    }
+};
 
 export const trim = undent;
 const sinon = createSandbox();
