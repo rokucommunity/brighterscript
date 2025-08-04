@@ -2461,7 +2461,7 @@ export class MethodStatement extends FunctionStatement {
         return this.name.text;
     }
 
-    transpile(state: BrsTranspileState) {
+    transpile(state: BrsTranspileState, name?: Identifier) {
         if (this.name.text.toLowerCase() === 'new') {
             this.ensureSuperConstructorCall(state);
             //TODO we need to undo this at the bottom of this method
@@ -2490,7 +2490,7 @@ export class MethodStatement extends FunctionStatement {
             visitor(statement, undefined);
             statement.walk(visitor, walkOptions);
         }
-        return this.func.transpile(state);
+        return this.func.transpile(state, name);
     }
 
     getTypedef(state: BrsTranspileState) {
