@@ -2036,8 +2036,14 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
+
+        const ancestors = this.getAncestors(state);
+        const body = this.createNewStatementIfNotExists(ancestors);
+
+        //make the methods
+        result.push(...this.getTranspiledMethods(state, ancestors, body));
         //make the builder
-        result.push(...this.getTranspiledBuilder(state));
+        result.push(...this.getTranspiledBuilder(state, ancestors, body));
         result.push(
             '\n',
             state.indent()
@@ -2202,44 +2208,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
         return false;
     }
 
-    /**
-     * The builder is a function that assigns all of the methods and property names to a class instance.
-     * This needs to be a separate function so that child classes can call the builder from their parent
-     * without instantiating the parent constructor at that point in time.
-     */
-    private getTranspiledBuilder(state: BrsTranspileState) {
-        let result = [] as TranspileResult;
-        result.push(`function ${this.getBuilderName(this.getName(ParseMode.BrightScript)!)}()\n`);
-        state.blockDepth++;
-        //indent
-        result.push(state.indent());
+    private createNewStatementIfNotExists(ancestors: ClassStatement[]): Statement[] {
+        let body = [...this.body];
 
-        /**
-         * The lineage of this class. index 0 is a direct parent, index 1 is index 0's parent, etc...
-         */
-        let ancestors = this.getAncestors(state);
-
-        //construct parent class or empty object
-        if (ancestors[0]) {
-            const ancestorNamespace = ancestors[0].findAncestor<NamespaceStatement>(isNamespaceStatement);
-            let fullyQualifiedClassName = util.getFullyQualifiedClassName(
-                ancestors[0].getName(ParseMode.BrighterScript)!,
-                ancestorNamespace?.getName(ParseMode.BrighterScript)
-            );
-            result.push(
-                'instance = ',
-                this.getBuilderName(fullyQualifiedClassName), '()');
-        } else {
-            //use an empty object.
-            result.push('instance = {}');
-        }
-        result.push(
-            state.newline,
-            state.indent()
-        );
-        let parentClassIndex = this.getParentClassIndex(state);
-
-        let body = this.body;
         //inject an empty "new" method if missing
         if (!this.getConstructorFunction()) {
             if (ancestors.length === 0) {
@@ -2276,6 +2247,64 @@ export class ClassStatement extends Statement implements TypedefProvider {
             }
         }
 
+        return body;
+    }
+
+    private getMethodName(state: BrsTranspileState, method: MethodStatement): Identifier {
+        return {
+            ...method.name,
+            text: '__' + this.getName(ParseMode.BrightScript)!.replace(/\./gi, '_') + '_' + method.name.text
+        };
+    }
+
+    private getTranspiledMethods(state: BrsTranspileState, ancestors: ClassStatement[], body: Statement[]) {
+        let result = [] as TranspileResult;
+        for (let statement of body) {
+            if (isMethodStatement(statement)) {
+                state.classStatement = this;
+                result.push(
+                    ...statement.transpile(state, this.getMethodName(state, statement)),
+                    state.newline,
+                    state.indent()
+                );
+                delete state.classStatement;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * The builder is a function that assigns all of the methods and property names to a class instance.
+     * This needs to be a separate function so that child classes can call the builder from their parent
+     * without instantiating the parent constructor at that point in time.
+     */
+    private getTranspiledBuilder(state: BrsTranspileState, ancestors: ClassStatement[], body: Statement[]) {
+        let result = [] as TranspileResult;
+        result.push(`function ${this.getBuilderName(this.getName(ParseMode.BrightScript)!)}()\n`);
+        state.blockDepth++;
+        //indent
+        result.push(state.indent());
+
+        //construct parent class or empty object
+        if (ancestors[0]) {
+            const ancestorNamespace = ancestors[0].findAncestor<NamespaceStatement>(isNamespaceStatement);
+            let fullyQualifiedClassName = util.getFullyQualifiedClassName(
+                ancestors[0].getName(ParseMode.BrighterScript)!,
+                ancestorNamespace?.getName(ParseMode.BrighterScript)
+            );
+            result.push(
+                'instance = ',
+                this.getBuilderName(fullyQualifiedClassName), '()');
+        } else {
+            //use an empty object.
+            result.push('instance = {}');
+        }
+        result.push(
+            state.newline,
+            state.indent()
+        );
+        let parentClassIndex = this.getParentClassIndex(state);
+
         for (let statement of body) {
             //is field statement
             if (isFieldStatement(statement)) {
@@ -2304,7 +2333,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                     'instance.',
                     state.transpileToken(statement.name),
                     ' = ',
-                    ...statement.transpile(state),
+                    state.transpileToken(this.getMethodName(state, statement)),
                     state.newline,
                     state.indent()
                 );
