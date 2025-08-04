@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.69.13](https://github.com/rokucommunity/brighterscript/compare/0.69.12...v0.69.13) - 2025-08-04
+### Added
+ - Add projectDiscoveryExclude setting and files.watcherExclude support ([#1535](https://github.com/rokucommunity/brighterscript/pull/1535))
+ - Add max depth configuration for Roku project discovery ([#1533](https://github.com/rokucommunity/brighterscript/pull/1533))
+### Fixed
+ - Fix signature help crash on malformed function declarations ([#1536](https://github.com/rokucommunity/brighterscript/pull/1536))
+
+
+
 ## [0.69.12](https://github.com/rokucommunity/brighterscript/compare/0.69.11...v0.69.12) - 2025-07-07
 ### Fixed
  - Fix discovery when `projects` is empty ([#1529](https://github.com/rokucommunity/brighterscript/pull/1529))
