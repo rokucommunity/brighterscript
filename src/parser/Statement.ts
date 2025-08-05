@@ -2039,7 +2039,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
         const className = this.getName(ParseMode.BrightScript).replace(/\./g, '_');
         const ancestors = this.getAncestors(state);
-        const body = this.getClassBody(ancestors);
+        const body = this.getTranspiledClassBody(ancestors);
 
         //make the methods
         result.push(...this.getTranspiledMethods(state, className, body));
@@ -2203,7 +2203,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
     /**
      * Returns a copy of the class' body, with the constructor function added if it doesn't exist.
      */
-    private getClassBody(ancestors: ClassStatement[]): Statement[] {
+    private getTranspiledClassBody(ancestors: ClassStatement[]): Statement[] {
         const body = [];
         body.push(...this.body);
 
