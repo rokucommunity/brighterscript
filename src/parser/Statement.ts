@@ -2163,6 +2163,14 @@ export class ClassStatement extends Statement implements TypedefProvider {
         return ancestors;
     }
 
+    private getBuilderName(transpiledClassName: string) {
+        return `__${transpiledClassName}_builder`;
+    }
+
+    private getMethodIdentifier(transpiledClassName: string, statement: MethodStatement) {
+        return { ...statement.name, text: `__${transpiledClassName}_${statement.name.text}` };
+    }
+
     /**
      * Get the constructor function for this class (if exists), or undefined if not exist
      */
@@ -2198,68 +2206,6 @@ export class ClassStatement extends Statement implements TypedefProvider {
             }
         }
         return false;
-    }
-
-    /**
-     * Returns a copy of the class' body, with the constructor function added if it doesn't exist.
-     */
-    private getTranspiledClassBody(ancestors: ClassStatement[]): Statement[] {
-        const body = [];
-        body.push(...this.body);
-
-        //inject an empty "new" method if missing
-        if (!this.getConstructorFunction()) {
-            if (ancestors.length === 0) {
-                body.unshift(createMethodStatement('new', TokenKind.Sub));
-            } else {
-                const params = this.getConstructorParams(ancestors);
-                const call = new ExpressionStatement(
-                    new CallExpression(
-                        new VariableExpression(createToken(TokenKind.Identifier, 'super')),
-                        createToken(TokenKind.LeftParen),
-                        createToken(TokenKind.RightParen),
-                        params.map(x => new VariableExpression(x.name))
-                    )
-                );
-                body.unshift(
-                    new MethodStatement(
-                        [],
-                        createIdentifier('new'),
-                        new FunctionExpression(
-                            params.map(x => x.clone()),
-                            new Block([call]),
-                            createToken(TokenKind.Sub),
-                            createToken(TokenKind.EndSub),
-                            createToken(TokenKind.LeftParen),
-                            createToken(TokenKind.RightParen)
-                        ),
-                        null
-                    )
-                );
-            }
-        }
-
-        return body;
-    }
-
-    /**
-     * These are the methods that are defined in this class. They are transpiled outside of the class body
-     * to ensure they don't appear as "$anon_#" in stack traces and crash logs.
-     */
-    private getTranspiledMethods(state: BrsTranspileState, transpiledClassName: string, body: Statement[]) {
-        let result = [] as TranspileResult;
-        for (let statement of body) {
-            if (isMethodStatement(statement)) {
-                state.classStatement = this;
-                result.push(
-                    ...statement.transpile(state, this.getMethodIdentifier(transpiledClassName, statement)),
-                    state.newline,
-                    state.indent()
-                );
-                delete state.classStatement;
-            }
-        }
-        return result;
     }
 
     /**
@@ -2339,6 +2285,68 @@ export class ClassStatement extends Statement implements TypedefProvider {
         state.blockDepth--;
         result.push(state.indent());
         result.push(`end function`);
+        return result;
+    }
+
+    /**
+     * Returns a copy of the class' body, with the constructor function added if it doesn't exist.
+     */
+    private getTranspiledClassBody(ancestors: ClassStatement[]): Statement[] {
+        const body = [];
+        body.push(...this.body);
+
+        //inject an empty "new" method if missing
+        if (!this.getConstructorFunction()) {
+            if (ancestors.length === 0) {
+                body.unshift(createMethodStatement('new', TokenKind.Sub));
+            } else {
+                const params = this.getConstructorParams(ancestors);
+                const call = new ExpressionStatement(
+                    new CallExpression(
+                        new VariableExpression(createToken(TokenKind.Identifier, 'super')),
+                        createToken(TokenKind.LeftParen),
+                        createToken(TokenKind.RightParen),
+                        params.map(x => new VariableExpression(x.name))
+                    )
+                );
+                body.unshift(
+                    new MethodStatement(
+                        [],
+                        createIdentifier('new'),
+                        new FunctionExpression(
+                            params.map(x => x.clone()),
+                            new Block([call]),
+                            createToken(TokenKind.Sub),
+                            createToken(TokenKind.EndSub),
+                            createToken(TokenKind.LeftParen),
+                            createToken(TokenKind.RightParen)
+                        ),
+                        null
+                    )
+                );
+            }
+        }
+
+        return body;
+    }
+
+    /**
+     * These are the methods that are defined in this class. They are transpiled outside of the class body
+     * to ensure they don't appear as "$anon_#" in stack traces and crash logs.
+     */
+    private getTranspiledMethods(state: BrsTranspileState, transpiledClassName: string, body: Statement[]) {
+        let result = [] as TranspileResult;
+        for (let statement of body) {
+            if (isMethodStatement(statement)) {
+                state.classStatement = this;
+                result.push(
+                    ...statement.transpile(state, this.getMethodIdentifier(transpiledClassName, statement)),
+                    state.newline,
+                    state.indent()
+                );
+                delete state.classStatement;
+            }
+        }
         return result;
     }
 
@@ -2432,14 +2440,6 @@ export class ClassStatement extends Statement implements TypedefProvider {
             ),
             ['body', 'parentClassName']
         );
-    }
-
-    private getBuilderName(className: string) {
-        return `__${className}_builder`;
-    }
-
-    private getMethodIdentifier(className: string, statement: MethodStatement) {
-        return { ...statement.name, text: `__${className}_${statement.name.text}` };
     }
 }
 
