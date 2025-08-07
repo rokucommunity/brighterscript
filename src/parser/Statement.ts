@@ -2168,7 +2168,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
     }
 
     private getMethodIdentifier(transpiledClassName: string, statement: MethodStatement) {
-        return { ...statement.name, text: `__${transpiledClassName}_${statement.name.text}` };
+        return { ...statement.name, text: `__${transpiledClassName}_method_${statement.name.text}` };
     }
 
     /**

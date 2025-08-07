@@ -251,13 +251,13 @@ describe('BrsFile BrighterScript classes', () => {
                     end sub
                 end class
             `, `
-                sub __Animal_new()
+                sub __Animal_method_new()
                     m.species1 = "Animal"
                     print "From Animal: " + m.species
                 end sub
                 function __Animal_builder()
                     instance = {}
-                    instance.new = __Animal_new
+                    instance.new = __Animal_method_new
                     return instance
                 end function
                 function Animal()
@@ -265,7 +265,7 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new()
                     return instance
                 end function
-                sub __Duck_new()
+                sub __Duck_method_new()
                     m.super0_new()
                     m.species2 = "Duck"
                     print "From Duck: " + m.species
@@ -273,7 +273,7 @@ describe('BrsFile BrighterScript classes', () => {
                 function __Duck_builder()
                     instance = __Animal_builder()
                     instance.super0_new = instance.new
-                    instance.new = __Duck_new
+                    instance.new = __Duck_method_new
                     return instance
                 end function
                 function Duck()
@@ -295,11 +295,11 @@ describe('BrsFile BrighterScript classes', () => {
                     end sub
                 end class
             `, `
-                sub __Animal_new()
+                sub __Animal_method_new()
                 end sub
                 function __Animal_builder()
                     instance = {}
-                    instance.new = __Animal_new
+                    instance.new = __Animal_method_new
                     return instance
                 end function
                 function Animal()
@@ -307,14 +307,14 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new()
                     return instance
                 end function
-                sub __Duck_new()
+                sub __Duck_method_new()
                     'comment should not cause double super call
                     m.super0_new()
                 end sub
                 function __Duck_builder()
                     instance = __Animal_builder()
                     instance.super0_new = instance.new
-                    instance.new = __Duck_new
+                    instance.new = __Duck_method_new
                     return instance
                 end function
                 function Duck()
@@ -336,11 +336,11 @@ describe('BrsFile BrighterScript classes', () => {
                     end sub
                 end class
             `, `
-                sub __Animal_new()
+                sub __Animal_method_new()
                 end sub
                 function __Animal_builder()
                     instance = {}
-                    instance.new = __Animal_new
+                    instance.new = __Animal_method_new
                     return instance
                 end function
                 function Animal()
@@ -348,14 +348,14 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new()
                     return instance
                 end function
-                sub __Duck_new()
+                sub __Duck_method_new()
                     print "I am a statement which does not use m"
                     m.super0_new()
                 end sub
                 function __Duck_builder()
                     instance = __Animal_builder()
                     instance.super0_new = instance.new
-                    instance.new = __Duck_new
+                    instance.new = __Duck_method_new
                     return instance
                 end function
                 function Duck()
@@ -378,12 +378,12 @@ describe('BrsFile BrighterScript classes', () => {
                     className3 = "BabyDuck"
                 end class
             `, `
-                sub __Animal_new()
+                sub __Animal_method_new()
                     m.className1 = "Animal"
                 end sub
                 function __Animal_builder()
                     instance = {}
-                    instance.new = __Animal_new
+                    instance.new = __Animal_method_new
                     return instance
                 end function
                 function Animal()
@@ -391,14 +391,14 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new()
                     return instance
                 end function
-                sub __Duck_new()
+                sub __Duck_method_new()
                     m.super0_new()
                     m.className2 = "Duck"
                 end sub
                 function __Duck_builder()
                     instance = __Animal_builder()
                     instance.super0_new = instance.new
-                    instance.new = __Duck_new
+                    instance.new = __Duck_method_new
                     return instance
                 end function
                 function Duck()
@@ -406,14 +406,14 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new()
                     return instance
                 end function
-                sub __BabyDuck_new()
+                sub __BabyDuck_method_new()
                     m.super1_new()
                     m.className3 = "BabyDuck"
                 end sub
                 function __BabyDuck_builder()
                     instance = __Duck_builder()
                     instance.super1_new = instance.new
-                    instance.new = __BabyDuck_new
+                    instance.new = __BabyDuck_method_new
                     return instance
                 end function
                 function BabyDuck()
@@ -433,11 +433,11 @@ describe('BrsFile BrighterScript classes', () => {
                     end class
                 end namespace
             `, `
-                sub __Birds_WaterFowl_Duck_new()
+                sub __Birds_WaterFowl_Duck_method_new()
                 end sub
                 function __Birds_WaterFowl_Duck_builder()
                     instance = {}
-                    instance.new = __Birds_WaterFowl_Duck_new
+                    instance.new = __Birds_WaterFowl_Duck_method_new
                     return instance
                 end function
                 function Birds_WaterFowl_Duck()
@@ -445,13 +445,13 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new()
                     return instance
                 end function
-                sub __Birds_WaterFowl_BabyDuck_new()
+                sub __Birds_WaterFowl_BabyDuck_method_new()
                     m.super0_new()
                 end sub
                 function __Birds_WaterFowl_BabyDuck_builder()
                     instance = __Birds_WaterFowl_Duck_builder()
                     instance.super0_new = instance.new
-                    instance.new = __Birds_WaterFowl_BabyDuck_new
+                    instance.new = __Birds_WaterFowl_BabyDuck_method_new
                     return instance
                 end function
                 function Birds_WaterFowl_BabyDuck()
@@ -467,11 +467,11 @@ describe('BrsFile BrighterScript classes', () => {
                 class Duck
                 end class
             `, `
-                sub __Duck_new()
+                sub __Duck_method_new()
                 end sub
                 function __Duck_builder()
                     instance = {}
-                    instance.new = __Duck_new
+                    instance.new = __Duck_method_new
                     return instance
                 end function
                 function Duck()
@@ -499,11 +499,11 @@ describe('BrsFile BrighterScript classes', () => {
                 class BabyDuck extends Duck
                 end class
             `, `
-                sub __Animal_new(p1)
+                sub __Animal_method_new(p1)
                 end sub
                 function __Animal_builder()
                     instance = {}
-                    instance.new = __Animal_new
+                    instance.new = __Animal_method_new
                     return instance
                 end function
                 function Animal(p1)
@@ -511,13 +511,13 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new(p1)
                     return instance
                 end function
-                sub __Bird_new(p1)
+                sub __Bird_method_new(p1)
                     m.super0_new(p1)
                 end sub
                 function __Bird_builder()
                     instance = __Animal_builder()
                     instance.super0_new = instance.new
-                    instance.new = __Bird_new
+                    instance.new = __Bird_method_new
                     return instance
                 end function
                 function Bird(p1)
@@ -525,14 +525,14 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new(p1)
                     return instance
                 end function
-                sub __Duck_new(p1, p2)
+                sub __Duck_method_new(p1, p2)
                     m.super1_new(p1)
                     m.p2 = p2
                 end sub
                 function __Duck_builder()
                     instance = __Bird_builder()
                     instance.super1_new = instance.new
-                    instance.new = __Duck_new
+                    instance.new = __Duck_method_new
                     return instance
                 end function
                 function Duck(p1, p2)
@@ -540,13 +540,13 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new(p1, p2)
                     return instance
                 end function
-                sub __BabyDuck_new(p1, p2)
+                sub __BabyDuck_method_new(p1, p2)
                     m.super2_new(p1, p2)
                 end sub
                 function __BabyDuck_builder()
                     instance = __Duck_builder()
                     instance.super2_new = instance.new
-                    instance.new = __BabyDuck_new
+                    instance.new = __BabyDuck_method_new
                     return instance
                 end function
                 function BabyDuck(p1, p2)
@@ -564,11 +564,11 @@ describe('BrsFile BrighterScript classes', () => {
                     end sub
                 end class
             `, `
-                sub __Duck_new(name as string, age as integer)
+                sub __Duck_method_new(name as string, age as integer)
                 end sub
                 function __Duck_builder()
                     instance = {}
-                    instance.new = __Duck_new
+                    instance.new = __Duck_method_new
                     return instance
                 end function
                 function Duck(name as string, age as integer)
@@ -593,11 +593,11 @@ describe('BrsFile BrighterScript classes', () => {
                     end sub
                 end class
             `, `
-                sub __Animal_new(name as string)
+                sub __Animal_method_new(name as string)
                 end sub
                 function __Animal_builder()
                     instance = {}
-                    instance.new = __Animal_new
+                    instance.new = __Animal_method_new
                     return instance
                 end function
                 function Animal(name as string)
@@ -605,14 +605,14 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new(name)
                     return instance
                 end function
-                sub __Duck_new(name as string, age as integer)
+                sub __Duck_method_new(name as string, age as integer)
                     m.super0_new(name)
                     m.super0_DoSomething()
                 end sub
                 function __Duck_builder()
                     instance = __Animal_builder()
                     instance.super0_new = instance.new
-                    instance.new = __Duck_new
+                    instance.new = __Duck_method_new
                     return instance
                 end function
                 function Duck(name as string, age as integer)
@@ -642,15 +642,15 @@ describe('BrsFile BrighterScript classes', () => {
                     end function
                 end class
             `, `
-                sub __Creature_new(name as string)
+                sub __Creature_method_new(name as string)
                 end sub
-                function __Creature_sayHello(text)
+                function __Creature_method_sayHello(text)
                     ? text
                 end function
                 function __Creature_builder()
                     instance = {}
-                    instance.new = __Creature_new
-                    instance.sayHello = __Creature_sayHello
+                    instance.new = __Creature_method_new
+                    instance.sayHello = __Creature_method_sayHello
                     return instance
                 end function
                 function Creature(name as string)
@@ -658,10 +658,10 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new(name)
                     return instance
                 end function
-                sub __Duck_new(name as string)
+                sub __Duck_method_new(name as string)
                     m.super0_new(name)
                 end sub
-                function __Duck_sayHello(text)
+                function __Duck_method_sayHello(text)
                     text = "The duck says " + text
                     if text <> invalid
                         m.super0_sayHello(text)
@@ -670,9 +670,9 @@ describe('BrsFile BrighterScript classes', () => {
                 function __Duck_builder()
                     instance = __Creature_builder()
                     instance.super0_new = instance.new
-                    instance.new = __Duck_new
+                    instance.new = __Duck_method_new
                     instance.super0_sayHello = instance.sayHello
-                    instance.sayHello = __Duck_sayHello
+                    instance.sayHello = __Duck_method_sayHello
                     return instance
                 end function
                 function Duck(name as string)
@@ -751,11 +751,11 @@ describe('BrsFile BrighterScript classes', () => {
                     end sub
                 end class
             `, `
-                sub __Parent_new()
+                sub __Parent_method_new()
                 end sub
                 function __Parent_builder()
                     instance = {}
-                    instance.new = __Parent_new
+                    instance.new = __Parent_method_new
                     return instance
                 end function
                 function Parent()
@@ -763,13 +763,13 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new()
                     return instance
                 end function
-                sub __Child_new()
+                sub __Child_method_new()
                     m.super0_new()
                 end sub
                 function __Child_builder()
                     instance = __Parent_builder()
                     instance.super0_new = instance.new
-                    instance.new = __Child_new
+                    instance.new = __Child_method_new
                     return instance
                 end function
                 function Child()
@@ -791,12 +791,12 @@ describe('BrsFile BrighterScript classes', () => {
                     name = "Bob"
                 end class
             `, `
-                sub __Person_new()
+                sub __Person_method_new()
                     m.name = "Bob"
                 end sub
                 function __Person_builder()
                     instance = {}
-                    instance.new = __Person_new
+                    instance.new = __Person_method_new
                     return instance
                 end function
                 function Person()
@@ -852,17 +852,17 @@ describe('BrsFile BrighterScript classes', () => {
                     '> Waddling...\\nDewey moved 2 meters\\nFell over...I'm new at this
                 end sub
             `, `
-                sub __Animal_new(name as string)
+                sub __Animal_method_new(name as string)
                     m.name = invalid
                     m.name = name
                 end sub
-                sub __Animal_move(distanceInMeters as integer)
+                sub __Animal_method_move(distanceInMeters as integer)
                     print m.name + " moved " + distanceInMeters.ToStr() + " meters"
                 end sub
                 function __Animal_builder()
                     instance = {}
-                    instance.new = __Animal_new
-                    instance.move = __Animal_move
+                    instance.new = __Animal_method_new
+                    instance.move = __Animal_method_move
                     return instance
                 end function
                 function Animal(name as string)
@@ -870,19 +870,19 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new(name)
                     return instance
                 end function
-                sub __Duck_new(name as string)
+                sub __Duck_method_new(name as string)
                     m.super0_new(name)
                 end sub
-                sub __Duck_move(distanceInMeters as integer)
+                sub __Duck_method_move(distanceInMeters as integer)
                     print "Waddling..."
                     m.super0_move(distanceInMeters)
                 end sub
                 function __Duck_builder()
                     instance = __Animal_builder()
                     instance.super0_new = instance.new
-                    instance.new = __Duck_new
+                    instance.new = __Duck_method_new
                     instance.super0_move = instance.move
-                    instance.move = __Duck_move
+                    instance.move = __Duck_method_move
                     return instance
                 end function
                 function Duck(name as string)
@@ -890,19 +890,19 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new(name)
                     return instance
                 end function
-                sub __BabyDuck_new(name as string)
+                sub __BabyDuck_method_new(name as string)
                     m.super1_new(name)
                 end sub
-                sub __BabyDuck_move(distanceInMeters as integer)
+                sub __BabyDuck_method_move(distanceInMeters as integer)
                     m.super1_move(distanceInMeters)
                     print "Fell over...I'm new at this"
                 end sub
                 function __BabyDuck_builder()
                     instance = __Duck_builder()
                     instance.super1_new = instance.new
-                    instance.new = __BabyDuck_new
+                    instance.new = __BabyDuck_method_new
                     instance.super1_move = instance.move
-                    instance.move = __BabyDuck_move
+                    instance.move = __BabyDuck_method_move
                     return instance
                 end function
                 function BabyDuck(name as string)
@@ -940,15 +940,15 @@ describe('BrsFile BrighterScript classes', () => {
                     end sub
                 end class
             `, `
-                sub __Duck_new()
+                sub __Duck_method_new()
                 end sub
-                sub __Duck_walk(meters as integer)
+                sub __Duck_method_walk(meters as integer)
                     print "Walked " + meters.ToStr() + " meters"
                 end sub
                 function __Duck_builder()
                     instance = {}
-                    instance.new = __Duck_new
-                    instance.walk = __Duck_walk
+                    instance.new = __Duck_method_new
+                    instance.walk = __Duck_method_walk
                     return instance
                 end function
                 function Duck()
@@ -956,19 +956,19 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new()
                     return instance
                 end function
-                sub __BabyDuck_new()
+                sub __BabyDuck_method_new()
                     m.super0_new()
                 end sub
-                sub __BabyDuck_walk(meters as integer)
+                sub __BabyDuck_method_walk(meters as integer)
                     print "Tripped"
                     m.super0_walk(meters)
                 end sub
                 function __BabyDuck_builder()
                     instance = __Duck_builder()
                     instance.super0_new = instance.new
-                    instance.new = __BabyDuck_new
+                    instance.new = __BabyDuck_method_new
                     instance.super0_walk = instance.walk
-                    instance.walk = __BabyDuck_walk
+                    instance.walk = __BabyDuck_method_walk
                     return instance
                 end function
                 function BabyDuck()
@@ -991,12 +991,12 @@ describe('BrsFile BrighterScript classes', () => {
                     end enum
                 end namespace
             `, `
-                sub __MyNS_HasEnumKlass_new()
+                sub __MyNS_HasEnumKlass_method_new()
                     m.enumValue = "A"
                 end sub
                 function __MyNS_HasEnumKlass_builder()
                     instance = {}
-                    instance.new = __MyNS_HasEnumKlass_new
+                    instance.new = __MyNS_HasEnumKlass_method_new
                     return instance
                 end function
                 function MyNS_HasEnumKlass()
@@ -1026,13 +1026,13 @@ describe('BrsFile BrighterScript classes', () => {
                     end enum
                 end namespace
             `, `
-                sub __MyNS_SubKlass_new()
+                sub __MyNS_SubKlass_method_new()
                     m.super0_new("B")
                 end sub
                 function __MyNS_SubKlass_builder()
                     instance = __MyNS_SuperKlass_builder()
                     instance.super0_new = instance.new
-                    instance.new = __MyNS_SubKlass_new
+                    instance.new = __MyNS_SubKlass_method_new
                     return instance
                 end function
                 function MyNS_SubKlass()
@@ -1040,12 +1040,12 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new()
                     return instance
                 end function
-                sub __MyNS_SuperKlass_new(enumVal)
+                sub __MyNS_SuperKlass_method_new(enumVal)
                     print enumVal
                 end sub
                 function __MyNS_SuperKlass_builder()
                     instance = {}
-                    instance.new = __MyNS_SuperKlass_new
+                    instance.new = __MyNS_SuperKlass_method_new
                     return instance
                 end function
                 function MyNS_SuperKlass(enumVal)
@@ -1073,7 +1073,7 @@ describe('BrsFile BrighterScript classes', () => {
                     end enum
                 end namespace
             `, `
-                sub __MyNS_HasEnumKlass_new()
+                sub __MyNS_HasEnumKlass_method_new()
                     m.myArray = [
                         true
                         true
@@ -1083,7 +1083,7 @@ describe('BrsFile BrighterScript classes', () => {
                 end sub
                 function __MyNS_HasEnumKlass_builder()
                     instance = {}
-                    instance.new = __MyNS_HasEnumKlass_new
+                    instance.new = __MyNS_HasEnumKlass_method_new
                     return instance
                 end function
                 function MyNS_HasEnumKlass()
@@ -1110,7 +1110,7 @@ describe('BrsFile BrighterScript classes', () => {
                     end enum
                 end namespace
             `, `
-                sub __MyNS_HasEnumKlass_new()
+                sub __MyNS_HasEnumKlass_method_new()
                     m.myArray = [
                         true
                         true
@@ -1120,7 +1120,7 @@ describe('BrsFile BrighterScript classes', () => {
                 end sub
                 function __MyNS_HasEnumKlass_builder()
                     instance = {}
-                    instance.new = __MyNS_HasEnumKlass_new
+                    instance.new = __MyNS_HasEnumKlass_method_new
                     return instance
                 end function
                 function MyNS_HasEnumKlass()
@@ -1238,15 +1238,15 @@ describe('BrsFile BrighterScript classes', () => {
         expect(
             fsExtra.readFileSync(s`${stagingDir}/source/lib.brs`).toString().trimEnd()
         ).to.eql(trim`
-            sub __Being_new()
+            sub __Being_method_new()
             end sub
-            function __Being_think()
+            function __Being_method_think()
                 print "thinking..."
             end function
             function __Being_builder()
                 instance = {}
-                instance.new = __Being_new
-                instance.think = __Being_think
+                instance.new = __Being_method_new
+                instance.think = __Being_method_think
                 return instance
             end function
             function Being()
@@ -1254,17 +1254,17 @@ describe('BrsFile BrighterScript classes', () => {
                 instance.new()
                 return instance
             end function
-            sub __Human_new()
+            sub __Human_method_new()
                 m.super0_new()
             end sub
-            function __Human_think()
+            function __Human_method_think()
                 m.super0_think()
             end function
             function __Human_builder()
                 instance = __Being_builder()
                 instance.super0_new = instance.new
-                instance.new = __Human_new
-                instance.think = __Human_think
+                instance.new = __Human_method_new
+                instance.think = __Human_method_think
                 return instance
             end function
             function Human()
@@ -1732,13 +1732,13 @@ describe('BrsFile BrighterScript classes', () => {
                 end class
             end namespace
         `, `
-            sub __App_ClassC_new()
+            sub __App_ClassC_method_new()
                 m.super1_new()
             end sub
             function __App_ClassC_builder()
                 instance = __App_ClassB_builder()
                 instance.super1_new = instance.new
-                instance.new = __App_ClassC_new
+                instance.new = __App_ClassC_method_new
                 return instance
             end function
             function App_ClassC()
@@ -1761,13 +1761,13 @@ describe('BrsFile BrighterScript classes', () => {
                 end class
             end namespace
         `, `
-            sub __App_ClassB_new()
+            sub __App_ClassB_method_new()
                 m.super0_new()
             end sub
             function __App_ClassB_builder()
                 instance = __ClassA_builder()
                 instance.super0_new = instance.new
-                instance.new = __App_ClassB_new
+                instance.new = __App_ClassB_method_new
                 return instance
             end function
             function App_ClassB()
@@ -1834,12 +1834,12 @@ describe('BrsFile BrighterScript classes', () => {
                 end class
             end namespace
         `, `
-            sub __App_CoreClass_new()
+            sub __App_CoreClass_method_new()
                 print "CoreClass.new()"
             end sub
             function __App_CoreClass_builder()
                 instance = {}
-                instance.new = __App_CoreClass_new
+                instance.new = __App_CoreClass_method_new
                 return instance
             end function
             function App_CoreClass()
@@ -1847,13 +1847,13 @@ describe('BrsFile BrighterScript classes', () => {
                 instance.new()
                 return instance
             end function
-            sub __App_Logic_FirstClass_new()
+            sub __App_Logic_FirstClass_method_new()
                 m.super0_new()
             end sub
             function __App_Logic_FirstClass_builder()
                 instance = __App_CoreClass_builder()
                 instance.super0_new = instance.new
-                instance.new = __App_Logic_FirstClass_new
+                instance.new = __App_Logic_FirstClass_method_new
                 return instance
             end function
             function App_Logic_FirstClass()
@@ -1861,13 +1861,13 @@ describe('BrsFile BrighterScript classes', () => {
                 instance.new()
                 return instance
             end function
-            sub __App_Logic_SecondClass_new()
+            sub __App_Logic_SecondClass_method_new()
                 m.super1_new()
             end sub
             function __App_Logic_SecondClass_builder()
                 instance = __App_Logic_FirstClass_builder()
                 instance.super1_new = instance.new
-                instance.new = __App_Logic_SecondClass_new
+                instance.new = __App_Logic_SecondClass_method_new
                 return instance
             end function
             function App_Logic_SecondClass()
@@ -1875,13 +1875,13 @@ describe('BrsFile BrighterScript classes', () => {
                 instance.new()
                 return instance
             end function
-            sub __App_OtherLogic_FinalClass_new()
+            sub __App_OtherLogic_FinalClass_method_new()
                 m.super2_new()
             end sub
             function __App_OtherLogic_FinalClass_builder()
                 instance = __App_Logic_SecondClass_builder()
                 instance.super2_new = instance.new
-                instance.new = __App_OtherLogic_FinalClass_new
+                instance.new = __App_OtherLogic_FinalClass_method_new
                 return instance
             end function
             function App_OtherLogic_FinalClass()

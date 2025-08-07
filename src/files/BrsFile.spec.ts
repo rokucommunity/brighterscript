@@ -2387,16 +2387,16 @@ describe('BrsFile', () => {
                         ' alpha.charlie()
                     end sub
 
-                    sub __Person_new()
+                    sub __Person_method_new()
                         m.name = invalid
                         print m.name
                     end sub
-                    sub __Person_test()
+                    sub __Person_method_test()
                     end sub
                     function __Person_builder()
                         instance = {}
-                        instance.new = __Person_new
-                        instance.test = __Person_test
+                        instance.new = __Person_method_new
+                        instance.test = __Person_method_test
                         return instance
                     end function
                     function Person()
