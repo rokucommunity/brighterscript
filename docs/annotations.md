@@ -48,10 +48,11 @@ end
 transpiles to
 
 ```brightscript
+sub __MyComp_method_new()
+end sub
 function __MyComp_builder()
     instance = {}
-    instance.new = sub()
-    end sub
+    instance.new = __MyComp_method_new
     return instance
 end function
 function MyComp()

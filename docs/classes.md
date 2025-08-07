@@ -19,13 +19,15 @@ end class
 And here's the transpiled BrightScript code
 
 ```BrightScript
+sub __Animal_method_new()
+    m.name = invalid
+end sub
+function __Animal_method_walk()
+end function
 function __Animal_builder()
     instance = {}
-    instance.new = sub()
-        m.name = invalid
-    end sub
-    instance.walk = function()
-    end function
+    instance.new = __Animal_method_new
+    instance.walk = __Animal_method_walk
     return instance
 end function
 function Animal()
@@ -35,7 +37,9 @@ function Animal()
 end function
 ```
 
-Notice that there are two functions created in the transpiled code for the `Animal` class. At runtime, BrighterScript classes are built in two steps in order to support class inheritance. The first step uses the `__ClassName_Build()` method to create the skeleton structure of the class. Then the class's constructor function will be run. Child classes will call the parent's `__ParentClassName_Build()` method, then rename overridden  methods, and then call the child's constructor (without calling the parent constructor). Take a look at the transpiled output of the other examples below for more information on this.
+Notice that there are four functions created in the transpiled code for the `Animal` class:
+- At runtime, BrighterScript classes are built in two steps in order to support class inheritance. The first step uses the `__ClassName_builder()` method to create the skeleton structure of the class. Then the class's constructor function will be run. Child classes will call the parent's `__ParentClassName_builder()` method, then rewrite overridden methods, and then call the child's constructor (without calling the parent constructor). Take a look at the transpiled output of the other examples below for more information on this.
+- Class methods are hoisted as named functions, to prevent an excessive amount of "$anon_..." functions in stack traces, crash logs, and profiler outputs.
 
 
 ## Inheritance
@@ -85,15 +89,17 @@ end sub
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
+sub __Animal_method_new(name as string)
+    m.name = invalid
+    m.name = name
+end sub
+sub __Animal_method_move(distanceInMeters as integer)
+    print m.name + " moved " + distanceInMeters.ToStr() + " meters"
+end sub
 function __Animal_builder()
     instance = {}
-    instance.new = sub(name as string)
-        m.name = invalid
-        m.name = name
-    end sub
-    instance.move = sub(distanceInMeters as integer)
-        print m.name + " moved " + distanceInMeters.ToStr() + " meters"
-    end sub
+    instance.new = __Animal_method_new
+    instance.move = __Animal_method_move
     return instance
 end function
 function Animal(name as string)
@@ -101,17 +107,19 @@ function Animal(name as string)
     instance.new(name)
     return instance
 end function
+sub __Duck_method_new(name as string)
+    m.super0_new(name)
+end sub
+sub __Duck_method_move(distanceInMeters as integer)
+    print "Waddling..."
+    m.super0_move(distanceInMeters)
+end sub
 function __Duck_builder()
     instance = __Animal_builder()
     instance.super0_new = instance.new
-    instance.new = sub(name as string)
-        m.super0_new(name)
-    end sub
+    instance.new = __Duck_method_new
     instance.super0_move = instance.move
-    instance.move = sub(distanceInMeters as integer)
-        print "Waddling..."
-        m.super0_move(distanceInMeters)
-    end sub
+    instance.move = __Duck_method_move
     return instance
 end function
 function Duck(name as string)
@@ -119,17 +127,19 @@ function Duck(name as string)
     instance.new(name)
     return instance
 end function
+sub __BabyDuck_method_new(name as string)
+    m.super1_new(name)
+end sub
+sub __BabyDuck_method_move(distanceInMeters as integer)
+    m.super1_move(distanceInMeters)
+    print "Fell over...I'm new at this"
+end sub
 function __BabyDuck_builder()
     instance = __Duck_builder()
     instance.super1_new = instance.new
-    instance.new = sub(name as string)
-        m.super1_new(name)
-    end sub
+    instance.new = __BabyDuck_method_new
     instance.super1_move = instance.move
-    instance.move = sub(distanceInMeters as integer)
-        m.super1_move(distanceInMeters)
-        print "Fell over...I'm new at this"
-    end sub
+    instance.move = __BabyDuck_method_move
     return instance
 end function
 function BabyDuck(name as string)
@@ -170,13 +180,14 @@ end sub
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
+sub __Duck_method_new(name as string)
+    m.name = invalid
+    m.end sub = invalid
+    m.name = name
+end sub
 function __Duck_builder()
     instance = {}
-    instance.new = sub(name as string)
-        m.name = invalid
-        m.end sub = invalid
-        m.name = name
-    end sub
+    instance.new = __Duck_method_new
     return instance
 end function
 function Duck(name as string)
@@ -212,12 +223,13 @@ end class
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
+sub __Duck_method_move(name as string)
+    m.name = invalid
+    m.name = name
+end sub
 function __Duck_builder()
     instance = {}
-    instance.new = sub(name as string)
-        m.name = invalid
-        m.name = name
-    end sub
+    instance.new = __Duck_method_move
     return instance
 end function
 function Duck(name as string)
@@ -225,16 +237,17 @@ function Duck(name as string)
     instance.new(name)
     return instance
 end function
+sub __BabyDuck_method_move(name as string, age as integer)
+    m.super0_new()
+    m.age = invalid
+    'the first line in this constructor must be a call to super()
+    m.super0_new(name)
+    m.age = age
+end sub
 function __BabyDuck_builder()
     instance = __Duck_builder()
     instance.super0_new = instance.new
-    instance.new = sub(name as string, age as integer)
-        m.super0_new()
-        m.age = invalid
-        'the first line in this constructor must be a call to super()
-        m.super0_new(name)
-        m.age = age
-    end sub
+    instance.new = __BabyDuck_method_move
     return instance
 end function
 function BabyDuck(name as string, age as integer)
@@ -267,13 +280,15 @@ end sub
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
+sub __Duck_method_new()
+end sub
+sub __Duck_method_Eat()
+    print "Ate all the food"
+end sub
 function __Duck_builder()
     instance = {}
-    instance.new = sub()
-    end sub
-    instance.Eat = sub()
-        print "Ate all the food"
-    end sub
+    instance.new = __Duck_method_new
+    instance.Eat = __Duck_method_Eat
     return instance
 end function
 function Duck()
@@ -281,15 +296,16 @@ function Duck()
     instance.new()
     return instance
 end function
+sub __BabyDuck_method_new()
+end sub
+sub __BabyDuck_method_Eat()
+    print "Ate half the food, because I'm a baby duck"
+end sub
 function __BabyDuck_builder()
     instance = {}
-    instance.new = sub()
-        m.end sub = invalid
-    end sub
-    instance.super-1_Eat = instance.Eat
-    instance.Eat = sub()
-        print "Ate half the food, because I'm a baby duck"
-    end sub
+    instance.new = __BabyDuck_method_new
+    instance.super1_Eat = instance.Eat
+    instance.Eat = __BabyDuck_method_Eat
     return instance
 end function
 function BabyDuck()
@@ -322,13 +338,15 @@ end class
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
+sub __Duck_method_new()
+end sub
+sub __Duck_method_walk(meters as integer)
+    print "Walked " + meters.ToStr() + " meters"
+end sub
 function __Duck_builder()
     instance = {}
-    instance.new = sub()
-    end sub
-    instance.walk = sub(meters as integer)
-        print "Walked " + meters.ToStr() + " meters"
-    end sub
+    instance.new = __Duck_method_new
+    instance.walk = __Duck_method_walk
     return instance
 end function
 function Duck()
@@ -336,17 +354,19 @@ function Duck()
     instance.new()
     return instance
 end function
+sub __BabyDuck_method_new()
+    m.super0_new()
+end sub
+sub __BabyDuck_method_walk(meters as integer)
+    print "Tripped"
+    m.super0_walk(meters)
+end sub
 function __BabyDuck_builder()
     instance = __Duck_builder()
     instance.super0_new = instance.new
-    instance.new = sub()
-        m.super0_new()
-    end sub
+    instance.new = __BabyDuck_method_new
     instance.super0_walk = instance.walk
-    instance.walk = sub(meters as integer)
-        print "Tripped"
-        m.super0_walk(meters)
-    end sub
+    instance.walk = __BabyDuck_method_walk
     return instance
 end function
 function BabyDuck()
@@ -383,22 +403,25 @@ end class
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
+sub __Person_method_new()
+    m.name = invalid
+    m.socialSecurityNumber = invalid
+end sub
+function __Person_method_getName()
+    return m.name
+end function
+sub __Person_method_setSocialSecurityNumber(value as string)
+    m.socialSecurityNumber = value
+end sub
 function __Person_builder()
     instance = {}
-    instance.new = sub()
-        m.name = invalid
-        m.socialSecurityNumber = invalid
-    end sub
+    instance.new = __Person_method_new
     'defaults to public
     'specified private
     'defaults to public
-    instance.getName = function()
-        return m.name
-    end function
+    instance.getName = __Person_method_getName
     'specified private
-    instance.setSocialSecurityNumber = sub(value as string)
-        m.socialSecurityNumber = value
-    end sub
+    instance.setSocialSecurityNumber = __Person_method_setSocialSecurityNumber
     return instance
 end function
 function Person()
@@ -414,7 +437,7 @@ You will get compile-time errors whenever you access private members of a class 
 ## Dynamic type by default
 You can specify a type for class fields and a return type for methods. However, this is entirely optional. All fields and methods have a default type of `dynamic`. However, BrighterScript will attempt to infer the type from usage. Take this for example:
 
-```vb
+```BrighterScript
 class Person
     'defaults to type "dynamic"
     name
@@ -432,18 +455,20 @@ end class
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
+sub __Person_method_new()
+    m.name = invalid
+    m.age = 12
+end sub
+function __Person_method_getAge()
+    return m.age
+end function
 function __Person_builder()
     instance = {}
-    instance.new = sub()
-        m.name = invalid
-        m.age = 12
-    end sub
+    instance.new = __Person_method_new
     'defaults to type "dynamic"
     'infers type "integer"
     'infers type "integer"
-    instance.getAge = function()
-        return m.age
-    end function
+    instance.getAge = __Person_method_getAge
     return instance
 end function
 function Person()
@@ -467,12 +492,13 @@ end class
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
+sub __Duck_method_new()
+    m.name = "Donald"
+    m.hasChildren = true
+end sub
 function __Duck_builder()
     instance = {}
-    instance.new = sub()
-        m.name = "Donald"
-        m.hasChildren = true
-    end sub
+    instance.new = __Duck_method_new
     return instance
 end function
 function Duck()
@@ -517,10 +543,11 @@ end namespace
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
+sub __Vertibrates_Birds_Animal_method_new()
+end sub
 function __Vertibrates_Birds_Animal_builder()
     instance = {}
-    instance.new = sub()
-    end sub
+    instance.new = __Vertibrates_Birds_Animal_method_new
     return instance
 end function
 function Vertibrates_Birds_Animal()
@@ -528,12 +555,13 @@ function Vertibrates_Birds_Animal()
     instance.new()
     return instance
 end function
+sub __Vertibrates_Birds_Duck_method_new()
+    m.super0_new()
+end sub
 function __Vertibrates_Birds_Duck_builder()
     instance = __Vertibrates_Birds_Animal_builder()
     instance.super0_new = instance.new
-    instance.new = sub()
-        m.super0_new()
-    end sub
+    instance.new = __Vertibrates_Birds_Duck_method_new
     return instance
 end function
 function Vertibrates_Birds_Duck()
@@ -580,14 +608,16 @@ end sub
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
+sub __Person_method_new(name as string)
+    m.name = name
+end sub
+sub __Person_method_sayHello()
+    print m.name
+end sub
 function __Person_builder()
     instance = {}
-    instance.new = sub(name as string)
-        m.name = name
-    end sub
-    instance.sayHello = sub()
-        print m.name
-    end sub
+    instance.new = __Person_method_new
+    instance.sayHello = __Person_method_sayHello
     return instance
 end function
 function Person(name as string)
@@ -628,15 +658,16 @@ end class
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
+sub __Video_method_new()
+    m.url = invalid
+    m.length = invalid
+    m.subtitleUrl = invalid
+    m.rating = invalid
+    m.genre = invalid
+end sub
 function __Video_builder()
     instance = {}
-    instance.new = sub()
-        m.url = invalid
-        m.length = invalid
-        m.subtitleUrl = invalid
-        m.rating = invalid
-        m.genre = invalid
-    end sub
+    instance.new = __Video_method_new
     return instance
 end function
 function Video()
