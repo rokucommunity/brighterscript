@@ -1027,11 +1027,17 @@ export class Program {
         let file = this.getFile(srcPath);
         let result: Hover[];
         if (file) {
+            //find the scopes for this file
+            let scopes = this.getScopesForFile(file);
+
+            //if there are no scopes, include the global scope so we at least get the built-in functions
+            scopes = scopes.length > 0 ? scopes : [this.globalScope];
+
             const event = {
                 program: this,
                 file: file,
                 position: position,
-                scopes: this.getScopesForFile(file),
+                scopes: scopes,
                 hovers: []
             } as ProvideHoverEvent;
             this.plugins.emit('beforeProvideHover', event);
