@@ -1,13 +1,13 @@
-import { createAssignmentStatement, createBlock, createDottedSetStatement, createIfStatement, createIndexedSetStatement, createToken } from '../../astUtils/creators';
-import { isAssignmentStatement, isBinaryExpression, isBlock, isBody, isBrsFile, isDottedGetExpression, isDottedSetStatement, isGroupingExpression, isIndexedGetExpression, isIndexedSetStatement, isLiteralExpression, isUnaryExpression, isVariableExpression } from '../../astUtils/reflection';
+import { createAssignmentStatement, createBlock, createDottedSetStatement, createIfStatement, createIndexedSetStatement, createToken, createVariableExpression, createInvalidLiteral } from '../../astUtils/creators';
+import { isAssignmentStatement, isBinaryExpression, isBlock, isBody, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isDottedSetStatement, isGroupingExpression, isIndexedGetExpression, isIndexedSetStatement, isLiteralExpression, isUnaryExpression, isVariableExpression } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BeforeFileTranspileEvent } from '../../interfaces';
 import type { Token } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { Expression, Statement } from '../../parser/AstNode';
-import type { TernaryExpression } from '../../parser/Expression';
-import { LiteralExpression } from '../../parser/Expression';
+import type { TernaryExpression, NullCoalescingExpression } from '../../parser/Expression';
+import { BinaryExpression, LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { IfStatement } from '../../parser/Statement';
 import type { Scope } from '../../Scope';
@@ -41,6 +41,9 @@ export class BrsFilePreTranspileProcessor {
         const visitor = createVisitor({
             TernaryExpression: (ternaryExpression) => {
                 this.processTernaryExpression(ternaryExpression, visitor, walkMode);
+            },
+            NullCoalescingExpression: (nullCoalescingExpression) => {
+                this.processNullCoalescingExpression(nullCoalescingExpression, visitor, walkMode);
             }
         });
         this.event.file.ast.walk(visitor, { walkMode: walkMode });
@@ -174,6 +177,84 @@ export class BrsFilePreTranspileProcessor {
                 this.event.editor.setProperty(owner, key, ifStatement);
             }
             //we've injected an ifStatement, so now we need to trigger a walk to handle any nested ternary expressions
+            ifStatement.walk(visitor, { walkMode: walkMode });
+        }
+    }
+
+    private processNullCoalescingExpression(nullCoalescingExpression: NullCoalescingExpression, visitor: ReturnType<typeof createVisitor>, walkMode: WalkMode) {
+        // Check if this null coalescing expression has complex expressions that require scope protection
+        const consequentInfo = util.getExpressionInfo(nullCoalescingExpression.consequent, this.event.file);
+        const alternateInfo = util.getExpressionInfo(nullCoalescingExpression.alternate, this.event.file);
+
+        let hasComplexExpression = [
+            ...consequentInfo.expressions,
+            ...alternateInfo.expressions
+        ].find(e => isCallExpression(e) || isCallfuncExpression(e) || isDottedGetExpression(e) || isIndexedGetExpression(e));
+
+        // Only optimize if there are no complex expressions
+        if (hasComplexExpression) {
+            return;
+        }
+
+        function getOwnerAndKey(statement: Statement) {
+            const parent = statement.parent;
+            if (isBlock(parent) || isBody(parent)) {
+                let idx = parent.statements.indexOf(statement);
+                if (idx > -1) {
+                    return { owner: parent.statements, key: idx };
+                }
+            }
+        }
+
+        //if the null coalescing expression is part of a simple assignment to a local variable, rewrite it as an `IfStatement`
+        let parent = nullCoalescingExpression.findAncestor(x => !isGroupingExpression(x));
+        let ifStatement: IfStatement;
+
+        // Only support simple AssignmentStatement to local variables
+        if (isAssignmentStatement(parent)) {
+            // For simple assignments like `a = user ?? {}`, use the original logic
+            // Create condition: variableName = invalid
+            const condition = new BinaryExpression(
+                createVariableExpression(parent.name.text),
+                createToken(TokenKind.Equal, '=', nullCoalescingExpression.questionQuestionToken.range),
+                createInvalidLiteral('invalid', nullCoalescingExpression.questionQuestionToken.range)
+            );
+
+            ifStatement = createIfStatement({
+                if: createToken(TokenKind.If, 'if', nullCoalescingExpression.questionQuestionToken.range),
+                condition: condition,
+                then: createToken(TokenKind.Then, 'then', nullCoalescingExpression.questionQuestionToken.range),
+                thenBranch: createBlock({
+                    statements: [
+                        createAssignmentStatement({
+                            name: parent.name,
+                            equals: parent.equals,
+                            value: nullCoalescingExpression.alternate
+                        })
+                    ]
+                }),
+                endIf: createToken(TokenKind.EndIf, 'end if', nullCoalescingExpression.questionQuestionToken.range)
+            });
+
+            // First, we need to create the initial assignment statement
+            const initialAssignment = createAssignmentStatement({
+                name: parent.name,
+                equals: parent.equals,
+                value: nullCoalescingExpression.consequent
+            });
+
+            // Replace the parent with a sequence: first the initial assignment, then the if statement
+            let { owner, key } = getOwnerAndKey(parent as Statement) ?? {};
+            if (owner && key !== undefined) {
+                // Replace with initial assignment first
+                this.event.editor.setProperty(owner, key, initialAssignment);
+                // Insert the if statement after
+                this.event.editor.addToArray(owner, key + 1, ifStatement);
+            }
+        }
+
+        if (ifStatement) {
+            //we've injected an ifStatement, so now we need to trigger a walk to handle any nested null coalescing expressions
             ifStatement.walk(visitor, { walkMode: walkMode });
         }
     }
