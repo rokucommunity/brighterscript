@@ -7,10 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.70.0](https://github.com/rokucommunity/brighterscript/compare/0.69.13...v0.70.0) - 2025-08-11
+### Added
+ - Transpile class methods as named functions ([#1548](https://github.com/rokucommunity/brighterscript/pull/1548))
 ### Changed
- - Support transpiling class methods as named functions ([#1548](https://github.com/rokucommunity/brighterscript/pull/1548))
  - upgrade to [roku-deploy@3.13.0](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3130---2025-08-04). Notable changes since 3.12.6:
-     - chore: Support dispatch workflows ([#198](https://github.com/rokucommunity/brighterscript/pull/198))
      - Add standards-compliant User-Agent header ([#203](https://github.com/rokucommunity/brighterscript/pull/203))
 
 
