@@ -2205,6 +2205,19 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+        it('namespaced functions default param values in d.bs files are transpiled correctly', () => {
+            testGetTypedef(`
+                namespace alpha
+                    function beta()
+                    end function
+                    function charlie(fn = alpha.beta, fn2 = beta)
+                    end function
+                end namespace
+                function delta(fn = alpha.beta)
+                end function
+            `);
+        });
+
         describe('null tokens', () => {
             it('succeeds when token locations are omitted', () => {
                 doTest(`
