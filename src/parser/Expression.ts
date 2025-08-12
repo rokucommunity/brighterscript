@@ -474,14 +474,12 @@ export class FunctionParameterExpression extends Expression {
         const results = [this.name.text] as TranspileResult;
 
         if (this.defaultValue) {
-            results.push(' = ', ...this.defaultValue.transpile(state));
+            results.push(' = ', ...(this.defaultValue.getTypedef(state) ?? this.defaultValue.transpile(state)));
         }
 
         if (this.asToken) {
             results.push(' as ');
 
-            // TODO: Is this conditional needed? Will typeToken always exist
-            // so long as `asToken` exists?
             if (this.typeToken) {
                 results.push(this.typeToken.text);
             }
@@ -602,6 +600,15 @@ export class DottedGetExpression extends Expression {
                 state.transpileToken(this.name)
             ];
         }
+    }
+
+    getTypedef(state: BrsTranspileState) {
+        //always transpile the dots for typedefs
+        return [
+            ...this.obj.transpile(state),
+            state.transpileToken(this.dot),
+            state.transpileToken(this.name)
+        ];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -1202,6 +1209,12 @@ export class VariableExpression extends Expression {
             );
         }
         return result;
+    }
+
+    getTypedef(state: BrsTranspileState) {
+        return [
+            state.transpileToken(this.name)
+        ];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
