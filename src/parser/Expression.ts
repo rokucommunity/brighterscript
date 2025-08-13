@@ -63,7 +63,7 @@ export class BinaryExpression extends Expression {
         );
     }
 
-    public childIsInExpressionChain(child: AstNode): boolean {
+    protected childIsInExpressionChain(child: AstNode): boolean {
         //we can't be part of expression chains. we're our own chain.
         return false;
     }
@@ -150,7 +150,7 @@ export class CallExpression extends Expression {
         );
     }
 
-    public childIsInExpressionChain(child: AstNode): boolean {
+    protected childIsInExpressionChain(child: AstNode): boolean {
         //only the callee can be part of our expression chain
         return child === this.callee;
     }
@@ -1492,7 +1492,7 @@ export class CallfuncExpression extends Expression {
         );
     }
 
-    public childIsInExpressionChain(child: AstNode): boolean {
+    protected childIsInExpressionChain(child: AstNode): boolean {
         //only the callee can be part of our expression chain
         return child === this.callee;
     }

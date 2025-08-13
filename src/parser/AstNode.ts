@@ -163,6 +163,7 @@ export abstract class AstNode {
     /**
      * Get the root of this expression chain.
      * For example, `alpha.beta(charlie.delta)`, the roots would be the DottedGetExpression for `delta`, and the `CallExpression for `beta(...)`.
+     * @deprecated this is a preview feature and may be removed or changed in the future
      */
     public getExpressionChainRoot(): Expression | undefined {
         let node: Expression = this;
@@ -184,6 +185,7 @@ export abstract class AstNode {
 
     /**
      * Is this node the root of an expression chain?
+     * @deprecated this is a preview feature and may be removed or changed in the future
      */
     public get isExpressionChainRoot() {
         //if any of these conditions are true, then this node is an expression chain root
@@ -202,7 +204,8 @@ export abstract class AstNode {
 
     /**
      * Is the node a direct child in the expression chain of this node?
-     * @param child
+     * @param child the child node to check
+     * @deprecated this is a preview feature and may be removed or changed in the future
      */
     protected abstract childIsInExpressionChain(child: AstNode): boolean;
 }
