@@ -2,7 +2,7 @@ import { isAliasStatement, isBlock, isBody, isClassStatement, isConditionalCompi
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { ExtraSymbolData, OnFileValidateEvent } from '../../interfaces';
+import type { ExtraSymbolData, ValidateFileEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import { CallExpression, type FunctionExpression, type LiteralExpression } from '../../parser/Expression';
@@ -20,7 +20,7 @@ import brsDocParser from '../../parser/BrightScriptDocParser';
 
 export class BrsFileValidator {
     constructor(
-        public event: OnFileValidateEvent<BrsFile>
+        public event: ValidateFileEvent<BrsFile>
     ) {
     }
 

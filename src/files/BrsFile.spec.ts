@@ -42,10 +42,10 @@ describe('BrsFile', () => {
 
     function validateFile(...files: BrsFile[]) {
         for (const file of files) {
-            program.plugins.emit('onFileValidate', { program: program, file: file });
+            program.plugins.emit('validateFile', { program: program, file: file });
         }
         for (const file of files) {
-            program.plugins.emit('afterFileValidate', { program: program, file: file });
+            program.plugins.emit('afterValidateFile', { program: program, file: file });
         }
 
     }
@@ -5137,7 +5137,7 @@ describe('BrsFile', () => {
                 program: program,
                 file: mainFile
             };
-            program.plugins.emit('onFileValidate', validateFileEvent);
+            program.plugins.emit('validateFile', validateFileEvent);
 
             expect(mainFile.requiredSymbols.length).to.eq(0);
         });
@@ -5163,7 +5163,7 @@ describe('BrsFile', () => {
                 program: program,
                 file: mainFile
             };
-            program.plugins.emit('onFileValidate', validateFileEvent);
+            program.plugins.emit('validateFile', validateFileEvent);
 
             expect(mainFile.requiredSymbols.length).to.eq(0);
         });
@@ -5182,7 +5182,7 @@ describe('BrsFile', () => {
                 program: program,
                 file: mainFile
             };
-            program.plugins.emit('onFileValidate', validateFileEvent);
+            program.plugins.emit('validateFile', validateFileEvent);
 
             expect(mainFile.requiredSymbols.length).to.eq(0);
         });
@@ -5914,7 +5914,7 @@ describe('BrsFile', () => {
                         west = "W"
                     end enum
                 `);
-                program.plugins.emit('onFileValidate', { program: program, file: mainFile });
+                program.plugins.emit('validateFile', { program: program, file: mainFile });
                 runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(1);
                 let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);

@@ -95,7 +95,7 @@ export class Project implements LspProject {
         //this plugin must be added LAST to the program to ensure we can see all diagnostics
         this.builder.plugins.add({
             name: 'bsc-language-server',
-            afterProgramValidate: () => {
+            afterValidateProgram: () => {
                 const diagnostics = this.getDiagnostics();
                 this.emit('diagnostics', {
                     diagnostics: diagnostics

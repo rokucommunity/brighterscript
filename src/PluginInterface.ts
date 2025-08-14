@@ -142,8 +142,8 @@ export default class PluginInterface<T extends Plugin = Plugin> {
             afterFileParse: 'afterProvideFile',
             beforeFileTranspile: 'beforePrepareFile',
             afterFileTranspile: 'afterPrepareFile',
-            beforeFileDispose: 'beforeFileRemove',
-            afterFileDispose: 'afterFileRemove'
+            beforeFileDispose: 'beforeRemoveFile',
+            afterFileDispose: 'afterRemoveFile'
         };
 
         for (const [oldEvent, newEvent] of Object.entries(upgradeWithWarn)) {

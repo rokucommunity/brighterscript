@@ -14,7 +14,7 @@ import type { BsConfig } from './BsConfig';
 import type { BscFile } from './files/BscFile';
 import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
 import { Deferred } from './deferred';
-import type { AfterProgramCreateEvent, BsDiagnostic } from './interfaces';
+import type { AfterProvideProgramEvent, BsDiagnostic } from './interfaces';
 
 describe('ProgramBuilder', () => {
 
@@ -61,12 +61,12 @@ describe('ProgramBuilder', () => {
         ).to.eql(0);
     });
 
-    it('includes .program in the afterProgramCreate event', async () => {
+    it('includes .program in the afterProvideProgram event', async () => {
         builder = new ProgramBuilder();
         const deferred = new Deferred<Program>();
         builder.plugins.add({
             name: 'test',
-            afterProgramCreate: () => {
+            afterProvideProgram: () => {
                 deferred.resolve(builder.program);
             }
         });
@@ -77,12 +77,12 @@ describe('ProgramBuilder', () => {
     });
 
 
-    it('can edit files array in afterProgramCreate event', async () => {
+    it('can edit files array in afterProvideProgram event', async () => {
         builder = new ProgramBuilder();
         const deferred = new Deferred<Program>();
         builder.plugins.add({
             name: 'test',
-            afterProgramCreate: (event: AfterProgramCreateEvent) => {
+            afterProvideProgram: (event: AfterProvideProgramEvent) => {
                 event.program.options.files.push('other/**/*.*');
                 deferred.resolve(builder.program);
 
@@ -338,18 +338,18 @@ describe('ProgramBuilder', () => {
     });
 
     it('forwards program events', async () => {
-        const beforeProgramValidate = sinon.spy();
-        const afterProgramValidate = sinon.spy();
+        const beforeValidateProgram = sinon.spy();
+        const afterValidateProgram = sinon.spy();
         builder.plugins.add({
             name: 'forwards program events',
-            beforeProgramValidate: beforeProgramValidate,
-            afterProgramValidate: afterProgramValidate
+            beforeValidateProgram: beforeValidateProgram,
+            afterValidateProgram: afterValidateProgram
         });
         await builder.run({
             createPackage: false
         });
-        expect(beforeProgramValidate.callCount).to.equal(1);
-        expect(afterProgramValidate.callCount).to.equal(1);
+        expect(beforeValidateProgram.callCount).to.equal(1);
+        expect(afterValidateProgram.callCount).to.equal(1);
     });
 
 

@@ -50,9 +50,9 @@ While there are no restrictions on plugin names, it helps others to find your pl
 
 Full compiler lifecycle:
 
-- `beforeProgramCreate`
-- `afterProgramCreate`
-    - `afterScopeCreate` ("source" scope)
+- `beforeProvideProgram`
+- `afterProvideProgram`
+    - `afterProvideScope` ("source" scope)
     - For each physical file:
         - `beforeProvideFile`
         - `onProvideFile`
@@ -62,17 +62,17 @@ Full compiler lifecycle:
     - For each physical and virtual file
         - `beforeAddFile`
         - `afterAddFile`
-        - `afterScopeCreate` (component scope)
-    - `beforeProgramValidate`
+        - `afterProvideScope` (component scope)
+    - `beforeValidateProgram`
     - For each file:
-        - `beforeFileValidate`
-        - `onFileValidate`
-        - `afterFileValidate`
+        - `beforeValidateFile`
+        - `validateFile`
+        - `afterValidateFile`
     - For each scope:
-        - `beforeScopeValidate`
-        - `onScopeValidate`
-        - `afterScopeValidate`
-    - `afterProgramValidate`
+        - `beforeValidateScope`
+        - `validateScope`
+        - `afterValidateScope`
+    - `afterValidateProgram`
 - `beforePrepublish`
 - `afterPrepublish`
 - `beforePublish`
@@ -82,7 +82,7 @@ Full compiler lifecycle:
         - `afterFileTranspile`
     - `afterProgramTranspile`
 - `afterPublish`
-- `beforeProgramDispose`
+- `beforeDisposeProgram`
 
 ### Language server
 
@@ -91,16 +91,16 @@ Once the program has been validated, the language server runs a special loop - i
 When a file is removed:
 
 - `beforeFileDispose`
-- `beforeScopeDispose` (component scope)
-- `afterScopeDispose` (component scope)
+- `beforeDisposeScope` (component scope)
+- `afterDisposeScope` (component scope)
 - `afterFileDispose`
 
 When a file is added:
 
 - `beforeFileParse`
 - `afterFileParse`
-- `afterScopeCreate` (component scope)
-- `afterFileValidate`
+- `afterProvideScope` (component scope)
+- `afterValidateFile`
 
 When any file is modified:
 
@@ -109,18 +109,18 @@ When any file is modified:
 
 After file addition/removal (note: throttled/debounced):
 
-- `beforeProgramValidate`
+- `beforeValidateProgram`
 - For each invalidated/not-yet-validated file
-    - `beforeFileValidate`
-    - `onFileValidate`
-    - `afterFileValidate`
+    - `beforeValidateFile`
+    - `validateFile`
+    - `afterValidateFile`
 - For each invalidated scope:
-    - `beforeScopeValidate`
-    - `afterScopeValidate`
-- `afterProgramValidate`
+    - `beforeValidateScope`
+    - `afterValidateScope`
+- `afterValidateProgram`
 
 Code Actions
- - `onGetCodeActions`
+ - `provideCodeActions`
 
 Completions
  - `beforeProvideCompletions`
@@ -133,7 +133,7 @@ Hovers
  - `afterProvideHover`
 
 Semantic Tokens
- - `onGetSemanticTokens`
+ - `provideSemanticTokens`
 
 
 ## Compiler API
@@ -164,11 +164,11 @@ export interface CompilerPlugin {
     /**
      * Called before a new program is created
      */
-    beforeProgramCreate?(event: BeforeProgramCreateEvent): any;
+    beforeProvideProgram?(event: BeforeProvideProgramEvent): any;
     /**
      * Called after a new program is created
      */
-    afterProgramCreate?(event: AfterProgramCreateEvent): any;
+    afterProvideProgram?(event: AfterProvideProgramEvent): any;
 
 
     /**
@@ -188,20 +188,20 @@ export interface CompilerPlugin {
     /**
      * Called before the entire program is validated
      */
-    beforeProgramValidate?(event: BeforeProgramValidateEvent): any;
+    beforeValidateProgram?(event: BeforeValidateProgramEvent): any;
     /**
      * Called before the entire program is validated
      */
-    onProgramValidate?(event: OnProgramValidateEvent): any;
+    onValidateProgram?(event: ValidateProgramEvent): any;
     /**
      * Called after the program has been validated
      */
-    afterProgramValidate?(event: AfterProgramValidateEvent): any;
+    afterValidateProgram?(event: AfterValidateProgramEvent): any;
 
     /**
      * Called right before the program is disposed/destroyed
      */
-    beforeProgramDispose?(event: BeforeProgramDisposeEvent): any;
+    beforeDisposeProgram?(event: BeforeDisposeProgramEvent): any;
 
     /**
      * Emitted before the program starts collecting completions
@@ -233,13 +233,13 @@ export interface CompilerPlugin {
     /**
      * Called after a scope was created
      */
-    afterScopeCreate?(event: AfterScopeCreateEvent): any;
+    afterProvideScope?(event: AfterProvideScopeEvent): any;
 
-    beforeScopeDispose?(event: BeforeScopeDisposeEvent): any;
-    onScopeDispose?(event: OnScopeDisposeEvent): any;
-    afterScopeDispose?(event: AfterScopeDisposeEvent): any;
+    beforeDisposeScope?(event: BeforeDisposeScopeEvent): any;
+    disposeScope?(event: DisposeScopeEvent): any;
+    afterDisposeScope?(event: AfterDisposeScopeEvent): any;
 
-    beforeScopeValidate?(event: BeforeScopeValidateEvent): any;
+    beforeValidateScope?(event: BeforeValidateScopeEvent): any;
 
     /**
      * Called before the `provideDefinition` hook
@@ -305,13 +305,13 @@ export interface CompilerPlugin {
     afterProvideWorkspaceSymbols?(event: AfterProvideWorkspaceSymbolsEvent): any;
 
 
-    onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
+    provideSemanticTokens?: PluginHandler<ProvideSemanticTokensEvent>;
     //scope events
-    onScopeValidate?(event: OnScopeValidateEvent): any;
-    afterScopeValidate?(event: BeforeScopeValidateEvent): any;
+    validateScope?(event: ValidateScopeEvent): any;
+    afterValidateScope?(event: BeforeValidateScopeEvent): any;
 
-    onGetCodeActions?(event: OnGetCodeActionsEvent): any;
-    onGetSemanticTokens?(event: OnGetSemanticTokensEvent): any;
+    provideCodeActions?(event: ProvideCodeActionsEvent): any;
+    provideSemanticTokens?(event: ProvideSemanticTokensEvent): any;
 
 
     /**
@@ -333,35 +333,35 @@ export interface CompilerPlugin {
      * Called before a file is added to the program.
      * Includes physical files as well as any virtual files produced by `provideFile` events
      */
-    beforeFileAdd?(event: BeforeFileAddEvent): any;
+    beforeAddFile?(event: BeforeAddFileEvent): any;
     /**
      * Called after a file has been added to the program.
      * Includes physical files as well as any virtual files produced by `provideFile` events
      */
-    afterFileAdd?(event: AfterFileAddEvent): any;
+    afterAddFile?(event: AfterAddFileEvent): any;
 
     /**
      * Called before a file is removed from the program. This includes physical and virtual files
      */
-    beforeFileRemove?(event: BeforeFileRemoveEvent): any;
+    beforeRemoveFile?(event: BeforeRemoveFileEvent): any;
     /**
      * Called after a file has been removed from the program. This includes physical and virtual files
      */
-    afterFileRemove?(event: AfterFileRemoveEvent): any;
+    afterRemoveFile?(event: AfterRemoveFileEvent): any;
 
 
     /**
      * Called before each file is validated
      */
-    beforeFileValidate?(event: BeforeFileValidateEvent): any;
+    beforeValidateFile?(event: BeforeValidateFileEvent): any;
     /**
      * Called during the file validation process. If your plugin contributes file validations, this is a good place to contribute them.
      */
-    onFileValidate?(event: OnFileValidateEvent): any;
+    validateFile?(event: ValidateFileEvent): any;
     /**
      * Called after each file is validated
      */
-    afterFileValidate?(event: AfterFileValidateEvent): any;
+    afterValidateFile?(event: AfterValidateFileEvent): any;
 
 
     /**
@@ -395,7 +395,7 @@ export interface CompilerPlugin {
     /**
      * Emitted right at the start of the program turning all file objects into their final buffers
      */
-    onSerializeProgram?(event: OnSerializeProgramEvent): any;
+    serializeProgram?(event: SerializeProgramEvent): any;
     /**
      * After the program turns all file objects into their final buffers
      */
@@ -542,8 +542,8 @@ npx tsc myPlugin.ts -m commonjs --sourceMap --watch
 
 Diagnostics must run every time it is relevant:
 
-- Files have one out-of-context validation step (`afterFileValidate`),
-- Scopes are validated once all the the files have been collected (`before/afterScopeValidate`).
+- Files have one out-of-context validation step (`afterValidateFile`),
+- Scopes are validated once all the the files have been collected (`before/afterValidateScope`).
 
 Note: in a language-server context, Scope validation happens every time a file changes.
 
@@ -558,7 +558,7 @@ export default function () {
     return {
         name: 'no-underscores',
         // post-parsing validation
-        afterFileValidate: (event: AfterFileValidateEvent) => {
+        afterValidateFile: (event: AfterValidateFileEvent) => {
             if (isBrsFile(event.file)) {
                 // clear existing diagnostics
                 event.program.diagnosticManager.clearByContext({file: file, tag: 'no-underscores-plugin'});
@@ -670,14 +670,14 @@ export default function (): Plugin {
 
 ## Modifying `bsconfig.json` via a plugin
 
-In some cases you may want to modify the project's configuration via a plugin, such as to change settings based on environment variables or to dynamically modify the project's `files` array. Plugins may do so in the `beforeProgramCreate` step. For example, here's a plugin which adds an additional file to the build:
+In some cases you may want to modify the project's configuration via a plugin, such as to change settings based on environment variables or to dynamically modify the project's `files` array. Plugins may do so in the `beforeProvideProgram` step. For example, here's a plugin which adds an additional file to the build:
 ```typescript
 import { CompilerPlugin, ProgramBuilder } from 'brighterscript';
 
 export default function plugin() {
     return {
         name: 'addFilesDynamically',
-        beforeProgramCreate: (builder: ProgramBuilder) => {
+        beforeProvideProgram: (builder: ProgramBuilder) => {
             if (!builder.options.files) {
                 builder.options.files = [];
             }
@@ -791,7 +791,7 @@ You can see examples of this in the previous code snippets above.
 ### Program changes
 Historically, only `.brs`, `.bs`, and `.xml` files would be present in the `Program`. As a result of the File API being introduced, now all files included as a result of the bsconfig.json `files` array will be present in the program. Unhandled files will be loaded as generic `AssetFile` instances. This may impact plugins that aren't properly guarding against specific file types. Consider this plugin code:
 ```typescript
-onFileValidate(event){
+validateFile(event){
     if (isXmlFile(event.file)) {
         // do XmlFile work
     } else {

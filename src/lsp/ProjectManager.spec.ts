@@ -217,11 +217,11 @@ describe('ProjectManager', () => {
             ]);
         });
 
-        it('gets diagnostics from plugins added in afterProgramValidate', async () => {
+        it('gets diagnostics from plugins added in afterValidateProgram', async () => {
             fsExtra.outputFileSync(`${rootDir}/plugin.js`, `
                 module.exports = function () {
                     return {
-                        afterProgramValidate: function(event) {
+                        afterValidateProgram: function(event) {
                             var file = event.program.getFile('source/main.brs');
                             //add a diagnostic from a plugin
                             event.program.diagnostics.register({
@@ -870,7 +870,7 @@ describe('ProjectManager', () => {
                 this.server.listen(port, host);
             }
 
-            afterProgramCreate(program: Program) {
+            afterProvideProgram(program: Program) {
                 // hijack the function to get workspace symbols, return a promise that resolves in the future
                 program.getWorkspaceSymbols = () => {
                     return this.deferred.promise as any;
