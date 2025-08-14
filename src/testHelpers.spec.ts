@@ -1,7 +1,7 @@
 import type { BscFile, BsDiagnostic } from './interfaces';
 import * as assert from 'assert';
 import chalk from 'chalk';
-import type { CodeDescription, CompletionItem, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, integer, Range } from 'vscode-languageserver';
+import type { CodeDescription, CompletionItem, CompletionList, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, integer, Range } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
 import { expect } from './chai-config.spec';
 import type { CodeActionShorthand } from './CodeActionUtil';
@@ -13,14 +13,32 @@ import type { CodeWithSourceMap } from 'source-map';
 import { getDiagnosticLine } from './diagnosticUtils';
 import { firstBy } from 'thenby';
 import undent from 'undent';
+import type { WorkspaceConfig } from './lsp/ProjectManager';
 
+export const cwd = s`${__dirname}/../`;
 export const tempDir = s`${__dirname}/../.tmp`;
 export const rootDir = s`${tempDir}/rootDir`;
 export const stagingDir = s`${tempDir}/stagingDir`;
+export const workspaceSettings: WorkspaceConfig = {
+    workspaceFolder: rootDir,
+    languageServer: {
+        enableThreading: false,
+        enableProjectDiscovery: true
+    }
+};
 
 export const trim = undent;
+const sinon = createSandbox();
+
+beforeEach(() => {
+    sinon.restore();
+});
+afterEach(() => {
+    sinon.restore();
+});
 
 type DiagnosticCollection = { getDiagnostics(): Array<Diagnostic> } | { diagnostics: Diagnostic[] } | Diagnostic[];
+type DiagnosticCollectionAsync = DiagnosticCollection | { getDiagnostics(): Promise<Array<Diagnostic>> };
 
 function getDiagnostics(arg: DiagnosticCollection): BsDiagnostic[] {
     if (Array.isArray(arg)) {
@@ -58,7 +76,7 @@ function cloneObject<TOriginal, TTemplate>(original: TOriginal, template: TTempl
     return clone;
 }
 
-interface PartialDiagnostic {
+export interface PartialDiagnostic {
     range?: Range;
     severity?: DiagnosticSeverity;
     code?: integer | string;
@@ -74,7 +92,7 @@ interface PartialDiagnostic {
 /**
  *  Helper function to clone a Diagnostic so it will give partial data that has the same properties as the expected
  */
-function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic: BsDiagnostic) {
+export function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic: BsDiagnostic) {
     const actualDiagnostic = cloneObject(
         actualDiagnosticInput,
         expectedDiagnostic,
@@ -85,7 +103,7 @@ function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic
         for (let j = 0; j < actualDiagnostic.relatedInformation.length; j++) {
             actualDiagnostic.relatedInformation[j] = cloneObject(
                 actualDiagnostic.relatedInformation[j],
-                expectedDiagnostic?.relatedInformation[j],
+                expectedDiagnostic?.relatedInformation?.[j],
                 ['location', 'message']
             ) as any;
         }
@@ -101,18 +119,38 @@ function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic
     return actualDiagnostic;
 }
 
-
 /**
  * Ensure the DiagnosticCollection exactly contains the data from expected list.
  * @param arg - any object that contains diagnostics (such as `Program`, `Scope`, or even an array of diagnostics)
  * @param expected an array of expected diagnostics. if it's a string, assume that's a diagnostic error message
  */
-export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<PartialDiagnostic | string | number>) {
-    const actualDiagnostics = sortDiagnostics(
-        getDiagnostics(arg)
+export async function expectDiagnosticsAsync(arg: DiagnosticCollectionAsync, expected: Array<PartialDiagnostic | string | number>) {
+    expectDiagnostics(
+        await Promise.resolve(getDiagnostics(arg as any)),
+        expected
     );
-    const expectedDiagnostics = sortDiagnostics(
-        expected.map(x => {
+}
+
+/**
+ * Ensure the DiagnosticCollection exactly contains the data from expected list.
+ * @param arg - any object that contains diagnostics (such as `Program`, `Scope`, or even an array of diagnostics)
+ * @param expectedDiagnostics an array of expected diagnostics. if it's a string, assume that's a diagnostic error message
+ */
+export function expectDiagnostics(arg: DiagnosticCollection, expectedDiagnostics: Array<PartialDiagnostic | string | number>) {
+    const [actual, expected] = normalizeDiagnostics(getDiagnostics(arg), expectedDiagnostics);
+    expect(actual).to.eql(expected);
+}
+
+/**
+ * Normalizes a collection of diagnostics for comparison
+ * @param actualDiagnostics the actual diagnostics that were found
+ * @param expectedDiagnostics the diagnostics we're expecing
+ */
+export function normalizeDiagnostics(actualDiagnostics: BsDiagnostic[], expectedDiagnostics: Array<PartialDiagnostic | string | number>) {
+    actualDiagnostics = sortDiagnostics([...actualDiagnostics]);
+
+    expectedDiagnostics = sortDiagnostics(
+        expectedDiagnostics.map(x => {
             let result = x;
             if (typeof x === 'string') {
                 result = { message: x };
@@ -123,13 +161,12 @@ export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<Par
         })
     );
 
-    const actual = [] as BsDiagnostic[];
     for (let i = 0; i < actualDiagnostics.length; i++) {
-        const expectedDiagnostic = expectedDiagnostics[i];
+        const expectedDiagnostic = expectedDiagnostics[i] as BsDiagnostic;
         const actualDiagnostic = cloneDiagnostic(actualDiagnostics[i], expectedDiagnostic);
-        actual.push(actualDiagnostic as any);
+        actualDiagnostics[i] = actualDiagnostic as any;
     }
-    expect(actual).to.eql(expectedDiagnostics);
+    return [actualDiagnostics, expectedDiagnostics];
 }
 
 /**
@@ -175,9 +212,9 @@ export function expectZeroDiagnostics(arg: DiagnosticCollection) {
         for (const diagnostic of diagnostics) {
             //escape any newlines
             diagnostic.message = diagnostic.message.replace(/\r/g, '\\r').replace(/\n/g, '\\n');
-            message += `\n        • bs${diagnostic.code} "${diagnostic.message}" at ${diagnostic.file?.srcPath ?? ''}#(${diagnostic.range.start.line}:${diagnostic.range.start.character})-(${diagnostic.range.end.line}:${diagnostic.range.end.character})`;
+            message += `\n        • bs${diagnostic.code} "${diagnostic.message}" at ${diagnostic.file?.srcPath ?? ''}#(${diagnostic.range?.start.line}:${diagnostic.range?.start.character})-(${diagnostic.range?.end.line}:${diagnostic.range?.end.character})`;
             //print the line containing the error (if we can find it)srcPath
-            const line = diagnostic.file?.fileContents?.split(/\r?\n/g)?.[diagnostic.range.start.line];
+            const line = diagnostic.file?.fileContents?.split(/\r?\n/g)?.[diagnostic.range?.start.line];
             if (line) {
                 message += '\n' + getDiagnosticLine(diagnostic, line, chalk.red);
             }
@@ -191,7 +228,7 @@ export function expectZeroDiagnostics(arg: DiagnosticCollection) {
  * @param diagnosticsCollection a collection of diagnostics
  * @param length if specified, checks the diagnostic count is exactly that amount. If omitted, the collection is just verified as non-empty
  */
-export function expectHasDiagnostics(diagnosticsCollection: DiagnosticCollection, length: number = null) {
+export function expectHasDiagnostics(diagnosticsCollection: DiagnosticCollection, length: number | null = null) {
     const diagnostics = getDiagnostics(diagnosticsCollection);
     if (length) {
         expect(diagnostics).lengthOf(length);
@@ -245,7 +282,7 @@ export function getTestGetTypedef(scopeGetter: () => [program: Program, rootDir:
         return {
             code: (file as BrsFile).getTypedef(),
             map: undefined
-        };
+        } as any as CodeWithSourceMap;
     }, scopeGetter);
 }
 
@@ -299,7 +336,9 @@ function pick<T extends Record<string, any>>(example: T, subject: Record<string,
 /**
  * Test a set of completions includes the provided items
  */
-export function expectCompletionsIncludes(completions: CompletionItem[], expectedItems: Array<string | Partial<CompletionItem>>) {
+export function expectCompletionsIncludes(collection: CompletionItem[] | CompletionList, expectedItems: Array<string | Partial<CompletionItem>>) {
+    const completions = Array.isArray(collection) ? collection : collection.items;
+
     for (const expectedItem of expectedItems) {
         if (typeof expectedItem === 'string') {
             expect(completions.map(x => x.label)).includes(expectedItem);
@@ -307,7 +346,7 @@ export function expectCompletionsIncludes(completions: CompletionItem[], expecte
             //match all existing properties of the expectedItem
             let actualItem = pick(
                 expectedItem,
-                completions.find(x => x.label === expectedItem.label)
+                completions.find(x => x.label === expectedItem.label)!
             );
             expect(actualItem).to.eql(expectedItem);
         }
@@ -325,14 +364,14 @@ export function expectCompletionsExcludes(completions: CompletionItem[], expecte
             //match all existing properties of the expectedItem
             let actualItem = pick(
                 expectedItem,
-                completions.find(x => x.label === expectedItem.label)
+                completions.find(x => x.label === expectedItem.label)!
             );
             expect(actualItem).to.not.eql(expectedItem);
         }
     }
 }
 
-export function expectThrows(callback: () => any, expectedMessage = undefined, failedTestMessage = 'Expected to throw but did not') {
+export function expectThrows(callback: () => any, expectedMessage: string | undefined = undefined, failedTestMessage = 'Expected to throw but did not') {
     let wasExceptionThrown = false;
     try {
         callback();
@@ -340,6 +379,21 @@ export function expectThrows(callback: () => any, expectedMessage = undefined, f
         wasExceptionThrown = true;
         if (expectedMessage) {
             expect((e as any).message).to.eql(expectedMessage);
+        }
+    }
+    if (wasExceptionThrown === false) {
+        throw new Error(failedTestMessage);
+    }
+}
+
+export async function expectThrowsAsync(callback: () => any, expectedMessage = undefined, failedTestMessage = 'Expected to throw but did not') {
+    let wasExceptionThrown = false;
+    try {
+        await Promise.resolve(callback());
+    } catch (e) {
+        wasExceptionThrown = true;
+        if (expectedMessage) {
+            expect((e as Error)?.message).to.eql(expectedMessage);
         }
     }
     if (wasExceptionThrown === false) {
@@ -361,4 +415,79 @@ export function mapToObject<T>(map: Map<any, T>) {
         result[key] = value;
     }
     return result;
+}
+
+export function stripConsoleColors(inputString) {
+    // Regular expression to match ANSI escape codes for colors
+    // eslint-disable-next-line no-control-regex
+    const colorPattern = /\u001b\[(?:\d*;){0,5}\d*m/g;
+
+    // Remove all occurrences of ANSI escape codes
+    return inputString.replace(colorPattern, '');
+}
+
+type FunctionReturnType<T> = T extends (...args: any[]) => infer R ? R : any;
+
+/**
+ * Mock something, and get a promise when it has been called once
+ */
+export async function onCalledOnce<T, K extends keyof T>(thing: T, method: K): Promise<FunctionReturnType<T[K]>> {
+    return new Promise((resolve, reject) => {
+        const stub = sinon.stub(thing, method).callsFake(async function _(this: any, ...args: any[]) {
+            const result = await stub.wrappedMethod.apply(this, args);
+            sinon.restore();
+            resolve(result);
+            return result;
+        });
+    });
+}
+
+
+/**
+ * Create a stub that resolves a promise after the function has settled for a period of time
+ */
+export function createInactivityStub<T, K extends keyof T>(obj: T, methodName: keyof T, inactivityPeriod = 400, sinonRef = sinon) {
+    // Store reference to the original method
+    const originalMethod = obj[methodName];
+
+    // Track the timeout for inactivity
+    let inactivityTimeout;
+
+    // Create the inactivity promise
+    let inactivityPromiseResolve;
+    const inactivityPromise = new Promise((resolve) => {
+        inactivityPromiseResolve = resolve;
+    });
+
+    // Stub the method
+    const stub = sinonRef.stub(obj, methodName).callsFake(function (this: any, ...args) {
+        // Call the original method
+        const result = (originalMethod as any).apply(this, args);
+
+        // Clear previous inactivity timeout and restart the timer
+        clearTimeout(inactivityTimeout);
+        inactivityTimeout = setTimeout(() => {
+            inactivityPromiseResolve();
+        }, inactivityPeriod);
+
+        return result;
+    });
+
+    // Return the stub and inactivity promise
+    return {
+        stub: stub,
+        promise: inactivityPromise
+    };
+}
+
+export async function once<T = any>(
+    obj: { on: (event, callback) => () => void },
+    event: string
+): Promise<T[]> {
+    return new Promise<T[]>((resolve) => {
+        const off = obj.on('diagnostics', (...args) => {
+            off();
+            resolve(args);
+        });
+    });
 }

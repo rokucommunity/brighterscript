@@ -1,4 +1,4 @@
-import type { LogLevel } from './Logger';
+import type { LogLevel } from './logging';
 
 export interface BsConfig {
     /**
@@ -11,6 +11,16 @@ export interface BsConfig {
      * Prefix with a question mark (?) to prevent throwing an exception if the file does not exist.
      */
     project?: string;
+
+    manifest?: {
+        bs_const?: Record<string, boolean | null>;
+    };
+
+    /**
+     * when set, bsconfig.json loading is disabled
+     */
+    noProject?: boolean;
+
 
     /**
      * Relative or absolute path to another bsconfig.json file that this file should import and then override.
@@ -107,15 +117,26 @@ export interface BsConfig {
     ignoreErrorCodes?: (number | string)[];
 
     /**
+     * A map of error codes with their severity level override (error|warn|info)
+     */
+    diagnosticSeverityOverrides?: Record<number | string, 'error' | 'warn' | 'info' | 'hint'>;
+
+    /**
      * Emit full paths to files when printing diagnostics to the console. Defaults to false
      */
     emitFullPaths?: boolean;
 
     /**
      * Emit type definition files (`d.bs`)
-     * @default true
+     * @default false
      */
     emitDefinitions?: boolean;
+
+    /**
+     * If true, removes the explicit type to function's parameters and return (i.e. the `as type` syntax); otherwise keep this information.
+     * @default false
+     */
+    removeParameterTypes?: boolean;
 
     /**
      * A list of filters used to exclude diagnostics from the output
@@ -152,7 +173,7 @@ export interface BsConfig {
      * The log level.
      * @default LogLevel.log
      */
-    logLevel?: LogLevel | 'error' | 'warn' | 'log' | 'info' | 'debug' | 'trace';
+    logLevel?: LogLevel | 'error' | 'warn' | 'log' | 'info' | 'debug' | 'trace' | 'off';
     /**
      * Override the path to source files in source maps. Use this if you have a preprocess step and want
      * to ensure the source maps point to the original location.
@@ -161,14 +182,54 @@ export interface BsConfig {
      */
     sourceRoot?: string;
     /**
+     * Should the `sourceRoot` property be resolve to an absolute path (relative to the bsconfig it's defined in)
+     * @default false
+     */
+    resolveSourceRoot?: boolean;
+    /**
      * Enables generating sourcemap files, which allow debugging tools to show the original source code while running the emitted files.
      * @default true
      */
     sourceMap?: boolean;
-
+    /**
+     * Excludes empty files from being included in the output. Some Brighterscript files
+     * are left empty or with only comments after transpilation to Brightscript.
+     * The default behavior is to write these to disk after transpilation.
+     * Setting this flag to `true` will prevent empty files being written and will
+     * remove associated script tags from XML
+     * @default false
+     */
+    pruneEmptyCodeFiles?: boolean;
     /**
      * Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.
      * @default false
      */
     allowBrighterScriptInBrightScript?: boolean;
+
+    /**
+     * Override the destination directory for the bslib.brs file.  Use this if
+     * you want to customize where the bslib.brs file is located in the staging
+     * directory.  Note that using a location outside of `source` will break
+     * scripts inside `source` that depend on bslib.brs.  Defaults to `source`.
+     */
+    bslibDestinationDir?: string;
 }
+
+type OptionalBsConfigFields =
+    | '_ancestors'
+    | 'sourceRoot'
+    | 'project'
+    | 'manifest'
+    | 'noProject'
+    | 'extends'
+    | 'host'
+    | 'password'
+    | 'require'
+    | 'stagingFolderPath'
+    | 'diagnosticLevel'
+    | 'rootDir'
+    | 'stagingDir';
+
+export type FinalizedBsConfig =
+    Omit<Required<BsConfig>, OptionalBsConfigFields>
+    & Pick<BsConfig, OptionalBsConfigFields>;

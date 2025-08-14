@@ -851,6 +851,22 @@ describe('lexer', () => {
             expect(f.text).to.eql('2.5e3');
         });
 
+        it('supports very long numbers with !', () => {
+            function doTest(number: string) {
+                let f = Lexer.scan(number).tokens[0];
+                expect(f.kind).to.equal(TokenKind.FloatLiteral);
+                expect(f.text).to.eql(number);
+            }
+            doTest('0!');
+            doTest('0!');
+            doTest('147483648!');
+            doTest('2147483648!');
+            doTest('2147483648111!');
+            doTest('2.4e-38!');
+            doTest('2.4e-32342342342342342342342342348!');
+            doTest('2.4e+32342342342342342342342342348!');
+        });
+
         it('supports larger-than-supported-precision floats to be defined with exponents', () => {
             let f = Lexer.scan('2.3659475627512424e-38').tokens[0];
             expect(f.kind).to.equal(TokenKind.FloatLiteral);
@@ -1026,6 +1042,55 @@ describe('lexer', () => {
             ]);
         });
 
+        it('handles whitespace between hash and keywords', () => {
+            function doTest(text: string, ...expected: TokenKind[]) {
+                let { tokens } = Lexer.scan(text);
+                expect(tokens.map(t => t.kind)).to.deep.equal([
+                    ...expected,
+                    TokenKind.Eof
+                ]);
+            }
+            //#if
+            doTest('# if true', TokenKind.HashIf, TokenKind.True);
+            doTest('#\tif true', TokenKind.HashIf, TokenKind.True);
+            doTest('#\t   \t\t \tif true', TokenKind.HashIf, TokenKind.True);
+
+            //#else
+            doTest('# else', TokenKind.HashElse);
+            doTest('#\telse', TokenKind.HashElse);
+            doTest('#\t   \t\t \telse', TokenKind.HashElse);
+
+            //#elseif
+            doTest('# elseif true', TokenKind.HashElseIf, TokenKind.True);
+            doTest('#\telseif true', TokenKind.HashElseIf, TokenKind.True);
+            doTest('#\t   \t\t \telseif true', TokenKind.HashElseIf, TokenKind.True);
+
+            //#else if
+            doTest('# else if true', TokenKind.HashElseIf, TokenKind.True);
+            doTest('#\t elseif true', TokenKind.HashElseIf, TokenKind.True);
+            doTest('#\t   \t\t \t else if true', TokenKind.HashElseIf, TokenKind.True);
+
+            //#endif
+            doTest('# endif', TokenKind.HashEndIf);
+            doTest('#\tendif', TokenKind.HashEndIf);
+            doTest('#\t   \t\t \tendif', TokenKind.HashEndIf);
+
+            //#end if
+            doTest('# end if', TokenKind.HashEndIf);
+            doTest('#\tend if', TokenKind.HashEndIf);
+            doTest('#\t   \t\t \tend if', TokenKind.HashEndIf);
+
+            //#const
+            doTest('# const thing=true', TokenKind.HashConst, TokenKind.Identifier, TokenKind.Equal, TokenKind.True);
+            doTest('#\tconst thing=true', TokenKind.HashConst, TokenKind.Identifier, TokenKind.Equal, TokenKind.True);
+            doTest('#\t   \t\t \tconst thing=true', TokenKind.HashConst, TokenKind.Identifier, TokenKind.Equal, TokenKind.True);
+
+            //#error
+            doTest('# error', TokenKind.HashError);
+            doTest('#\terror', TokenKind.HashError);
+            doTest('#\t   \t\t \terror', TokenKind.HashError);
+        });
+
         it('reads constant aliases', () => {
             let { tokens } = Lexer.scan('#const bar foo');
             expect(tokens.map(t => t.kind)).to.deep.equal([
@@ -1097,6 +1162,14 @@ describe('lexer', () => {
                 TokenKind.HashEndIf,
                 TokenKind.HashEndIf,
                 TokenKind.HashEndIf,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('does not require a message after #error', () => {
+            let { tokens } = Lexer.scan('#error');
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.HashError,
                 TokenKind.Eof
             ]);
         });
@@ -1259,13 +1332,15 @@ describe('lexer', () => {
     });
 
     it('identifies brighterscript source literals', () => {
-        let { tokens } = Lexer.scan('LINE_NUM SOURCE_FILE_PATH SOURCE_LINE_NUM FUNCTION_NAME SOURCE_FUNCTION_NAME SOURCE_LOCATION PKG_PATH PKG_LOCATION');
+        let { tokens } = Lexer.scan('LINE_NUM SOURCE_FILE_PATH SOURCE_LINE_NUM FUNCTION_NAME SOURCE_FUNCTION_NAME SOURCE_NAMESPACE_NAME SOURCE_NAMESPACE_ROOT_NAME SOURCE_LOCATION PKG_PATH PKG_LOCATION');
         expect(tokens.map(x => x.kind)).to.eql([
             TokenKind.LineNumLiteral,
             TokenKind.SourceFilePathLiteral,
             TokenKind.SourceLineNumLiteral,
             TokenKind.FunctionNameLiteral,
             TokenKind.SourceFunctionNameLiteral,
+            TokenKind.SourceNamespaceNameLiteral,
+            TokenKind.SourceNamespaceRootNameLiteral,
             TokenKind.SourceLocationLiteral,
             TokenKind.PkgPathLiteral,
             TokenKind.PkgLocationLiteral,

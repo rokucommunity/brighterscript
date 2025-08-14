@@ -7,6 +7,8 @@ import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { tempDir, rootDir } from './testHelpers.spec';
+import { Program } from './Program';
+import type { BsDiagnostic } from '.';
 
 const sinon = createSandbox();
 
@@ -38,6 +40,31 @@ describe('util', () => {
         });
     });
 
+    describe('diagnosticIsSuppressed', () => {
+        it('does not crash when diagnostic is missing location information', () => {
+            const program = new Program({});
+            const file = program.setFile('source/main.brs', '');
+            const diagnostic: BsDiagnostic = {
+                file: file,
+                message: 'crash',
+                //important part of the test. range must be missing
+                range: undefined as any
+            };
+
+            file.commentFlags.push({
+                affectedRange: util.createRange(1, 2, 3, 4),
+                codes: [1, 2, 3],
+                file: file,
+                range: util.createRange(1, 2, 3, 4)
+            });
+            file.diagnostics.push(diagnostic);
+
+            util.diagnosticIsSuppressed(diagnostic);
+
+            //test passes if there's no crash
+        });
+    });
+
     describe('getRokuPkgPath', () => {
         it('replaces more than one windows slash in a path', () => {
             expect(util.getRokuPkgPath('source\\folder1\\folder2\\file.brs')).to.eql('pkg:/source/folder1/folder2/file.brs');
@@ -59,7 +86,7 @@ describe('util', () => {
             fsExtra.outputFileSync(s`${rootDir}/grandparent.json`, `{"extends": "greatgrandparent.json"}`);
             fsExtra.outputFileSync(s`${rootDir}/greatgrandparent.json`, `{}`);
             expect(
-                util.loadConfigFile(s`${rootDir}/child.json`)._ancestors.map(x => s(x))
+                util.loadConfigFile(s`${rootDir}/child.json`)?._ancestors?.map(x => s(x))
             ).to.eql([
                 s`${rootDir}/child.json`,
                 s`${rootDir}/parent.json`,
@@ -68,11 +95,31 @@ describe('util', () => {
             ]);
         });
 
+        it('resolves sourceRoot relative to the bsconfig file', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/folder1/parent.json`, { sourceRoot: './alpha/beta', resolveSourceRoot: true });
+            fsExtra.outputJsonSync(s`${rootDir}/child.json`, { extends: 'folder1/parent.json' });
+            expect(
+                util.loadConfigFile(s`${rootDir}/child.json`).sourceRoot
+            ).to.eql(
+                s`${rootDir}/folder1/alpha/beta`
+            );
+        });
+
+        it('leaves sourceRoot relative when defaulted to', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/folder1/parent.json`, { sourceRoot: './alpha/beta' });
+            fsExtra.outputJsonSync(s`${rootDir}/child.json`, { extends: 'folder1/parent.json' });
+            expect(
+                util.loadConfigFile(s`${rootDir}/child.json`).sourceRoot
+            ).to.eql(
+                `./alpha/beta`
+            );
+        });
+
         it('returns empty ancestors list for non-extends files', () => {
             fsExtra.outputFileSync(s`${rootDir}/child.json`, `{}`);
             let config = util.loadConfigFile(s`${rootDir}/child.json`);
             expect(
-                config._ancestors.map(x => s(x))
+                config?._ancestors?.map(x => s(x))
             ).to.eql([
                 s`${rootDir}/child.json`
             ]);
@@ -88,12 +135,32 @@ describe('util', () => {
                 ]
             };
             util.resolvePathsRelativeTo(config, 'plugins', s`${rootDir}/config`);
-            expect(config.plugins.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
+            expect(config?.plugins?.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
                 `${rootDir}/config/plugins.js`,
                 `${rootDir}/config/scripts/plugins.js`,
                 `${rootDir}/scripts/plugins.js`,
                 'bsplugin'
             ].map(p => util.pathSepNormalize(p, '/')));
+        });
+
+        it('resolves path relatively to config file', () => {
+            const mockConfig: BsConfig = {
+                outFile: 'out/app.zip',
+                rootDir: 'rootDir',
+                cwd: 'cwd',
+                stagingDir: 'stagingDir'
+            };
+            fsExtra.outputFileSync(s`${rootDir}/child.json`, JSON.stringify(mockConfig));
+            let config = util.loadConfigFile(s`${rootDir}/child.json`);
+            expect(config).to.deep.equal({
+                '_ancestors': [
+                    s`${rootDir}/child.json`
+                ],
+                'cwd': s`${rootDir}/cwd`,
+                'outFile': s`${rootDir}/out/app.zip`,
+                'rootDir': s`${rootDir}/rootDir`,
+                'stagingDir': s`${rootDir}/stagingDir`
+            });
         });
 
         it('removes duplicate plugins and undefined values', () => {
@@ -103,11 +170,11 @@ describe('util', () => {
                     'bsplugin',
                     '../config/plugins.js',
                     'bsplugin',
-                    undefined
+                    undefined as any
                 ]
             };
             util.resolvePathsRelativeTo(config, 'plugins', s`${process.cwd()}/config`);
-            expect(config.plugins.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
+            expect(config?.plugins?.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
                 s`${process.cwd()}/config/plugins.js`,
                 'bsplugin'
             ].map(p => util.pathSepNormalize(p, '/')));
@@ -206,6 +273,31 @@ describe('util', () => {
     });
 
     describe('normalizeAndResolveConfig', () => {
+        it('loads project by default', () => {
+            fsExtra.outputJsonSync(`${rootDir}/bsconfig.json`, {
+                rootDir: s`${cwd}/TEST`
+            });
+            expect(
+                util.normalizeAndResolveConfig({
+                    cwd: rootDir
+                }).rootDir
+            ).to.eql(
+                s`${cwd}/TEST`
+            );
+        });
+
+        it('noproject skips loading the local bsconfig.json', () => {
+            fsExtra.outputJsonSync(`${rootDir}/bsconfig.json`, {
+                rootDir: s`${cwd}/TEST`
+            });
+            expect(
+                util.normalizeAndResolveConfig({
+                    cwd: rootDir,
+                    noProject: true
+                }).rootDir
+            ).to.be.undefined;
+        });
+
         it('throws for missing project file', () => {
             expect(() => {
                 util.normalizeAndResolveConfig({ project: 'path/does/not/exist/bsconfig.json' });
@@ -249,6 +341,12 @@ describe('util', () => {
             expect(util.normalizeConfig(<any>{ emitDefinitions: 123 }).emitDefinitions).to.be.false;
             expect(util.normalizeConfig(<any>{ emitDefinitions: undefined }).emitDefinitions).to.be.false;
             expect(util.normalizeConfig(<any>{ emitDefinitions: 'true' }).emitDefinitions).to.be.false;
+        });
+
+        it('sets pruneEmptyCodeFiles to false by default, or true if explicitly true', () => {
+            expect(util.normalizeConfig({}).pruneEmptyCodeFiles).to.be.false;
+            expect(util.normalizeConfig({ pruneEmptyCodeFiles: true }).pruneEmptyCodeFiles).to.be.true;
+            expect(util.normalizeConfig({ pruneEmptyCodeFiles: false }).pruneEmptyCodeFiles).to.be.false;
         });
 
         it('loads project from disc', () => {
@@ -323,6 +421,16 @@ describe('util', () => {
             let config = util.normalizeAndResolveConfig({ watch: true });
             expect(config.watch).to.be.true;
         });
+
+        it('sets default value for bslibDestinationDir', () => {
+            expect(util.normalizeConfig(<any>{}).bslibDestinationDir).to.equal('source');
+        });
+
+        it('strips leading and/or trailing slashes from bslibDestinationDir', () => {
+            ['source/opt', '/source/opt', 'source/opt/', '/source/opt/'].forEach(input => {
+                expect(util.normalizeConfig(<any>{ bslibDestinationDir: input }).bslibDestinationDir).to.equal('source/opt');
+            });
+        });
     });
 
     describe('areArraysEqual', () => {
@@ -359,6 +467,16 @@ describe('util', () => {
             expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:/')).to.equal(null);
             expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:')).to.equal(null);
             expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg')).to.equal(s`components/pkg`);
+        });
+
+        it('supports pkg:/ and libpkg:/', () => {
+            expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:/source/lib.brs')).to.equal(s`source/lib.brs`);
+            expect(util.getPkgPathFromTarget('components/component1.xml', 'libpkg:/source/lib.brs')).to.equal(s`source/lib.brs`);
+        });
+
+        it('works case insensitive', () => {
+            expect(util.getPkgPathFromTarget('components/component1.xml', 'PKG:/source/lib.brs')).to.equal(s`source/lib.brs`);
+            expect(util.getPkgPathFromTarget('components/component1.xml', 'LIBPKG:/source/lib.brs')).to.equal(s`source/lib.brs`);
         });
     });
 
@@ -405,7 +523,16 @@ describe('util', () => {
         });
     });
 
-    describe('compareRangeToPosition', () => {
+    describe('comparePositionToRange', () => {
+        it('does not crash on undefined props', () => {
+            expect(
+                util.comparePositionToRange(undefined, util.createRange(0, 0, 0, 0))
+            ).to.eql(0);
+            expect(
+                util.comparePositionToRange(util.createPosition(1, 1), undefined)
+            ).to.eql(0);
+        });
+
         it('correctly compares positions to ranges with one line range line', () => {
             let range = Range.create(1, 10, 1, 15);
             expect(util.comparePositionToRange(Position.create(0, 13), range)).to.equal(-1);
@@ -452,7 +579,7 @@ describe('util', () => {
         let id = 1;
 
         beforeEach(() => {
-            // `require` caches plugins, so  generate a unique plugin name for every test
+            // `require` caches plugins, so generate a unique plugin name for every test
             pluginPath = `${tempDir}/plugin${id++}.js`;
         });
 
@@ -509,6 +636,22 @@ describe('util', () => {
             //does not warn about factory pattern
             expect(stub.callCount).to.equal(0);
         });
+
+        it('passes factory options', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports.default = function(options) {
+                    return {
+                        name: 'AwesomePlugin',
+                        initOptions: options
+                    };
+                };
+            `);
+            sinon.stub(console, 'warn').callThrough();
+            const plugins = util.loadPlugins(cwd, [pluginPath]);
+            expect((plugins[0] as any).initOptions).to.eql({
+                version: util.getBrighterScriptVersion()
+            });
+        });
     });
 
     describe('copyBslibToStaging', () => {
@@ -521,9 +664,28 @@ describe('util', () => {
                 )
             ).not.to.be.null;
         });
+
+        it('copies from local bslib dependency to optionally specified destination directory', async () => {
+            await util.copyBslibToStaging(tempDir, 'source/opt');
+            expect(fsExtra.pathExistsSync(`${tempDir}/source/opt/bslib.brs`)).to.be.true;
+            expect(
+                /^function bslib_toString\(/mg.exec(
+                    fsExtra.readFileSync(`${tempDir}/source/opt/bslib.brs`).toString()
+                )
+            ).not.to.be.null;
+        });
     });
 
     describe('rangesIntersect', () => {
+        it('does not crash on undefined range', () => {
+            expect(
+                util.rangesIntersect(undefined, util.createRange(0, 0, 0, 0))
+            ).to.be.false;
+            expect(
+                util.rangesIntersect(util.createRange(0, 0, 0, 0), undefined)
+            ).to.be.false;
+        });
+
         it('does not match when ranges do not touch (a < b)', () => {
             // AA BB
             expect(util.rangesIntersectOrTouch(
@@ -614,6 +776,15 @@ describe('util', () => {
     });
 
     describe('rangesIntersectOrTouch', () => {
+        it('does not crash on undefined range', () => {
+            expect(
+                util.rangesIntersectOrTouch(undefined, util.createRange(0, 0, 0, 0))
+            ).to.be.false;
+            expect(
+                util.rangesIntersectOrTouch(util.createRange(0, 0, 0, 0), undefined)
+            ).to.be.false;
+        });
+
         it('does not match when ranges do not touch (a < b)', () => {
             // AA BB
             expect(util.rangesIntersectOrTouch(
@@ -766,11 +937,11 @@ describe('util', () => {
             expect(
                 util.toDiagnostic({
                     ...DiagnosticMessages.cannotFindName('someVar'),
-                    file: undefined,
+                    file: undefined as any,
                     range: util.createRange(1, 2, 3, 4),
                     relatedInformation: [{
                         message: 'Alpha',
-                        location: undefined
+                        location: undefined as any
                     }]
                 }, 'u/r/i').relatedInformation
             ).to.eql([{
@@ -785,7 +956,7 @@ describe('util', () => {
             expect(
                 util.toDiagnostic({
                     ...DiagnosticMessages.cannotFindName('someVar'),
-                    file: undefined,
+                    file: undefined as any,
                     range: util.createRange(1, 2, 3, 4),
                     relatedInformation: [{
                         message: 'Alpha',
@@ -794,15 +965,233 @@ describe('util', () => {
                         )
                     }, {
                         message: 'Beta',
-                        location: undefined
+                        location: undefined as any
                     }]
-                }, undefined).relatedInformation
+                }, undefined as any).relatedInformation
             ).to.eql([{
                 message: 'Alpha',
                 location: util.createLocation(
                     'uri', util.createRange(2, 3, 4, 5)
                 )
             }]);
+        });
+    });
+
+    describe('promiseRaceMatch', () => {
+        async function resolveAfter<T = any>(value: T, timeout: number) {
+            await util.sleep(timeout);
+            return value;
+        }
+
+        it('returns the value from the first promise that resolves that matches the matcher', async () => {
+            expect(
+                await util.promiseRaceMatch([
+                    resolveAfter('a', 1),
+                    resolveAfter('b', 20),
+                    resolveAfter('c', 30)
+                ], x => true)
+            ).to.eql('a');
+
+            expect(
+                await util.promiseRaceMatch([
+                    resolveAfter('a', 30),
+                    resolveAfter('b', 1),
+                    resolveAfter('c', 20)
+                ], x => true)
+            ).to.eql('b');
+
+            expect(
+                await util.promiseRaceMatch([
+                    resolveAfter('a', 20),
+                    resolveAfter('b', 30),
+                    resolveAfter('c', 1)
+                ], x => true)
+            ).to.eql('c');
+        });
+
+        it('does not throw when there were zero promises', async () => {
+            expect(
+                await util.promiseRaceMatch([], x => true)
+            ).to.be.undefined;
+        });
+
+        it('returns a value even if one of the promises never resolves', async () => {
+            expect(
+                await util.promiseRaceMatch([
+                    new Promise(() => {
+                        //i will never resolve
+                    }),
+                    resolveAfter('a', 1)
+                ], x => true)
+            ).to.eql('a');
+        });
+
+        it('rejects if all the promises fail', async () => {
+            let error: Error;
+            try {
+                await util.promiseRaceMatch([
+                    Promise.reject(new Error('error 1')),
+                    Promise.reject(new Error('error 2')),
+                    Promise.reject(new Error('error 3'))
+                ], x => true);
+            } catch (e) {
+                error = e as any;
+            }
+            expect(
+                (error as AggregateError).errors.map(x => x.message)
+            ).to.eql([
+                'error 1',
+                'error 2',
+                'error 3'
+            ]);
+        });
+
+        it('returns a value when one of the promises rejects', async () => {
+            expect(
+                await util.promiseRaceMatch([
+                    Promise.reject(new Error('crash')),
+                    resolveAfter('a', 1)
+                ], x => true)
+            ).to.eql('a');
+        });
+
+        it('returns undefined if no valuees match the matcher', async () => {
+            expect(
+                await util.promiseRaceMatch([
+                    resolveAfter('a', 1),
+                    resolveAfter('b', 20),
+                    resolveAfter('c', 30)
+                ], x => false)
+            ).to.be.undefined;
+        });
+
+        it('returns undefined if no matcher is provided', async () => {
+            expect(
+                await util.promiseRaceMatch([
+                    resolveAfter('a', 1),
+                    resolveAfter('b', 20),
+                    resolveAfter('c', 30)
+                ], undefined)
+            ).to.be.undefined;
+        });
+    });
+
+    describe('standardizePath', () => {
+        let isWindowsOrig = util['isWindows'];
+        let isWindows = isWindowsOrig;
+
+        beforeEach(() => {
+            util['standardizePathCache'].clear();
+        });
+        afterEach(() => {
+            util['standardizePathCache'].clear();
+            util['isWindows'] = isWindowsOrig;
+        });
+
+        function test(incoming: string, expected: string) {
+            util['isWindows'] = isWindows;
+            expect(
+                util.standardizePath(incoming)
+            ).to.eql(
+                expected
+            );
+            util['isWindows'] = isWindowsOrig;
+        }
+
+        describe('windows paths on windows', () => {
+            beforeEach(() => {
+                isWindows = true;
+            });
+
+            it('mismatched slashes', () => {
+                test('c:/one/two/three', 'c:\\one\\two\\three');
+                test('c:\\one\\two\\three', 'c:\\one\\two\\three');
+                test('c:/one\\two/three', 'c:\\one\\two\\three');
+            });
+
+            it('trailing slashes', () => {
+                test('c:/one/two/three/', 'c:\\one\\two\\three\\');
+                test('c:/one/two/three\\', 'c:\\one\\two\\three\\');
+            });
+
+            it('drive letter case', () => {
+                test('D:/one/two/three', 'd:\\one\\two\\three');
+            });
+
+            it('consecutive slashes', () => {
+                test('c://one//two//three//', 'c:\\one\\two\\three\\');
+                test('c:\\\\one\\\\two\\\\three\\\\', 'c:\\one\\two\\three\\');
+            });
+        });
+
+        describe('windows paths on unix', () => {
+            beforeEach(() => {
+                isWindows = false;
+            });
+
+            it('mismatched slashes', () => {
+                test('c:/one/two/three', 'c:/one/two/three');
+                test('c:\\one\\two\\three', 'c:/one/two/three');
+                test('c:/one\\two/three', 'c:/one/two/three');
+            });
+
+            it('trailing slashes', () => {
+                test('c:/one/two/three/', 'c:/one/two/three/');
+                test('c:/one/two/three\\', 'c:/one/two/three/');
+            });
+
+            it('drive letter case', () => {
+                test('D:/one/two/three', 'd:/one/two/three');
+            });
+
+            it('consecutive slashes', () => {
+                test('c://one//two//three//', 'c:/one/two/three/');
+                test('c:\\\\one\\\\two\\\\three\\\\', 'c:/one/two/three/');
+            });
+        });
+
+        describe('unix paths on windows', () => {
+            beforeEach(() => {
+                isWindows = true;
+            });
+
+            it('mismatched slashes', () => {
+                test('/one/two/three', '\\one\\two\\three');
+                test('\\one\\two\\three', '\\one\\two\\three');
+                test('/one\\two/three', '\\one\\two\\three');
+            });
+
+            it('trailing slashes', () => {
+                test('/one/two/three/', '\\one\\two\\three\\');
+                test('/one/two/three\\', '\\one\\two\\three\\');
+            });
+
+            it('consecutive slashes', () => {
+                test('/one//two///three//', '\\one\\two\\three\\');
+                test('\\one\\\\two\\\\\\three\\\\', '\\one\\two\\three\\');
+            });
+        });
+
+        describe('unix paths on unix', () => {
+            beforeEach(() => {
+                isWindows = false;
+            });
+
+            it('mismatched slashes', () => {
+                test('/one/two/three', '/one/two/three');
+                test('\\one\\two\\three', '/one/two/three');
+                test('/one\\two/three', '/one/two/three');
+            });
+
+            it('trailing slashes', () => {
+                test('/one/two/three/', '/one/two/three/');
+                test('/one/two/three\\', '/one/two/three/');
+            });
+
+            it('consecutive slashes', () => {
+                test('/one//two///three//', '/one/two/three/');
+                test('\\\\one\\\\two\\\\three\\\\', '/one/two/three/');
+            });
         });
     });
 });

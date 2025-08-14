@@ -1,14 +1,15 @@
 import type { Range } from 'vscode-languageserver';
 import type { Identifier, Token } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import type { Expression } from '../parser/AstNode';
+import type { Expression, Statement } from '../parser/AstNode';
 import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpression, FunctionExpression } from '../parser/Expression';
 import type { SGAttribute } from '../parser/SGTypes';
-import { Block, MethodStatement } from '../parser/Statement';
+import { AssignmentStatement, Block, DottedSetStatement, IfStatement, IndexedSetStatement, MethodStatement } from '../parser/Statement';
 
 /**
  * A range that points to the beginning of the file. Used to give non-null ranges to programmatically-added source code.
  * (Hardcoded range to prevent circular dependency issue in `../util.ts`)
+ * @deprecated don't use this, it screws up sourcemaps. Just set range to null
  */
 export const interpolatedRange = {
     start: {
@@ -73,6 +74,8 @@ const tokenDefaults = {
     [TokenKind.Semicolon]: ';',
     [TokenKind.SourceFilePathLiteral]: 'SOURCE_FILE_PATH',
     [TokenKind.SourceFunctionNameLiteral]: 'SOURCE_FUNCTION_NAME',
+    [TokenKind.SourceNamespaceRootNameLiteral]: 'SOURCE_NAMESPACE_ROOT_NAME',
+    [TokenKind.SourceNamespaceNameLiteral]: 'SOURCE_NAMESPACE_NAME',
     [TokenKind.SourceLineNumLiteral]: 'SOURCE_LINE_NUM',
     [TokenKind.SourceLocationLiteral]: 'SOURCE_LOCATION',
     [TokenKind.Star]: '*',
@@ -83,7 +86,7 @@ const tokenDefaults = {
     [TokenKind.Whitespace]: ' '
 };
 
-export function createToken<T extends TokenKind>(kind: T, text?: string, range = interpolatedRange): Token & { kind: T } {
+export function createToken<T extends TokenKind>(kind: T, text?: string, range?: Range): Token & { kind: T } {
     return {
         kind: kind,
         text: text ?? tokenDefaults[kind as string] ?? kind.toString().toLowerCase(),
@@ -142,7 +145,7 @@ export function createBooleanLiteral(value: 'true' | 'false', range?: Range) {
 export function createFunctionExpression(kind: TokenKind.Sub | TokenKind.Function) {
     return new FunctionExpression(
         [],
-        new Block([], interpolatedRange),
+        new Block([]),
         createToken(kind),
         kind === TokenKind.Sub ? createToken(TokenKind.EndSub) : createToken(TokenKind.EndFunction),
         createToken(TokenKind.LeftParen),
@@ -188,4 +191,78 @@ export function createSGAttribute(keyName: string, value: string) {
             text: value
         }
     } as SGAttribute;
+}
+
+export function createIfStatement(options: {
+    if?: Token;
+    condition: Expression;
+    then?: Token;
+    thenBranch: Block;
+    else?: Token;
+    elseBranch?: IfStatement | Block;
+    endIf?: Token;
+}) {
+    return new IfStatement(
+        {
+            if: options.if ?? createToken(TokenKind.If),
+            then: options.then ?? createToken(TokenKind.Then),
+            else: options.else ?? createToken(TokenKind.Else),
+            endIf: options.endIf ?? createToken(TokenKind.EndIf)
+        },
+        options.condition,
+        options.thenBranch,
+        options.elseBranch
+    );
+}
+
+export function createBlock(options: { statements: Statement[] }) {
+    return new Block(options.statements);
+}
+
+export function createAssignmentStatement(options: {
+    name: Identifier | string;
+    equals?: Token;
+    value: Expression;
+}) {
+    return new AssignmentStatement(
+        options.equals ?? createToken(TokenKind.Equal),
+        typeof options.name === 'string' ? createIdentifier(options.name) : options.name,
+        options.value
+    );
+}
+
+export function createDottedSetStatement(options: {
+    obj: Expression;
+    dot?: Token;
+    name: Identifier | string;
+    equals?: Token;
+    value: Expression;
+}) {
+    return new DottedSetStatement(
+        options.obj,
+        typeof options.name === 'string' ? createIdentifier(options.name) : options.name,
+        options.value,
+        options.dot,
+        options.equals ?? createToken(TokenKind.Equal)
+    );
+}
+
+export function createIndexedSetStatement(options: {
+    obj: Expression;
+    openingSquare?: Token;
+    index: Expression;
+    closingSquare?: Token;
+    equals?: Token;
+    value: Expression;
+    additionalIndexes?: Expression[];
+}) {
+    return new IndexedSetStatement(
+        options.obj,
+        options.index,
+        options.value,
+        options.openingSquare ?? createToken(TokenKind.LeftSquareBracket),
+        options.closingSquare ?? createToken(TokenKind.RightSquareBracket),
+        options.additionalIndexes || [],
+        options.equals ?? createToken(TokenKind.Equal)
+    );
 }

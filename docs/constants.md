@@ -107,6 +107,6 @@ transpiles to
 ```brightscript
 sub main()
     print ("https://api.domain.com" + "/login")
-    print (bslib_toString("https://api.domain.com") + "/some/error")
+    print ((bslib_toString("https://api.domain.com") + "/some/error"))
 end sub
 ```

@@ -1,11 +1,12 @@
 import type { Expression } from '../parser/AstNode';
 import type { CallExpression, CallfuncExpression, NewExpression } from '../parser/Expression';
-import type { ClassStatement, NamespaceStatement } from '../parser/Statement';
+import type { ClassStatement } from '../parser/Statement';
 import { isCallExpression, isCallfuncExpression, isVariableExpression, isDottedGetExpression, isClassStatement, isNewExpression } from '../astUtils/reflection';
 import type { BrsFile } from '../files/BrsFile';
 import type { Position } from 'vscode-languageserver-protocol';
 import { util } from '../util';
 import { ParseMode } from '../parser/Parser';
+import type { NamespaceContainer } from '../Scope';
 
 
 export enum CallExpressionType {
@@ -29,7 +30,7 @@ export class CallExpressionInfo {
 
     file: BrsFile;
     myClass: ClassStatement;
-    namespace: NamespaceStatement;
+    namespace?: NamespaceContainer;
     dotPart: string;
     name: string;
     isCallingMethodOnMyClass: boolean;
@@ -78,9 +79,11 @@ export class CallExpressionInfo {
 
             } else {
                 let parts = util.getAllDottedGetParts(callExpression.callee);
-                parts.splice(parts?.length - 1, 1);
-                this.dotPart = parts.map(x => x.text).join('.');
-                this.namespace = this.getNamespace(this.dotPart, this.file);
+                if (parts) {
+                    parts.splice(parts?.length - 1, 1);
+                    this.dotPart = parts.map(x => x.text).join('.');
+                    this.namespace = this.getNamespace();
+                }
             }
         }
 
@@ -90,6 +93,9 @@ export class CallExpressionInfo {
     }
 
     isPositionBetweenParentheses() {
+        if (!this.callExpression) {
+            return false;
+        }
         let boundingRange = util.createBoundingRange(this.callExpression.openingParen, this.callExpression.closingParen);
         return util.rangeContains(boundingRange, this.position);
     }
@@ -103,8 +109,8 @@ export class CallExpressionInfo {
         let callExpression = expression?.findAncestor<CallExpression | CallfuncExpression>(isCallFuncOrCallExpression);
         if (callExpression && callExpression.callee === expression) {
             //this expression is the NAME of a CallExpression
-            callExpression = expression.parent.findAncestor<CallExpression | CallfuncExpression>(isCallFuncOrCallExpression);
-        } else if (isDottedGetExpression(expression.parent) && expression.parent.parent === callExpression) {
+            callExpression = expression.parent?.findAncestor<CallExpression | CallfuncExpression>(isCallFuncOrCallExpression);
+        } else if (isDottedGetExpression(expression?.parent) && expression?.parent?.parent === callExpression) {
             callExpression = callExpression.findAncestor<CallExpression | CallfuncExpression>(isCallFuncOrCallExpression);
         }
 
@@ -142,12 +148,15 @@ export class CallExpressionInfo {
 
     }
 
-    private getNamespace(dotPart: string, file: BrsFile): any {
+    private getNamespace(): NamespaceContainer {
         let scope = this.file.program.getFirstScopeForFile(this.file);
         return scope.namespaceLookup.get(this.dotPart);
     }
 
     private getParameterIndex() {
+        if (!this.callExpression || !this.callExpression.args) {
+            return 0;
+        }
         for (let i = this.callExpression.args.length - 1; i > -1; i--) {
             let argExpression = this.callExpression.args[i];
             let comparison = util.comparePositionToRange(this.position, argExpression.range);
@@ -157,8 +166,6 @@ export class CallExpressionInfo {
         }
 
         return 0;
-
     }
 
 }
-

@@ -1,4 +1,7 @@
-module.exports = async (suite, name, brighterscript, projectPath, options) => {
+import type { TargetOptions } from '../target-runner';
+
+module.exports = async (options: TargetOptions) => {
+    const { suite, name, version, fullName, brighterscript, projectPath, suiteOptions } = options;
     const { ProgramBuilder } = brighterscript;
 
     const builder = new ProgramBuilder();
@@ -7,28 +10,26 @@ module.exports = async (suite, name, brighterscript, projectPath, options) => {
         cwd: projectPath,
         createPackage: false,
         copyToStaging: false,
+        enableTypeValidation: true,
         //disable diagnostic reporting (they still get collected)
         diagnosticFilters: ['**/*'],
         logLevel: 'error'
-    });
+    } as any);
     if (Object.keys(builder.program.files).length === 0) {
         throw new Error('No files found in program');
     }
 
-    suite.add(name, (deferred) => {
-        const scopes = Object.values(builder.program.scopes);
+    suite.add(fullName, (deferred) => {
+        const scopes = Object.values(builder.program['scopes']);
         //mark all scopes as invalid so they'll re-validate
         for (let scope of scopes) {
             scope.invalidate();
         }
-        let promise = builder.program.validate();
-        if (promise) {
-            promise.then(() => deferred.resolve());
-        } else {
-            deferred.resolve();
-        }
+        Promise.resolve(
+            builder.program.validate()
+        ).finally(() => deferred.resolve());
     }, {
-        ...options,
+        ...suiteOptions,
         'defer': true
     });
 };

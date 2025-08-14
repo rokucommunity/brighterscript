@@ -44,11 +44,11 @@ describe('BrsFileValidator', () => {
                 end class
             end namespace
         `);
-        const namespace = ast.findChild<NamespaceStatement>(isNamespaceStatement);
-        const deltaClass = namespace.findChild<ClassStatement>(isClassStatement);
+        const namespace = ast.findChild<NamespaceStatement>(isNamespaceStatement)!;
+        const deltaClass = namespace.findChild<ClassStatement>(isClassStatement)!;
         expect(deltaClass.parent).to.equal(namespace.body);
 
-        const charlie = (deltaClass.parentClassName.expression as DottedGetExpression);
+        const charlie = (deltaClass.parentClassName!.expression as DottedGetExpression);
         expect(charlie.parent).to.equal(deltaClass.parentClassName);
 
         const bravo = charlie.obj as DottedGetExpression;
@@ -318,5 +318,176 @@ describe('BrsFileValidator', () => {
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('const'),
             range: util.createRange(4, 20, 4, 30)
         }]);
+    });
+
+    describe('function return values', () => {
+
+        it('catches sub with return value', () => {
+            program.setFile('source/main.brs', `
+                sub test()
+                    return true
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.voidFunctionMayNotReturnValue('sub'),
+                range: util.createRange(2, 20, 2, 31)
+            }]);
+        });
+
+        it('catches sub as void with return value', () => {
+            program.setFile('source/main.brs', `
+                sub test() as void
+                    return true
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.voidFunctionMayNotReturnValue('sub'),
+                range: util.createRange(2, 20, 2, 31)
+            }]);
+        });
+
+        it('catches function as void with return value', () => {
+            program.setFile('source/main.brs', `
+                function test() as void
+                    return true
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.voidFunctionMayNotReturnValue('function'),
+                range: util.createRange(2, 20, 2, 31)
+            }]);
+        });
+
+        it('catches sub as <type> without return value', () => {
+            program.setFile('source/main.brs', `
+                sub test() as integer
+                    return
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.nonVoidFunctionMustReturnValue('sub'),
+                range: util.createRange(2, 20, 2, 26)
+            }]);
+        });
+
+        it('catches function without return value', () => {
+            program.setFile('source/main.brs', `
+                function test()
+                    return
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.nonVoidFunctionMustReturnValue('function'),
+                range: util.createRange(2, 20, 2, 26)
+            }]);
+        });
+
+        it('catches function as <type> without return value', () => {
+            program.setFile('source/main.brs', `
+                function test() as integer
+                    return
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.nonVoidFunctionMustReturnValue('function'),
+                range: util.createRange(2, 20, 2, 26)
+            }]);
+        });
+
+        it('catches anon sub with return value', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    test = sub()
+                        return true
+                    end sub
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.voidFunctionMayNotReturnValue('sub'),
+                range: util.createRange(3, 24, 3, 35)
+            }]);
+        });
+
+        it('catches sub as void with return value', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    test = sub() as void
+                        return true
+                    end sub
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.voidFunctionMayNotReturnValue('sub'),
+                range: util.createRange(3, 24, 3, 35)
+            }]);
+        });
+
+        it('catches function as void with return value', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    test = function() as void
+                        return true
+                    end function
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.voidFunctionMayNotReturnValue('function'),
+                range: util.createRange(3, 24, 3, 35)
+            }]);
+        });
+
+        it('catches sub as <type> without return value', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    test = sub() as integer
+                        return
+                    end sub
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.nonVoidFunctionMustReturnValue('sub'),
+                range: util.createRange(3, 24, 3, 30)
+            }]);
+        });
+
+        it('catches function without return value', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    test = function()
+                        return
+                    end function
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.nonVoidFunctionMustReturnValue('function'),
+                range: util.createRange(3, 24, 3, 30)
+            }]);
+        });
+
+        it('catches function as <type> without return value', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    test = function() as integer
+                        return
+                    end function
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.nonVoidFunctionMustReturnValue('function'),
+                range: util.createRange(3, 24, 3, 30)
+            }]);
+        });
     });
 });

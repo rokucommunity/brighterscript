@@ -1,7 +1,7 @@
 import { assert, expect } from './chai-config.spec';
 import * as pick from 'object.pick';
 import * as sinonImport from 'sinon';
-import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
+import { CancellationTokenSource, CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile } from './files/BrsFile';
@@ -13,14 +13,17 @@ import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import type { FunctionStatement, PrintStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
-import { expectCompletionsExcludes, expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
+import { expectCompletionsExcludes, expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectThrows, expectThrowsAsync, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
-import { Logger } from './Logger';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { isBrsFile } from './astUtils/reflection';
 import type { LiteralExpression } from './parser/Expression';
 import type { AstEditor } from './astUtils/AstEditor';
 import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
+import type { BsDiagnostic, Plugin } from './interfaces';
+import { createLogger } from './logging';
+import { Scope } from './Scope';
+import undent from 'undent';
 
 let sinon = sinonImport.createSandbox();
 
@@ -43,7 +46,16 @@ describe('Program', () => {
         program.dispose();
     });
 
-    it('Does not crazy for file not referenced by any other scope', async () => {
+    it('does not throw exception after calling validate() after dispose()', () => {
+        program.setFile('source/themes/alpha.bs', `
+            sub main()
+            end sub
+        `);
+        program.dispose();
+        program.validate();
+    });
+
+    it('Does not crash for file not referenced by any other scope', async () => {
         program.setFile('tests/testFile.spec.bs', `
             function main(args as object) as object
                 return roca(args).describe("test suite", sub()
@@ -187,7 +199,7 @@ describe('Program', () => {
                 beforeFileParse: beforeFileParse,
                 afterFileParse: afterFileParse,
                 afterFileValidate: afterFileValidate
-            }], { logger: new Logger() });
+            }], { logger: createLogger() });
 
             //add a new source file
             program.setFile('source/main.brs', '');
@@ -215,6 +227,98 @@ describe('Program', () => {
     });
 
     describe('validate', () => {
+        it('does not lose scope diagnostics in second validation after cancelling the previous validation', async () => {
+            program.setFile('source/Direction.bs', `
+                enum Direction
+                    up = "up"
+                end enum
+            `);
+            program.setFile('source/test.bs', `
+                import "Direction.bs"
+                sub test()
+                    print Direction.down
+                end sub
+            `);
+
+            //add several scopes so we have time to cancel the validation
+            for (let i = 0; i < 3; i++) {
+                program.setFile(`components/Component${i}.xml`, undent`
+                    <component name="Component${i}" extends="Group">
+                        <script uri="pkg:/source/test.bs" />
+                    </component>
+                `);
+            }
+            program.validate();
+            //ensure the diagnostic is there during normal run
+            expectDiagnostics(program, [
+                DiagnosticMessages.unknownEnumValue('down', 'Direction').message
+            ]);
+
+            const cancel = new CancellationTokenSource();
+
+            let count = 0;
+            const plugin = {
+                name: 'cancel validation',
+                beforeProgramValidate: () => {
+                    count++;
+                    //if this is the second validate, remove the plugin and change the file to invalidate the scopes again
+                    if (count === 2) {
+                        program.plugins.remove(plugin);
+                        program.setFile('source/test.bs', program.getFile('source/test.bs').fileContents + `'comment`);
+                    }
+                },
+                afterScopeValidate: () => {
+                    //if the diagnostic is avaiable, we know it's safe to cancel
+                    if (program.getDiagnostics().find(x => x.code === DiagnosticMessages.unknownEnumValue('down', 'Direction').code)) {
+                        cancel.cancel();
+                    }
+                }
+            } as Plugin;
+            //add a plugin that monitors where we are in the process, so we can cancel the validate at the correct time
+            program.plugins.add(plugin);
+
+            //change the file so it forces a reload
+            program.setFile('source/test.bs', program.getFile('source/test.bs').fileContents + `'comment`);
+
+            //now trigger two validations, the first one will be cancelled, the second one will run to completion
+            await Promise.all([
+                program.validate({
+                    async: true,
+                    cancellationToken: cancel.token
+                }),
+                program.validate({
+                    async: true
+                })
+            ]);
+
+            //ensure the diagnostic is there after a cancelled run (with a subsequent completed run)
+            expectDiagnostics(program, [
+                DiagnosticMessages.unknownEnumValue('down', 'Direction').message
+            ]);
+        });
+
+        it('validate (sync) passes along inner exception', () => {
+            program.setFile('source/main.brs', ``);
+            sinon.stub(Scope.prototype, 'validate').callsFake(() => {
+                throw new Error('Scope crash');
+            });
+            expectThrows(() => {
+                program.validate();
+            }, 'Scope crash');
+        });
+
+        it('validate (async) passes along inner exception', async () => {
+            program.setFile('source/main.brs', ``);
+            sinon.stub(Scope.prototype, 'validate').callsFake(() => {
+                throw new Error('Scope crash');
+            });
+            await expectThrowsAsync(async () => {
+                await program.validate({
+                    async: true
+                });
+            }, 'Scope crash');
+        });
+
         it('retains expressions after validate', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
                 sub test()
@@ -267,7 +371,7 @@ describe('Program', () => {
                 message: 'message',
                 file: undefined,
                 range: undefined
-            }];
+            }] as any as BsDiagnostic[];
             program.addDiagnostics(expected);
             const actual = (program as any).diagnostics;
             expect(actual).to.deep.equal(expected);
@@ -313,6 +417,7 @@ describe('Program', () => {
                 DiagnosticMessages.fileNotReferencedByAnyOtherFile()
             ]);
         });
+
         it('does not throw errors on shadowed init functions in components', () => {
             program.setFile('lib.brs', `
                 function DoSomething()
@@ -505,7 +610,7 @@ describe('Program', () => {
 
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('DoSomething')
+                DiagnosticMessages.cannotFindFunction('DoSomething')
             ]);
         });
 
@@ -527,9 +632,9 @@ describe('Program', () => {
         it('supports using `m` vars in parameter default values', () => {
             //call a function that doesn't exist
             program.setFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
-                sub findNode(nodeId as string, parentNode = m.top as object)
+                function findNode(nodeId as string, parentNode = m.top as object)
                     return parentNode.findNode(nodeId)
-                end sub
+                end function
             `);
 
             program.validate();
@@ -549,6 +654,20 @@ describe('Program', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
+        });
+
+        it('properly handles errors in async mode', async () => {
+            const file = program.setFile<BrsFile>('source/main.brs', ``);
+            file.validate = () => {
+                throw new Error('Crash for test');
+            };
+            let error: Error;
+            try {
+                await program.validate({ async: true });
+            } catch (e) {
+                error = e as any;
+            }
+            expect(error?.message).to.eql('Crash for test');
         });
     });
 
@@ -700,6 +819,92 @@ describe('Program', () => {
             }]);
         });
 
+        it('accepts libpkg .brs script reference', () => {
+            program.setFile('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="HeroScene" extends="Scene">
+                    <script type="text/brightscript" uri="libpkg:/components/component1.brs" />
+                </component>
+            `);
+            program.setFile('components/component1.brs', '');
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('accepts libpkg .bs script reference', () => {
+            program.setFile('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="HeroScene" extends="Scene">
+                    <script type="text/brightscript" uri="libpkg:/components/component1.bs" />
+                </component>
+            `);
+            program.setFile('components/component1.bs', '');
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not set function not found diagnostic for function in libpkg referenced script reference', () => {
+            program.setFile('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="HeroScene" extends="Scene">
+                    <script type="text/brightscript" uri="libpkg:/components/component1.brs" />
+                    <interface>
+                        <function name="isFound"/>
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/component1.brs', `
+                function isFound()
+                end function`
+            );
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not set function not found diagnostic for function in libpkg referenced .bs script reference', () => {
+            program.setFile('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="HeroScene" extends="Scene">
+                    <script type="text/brightscript" uri="libpkg:/components/component1.bs" />
+                    <interface>
+                        <function name="isFound"/>
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/component1.bs', `
+                function isFound()
+                end function`
+            );
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('sets function not found diagnostic for missing function in libpkg referenced script reference', () => {
+            program.setFile('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="HeroScene" extends="Scene">
+                    <script type="text/brightscript" uri="libpkg:/components/component1.brs" />
+                    <interface>
+                        <function name="isNotFound"/>
+                    </interface>
+                </component>
+            `);
+            program.setFile('components/component1.brs', `
+                function isFound()
+                end function`
+            );
+
+            program.validate();
+
+            expectDiagnostics(program, [
+                DiagnosticMessages.xmlFunctionNotFound('isNotFound')
+            ]);
+        });
+
         it('adds warning instead of error on mismatched upper/lower case script import', () => {
             program.setFile('components/component1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -719,7 +924,7 @@ describe('Program', () => {
 
     describe('reloadFile', () => {
         it('picks up new files in a scope when an xml file is loaded', () => {
-            program.options.ignoreErrorCodes.push(1013);
+            program.options.ignoreErrorCodes!.push(1013);
             program.setFile('components/component1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="HeroScene" extends="Scene">
@@ -765,7 +970,7 @@ describe('Program', () => {
         });
 
         it('reloads referenced fles when xml file changes', () => {
-            program.options.ignoreErrorCodes.push(1013);
+            program.options.ignoreErrorCodes!.push(1013);
             program.setFile('components/component1.brs', '');
 
             let xmlFile = program.setFile('components/component1.xml', trim`
@@ -812,6 +1017,43 @@ describe('Program', () => {
             program.validate();
             let completions = program.getCompletions(`${rootDir}/source/main.brs`, Position.create(4, 28)).map(x => x.label);
             expect(completions).to.include('thing');
+        });
+
+        it('finds enum member after dot', () => {
+            program.setFile('source/main.bs', `
+                sub test()
+                    thing = alpha.Direction.
+                end sub
+                namespace alpha
+                    enum Direction
+                        up
+                    end enum
+                end namespace
+            `);
+            program.validate();
+            const completions = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 44));
+            expect(completions.map(x => ({ kind: x.kind, label: x.label }))).to.eql([{
+                label: 'up',
+                kind: CompletionItemKind.EnumMember
+            }]);
+        });
+
+        it('finds enum member after dot in if statement', () => {
+            program.setFile('source/main.bs', `
+                sub test()
+                    if alpha.beta. then
+                    end if
+                end sub
+                namespace alpha.beta
+                    const isEnabled = true
+                end namespace
+            `);
+            program.validate();
+            const completions = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 34));
+            expect(completions.map(x => ({ kind: x.kind, label: x.label }))).to.eql([{
+                label: 'isEnabled',
+                kind: CompletionItemKind.Constant
+            }]);
         });
 
         it('includes `for` variable', () => {
@@ -1488,7 +1730,7 @@ describe('Program', () => {
 
             //there should be an error when calling DoParentThing, since it doesn't exist on child or parent
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('DoParentThing')
+                DiagnosticMessages.cannotFindFunction('DoParentThing')
             ]);
 
             //add the script into the parent
@@ -1646,7 +1888,7 @@ describe('Program', () => {
             ];
 
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('C')
+                DiagnosticMessages.cannotFindFunction('C')
             ]);
         });
     });
@@ -1734,19 +1976,19 @@ describe('Program', () => {
     });
 
     it('does not create map by default', async () => {
-        fsExtra.ensureDirSync(program.options.stagingDir);
+        fsExtra.ensureDirSync(program.options.stagingDir!);
         program.setFile('source/main.brs', `
             sub main()
             end sub
         `);
         program.validate();
-        await program.transpile([], program.options.stagingDir);
+        await program.transpile([], program.options.stagingDir!);
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs`)).is.true;
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs.map`)).is.false;
     });
 
     it('creates sourcemap for brs and xml files', async () => {
-        fsExtra.ensureDirSync(program.options.stagingDir);
+        fsExtra.ensureDirSync(program.options.stagingDir!);
         program.setFile('source/main.brs', `
             sub main()
             end sub
@@ -1769,19 +2011,29 @@ describe('Program', () => {
             dest: s`components/comp1.xml`
         }];
         program.options.sourceMap = true;
-        await program.transpile(filePaths, program.options.stagingDir);
+        await program.transpile(filePaths, program.options.stagingDir!);
 
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs.map`)).is.true;
         expect(fsExtra.pathExistsSync(s`${stagingDir}/components/comp1.xml.map`)).is.true;
     });
 
     it('copies the bslib.brs file', async () => {
-        fsExtra.ensureDirSync(program.options.stagingDir);
+        fsExtra.ensureDirSync(program.options.stagingDir!);
         program.validate();
 
-        await program.transpile([], program.options.stagingDir);
+        await program.transpile([], program.options.stagingDir!);
 
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/bslib.brs`)).is.true;
+    });
+
+    it('copies the bslib.brs file to optionally specified directory', async () => {
+        fsExtra.ensureDirSync(program.options.stagingDir!);
+        program.options.bslibDestinationDir = 'source/opt';
+        program.validate();
+
+        await program.transpile([], program.options.stagingDir!);
+
+        expect(fsExtra.pathExistsSync(s`${stagingDir}/source/opt/bslib.brs`)).is.true;
     });
 
     describe('getTranspiledFileContents', () => {
@@ -1842,8 +2094,38 @@ describe('Program', () => {
         });
     });
 
-    describe('transpile', () => {
+    it('beforeProgramTranspile sends entries in alphabetical order', () => {
+        program.setFile('source/main.bs', trim`
+            sub main()
+                print "hello world"
+            end sub
+        `);
 
+        program.setFile('source/common.bs', trim`
+            sub getString()
+                return "test"
+            end sub
+        `);
+
+        //send the files out of order
+        const result = program['beforeProgramTranspile']([{
+            src: s`${rootDir}/source/main.bs`,
+            dest: 'source/main.bs'
+        }, {
+            src: s`${rootDir}/source/common.bs`,
+            dest: 'source/common.bs'
+        }], program.options.stagingDir);
+
+        //entries should now be in alphabetic order
+        expect(
+            result.entries.map(x => x.outputPath)
+        ).to.eql([
+            s`${stagingDir}/source/common.brs`,
+            s`${stagingDir}/source/main.brs`
+        ]);
+    });
+
+    describe('transpile', () => {
         it('detects and transpiles files added between beforeProgramTranspile and afterProgramTranspile', async () => {
             program.setFile('source/main.bs', trim`
                 sub main()
@@ -1919,7 +2201,7 @@ describe('Program', () => {
                     print "hello world"
                 end sub
             `);
-            let literalExpression: LiteralExpression;
+            let literalExpression: LiteralExpression | undefined;
             //replace all strings with "goodbye world"
             program.plugins.add({
                 name: 'TestPlugin',
@@ -1948,7 +2230,7 @@ describe('Program', () => {
             );
 
             //our literalExpression should have been restored to its original value
-            expect(literalExpression.token.text).to.eql('"hello world"');
+            expect(literalExpression!.token.text).to.eql('"hello world"');
         });
 
         it('handles AstEditor for beforeProgramTranspile', async () => {
@@ -1957,7 +2239,7 @@ describe('Program', () => {
                     print "hello world"
                 end sub
             `);
-            let literalExpression: LiteralExpression;
+            let literalExpression: LiteralExpression | undefined;
             //replace all strings with "goodbye world"
             program.plugins.add({
                 name: 'TestPlugin',
@@ -1984,7 +2266,7 @@ describe('Program', () => {
             );
 
             //our literalExpression should have been restored to its original value
-            expect(literalExpression.token.text).to.eql('"hello world"');
+            expect(literalExpression!.token.text).to.eql('"hello world"');
         });
 
         it('copies bslib.brs when no ropm version was found', async () => {
@@ -2005,7 +2287,7 @@ describe('Program', () => {
                     print SOURCE_LINE_NUM
                 end sub
             `);
-            await program.transpile([], program.options.stagingDir);
+            await program.transpile([], program.options.stagingDir!);
             expect(trimMap(
                 fsExtra.readFileSync(s`${stagingDir}/source/logger.brs`).toString()
             )).to.eql(trim`
@@ -2021,7 +2303,7 @@ describe('Program', () => {
                     print "logInfo"
                 end sub
             `);
-            await program.transpile([], program.options.stagingDir);
+            await program.transpile([], program.options.stagingDir!);
             expect(trimMap(
                 fsExtra.readFileSync(s`${stagingDir}/source/logger.brs`).toString()
             )).to.eql(trim`
@@ -2037,13 +2319,31 @@ describe('Program', () => {
                 <component name="Component1" extends="Scene">
                 </component>
             `);
-            await program.transpile([], program.options.stagingDir);
+            await program.transpile([], program.options.stagingDir!);
             expect(trimMap(
                 fsExtra.readFileSync(s`${stagingDir}/components/Component1.xml`).toString()
             )).to.eql(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component1" extends="Scene">
                     <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `);
+        });
+
+        it('uses custom bslib path when specified in .xml file', async () => {
+            program.options.bslibDestinationDir = 'source/opt';
+            program.setFile('components/Component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Scene">
+                </component>
+            `);
+            await program.transpile([], program.options.stagingDir!);
+            expect(trimMap(
+                fsExtra.readFileSync(s`${stagingDir}/components/Component1.xml`).toString()
+            )).to.eql(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/source/opt/bslib.brs" />
                 </component>
             `);
         });
@@ -2098,6 +2398,51 @@ describe('Program', () => {
             ).to.eql(
                 s`${sourceRoot}/source/main.bs`
             );
+        });
+
+        it('does not publish files that are empty', async () => {
+            let sourceRoot = s`${tempDir}/sourceRootFolder`;
+            program = new Program({
+                rootDir: rootDir,
+                stagingDir: stagingDir,
+                sourceRoot: sourceRoot,
+                sourceMap: true,
+                pruneEmptyCodeFiles: true
+            });
+            program.setFile('source/types.bs', `
+                enum mainstyle
+                    dark = "dark"
+                    light = "light"
+                end enum
+            `);
+            program.setFile('source/main.bs', `
+                import "pkg:/source/types.bs"
+
+                sub main()
+                    ? "The night is " + mainstyle.dark + " and full of terror"
+                end sub
+            `);
+            await program.transpile([
+                {
+                    src: s`${rootDir}/source/main.bs`,
+                    dest: s`source/main.bs`
+                },
+                {
+                    src: s`${rootDir}/source/types.bs`,
+                    dest: s`source/types.bs`
+                }
+            ], stagingDir);
+
+            expect(trimMap(
+                fsExtra.readFileSync(s`${stagingDir}/source/main.brs`).toString()
+            )).to.eql(trim`
+                'import "pkg:/source/types.bs"
+
+                sub main()
+                    ? "The night is " + "dark" + " and full of terror"
+                end sub
+            `);
+            expect(fsExtra.pathExistsSync(s`${stagingDir}/source/types.brs`)).to.be.false;
         });
     });
 
@@ -2176,6 +2521,19 @@ describe('Program', () => {
 
             expectZeroDiagnostics(program);
             expect(signatureHelp[0]?.signature).to.not.exist;
+        });
+
+        it('does not crash when parts is undefined', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    print m.b["c"].hello?(12345)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            // 123|45
+            let signatureHelp = getSignatureHelp(2, 45);
+            expect(signatureHelp).is.empty;
         });
 
         describe('gets signature info for regular function call', () => {
@@ -2842,6 +3200,54 @@ describe('Program', () => {
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(0);
             }
         });
+
+        it('does not crash on malformed function declaration with trailing comma', () => {
+            program.setFile('source/main.bs', `
+                sub test(p1 = invalid,
+                    result = 1
+                end sub
+            `);
+            program.validate();
+
+            // Try to get signature help at the position after the comma
+            // This should not crash even though the function declaration is malformed
+            const signatureHelp = program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(1, 34));
+
+            // We don't necessarily expect specific results, just that it doesn't crash
+            expect(signatureHelp).to.be.an('array');
+        });
+
+        it('does not crash on incomplete function call', () => {
+            program.setFile('source/main.bs', `
+                function main()
+                    someFunction(
+                end function
+                function someFunction(param1 as string)
+                end function
+            `);
+            program.validate();
+
+            // Try to get signature help after the opening parenthesis
+            const signatureHelp = program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 32));
+
+            // We don't necessarily expect specific results, just that it doesn't crash
+            expect(signatureHelp).to.be.an('array');
+        });
+
+        it('does not crash on malformed function declaration with missing closing paren', () => {
+            program.setFile('source/main.bs', `
+                sub test(p1 = invalid
+                    result = 1
+                end sub
+            `);
+            program.validate();
+
+            // Try to get signature help at the position where closing paren should be
+            const signatureHelp = program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(1, 33));
+
+            // We don't necessarily expect specific results, just that it doesn't crash
+            expect(signatureHelp).to.be.an('array');
+        });
     });
 
     describe('plugins', () => {
@@ -2874,6 +3280,16 @@ describe('Program', () => {
             expect(plugin.onFileValidate.callCount).to.equal(1);
             expect(plugin.afterFileValidate.callCount).to.equal(1);
         });
+
+        it('emits program dispose event', () => {
+            const plugin = {
+                name: 'test',
+                beforeProgramDispose: sinon.spy()
+            };
+            program.plugins.add(plugin);
+            program.dispose();
+            expect(plugin.beforeProgramDispose.callCount).to.equal(1);
+        });
     });
 
     describe('getScopesForFile', () => {
@@ -2896,5 +3312,114 @@ describe('Program', () => {
                 file.srcPath
             ]);
         });
+    });
+
+    describe('manifest', () => {
+        beforeEach(() => {
+            fsExtra.emptyDirSync(tempDir);
+            fsExtra.writeFileSync(`${tempDir}/manifest`, trim`
+                # Channel Details
+                title=sample manifest
+                major_version=2
+                minor_version=0
+                build_version=0
+                supports_input_launch=1
+                bs_const=DEBUG=false
+            `);
+            program.options = util.normalizeConfig({
+                rootDir: tempDir
+            });
+        });
+
+        afterEach(() => {
+            fsExtra.emptyDirSync(tempDir);
+            program.dispose();
+        });
+
+        it('loads the manifest from project root', () => {
+            let manifest = program.getManifest();
+            testCommonManifestValues(manifest);
+            expect(manifest.get('bs_const')).to.equal('DEBUG=false');
+        });
+
+        it('loads the manifest from a FileObj', () => {
+            fsExtra.emptyDirSync(tempDir);
+            fsExtra.ensureDirSync(`${tempDir}/someDeepDir`);
+            fsExtra.writeFileSync(`${tempDir}/someDeepDir/manifest`, trim`
+                # Channel Details
+                title=sample manifest
+                major_version=2
+                minor_version=0
+                build_version=0
+                supports_input_launch=1
+                bs_const=DEBUG=false
+            `);
+            program.loadManifest({
+                src: `${tempDir}/someDeepDir/manifest`,
+                dest: 'manifest'
+            });
+            let manifest = program.getManifest();
+            testCommonManifestValues(manifest);
+            expect(manifest.get('bs_const')).to.equal('DEBUG=false');
+        });
+
+        it('adds a const to the manifest', () => {
+            program.options.manifest = {
+                // eslint-disable-next-line camelcase
+                bs_const: {
+                    NEW_VALUE: false
+                }
+            };
+            let manifest = program.getManifest();
+            testCommonManifestValues(manifest);
+            expect(manifest.get('bs_const')).to.equal('DEBUG=false;NEW_VALUE=false');
+        });
+
+        it('changes a const in the manifest', () => {
+            program.options.manifest = {
+                // eslint-disable-next-line camelcase
+                bs_const: {
+                    DEBUG: true
+                }
+            };
+            let manifest = program.getManifest();
+            testCommonManifestValues(manifest);
+            expect(manifest.get('bs_const')).to.equal('DEBUG=true');
+        });
+
+        it('removes a const in the manifest', () => {
+            program.options.manifest = {
+                // eslint-disable-next-line camelcase
+                bs_const: {
+                    DEBUG: null
+                }
+            };
+            let manifest = program.getManifest();
+            testCommonManifestValues(manifest);
+            expect(manifest.get('bs_const')).to.equal('');
+        });
+
+        it('handles no consts in the manifest', () => {
+            fsExtra.emptyDirSync(tempDir);
+            fsExtra.writeFileSync(`${tempDir}/manifest`, trim`
+                # Channel Details
+                title=sample manifest
+                major_version=2
+                minor_version=0
+                build_version=0
+                supports_input_launch=1
+            `);
+            let manifest = program.getManifest();
+            testCommonManifestValues(manifest);
+            expect(manifest.get('bs_const')).to.equal('');
+        });
+
+        function testCommonManifestValues(manifest: Map<string, string>) {
+            expect(manifest.get('title')).to.equal('sample manifest');
+            expect(manifest.get('major_version')).to.equal('2');
+            expect(manifest.get('minor_version')).to.equal('0');
+            expect(manifest.get('build_version')).to.equal('0');
+            expect(manifest.get('supports_input_launch')).to.equal('1');
+        }
     });
 });

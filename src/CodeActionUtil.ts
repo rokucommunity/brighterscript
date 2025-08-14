@@ -12,16 +12,20 @@ export class CodeActionUtil {
             const uri = URI.file(change.filePath).toString();
 
             //create the edit changes array for this uri
-            if (!edit.changes[uri]) {
-                edit.changes[uri] = [];
+            if (!edit.changes![uri]) {
+                edit.changes![uri] = [];
             }
             if (change.type === 'insert') {
-                edit.changes[uri].push(
+                edit.changes![uri].push(
                     TextEdit.insert(change.position, change.newText)
                 );
             } else if (change.type === 'replace') {
-                edit.changes[uri].push(
+                edit.changes![uri].push(
                     TextEdit.replace(change.range, change.newText)
+                );
+            } else if (change.type === 'delete') {
+                edit.changes![uri].push(
+                    TextEdit.del(change.range)
                 );
             }
         }
@@ -31,7 +35,7 @@ export class CodeActionUtil {
         return action;
     }
 
-    public serializableDiagnostics(diagnostics: Diagnostic[]) {
+    public serializableDiagnostics(diagnostics: Diagnostic[] | undefined) {
         return diagnostics?.map(({ range, severity, code, source, message, relatedInformation }) => ({
             range: range,
             severity: severity,
@@ -50,7 +54,7 @@ export interface CodeActionShorthand {
     diagnostics?: Diagnostic[];
     kind?: CodeActionKind;
     isPreferred?: boolean;
-    changes: Array<InsertChange | ReplaceChange>;
+    changes: Array<InsertChange | ReplaceChange | DeleteChange>;
 }
 
 export interface InsertChange {
@@ -66,5 +70,12 @@ export interface ReplaceChange {
     type: 'replace';
     range: Range;
 }
+
+export interface DeleteChange {
+    filePath: string;
+    type: 'delete';
+    range: Range;
+}
+
 
 export const codeActionUtil = new CodeActionUtil();

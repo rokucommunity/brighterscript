@@ -64,6 +64,21 @@ describe('ConstStatement', () => {
         `);
     });
 
+    it('allows const with the name `optional`', () => {
+        program.setFile('source/main.bs', `
+            const optional = true
+            namespace alpha
+                const optional = true
+            end namespace
+            sub main()
+                print optional
+                print alpha.optional
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
     describe('transpile', () => {
 
         it('transpiles simple consts', () => {
@@ -207,6 +222,34 @@ describe('ConstStatement', () => {
                     kind: CompletionItemKind.Constant
                 }]
             );
+        });
+
+        it('transpiles simple const in a unary expression', () => {
+            testTranspile(`
+                const foo = 1
+                sub main()
+                    bar = -foo
+                end sub
+            `, `
+                sub main()
+                    bar = -1
+                end sub
+            `, undefined, 'source/main.bs');
+        });
+
+        it('transpiles complex const in a unary expression', () => {
+            testTranspile(`
+                namespace some.consts
+                    const foo = 1
+                end namespace
+                sub main()
+                    bar = -some.consts.foo
+                end sub
+            `, `
+                sub main()
+                    bar = - 1
+                end sub
+            `, undefined, 'source/main.bs');
         });
 
         it('shows up in namespace completions', () => {

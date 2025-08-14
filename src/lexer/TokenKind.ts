@@ -155,6 +155,7 @@ export enum TokenKind {
     Public = 'Public',
     Protected = 'Protected',
     Private = 'Private',
+    Optional = 'Optional',
     As = 'As',
     New = 'New',
     Override = 'Override',
@@ -162,6 +163,8 @@ export enum TokenKind {
     EndInterface = 'EndInterface',
     Const = 'Const',
     Continue = 'Continue',
+    Typecast = 'Typecast',
+    Alias = 'Alias',
 
     //brighterscript source literals
     LineNumLiteral = 'LineNumLiteral',
@@ -169,6 +172,8 @@ export enum TokenKind {
     SourceLineNumLiteral = 'SourceLineNumLiteral',
     FunctionNameLiteral = 'FunctionNameLiteral',
     SourceFunctionNameLiteral = 'SourceFunctionNameLiteral',
+    SourceNamespaceNameLiteral = 'SourceNamespaceNameLiteral',
+    SourceNamespaceRootNameLiteral = 'SourceNamespaceRootNameLiteral',
     SourceLocationLiteral = 'SourceLocationLiteral',
     PkgPathLiteral = 'PkgPathLiteral',
     PkgLocationLiteral = 'PkgLocationLiteral',
@@ -301,6 +306,7 @@ export const Keywords: Record<string, TokenKind> = {
     private: TokenKind.Private,
     new: TokenKind.New,
     override: TokenKind.Override,
+    optional: TokenKind.Optional,
     namespace: TokenKind.Namespace,
     endnamespace: TokenKind.EndNamespace,
     'end namespace': TokenKind.EndNamespace,
@@ -310,6 +316,8 @@ export const Keywords: Record<string, TokenKind> = {
     'source_line_num': TokenKind.SourceLineNumLiteral,
     'function_name': TokenKind.FunctionNameLiteral,
     'source_function_name': TokenKind.SourceFunctionNameLiteral,
+    'source_namespace_name': TokenKind.SourceNamespaceNameLiteral,
+    'source_namespace_root_name': TokenKind.SourceNamespaceRootNameLiteral,
     'source_location': TokenKind.SourceLocationLiteral,
     'pkg_path': TokenKind.PkgPathLiteral,
     'pkg_location': TokenKind.PkgLocationLiteral,
@@ -320,7 +328,9 @@ export const Keywords: Record<string, TokenKind> = {
     throw: TokenKind.Throw,
     'end interface': TokenKind.EndInterface,
     endinterface: TokenKind.EndInterface,
-    const: TokenKind.Const
+    const: TokenKind.Const,
+    typecast: TokenKind.Typecast,
+    alias: TokenKind.Alias
 };
 //hide the constructor prototype method because it causes issues
 Keywords.constructor = undefined;
@@ -427,6 +437,7 @@ export const AllowedProperties = [
     TokenKind.Class,
     TokenKind.New,
     TokenKind.Override,
+    TokenKind.Optional,
     TokenKind.Namespace,
     TokenKind.EndNamespace,
     TokenKind.Import,
@@ -435,6 +446,8 @@ export const AllowedProperties = [
     TokenKind.SourceLineNumLiteral,
     TokenKind.FunctionNameLiteral,
     TokenKind.SourceFunctionNameLiteral,
+    TokenKind.SourceNamespaceNameLiteral,
+    TokenKind.SourceNamespaceRootNameLiteral,
     TokenKind.SourceLocationLiteral,
     TokenKind.PkgPathLiteral,
     TokenKind.PkgLocationLiteral,
@@ -444,7 +457,9 @@ export const AllowedProperties = [
     TokenKind.Throw,
     TokenKind.EndInterface,
     TokenKind.Const,
-    TokenKind.Continue
+    TokenKind.Continue,
+    TokenKind.Typecast,
+    TokenKind.Alias
 ];
 
 /** List of TokenKind that are allowed as local var identifiers. */
@@ -471,6 +486,7 @@ export const AllowedLocalIdentifiers = [
     TokenKind.Class,
     TokenKind.New,
     TokenKind.Override,
+    TokenKind.Optional,
     TokenKind.Namespace,
     TokenKind.EndNamespace,
     TokenKind.Import,
@@ -478,7 +494,9 @@ export const AllowedLocalIdentifiers = [
     TokenKind.Catch,
     TokenKind.EndTry,
     TokenKind.Const,
-    TokenKind.Continue
+    TokenKind.Continue,
+    TokenKind.Typecast,
+    TokenKind.Alias
 ];
 
 export const BrighterScriptSourceLiterals = [
@@ -486,6 +504,8 @@ export const BrighterScriptSourceLiterals = [
     TokenKind.SourceLineNumLiteral,
     TokenKind.FunctionNameLiteral,
     TokenKind.SourceFunctionNameLiteral,
+    TokenKind.SourceNamespaceNameLiteral,
+    TokenKind.SourceNamespaceRootNameLiteral,
     TokenKind.SourceLocationLiteral,
     TokenKind.PkgPathLiteral,
     TokenKind.PkgLocationLiteral
@@ -542,6 +562,8 @@ export const DisallowedLocalIdentifiers = [
     TokenKind.SourceLineNumLiteral,
     TokenKind.FunctionNameLiteral,
     TokenKind.SourceFunctionNameLiteral,
+    TokenKind.SourceNamespaceNameLiteral,
+    TokenKind.SourceNamespaceRootNameLiteral,
     TokenKind.SourceLocationLiteral,
     TokenKind.PkgPathLiteral,
     TokenKind.PkgLocationLiteral,

@@ -71,6 +71,11 @@ export class XmlFile {
     public commentFlags = [] as CommentFlag[];
 
     /**
+     * Will this file result in only comment or whitespace output? If so, it can be excluded from the output if that bsconfig setting is enabled.
+     */
+    readonly canBePruned = false;
+
+    /**
      * The list of script imports delcared in the XML of this file.
      * This excludes parent imports and auto codebehind imports
      */
@@ -393,8 +398,8 @@ export class XmlFile {
     /**
      * Walk up the ancestor chain and aggregate all of the script tag imports
      */
-    public getAncestorScriptTagImports() {
-        let result = [];
+    public getAncestorScriptTagImports(): FileReference[] {
+        let result = [] as FileReference[];
         let parent = this.parentComponent;
         while (parent) {
             result.push(...parent.scriptTagImports);
@@ -458,29 +463,50 @@ export class XmlFile {
         this.program.logger.debug('XmlFile', chalk.green(this.pkgPath), ...args);
     }
 
+    private checkScriptsForPublishableImports(scripts: SGScript[]): [boolean, SGScript[]] {
+        if (!this.program.options.pruneEmptyCodeFiles) {
+            return [false, scripts];
+        }
+        const publishableScripts = scripts.filter(script => {
+            const uriAttributeValue = script.attributes.find((v) => v.key.text === 'uri')?.value.text || '';
+            const pkgMapPath = util.getPkgPathFromTarget(this.pkgPath, uriAttributeValue);
+            let file = this.program.getFile(pkgMapPath);
+            if (!file && pkgMapPath.endsWith(this.program.bslibPkgPath)) {
+                return true;
+            }
+            if (!file && pkgMapPath.endsWith('.brs')) {
+                file = this.program.getFile(pkgMapPath.replace(/\.brs$/, '.bs'));
+            }
+            return !(file?.canBePruned);
+        });
+        return [publishableScripts.length !== scripts.length, publishableScripts];
+    }
+
     /**
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile(): CodeWithSourceMap {
         const state = new TranspileState(this.srcPath, this.program.options);
 
+        const originalScripts = this.ast.component?.scripts ?? [];
         const extraImportScripts = this.getMissingImportsForTranspile().map(uri => {
             const script = new SGScript();
             script.uri = util.getRokuPkgPath(uri.replace(/\.bs$/, '.brs'));
             return script;
         });
 
+        const [scriptsHaveChanged, publishableScripts] = this.checkScriptsForPublishableImports([
+            ...originalScripts,
+            ...extraImportScripts
+        ]);
+
         let transpileResult: SourceNode | undefined;
-
-        if (this.needsTranspiled || extraImportScripts.length > 0) {
+        if (this.needsTranspiled || extraImportScripts.length > 0 || scriptsHaveChanged) {
             //temporarily add the missing imports as script tags
-            const originalScripts = this.ast.component?.scripts ?? [];
-            this.ast.component.scripts = [
-                ...originalScripts,
-                ...extraImportScripts
-            ];
+            this.ast.component.scripts = publishableScripts;
 
-            transpileResult = new SourceNode(null, null, state.srcPath, this.parser.ast.transpile(state));
+
+            transpileResult = util.sourceNodeFromTranspileResult(null, null, state.srcPath, this.parser.ast.transpile(state));
 
             //restore the original scripts array
             this.ast.component.scripts = originalScripts;

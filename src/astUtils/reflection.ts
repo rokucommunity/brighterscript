@@ -1,5 +1,5 @@
-import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement, EnumStatement, EnumMemberStatement, TryCatchStatement, CatchStatement, ThrowStatement, MethodStatement, FieldStatement, ConstStatement, ContinueStatement } from '../parser/Statement';
-import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression } from '../parser/Expression';
+import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassFieldStatement, ClassMethodStatement, ClassStatement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement, EnumStatement, EnumMemberStatement, TryCatchStatement, CatchStatement, ThrowStatement, MethodStatement, FieldStatement, ConstStatement, ContinueStatement, DimStatement, TypecastStatement, AliasStatement } from '../parser/Statement';
+import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, NamespacedVariableNameExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, TypeCastExpression, TernaryExpression, NullCoalescingExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
 import type { BscFile, File, TypedefProvider } from '../interfaces';
@@ -24,15 +24,15 @@ import type { Token } from '../lexer/Token';
 
 // File reflection
 
-export function isBrsFile(file: (BscFile | File)): file is BrsFile {
+export function isBrsFile(file: BscFile | File | undefined): file is BrsFile {
     return file?.constructor.name === 'BrsFile';
 }
 
-export function isXmlFile(file: (BscFile)): file is XmlFile {
+export function isXmlFile(file: BscFile | undefined): file is XmlFile {
     return file?.constructor.name === 'XmlFile';
 }
 
-export function isXmlScope(scope: (Scope)): scope is XmlScope {
+export function isXmlScope(scope: Scope | undefined): scope is XmlScope {
     return scope?.constructor.name === 'XmlScope';
 }
 
@@ -92,6 +92,12 @@ export function isLabelStatement(element: AstNode | undefined): element is Label
 export function isReturnStatement(element: AstNode | undefined): element is ReturnStatement {
     return element?.constructor?.name === 'ReturnStatement';
 }
+export function isTernaryExpression(element: AstNode | undefined): element is TernaryExpression {
+    return element?.constructor?.name === 'TernaryExpression';
+}
+export function isNullCoalescingExpression(element: AstNode | undefined): element is NullCoalescingExpression {
+    return element?.constructor?.name === 'NullCoalescingExpression';
+}
 export function isEndStatement(element: AstNode | undefined): element is EndStatement {
     return element?.constructor?.name === 'EndStatement';
 }
@@ -106,6 +112,9 @@ export function isForEachStatement(element: AstNode | undefined): element is For
 }
 export function isWhileStatement(element: AstNode | undefined): element is WhileStatement {
     return element?.constructor?.name === 'WhileStatement';
+}
+export function isDimStatement(element: AstNode | undefined): element is DimStatement {
+    return element?.constructor?.name === 'DimStatement';
 }
 export function isDottedSetStatement(element: AstNode | undefined): element is DottedSetStatement {
     return element?.constructor?.name === 'DottedSetStatement';
@@ -174,6 +183,12 @@ export function isCatchStatement(element: AstNode | undefined): element is Catch
 }
 export function isThrowStatement(element: AstNode | undefined): element is ThrowStatement {
     return element?.constructor.name === 'ThrowStatement';
+}
+export function isTypecastStatement(element: AstNode | undefined): element is TypecastStatement {
+    return element?.constructor?.name === 'TypecastStatement';
+}
+export function isAliasStatement(element: AstNode | undefined): element is AliasStatement {
+    return element?.constructor?.name === 'AliasStatement';
 }
 
 // Expressions reflection
@@ -261,6 +276,10 @@ export function isAnnotationExpression(element: AstNode | undefined): element is
 export function isTypedefProvider(element: any): element is TypedefProvider {
     return 'getTypedef' in element;
 }
+export function isTypeCastExpression(element: any): element is TypeCastExpression {
+    return element?.constructor.name === 'TypeCastExpression';
+}
+
 
 // BscType reflection
 export function isStringType(value: any): value is StringType {

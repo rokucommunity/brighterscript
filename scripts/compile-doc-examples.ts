@@ -70,7 +70,9 @@ class DocCompiler {
         while (this.nextLine !== undefined) {
             this.advance();
             if (this.currentLine.includes('```')) {
-                await this.processCodeBlock();
+                try {
+                    await this.processCodeBlock();
+                } catch { }
             }
         }
 
@@ -84,7 +86,7 @@ class DocCompiler {
     private customProcessing(docPath: string, contents: string) {
         const docName = docPath.split(/[\/\\]/).pop().toLowerCase();
         if (docName === 'plugins.md') {
-            const regexp = /export interface CompilerPlugin(.|\r?\n)*?}/;
+            const regexp = /export interface Plugin(.|\r?\n)*?}/;
             //load the CompilerPlugin original source code
             const [latestInterface] = regexp.exec(
                 fsExtra.readFileSync(`${__dirname}/../src/interfaces.ts`).toString()
@@ -195,7 +197,7 @@ class DocCompiler {
         const program = new Program({
             rootDir: `${__dirname}/rootDir`,
             files: [
-                'source/main.brs'
+                'source/main.bs'
             ],
             //use the current bsconfig
             ...(this.bsconfig ?? {})

@@ -18,9 +18,16 @@ export abstract class AstNode {
     /**
      *  The starting and ending location of the node.
      */
-    public abstract range: Range;
+    public abstract range: Range | undefined;
 
     public abstract transpile(state: BrsTranspileState): TranspileResult;
+
+    /**
+     * Get the typedef for this node. (defaults to transpiling the node, should be overridden by subclasses if there's a more specific typedef requirement)
+     */
+    public getTypedef(state: BrsTranspileState) {
+        return this.transpile(state);
+    }
 
     /**
      * When being considered by the walk visitor, this describes what type of element the current class is.
@@ -41,24 +48,41 @@ export abstract class AstNode {
     public symbolTable?: SymbolTable;
 
     /**
-     * Get the closest symbol table for this node. Should be overridden in children that directly contain a symbol table
+     * Get the closest symbol table for this node
      */
     public getSymbolTable(): SymbolTable {
-        if (this.symbolTable) {
-            return this.symbolTable;
-        } else {
-            return this.parent?.getSymbolTable();
+        let node: AstNode = this;
+        while (node) {
+            if (node.symbolTable) {
+                return node.symbolTable;
+            }
+            node = node.parent!;
         }
+
+        //justification: we are following a chain of nodes until we get to one with a SymbolTable,
+        //and the top-level node will always have a SymbolTable. So we'll never hit this undefined,
+        //but it is not so easy to convince the typechecker of this.
+        return undefined as any;
     }
 
     /**
-     * Walk upward and return the first node that results in `true` from the matcher
+     * Walk upward and return the first node that results in `true` from the matcher.
+     * @param matcher a function called for each node. If you return true, this function returns the specified node. If you return a node, that node is returned. all other return values continue the loop
+     *                The function's second parameter is a cancellation token. If you'd like to short-circuit the walk, call `cancellationToken.cancel()`, then this function will return `undefined`
      */
-    public findAncestor<TNode extends AstNode = AstNode>(matcher: (node: AstNode) => boolean | undefined) {
+    public findAncestor<TNode extends AstNode = AstNode>(matcher: (node: AstNode, cancellationToken: CancellationTokenSource) => boolean | AstNode | undefined | void): TNode | undefined {
         let node = this.parent;
+
+        const cancel = new CancellationTokenSource();
         while (node) {
-            if (matcher(node)) {
-                return node as TNode;
+            let matcherValue = matcher(node, cancel);
+            if (cancel.token.isCancellationRequested) {
+                return;
+            }
+            if (matcherValue) {
+                cancel.cancel();
+                return (matcherValue === true ? node : matcherValue) as TNode;
+
             }
             node = node.parent;
         }
@@ -68,11 +92,11 @@ export abstract class AstNode {
      * Find the first child where the matcher evaluates to true.
      * @param matcher a function called for each node. If you return true, this function returns the specified node. If you return a node, that node is returned. all other return values continue the loop
      */
-    public findChild<TNodeType extends AstNode = AstNode>(matcher: (node: AstNode) => boolean | AstNode, options?: WalkOptions) {
+    public findChild<TNode = AstNode>(matcher: (node: AstNode, cancellationSource) => boolean | AstNode | undefined | void, options?: WalkOptions): TNode | undefined {
         const cancel = new CancellationTokenSource();
-        let result: AstNode;
+        let result: AstNode | undefined;
         this.walk((node) => {
-            const matcherValue = matcher(node);
+            const matcherValue = matcher(node, cancel);
             if (matcherValue) {
                 cancel.cancel();
                 result = matcherValue === true ? node : matcherValue;
@@ -82,13 +106,13 @@ export abstract class AstNode {
             ...options ?? {},
             cancel: cancel.token
         });
-        return result as TNodeType;
+        return result as unknown as TNode;
     }
 
     /**
      * FInd the deepest child that includes the given position
      */
-    public findChildAtPosition<TNodeType extends AstNode = AstNode>(position: Position, options?: WalkOptions): TNodeType {
+    public findChildAtPosition<TNodeType extends AstNode = AstNode>(position: Position, options?: WalkOptions): TNodeType | undefined {
         return this.findChild<TNodeType>((node) => {
             //if the current node includes this range, keep that node
             if (util.rangeContains(node.range, position)) {
@@ -120,6 +144,36 @@ export abstract class AstNode {
      * Generate a SourceNode that represents the stringified value of this node (used to generate sourcemaps and transpile the code
      */
     public abstract toSourceNode(state: TranspileState): SourceNode;
+
+    /**
+     * Clone this node and all of its children. This creates a completely detached and identical copy of the AST.
+     * All tokens, statements, expressions, range, and location are cloned.
+     */
+    public abstract clone();
+
+    /**
+     * Helper function for creating a clone. This will clone any attached annotations, as well as reparent the cloned node's children to the clone
+     */
+    protected finalizeClone<T extends AstNode>(
+        clone: T,
+        propsToReparent?: Array<{ [K in keyof T]: T[K] extends AstNode | AstNode[] ? K : never }[keyof T]>
+    ) {
+        //clone the annotations if they exist
+        if (Array.isArray((this as unknown as Statement).annotations)) {
+            (clone as unknown as Statement).annotations = (this as unknown as Statement).annotations?.map(x => x.clone());
+        }
+        //reparent all of the supplied props
+        for (let key of propsToReparent ?? []) {
+            const children = (Array.isArray(clone?.[key]) ? clone[key] : [clone?.[key]]) as any[];
+            for (let child of children ?? []) {
+                if (child) {
+                    (clone[key as any] as AstNode).parent = clone;
+                }
+            }
+        }
+        return clone;
+    }
+
 }
 
 export abstract class Statement extends AstNode {
@@ -130,7 +184,7 @@ export abstract class Statement extends AstNode {
     /**
      * Annotations for this statement
      */
-    public annotations: AnnotationExpression[];
+    public annotations: AnnotationExpression[] | undefined;
 }
 
 

@@ -1,16 +1,21 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
-import type { BeforeFileTranspileEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent } from '../interfaces';
+import type { BeforeFileTranspileEvent, Plugin, OnFileValidateEvent, OnGetCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent } from '../interfaces';
 import type { Program } from '../Program';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
+import { DefinitionProvider } from './definition/DefinitionProvider';
+import { DocumentSymbolProcessor } from './symbols/DocumentSymbolProcessor';
 import { HoverProcessor } from './hover/HoverProcessor';
+import { ReferencesProvider } from './references/ReferencesProvider';
 import { BrsFileSemanticTokensProcessor } from './semanticTokens/BrsFileSemanticTokensProcessor';
 import { BrsFilePreTranspileProcessor } from './transpile/BrsFilePreTranspileProcessor';
 import { BrsFileValidator } from './validation/BrsFileValidator';
+import { ProgramValidator } from './validation/ProgramValidator';
 import { ScopeValidator } from './validation/ScopeValidator';
 import { XmlFileValidator } from './validation/XmlFileValidator';
+import { WorkspaceSymbolProcessor } from './symbols/WorkspaceSymbolProcessor';
 
-export class BscPlugin implements CompilerPlugin {
+export class BscPlugin implements Plugin {
     public name = 'BscPlugin';
 
     public onGetCodeActions(event: OnGetCodeActionsEvent) {
@@ -21,8 +26,24 @@ export class BscPlugin implements CompilerPlugin {
         return new HoverProcessor(event).process();
     }
 
+    public provideDocumentSymbols(event: ProvideDocumentSymbolsEvent) {
+        return new DocumentSymbolProcessor(event).process();
+    }
+
+    public provideWorkspaceSymbols(event: ProvideWorkspaceSymbolsEvent) {
+        return new WorkspaceSymbolProcessor(event).process();
+    }
+
     public provideCompletions(event: ProvideCompletionsEvent) {
         new CompletionsProcessor(event).process();
+    }
+
+    public provideDefinition(event: ProvideDefinitionEvent) {
+        new DefinitionProvider(event).process();
+    }
+
+    public provideReferences(event: ProvideReferencesEvent) {
+        new ReferencesProvider(event).process();
     }
 
     public onGetSemanticTokens(event: OnGetSemanticTokensEvent) {
@@ -46,6 +67,7 @@ export class BscPlugin implements CompilerPlugin {
     }
 
     public afterProgramValidate(program: Program) {
+        new ProgramValidator(program).process();
         //release memory once the validation cycle has finished
         this.scopeValidator.reset();
     }

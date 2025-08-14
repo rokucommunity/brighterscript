@@ -1,4 +1,4 @@
-import type { TokenKind } from './TokenKind';
+import { TokenKind } from './TokenKind';
 import type { Range } from 'vscode-languageserver';
 
 /**
@@ -43,6 +43,13 @@ export interface Identifier extends Token {
  * @param obj the object to check for `Token`-ness
  * @returns `true` is `obj` is a `Token`, otherwise `false`
  */
-export function isToken(obj: Record<string, any>): obj is Token {
-    return !!(obj.kind && obj.text && obj.range);
+export function isToken(obj: any): obj is Token {
+    return !!(obj.kind && obj.text);
+}
+
+/**
+ * Is this a token that has the `TokenKind.Identifier` kind?
+ */
+export function isIdentifier(obj: any): obj is Identifier {
+    return obj?.kind === TokenKind.Identifier;
 }

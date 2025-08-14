@@ -40,7 +40,7 @@ export class SymbolTable {
     /**
      * The parent SymbolTable (if there is one)
      */
-    public get parent() {
+    public get parent(): SymbolTable | undefined {
         return this.parentProviders[this.parentProviders.length - 1]?.();
     }
 
@@ -80,9 +80,9 @@ export class SymbolTable {
      * @param searchParent should we look to our parent if we don't have the symbol?
      * @returns An array of BscSymbols - one for each time this symbol had a type implicitly defined
      */
-    getSymbol(name: string, searchParent = true): BscSymbol[] {
+    getSymbol(name: string, searchParent = true): BscSymbol[] | undefined {
         const key = name.toLowerCase();
-        let result: BscSymbol[];
+        let result: BscSymbol[] | undefined;
         // look in our map first
         if ((result = this.symbolMap.get(key))) {
             return result;
@@ -107,7 +107,7 @@ export class SymbolTable {
         if (!this.symbolMap.has(key)) {
             this.symbolMap.set(key, []);
         }
-        this.symbolMap.get(key).push({
+        this.symbolMap.get(key)?.push({
             name: name,
             range: range,
             type: type
@@ -157,4 +157,4 @@ export interface BscSymbol {
 /**
  * A function that returns a symbol table.
  */
-export type SymbolTableProvider = () => SymbolTable;
+export type SymbolTableProvider = () => SymbolTable | undefined;

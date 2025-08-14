@@ -258,6 +258,54 @@ describe('NullCoalescingExpression', () => {
             `);
         });
 
+        it('does not capture restricted OS functions', () => {
+            testTranspile(`
+                sub main()
+                    num = 1
+                    test(num.ToStr() = "1" ?? [
+                        createObject("roDeviceInfo")
+                        type(true)
+                        GetGlobalAA()
+                        box(1)
+                        run("file.brs", invalid)
+                        eval("print 1")
+                        GetLastRunCompileError()
+                        GetLastRunRuntimeError()
+                        Tab(1)
+                        Pos(0)
+                    ])
+                end sub
+                sub test(p1)
+                end sub
+            `, `
+                sub main()
+                    num = 1
+                    test((function(num)
+                            __bsConsequent = num.ToStr() = "1"
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return [
+                                    createObject("roDeviceInfo")
+                                    type(true)
+                                    GetGlobalAA()
+                                    box(1)
+                                    run("file.brs", invalid)
+                                    eval("print 1")
+                                    GetLastRunCompileError()
+                                    GetLastRunRuntimeError()
+                                    Tab(1)
+                                    Pos(0)
+                                ]
+                            end if
+                        end function)(num))
+                end sub
+
+                sub test(p1)
+                end sub
+            `);
+        });
+
         it('properly transpiles null coalesence assignments - complex alternate', () => {
             testTranspile(`
                 sub main()
@@ -277,6 +325,52 @@ describe('NullCoalescingExpression', () => {
                                 return m.defaults.getAccount(settings.name)
                             end if
                         end function)(m, settings, user)
+                end sub
+            `);
+        });
+
+        it('ignores enum variable names', () => {
+            testTranspile(`
+                enum Direction
+                    up = "up"
+                end enum
+                sub main()
+                    d = invalid
+                    a = d ?? Direction.up
+                end sub
+            `, `
+                sub main()
+                    d = invalid
+                    a = (function(d)
+                            __bsConsequent = d
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return "up"
+                            end if
+                        end function)(d)
+                end sub
+            `);
+        });
+
+        it('ignores const variable names', () => {
+            testTranspile(`
+                const USER = "user"
+                sub main()
+                    settings = {}
+                    a = m.defaults.getAccount(settings.name) ?? USER
+                end sub
+            `, `
+                sub main()
+                    settings = {}
+                    a = (function(m, settings)
+                            __bsConsequent = m.defaults.getAccount(settings.name)
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return "user"
+                            end if
+                        end function)(m, settings)
                 end sub
             `);
         });

@@ -7,9 +7,8 @@ import { Program } from './Program';
 import { ParseMode } from './parser/Parser';
 import PluginInterface from './PluginInterface';
 import { expectDiagnostics, expectZeroDiagnostics, trim } from './testHelpers.spec';
-import { Logger } from './Logger';
 import type { BrsFile } from './files/BrsFile';
-import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
+import type { NamespaceStatement } from './parser/Statement';
 import type { OnScopeValidateEvent } from './interfaces';
 
 describe('Scope', () => {
@@ -30,7 +29,7 @@ describe('Scope', () => {
     it('getEnumMemberFileLink does not crash on undefined name', () => {
         program.setFile('source/main.bs', ``);
         const scope = program.getScopesForFile('source/main.bs')[0];
-        scope.getEnumMemberFileLink(null);
+        scope.getEnumMemberFileLink(null as any);
         //test passes if this doesn't explode
     });
 
@@ -107,6 +106,24 @@ describe('Scope', () => {
         ]);
     });
 
+    it('flags parameter with same name as a sub namespace part', () => {
+        program.setFile('source/main.bs', `
+            namespace alpha
+                sub test(lineHeight as integer)
+                end sub
+            end namespace
+
+            namespace alpha.lineHeight
+            end namespace
+        `);
+        program.validate();
+        expectDiagnostics(program, [{
+            //sub test(|lineHeight| as integer)
+            message: DiagnosticMessages.parameterMayNotHaveSameNameAsNamespace('lineHeight').message,
+            range: util.createRange(2, 25, 2, 35)
+        }]);
+    });
+
     it('flags assignments with same name as namespace', () => {
         program.setFile('source/main.bs', `
             namespace NameA.NameB
@@ -118,9 +135,18 @@ describe('Scope', () => {
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('namea'),
-            DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('NAMEA'),
-            DiagnosticMessages.namespaceCannotBeReferencedDirectly()
+            {
+                ...DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('namea'),
+                range: util.createRange(4, 16, 4, 21)
+            },
+            {
+                ...DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('NAMEA'),
+                range: util.createRange(5, 16, 5, 21)
+            },
+            {
+                ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
+                range: util.createRange(5, 16, 5, 21)
+            }
         ]);
     });
 
@@ -203,6 +229,68 @@ describe('Scope', () => {
     });
 
     describe('validate', () => {
+        it('Validates not too many callfunc argument count', () => {
+            program.options.autoImportComponentScript = true;
+            program.setFile(`components/myComponent.bs`, `
+                function myFunc(a, b, c, d, e)
+                    return true
+                end function
+            `);
+            program.setFile(`components/myComponent.xml`, `
+                <component name="MyComponent" extends="Group">
+                    <interface>
+                        <function name="myFunc" />
+                    </interface>
+                </component>
+            `);
+            program.setFile(`components/main.bs`, `
+                sub init()
+                    m.mc@.callFunc(1,2,3,4,5)
+                end sub
+            `);
+            program.setFile(`components/main.xml`, `
+                <component name="MainScene" extends="Scene">
+                    <children>
+                        <MyComponent id="mc" />
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('Validates too many callfunc argument count', () => {
+            program.options.autoImportComponentScript = true;
+            program.setFile(`components/myComponent.bs`, `
+                function myFunc(a, b, c, d, e, f)
+                    return true
+                end function
+            `);
+            program.setFile(`components/myComponent.xml`, `
+                <component name="MyComponent" extends="Group">
+                    <interface>
+                        <function name="myFunc" />
+                    </interface>
+                </component>
+            `);
+            program.setFile(`components/main.bs`, `
+                sub init()
+                    m.mc@.callFunc(1,2,3,4,5,6)
+                end sub
+            `);
+            program.setFile(`components/main.xml`, `
+                <component name="MainScene" extends="Scene">
+                    <children>
+                        <MyComponent id="mc" />
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.callfuncHasToManyArgs(6)
+            ]);
+        });
+
         it('diagnostics are assigned to correct child scope', () => {
             program.options.autoImportComponentScript = true;
             program.setFile('components/constants.bs', `
@@ -280,6 +368,70 @@ describe('Scope', () => {
             expectDiagnostics(program, [
                 DiagnosticMessages.cannotFindName('Name2')
             ]);
+        });
+
+        it('detects namespace-relative namespace name used like a variable', () => {
+            program.setFile('source/main.bs', `
+                namespace Alpha.Beta
+                    namespace Charlie
+                    end namespace
+
+                    sub test()
+                        thing = Charlie
+                        thing = Alpha.Beta.Charlie
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
+                range: util.createRange(6, 32, 6, 39)
+            }, {
+                ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
+                range: util.createRange(7, 32, 7, 50)
+            }]);
+        });
+
+        it('flags assignment with same name as a sub namespace part', () => {
+            program.setFile('source/main.bs', `
+                namespace alpha
+                    sub test()
+                        lineHeight = 1
+                    end sub
+                end namespace
+
+                namespace alpha.lineHeight
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                //|lineHeight| = 1
+                message: DiagnosticMessages.variableMayNotHaveSameNameAsNamespace('lineHeight').message,
+                range: util.createRange(3, 24, 3, 34)
+            }]);
+        });
+
+        it('flags local vars with same name as a sub namespace part', () => {
+            program.setFile('source/main.bs', `
+                namespace alpha
+                    sub test()
+                        print lineHeight
+                    end sub
+                end namespace
+
+                namespace alpha.lineHeight
+                    const lg = 1.75
+                    const md = 1.5
+                    const sm = 1.25
+                    const xs = 1.0
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                //print |lineHeight|
+                message: DiagnosticMessages.itemCannotBeUsedAsVariable('namespace').message,
+                range: util.createRange(3, 30, 3, 40)
+            }]);
         });
 
         it('accepts namespace names in their transpiled form in .brs files', () => {
@@ -557,6 +709,16 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
             });
 
+            it('recognizes roIntrinsicDouble', () => {
+                program.setFile(`source/file.brs`, `
+                    sub main()
+                        intrinsicDouble = CreateObject("roIntrinsicDouble")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
             it('catches invalid BrightScript components', () => {
                 program.setFile(`source/file.brs`, `
                     sub main()
@@ -643,6 +805,7 @@ describe('Scope', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
         it('resolves local-variable function calls', () => {
             program.setFile(`source/main.brs`, `
                 sub DoSomething()
@@ -779,7 +942,7 @@ describe('Scope', () => {
             //validate the scope
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('DoB')
+                DiagnosticMessages.cannotFindFunction('DoB')
             ]);
         });
 
@@ -795,7 +958,7 @@ describe('Scope', () => {
             //validate the scope
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('DoC')
+                DiagnosticMessages.cannotFindFunction('DoC')
             ]);
         });
 
@@ -961,7 +1124,7 @@ describe('Scope', () => {
             program.setFile(s`components/comp.brs`, ``);
             const sourceScope = program.getScopeByName('source');
             const compScope = program.getScopeByName('components/comp.xml');
-            program.plugins = new PluginInterface([], { logger: new Logger() });
+            program.plugins = new PluginInterface();
             const plugin = program.plugins.add({
                 name: 'Emits validation events',
                 beforeScopeValidate: sinon.spy(),
@@ -1327,7 +1490,7 @@ describe('Scope', () => {
             `);
             program.setFile(s`components/child.brs`, ``);
             program.validate();
-            let childScope = program.getComponentScope('child');
+            let childScope = program.getComponentScope('child')!;
             expect(childScope.getAllCallables().map(x => x.callable.name)).not.to.include('parentSub');
 
             program.setFile('components/parent.xml', trim`
@@ -1388,7 +1551,7 @@ describe('Scope', () => {
                     end function
                 end namespace
             `);
-            delete ((file.ast.statements[0] as NamespaceStatement).body.statements[0] as FunctionStatement).name;
+            delete ((file.ast.statements[0] as NamespaceStatement).body.statements[0] as any).name;
             program.validate();
             program['scopes']['source'].buildNamespaceLookup();
         });

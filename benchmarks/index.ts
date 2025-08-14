@@ -1,31 +1,45 @@
-const fsExtra = require('fs-extra');
-const syncRequest = require('sync-request');
-const path = require('path');
-const { spawnSync, execSync } = require('child_process');
-const yargs = require('yargs');
-const readline = require('readline');
-const rimraf = require('rimraf');
-const fastGlob = require('fast-glob');
-let nodeParams = ['--max-old-space-size=8192'];
-const tempDir = path.join(__dirname, '.tmp');
+import type { ExecSyncOptions, SpawnSyncOptions } from 'child_process';
+import * as childProcess from 'child_process';
+import * as path from 'path';
+import * as fs from 'fs';
+const cwd = __dirname;
+const tempDir = path.join(cwd, '.tmp');
+let MAX_OLD_SPACE = 8192;
 
+clean();
+execSync('npm install');
+
+import * as fsExtra from 'fs-extra';
+import * as yargs from 'yargs';
+import * as rimraf from 'rimraf';
+import * as fastGlob from 'fast-glob';
+
+interface RunnerOptions {
+    versions: string[];
+    targets: string[];
+    noprepare: boolean;
+    project: string;
+    quick: boolean;
+    profile: boolean;
+    tar: boolean;
+}
 class Runner {
-    constructor(options) {
-        this.versions = options.versions;
-        this.targets = options.targets;
-        this.noprepare = options.noprepare;
-        this.project = options.project;
-        this.quick = options.quick;
-        this.profile = options.profile;
-        this.tar = options.tar;
+    constructor(
+        private options: RunnerOptions
+    ) {
     }
-    run() {
-        this.downloadFiles();
 
-        if (!this.noprepare) {
-            this.prepare();
+    run() {
+        try {
+            this.downloadFiles();
+
+            if (!this.options.noprepare) {
+                this.prepare();
+            }
+            this.runBenchmarks();
+        } finally {
+            clean();
         }
-        this.runBenchmarks();
     }
 
     /**
@@ -36,33 +50,28 @@ class Runner {
         fsExtra.ensureDirSync(tempDir);
 
         //use the given project, or use the default
-        this.project = this.project || 'https://github.com/chtaylo2/Roku-GooglePhotos';
+        this.options.project = this.options.project || 'https://github.com/chtaylo2/Roku-GooglePhotos';
 
-        if (this.project.startsWith('https://')) {
-            const projectName = this.project.split('/').pop();
+        if (this.options.project.startsWith('https://')) {
+            const projectName = this.options.project.split('/').pop()!;
             const projectDir = path.join(tempDir, projectName);
 
             //if no project was specified, download the default.
             if (!fsExtra.pathExistsSync(projectDir)) {
-                console.log(`benchmark: Downloading project for validation benchmarking: ${this.project}`);
-                spawnSync(
-                    process.platform.startsWith('win') ? 'npx.cmd' : 'npx',
-                    ['degit', this.project, projectName],
-                    {
-                        stdio: 'inherit',
-                        cwd: tempDir
-                    }
-                );
+                console.log(`benchmark: Downloading project for validation benchmarking: ${this.options.project}`);
+                execSync(`npx degit "${this.options.project}" "${projectName}"`, {
+                    cwd: tempDir
+                });
             }
             //store the file system path for the project
-            this.project = projectDir;
+            this.options.project = projectDir;
         }
     }
 
     buildCurrent() {
         const bscDir = path.resolve(__dirname, '..');
         console.log('benchmark: build current brighterscript');
-        this.npmSync(['run', 'build'], {
+        execSync('npm run build', {
             cwd: bscDir
         });
         return 'file:' + path.resolve(bscDir);
@@ -73,11 +82,11 @@ class Runner {
         this.buildCurrent();
         console.log('benchmark: pack current brighterscript');
         //pack the package
-        const filename = this.npmSync(['pack'], { cwd: bscDir, stdio: 'pipe' }).stdout.toString().trim();
+        const filename = execSync('npm pack', { cwd: bscDir, stdio: 'pipe' }).toString().trim();
 
         //move the tarball to temp to declutter the outer project
         let newFilename = path.join(tempDir, path.basename(filename).replace('.tgz', `${Date.now()}.tgz`));
-        fsExtra.renameSync(filename, newFilename);
+        fsExtra.renameSync(`${bscDir}/${filename}`, newFilename);
 
         //return path to the tarball
         return path.resolve(newFilename);
@@ -87,91 +96,63 @@ class Runner {
      * Clean out the node_modules folder for this folder, and load it up with the information needed for the versions in question
      */
     prepare() {
-        console.log('benchmark: Clearing any existing node_modules folder');
-        const nodeModulesDir = path.join(__dirname, 'node_modules');
-        fsExtra.ensureDirSync(nodeModulesDir);
-        //delete anything that was there previously
-        fsExtra.emptyDirSync(nodeModulesDir);
-
         const dependencies = {};
-        console.log(`benchmark: using versions: ${this.versions}`);
-        for (let i = 0; i < this.versions.length; i++) {
-            const version = this.versions[i];
+        console.log(`benchmark: using versions: ${this.options.versions.join(', ')}`);
+        for (let i = 0; i < this.options.versions.length; i++) {
+            const version = this.options.versions[i];
             const name = `brighterscript${i + 1}`;
+            let location: string;
 
             //if the version is "current", then make a local copy of the package from the dist folder to install (because npm link makes things slower)
             if (version === 'local') {
-                const localVersion = this.tar ? this.buildCurrentTarball() : this.buildCurrent();
-                dependencies[name] = localVersion;
+                location = this.options.tar ? this.buildCurrentTarball() : this.buildCurrent();
             } else {
-                dependencies[name] = `npm:brighterscript@${version}`;
+                location = `npm:brighterscript@${version}`;
             }
+            execSync(`npm i ${name}@${location}`);
         }
-        console.log('benchmark: Writing package.json');
-        //write a package.json for this project
-        fsExtra.outputFileSync(path.join(__dirname, 'package.json'), JSON.stringify({
-            dependencies: dependencies
-        }, null, 4));
         console.log('benchmark: npm install');
         //install packages
-        this.npmSync(['install']);
-    }
-
-    npmSync(args, options = {}) {
-        return spawnSync(
-            process.platform.startsWith('win') ? 'npm.cmd' : 'npm',
-            args,
-            {
-                stdio: 'inherit',
-                cwd: __dirname,
-                ...options
-            }
-        );
+        execSync('npm install');
     }
 
     runBenchmarks() {
         console.log('benchmark: Running benchmarks: \n');
-        const maxVersionLength = this.versions.reduce((acc, curr) => {
+        const maxVersionLength = this.options.versions.reduce((acc, curr) => {
             return curr.length > acc ? curr.length : acc;
         }, 0);
 
-        const maxTargetLength = this.targets.reduce((acc, curr) => {
+        const maxTargetLength = this.options.targets.reduce((acc, curr) => {
             return curr.length > acc ? curr.length : acc;
         }, 0);
 
-        if (this.profile) {
+        if (this.options.profile) {
             console.log('Deleting previous profile runs\n');
-            rimraf.sync(path.join(__dirname, 'isolate-*'));
+            rimraf.sync(path.join(__dirname, 'isolate-*'), { glob: true });
         }
 
         //run one target at a time
-        for (const target of this.targets) {
+        for (const target of this.options.targets) {
             //run each of the versions within this target
-            for (let versionIndex = 0; versionIndex < this.versions.length; versionIndex++) {
-                const version = this.versions[versionIndex];
+            for (let versionIndex = 0; versionIndex < this.options.versions.length; versionIndex++) {
+                const version = this.options.versions[versionIndex];
                 process.stdout.write(`Benchmarking ${target}@${version}`);
                 const alias = `brighterscript${versionIndex + 1}`;
 
                 //get the list of current profiler logs
                 const beforeLogs = fastGlob.sync('isolate-*.log', {
-                    cwd: __dirname
+                    cwd: cwd
                 });
 
-                execSync(`node ${nodeParams.join(' ')} ${this.profile ? '--prof ' : ''}target-runner.js "${version}" "${maxVersionLength}" "${target}" "${maxTargetLength}" "${alias}" "${this.project}" "${this.quick}"`, {
-                    cwd: path.join(__dirname),
-                    stdio: 'inherit'
+                execSync(`npx ts-node target-runner.ts "${version}" "${maxVersionLength}" "${target}" "${maxTargetLength}" "${alias}" "${this.options.project}" "${this.options.quick}" "${this.options.profile}"`, {
+                    env: {
+                        'NODE_OPTIONS': `--max-old-space-size=${MAX_OLD_SPACE}`
+                    }
                 });
-                if (this.profile) {
+                if (this.options.profile) {
                     const logFile = fastGlob.sync('isolate-*.log', {
-                        cwd: __dirname
+                        cwd: cwd
                     }).filter(x => !beforeLogs.includes(x))[0];
-
-                    execSync(`node --prof-process ${logFile} > "${logFile.replace(/\.log$/, '')} (${target} ${version}).txt"`, {
-                        cwd: path.join(__dirname)
-                    });
-                    execSync(`node --prof-process --preprocess -j ${logFile} > "${logFile.replace(/\.log$/, '')} (${target} ${version}).json"`, {
-                        cwd: path.join(__dirname)
-                    });
                 }
             }
             //print a newline to separate the targets
@@ -180,7 +161,7 @@ class Runner {
     }
 }
 
-let targets = fsExtra.readdirSync(path.join(__dirname, 'targets')).map(x => x.replace('.js', ''));
+let targets = fsExtra.readdirSync('./targets').map(x => x.replace(/\.(js|ts)/, ''));
 
 let options = yargs
     .usage('$0', 'bsc benchmark tool')
@@ -229,10 +210,28 @@ let options = yargs
         const idx = argv.versions.indexOf('latest');
         if (idx > -1) {
             //look up the latest version of brighterscript
-            argv.versions[idx] = spawnSync(process.platform.startsWith('win') ? 'npm.cmd' : 'npm', ['show', 'brighterscript', 'version']).stdout.toString().trim();
+            argv.versions[idx] = execSync('npm show brighterscript version', { stdio: 'pipe' }).toString().trim();
         }
         return true;
     })
     .argv;
-const runner = new Runner(options);
+const runner = new Runner(options as any);
 runner.run();
+
+function execSync(command: string, options: ExecSyncOptions = {}) {
+    // console.log(`Executing '${command}'`);
+    return childProcess.execSync(command, { stdio: 'inherit', cwd: cwd, ...options });
+}
+
+function clean() {
+    const packageJson = JSON.parse(
+        fs.readFileSync(`${cwd}/package.json`)?.toString()
+    );
+    //remove any brighterscript dependencies from the package.json (but don't actually remove the files)
+    for (const key in packageJson.dependencies) {
+        if (/brighterscript\d+/.exec(key)) {
+            delete packageJson.dependencies[key];
+        }
+    }
+    fs.writeFileSync(`${cwd}/package.json`, JSON.stringify(packageJson, null, 4));
+}

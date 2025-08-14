@@ -13,6 +13,11 @@ export const triviaKinds: ReadonlyArray<TokenKind> = [
     TokenKind.Colon
 ];
 
+/**
+ * Numeric type designators can only be one of these characters
+ */
+const numericTypeDesignatorCharsRegexp = /[#d!e&%]/;
+
 export class Lexer {
     /**
      * The zero-indexed position at which the token under consideration begins.
@@ -109,7 +114,9 @@ export class Lexer {
             kind: TokenKind.Eof,
             isReserved: false,
             text: '',
-            range: util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1),
+            range: this.options.trackLocations
+                ? util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1)
+                : undefined,
             leadingWhitespace: this.leadingWhitespace,
             leadingTrivia: this.leadingTrivia
         });
@@ -130,10 +137,10 @@ export class Lexer {
      * Fill in missing/invalid options with defaults
      */
     private sanitizeOptions(options: ScanOptions) {
-        return {
-            includeWhitespace: false,
-            ...options
-        } as ScanOptions;
+        options ??= {};
+        options.includeWhitespace ??= false;
+        options.trackLocations ??= true;
+        return options;
     }
 
     /**
@@ -141,7 +148,7 @@ export class Lexer {
      * @returns `true` if the lexer has read to (or past) the end of its input, otherwise `false`.
      */
     private isAtEnd() {
-        return this.current >= this.source.length;
+        return !this.source || this.current >= this.source.length;
     }
 
     /**
@@ -614,12 +621,6 @@ export class Lexer {
                 let token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
                 //store the char code
                 token.charCode = '"'.charCodeAt(0);
-
-                //move the location tracking to the next line
-                this.lineEnd++;
-                this.lineBegin = this.lineEnd;
-                this.columnEnd = 0;
-                this.columnBegin = this.columnEnd;
                 continue;
             }
 
@@ -633,7 +634,7 @@ export class Lexer {
                     this.scanToken();
                 }
                 if (this.check('}')) {
-                    this.current++;
+                    this.advance();
                     this.addToken(TokenKind.TemplateStringExpressionEnd);
                 } else {
 
@@ -696,8 +697,12 @@ export class Lexer {
         let asString = this.source.slice(this.start, this.current);
         let numberOfDigits = containsDecimal ? asString.length - 1 : asString.length;
         let designator = this.peek().toLowerCase();
+        //set to undefined if it's not one of the supported designator chars
+        if (!numericTypeDesignatorCharsRegexp.test(designator)) {
+            designator = undefined;
+        }
 
-        if (numberOfDigits >= 10 && designator !== '&' && designator !== 'e') {
+        if (numberOfDigits >= 10 && !designator) {
             // numeric literals over 10 digits with no type designator are implicitly Doubles
             this.addToken(TokenKind.DoubleLiteral);
         } else if (designator === '#') {
@@ -728,9 +733,9 @@ export class Lexer {
             this.advance();
             this.addToken(TokenKind.FloatLiteral);
         } else if (designator === 'e') {
-            // literals that use "E" as the exponent are also automatic Floats
+            // literals that use "e" as the exponent are also automatic Floats
 
-            // consume the "E"
+            // consume the "e"
             this.advance();
 
             // exponents are optionally signed
@@ -740,6 +745,11 @@ export class Lexer {
 
             // consume the exponent
             while (isDecimalDigit(this.peek())) {
+                this.advance();
+            }
+
+            //optionally consume a trailing type designator
+            if (numericTypeDesignatorCharsRegexp.test(this.peek())) {
                 this.advance();
             }
 
@@ -758,7 +768,6 @@ export class Lexer {
         } else {
             // otherwise, it's a regular integer
             this.addToken(TokenKind.IntegerLiteral);
-
         }
     }
 
@@ -915,14 +924,20 @@ export class Lexer {
      */
     private preProcessedConditional() {
         this.advance(); // advance past the leading #
+
+        //consume whitespace
+        while (this.check(' ', '\t')) {
+            this.advance();
+        }
+
         while (isAlphaNumeric(this.peek())) {
             this.advance();
         }
 
         let text = this.source.slice(this.start, this.current).toLowerCase();
 
-        // some identifiers can be split into two words, so check the "next" word and see what we get
-        if ((text === '#end' || text === '#else') && this.check(' ', '\t')) {
+        // some identifiers can be split into two words (`#end if`, `#else if`), so check the "next" word and see what we get
+        if ((text.endsWith('end') || text.endsWith('else')) && this.check(' ', '\t')) {
             let endOfFirstWord = this.current;
 
             //skip past whitespace
@@ -935,11 +950,11 @@ export class Lexer {
             } // read the next word
 
             let twoWords = this.source.slice(this.start, this.current).toLowerCase();
-            switch (twoWords.replace(/[\s\t]+/g, ' ')) {
-                case '#else if':
+            switch (twoWords.replace(/\s+/g, '')) {
+                case '#elseif':
                     this.addToken(TokenKind.HashElseIf);
                     return;
-                case '#end if':
+                case '#endif':
                     this.addToken(TokenKind.HashEndIf);
                     return;
             }
@@ -948,7 +963,7 @@ export class Lexer {
             this.current = endOfFirstWord;
         }
 
-        switch (text) {
+        switch (text.replace(/\s+/g, '')) {
             case '#if':
                 this.addToken(TokenKind.HashIf);
                 return;
@@ -973,12 +988,16 @@ export class Lexer {
                     this.whitespace();
                 }
 
-                while (!this.isAtEnd() && !this.check('\n')) {
+                let hasErrorMessage = false;
+                while (!this.isAtEnd() && !this.check('\r') && !this.check('\n')) {
+                    hasErrorMessage = true;
                     this.advance();
                 }
 
-                // grab all text since we found #error as one token
-                this.addToken(TokenKind.HashErrorMessage);
+                if (hasErrorMessage) {
+                    // grab all text since we found #error as one token
+                    this.addToken(TokenKind.HashErrorMessage);
+                }
 
                 this.start = this.current;
                 return;
@@ -1091,17 +1110,27 @@ export class Lexer {
     }
 
     /**
-     * Creates a `TokenLocation` at the lexer's current position for the provided `text`.
-     * @returns the range of `text` as a `TokenLocation`
+     * Creates a `Range` at the lexer's current position
+     * @returns the range of `text`
      */
     private rangeOf(): Range {
-        return util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd);
+        if (this.options.trackLocations) {
+            return util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd);
+        } else {
+            return undefined;
+        }
     }
 }
 
 export interface ScanOptions {
     /**
      * If true, the whitespace tokens are included. If false, they are discarded
+     * @default false
      */
-    includeWhitespace: boolean;
+    includeWhitespace?: boolean;
+    /**
+     * Should locations be tracked. If false, the `range` property will be omitted
+     * @default true
+     */
+    trackLocations?: boolean;
 }

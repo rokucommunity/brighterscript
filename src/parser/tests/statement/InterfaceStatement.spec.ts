@@ -87,4 +87,22 @@ describe('InterfaceStatement', () => {
             'this comment was throwing exception during transpile
         `);
     });
+
+    it('allows parameters in interface method signatures', () => {
+        testGetTypedef(`
+            interface Person
+                sub someFunc(name as string, age as integer) as string
+                someField as string
+            end interface
+        `, undefined, undefined, undefined, true);
+    });
+
+    it('supports empty interfaces', () => {
+        const file = program.setFile('source/main.bs', `
+           interface SomeInterface
+           end interface
+        `);
+        program.validate();
+        expectZeroDiagnostics(file);
+    });
 });

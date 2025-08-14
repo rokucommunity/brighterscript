@@ -137,17 +137,19 @@ export class Node {
     ) {
         if (dependencies.length > 0) {
             this.subscriptions = [];
-        }
-        for (let dependency of this.dependencies) {
-            let sub = this.graph.onchange(dependency, (event) => {
-                //notify the graph that we changed since one of our dependencies changed
-                this.graph.emit(this.key, event);
-            });
 
-            this.subscriptions.push(sub);
+            for (let dependency of this.dependencies) {
+                let sub = this.graph.onchange(dependency, (event) => {
+                    //notify the graph that we changed since one of our dependencies changed
+                    this.graph.emit(this.key, event);
+                });
+
+                this.subscriptions.push(sub);
+            }
         }
     }
-    private subscriptions: Array<() => void>;
+
+    private subscriptions: Array<() => void> | undefined;
 
     /**
      * Return the full list of unique dependencies for this node by traversing all descendents
@@ -161,7 +163,7 @@ export class Node {
             let dependency = dependencyStack.pop();
 
             //if this is a new dependency and we aren't supposed to skip it
-            if (!dependencyMap[dependency] && !exclude.includes(dependency)) {
+            if (dependency && !dependencyMap[dependency] && !exclude.includes(dependency)) {
                 dependencyMap[dependency] = true;
 
                 //get the node for this dependency
