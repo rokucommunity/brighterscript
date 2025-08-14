@@ -721,12 +721,20 @@ export class Program {
 
                 //if this is an xml file in the components folder, register it as a component
                 if (this.isComponentsXmlFile(file)) {
+                    this.plugins.emit('beforeProvideScope', {
+                        program: this,
+                        scope: undefined
+                    });
                     //create a new scope for this xml file
                     let scope = new XmlScope(file, this);
                     this.addScope(scope);
 
                     //register this componet now that we have parsed it and know its component name
                     this.registerComponent(file, scope);
+                    this.plugins.emit('provideScope', {
+                        program: this,
+                        scope: scope
+                    });
 
                     //notify plugins that the scope is created and the component is registered
                     this.plugins.emit('afterProvideScope', {
@@ -1649,7 +1657,25 @@ export class Program {
 
             const scopes = this.getScopesForFile(file);
 
+            this.plugins.emit('beforeProvideCodeActions', {
+                program: this,
+                file: file,
+                range: range,
+                diagnostics: diagnostics,
+                scopes: scopes,
+                codeActions: codeActions
+            });
+
             this.plugins.emit('provideCodeActions', {
+                program: this,
+                file: file,
+                range: range,
+                diagnostics: diagnostics,
+                scopes: scopes,
+                codeActions: codeActions
+            });
+
+            this.plugins.emit('afterProvideCodeActions', {
                 program: this,
                 file: file,
                 range: range,
@@ -1667,8 +1693,20 @@ export class Program {
     public getSemanticTokens(srcPath: string): SemanticToken[] | undefined {
         const file = this.getFile(srcPath);
         if (file) {
+            this.plugins.emit('beforeProvideSemanticTokens', {
+                program: this,
+                file: file,
+                scopes: this.getScopesForFile(file),
+                semanticTokens: undefined
+            });
             const result = [] as SemanticToken[];
             this.plugins.emit('provideSemanticTokens', {
+                program: this,
+                file: file,
+                scopes: this.getScopesForFile(file),
+                semanticTokens: result
+            });
+            this.plugins.emit('afterProvideSemanticTokens', {
                 program: this,
                 file: file,
                 scopes: this.getScopesForFile(file),
@@ -2141,6 +2179,8 @@ export class Program {
         }
         this.globalScope?.dispose?.();
         this.dependencyGraph?.dispose?.();
+        this.plugins.emit('disposeProgram', { program: this });
+        this.plugins.emit('afterDisposeProgram', { program: this });
     }
 }
 

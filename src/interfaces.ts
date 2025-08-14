@@ -240,6 +240,7 @@ export interface Plugin {
      * Called before a new program is created
      */
     beforeProvideProgram?(event: BeforeProvideProgramEvent): any;
+    provideProgram?(event: ProvideProgramEvent): any;
     /**
      * Called after a new program is created
      */
@@ -277,6 +278,8 @@ export interface Plugin {
      * Called right before the program is disposed/destroyed
      */
     beforeDisposeProgram?(event: BeforeDisposeProgramEvent): any;
+    disposeProgram?(event: DisposeProgramEvent): any;
+    afterDisposeProgram?(event: AfterDisposeProgramEvent): any;
 
     /**
      * Emitted before the program starts collecting completions
@@ -308,6 +311,8 @@ export interface Plugin {
     /**
      * Called after a scope was created
      */
+    beforeProvideScope?(event: BeforeProvideScopeEvent): any;
+    provideScope?(event: ProvideScopeEvent): any;
     afterProvideScope?(event: AfterProvideScopeEvent): any;
 
     beforeDisposeScope?(event: BeforeDisposeScopeEvent): any;
@@ -381,10 +386,13 @@ export interface Plugin {
     validateScope?(event: ValidateScopeEvent): any;
     afterValidateScope?(event: AfterValidateScopeEvent): any;
 
+    beforeProvideCodeActions?(event: BeforeProvideCodeActionsEvent): any;
     provideCodeActions?(event: ProvideCodeActionsEvent): any;
+    afterProvideCodeActions?(event: AfterProvideCodeActionsEvent): any;
 
-
+    beforeProvideSemanticTokens?(event: BeforeProvideSemanticTokensEvent): any;
     provideSemanticTokens?(event: ProvideSemanticTokensEvent): any;
+    afterProvideSemanticTokens?(event: AfterProvideSemanticTokensEvent): any;
 
 
     /**
@@ -513,8 +521,23 @@ export interface Plugin {
      */
     afterWriteFile?(event: AfterWriteFileEvent): any;
 }
-
+export interface BeforeProvideCodeActionsEvent<TFile extends BscFile = BscFile> {
+    program: Program;
+    file: TFile;
+    range: Range;
+    scopes: Scope[];
+    diagnostics: BsDiagnostic[];
+    codeActions: CodeAction[];
+}
 export interface ProvideCodeActionsEvent<TFile extends BscFile = BscFile> {
+    program: Program;
+    file: TFile;
+    range: Range;
+    scopes: Scope[];
+    diagnostics: BsDiagnostic[];
+    codeActions: CodeAction[];
+}
+export interface AfterProvideCodeActionsEvent<TFile extends BscFile = BscFile> {
     program: Program;
     file: TFile;
     range: Range;
@@ -525,6 +548,11 @@ export interface ProvideCodeActionsEvent<TFile extends BscFile = BscFile> {
 
 export interface BeforeProvideProgramEvent {
     builder: ProgramBuilder;
+    program?: Program;
+}
+export interface ProvideProgramEvent {
+    builder: ProgramBuilder;
+    program?: Program;
 }
 export interface AfterProvideProgramEvent {
     builder: ProgramBuilder;
@@ -589,6 +617,14 @@ export interface Hover {
 export type BeforeProvideHoverEvent = ProvideHoverEvent;
 export type AfterProvideHoverEvent = ProvideHoverEvent;
 
+export interface BeforeProvideScopeEvent {
+    program: Program;
+    scope: Scope;
+}
+export interface ProvideScopeEvent {
+    program: Program;
+    scope: Scope;
+}
 export interface AfterProvideScopeEvent {
     program: Program;
     scope: Scope;
@@ -688,7 +724,43 @@ export type BeforeProvideWorkspaceSymbolsEvent = ProvideWorkspaceSymbolsEvent;
 export type AfterProvideWorkspaceSymbolsEvent = ProvideWorkspaceSymbolsEvent;
 
 
+export interface BeforeProvideSemanticTokensEvent<T extends BscFile = BscFile> {
+    /**
+     * The program this file is from
+     */
+    program: Program;
+    /**
+     * The file to get semantic tokens for
+     */
+    file: T;
+    /**
+     * The list of scopes that this file is a member of
+     */
+    scopes: Scope[];
+    /**
+     * The list of semantic tokens being produced during this event.
+     */
+    semanticTokens: SemanticToken[];
+}
 export interface ProvideSemanticTokensEvent<T extends BscFile = BscFile> {
+    /**
+     * The program this file is from
+     */
+    program: Program;
+    /**
+     * The file to get semantic tokens for
+     */
+    file: T;
+    /**
+     * The list of scopes that this file is a member of
+     */
+    scopes: Scope[];
+    /**
+     * The list of semantic tokens being produced during this event.
+     */
+    semanticTokens: SemanticToken[];
+}
+export interface AfterProvideSemanticTokensEvent<T extends BscFile = BscFile> {
     /**
      * The program this file is from
      */
@@ -929,7 +1001,12 @@ export type AfterFileDisposeEvent = BeforeFileDisposeEvent;
 export interface BeforeDisposeProgramEvent {
     program: Program;
 }
-
+export interface DisposeProgramEvent {
+    program: Program;
+}
+export interface AfterDisposeProgramEvent {
+    program: Program;
+}
 export interface SemanticToken {
     range: Range;
     tokenType: SemanticTokenTypes;

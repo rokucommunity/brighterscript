@@ -172,6 +172,10 @@ export class ProgramBuilder {
 
     protected createProgram() {
         this.program = new Program(this.options, this.logger, this.plugins, this.diagnostics);
+        this.plugins.emit('provideProgram', {
+            builder: this,
+            program: this.program
+        });
 
         this.plugins.emit('afterProvideProgram', {
             builder: this,
