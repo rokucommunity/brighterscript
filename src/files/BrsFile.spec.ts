@@ -4434,7 +4434,7 @@ describe('BrsFile', () => {
             });
             program.plugins.add({
                 name: 'transform callback',
-                afterFileParse: onParsed
+                afterProvideFile: onParsed
             });
             file = program.setFile(`source/file${ext}`, `
                 sub Sum()

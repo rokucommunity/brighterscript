@@ -57,8 +57,8 @@ Full compiler lifecycle:
         - `beforeProvideFile`
         - `onProvideFile`
         - `afterProvideFile`
-            - `beforeFileParse` (deprecated)
-            - `afterFileParse` (deprecated)
+            - `beforeProvideFile`
+            - `afterProvideFile`
     - For each physical and virtual file
         - `beforeAddFile`
         - `afterAddFile`
@@ -75,14 +75,14 @@ Full compiler lifecycle:
     - `afterValidateProgram`
 - `beforePrepublish`
 - `afterPrepublish`
-- `beforePublish`
-    - `beforeProgramTranspile`
+- `beforeSerializeProgram`
+    - `beforeBuildProgram`
     - For each file:
-        - `beforeFileTranspile`
-        - `afterFileTranspile`
-    - `afterProgramTranspile`
-- `afterPublish`
-- `beforeDisposeProgram`
+        - `beforePrepareFile`
+        - `afterPrepareFile`
+    - `afterBuildProgram`
+- `afterSerializeProgram`
+- `beforeRemoveProgram`
 
 ### Language server
 
@@ -90,15 +90,15 @@ Once the program has been validated, the language server runs a special loop - i
 
 When a file is removed:
 
-- `beforeFileDispose`
-- `beforeDisposeScope` (component scope)
-- `afterDisposeScope` (component scope)
-- `afterFileDispose`
+- `beforeRemoveFile`
+- `beforeRemoveScope` (component scope)
+- `afterRemoveScope` (component scope)
+- `afterRemoveFile`
 
 When a file is added:
 
-- `beforeFileParse`
-- `afterFileParse`
+- `beforeProvideFile`
+- `afterProvideFile`
 - `afterProvideScope` (component scope)
 - `afterValidateFile`
 
@@ -192,7 +192,7 @@ export interface CompilerPlugin {
     /**
      * Called before the entire program is validated
      */
-    onValidateProgram?(event: ValidateProgramEvent): any;
+    validateProgram?(event: ValidateProgramEvent): any;
     /**
      * Called after the program has been validated
      */
@@ -201,7 +201,7 @@ export interface CompilerPlugin {
     /**
      * Called right before the program is disposed/destroyed
      */
-    beforeDisposeProgram?(event: BeforeDisposeProgramEvent): any;
+    beforeRemoveProgram?(event: BeforeRemoveProgramEvent): any;
 
     /**
      * Emitted before the program starts collecting completions
@@ -235,9 +235,9 @@ export interface CompilerPlugin {
      */
     afterProvideScope?(event: AfterProvideScopeEvent): any;
 
-    beforeDisposeScope?(event: BeforeDisposeScopeEvent): any;
-    disposeScope?(event: DisposeScopeEvent): any;
-    afterDisposeScope?(event: AfterDisposeScopeEvent): any;
+    beforeRemoveScope?(event: BeforeRemoveProgramEvent): any;
+    removeScope?(event: RemoveScopeEvent): any;
+    afterRemoveScope?(event: AfterRemoveScopeEvent): any;
 
     beforeValidateScope?(event: BeforeValidateScopeEvent): any;
 
@@ -587,7 +587,7 @@ export default function () {
 ## Modifying code
 Sometimes plugins will want to modify code before the project is transpiled. While you can technically edit the AST directly at any point in the file's lifecycle, this is not recommended as those changes will remain changed as long as that file exists in memory and could cause issues with file validation if the plugin is used in a language-server context (i.e. inside vscode).
 
-Instead, we provide an instace of an `Editor` class in the `beforeFileTranspile` event that allows you to modify AST before the file is transpiled, and then those modifications are undone `afterFileTranspile`.
+Instead, we provide an instace of an `Editor` class in the `beforePrepareFile` event that allows you to modify AST before the file is transpiled, and then those modifications are undone `afterPrepareFile`.
 
 For example, consider the following brightscript code:
 ```brightscript
@@ -606,7 +606,7 @@ export default function () {
     return {
         name: 'replacePlaceholders',
         // transform AST before transpilation
-        beforeFileTranspile: (event: BeforeFileTranspileEvent) => {
+        beforePrepareFile: (event: BeforeFileTranspileEvent) => {
             if (isBrsFile(event.file)) {
                 event.file.ast.walk(createVisitor({
                     LiteralExpression: (literal) => {

@@ -880,17 +880,17 @@ export class Program {
             let scope = this.scopes[file.destPath];
             if (scope) {
                 this.logger.debug('Removing associated scope', scope.name);
-                const scopeDisposeEvent = {
+                const scopeRemoveEvent = {
                     program: this,
                     scope: scope
                 };
-                this.plugins.emit('beforeDisposeScope', scopeDisposeEvent);
-                this.plugins.emit('disposeScope', scopeDisposeEvent);
+                this.plugins.emit('beforeRemoveScope', scopeRemoveEvent);
+                this.plugins.emit('removeScope', scopeRemoveEvent);
                 scope.dispose();
                 //notify dependencies of this scope that it has been removed
                 this.dependencyGraph.remove(scope.dependencyGraphKey!);
                 this.removeScope(this.scopes[file.destPath]);
-                this.plugins.emit('afterDisposeScope', scopeDisposeEvent);
+                this.plugins.emit('afterRemoveScope', scopeRemoveEvent);
             }
             //remove the file from the program
             this.unassignFile(file);
@@ -2169,7 +2169,7 @@ export class Program {
     }
 
     public dispose() {
-        this.plugins.emit('beforeDisposeProgram', { program: this });
+        this.plugins.emit('beforeRemoveProgram', { program: this });
 
         for (let filePath in this.files) {
             this.files[filePath]?.dispose?.();

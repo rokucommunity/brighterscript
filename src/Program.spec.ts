@@ -204,8 +204,8 @@ describe('Program', () => {
             const afterProvideScope = sinon.spy();
             const beforeValidateScope = sinon.spy();
             const afterValidateScope = sinon.spy();
-            const beforeFileParse = sinon.spy();
-            const afterFileParse = sinon.spy();
+            const beforeProvideFile = sinon.spy();
+            const afterProvideFile = sinon.spy();
             const afterValidateFile = sinon.spy();
             program.plugins.add({
                 name: 'emits events for scope and file creation',
@@ -214,8 +214,8 @@ describe('Program', () => {
                 afterProvideScope: afterProvideScope,
                 beforeValidateScope: beforeValidateScope,
                 afterValidateScope: afterValidateScope,
-                beforeFileParse: beforeFileParse,
-                afterFileParse: afterFileParse,
+                beforeProvideFile: beforeProvideFile,
+                afterProvideFile: afterProvideFile,
                 afterValidateFile: afterValidateFile
             });
 
@@ -238,8 +238,8 @@ describe('Program', () => {
             expect(beforeValidateScope.callCount).to.equal(2);
             expect(afterValidateScope.callCount).to.equal(2);
             //file events
-            expect(beforeFileParse.callCount).to.equal(2);
-            expect(afterFileParse.callCount).to.equal(2);
+            expect(beforeProvideFile.callCount).to.equal(2);
+            expect(afterProvideFile.callCount).to.equal(2);
             expect(afterValidateFile.callCount).to.equal(2);
         });
     });
@@ -1813,8 +1813,7 @@ describe('Program', () => {
             `);
         });
     });
-
-    it('beforeProgramTranspile sends entries in alphabetical order', async () => {
+    it('beforeBuildProgram sends entries in alphabetical order', async () => {
         const destPaths: string[] = [];
         program.plugins.add({
             name: 'test',
@@ -1912,7 +1911,7 @@ describe('Program', () => {
             expect(literalExpression!.tokens.value.text).to.eql('"hello world"');
         });
 
-        it('handles Editor for beforeProgramTranspile', async () => {
+        it('handles Editor for beforeBuildProgram', async () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
                 sub main()
                     print "hello world"
@@ -3064,11 +3063,11 @@ describe('Program', () => {
         it('emits program dispose event', () => {
             const plugin = {
                 name: 'test',
-                beforeDisposeProgram: sinon.spy()
+                beforeRemoveProgram: sinon.spy()
             };
             program.plugins.add(plugin);
             program.dispose();
-            expect(plugin.beforeDisposeProgram.callCount).to.equal(1);
+            expect(plugin.beforeRemoveProgram.callCount).to.equal(1);
         });
     });
 

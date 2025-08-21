@@ -277,7 +277,7 @@ export interface Plugin {
     /**
      * Called right before the program is disposed/destroyed
      */
-    beforeDisposeProgram?(event: BeforeDisposeProgramEvent): any;
+    beforeRemoveProgram?(event: BeforeRemoveProgramEvent): any;
     disposeProgram?(event: DisposeProgramEvent): any;
     afterDisposeProgram?(event: AfterDisposeProgramEvent): any;
 
@@ -315,9 +315,9 @@ export interface Plugin {
     provideScope?(event: ProvideScopeEvent): any;
     afterProvideScope?(event: AfterProvideScopeEvent): any;
 
-    beforeDisposeScope?(event: BeforeDisposeScopeEvent): any;
-    disposeScope?(event: DisposeScopeEvent): any;
-    afterDisposeScope?(event: AfterDisposeScopeEvent): any;
+    beforeRemoveScope?(event: BeforeRemoveProgramEvent): any;
+    removeScope?(event: RemoveScopeEvent): any;
+    afterRemoveScope?(event: AfterRemoveScopeEvent): any;
 
     /**
      * Called before the `provideDefinition` hook
@@ -629,15 +629,15 @@ export interface AfterProvideScopeEvent {
     program: Program;
     scope: Scope;
 }
-export interface BeforeDisposeScopeEvent {
+export interface BeforeRemoveProgramEvent {
     program: Program;
     scope: Scope;
 }
-export interface DisposeScopeEvent {
+export interface RemoveScopeEvent {
     program: Program;
     scope: Scope;
 }
-export interface AfterDisposeScopeEvent {
+export interface AfterRemoveScopeEvent {
     program: Program;
     scope: Scope;
 }
@@ -998,7 +998,7 @@ export interface BeforeFileDisposeEvent {
     file: BscFile;
 }
 export type AfterFileDisposeEvent = BeforeFileDisposeEvent;
-export interface BeforeDisposeProgramEvent {
+export interface BeforeRemoveProgramEvent {
     program: Program;
 }
 export interface DisposeProgramEvent {

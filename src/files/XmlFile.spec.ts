@@ -62,7 +62,7 @@ describe('XmlFile', () => {
             const file = new XmlFile({ srcPath: 'abs', destPath: 'rel', program: program });
             program.plugins.add({
                 name: 'allows modifying the parsed XML model',
-                afterFileParse: () => {
+                afterProvideFile: () => {
                     let child = file.parser.ast.componentElement!.childrenElement.elements[0];
                     expect(child.attributes).to.have.lengthOf(4);
                     child.setAttributeValue('text', undefined as any);
@@ -569,7 +569,7 @@ describe('XmlFile', () => {
             `);
         });
 
-        it(`honors the 'needsTranspiled' flag when set in 'afterFileParse'`, () => {
+        it(`honors the 'needsTranspiled' flag when set in 'afterProvideFile'`, () => {
             program.plugins.add({
                 name: 'test',
                 afterProvideFile: (event) => {
