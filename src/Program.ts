@@ -2179,8 +2179,8 @@ export class Program {
         }
         this.globalScope?.dispose?.();
         this.dependencyGraph?.dispose?.();
-        this.plugins.emit('disposeProgram', { program: this });
-        this.plugins.emit('afterDisposeProgram', { program: this });
+        this.plugins.emit('removeProgram', { program: this });
+        this.plugins.emit('afterRemoveProgram', { program: this });
     }
 }
 

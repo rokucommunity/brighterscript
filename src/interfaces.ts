@@ -278,8 +278,8 @@ export interface Plugin {
      * Called right before the program is disposed/destroyed
      */
     beforeRemoveProgram?(event: BeforeRemoveProgramEvent): any;
-    disposeProgram?(event: DisposeProgramEvent): any;
-    afterDisposeProgram?(event: AfterDisposeProgramEvent): any;
+    removeProgram?(event: RemoveProgramEvent): any;
+    afterRemoveProgram?(event: AfterRemoveProgramEvent): any;
 
     /**
      * Emitted before the program starts collecting completions
@@ -631,7 +631,6 @@ export interface AfterProvideScopeEvent {
 }
 export interface BeforeRemoveProgramEvent {
     program: Program;
-    scope: Scope;
 }
 export interface RemoveScopeEvent {
     program: Program;
@@ -1001,10 +1000,10 @@ export type AfterFileDisposeEvent = BeforeFileDisposeEvent;
 export interface BeforeRemoveProgramEvent {
     program: Program;
 }
-export interface DisposeProgramEvent {
+export interface RemoveProgramEvent {
     program: Program;
 }
-export interface AfterDisposeProgramEvent {
+export interface AfterRemoveProgramEvent {
     program: Program;
 }
 export interface SemanticToken {
