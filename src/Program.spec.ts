@@ -180,6 +180,44 @@ describe('Program', () => {
             // await program.loadOrReloadFile('components', '')
         });
 
+        it('validates files added in beforeProgramValidate hook', () => {
+            const afterFileValidate = sinon.spy();
+
+            program.plugins = new PluginInterface([{
+                name: 'test plugin that adds files during beforeProgramValidate',
+                beforeProgramValidate: (program: Program) => {
+                    // Add a file that defines an enum
+                    const fileContent = `enum Tasks
+    MyTask = "_AsyncTask"
+end enum`;
+                    program.setFile('source/AsyncTask/Tasks.bs', fileContent);
+                },
+                afterFileValidate: afterFileValidate
+            }], { logger: createLogger() });
+
+            // Add a main file that imports the enum
+            program.setFile('source/main.bs', `
+import "pkg:/source/AsyncTask/Tasks.bs"
+
+sub main()
+    print Tasks.MyTask
+end sub
+            `);
+
+            program.validate();
+
+            // Verify that the Tasks.bs file was validated
+            const tasksFile = program.getFile('source/AsyncTask/Tasks.bs');
+            expect(tasksFile).to.not.be.undefined;
+            expect(tasksFile.isValidated).to.be.true;
+
+            // Verify afterFileValidate was called for both files (main.bs and Tasks.bs)
+            expect(afterFileValidate.callCount).to.equal(2);
+
+            // Should have no diagnostics (Tasks should be found)
+            expectZeroDiagnostics(program);
+        });
+
         it(`emits events for scope and file creation`, () => {
             const beforeProgramValidate = sinon.spy();
             const afterProgramValidate = sinon.spy();
@@ -223,6 +261,44 @@ describe('Program', () => {
             expect(beforeFileParse.callCount).to.equal(2);
             expect(afterFileParse.callCount).to.equal(2);
             expect(afterFileValidate.callCount).to.equal(2);
+        });
+
+        it('validates files added in beforeProgramValidate hook', () => {
+            const afterFileValidate = sinon.spy();
+
+            program.plugins = new PluginInterface([{
+                name: 'test plugin that adds files during beforeProgramValidate',
+                beforeProgramValidate: (program: Program) => {
+                    // Add a file that defines an enum
+                    const fileContent = `enum Tasks
+    MyTask = "_AsyncTask"
+end enum`;
+                    program.setFile('source/AsyncTask/Tasks.bs', fileContent);
+                },
+                afterFileValidate: afterFileValidate
+            }], { logger: createLogger() });
+
+            // Add a main file that imports the enum
+            program.setFile('source/main.bs', `
+import "pkg:/source/AsyncTask/Tasks.bs"
+
+sub main()
+    print Tasks.MyTask
+end sub
+            `);
+
+            program.validate();
+
+            // Verify that the Tasks.bs file was validated
+            const tasksFile = program.getFile('source/AsyncTask/Tasks.bs');
+            expect(tasksFile).to.not.be.undefined;
+            expect(tasksFile.isValidated).to.be.true;
+
+            // Verify afterFileValidate was called for both files (main.bs and Tasks.bs)
+            expect(afterFileValidate.callCount).to.equal(2);
+
+            // Should have no diagnostics (Tasks should be found)
+            expectZeroDiagnostics(program);
         });
     });
 

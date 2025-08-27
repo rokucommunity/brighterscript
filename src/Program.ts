@@ -727,23 +727,27 @@ export class Program {
                 this.plugins.emit('beforeProgramValidate', this);
                 beforeProgramValidateWasEmitted = true;
             })
-            .forEach(Object.values(this.files), (file) => {
-                if (!file.isValidated) {
-                    this.plugins.emit('beforeFileValidate', {
-                        program: this,
-                        file: file
-                    });
+            .once(() => {
+                // Capture files AFTER beforeProgramValidate event to include any files added by plugins
+                const filesToValidate = Object.values(this.files);
+                for (const file of filesToValidate) {
+                    if (!file.isValidated) {
+                        this.plugins.emit('beforeFileValidate', {
+                            program: this,
+                            file: file
+                        });
 
-                    //emit an event to allow plugins to contribute to the file validation process
-                    this.plugins.emit('onFileValidate', {
-                        program: this,
-                        file: file
-                    });
-                    //call file.validate() IF the file has that function defined
-                    file.validate?.();
-                    file.isValidated = true;
+                        //emit an event to allow plugins to contribute to the file validation process
+                        this.plugins.emit('onFileValidate', {
+                            program: this,
+                            file: file
+                        });
+                        //call file.validate() IF the file has that function defined
+                        file.validate?.();
+                        file.isValidated = true;
 
-                    this.plugins.emit('afterFileValidate', file);
+                        this.plugins.emit('afterFileValidate', file);
+                    }
                 }
             })
             .forEach(Object.values(this.scopes), (scope) => {
