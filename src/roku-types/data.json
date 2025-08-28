@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2025-04-24T15:48:08.626Z",
+    "generatedDate": "2025-08-28T16:28:44.298Z",
     "nodes": {
         "animation": {
             "description": "Extends [**AnimationBase**](https://developer.roku.com/docs/references/scenegraph/abstract-nodes/animationbase.md\n\nThe Animation node class provides animations of renderable nodes, by applying interpolator functions to the values in specified renderable node fields. For an animation to take effect, an Animation node definition must include a child field interpolator node ([FloatFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/floatfieldinterpolator.md\"FloatFieldInterpolator\"), [Vector2DFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/vector2dfieldinterpolator.md\"Vector2DFieldInterpolator\"), [ColorFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/colorfieldinterpolator.md\"ColorFieldInterpolator\")) definition for each renderable node field that is animated.\n\nThe Animation node class provides a simple linear interpolator function, where the animation takes place smoothly and simply from beginning to end. The Animation node class also provides several more complex interpolator functions to allow custom animation effects. For example, you can move a graphic image around the screen at differing speeds and curved trajectories at different times in the animation by specifying the appropriate function in the easeFunction field (quadratic and exponential are two examples of functions that can be specified). The interpolator functions are divided into two parts: the beginning of the animation (ease-in), and the end of the animation (ease-out). You can apply a specified interpolator function to either or both ease-in and ease-out, or specify no function for either or both (which is the linear function). You can also change the portion of the animation that is ease-in and ease-out to arbitrary fractional values for a quadratic interpolator function applied to both ease-in and ease-out.",
@@ -576,7 +576,7 @@
                 {
                     "accessPermission": "READ_ONLY",
                     "default": "{ }",
-                    "description": "Information about the audio segment that is currently streaming. This is only meaningful for segmented audio transports, such as DASH and HLS. The associative array has the following entries:\n\n| Key | Type | Value |\n| --- | --- | --- |\n| segBitrateBps | integer | Bitrate of the segment in bits per second |\n| segSequence | integer | The sequence number of the segment in the audio |\n| segStart | time | The start time of the segment from the start of the audio, specified in seconds |\n| segUrl | string | URL of the segment |",
+                    "description": "Information about the audio segment that is currently streaming. This is only meaningful for segmented audio transports, such as DASH and HLS. The associative array has the following entries:\n\n| Key | Type | Value |\n| --- | --- | --- |\n| segBitrateBps | integer | Bitrate of the segment in bits per second |\n| segSequence | integer | The sequence number of the segment in the audio |\n| segStart | time | The start time of the segment from the start of the audio, specified in seconds |\n| segUrl | string | URL of the segment |\n| segTypeStr | string | The type of data in the segment: \"unknown\", \"mux\", \"audio\", \"video\", or \"captions\". |\n| hdrModeStr | string | The HDR format of the content, which may be one of the following values:  *   \"invalid\" *   \"unknown\" *   \"none\" *   \"hdr10\" *   \"dolby\\_vision\" *   \"hlg10\" *   \"hdr10\" *   \"sl-hdr2\"   |",
                     "name": "streamingSegment",
                     "type": "associative array"
                 },
@@ -769,9 +769,16 @@
                 {
                     "accessPermission": "READ_WRITE",
                     "default": "false",
+                    "description": "Enables auto-scrolling to ensure text that is larger than initially expected fits within the button (for example, when the text is translated to other languages).",
+                    "name": "scrollable",
+                    "type": "boolean"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "false",
                     "description": "Controls whether the focus \"footprint\" bitmap is displayed when the button does not have the key focus. Since the default value of the showFocusFootprint field is false, the \"footprint\" bitmap is not displayed by default",
                     "name": "showFocusFootprint",
-                    "type": "Boolean"
+                    "type": "boolean"
                 },
                 {
                     "accessPermission": "READ_WRITE",
@@ -977,7 +984,7 @@
                 {
                     "accessPermission": "READ_WRITE",
                     "default": "invalid",
-                    "description": "Contains the order to be filled when the \\[\\*\\*doOrder\\*\\*\\](#doorder) command is executed. This ContentNode contains one child ContentNode for each of the items to be purchased. The child ContentNode must contain the following fields:\n\n| Field | Type | Description |\n| --- | --- | --- |\n| code | string | Identifies the product to be purchased, as entered in the **Product Identifier** field on the [In-App Product page in the Developer Dashboard](https://developer.roku.com/products) when the product was created. See [Creating an order](#creating-an-order) for more information. |\n| qty | string | The quantity of the item to be purchased, which is typically 1 for most in-app products.      This is only typically more than 1 if the product is a \"packet\" of identical items (such as game points, number of viewings permitted of some item of content, and so on). |\n| action | string | **For upgrades/downgrades only**. Set this to \"Upgrade\" or \"Downgrade\" to change the subscription plan from a previous purchase (for example, `myOrder.action = \"Upgrade\"`). The required values are case-sensitive; do not pass \"upgrade\" or \"downgrade\". See [On-device upgrade and downgrade](/docs/developer-program/roku-pay/implementation/on-device-upgrade-downgrade.md) for more information. |\n\nTo clear an order, set the \\*\\*order\\*\\* field to \"invalid\".",
+                    "description": "Contains the order to be filled when the \\[\\*\\*doOrder\\*\\*\\](#doorder) command is executed. This ContentNode contains one child ContentNode for each of the items to be purchased. The child ContentNode must contain the following fields:\n\n| Field | Type | Description |\n| --- | --- | --- |\n| code | string | Identifies the product to be purchased, as entered in the **Product Identifier** field on the [In-App Product page in the Developer Dashboard](https://developer.roku.com/products) when the product was created. See [Creating an order](#creating-an-order) for more information. |\n| qty | Integer | The quantity of the item to be purchased, which is typically 1 for most in-app products.      This is only typically more than 1 if the product is a \"packet\" of identical items (such as game points, number of viewings permitted of some item of content, and so on). |\n\nTo clear an order, set the \\*\\*order\\*\\* field to \"invalid\". \\*\\*For upgrades/downgrades only\\*\\*. You need to include an \\*\\*action\\*\\* field to specify a subscription plan change.\n\n| Field | Type | Access Permission | Description |\n| --- | --- | --- | --- |\n| action | string | READ\\_WRITE | Set this to \"Upgrade\" or \"Downgrade\" to change the subscription plan from a previous purchase (for example, `myOrder.action = \"Upgrade\"`). The required values are case-sensitive; do not pass \"upgrade\" or \"downgrade\". See [On-device upgrade and downgrade](/docs/developer-program/roku-pay/implementation/on-device-upgrade-downgrade.md) for more information. |",
                     "name": "order",
                     "type": "ContentNode"
                 },
@@ -1393,7 +1400,7 @@
                 {
                     "accessPermission": "READ_WRITE",
                     "default": "not specified",
-                    "description": "URL for FHD content artwork",
+                    "description": "YesterdayURL for FHD content artwork",
                     "name": "FHDPosterUrl",
                     "type": "String"
                 },
@@ -1613,6 +1620,13 @@
                     "description": "The original price of the product. Do not include a currency symbol (for example, set this to \"3.99\" instead of \"$3.99\").",
                     "name": "priceDisplay",
                     "type": "string"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "not specified",
+                    "description": "An opaque, unique identifier for the content the app is playing. Each movie, episode, or other content in the app should have a different program ID value. This identifier is used to debug content-specific playback issues. Roku will reference this programID in playback error reports, allowing developers to identify the content that failed to play.",
+                    "name": "ProgramID",
+                    "type": "String"
                 },
                 {
                     "accessPermission": "READ_WRITE",
@@ -2440,7 +2454,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/animation-nodes/floatfieldinterpolator.md"
         },
         "font": {
-            "description": "Extends [**Node**](https://developer.roku.com/docs/references/scenegraph/node.md\n\nThe Font node class specifies the font to be used by a Label node, or any other nodes that render text.\n\nNodes that use fonts include a field that stores a Font node. The font to use is specified by creating a Font node, and setting its uri and size fields.\n\nThe uri field can be set to any TrueType/OpenType font file. For example, to specify a font in XML markup:\n\n```\n<Label>\n  <Font role = \"font\" uri = \"pkg:/fonts/font.ttf\" size = \"24\" />\n</Label>\n```\n\nA default system font can also be specified, such as in the following:\n\n```\n<Label id = \"myLabel\"\n  width = \"200\"\n  height = \"200\"\n  text = \"Hello Label\"\n  font = \"font:MediumBoldSystemFont\" \n  />\n```\n\nBelow is the list of all the possible system font values:\n\n*   SmallestSystemFont\n*   SmallestBoldSystemFont\n*   SmallSystemFont\n*   SmallBoldSystemFont\n*   MediumSystemFont\n*   MediumBoldSystemFont\n*   LargeSystemFont\n*   LargeBoldSystemFont\n\nThe font can also be specified in BrightScript, for example:\n\n```\nlabel = CreateObject(\"roSGNode\", \"Label\")\nfont  = CreateObject(\"roSGNode\", \"Font\")\nfont.uri = \"pkg:/fonts/font.ttf\"\nfont.size = 24\nlabel.font = font\n```",
+            "description": "Extends [**Node**](https://developer.roku.com/docs/references/scenegraph/node.md\n\nThe Font node class specifies the font to be used by a Label node, or any other nodes that render text.\n\nNodes that use fonts include a field that stores a Font node. The font to use is specified by creating a Font node, and setting its uri and size fields.\n\nThe uri field can be set to any TrueType/OpenType font file. For example, to specify a font in XML markup:\n\n```\n<Label>\n  <Font role = \"font\" uri = \"pkg:/fonts/font.ttf\" size = \"24\" />\n</Label>\n```\n\nA default system font can also be specified, such as in the following:\n\n```\n<Label id = \"myLabel\"\n  width = \"200\"\n  height = \"200\"\n  text = \"Hello Label\"\n  font = \"font:MediumBoldSystemFont\" \n  />\n```\n\nBelow is the list of all the possible system font values:\n\n*   TinySystemFont\n*   TinyBoldSystemFont\n*   SmallerSystemFont\n*   SmallerBoldSystemFont\n*   SmallestSystemFont\n*   SmallestBoldSystemFont\n*   SmallSystemFont\n*   SmallBoldSystemFont\n*   MediumSystemFont\n*   MediumBoldSystemFont\n*   LargeSystemFont\n*   LargeBoldSystemFont\n*   LargestSystemFont\n*   ExtraLargeSystemFont\n*   ExtraLargeBoldSystemFont\n*   BadgeSystemFont\n\nThe font can also be specified in BrightScript, for example:\n\n```\nlabel = CreateObject(\"roSGNode\", \"Label\")\nfont  = CreateObject(\"roSGNode\", \"Font\")\nfont.uri = \"pkg:/fonts/font.ttf\"\nfont.size = 24\nlabel.font = font\n```",
             "events": [],
             "extends": {
                 "name": "Node",
@@ -2764,7 +2778,7 @@
                     "default": "false",
                     "description": "Specifies whether to display the end or beginning of text that overflows its available width: \\* \\*\\*true\\*\\*. The end of the text is shown. For example, \"the quick brown fox jumps over the lazy dog\" would be truncated to \"...jumps over the lazy dog\". \\* \\*\\*false\\*\\*. The start of the text is shown (for example, \"the quick brown fox jumps...\").",
                     "name": "leadingEllipsis",
-                    "type": "Boolean"
+                    "type": "boolean"
                 },
                 {
                     "accessPermission": "READ_WRITE",
@@ -2779,6 +2793,13 @@
                     "description": "If the width field value is greater than zero, provides a set of characters that are used to determine how to truncate the last line of text that is displayed if it extends beyond the specified width. If none of the characters in the last line of text are included in the truncateOnDelimiter field value string, the entire last line is not displayed. When the value is set to a non-empty string, the ellipsizeOnBoundary field value is ignored",
                     "name": "truncateOnDelimiter",
                     "type": "string"
+                },
+                {
+                    "accessPermission": "READ_ONLY",
+                    "default": "",
+                    "description": "indicates the number of wrapped lines in the label.",
+                    "name": "wrappedLines",
+                    "type": "Integer"
                 }
             ],
             "interfaces": [],
@@ -7089,7 +7110,7 @@
                 {
                     "accessPermission": "READ_ONLY",
                     "default": "invalid",
-                    "description": "Information about the video segment that was just downloaded. This is only meaningful for segmented video transports, such as DASH and HLS. The associative array has the following entries:\n\n| Key | Type | Value |\n| --- | --- | --- |\n| Status | integer | Status of the download: 0 = success, nonzero = error |\n| SegSequence | integer | Stream segment sequence number |\n| SegUrl | string | Stream segment URL (i.e., .ts file for HLS, stream fragment URL for smooth) |\n| DownloadDuration | integer | Amount of time spent downloading the segment, in milliseconds |\n| SegSize | integer | Segment size, in bytes |\n| SegType | integer | Type of data in the segment: 1=audio, 2=video, 3=captions, 0=mux |\n| BitrateBPS | integer | Bitrate of the segment, in bits per second |\n| SegStart | time | The start time of the segment from the start of the video, specified in seconds |\n| SegDuration | string | The duration of the segment in milliseconds. |\n| Path | string | A path indicating the Period, AdaptationSet and Representation that is played. This is in UNIX directory notation as: /// |\n| Width | integer | For video segments, the width of the encoded video picture |\n| Height | integer | For video segments, the height of the encoded video picture |\n| HdrMode |  | Indicates the HDR format of the content, which may be one of the following values:  *   0: UNKNOWN *   1: NONE (SDR) *   2: HDR10 *   3: DOLBY\\_VISION *   4: HLG10 *   5: HDR10\\_PLUS *   6: SL\\_HDR2   |\n| Latency | integer | The time, in milliseconds, between the current live edge (or most recent available media segment on the CDN) and the segment currently being played. |",
+                    "description": "Information about the video segment that was just downloaded. This is only meaningful for segmented video transports, such as DASH and HLS. The associative array has the following entries:\n\n| Key | Type | Value |\n| --- | --- | --- |\n| Status | integer | Status of the download: 0 = success, nonzero = error |\n| SegSequence | integer | Stream segment sequence number |\n| SegUrl | string | Stream segment URL (i.e., .ts file for HLS, stream fragment URL for smooth) |\n| DownloadDuration | integer | Amount of time spent downloading the segment, in milliseconds |\n| SegSize | integer | Segment size, in bytes |\n| SegType | integer | Type of data in the segment: 1=audio, 2=video, 3=captions, 0=mux |\n| BitrateBPS | integer | Bitrate of the segment, in bits per second |\n| SegStart | time | The start time of the segment from the start of the video, specified in seconds |\n| SegDuration | string | The duration of the segment in milliseconds. |\n| Path | string | A path indicating the Period, AdaptationSet and Representation that is played. This is in UNIX directory notation as: /// |\n| Width | integer | For video segments, the width of the encoded video picture |\n| Height | integer | For video segments, the height of the encoded video picture |\n| HdrMode |  | Indicates the HDR format of the content, which may be one of the following values:  *   0: UNKNOWN *   1: NONE (SDR) *   2: HDR10 *   3: DOLBY\\_VISION *   4: HLG10 *   5: HDR10\\_PLUS *   6: SL\\_HDR2   |",
                     "name": "downloadedSegment",
                     "type": "associative array"
                 },
@@ -7235,6 +7256,13 @@
                 },
                 {
                     "accessPermission": "READ_ONLY",
+                    "default": "invalid",
+                    "description": "Enables apps to translate the relative time provided in the \\*\\*pauseBuffer\\*\\* fields to UTC time based on the wall-clock timing provided in live manifests/playlists.",
+                    "name": "pauseBufferEpochOffset",
+                    "type": "double"
+                },
+                {
+                    "accessPermission": "READ_ONLY",
                     "default": "false",
                     "description": "Indicates that the video buffer was not able to save all video since being paused. This field is only valid for live video.",
                     "name": "pauseBufferOverflow",
@@ -7334,7 +7362,7 @@
                 {
                     "accessPermission": "READ_ONLY",
                     "default": "invalid",
-                    "description": "Contains the following fields that provide information about the last rendered video and audio samples.\n\n| Field | Type | Default | Access Permission | Description |\n| --- | --- | --- | --- | --- |\n| audio | double | invalid | READ\\_ONLY | Position of the last rendered audio sample, specified in seconds |\n| clip\\_id | integer | invalid | READ\\_ONLY | The unique ID of the clip |\n| epoch | integer | invalid | READ\\_ONLY | 0 means positions are relative to videoStart; 1 means that positions are utc |\n| video | double | invalid | READ\\_ONLY | Position of the last rendered video sample, specified in seconds |",
+                    "description": "Contains the following fields that provide information about the last rendered video and audio samples.\n\n| Field | Type | Default | Access Permission | Description |\n| --- | --- | --- | --- | --- |\n| audio | double | invalid | READ\\_ONLY | Position of the last rendered audio sample, specified in seconds |\n| clip\\_id | integer | invalid | READ\\_ONLY | The unique ID of the clip |\n| epoch | integer | invalid | READ\\_ONLY | 0 means positions are relative to videoStart; 1 means that positions are utc |\n| video | double | invalid | READ\\_ONLY | The value of this field is double/float, in seconds since epoch.Position of the last rendered video sample, specified in seconds |",
                     "name": "positionInfo",
                     "type": "roAssociativeArray"
                 },
@@ -7390,7 +7418,7 @@
                 {
                     "accessPermission": "READ_ONLY",
                     "default": "{ }",
-                    "description": "Information about the video segment that is currently streaming. This is only meaningful for segmented video transports, such as DASH and HLS. The associative array has the following entries:\n\n| Key | Type | Value |\n| --- | --- | --- |\n| segBitrateBps | integer | Bitrate of the segment in bits per second |\n| segSequence | integer | The sequence number of the segment in the video |\n| segStart | time | The start time of the segment from the start of the video, specified in seconds |\n| segUrl | string | URL of the segment |\n| SegType | integer | Type of data in the segment: 1=audio, 2=video, 3=captions, 0=mux |\n| Path | string | A path indicating the Period, AdaptationSet and Representation that is played. This is in UNIX directory notation as: /// |\n| Width | integer | For video segments, the width of the encoded video picture |\n| Height | integer | For video segments, the height of the encoded video picture |",
+                    "description": "Information about the video segment that is currently streaming. This is only meaningful for segmented video transports, such as DASH and HLS. The associative array has the following entries:\n\n| Key | Type | Value |\n| --- | --- | --- |\n| hdrModeStr | string | HDR format of the content, which may be one of the following values: \"invalid\", \"unknown\", \"none\", \"hdr10\", \"dolby\\_vision\", \"hlg10\", \"hdr10\", \"sl-hdr2\". |\n| segBitrateBps | integer | Bitrate of the segment in bits per second |\n| segSequence | integer | The sequence number of the segment in the video |\n| segStart | time | The start time of the segment from the start of the video, specified in seconds |\n| segUrl | string | URL of the segment |\n| segType | integer | Type of data in the segment: 1=audio, 2=video, 3=captions, 0=mux |\n| segTypeStr | String | Type of data in the segment: \"audio\", \"video\", \"captions\", \"mux\" |\n| latency | integer | The time, in milliseconds, between the current live edge (or most recent available media segment on the CDN) and the segment currently being played. |\n| path | string | A path indicating the Period, AdaptationSet and Representation that is played. This is in UNIX directory notation as: /// |\n| width | integer | For video segments, the width of the encoded video picture |\n| height | integer | For video segments, the height of the encoded video picture |",
                     "name": "streamingSegment",
                     "type": "associative array"
                 },
@@ -7439,7 +7467,7 @@
                 {
                     "accessPermission": "READ_ONLY",
                     "default": "{ }",
-                    "description": "This field contains all the same information included in the \\*\\*timedMetaData\\*\\* field and the following additional fields:\n\n| Key | Type | Value |\n| --- | --- | --- |\n| data | associative array | The values from the stream's metadata tag, as defined by video provider. |\n| position | time | The Presentation Time Stamp (PTS) when the tag was seen. |\n| source | enum | This may be one of the following string values: ${source-enum-list} |",
+                    "description": "This field contains all the same information included in the \\*\\*timedMetaData\\*\\* field and the following additional fields:\n\n| Key | Type | Value |\n| --- | --- | --- |\n| data | associative array | The values from the stream's metadata tag, as defined by video provider. |\n| position | time | The Presentation Time Stamp (PTS) when the tag was seen. |\n| source | enum | This may be one of the following string values:  *   \"emsg\" *   \"id3\" *   \"hls\" *   \"unk\"   |",
                     "name": "timedMetaData2",
                     "type": "associative array"
                 },
@@ -8132,7 +8160,7 @@
                     "returnType": "roFileSystem"
                 }
             ],
-            "description": "The roFilesystem component implements common filesystem inspection and modificationroutines.\n\nAll paths are matched case-insensitively, regardless of the case-sensitivity of the underlying filesystem. The supported character set is limited to only those characters supported by vfat filesystems (valid Windows characters). The usbplayer sample application is a good example of roFileSystem usage. USB devices with VFAT, NTFS, HFS, and HFS Plus filesystems are supported. The USB filesystems are currently mounted read only.\n\nThis object is created with no parameters:\n\n`CreateObject(\"roFileSystem\")`",
+            "description": "The roFilesystem component implements common filesystem inspection and modificationroutines.\n\nAll paths are matched case-insensitively, regardless of the case-sensitivity of the underlying filesystem. The supported character set is limited to only those characters supported by vfat filesystems (valid Windows characters). The usbplayer sample application is a good example of roFileSystem usage. USB devices with NTFS, HFS+, FAT16/32, exFAT, and Ext2/3 filesystems are supported. The USB filesystems are currently mounted read only.\n\nThis object is created with no parameters:\n\n`CreateObject(\"roFileSystem\")`",
             "events": [
                 {
                     "name": "roFileSystemEvent",
@@ -11551,6 +11579,13 @@
                     "params": [],
                     "returnDescription": "Returns the general memory levels of the app, which may be one of the following values:",
                     "returnType": "string"
+                },
+                {
+                    "description": "Checks the graphics features supported by the device.",
+                    "name": "GetGraphicsFeatures",
+                    "params": [],
+                    "returnDescription": "An associative array containing the following key/value pairs:",
+                    "returnType": "object"
                 },
                 {
                     "description": "Checks the graphics platform of the device.",

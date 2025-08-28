@@ -31,7 +31,8 @@ const foundTypesTranslation = {
     'object (string array)': 'object',
     'robytearray object': 'roByteArray',
     'rolist of roassociativearray items': 'roList',
-    'roassociative array': 'roAssociativeArray'
+    'roassociative array': 'roAssociativeArray',
+    'uri string': 'uri'
 };
 
 const turndownService = new TurndownService({
@@ -886,6 +887,9 @@ class Runner {
         }
         if (!opts?.allowSpaces) {
             result = result?.split(' ')?.[0];
+        }
+        if (foundTypesTranslation[result.toLowerCase()]) {
+            result = foundTypesTranslation[result.toLowerCase()];
         }
         return result;
     }
