@@ -5,9 +5,7 @@ While a minimal `bsconfig.json` file is sufficient for getting started, `bsc` su
 - [allowBrighterScriptInBrightScript](#allowBrighterScriptInBrightScript)
 - [autoImportComponentScript](#autoImportComponentScript)
 - [bslibDestinationDir](#bslibDestinationDir)
-- [createPackage](#createPackage)
 - [cwd](#cwd)
-- [deploy](#deploy)
 - [diagnosticFilters](#diagnosticFilters)
 - [diagnosticLevel](#diagnosticLevel)
 - [diagnosticSeverityOverrides](#diagnosticSeverityOverrides)
@@ -15,9 +13,7 @@ While a minimal `bsconfig.json` file is sufficient for getting started, `bsc` su
 - [emitFullPaths](#emitFullPaths)
 - [extends](#extends)
 - [files](#files)
-- [host](#host)
 - [outFile](#outFile)
-- [password](#password)
 - [plugins](#plugins)
 - [project](#project)
 - [pruneEmptyCodeFiles](#pruneEmptyCodeFiles)
@@ -27,7 +23,6 @@ While a minimal `bsconfig.json` file is sufficient for getting started, `bsc` su
 - [rootDir](#rootDir)
 - [sourceRoot](#sourceRoot)
 - [stagingDir](#stagingDir)
-- [username](#username)
 - [watch](#watch)
 
 ## `allowBrighterScriptInBrightScript`
@@ -50,23 +45,11 @@ Override the destination directory for the bslib.brs file.  Use this if you want
 
 Defaults to `source`.
 
-## `createPackage`
-
-Type: `boolean`
-
-Causes the build to create a zip package. Defaults to `true`. This setting is ignored when [`deploy`](#deploy) is enabled.
-
 ## `cwd`
 
 Type: `string`
 
 If present, overrides the current working directory when invoking `bsc`. Defaults to `process.cwd()`.
-
-## `deploy`
-
-Type: `boolean`
-
-If `true`, after a successful build, the project will be deployed to the Roku specified in host. Defaults to `false`. If this field is set to `true`, then the [`host`](#host) and [`password`](#password) fields must be set as well.
 
 ## `diagnosticFilters`
 
@@ -349,23 +332,11 @@ For example, if you have a base project and a child project that wants to overri
 }
 ```
 
-## `host`
-
-Type: `string`
-
-The host of the Roku that this project will deploy to when the [`deploy`](#deploy) field is set to `true`. Defaults to `undefined`.
-
 ## `outFile`
 
 Type: `string`
 
 The path (including filename) where the output file should be placed. Defaults to `"./out/${WORKSPACE_FOLDER_NAME}.zip"`.
-
-## `password`
-
-Type: `string`
-
-The password that will be used to deploy to the Roku device when the [`deploy`](#deploy) field is set to `true`. Defaults to `undefined`.
 
 ## `plugins`
 
@@ -420,16 +391,9 @@ Type: `string`
 Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within [`rootDir`](#rootdir). This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.
 
 ## `stagingDir`
-
 Type: `string`
 
 The folder where the transpiled files are placed. This folder will be created automatically if it does not exist, and will be deleted after transpilation completes unless [`retainStagingDir`](#retainstagingdir) is set to `true`. Defaults to `./out/.roku-deploy-staging`.
-
-## `username`
-
-Type: `string`
-
-The username that will be used to deploy to the Roku device when the [`deploy`](#deploy) field is set to `true`. Defaults to `undefined`.
 
 ## `watch`
 
