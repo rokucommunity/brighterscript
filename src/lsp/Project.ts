@@ -71,9 +71,7 @@ export class Project implements LspProject {
             cwd: cwd,
             project: this.bsconfigPath,
             watch: false,
-            createPackage: false,
-            deploy: false,
-            copyToStaging: false,
+            noEmit: true,
             showDiagnosticsInConsole: false,
             validate: false
         } as BsConfig;

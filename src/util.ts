@@ -362,7 +362,6 @@ export class Util {
 
         const cwd = config.cwd ?? process.cwd();
         const rootFolderName = path.basename(cwd);
-        const retainStagingDir = (config.retainStagingDir ?? config.retainStagingFolder) === true ? true : false;
 
         let logLevel: LogLevel = LogLevel.log;
 
@@ -378,18 +377,13 @@ export class Util {
 
         const configWithDefaults: Omit<FinalizedBsConfig, 'rootDir'> = {
             cwd: cwd,
-            deploy: config.deploy === true ? true : false,
             //use default files array from rokuDeploy
             files: config.files ?? [...DefaultFiles],
-            createPackage: config.createPackage === false ? false : true,
             outFile: config.outFile ?? `./out/${rootFolderName}.zip`,
             sourceMap: config.sourceMap === true,
-            username: config.username ?? 'rokudev',
             watch: config.watch === true ? true : false,
             emitFullPaths: config.emitFullPaths === true ? true : false,
-            retainStagingDir: retainStagingDir,
-            retainStagingFolder: retainStagingDir,
-            copyToStaging: config.copyToStaging === false ? false : true,
+            noEmit: config.noEmit === false ? false : true,
             ignoreErrorCodes: config.ignoreErrorCodes ?? [],
             diagnosticSeverityOverrides: config.diagnosticSeverityOverrides ?? {},
             diagnosticFilters: config.diagnosticFilters ?? [],
