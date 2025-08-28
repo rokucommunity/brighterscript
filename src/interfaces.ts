@@ -239,11 +239,12 @@ export interface Plugin {
     /**
      * Called before a new program is created
      */
-    beforeProgramCreate?(event: BeforeProgramCreateEvent): any;
+    beforeProvideProgram?(event: BeforeProvideProgramEvent): any;
+    provideProgram?(event: ProvideProgramEvent): any;
     /**
      * Called after a new program is created
      */
-    afterProgramCreate?(event: AfterProgramCreateEvent): any;
+    afterProvideProgram?(event: AfterProvideProgramEvent): any;
 
 
     /**
@@ -263,20 +264,22 @@ export interface Plugin {
     /**
      * Called before the entire program is validated
      */
-    beforeProgramValidate?(event: BeforeProgramValidateEvent): any;
+    beforeValidateProgram?(event: BeforeValidateProgramEvent): any;
     /**
      * Called before the entire program is validated
      */
-    onProgramValidate?(event: OnProgramValidateEvent): any;
+    validateProgram?(event: ValidateProgramEvent): any;
     /**
      * Called after the program has been validated
      */
-    afterProgramValidate?(event: AfterProgramValidateEvent): any;
+    afterValidateProgram?(event: AfterValidateProgramEvent): any;
 
     /**
      * Called right before the program is disposed/destroyed
      */
-    beforeProgramDispose?(event: BeforeProgramDisposeEvent): any;
+    beforeRemoveProgram?(event: BeforeRemoveProgramEvent): any;
+    removeProgram?(event: RemoveProgramEvent): any;
+    afterRemoveProgram?(event: AfterRemoveProgramEvent): any;
 
     /**
      * Emitted before the program starts collecting completions
@@ -308,13 +311,14 @@ export interface Plugin {
     /**
      * Called after a scope was created
      */
-    afterScopeCreate?(event: AfterScopeCreateEvent): any;
+    beforeProvideScope?(event: BeforeProvideScopeEvent): any;
+    provideScope?(event: ProvideScopeEvent): any;
+    afterProvideScope?(event: AfterProvideScopeEvent): any;
 
-    beforeScopeDispose?(event: BeforeScopeDisposeEvent): any;
-    onScopeDispose?(event: OnScopeDisposeEvent): any;
-    afterScopeDispose?(event: AfterScopeDisposeEvent): any;
+    beforeRemoveScope?(event: BeforeRemoveProgramEvent): any;
+    removeScope?(event: RemoveScopeEvent): any;
+    afterRemoveScope?(event: AfterRemoveScopeEvent): any;
 
-    beforeScopeValidate?(event: BeforeScopeValidateEvent): any;
     /**
      * Called before the `provideDefinition` hook
      */
@@ -378,11 +382,17 @@ export interface Plugin {
     afterProvideWorkspaceSymbols?(event: AfterProvideWorkspaceSymbolsEvent): any;
 
     //scope events
-    onScopeValidate?(event: OnScopeValidateEvent): any;
-    afterScopeValidate?(event: BeforeScopeValidateEvent): any;
+    beforeValidateScope?(event: BeforeValidateScopeEvent): any;
+    validateScope?(event: ValidateScopeEvent): any;
+    afterValidateScope?(event: AfterValidateScopeEvent): any;
 
-    onGetCodeActions?(event: OnGetCodeActionsEvent): any;
-    onGetSemanticTokens?(event: OnGetSemanticTokensEvent): any;
+    beforeProvideCodeActions?(event: BeforeProvideCodeActionsEvent): any;
+    provideCodeActions?(event: ProvideCodeActionsEvent): any;
+    afterProvideCodeActions?(event: AfterProvideCodeActionsEvent): any;
+
+    beforeProvideSemanticTokens?(event: BeforeProvideSemanticTokensEvent): any;
+    provideSemanticTokens?(event: ProvideSemanticTokensEvent): any;
+    afterProvideSemanticTokens?(event: AfterProvideSemanticTokensEvent): any;
 
 
     /**
@@ -404,35 +414,35 @@ export interface Plugin {
      * Called before a file is added to the program.
      * Includes physical files as well as any virtual files produced by `provideFile` events
      */
-    beforeFileAdd?(event: BeforeFileAddEvent): any;
+    beforeAddFile?(event: BeforeAddFileEvent): any;
     /**
      * Called after a file has been added to the program.
      * Includes physical files as well as any virtual files produced by `provideFile` events
      */
-    afterFileAdd?(event: AfterFileAddEvent): any;
+    afterAddFile?(event: AfterAddFileEvent): any;
 
     /**
      * Called before a file is removed from the program. This includes physical and virtual files
      */
-    beforeFileRemove?(event: BeforeFileRemoveEvent): any;
+    beforeRemoveFile?(event: BeforeRemoveFileEvent): any;
     /**
      * Called after a file has been removed from the program. This includes physical and virtual files
      */
-    afterFileRemove?(event: AfterFileRemoveEvent): any;
+    afterRemoveFile?(event: AfterRemoveFileEvent): any;
 
 
     /**
      * Called before each file is validated
      */
-    beforeFileValidate?(event: BeforeFileValidateEvent): any;
+    beforeValidateFile?(event: BeforeValidateFileEvent): any;
     /**
      * Called during the file validation process. If your plugin contributes file validations, this is a good place to contribute them.
      */
-    onFileValidate?(event: OnFileValidateEvent): any;
+    validateFile?(event: ValidateFileEvent): any;
     /**
      * Called after each file is validated
      */
-    afterFileValidate?(event: AfterFileValidateEvent): any;
+    afterValidateFile?(event: AfterValidateFileEvent): any;
 
 
     /**
@@ -466,7 +476,7 @@ export interface Plugin {
     /**
      * Emitted right at the start of the program turning all file objects into their final buffers
      */
-    onSerializeProgram?(event: OnSerializeProgramEvent): any;
+    serializeProgram?(event: SerializeProgramEvent): any;
     /**
      * After the program turns all file objects into their final buffers
      */
@@ -511,8 +521,23 @@ export interface Plugin {
      */
     afterWriteFile?(event: AfterWriteFileEvent): any;
 }
-
-export interface OnGetCodeActionsEvent<TFile extends BscFile = BscFile> {
+export interface BeforeProvideCodeActionsEvent<TFile extends BscFile = BscFile> {
+    program: Program;
+    file: TFile;
+    range: Range;
+    scopes: Scope[];
+    diagnostics: BsDiagnostic[];
+    codeActions: CodeAction[];
+}
+export interface ProvideCodeActionsEvent<TFile extends BscFile = BscFile> {
+    program: Program;
+    file: TFile;
+    range: Range;
+    scopes: Scope[];
+    diagnostics: BsDiagnostic[];
+    codeActions: CodeAction[];
+}
+export interface AfterProvideCodeActionsEvent<TFile extends BscFile = BscFile> {
     program: Program;
     file: TFile;
     range: Range;
@@ -521,19 +546,24 @@ export interface OnGetCodeActionsEvent<TFile extends BscFile = BscFile> {
     codeActions: CodeAction[];
 }
 
-export interface BeforeProgramCreateEvent {
+export interface BeforeProvideProgramEvent {
     builder: ProgramBuilder;
+    program?: Program;
 }
-export interface AfterProgramCreateEvent {
+export interface ProvideProgramEvent {
+    builder: ProgramBuilder;
+    program?: Program;
+}
+export interface AfterProvideProgramEvent {
     builder: ProgramBuilder;
     program: Program;
 }
 
-export interface BeforeProgramValidateEvent {
+export interface BeforeValidateProgramEvent {
     program: Program;
 }
-export type OnProgramValidateEvent = BeforeProgramValidateEvent;
-export interface AfterProgramValidateEvent extends BeforeProgramValidateEvent {
+export type ValidateProgramEvent = BeforeValidateProgramEvent;
+export interface AfterValidateProgramEvent extends BeforeValidateProgramEvent {
     /**
      * Was the validation cancelled? Will be false if the validation was completed
      */
@@ -587,27 +617,34 @@ export interface Hover {
 export type BeforeProvideHoverEvent = ProvideHoverEvent;
 export type AfterProvideHoverEvent = ProvideHoverEvent;
 
-export interface AfterScopeCreateEvent {
+export interface BeforeProvideScopeEvent {
     program: Program;
     scope: Scope;
 }
-export interface BeforeScopeDisposeEvent {
+export interface ProvideScopeEvent {
     program: Program;
     scope: Scope;
 }
-export interface OnScopeDisposeEvent {
+export interface AfterProvideScopeEvent {
     program: Program;
     scope: Scope;
 }
-export interface AfterScopeDisposeEvent {
+export interface BeforeRemoveProgramEvent {
+    program: Program;
+}
+export interface RemoveScopeEvent {
     program: Program;
     scope: Scope;
 }
-export interface BeforeScopeValidateEvent {
+export interface AfterRemoveScopeEvent {
     program: Program;
     scope: Scope;
 }
-export type AfterScopeValidateEvent = BeforeScopeValidateEvent;
+export interface BeforeValidateScopeEvent {
+    program: Program;
+    scope: Scope;
+}
+export type AfterValidateScopeEvent = BeforeValidateScopeEvent;
 
 export interface BeforeFileParseEvent {
     program: Program;
@@ -686,7 +723,43 @@ export type BeforeProvideWorkspaceSymbolsEvent = ProvideWorkspaceSymbolsEvent;
 export type AfterProvideWorkspaceSymbolsEvent = ProvideWorkspaceSymbolsEvent;
 
 
-export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
+export interface BeforeProvideSemanticTokensEvent<T extends BscFile = BscFile> {
+    /**
+     * The program this file is from
+     */
+    program: Program;
+    /**
+     * The file to get semantic tokens for
+     */
+    file: T;
+    /**
+     * The list of scopes that this file is a member of
+     */
+    scopes: Scope[];
+    /**
+     * The list of semantic tokens being produced during this event.
+     */
+    semanticTokens: SemanticToken[];
+}
+export interface ProvideSemanticTokensEvent<T extends BscFile = BscFile> {
+    /**
+     * The program this file is from
+     */
+    program: Program;
+    /**
+     * The file to get semantic tokens for
+     */
+    file: T;
+    /**
+     * The list of scopes that this file is a member of
+     */
+    scopes: Scope[];
+    /**
+     * The list of semantic tokens being produced during this event.
+     */
+    semanticTokens: SemanticToken[];
+}
+export interface AfterProvideSemanticTokensEvent<T extends BscFile = BscFile> {
     /**
      * The program this file is from
      */
@@ -705,14 +778,14 @@ export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
     semanticTokens: SemanticToken[];
 }
 
-export type BeforeFileValidateEvent = OnFileValidateEvent;
-export interface OnFileValidateEvent<T extends BscFile = BscFile> {
+export type BeforeValidateFileEvent = ValidateFileEvent;
+export interface ValidateFileEvent<T extends BscFile = BscFile> {
     program: Program;
     file: T;
 }
-export type AfterFileValidateEvent<T extends BscFile = BscFile> = OnFileValidateEvent;
+export type AfterValidateFileEvent<T extends BscFile = BscFile> = ValidateFileEvent;
 
-export interface OnFileValidateEvent<T extends BscFile = BscFile> {
+export interface ValidateFileEvent<T extends BscFile = BscFile> {
     program: Program;
     file: T;
 }
@@ -730,7 +803,7 @@ export interface ScopeValidationOptions {
     initialValidation?: boolean;
 }
 
-export interface OnScopeValidateEvent {
+export interface ValidateScopeEvent {
     program: Program;
     scope: Scope;
     changedFiles?: BscFile[];
@@ -795,17 +868,17 @@ export interface ProvideFileEvent<TFile extends BscFile = BscFile> {
 }
 export type AfterProvideFileEvent<TFile extends BscFile = BscFile> = ProvideFileEvent<TFile>;
 
-export interface BeforeFileAddEvent<TFile extends BscFile = BscFile> {
+export interface BeforeAddFileEvent<TFile extends BscFile = BscFile> {
     file: TFile;
     program: Program;
 }
-export type AfterFileAddEvent<TFile extends BscFile = BscFile> = BeforeFileAddEvent<TFile>;
+export type AfterAddFileEvent<TFile extends BscFile = BscFile> = BeforeAddFileEvent<TFile>;
 
-export interface BeforeFileRemoveEvent<TFile extends BscFile = BscFile> {
+export interface BeforeRemoveFileEvent<TFile extends BscFile = BscFile> {
     file: TFile;
     program: Program;
 }
-export type AfterFileRemoveEvent<TFile extends BscFile = BscFile> = BeforeFileRemoveEvent<TFile>;
+export type AfterRemoveFileEvent<TFile extends BscFile = BscFile> = BeforeRemoveFileEvent<TFile>;
 
 export type BeforePrepareProgramEvent = PrepareProgramEvent;
 /**
@@ -852,7 +925,7 @@ export interface BeforeSerializeProgramEvent {
     files: BscFile[];
     result: Map<BscFile, SerializedFile[]>;
 }
-export type OnSerializeProgramEvent = BeforeSerializeProgramEvent;
+export type SerializeProgramEvent = BeforeSerializeProgramEvent;
 export type AfterSerializeProgramEvent = BeforeSerializeProgramEvent;
 
 /**
@@ -924,10 +997,15 @@ export interface BeforeFileDisposeEvent {
     file: BscFile;
 }
 export type AfterFileDisposeEvent = BeforeFileDisposeEvent;
-export interface BeforeProgramDisposeEvent {
+export interface BeforeRemoveProgramEvent {
     program: Program;
 }
-
+export interface RemoveProgramEvent {
+    program: Program;
+}
+export interface AfterRemoveProgramEvent {
+    program: Program;
+}
 export interface SemanticToken {
     range: Range;
     tokenType: SemanticTokenTypes;

@@ -1,5 +1,5 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
-import type { Plugin, OnFileValidateEvent, OnGetCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, AfterProvideFileEvent, AfterFileValidateEvent, AfterProgramValidateEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, OnPrepareFileEvent, WriteFileEvent } from '../interfaces';
+import type { Plugin, ValidateFileEvent, ProvideCodeActionsEvent, ProvideHoverEvent, ProvideSemanticTokensEvent, ValidateScopeEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, AfterProvideFileEvent, AfterValidateFileEvent, AfterValidateProgramEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, OnPrepareFileEvent, WriteFileEvent } from '../interfaces';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
 import { DefinitionProvider } from './definition/DefinitionProvider';
@@ -29,7 +29,7 @@ export class BscPlugin implements Plugin {
         new FileProvider(event).process();
     }
 
-    public onGetCodeActions(event: OnGetCodeActionsEvent) {
+    public provideCodeActions(event: ProvideCodeActionsEvent) {
         new CodeActionsProcessor(event).process();
     }
 
@@ -57,33 +57,33 @@ export class BscPlugin implements Plugin {
         new ReferencesProvider(event).process();
     }
 
-    public onGetSemanticTokens(event: OnGetSemanticTokensEvent) {
+    public provideSemanticTokens(event: ProvideSemanticTokensEvent) {
         if (isBrsFile(event.file)) {
             return new BrsFileSemanticTokensProcessor(event as any).process();
         }
     }
 
-    public onFileValidate(event: OnFileValidateEvent) {
+    public validateFile(event: ValidateFileEvent) {
         if (isBrsFile(event.file)) {
-            return new BrsFileValidator(event as OnFileValidateEvent<BrsFile>).process();
+            return new BrsFileValidator(event as ValidateFileEvent<BrsFile>).process();
         } else if (isXmlFile(event.file)) {
-            return new XmlFileValidator(event as OnFileValidateEvent<XmlFile>).process();
+            return new XmlFileValidator(event as ValidateFileEvent<XmlFile>).process();
         }
     }
 
-    public afterFileValidate(event: AfterFileValidateEvent) {
+    public afterValidateFile(event: AfterValidateFileEvent) {
         if (isBrsFile(event.file)) {
-            return new BrsFileAfterValidator(event as AfterFileValidateEvent<BrsFile>).process();
+            return new BrsFileAfterValidator(event as AfterValidateFileEvent<BrsFile>).process();
         }
     }
 
     private scopeValidator = new ScopeValidator();
 
-    public onScopeValidate(event: OnScopeValidateEvent) {
+    public validateScope(event: ValidateScopeEvent) {
         this.scopeValidator.processEvent(event);
     }
 
-    public afterProgramValidate(event: AfterProgramValidateEvent) {
+    public afterValidateProgram(event: AfterValidateProgramEvent) {
         new ProgramValidator(event).process();
         //release memory once the validation cycle has finished
         this.scopeValidator.reset();

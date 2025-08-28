@@ -5,7 +5,7 @@ import { DiagnosticCodeMap } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile } from '../../files/BscFile';
 import type { XmlFile } from '../../files/XmlFile';
-import type { BsDiagnostic, OnGetCodeActionsEvent } from '../../interfaces';
+import type { BsDiagnostic, ProvideCodeActionsEvent } from '../../interfaces';
 import { ParseMode } from '../../parser/Parser';
 import { util } from '../../util';
 import { isBrsFile, isFunctionExpression, isVariableExpression, isVoidType } from '../../astUtils/reflection';
@@ -15,7 +15,7 @@ import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 
 export class CodeActionsProcessor {
     public constructor(
-        public event: OnGetCodeActionsEvent
+        public event: ProvideCodeActionsEvent
     ) {
 
     }

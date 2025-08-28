@@ -70,11 +70,11 @@ describe('Project', () => {
 
             project['builder'].program.plugins.add({
                 name: 'Test',
-                beforeProgramValidate: () => {
+                beforeValidateProgram: () => {
                     validationCount++;
                     maxValidationCount = Math.max(maxValidationCount, validationCount);
                 },
-                afterProgramValidate: () => {
+                afterValidateProgram: () => {
                     validationCount--;
                 }
             });

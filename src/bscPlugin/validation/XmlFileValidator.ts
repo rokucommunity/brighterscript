@@ -1,12 +1,12 @@
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { XmlFile } from '../../files/XmlFile';
-import type { OnFileValidateEvent } from '../../interfaces';
+import type { ValidateFileEvent } from '../../interfaces';
 import type { SGAst } from '../../parser/SGTypes';
 import util from '../../util';
 
 export class XmlFileValidator {
     constructor(
-        public event: OnFileValidateEvent<XmlFile>
+        public event: ValidateFileEvent<XmlFile>
     ) {
     }
 

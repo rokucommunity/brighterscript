@@ -142,15 +142,37 @@ export default class PluginInterface<T extends Plugin = Plugin> {
             afterFileParse: 'afterProvideFile',
             beforeFileTranspile: 'beforePrepareFile',
             afterFileTranspile: 'afterPrepareFile',
-            beforeFileDispose: 'beforeFileRemove',
-            afterFileDispose: 'afterFileRemove'
+            beforeFileDispose: 'beforeRemoveFile',
+            afterFileDispose: 'afterRemoveFile',
+            beforeProgramCreate: 'beforeProvideProgram',
+            afterProgramCreate: 'afterProvideProgram',
+            beforeProgramValidate: 'beforeValidateProgram',
+            onProgramValidate: 'validateProgram',
+            beforeProgramDispose: 'beforeRemoveProgram',
+            afterScopeCreate: 'afterProvideScope',
+            beforeScopeDispose: 'beforeRemoveScope',
+            onScopeDispose: 'removeScope',
+            afterScopeDispose: 'afterRemoveScope',
+            beforeScopeValidate: 'beforeValidateScope',
+            onScopeValidate: 'validateScope',
+            afterScopeValidate: 'afterValidateScope',
+            onGetCodeActions: 'provideCodeActions',
+            onGetSemanticTokens: 'provideSemanticTokens',
+            beforeFileAdd: 'beforeAddFile',
+            afterFileAdd: 'afterAddFile',
+            beforeFileRemove: 'beforeRemoveFile',
+            afterFileRemove: 'afterRemoveFile',
+            beforeFileValidate: 'beforeValidateFile',
+            onFileValidate: 'validateFile',
+            afterFileValidate: 'afterValidateFile',
+            onSerializeProgram: 'serializeProgram'
         };
 
         for (const [oldEvent, newEvent] of Object.entries(upgradeWithWarn)) {
             if (plugin[oldEvent]) {
                 if (!plugin[newEvent]) {
                     plugin[newEvent] = plugin[oldEvent];
-                    this.logger?.warn(`Plugin '${plugin.name}': event '${oldEvent}' is no longer supported. It has been converted to '${newEvent}' but you may encounter issues as their signatures do not match.`);
+                    this.logger?.warn(`Plugin '${plugin.name}': event '${oldEvent}' is no longer supported. It has been converted to '${newEvent}' but you may encounter issues as their signatures may not match.`);
                 } else {
                     this.logger?.warn(`Plugin "${plugin.name}": event '${oldEvent}' is no longer supported and will never be called`);
                 }

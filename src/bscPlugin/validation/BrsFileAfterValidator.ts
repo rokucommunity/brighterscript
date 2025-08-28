@@ -1,12 +1,12 @@
 import { isBrsFile } from '../../astUtils/reflection';
 
 import type { BrsFile } from '../../files/BrsFile';
-import type { AfterFileValidateEvent } from '../../interfaces';
+import type { AfterValidateFileEvent } from '../../interfaces';
 
 
 export class BrsFileAfterValidator {
     constructor(
-        public event: AfterFileValidateEvent<BrsFile>
+        public event: AfterValidateFileEvent<BrsFile>
     ) {
     }
 
