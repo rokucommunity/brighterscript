@@ -52,14 +52,9 @@ export interface BsConfig {
     outFile?: string;
 
     /**
-     * Creates a zip package. Defaults to true. This setting is ignored when deploy is enabled.
+     * If true, the files are not copied to outDir.
      */
-    createPackage?: boolean;
-
-    /**
-     * If true, the files are copied to staging. This setting is ignored when deploy is enabled or if createPackage is enabled
-     */
-    copyToStaging?: boolean;
+    noEmit?: boolean;
 
     /**
      * If true, the server will keep running and will watch and recompile on every file change
@@ -68,35 +63,22 @@ export interface BsConfig {
     watch?: boolean;
 
     /**
-     * If true, after a successful buld, the project will be deployed to the roku specified in host
-     */
-    deploy?: boolean;
-
-    /**
-     * The host of the Roku that this project will deploy to
-     */
-    host?: string;
-
-    /**
-     * The username to use when deploying to a Roku device
-     */
-    username?: string;
-
-    /**
-     * The password to use when deploying to a Roku device
-     */
-    password?: string;
-
-    /**
-     * Prevent the staging folder from being deleted after creating the package
-     * @default false
-     */
-    retainStagingDir?: boolean;
-
-    /**
      * The path to the staging directory (wehre the output files are copied immediately before creating the zip)
+     * @deprecated use `outDir` instead
      */
     stagingDir?: string;
+
+    /**
+     * The path to the staging folder (where all files are copied to right before creating the zip package)
+     * @deprecated use `outDir` instead
+     */
+    stagingFolderPath?: string;
+
+    /**
+     * The path to the out folder
+     * @default "./out"
+     */
+    outDir?: string;
 
     /**
      * A list of error codes the compiler should NOT emit, even if encountered.
@@ -220,10 +202,8 @@ type OptionalBsConfigFields =
     | 'manifest'
     | 'noProject'
     | 'extends'
-    | 'host'
-    | 'password'
     | 'require'
-    | 'stagingDir'
+    | 'outDir'
     | 'diagnosticLevel'
     | 'rootDir'
     | 'stagingDir';

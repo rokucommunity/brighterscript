@@ -409,16 +409,12 @@ export class ProgramBuilder {
                 return errorCount;
             }
 
-            //create the deployment package (and transpile as well)
-            await this.createPackageIfEnabled();
+            await this.transpile();
 
             //maybe cancel?
             if (options?.cancellationToken?.isCanceled === true) {
                 return -1;
             }
-
-            //deploy the package
-            await this.deployPackageIfEnabled();
 
             return 0;
         } catch (e) {
@@ -429,28 +425,7 @@ export class ProgramBuilder {
         }
     }
 
-    private async createPackageIfEnabled() {
-        if (this.options.copyToStaging || this.options.createPackage || this.options.deploy) {
-
-            //transpile the project
-            await this.transpile();
-
-            //create the zip file if configured to do so
-            if (this.options.createPackage !== false || this.options.deploy) {
-                await this.logger.time(LogLevel.log, [`Creating package at ${this.options.outFile}`], async () => {
-                    await rokuDeploy.zipPackage({
-                        ...this.options,
-                        logLevel: this.options.logLevel as unknown as RokuDeployLogLevel,
-                        outDir: util.getOutDir(this.options),
-                        outFile: path.basename(this.options.outFile)
-                    });
-                });
-            }
-        }
-    }
-
     private buildThrottler = new Throttler(0);
-
     /**
      * Build the entire project and place the contents into the staging directory
      */
@@ -486,20 +461,6 @@ export class ProgramBuilder {
      */
     public async transpile() {
         return this.build();
-    }
-
-    private async deployPackageIfEnabled() {
-        //deploy the project if configured to do so
-        if (this.options.deploy) {
-            await this.logger.time(LogLevel.log, ['Deploying package to', this.options.host], async () => {
-                await rokuDeploy.publish({
-                    ...this.options,
-                    logLevel: this.options.logLevel as unknown as RokuDeployLogLevel,
-                    outDir: util.getOutDir(this.options),
-                    outFile: path.basename(this.options.outFile)
-                });
-            });
-        }
     }
 
     /**
