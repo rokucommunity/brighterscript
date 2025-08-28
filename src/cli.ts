@@ -32,7 +32,6 @@ let options = yargs
     .option('out-file', { type: 'string', description: 'Path to the zip folder containing the bundled project. Defaults to `./out/[YOUR_ROOT_FOLDER_NAME].zip' })
     .option('project', { type: 'string', description: 'Path to a bsconfig.json project file.' })
     .option('root-dir', { type: 'string', description: 'Path to the root of your project files (where the manifest lives). Defaults to current directory.' })
-    //TODO MARKED maybe rename and set to 'outDir' by default
     .option('out-dir', { type: 'string', description: 'TODO Better description The path where the transpiled files should are placed.' })
     .option('source-root', { type: 'string', description: 'Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within rootDir. This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files.' })
     .option('watch', { type: 'boolean', defaultDescription: 'false', description: 'Watch input files.' })

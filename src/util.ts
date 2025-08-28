@@ -376,10 +376,6 @@ export class Util {
 
         const cwd = config.cwd ?? process.cwd();
         const rootFolderName = path.basename(cwd);
-<<<<<<< HEAD
-        const retainStagingDir = (config.retainStagingDir ?? config.retainStagingDir) === true ? true : false;
-=======
->>>>>>> e780316d (Deprecate zip and sideloading options from bsconfig and cli)
 
         let logLevel: LogLevel = LogLevel.log;
 
@@ -401,12 +397,7 @@ export class Util {
             sourceMap: config.sourceMap === true,
             watch: config.watch === true ? true : false,
             emitFullPaths: config.emitFullPaths === true ? true : false,
-<<<<<<< HEAD
-            retainStagingDir: retainStagingDir,
-            copyToStaging: config.copyToStaging === false ? false : true,
-=======
             noEmit: config.noEmit === false ? false : true,
->>>>>>> e780316d (Deprecate zip and sideloading options from bsconfig and cli)
             ignoreErrorCodes: config.ignoreErrorCodes ?? [],
             diagnosticSeverityOverrides: config.diagnosticSeverityOverrides ?? {},
             diagnosticFilters: config.diagnosticFilters ?? [],
