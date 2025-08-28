@@ -158,16 +158,12 @@ If you need to configure `bsc`, you can do so in two ways:
     bsc --watch
     ```
 
-3. Run the compiler in watch mode, and redeploy to the roku on every change
-    ```bash
-    bsc --watch --deploy --host 192.168.1.10 --password secret_password
-    ```
-4. Use a bsconfig.json file not located at cwd
+3. Use a bsconfig.json file not located at cwd
     ```bash
     bsc --project ./some_folder/bsconfig.json
     ```
 
-5. Run the compiler as a **linter** only (watch mode supported)
+4. Run the compiler as a **linter** only (watch mode supported)
     ```bash
     bsc --create-package false --copy-to-staging false
     ```
@@ -183,8 +179,7 @@ The presence of a `bsconfig.json` file in a directory indicates that the directo
     "files": [
         "**/*"
     ],
-    "stagingFolderPath": "dist",
-    "retainStagingFolder": true,
+    "outDir": "out",
     //this flag tells BrighterScript that for every xml file, try to import a .bs file with the same name and location
     "autoImportComponentScript": true,
     "sourceMap": true

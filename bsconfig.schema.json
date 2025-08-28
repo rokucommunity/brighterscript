@@ -100,7 +100,12 @@
             "default": false
         },
         "copyToStaging": {
-            "description": "If true, the files are copied to staging. This setting is ignored when deploy is enabled or if createPackage is enabled",
+            "description": "(Deprecated use 'noEmit') If true, the files are copied to staging. This setting is ignored when deploy is enabled or if createPackage is enabled",
+            "deprecated": true,
+            "type": "boolean"
+        },
+        "noEmit": {
+            "description": "If true, then no files are copied to outDir.",
             "type": "boolean"
         },
         "watch": {
@@ -109,19 +114,23 @@
             "default": false
         },
         "deploy": {
-            "description": "If true, after a successful build, the project will be deployed to the roku specified in host",
+            "description": "(Deprecated) If true, after a successful buld, the project will be deployed to the roku specified in host",
+            "deprecated": true,
             "type": "boolean"
         },
         "host": {
-            "description": "The host of the Roku that the package will be deploy to",
+            "description": "(Deprecated) host of the Roku that the package will be deploy to",
+            "deprecated": true,
             "type": "string"
         },
         "username": {
-            "description": "The username to use when deploying to a Roku device",
+            "description": "(Deprecated) The username to use when deploying to a Roku device",
+            "deprecated": true,
             "type": "string"
         },
         "password": {
-            "description": " The password to use when deploying to a Roku device",
+            "description": "(Deprecated) The password to use when deploying to a Roku device",
+            "deprecated": true,
             "type": "string"
         },
         "retainStagingDir": {
@@ -132,17 +141,21 @@
         "retainStagingFolder": {
             "type": "boolean",
             "deprecated": true,
-            "description": "Prevent the staging folder from being deleted after the deployment package is created.  This is helpful for troubleshooting why your package isn't being created the way you expected.",
+            "description": "(Deprecated) Prevent the staging folder from being deleted after the deployment package is created.  This is helpful for troubleshooting why your package isn't being created the way you expected.",
             "default": false
         },
         "stagingDir": {
             "type": "string",
             "description": "The path to the staging folder (where all files are copied before creating the zip package)"
         },
+        "outDir": {
+            "type": "string",
+            "description": "TODO better description: The path to the output directory (where all files are copied before creating the zip package)"
+        },
         "stagingFolderPath": {
             "type": "string",
             "deprecated": true,
-            "deprecationMessage": "Deprecated. Use `stagingDir` instead.",
+            "deprecationMessage": "Deprecated. Use `outDir` instead.",
             "description": "The path to the staging folder (where all files are copied before creating the zip package)"
         },
         "ignoreErrorCodes": {
