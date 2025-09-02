@@ -160,12 +160,14 @@ export class ProgramBuilder {
         if (this.options.watch) {
             this.logger.log('Starting compilation in watch mode...');
             await this.runOnce({
-                validate: options?.validate
+                validate: options?.validate,
+                noEmit: options?.noEmit
             });
             this.enableWatchMode();
         } else {
             await this.runOnce({
-                validate: options?.validate
+                validate: options?.validate,
+                noEmit: options?.noEmit
             });
         }
     }
@@ -295,7 +297,8 @@ export class ProgramBuilder {
     /**
      * Run the entire process exactly one time.
      */
-    private runOnce(options?: { validate?: boolean }) {
+    private runOnce(options?: { validate?: boolean; noEmit?: boolean }) {
+
         //clear the console
         this.clearConsole();
         let cancellationToken = { isCanceled: false };
@@ -304,7 +307,8 @@ export class ProgramBuilder {
             //start the new run
             return this._runOnce({
                 cancellationToken: cancellationToken,
-                validate: options?.validate
+                validate: options?.validate,
+                noEmit: options?.noEmit
             });
         }) as any;
 
@@ -382,7 +386,7 @@ export class ProgramBuilder {
      * Run the process once, allowing it to be cancelled.
      * NOTE: This should only be called by `runOnce`.
      */
-    private async _runOnce(options: { cancellationToken: { isCanceled: any }; validate: boolean }) {
+    private async _runOnce(options: { cancellationToken: { isCanceled: any }; validate: boolean; noEmit: boolean }) {
         let wereDiagnosticsPrinted = false;
         try {
             //maybe cancel?
@@ -409,7 +413,9 @@ export class ProgramBuilder {
                 return errorCount;
             }
 
-            await this.transpile();
+            if (options.noEmit !== true) {
+                await this.transpile();
+            }
 
             //maybe cancel?
             if (options?.cancellationToken?.isCanceled === true) {
