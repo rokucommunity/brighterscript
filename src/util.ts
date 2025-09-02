@@ -389,6 +389,15 @@ export class Util {
             bslibDestinationDir = bslibDestinationDir.replace(/^(\/*)(.*?)(\/*)$/, '$2');
         }
 
+        let noEmit: boolean;
+        if ('noEmit' in config) {
+            noEmit = config.noEmit;
+        } else if ('copyToStaging' in config) {
+            noEmit = !config.copyToStaging; //invert the old value
+        } else {
+            noEmit = true; //default case
+        }
+
         const configWithDefaults: Omit<FinalizedBsConfig, 'rootDir'> = {
             cwd: cwd,
             //use default files array from rokuDeploy
@@ -397,7 +406,7 @@ export class Util {
             sourceMap: config.sourceMap === true,
             watch: config.watch === true ? true : false,
             emitFullPaths: config.emitFullPaths === true ? true : false,
-            noEmit: config.noEmit === false ? false : true,
+            noEmit: noEmit,
             ignoreErrorCodes: config.ignoreErrorCodes ?? [],
             diagnosticSeverityOverrides: config.diagnosticSeverityOverrides ?? {},
             diagnosticFilters: config.diagnosticFilters ?? [],
