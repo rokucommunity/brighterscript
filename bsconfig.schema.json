@@ -100,8 +100,9 @@
             "default": false
         },
         "copyToStaging": {
-            "description": "(Deprecated use 'noEmit') If true, the files are copied to staging. This setting is ignored when deploy is enabled or if createPackage is enabled",
+            "description": "If true, the files are copied to staging. This setting is ignored when deploy is enabled or if createPackage is enabled",
             "deprecated": true,
+            "deprecationMessage": "Deprecated. Use `noEmit` instead.",
             "type": "boolean"
         },
         "noEmit": {
@@ -114,23 +115,27 @@
             "default": false
         },
         "deploy": {
-            "description": "(Deprecated) If true, after a successful buld, the project will be deployed to the roku specified in host",
+            "description": "If true, after a successful buld, the project will be deployed to the roku specified in host",
             "deprecated": true,
+            "deprecationMessage": "Deprecated. No longer supporting deployment in this tool.",
             "type": "boolean"
         },
         "host": {
-            "description": "(Deprecated) host of the Roku that the package will be deploy to",
+            "description": "host of the Roku that the package will be deploy to",
             "deprecated": true,
+            "deprecationMessage": "Deprecated. No longer supporting deployment in this tool.",
             "type": "string"
         },
         "username": {
-            "description": "(Deprecated) The username to use when deploying to a Roku device",
+            "description": "The username to use when deploying to a Roku device",
             "deprecated": true,
+            "deprecationMessage": "Deprecated. No longer supporting deployment in this tool.",
             "type": "string"
         },
         "password": {
-            "description": "(Deprecated) The password to use when deploying to a Roku device",
+            "description": "The password to use when deploying to a Roku device",
             "deprecated": true,
+            "deprecationMessage": "Deprecated. No longer supporting deployment in this tool.",
             "type": "string"
         },
         "retainStagingDir": {
@@ -141,7 +146,8 @@
         "retainStagingFolder": {
             "type": "boolean",
             "deprecated": true,
-            "description": "(Deprecated) Prevent the staging folder from being deleted after the deployment package is created.  This is helpful for troubleshooting why your package isn't being created the way you expected.",
+            "description": "Prevent the staging folder from being deleted after the deployment package is created.  This is helpful for troubleshooting why your package isn't being created the way you expected.",
+            "deprecationMessage": "Deprecated. No longer supporting package zipping in this tool.",
             "default": false
         },
         "stagingDir": {
