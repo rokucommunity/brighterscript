@@ -24,6 +24,8 @@ module.exports = (options: TargetOptions) => {
 
         builder.run({
             cwd: projectPath,
+            createPackage: false,
+            copyToStaging: false,
             noEmit: true,
             //disable diagnostic reporting (they still get collected)
             diagnosticFilters: ['**/*'],

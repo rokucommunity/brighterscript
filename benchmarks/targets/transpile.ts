@@ -8,6 +8,8 @@ module.exports = async (options: TargetOptions) => {
     //run the first run outside of the test
     await builder.run({
         cwd: projectPath,
+        createPackage: false,
+        copyToStaging: false,
         noEmit: true,
         //disable diagnostic reporting (they still get collected)
         diagnosticFilters: ['**/*'],

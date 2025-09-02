@@ -8,8 +8,9 @@ module.exports = async (options: TargetOptions) => {
     //run the first run so we we can focus the test on validate
     await builder.run({
         cwd: projectPath,
+        createPackage: false,
+        copyToStaging: false,
         noEmit: true,
-        enableTypeValidation: true,
         //disable diagnostic reporting (they still get collected)
         diagnosticFilters: ['**/*'],
         logLevel: 'error',
