@@ -372,7 +372,6 @@ export class Util {
         config = config ?? {} as BsConfig;
 
         const cwd = config.cwd ?? process.cwd();
-        const rootFolderName = path.basename(cwd);
 
         let logLevel: LogLevel = LogLevel.log;
 
@@ -390,7 +389,7 @@ export class Util {
         if ('noEmit' in config) {
             noEmit = config.noEmit;
         } else if ('copyToStaging' in config) {
-            noEmit = !config.copyToStaging; //invert the old value
+            noEmit = !(config as any).copyToStaging; //invert the old value
         } else {
             noEmit = false; //default case
         }
@@ -399,9 +398,9 @@ export class Util {
         if ('outDir' in config) {
             outDir = config.outDir ?? './out';
         } else if ('stagingFolderPath' in config) {
-            outDir = config.stagingFolderPath as string;
+            outDir = (config as any).stagingFolderPath as string;
         } else if ('stagingDir' in config) {
-            outDir = config.stagingDir as string;
+            outDir = (config as any).stagingDir as string;
         } else {
             outDir = './out'; //default case
         }

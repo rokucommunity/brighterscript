@@ -1,7 +1,6 @@
 import * as debounce from 'debounce-promise';
 import * as path from 'path';
 import { rokuDeploy } from 'roku-deploy';
-import type { LogLevel as RokuDeployLogLevel } from 'roku-deploy/dist/Logger';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import type { BsDiagnostic, FileObj, FileResolver } from './interfaces';
 import { Program } from './Program';
