@@ -1,3 +1,4 @@
+import type { BrsFile, BsConfig } from '../../src';
 import type { TargetOptions } from '../target-runner';
 
 module.exports = async (options: TargetOptions) => {
@@ -15,9 +16,9 @@ module.exports = async (options: TargetOptions) => {
         diagnosticFilters: ['**/*'],
         logLevel: 'error',
         ...options.additionalConfig
-    });
+    } as BsConfig & Record<string, any>);
     //collect all the brs files
-    const files = Object.values(builder.program.files).filter(x => ['.brs', '.bs'].includes(x.extension));
+    const files = Object.values(builder.program!.files as Record<string, BrsFile>).filter(x => ['.brs', '.bs'].includes(x.extension));
 
     //flag every file for transpilation
     for (const file of files) {

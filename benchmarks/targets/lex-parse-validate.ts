@@ -1,3 +1,4 @@
+import type { BsConfig } from '../../src';
 import type { TargetOptions } from '../target-runner';
 import * as fsExtra from 'fs-extra';
 
@@ -31,8 +32,8 @@ module.exports = (options: TargetOptions) => {
             diagnosticFilters: ['**/*'],
             logLevel: 'error',
             ...options.additionalConfig
-        }).then(() => {
-            if (Object.keys(builder.program.files).length === 0) {
+        } as BsConfig & Record<string, any>).then(() => {
+            if (Object.keys(builder.program!.files).length === 0) {
                 throw new Error('No files found in program');
             } else {
                 deferred.resolve();

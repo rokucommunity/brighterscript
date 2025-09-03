@@ -88,6 +88,8 @@
         },
         "outFile": {
             "description": "The path where the output zip or package should be placed. This includes the filename. Defaults to \"./out/package\"",
+            "deprecated": true,
+            "deprecationMessage": "Deprecated in v1",
             "type": "string"
         },
         "createPackage": {
@@ -152,6 +154,8 @@
         },
         "stagingDir": {
             "type": "string",
+            "deprecated": true,
+            "deprecationMessage": "Deprecated. Use `outDir` instead.",
             "description": "The path to the staging folder (where all files are copied before creating the zip package)"
         },
         "outDir": {

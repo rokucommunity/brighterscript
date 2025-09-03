@@ -106,7 +106,7 @@ export class ProgramBuilder {
             }
 
             if (this.options.noProject) {
-                this.logger.log(`'no-project' flag is set so bsconfig.json loading is disabled'`);
+                this.logger.log(`'noProject' flag is set so bsconfig.json loading is disabled'`);
             } else if (this.options.project) {
                 this.logger.log(`Using config file: "${this.options.project}"`);
             } else {

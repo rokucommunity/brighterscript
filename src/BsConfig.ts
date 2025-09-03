@@ -46,12 +46,6 @@ export interface BsConfig {
     files?: Array<string | { src: string | string[]; dest?: string }>;
 
     /**
-     * The path where the output zip file should be placed.
-     * @default "./out/package.zip"
-     */
-    outFile?: string;
-
-    /**
      * If true, the files are not copied to outDir.
      */
     noEmit?: boolean;
@@ -61,18 +55,6 @@ export interface BsConfig {
      * @default false
      */
     watch?: boolean;
-
-    /**
-     * The path to the staging directory (wehre the output files are copied immediately before creating the zip)
-     * @deprecated use `outDir` instead
-     */
-    stagingDir?: string;
-
-    /**
-     * The path to the staging folder (where all files are copied to right before creating the zip package)
-     * @deprecated use `outDir` instead
-     */
-    stagingFolderPath?: string;
 
     /**
      * The path to the out folder
@@ -205,8 +187,7 @@ type OptionalBsConfigFields =
     | 'require'
     | 'outDir'
     | 'diagnosticLevel'
-    | 'rootDir'
-    | 'stagingDir';
+    | 'rootDir';
 
 export type FinalizedBsConfig =
     Omit<Required<BsConfig>, OptionalBsConfigFields>

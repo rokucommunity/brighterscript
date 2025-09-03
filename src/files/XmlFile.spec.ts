@@ -12,7 +12,7 @@ import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, ge
 import { ProgramBuilder } from '../ProgramBuilder';
 import { LogLevel } from '../logging';
 import { isXmlFile } from '../astUtils/reflection';
-import { tempDir, rootDir, stagingDir } from '../testHelpers.spec';
+import { tempDir, rootDir, outDir } from '../testHelpers.spec';
 import type { BrsFile } from './BrsFile';
 
 describe('XmlFile', () => {
@@ -25,8 +25,8 @@ describe('XmlFile', () => {
     beforeEach(() => {
         fsExtra.emptyDirSync(tempDir);
         fsExtra.ensureDirSync(rootDir);
-        fsExtra.ensureDirSync(stagingDir);
-        program = new Program({ rootDir: rootDir, stagingDir: stagingDir });
+        fsExtra.ensureDirSync(outDir);
+        program = new Program({ rootDir: rootDir, outDir: outDir });
         file = new XmlFile({
             srcPath: `${rootDir}/components/MainComponent.xml`,
             destPath: 'components/MainComponent.xml',
@@ -547,14 +547,12 @@ describe('XmlFile', () => {
             const builder = new ProgramBuilder();
             await builder.run({
                 cwd: rootDir,
-                retainStagingDir: true,
-                createPackage: false,
-                stagingDir: stagingDir,
+                outDir: outDir,
                 logLevel: LogLevel.off
             });
             expect(
                 trim(
-                    fsExtra.readFileSync(`${stagingDir}/components/MainScene.xml`).toString()
+                    fsExtra.readFileSync(`${outDir}/components/MainScene.xml`).toString()
                 )
             ).to.eql(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -668,16 +666,16 @@ describe('XmlFile', () => {
             await program.build();
             expect(
                 trim(
-                    fsExtra.readFileSync(`${stagingDir}/components/SimpleScene.xml`).toString()
+                    fsExtra.readFileSync(`${outDir}/components/SimpleScene.xml`).toString()
                 )
             ).to.eql(expected);
 
             //clear the output folder
-            fsExtra.emptyDirSync(stagingDir);
+            fsExtra.emptyDirSync(outDir);
             await program.build();
             expect(
                 trim(
-                    fsExtra.readFileSync(`${stagingDir}/components/SimpleScene.xml`).toString()
+                    fsExtra.readFileSync(`${outDir}/components/SimpleScene.xml`).toString()
                 )
             ).to.eql(expected);
         });

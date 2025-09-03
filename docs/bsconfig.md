@@ -13,16 +13,13 @@ While a minimal `bsconfig.json` file is sufficient for getting started, `bsc` su
 - [emitFullPaths](#emitFullPaths)
 - [extends](#extends)
 - [files](#files)
-- [outFile](#outFile)
 - [plugins](#plugins)
 - [project](#project)
 - [pruneEmptyCodeFiles](#pruneEmptyCodeFiles)
 - [removeParameterTypes](#removeParameterTypes)
 - [require](#require)
-- [retainStagingDir](#retainStagingDir)
 - [rootDir](#rootDir)
 - [sourceRoot](#sourceRoot)
-- [stagingDir](#stagingDir)
 - [watch](#watch)
 
 ## `allowBrighterScriptInBrightScript`
@@ -354,12 +351,6 @@ For example, if you have a base project and a child project that wants to overri
 }
 ```
 
-## `outFile`
-
-Type: `string`
-
-The path (including filename) where the output file should be placed. Defaults to `"./out/${WORKSPACE_FOLDER_NAME}.zip"`.
-
 ## `plugins`
 
 Type: `Array<string>`
@@ -394,12 +385,6 @@ List of node scripts or npm modules to load during the startup sequence. Useful 
 
 If a child bsconfig extends from a parent bsconfig, and both bsconfigs specify a `require` field, the child's `require` field will completely overwrite the parent's `require` field.
 
-## `retainStagingDir`
-
-Type: `boolean`
-
-Prevent the staging folder from being deleted after creating the package. Defaults to `false`, meaning that the folder is deleted every time.
-
 ## `rootDir`
 
 Type: `string`
@@ -412,10 +397,10 @@ Type: `string`
 
 Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within [`rootDir`](#rootdir). This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.
 
-## `stagingDir`
+## `outDir`
 Type: `string`
 
-The folder where the transpiled files are placed. This folder will be created automatically if it does not exist, and will be deleted after transpilation completes unless [`retainStagingDir`](#retainstagingdir) is set to `true`. Defaults to `./out/.roku-deploy-staging`.
+The folder where the transpiled files are placed. This folder will be created automatically if it does not exist. Defaults to `./out/.roku-deploy-staging`.
 
 ## `watch`
 

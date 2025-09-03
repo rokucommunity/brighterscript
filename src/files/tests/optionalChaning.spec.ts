@@ -2,7 +2,7 @@ import * as sinonImport from 'sinon';
 import * as fsExtra from 'fs-extra';
 import { Program } from '../../Program';
 import { expectDiagnostics, getTestTranspile } from '../../testHelpers.spec';
-import { tempDir, rootDir, stagingDir } from '../../testHelpers.spec';
+import { tempDir, rootDir, outDir } from '../../testHelpers.spec';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import util from '../../util';
 
@@ -17,7 +17,7 @@ describe('optional chaining', () => {
         fsExtra.emptyDirSync(tempDir);
         program = new Program({
             rootDir: rootDir,
-            stagingDir: stagingDir
+            outDir: outDir
         });
     });
     afterEach(() => {

@@ -29,11 +29,11 @@ describe('BrsFileTranspileProcessor', () => {
                 print a.b
             end sub
         `);
-        await program.build({ stagingDir: s`${tempDir}/out` });
+        await program.build({ outDir: s`${tempDir}/out` });
     });
 
     it('properly prefixes functions from bslib', async () => {
-        program.options.stagingDir = s`${tempDir}/staging`;
+        program.options.outDir = s`${tempDir}/staging`;
         program.setFile('source/main.bs', `
             sub main()
                 print true ? true : false
@@ -42,12 +42,12 @@ describe('BrsFileTranspileProcessor', () => {
         program.validate();
         await program.build();
         expect(
-            fsExtra.readFileSync(`${program.options.stagingDir}/source/bslib.brs`).toString()
+            fsExtra.readFileSync(`${program.options.outDir}/source/bslib.brs`).toString()
         ).to.include('bslib_toString');
     });
 
     it('properly prefixes functions from bslib when found in roku_modules as `bslib`', async () => {
-        program.options.stagingDir = s`${tempDir}/staging`;
+        program.options.outDir = s`${tempDir}/staging`;
         program.setFile('source/main.bs', `
             sub main()
                 print true ? true : false
@@ -61,7 +61,7 @@ describe('BrsFileTranspileProcessor', () => {
         await program.build();
 
         const parser = Parser.parse(
-            fsExtra.readFileSync(s`${program.options.stagingDir}/source/roku_modules/bslib/bslib.brs`).toString()
+            fsExtra.readFileSync(s`${program.options.outDir}/source/roku_modules/bslib/bslib.brs`).toString()
         );
         expect(
             parser.ast.findChildren<FunctionStatement>(isFunctionStatement).map(x => x.tokens.name.text)
@@ -69,7 +69,7 @@ describe('BrsFileTranspileProcessor', () => {
     });
 
     it('properly prefixes functions from bslib when found in roku_modules as `rokucommunity_bslib`', async () => {
-        program.options.stagingDir = s`${tempDir}/staging`;
+        program.options.outDir = s`${tempDir}/staging`;
         program.setFile('source/main.bs', `
             sub main()
                 print true ? true : false
@@ -83,7 +83,7 @@ describe('BrsFileTranspileProcessor', () => {
         await program.build();
 
         const parser = Parser.parse(
-            fsExtra.readFileSync(s`${program.options.stagingDir}/source/roku_modules/rokucommunity_bslib/bslib.brs`).toString()
+            fsExtra.readFileSync(s`${program.options.outDir}/source/roku_modules/rokucommunity_bslib/bslib.brs`).toString()
         );
         expect(
             parser.ast.findChildren<FunctionStatement>(isFunctionStatement).map(x => x.tokens.name.text)

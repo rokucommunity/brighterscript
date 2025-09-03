@@ -150,10 +150,8 @@ describe('util', () => {
 
         it('resolves path relatively to config file', () => {
             const mockConfig: BsConfig = {
-                outFile: 'out/app.zip',
                 rootDir: 'rootDir',
-                cwd: 'cwd',
-                stagingDir: 'stagingDir'
+                cwd: 'cwd'
             };
             fsExtra.outputFileSync(s`${rootDir}/child.json`, JSON.stringify(mockConfig));
             let config = util.loadConfigFile(s`${rootDir}/child.json`);
@@ -162,9 +160,7 @@ describe('util', () => {
                     s`${rootDir}/child.json`
                 ],
                 'cwd': s`${rootDir}/cwd`,
-                'outFile': s`${rootDir}/out/app.zip`,
-                'rootDir': s`${rootDir}/rootDir`,
-                'stagingDir': s`${rootDir}/stagingDir`
+                'rootDir': s`${rootDir}/rootDir`
             });
         });
 
@@ -355,21 +351,21 @@ describe('util', () => {
         });
 
         it('loads project from disc', () => {
-            fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{ "outFile": "customOutDir/pkg.zip" }`);
+            fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{ "outDir": "customOutDir" }`);
             let config = util.normalizeAndResolveConfig({
                 project: s`${tempDir}/rootDir/bsconfig.json`
             });
             expect(
-                config.outFile
+                config.outDir
             ).to.equal(
-                s`${tempDir}/rootDir/customOutDir/pkg.zip`
+                s`${tempDir}/rootDir/customOutDir`
             );
         });
 
         it('loads project from disc and extends it', () => {
             //the extends file
             fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.base.json`, `{
-                "outFile": "customOutDir/pkg1.zip",
+                "outDir": "customOutDir",
                 "rootDir": "core"
             }`);
 
@@ -381,7 +377,7 @@ describe('util', () => {
 
             let config = util.normalizeAndResolveConfig({ project: s`${tempDir}/rootDir/bsconfig.json` });
 
-            expect(config.outFile).to.equal(s`${tempDir}/rootDir/customOutDir/pkg1.zip`);
+            expect(config.outDir).to.equal(s`${tempDir}/rootDir/customOutDir`);
             expect(config.rootDir).to.equal(s`${tempDir}/rootDir/core`);
             expect(config.watch).to.equal(true);
         });

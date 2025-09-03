@@ -1,6 +1,6 @@
 import { util } from './util';
 import { Program } from './Program';
-import { expectDiagnostics, expectZeroDiagnostics, rootDir, stagingDir } from './testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics, rootDir, outDir } from './testHelpers.spec';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { expect } from './chai-config.spec';
 
@@ -9,7 +9,7 @@ describe('globalCallables', () => {
     beforeEach(() => {
         program = new Program({
             rootDir: rootDir,
-            stagingDir: stagingDir
+            outDir: outDir
         });
     });
     afterEach(() => {

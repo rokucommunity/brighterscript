@@ -150,7 +150,7 @@ If you need to configure `bsc`, you can do so in two ways:
 1. Your project resides in a subdirectory of your workspace folder.
 
     ```bash
-    bsc --root-dir ./rokuSourceFiles
+    bsc --rootDir ./rokuSourceFiles
     ```
 2. Run the compiler in watch mode
 

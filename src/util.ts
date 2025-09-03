@@ -267,17 +267,14 @@ export class Util {
             }
 
             //make any paths in the config absolute (relative to the CURRENT config file)
-            if (result.outFile) {
-                result.outFile = path.resolve(projectFileCwd, result.outFile);
-            }
             if (result.rootDir) {
                 result.rootDir = path.resolve(projectFileCwd, result.rootDir);
             }
+            if (result.outDir) {
+                result.outDir = path.resolve(projectFileCwd, result.outDir);
+            }
             if (result.cwd) {
                 result.cwd = path.resolve(projectFileCwd, result.cwd);
-            }
-            if (result.stagingDir) {
-                result.stagingDir = path.resolve(projectFileCwd, result.stagingDir);
             }
             if (result.sourceRoot && result.resolveSourceRoot) {
                 result.sourceRoot = path.resolve(projectFileCwd, result.sourceRoot);
@@ -395,14 +392,25 @@ export class Util {
         } else if ('copyToStaging' in config) {
             noEmit = !config.copyToStaging; //invert the old value
         } else {
-            noEmit = true; //default case
+            noEmit = false; //default case
+        }
+
+        let outDir: string;
+        if ('outDir' in config) {
+            outDir = config.outDir ?? './out';
+        } else if ('stagingFolderPath' in config) {
+            outDir = config.stagingFolderPath as string;
+        } else if ('stagingDir' in config) {
+            outDir = config.stagingDir as string;
+        } else {
+            outDir = './out'; //default case
         }
 
         const configWithDefaults: Omit<FinalizedBsConfig, 'rootDir'> = {
             cwd: cwd,
             //use default files array from rokuDeploy
             files: config.files ?? [...DefaultFiles],
-            outFile: config.outFile ?? `./out/${rootFolderName}.zip`,
+            outDir: outDir,
             sourceMap: config.sourceMap === true,
             watch: config.watch === true ? true : false,
             emitFullPaths: config.emitFullPaths === true ? true : false,
@@ -895,20 +903,6 @@ export class Util {
         }
         const normalizedPath = path.normalize(parsedPath);
         return normalizedPath;
-    }
-
-
-    /**
-     * Get the outDir from options, taking into account cwd and absolute outFile paths
-     */
-    public getOutDir(options: FinalizedBsConfig) {
-        options = this.normalizeConfig(options);
-        let cwd = path.normalize(options.cwd ? options.cwd : process.cwd());
-        if (path.isAbsolute(options.outFile)) {
-            return path.dirname(options.outFile);
-        } else {
-            return path.normalize(path.join(cwd, path.dirname(options.outFile)));
-        }
     }
 
     /**

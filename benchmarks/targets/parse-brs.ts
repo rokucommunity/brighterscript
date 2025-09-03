@@ -1,3 +1,4 @@
+import type { BsConfig } from '../../src';
 import type { TargetOptions } from '../target-runner';
 
 module.exports = async (options: TargetOptions) => {
@@ -15,9 +16,9 @@ module.exports = async (options: TargetOptions) => {
         diagnosticFilters: ['**/*'],
         logLevel: 'error',
         ...options.additionalConfig
-    });
+    } as BsConfig & Record<string, any>);
     //collect all the brs file contents
-    const files = Object.values(builder.program.files).filter(x => ['.brs', '.bs', '.d.bs'].includes(brighterscript.util.getExtension(x.srcPath)!)).map(x => ({
+    const files = Object.values(builder.program!.files).filter(x => ['.brs', '.bs', '.d.bs'].includes(brighterscript.util.getExtension(x.srcPath)!)).map(x => ({
         destPath: x.destPath ?? x.pkgPath,
         fileContents: (x as any).fileContents
     }));
@@ -26,13 +27,13 @@ module.exports = async (options: TargetOptions) => {
         return;
     }
 
-    const setFileFuncName = builder.program['setFile'] ? 'setFile' : 'addOrReplaceFile';
+    const setFileFuncName = builder.program!['setFile'] ? 'setFile' : 'addOrReplaceFile';
 
     suite.add(fullName, (deferred) => {
         const promises: unknown[] = [];
         for (const file of files) {
             promises.push(
-                builder.program[setFileFuncName](file.destPath, file.fileContents)
+                builder.program![setFileFuncName](file.destPath, file.fileContents)
             );
         }
         // eslint-disable-next-line @typescript-eslint/no-floating-promises
