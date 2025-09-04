@@ -267,17 +267,14 @@ export class Util {
             }
 
             //make any paths in the config absolute (relative to the CURRENT config file)
-            if (result.outFile) {
-                result.outFile = path.resolve(projectFileCwd, result.outFile);
-            }
             if (result.rootDir) {
                 result.rootDir = path.resolve(projectFileCwd, result.rootDir);
             }
+            if (result.outDir) {
+                result.outDir = path.resolve(projectFileCwd, result.outDir);
+            }
             if (result.cwd) {
                 result.cwd = path.resolve(projectFileCwd, result.cwd);
-            }
-            if (result.stagingDir) {
-                result.stagingDir = path.resolve(projectFileCwd, result.stagingDir);
             }
             if (result.sourceRoot && result.resolveSourceRoot) {
                 result.sourceRoot = path.resolve(projectFileCwd, result.sourceRoot);
@@ -375,8 +372,6 @@ export class Util {
         config = config ?? {} as BsConfig;
 
         const cwd = config.cwd ?? process.cwd();
-        const rootFolderName = path.basename(cwd);
-        const retainStagingDir = (config.retainStagingDir ?? config.retainStagingDir) === true ? true : false;
 
         let logLevel: LogLevel = LogLevel.log;
 
@@ -390,19 +385,35 @@ export class Util {
             bslibDestinationDir = bslibDestinationDir.replace(/^(\/*)(.*?)(\/*)$/, '$2');
         }
 
+        let noEmit: boolean;
+        if ('noEmit' in config) {
+            noEmit = config.noEmit;
+        } else if ('copyToStaging' in config) {
+            noEmit = !(config as any).copyToStaging; //invert the old value
+        } else {
+            noEmit = false; //default case
+        }
+
+        let outDir: string;
+        if ('outDir' in config) {
+            outDir = config.outDir ?? './out';
+        } else if ('stagingFolderPath' in config) {
+            outDir = (config as any).stagingFolderPath as string;
+        } else if ('stagingDir' in config) {
+            outDir = (config as any).stagingDir as string;
+        } else {
+            outDir = './out'; //default case
+        }
+
         const configWithDefaults: Omit<FinalizedBsConfig, 'rootDir'> = {
             cwd: cwd,
-            deploy: config.deploy === true ? true : false,
             //use default files array from rokuDeploy
             files: config.files ?? [...DefaultFiles],
-            createPackage: config.createPackage === false ? false : true,
-            outFile: config.outFile ?? `./out/${rootFolderName}.zip`,
+            outDir: outDir,
             sourceMap: config.sourceMap === true,
-            username: config.username ?? 'rokudev',
             watch: config.watch === true ? true : false,
             emitFullPaths: config.emitFullPaths === true ? true : false,
-            retainStagingDir: retainStagingDir,
-            copyToStaging: config.copyToStaging === false ? false : true,
+            noEmit: noEmit,
             ignoreErrorCodes: config.ignoreErrorCodes ?? [],
             diagnosticSeverityOverrides: config.diagnosticSeverityOverrides ?? {},
             diagnosticFilters: config.diagnosticFilters ?? [],
@@ -891,20 +902,6 @@ export class Util {
         }
         const normalizedPath = path.normalize(parsedPath);
         return normalizedPath;
-    }
-
-
-    /**
-     * Get the outDir from options, taking into account cwd and absolute outFile paths
-     */
-    public getOutDir(options: FinalizedBsConfig) {
-        options = this.normalizeConfig(options);
-        let cwd = path.normalize(options.cwd ? options.cwd : process.cwd());
-        if (path.isAbsolute(options.outFile)) {
-            return path.dirname(options.outFile);
-        } else {
-            return path.normalize(path.join(cwd, path.dirname(options.outFile)));
-        }
     }
 
     /**

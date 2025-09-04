@@ -1,3 +1,5 @@
+import type { BsConfig } from '../../src';
+import type { BrsFile } from '../../src/files/BrsFile';
 import type { TargetOptions } from '../target-runner';
 
 module.exports = async (options: TargetOptions) => {
@@ -10,13 +12,14 @@ module.exports = async (options: TargetOptions) => {
         cwd: projectPath,
         createPackage: false,
         copyToStaging: false,
+        noEmit: true,
         //disable diagnostic reporting (they still get collected)
         diagnosticFilters: ['**/*'],
         logLevel: 'error',
         ...options.additionalConfig
-    });
+    } as BsConfig & Record<string, any>);
     //collect all the brighterscript files
-    const brsFiles = Object.values(builder.program.files).filter(x => x.extension === '.brs' || x.extension === '.bs');
+    const brsFiles = Object.values(builder.program!.files as Record<string, BrsFile>).filter(x => x.extension === '.brs' || x.extension === '.bs');
     if (brsFiles.length === 0) {
         throw new Error('No files found in program');
     }

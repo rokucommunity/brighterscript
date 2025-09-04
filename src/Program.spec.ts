@@ -14,7 +14,7 @@ import { doesNotThrow } from 'assert';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { isBrsFile } from './astUtils/reflection';
 import type { LiteralExpression } from './parser/Expression';
-import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
+import { tempDir, rootDir, outDir } from './testHelpers.spec';
 import type { SinonSpy } from 'sinon';
 import { createSandbox } from 'sinon';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
@@ -37,7 +37,7 @@ describe('Program', () => {
         fsExtra.emptyDirSync(tempDir);
         program = new Program({
             rootDir: rootDir,
-            stagingDir: stagingDir
+            outDir: outDir
         });
         program.createSourceScope(); //ensure source scope is created
     });
@@ -148,7 +148,7 @@ describe('Program', () => {
             (file.parser.ast.statements[0] as FunctionStatement).func.body.statements[0] = new EmptyStatement();
             await program.build({
                 files: [file],
-                stagingDir: tempDir
+                outDir: tempDir
             });
         });
 
@@ -1686,19 +1686,19 @@ describe('Program', () => {
     });
 
     it('does not create map by default', async () => {
-        fsExtra.ensureDirSync(program.options.stagingDir!);
+        fsExtra.ensureDirSync(program.options.outDir!);
         program.setFile('source/main.brs', `
             sub main()
             end sub
         `);
         program.validate();
-        await program.build({ stagingDir: program.options.stagingDir });
-        expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs`)).is.true;
-        expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs.map`)).is.false;
+        await program.build({ outDir: program.options.outDir });
+        expect(fsExtra.pathExistsSync(s`${outDir}/source/main.brs`)).is.true;
+        expect(fsExtra.pathExistsSync(s`${outDir}/source/main.brs.map`)).is.false;
     });
 
     it('creates sourcemap for brs and xml files', async () => {
-        fsExtra.ensureDirSync(program.options.stagingDir!);
+        fsExtra.ensureDirSync(program.options.outDir!);
         program.setFile('source/main.brs', `
             sub main()
             end sub
@@ -1710,40 +1710,40 @@ describe('Program', () => {
         `);
         program.validate();
 
-        expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs.map`)).is.false;
-        expect(fsExtra.pathExistsSync(s`${stagingDir}/components/comp1.xml.map`)).is.false;
+        expect(fsExtra.pathExistsSync(s`${outDir}/source/main.brs.map`)).is.false;
+        expect(fsExtra.pathExistsSync(s`${outDir}/components/comp1.xml.map`)).is.false;
 
         program.options.sourceMap = true;
         await program.build({
             files: program.getFiles([s`${rootDir}/source/main.brs`, s`${rootDir}/components/comp1.xml`]),
-            stagingDir: program.options.stagingDir
+            outDir: program.options.outDir
         });
 
-        expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs.map`)).is.true;
-        expect(fsExtra.pathExistsSync(s`${stagingDir}/components/comp1.xml.map`)).is.true;
+        expect(fsExtra.pathExistsSync(s`${outDir}/source/main.brs.map`)).is.true;
+        expect(fsExtra.pathExistsSync(s`${outDir}/components/comp1.xml.map`)).is.true;
     });
 
     it('copies the bslib.brs file', async () => {
-        fsExtra.ensureDirSync(program.options.stagingDir!);
+        fsExtra.ensureDirSync(program.options.outDir!);
         program.validate();
 
         await program.build({
-            stagingDir: program.options.stagingDir
+            outDir: program.options.outDir
         });
 
-        expect(fsExtra.pathExistsSync(s`${stagingDir}/source/bslib.brs`)).is.true;
+        expect(fsExtra.pathExistsSync(s`${outDir}/source/bslib.brs`)).is.true;
     });
 
     it('copies the bslib.brs file to optionally specified directory', async () => {
-        fsExtra.ensureDirSync(program.options.stagingDir!);
+        fsExtra.ensureDirSync(program.options.outDir!);
         program.options.bslibDestinationDir = 'source/opt';
         program.validate();
 
         await program.build({
-            stagingDir: program.options.stagingDir
+            outDir: program.options.outDir
         });
 
-        expect(fsExtra.pathExistsSync(s`${stagingDir}/source/opt/bslib.brs`)).is.true;
+        expect(fsExtra.pathExistsSync(s`${outDir}/source/opt/bslib.brs`)).is.true;
     });
 
     describe('getTranspiledFileContents', () => {
@@ -1794,10 +1794,10 @@ describe('Program', () => {
                 end sub
             `);
             await program.build({
-                stagingDir: stagingDir
+                outDir: outDir
             });
             expect(
-                fsExtra.readFileSync(`${stagingDir}/source/lib.brs`).toString().trimEnd()
+                fsExtra.readFileSync(`${outDir}/source/lib.brs`).toString().trimEnd()
             ).to.eql(trim`
                 'code comment
                 sub log(message)
@@ -1805,7 +1805,7 @@ describe('Program', () => {
                 end sub`
             );
             expect(
-                fsExtra.readFileSync(`${stagingDir}/source/lib.d.bs`).toString().trimEnd()
+                fsExtra.readFileSync(`${outDir}/source/lib.d.bs`).toString().trimEnd()
             ).to.eql(trim`
                 'typedef comment
                 sub log(message)
@@ -1860,11 +1860,11 @@ describe('Program', () => {
                 }
             });
             await program.build({
-                stagingDir: stagingDir
+                outDir: outDir
             });
             //our changes should be there
             expect(
-                fsExtra.readFileSync(`${stagingDir}/source/main.brs`).toString()
+                fsExtra.readFileSync(`${outDir}/source/main.brs`).toString()
             ).to.eql(trim`
                 sub main()
                     print "hello there"
@@ -1897,11 +1897,11 @@ describe('Program', () => {
             });
             //transpile the file
             await program.build({
-                stagingDir: stagingDir
+                outDir: outDir
             });
             //our changes should be there
             expect(
-                fsExtra.readFileSync(`${stagingDir}/source/main.brs`).toString()
+                fsExtra.readFileSync(`${outDir}/source/main.brs`).toString()
             ).to.eql(trim`
                 sub main()
                     print "goodbye world"
@@ -1935,11 +1935,11 @@ describe('Program', () => {
             });
             //transpile the file
             await program.build({
-                stagingDir: stagingDir
+                outDir: outDir
             });
             //our changes should be there
             expect(
-                fsExtra.readFileSync(`${stagingDir}/source/main.brs`).toString()
+                fsExtra.readFileSync(`${outDir}/source/main.brs`).toString()
             ).to.eql(trim`
                 sub main()
                     print "goodbye world"
@@ -1952,18 +1952,18 @@ describe('Program', () => {
 
         it('copies the embedded version of bslib.brs when a version from ropm is not found', async () => {
             await program.build({
-                stagingDir: stagingDir
+                outDir: outDir
             });
-            expect(fsExtra.pathExistsSync(`${stagingDir}/source/bslib.brs`)).to.be.true;
+            expect(fsExtra.pathExistsSync(`${outDir}/source/bslib.brs`)).to.be.true;
         });
 
         it('does not copy bslib.brs when found in roku_modules', async () => {
             program.setFile('source/roku_modules/bslib/bslib.brs', '');
             await program.build({
-                stagingDir: stagingDir
+                outDir: outDir
             });
-            expect(fsExtra.pathExistsSync(`${stagingDir}/source/bslib.brs`)).to.be.false;
-            expect(fsExtra.pathExistsSync(`${stagingDir}/source/roku_modules/bslib/bslib.brs`)).to.be.true;
+            expect(fsExtra.pathExistsSync(`${outDir}/source/bslib.brs`)).to.be.false;
+            expect(fsExtra.pathExistsSync(`${outDir}/source/roku_modules/bslib/bslib.brs`)).to.be.true;
         });
 
         it('transpiles in-memory-only files', async () => {
@@ -1973,10 +1973,10 @@ describe('Program', () => {
                 end sub
             `);
             await program.build({
-                stagingDir: program.options.stagingDir
+                outDir: program.options.outDir
             });
             expect(trimMap(
-                fsExtra.readFileSync(s`${stagingDir}/source/logger.brs`).toString()
+                fsExtra.readFileSync(s`${outDir}/source/logger.brs`).toString()
             )).to.eql(trim`
                 sub logInfo()
                     print 2
@@ -1984,17 +1984,17 @@ describe('Program', () => {
             `);
         });
 
-        it('copies in-memory-only .brs files to stagingDir', async () => {
+        it('copies in-memory-only .brs files to outDir', async () => {
             program.setFile('source/logger.brs', trim`
                 sub logInfo()
                     print "logInfo"
                 end sub
             `);
             await program.build({
-                stagingDir: program.options.stagingDir
+                outDir: program.options.outDir
             });
             expect(trimMap(
-                fsExtra.readFileSync(s`${stagingDir}/source/logger.brs`).toString()
+                fsExtra.readFileSync(s`${outDir}/source/logger.brs`).toString()
             )).to.eql(trim`
                 sub logInfo()
                     print "logInfo"
@@ -2009,10 +2009,10 @@ describe('Program', () => {
                 </component>
             `);
             await program.build({
-                stagingDir: program.options.stagingDir
+                outDir: program.options.outDir
             });
             expect(trimMap(
-                fsExtra.readFileSync(s`${stagingDir}/components/Component1.xml`).toString()
+                fsExtra.readFileSync(s`${outDir}/components/Component1.xml`).toString()
             )).to.eql(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component1" extends="Scene">
@@ -2029,10 +2029,10 @@ describe('Program', () => {
                 </component>
             `);
             await program.build({
-                stagingDir: program.options.stagingDir
+                outDir: program.options.outDir
             });
             expect(trimMap(
-                fsExtra.readFileSync(s`${stagingDir}/components/Component1.xml`).toString()
+                fsExtra.readFileSync(s`${outDir}/components/Component1.xml`).toString()
             )).to.eql(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Component1" extends="Scene">
@@ -2045,7 +2045,7 @@ describe('Program', () => {
             let sourceRoot = s`${tempDir}/sourceRootFolder`;
             program = new Program({
                 rootDir: rootDir,
-                stagingDir: stagingDir,
+                outDir: outDir,
                 sourceRoot: sourceRoot,
                 sourceMap: true
             });
@@ -2055,10 +2055,10 @@ describe('Program', () => {
             `);
             await program.build({
                 files: [main],
-                stagingDir: stagingDir
+                outDir: outDir
             });
 
-            let contents = fsExtra.readFileSync(s`${stagingDir}/source/main.brs.map`).toString();
+            let contents = fsExtra.readFileSync(s`${outDir}/source/main.brs.map`).toString();
             let map = JSON.parse(contents);
             expect(
                 s`${map.sources[0]}`
@@ -2071,7 +2071,7 @@ describe('Program', () => {
             let sourceRoot = s`${tempDir}/sourceRootFolder`;
             program = new Program({
                 rootDir: rootDir,
-                stagingDir: stagingDir,
+                outDir: outDir,
                 sourceRoot: sourceRoot,
                 sourceMap: true
             });
@@ -2081,10 +2081,10 @@ describe('Program', () => {
             `);
             await program.build({
                 files: [program.getFile('source/main.bs')],
-                stagingDir: stagingDir
+                outDir: outDir
             });
 
-            let contents = fsExtra.readFileSync(s`${stagingDir}/source/main.brs.map`).toString();
+            let contents = fsExtra.readFileSync(s`${outDir}/source/main.brs.map`).toString();
             let map = JSON.parse(contents);
             expect(
                 s`${map.sources[0]}`
@@ -2097,7 +2097,7 @@ describe('Program', () => {
             let sourceRoot = s`${tempDir}/sourceRootFolder`;
             program = new Program({
                 rootDir: rootDir,
-                stagingDir: stagingDir,
+                outDir: outDir,
                 sourceRoot: sourceRoot,
                 sourceMap: true,
                 pruneEmptyCodeFiles: true
@@ -2118,7 +2118,7 @@ describe('Program', () => {
             await program.build();
 
             expect(trimMap(
-                fsExtra.readFileSync(s`${stagingDir}/source/main.brs`).toString()
+                fsExtra.readFileSync(s`${outDir}/source/main.brs`).toString()
             )).to.eql(trim`
                 'import "pkg:/source/types.bs"
 
@@ -2126,7 +2126,7 @@ describe('Program', () => {
                     ? "The night is " + "dark" + " and full of terror"
                 end sub
             `);
-            expect(fsExtra.pathExistsSync(s`${stagingDir}/source/types.brs`)).to.be.false;
+            expect(fsExtra.pathExistsSync(s`${outDir}/source/types.brs`)).to.be.false;
         });
     });
 
@@ -2140,12 +2140,12 @@ describe('Program', () => {
                 program.options.emitDefinitions = true;
                 program.validate();
                 await program.build({
-                    stagingDir: stagingDir
+                    outDir: outDir
                 });
 
-                expect(fsExtra.pathExistsSync(s`${stagingDir}/source/Duck.brs`)).to.be.true;
-                expect(fsExtra.pathExistsSync(s`${stagingDir}/source/Duck.d.bs`)).to.be.true;
-                expect(fsExtra.pathExistsSync(s`${stagingDir}/source/Duck.d.brs`)).to.be.false;
+                expect(fsExtra.pathExistsSync(s`${outDir}/source/Duck.brs`)).to.be.true;
+                expect(fsExtra.pathExistsSync(s`${outDir}/source/Duck.d.bs`)).to.be.true;
+                expect(fsExtra.pathExistsSync(s`${outDir}/source/Duck.d.brs`)).to.be.false;
             });
 
             it('does not generate typedef for typedef file', async () => {
@@ -2156,11 +2156,11 @@ describe('Program', () => {
                 program.options.emitDefinitions = true;
                 program.validate();
                 await program.build({
-                    stagingDir: stagingDir
+                    outDir: outDir
                 });
 
-                expect(fsExtra.pathExistsSync(s`${stagingDir}/source/Duck.d.brs`)).to.be.false;
-                expect(fsExtra.pathExistsSync(s`${stagingDir}/source/Duck.brs`)).to.be.false;
+                expect(fsExtra.pathExistsSync(s`${outDir}/source/Duck.d.brs`)).to.be.false;
+                expect(fsExtra.pathExistsSync(s`${outDir}/source/Duck.brs`)).to.be.false;
             });
         });
 
@@ -3101,7 +3101,7 @@ describe('Program', () => {
             await program.build();
             expect(
                 fsExtra.pathExistsSync(
-                    s`${program.options.stagingDir}/${file.pkgPath}`
+                    s`${program.options.outDir}/${file.pkgPath}`
                 )
             ).to.be.true;
         });
@@ -3114,13 +3114,13 @@ describe('Program', () => {
 
                 program.options.cwd = s`${tempDir}/rootDir`;
                 program.options.rootDir = s`${tempDir}/rootDir`;
-                program.options.stagingDir = s`../stagingDir`;
+                program.options.outDir = s`../outDir`;
                 program.setFile('source/main.brs', '');
                 await program.build();
             } finally {
                 process.chdir(cwd);
             }
-            expect(fsExtra.pathExistsSync(`${tempDir}/stagingDir/source/main.brs`)).to.be.true;
+            expect(fsExtra.pathExistsSync(`${tempDir}/outDir/source/main.brs`)).to.be.true;
             expect(fsExtra.pathExistsSync(`${tempDir}/alpha/source/main.brs`)).to.be.false;
         });
 
@@ -3128,7 +3128,7 @@ describe('Program', () => {
             const data = Buffer.from([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
             program.setFile('assets/logo.png', data);
             await program.build();
-            const result = fsExtra.readFileSync(`${stagingDir}/assets/logo.png`);
+            const result = fsExtra.readFileSync(`${outDir}/assets/logo.png`);
 
             //the buffers should be identical
             expect(
@@ -3150,7 +3150,7 @@ describe('Program', () => {
             `);
             await program.build();
             expect(
-                fsExtra.pathExistsSync(`${stagingDir}/source/bslib.brs`)
+                fsExtra.pathExistsSync(`${outDir}/source/bslib.brs`)
             ).to.be.true;
         });
 
@@ -3172,7 +3172,7 @@ describe('Program', () => {
             `);
             await program.build();
             expect(
-                fsExtra.readFileSync(`${stagingDir}/source/main.brs`).toString()
+                fsExtra.readFileSync(`${outDir}/source/main.brs`).toString()
             ).to.eql(undent`
                 sub alpha_test()
                 end sub

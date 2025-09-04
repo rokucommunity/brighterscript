@@ -1771,14 +1771,14 @@ export class Program {
     /**
      * Get the absolute output path for a file
      */
-    private getOutputPath(file: { pkgPath?: string }, stagingDir = this.getStagingDir()) {
-        return s`${stagingDir}/${file.pkgPath}`;
+    private getOutputPath(file: { pkgPath?: string }, outDir = this.getOutDir()) {
+        return s`${outDir}/${file.pkgPath}`;
     }
 
-    private getStagingDir(stagingDir?: string) {
-        let result = stagingDir ?? this.options.stagingDir ?? this.options.stagingDir;
+    private getOutDir(outDir?: string) {
+        let result = outDir ?? this.options.outDir ?? this.options.outDir;
         if (!result) {
-            result = rokuDeploy.getOptions(this.options as any).stagingDir;
+            result = rokuDeploy.getOptions(this.options as any).outDir;
         }
         result = s`${path.resolve(this.options.cwd ?? process.cwd(), result ?? '/')}`;
         return result;
@@ -1817,7 +1817,7 @@ export class Program {
         await this.plugins.emitAsync('beforePrepareProgram', programEvent);
         await this.plugins.emitAsync('prepareProgram', programEvent);
 
-        const stagingDir = this.getStagingDir();
+        const outDir = this.getOutDir();
 
         const entries: TranspileObj[] = [];
 
@@ -1835,7 +1835,7 @@ export class Program {
                 file: file,
                 editor: file.editor,
                 scope: scope,
-                outputPath: this.getOutputPath(file, stagingDir)
+                outputPath: this.getOutputPath(file, outDir)
             } as PrepareFileEvent & { outputPath: string };
 
             await this.plugins.emitAsync('beforePrepareFile', event);
@@ -1906,14 +1906,14 @@ export class Program {
     /**
      * Write the entire project to disk
      */
-    private async write(stagingDir: string, files: Map<BscFile, SerializedFile[]>) {
+    private async write(outDir: string, files: Map<BscFile, SerializedFile[]>) {
         const programEvent = await this.plugins.emitAsync('beforeWriteProgram', {
             program: this,
             files: files,
-            stagingDir: stagingDir
+            outDir: outDir
         });
-        //empty the staging directory
-        await fsExtra.emptyDir(stagingDir);
+        //empty the out directory
+        await fsExtra.emptyDir(outDir);
 
         const serializedFiles = [...files]
             .map(([, serializedFiles]) => serializedFiles)
@@ -1925,7 +1925,7 @@ export class Program {
                 const event = await this.plugins.emitAsync('beforeWriteFile', {
                     program: this,
                     file: file,
-                    outputPath: this.getOutputPath(file, stagingDir),
+                    outputPath: this.getOutputPath(file, outDir),
                     processedFiles: new Set<SerializedFile>()
                 });
 
@@ -1947,7 +1947,7 @@ export class Program {
     public async build(options?: ProgramBuildOptions) {
         //run a single build at a time
         await this.buildPipeline.run(async () => {
-            const stagingDir = this.getStagingDir(options?.stagingDir);
+            const outDir = this.getOutDir(options?.outDir);
 
             const event = await this.plugins.emitAsync('beforeBuildProgram', {
                 program: this,
@@ -1961,7 +1961,7 @@ export class Program {
             //stage the entire program
             const serializedFilesByFile = await this.serialize(event.files);
 
-            await this.write(stagingDir, serializedFilesByFile);
+            await this.write(outDir, serializedFilesByFile);
 
             await this.plugins.emitAsync('afterBuildProgram', event);
 
@@ -2174,7 +2174,7 @@ export interface ProgramBuildOptions {
     /**
      * The directory where the final built files should be placed. This directory will be cleared before running
      */
-    stagingDir?: string;
+    outDir?: string;
     /**
      * An array of files to build. If omitted, the entire list of files from the program will be used instead.
      * Typically you will want to leave this blank

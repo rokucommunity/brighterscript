@@ -7,7 +7,7 @@ import { standardizePath as s } from '../../util';
 import type { XmlFile } from '../XmlFile';
 import type { BrsFile } from '../BrsFile';
 import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../../testHelpers.spec';
-import { tempDir, rootDir, stagingDir } from '../../testHelpers.spec';
+import { tempDir, rootDir, outDir } from '../../testHelpers.spec';
 
 let sinon = sinonImport.createSandbox();
 
@@ -20,7 +20,7 @@ describe('import statements', () => {
         fsExtra.emptyDirSync(tempDir);
         program = new Program({
             rootDir: rootDir,
-            stagingDir: stagingDir
+            outDir: outDir
         });
     });
     afterEach(() => {
@@ -57,9 +57,9 @@ describe('import statements', () => {
                 dest: x!.destPath
             };
         });
-        await program.build({ stagingDir: stagingDir });
+        await program.build({ outDir: outDir });
         expect(
-            trimMap(fsExtra.readFileSync(`${stagingDir}/components/ChildScene.xml`).toString())
+            trimMap(fsExtra.readFileSync(`${outDir}/components/ChildScene.xml`).toString())
         ).to.equal(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="Scene">

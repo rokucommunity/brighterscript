@@ -22,7 +22,7 @@ import type { WorkspaceConfig } from './lsp/ProjectManager';
 export const cwd = s`${__dirname}/../`;
 export const tempDir = s`${__dirname}/../.tmp`;
 export const rootDir = s`${tempDir}/rootDir`;
-export const stagingDir = s`${tempDir}/stagingDir`;
+export const outDir = s`${tempDir}/outDir`;
 export const workspaceSettings: WorkspaceConfig = {
     workspaceFolder: rootDir,
     languageServer: {
