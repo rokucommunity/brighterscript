@@ -94,7 +94,9 @@
         },
         "createPackage": {
             "description": "Creates a zip package. Defaults to true. This setting is ignored when deploy is enabled.",
-            "type": "boolean"
+            "type": "boolean",
+            "deprecated": true,
+            "deprecationMessage": "Deprecated starting in v1"
         },
         "sourceMap": {
             "description": "Enables generating sourcemap files, which allow debugging tools to show the original source code while running the emitted files.",
@@ -104,7 +106,7 @@
         "copyToStaging": {
             "description": "If true, the files are copied to staging. This setting is ignored when deploy is enabled or if createPackage is enabled",
             "deprecated": true,
-            "deprecationMessage": "Deprecated. Use `noEmit` instead.",
+            "deprecationMessage": "Deprecated starting in v1. Use `noEmit` instead.",
             "type": "boolean"
         },
         "noEmit": {
@@ -119,43 +121,45 @@
         "deploy": {
             "description": "If true, after a successful buld, the project will be deployed to the roku specified in host",
             "deprecated": true,
-            "deprecationMessage": "Deprecated. No longer supporting deployment in this tool.",
+            "deprecationMessage": "Deprecated starting in v1. No longer supporting deployment in this tool.",
             "type": "boolean"
         },
         "host": {
             "description": "host of the Roku that the package will be deploy to",
             "deprecated": true,
-            "deprecationMessage": "Deprecated. No longer supporting deployment in this tool.",
+            "deprecationMessage": "Deprecated starting in v1. No longer supporting deployment in this tool.",
             "type": "string"
         },
         "username": {
             "description": "The username to use when deploying to a Roku device",
             "deprecated": true,
-            "deprecationMessage": "Deprecated. No longer supporting deployment in this tool.",
+            "deprecationMessage": "Deprecated starting in v1. No longer supporting deployment in this tool.",
             "type": "string"
         },
         "password": {
             "description": "The password to use when deploying to a Roku device",
             "deprecated": true,
-            "deprecationMessage": "Deprecated. No longer supporting deployment in this tool.",
+            "deprecationMessage": "Deprecated starting in v1. No longer supporting deployment in this tool.",
             "type": "string"
         },
         "retainStagingDir": {
             "type": "boolean",
             "description": "Prevent the staging folder from being deleted after the deployment package is created.  This is helpful for troubleshooting why your package isn't being created the way you expected.",
+            "deprecated": true,
+            "deprecationMessage": "Deprecated starting in v1. No longer supporting package zipping in this tool.",
             "default": false
         },
         "retainStagingFolder": {
             "type": "boolean",
-            "deprecated": true,
             "description": "Prevent the staging folder from being deleted after the deployment package is created.  This is helpful for troubleshooting why your package isn't being created the way you expected.",
-            "deprecationMessage": "Deprecated. No longer supporting package zipping in this tool.",
+            "deprecated": true,
+            "deprecationMessage": "Deprecated starting in v1. No longer supporting package zipping in this tool.",
             "default": false
         },
         "stagingDir": {
             "type": "string",
             "deprecated": true,
-            "deprecationMessage": "Deprecated. Use `outDir` instead.",
+            "deprecationMessage": "Deprecated starting in v1. Use `outDir` instead.",
             "description": "The path to the staging folder (where all files are copied before creating the zip package)"
         },
         "outDir": {
@@ -165,7 +169,7 @@
         "stagingFolderPath": {
             "type": "string",
             "deprecated": true,
-            "deprecationMessage": "Deprecated. Use `outDir` instead.",
+            "deprecationMessage": "Deprecated starting in v1. Use `outDir` instead.",
             "description": "The path to the staging folder (where all files are copied before creating the zip package)"
         },
         "ignoreErrorCodes": {

@@ -20,6 +20,7 @@ While a minimal `bsconfig.json` file is sufficient for getting started, `bsc` su
 - [require](#require)
 - [rootDir](#rootDir)
 - [sourceRoot](#sourceRoot)
+- [outDir](#outDir)
 - [watch](#watch)
 
 ## `allowBrighterScriptInBrightScript`
