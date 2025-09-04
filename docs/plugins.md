@@ -57,8 +57,6 @@ Full compiler lifecycle:
         - `beforeProvideFile`
         - `onProvideFile`
         - `afterProvideFile`
-            - `beforeProvideFile`
-            - `afterProvideFile`
     - For each physical and virtual file
         - `beforeAddFile`
         - `afterAddFile`
