@@ -21,7 +21,7 @@ let options = yargs
     .option('sourceMap', { type: 'boolean', defaultDescription: 'false', description: 'Enables generating sourcemap files, which allow debugging tools to show the original source code while running the emitted files.' })
     .option('allowBrighterscriptInBrightscript', { type: 'boolean', defaultDescription: 'false', description: 'Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled..' })
     .option('cwd', { type: 'string', description: 'Override the current working directory.' })
-    .option('noEmit', { type: 'boolean', defaultDescription: 'false', description: 'TODO better description Do not produce transpiled files' })
+    .option('noEmit', { type: 'boolean', defaultDescription: 'false', description: 'Do not generate any output files.' })
     .option('diagnosticLevel', { type: 'string', defaultDescription: '"warn"', description: 'Specify what diagnostic types should be printed to the console. Value can be "error", "warn", "hint", "info".' })
     .option('plugins', { type: 'array', alias: 'plugin', description: 'A list of scripts or modules to add extra diagnostics or transform the AST.' })
     .option('emitFullPaths', { type: 'boolean', defaultDescription: 'false', description: 'Emit full paths to files when encountering diagnostics.' })
