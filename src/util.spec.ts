@@ -432,6 +432,55 @@ describe('util', () => {
                 expect(util.normalizeConfig(<any>{ bslibDestinationDir: input }).bslibDestinationDir).to.equal('source/opt');
             });
         });
+
+        it('used default noEmit value', () => {
+            let config = util.normalizeConfig({} as any);
+            expect(config.noEmit).to.be.false;
+        });
+
+        it('used noEmit value over copyToStaging', () => {
+            let config = util.normalizeConfig({ noEmit: true, copyToStaging: false } as any);
+            expect(config.noEmit).to.be.true;
+            config = util.normalizeConfig({ noEmit: false, copyToStaging: false } as any);
+            expect(config.noEmit).to.be.false;
+        });
+
+        it('used copyToStaging when noEmit is not present', () => {
+            let config = util.normalizeConfig({ copyToStaging: true } as any);
+            expect(config.noEmit).to.be.false;
+            config = util.normalizeConfig({ copyToStaging: false } as any);
+            expect(config.noEmit).to.be.true;
+        });
+
+        it('defaults outDir to ./out', () => {
+            let config = util.normalizeConfig({} as any);
+            expect(config.outDir).to.equal('./out');
+        });
+
+        it('uses stagingDir when outDir is not provided', () => {
+            let config = util.normalizeConfig({ stagingDir: 'staging' } as any);
+            expect(config.outDir).to.equal('staging');
+        });
+
+        it('uses stagingFolderPath when outDir is not provided', () => {
+            let config = util.normalizeConfig({ stagingFolderPath: 'stagingPath' } as any);
+            expect(config.outDir).to.equal('stagingPath');
+        });
+
+        it('uses outDir when stagingDir is provided', () => {
+            let config = util.normalizeConfig({ outDir: 'outTest', stagingDir: 'staging' } as any);
+            expect(config.outDir).to.equal('outTest');
+        });
+
+        it('uses outDir when stagingFolderPath is provided', () => {
+            let config = util.normalizeConfig({ outDir: 'outTest', stagingFolderPath: 'stagingPath' } as any);
+            expect(config.outDir).to.equal('outTest');
+        });
+
+        it('uses outDir when stagingFolderPath and stagingDir are provided', () => {
+            let config = util.normalizeConfig({ outDir: 'outTest', stagingDir: 'staging', stagingFolderPath: 'stagingPath' } as any);
+            expect(config.outDir).to.equal('outTest');
+        });
     });
 
     describe('areArraysEqual', () => {
