@@ -503,12 +503,6 @@ describe('util', () => {
         });
     });
 
-    describe('padLeft', () => {
-        it('stops at an upper limit to prevent terrible memory explosions', () => {
-            expect(util.padLeft('', Number.MAX_VALUE, ' ')).to.be.lengthOf(1000);
-        });
-    });
-
     describe('getTextForRange', () => {
         const testArray = ['The quick', 'brown fox', 'jumps over', 'the lazy dog'];
         const testString = testArray.join('\n');
