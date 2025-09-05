@@ -12,7 +12,7 @@ import * as fsExtra from 'fs-extra';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { doesNotThrow } from 'assert';
 import type { ClassStatement, MethodStatement } from '../parser/Statement';
-import { tempDir, rootDir, stagingDir } from '../testHelpers.spec';
+import { tempDir, rootDir, outDir } from '../testHelpers.spec';
 import { isClassStatement } from '../astUtils/reflection';
 import { WalkMode } from '../astUtils/visitors';
 
@@ -25,7 +25,7 @@ describe('BrsFile BrighterScript classes', () => {
     beforeEach(() => {
         fsExtra.ensureDirSync(rootDir);
         fsExtra.emptyDirSync(tempDir);
-        program = new Program({ rootDir: rootDir, stagingDir: stagingDir });
+        program = new Program({ rootDir: rootDir, outDir: outDir });
     });
     afterEach(() => {
         sinon.restore();
@@ -1408,11 +1408,11 @@ describe('BrsFile BrighterScript classes', () => {
                 end function
             end class
         `);
-        await program.build({ stagingDir: stagingDir });
-        fsExtra.emptyDirSync(stagingDir);
-        await program.build({ stagingDir: stagingDir });
+        await program.build({ outDir: outDir });
+        fsExtra.emptyDirSync(outDir);
+        await program.build({ outDir: outDir });
         expect(
-            fsExtra.readFileSync(s`${stagingDir}/source/lib.brs`).toString().trimEnd()
+            fsExtra.readFileSync(s`${outDir}/source/lib.brs`).toString().trimEnd()
         ).to.eql(trim`
             function __Being_builder()
                 instance = {}

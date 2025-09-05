@@ -1,3 +1,4 @@
+import type { BrsFile, BsConfig } from '../../src';
 import type { TargetOptions } from '../target-runner';
 
 module.exports = async (options: TargetOptions) => {
@@ -10,13 +11,14 @@ module.exports = async (options: TargetOptions) => {
         cwd: projectPath,
         createPackage: false,
         copyToStaging: false,
+        noEmit: true,
         //disable diagnostic reporting (they still get collected)
         diagnosticFilters: ['**/*'],
         logLevel: 'error',
         ...options.additionalConfig
-    });
+    } as BsConfig & Record<string, any>);
     //collect all the XML files
-    const files = Object.values(builder.program.files).filter(x => x.extension === '.xml');
+    const files = Object.values(builder.program!.files as Record<string, BrsFile>).filter(x => x.extension === '.xml');
     //flag every file for transpilation
     for (const file of files) {
         file.needsTranspiled = true;

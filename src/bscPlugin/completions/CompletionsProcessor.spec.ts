@@ -3,7 +3,7 @@ import { Program } from '../../Program';
 import util, { standardizePath as s } from '../../util';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
-import { expectCompletionsExcludes, expectCompletionsIncludes, tempDir, rootDir, stagingDir, trim, expectZeroDiagnostics } from '../../testHelpers.spec';
+import { expectCompletionsExcludes, expectCompletionsIncludes, tempDir, rootDir, outDir, trim, expectZeroDiagnostics } from '../../testHelpers.spec';
 import { XmlFile } from '../../files/XmlFile';
 import { Keywords } from '../../lexer/TokenKind';
 import { CompletionsProcessor } from './CompletionsProcessor';
@@ -22,7 +22,7 @@ describe('CompletionsProcessor', () => {
     beforeEach(() => {
         fsExtra.emptyDirSync(tempDir);
         fsExtra.ensureDirSync(rootDir);
-        fsExtra.ensureDirSync(stagingDir);
+        fsExtra.ensureDirSync(outDir);
         program = new Program({ rootDir: rootDir });
     });
     afterEach(() => {

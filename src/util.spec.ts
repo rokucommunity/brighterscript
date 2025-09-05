@@ -150,10 +150,8 @@ describe('util', () => {
 
         it('resolves path relatively to config file', () => {
             const mockConfig: BsConfig = {
-                outFile: 'out/app.zip',
                 rootDir: 'rootDir',
-                cwd: 'cwd',
-                stagingDir: 'stagingDir'
+                cwd: 'cwd'
             };
             fsExtra.outputFileSync(s`${rootDir}/child.json`, JSON.stringify(mockConfig));
             let config = util.loadConfigFile(s`${rootDir}/child.json`);
@@ -162,9 +160,7 @@ describe('util', () => {
                     s`${rootDir}/child.json`
                 ],
                 'cwd': s`${rootDir}/cwd`,
-                'outFile': s`${rootDir}/out/app.zip`,
-                'rootDir': s`${rootDir}/rootDir`,
-                'stagingDir': s`${rootDir}/stagingDir`
+                'rootDir': s`${rootDir}/rootDir`
             });
         });
 
@@ -355,21 +351,21 @@ describe('util', () => {
         });
 
         it('loads project from disc', () => {
-            fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{ "outFile": "customOutDir/pkg.zip" }`);
+            fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{ "outDir": "customOutDir" }`);
             let config = util.normalizeAndResolveConfig({
                 project: s`${tempDir}/rootDir/bsconfig.json`
             });
             expect(
-                config.outFile
+                config.outDir
             ).to.equal(
-                s`${tempDir}/rootDir/customOutDir/pkg.zip`
+                s`${tempDir}/rootDir/customOutDir`
             );
         });
 
         it('loads project from disc and extends it', () => {
             //the extends file
             fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.base.json`, `{
-                "outFile": "customOutDir/pkg1.zip",
+                "outDir": "customOutDir",
                 "rootDir": "core"
             }`);
 
@@ -381,7 +377,7 @@ describe('util', () => {
 
             let config = util.normalizeAndResolveConfig({ project: s`${tempDir}/rootDir/bsconfig.json` });
 
-            expect(config.outFile).to.equal(s`${tempDir}/rootDir/customOutDir/pkg1.zip`);
+            expect(config.outDir).to.equal(s`${tempDir}/rootDir/customOutDir`);
             expect(config.rootDir).to.equal(s`${tempDir}/rootDir/core`);
             expect(config.watch).to.equal(true);
         });
@@ -435,6 +431,55 @@ describe('util', () => {
             ['source/opt', '/source/opt', 'source/opt/', '/source/opt/'].forEach(input => {
                 expect(util.normalizeConfig(<any>{ bslibDestinationDir: input }).bslibDestinationDir).to.equal('source/opt');
             });
+        });
+
+        it('used default noEmit value', () => {
+            let config = util.normalizeConfig({} as any);
+            expect(config.noEmit).to.be.false;
+        });
+
+        it('used noEmit value over copyToStaging', () => {
+            let config = util.normalizeConfig({ noEmit: true, copyToStaging: false } as any);
+            expect(config.noEmit).to.be.true;
+            config = util.normalizeConfig({ noEmit: false, copyToStaging: false } as any);
+            expect(config.noEmit).to.be.false;
+        });
+
+        it('used copyToStaging when noEmit is not present', () => {
+            let config = util.normalizeConfig({ copyToStaging: true } as any);
+            expect(config.noEmit).to.be.false;
+            config = util.normalizeConfig({ copyToStaging: false } as any);
+            expect(config.noEmit).to.be.true;
+        });
+
+        it('defaults outDir to ./out', () => {
+            let config = util.normalizeConfig({} as any);
+            expect(config.outDir).to.equal('./out');
+        });
+
+        it('uses stagingDir when outDir is not provided', () => {
+            let config = util.normalizeConfig({ stagingDir: 'staging' } as any);
+            expect(config.outDir).to.equal('staging');
+        });
+
+        it('uses stagingFolderPath when outDir is not provided', () => {
+            let config = util.normalizeConfig({ stagingFolderPath: 'stagingPath' } as any);
+            expect(config.outDir).to.equal('stagingPath');
+        });
+
+        it('uses outDir when stagingDir is provided', () => {
+            let config = util.normalizeConfig({ outDir: 'outTest', stagingDir: 'staging' } as any);
+            expect(config.outDir).to.equal('outTest');
+        });
+
+        it('uses outDir when stagingFolderPath is provided', () => {
+            let config = util.normalizeConfig({ outDir: 'outTest', stagingFolderPath: 'stagingPath' } as any);
+            expect(config.outDir).to.equal('outTest');
+        });
+
+        it('uses outDir when stagingFolderPath and stagingDir are provided', () => {
+            let config = util.normalizeConfig({ outDir: 'outTest', stagingDir: 'staging', stagingFolderPath: 'stagingPath' } as any);
+            expect(config.outDir).to.equal('outTest');
         });
     });
 

@@ -1,7 +1,6 @@
 import * as debounce from 'debounce-promise';
 import * as path from 'path';
 import { rokuDeploy } from 'roku-deploy';
-import type { LogLevel as RokuDeployLogLevel } from 'roku-deploy/dist/Logger';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import type { BsDiagnostic, FileObj, FileResolver } from './interfaces';
 import { Program } from './Program';
@@ -106,7 +105,7 @@ export class ProgramBuilder {
             }
 
             if (this.options.noProject) {
-                this.logger.log(`'no-project' flag is set so bsconfig.json loading is disabled'`);
+                this.logger.log(`'noProject' flag is set so bsconfig.json loading is disabled'`);
             } else if (this.options.project) {
                 this.logger.log(`Using config file: "${this.options.project}"`);
             } else {
@@ -160,12 +159,14 @@ export class ProgramBuilder {
         if (this.options.watch) {
             this.logger.log('Starting compilation in watch mode...');
             await this.runOnce({
-                validate: options?.validate
+                validate: options?.validate,
+                noEmit: options?.noEmit
             });
             this.enableWatchMode();
         } else {
             await this.runOnce({
-                validate: options?.validate
+                validate: options?.validate,
+                noEmit: options?.noEmit
             });
         }
     }
@@ -295,7 +296,8 @@ export class ProgramBuilder {
     /**
      * Run the entire process exactly one time.
      */
-    private runOnce(options?: { validate?: boolean }) {
+    private runOnce(options?: { validate?: boolean; noEmit?: boolean }) {
+
         //clear the console
         this.clearConsole();
         let cancellationToken = { isCanceled: false };
@@ -304,7 +306,8 @@ export class ProgramBuilder {
             //start the new run
             return this._runOnce({
                 cancellationToken: cancellationToken,
-                validate: options?.validate
+                validate: options?.validate,
+                noEmit: options?.noEmit
             });
         }) as any;
 
@@ -382,7 +385,7 @@ export class ProgramBuilder {
      * Run the process once, allowing it to be cancelled.
      * NOTE: This should only be called by `runOnce`.
      */
-    private async _runOnce(options: { cancellationToken: { isCanceled: any }; validate: boolean }) {
+    private async _runOnce(options: { cancellationToken: { isCanceled: any }; validate: boolean; noEmit: boolean }) {
         let wereDiagnosticsPrinted = false;
         try {
             //maybe cancel?
@@ -409,16 +412,14 @@ export class ProgramBuilder {
                 return errorCount;
             }
 
-            //create the deployment package (and transpile as well)
-            await this.createPackageIfEnabled();
+            if (options.noEmit !== true) {
+                await this.transpile();
+            }
 
             //maybe cancel?
             if (options?.cancellationToken?.isCanceled === true) {
                 return -1;
             }
-
-            //deploy the package
-            await this.deployPackageIfEnabled();
 
             return 0;
         } catch (e) {
@@ -429,28 +430,7 @@ export class ProgramBuilder {
         }
     }
 
-    private async createPackageIfEnabled() {
-        if (this.options.copyToStaging || this.options.createPackage || this.options.deploy) {
-
-            //transpile the project
-            await this.transpile();
-
-            //create the zip file if configured to do so
-            if (this.options.createPackage !== false || this.options.deploy) {
-                await this.logger.time(LogLevel.log, [`Creating package at ${this.options.outFile}`], async () => {
-                    await rokuDeploy.zipPackage({
-                        ...this.options,
-                        logLevel: this.options.logLevel as unknown as RokuDeployLogLevel,
-                        outDir: util.getOutDir(this.options),
-                        outFile: path.basename(this.options.outFile)
-                    });
-                });
-            }
-        }
-    }
-
     private buildThrottler = new Throttler(0);
-
     /**
      * Build the entire project and place the contents into the staging directory
      */
@@ -486,20 +466,6 @@ export class ProgramBuilder {
      */
     public async transpile() {
         return this.build();
-    }
-
-    private async deployPackageIfEnabled() {
-        //deploy the project if configured to do so
-        if (this.options.deploy) {
-            await this.logger.time(LogLevel.log, ['Deploying package to', this.options.host], async () => {
-                await rokuDeploy.publish({
-                    ...this.options,
-                    logLevel: this.options.logLevel as unknown as RokuDeployLogLevel,
-                    outDir: util.getOutDir(this.options),
-                    outFile: path.basename(this.options.outFile)
-                });
-            });
-        }
     }
 
     /**
