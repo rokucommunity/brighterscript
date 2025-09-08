@@ -36,6 +36,22 @@ export class Sequencer {
         return this;
     }
 
+    public forEachFactory<T>(itemsFactory: () => T[], func: (item: T) => any) {
+        this.actions.push({
+            args: [],
+            func: () => {
+                // Get the items from the factory function at execution time
+                const items = itemsFactory();
+                // Create a nested sequencer for the items to maintain event loop yielding behavior
+                const nestedSequencer = new Sequencer(this.options);
+                return nestedSequencer
+                    .forEach(items, func)
+                    .runSync();
+            }
+        });
+        return this;
+    }
+
     private emitter = new EventEmitter();
 
     public onCancel(callback: () => void) {

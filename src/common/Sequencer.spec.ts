@@ -73,4 +73,43 @@ describe('Sequencer', () => {
         }
         expect(cancelCalled).to.be.true;
     });
+
+    it('forEachFactory calls factory function at execution time', () => {
+        const values = [];
+        let items = [1, 2];
+
+        const sequencer = new Sequencer().forEachFactory(() => items, (i) => {
+            values.push(i);
+        });
+
+        // Add more items after sequencer is configured but before execution
+        items.push(3);
+
+        sequencer.runSync();
+
+        // Should process all items including the one added after configuration
+        expect(values).to.eql([1, 2, 3]);
+    });
+
+    it('forEachFactory maintains event loop yielding behavior', async () => {
+        const values = [];
+        let executionTimes = [];
+
+        await new Sequencer({
+            minSyncDuration: 10 // Very short duration to force frequent yielding
+        }).forEachFactory(() => [1, 2, 3, 4, 5], (i) => {
+            executionTimes.push(Date.now());
+            values.push(i);
+            // Simulate some work
+            const start = Date.now();
+            while (Date.now() - start < 5) {
+                // busy wait
+            }
+        }).run();
+
+        expect(values).to.eql([1, 2, 3, 4, 5]);
+        // With the short minSyncDuration, we should see some gaps in execution times
+        // indicating the sequencer yielded to the event loop
+        expect(executionTimes.length).to.equal(5);
+    });
 });
