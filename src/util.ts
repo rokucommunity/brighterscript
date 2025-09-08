@@ -136,18 +136,6 @@ export class Util {
     }
 
     /**
-     * Given a path to a file/directory, replace all path separators with the current system's version.
-     */
-    //TODO check this? maybe it can move to testHelpers
-    public pathSepNormalize(filePath: string, separator?: string) {
-        if (!filePath) {
-            return filePath;
-        }
-        separator = separator ? separator : path.sep;
-        return filePath.replace(/[\\/]+/g, separator);
-    }
-
-    /**
      * Find the path to the config file.
      * If the config file path doesn't exist
      * @param cwd the current working directory where the search for configs should begin
@@ -763,22 +751,6 @@ export class Util {
     }
 
     /**
-     * Determine if two arrays containing primitive values are equal.
-     * This considers order and compares by equality.
-     */
-    //TODO maybe this can move to testHelpers
-    public areArraysEqual(arr1: any[], arr2: any[]) {
-        if (arr1.length !== arr2.length) {
-            return false;
-        }
-        for (let i = 0; i < arr1.length; i++) {
-            if (arr1[i] !== arr2[i]) {
-                return false;
-            }
-        }
-        return true;
-    }
-    /**
      * Does the string appear to be a uri (i.e. does it start with `file:`)
      */
     public isUriLike(filePath: string) {
@@ -842,38 +814,6 @@ export class Util {
         } else {
             return undefined;
         }
-    }
-
-
-    /**
-     * Walks up the chain to find the closest bsconfig.json file
-     */
-    //TODO maybe this can move to testHelpers
-    public async findClosestConfigFile(currentPath: string): Promise<string | undefined> {
-        //make the path absolute
-        currentPath = path.resolve(
-            path.normalize(
-                currentPath
-            )
-        );
-
-        let previousPath: string | undefined;
-        //using ../ on the root of the drive results in the same file path, so that's how we know we reached the top
-        while (previousPath !== currentPath) {
-            previousPath = currentPath;
-
-            let bsPath = path.join(currentPath, 'bsconfig.json');
-            let brsPath = path.join(currentPath, 'brsconfig.json');
-            if (await this.pathExists(bsPath)) {
-                return bsPath;
-            } else if (await this.pathExists(brsPath)) {
-                return brsPath;
-            } else {
-                //walk upwards one directory
-                currentPath = path.resolve(path.join(currentPath, '../'));
-            }
-        }
-        //got to the root path, no config file exists
     }
 
     /**
@@ -1225,19 +1165,6 @@ export class Util {
             line: line,
             character: character
         };
-    }
-
-    /**
-     * Convert a list of tokens into a string, including their leading whitespace
-     */
-    //TODO maybe this can move to testHelpers
-    public tokensToString(tokens: Token[]) {
-        let result = '';
-        //skip iterating the final token
-        for (let token of tokens) {
-            result += token.leadingWhitespace + token.text;
-        }
-        return result;
     }
 
     /**
@@ -2011,33 +1938,6 @@ export class Util {
             }
             return 0;
         });
-    }
-
-    /**
-     * Split the given text and return ranges for each chunk.
-     * Only works for single-line strings
-     */
-    //TODO maybe move to testHelpers
-    public splitGetRange(separator: string, text: string, range: Range) {
-        const chunks = text.split(separator);
-        const result = [] as Array<{ text: string; range: Range }>;
-        let offset = 0;
-        for (let chunk of chunks) {
-            //only keep nonzero chunks
-            if (chunk.length > 0) {
-                result.push({
-                    text: chunk,
-                    range: this.createRange(
-                        range.start.line,
-                        range.start.character + offset,
-                        range.end.line,
-                        range.start.character + offset + chunk.length
-                    )
-                });
-            }
-            offset += chunk.length + separator.length;
-        }
-        return result;
     }
 
     /**
