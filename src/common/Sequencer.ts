@@ -40,8 +40,13 @@ export class Sequencer {
         this.actions.push({
             args: [],
             func: () => {
+                // Get the items from the factory function at execution time
                 const items = itemsFactory();
-                this.forEach(items, func);
+                // Create a nested sequencer for the items to maintain event loop yielding behavior
+                const nestedSequencer = new Sequencer(this.options);
+                return nestedSequencer
+                    .forEach(items, func)
+                    .runSync();
             }
         });
         return this;
