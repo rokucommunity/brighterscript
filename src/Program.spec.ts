@@ -669,6 +669,27 @@ describe('Program', () => {
             }
             expect(error?.message).to.eql('Crash for test');
         });
+
+        it('includes files added during beforeProgramValidate in validation', () => {
+            program.setFile('source/a.brs', `
+                sub a()
+                    b()
+                end sub
+            `);
+
+            program.plugins.add({
+                name: 'add file in beforeProgramValidate',
+                beforeProgramValidate: () => {
+                    program.setFile('source/b.brs', `
+                        sub b()
+                        end sub
+                    `);
+                }
+            });
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('hasFile', () => {
