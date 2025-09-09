@@ -7,7 +7,6 @@ import type { Token } from './Token';
 import { isToken } from './Token';
 import { rangeToArray } from '../parser/Parser.spec';
 import { Range } from 'vscode-languageserver';
-import util from '../util';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 
 describe('lexer', () => {
