@@ -7,9 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.70.2](https://github.com/rokucommunity/brighterscript/compare/0.70.1...v0.70.2) - 2025-10-10
-### Added
- - Add manual entries for roUtils and roRenderThreadQueue ([#1574](https://github.com/rokucommunity/brighterscript/pull/1574))
 ### Changed
+ - Add info for brightscript components `roUtils` and `roRenderThreadQueue` ([#1574](https://github.com/rokucommunity/brighterscript/pull/1574))
  - Roku sdk updates ([#1573](https://github.com/rokucommunity/brighterscript/pull/1573))
 
 
