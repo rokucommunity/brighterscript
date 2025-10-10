@@ -148,6 +148,26 @@ describe('BrsFile', () => {
         expectZeroDiagnostics(program);
     });
 
+    it('supports roUtils as a brightscript object', () => {
+        program.setFile('source/main.brs', `
+            sub test()
+                utils = CreateObject("roUtils")
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
+    it('supports roRenderThreadQueue as a brightscript object', () => {
+        program.setFile('source/main.brs', `
+            sub test()
+                utils = CreateObject("roRenderThreadQueue")
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
     it('sets needsTranspiled to true for .bs files', () => {
         //BrightScript
         expect(new BrsFile(`${rootDir}/source/main.brs`, 'source/main.brs', program).needsTranspiled).to.be.false;
