@@ -10,10 +10,11 @@ import type { Range } from 'vscode-languageserver';
 export function token(kind: TokenKind, text?: string): Token {
     return {
         kind: kind,
-        text: text!,
-        isReserved: ReservedWords.has((text ?? '').toLowerCase()),
-        range: null,
-        leadingWhitespace: ''
+        text: text,
+        isReserved: ReservedWords.has((text || '').toLowerCase()),
+        range: null as any,
+        leadingWhitespace: '',
+        leadingTrivia: []
     };
 }
 
