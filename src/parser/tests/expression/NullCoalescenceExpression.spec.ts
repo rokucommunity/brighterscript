@@ -197,7 +197,10 @@ describe('NullCoalescingExpression', () => {
                 end sub
             `, `
                 sub main()
-                    a = rokucommunity_bslib_coalesce(user, false)
+                    a = user
+                    if a = invalid then
+                        a = false
+                    end if
                 end sub
             `);
         });
@@ -209,9 +212,12 @@ describe('NullCoalescingExpression', () => {
                 end sub
             `, `
                 sub main()
-                    a = bslib_coalesce(user, {
-                        "id": "default"
-                    })
+                    a = user
+                    if a = invalid then
+                        a = {
+                            "id": "default"
+                        }
+                    end if
                 end sub
             `);
         });
@@ -371,6 +377,100 @@ describe('NullCoalescingExpression', () => {
                                 return "user"
                             end if
                         end function)(m, settings)
+                end sub
+            `);
+        });
+
+        it('transpiles null coalescing in RHS of AssignmentStatement to if statement', () => {
+            testTranspile(`
+                sub main()
+                    a = user ?? {}
+                end sub
+            `, `
+                sub main()
+                    a = user
+                    if a = invalid then
+                        a = {}
+                    end if
+                end sub
+            `);
+        });
+
+        it('uses bslib_coalesce for compound assignment operators', () => {
+            testTranspile(`
+                sub main()
+                    a += user ?? 0
+                end sub
+            `, `
+                sub main()
+                    a += bslib_coalesce(user, 0)
+                end sub
+            `);
+        });
+
+        it('supports nested null coalescing in assignment', () => {
+            testTranspile(`
+                sub main()
+                    result = user ?? (fallback ?? {})
+                end sub
+            `, `
+                sub main()
+                    result = user
+                    if result = invalid then
+                        result = fallback
+                        if result = invalid then
+                            result = {}
+                        end if
+                    end if
+                end sub
+            `);
+        });
+
+        it('uses scope-captured functions for DottedSet expressions', () => {
+            testTranspile(`
+                sub main()
+                    m.a = user ?? {}
+                end sub
+            `, `
+                sub main()
+                    m.a = bslib_coalesce(user, {})
+                end sub
+            `);
+        });
+
+        it('uses scope-captured functions for IndexedSet expressions', () => {
+            testTranspile(`
+                sub main()
+                    m["a"] = user ?? {}
+                end sub
+            `, `
+                sub main()
+                    m["a"] = bslib_coalesce(user, {})
+                end sub
+            `);
+        });
+
+        it('uses scope-captured functions for complex expressions', () => {
+            testTranspile(`
+                sub main()
+                    zombie = {}
+                    result = [
+                        zombie.getName() ?? "zombie"
+                    ]
+                end sub
+            `, `
+                sub main()
+                    zombie = {}
+                    result = [
+                        (function(zombie)
+                                __bsConsequent = zombie.getName()
+                                if __bsConsequent <> invalid then
+                                    return __bsConsequent
+                                else
+                                    return "zombie"
+                                end if
+                            end function)(zombie)
+                    ]
                 end sub
             `);
         });
