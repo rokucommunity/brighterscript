@@ -7,7 +7,6 @@ import { rokuDeploy, DefaultFiles } from 'roku-deploy';
 import type { Diagnostic, Position, DiagnosticRelatedInformation } from 'vscode-languageserver';
 import { Range, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
-import * as xml2js from 'xml2js';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, Plugin, ExpressionInfo, TranspileResult, MaybePromise, DisposableLike, ExtraSymbolData, GetTypeOptions, TypeChainProcessResult, PluginFactory } from './interfaces';
@@ -22,9 +21,9 @@ import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
-import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionParameterExpression, IndexedGetExpression, LiteralExpression, NewExpression, TypeExpression, VariableExpression, XmlAttributeGetExpression } from './parser/Expression';
+import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionParameterExpression, IndexedGetExpression, LiteralExpression, TypeExpression, VariableExpression } from './parser/Expression';
 import { LogLevel, createLogger } from './logging';
-import { isToken, type Identifier, type Locatable, type Token } from './lexer/Token';
+import { isToken, type Identifier, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
 import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
@@ -134,32 +133,6 @@ export class Util {
         pkgPath = pkgPath.replace(/[\/\\]+/g, '/');
         //ensure every path has the leading pkg:/
         return 'pkg:/' + pkgPath.replace(/^pkg:\//i, '');
-    }
-
-    /**
-     * Determine if the given path starts with a protocol
-     */
-    public startsWithProtocol(path: string) {
-        return !!/^[-a-z]+:\//i.exec(path);
-    }
-
-    /**
-     * Given a pkg path of any kind, transform it to a roku-specific pkg path (i.e. "pkg:/some/path.brs")
-     * @deprecated use `sanitizePkgPath instead. Will be removed in v1
-     */
-    public getRokuPkgPath(pkgPath: string) {
-        return this.sanitizePkgPath(pkgPath);
-    }
-
-    /**
-     * Given a path to a file/directory, replace all path separators with the current system's version.
-     */
-    public pathSepNormalize(filePath: string, separator?: string) {
-        if (!filePath) {
-            return filePath;
-        }
-        separator = separator ? separator : path.sep;
-        return filePath.replace(/[\\/]+/g, separator);
     }
 
     /**
@@ -305,38 +278,6 @@ export class Util {
     }
 
     /**
-     * Do work within the scope of a changed current working directory
-     * @param targetCwd the cwd where the work should be performed
-     * @param callback a function to call when the cwd has been changed to `targetCwd`
-     */
-    public cwdWork<T>(targetCwd: string | null | undefined, callback: () => T): T {
-        let originalCwd = process.cwd();
-        if (targetCwd) {
-            process.chdir(targetCwd);
-        }
-
-        let result: T;
-        let err;
-
-        try {
-            result = callback();
-        } catch (e) {
-            err = e;
-        }
-
-        if (targetCwd) {
-            process.chdir(originalCwd);
-        }
-
-        if (err) {
-            throw err;
-        } else {
-            //justification: `result` is set as long as `err` is not set and vice versa
-            return result!;
-        }
-    }
-
-    /**
      * Given a BsConfig object, start with defaults,
      * merge with bsconfig.json and the provided options.
      * @param config a bsconfig object to use as the baseline for the resulting config
@@ -476,13 +417,6 @@ export class Util {
             }
         }
         return result;
-    }
-
-    /**
-     * Split a file by newline characters (LF or CRLF)
-     */
-    public getLines(text: string) {
-        return text.split(/\r?\n/);
     }
 
     /**
@@ -786,39 +720,6 @@ export class Util {
     }
 
     /**
-     * Parse an xml file and get back a javascript object containing its results
-     */
-    public parseXml(text: string) {
-        return new Promise<any>((resolve, reject) => {
-            xml2js.parseString(text, (err, data) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(data);
-                }
-            });
-        });
-    }
-
-    public propertyCount(object: Record<string, unknown>) {
-        let count = 0;
-        for (let key in object) {
-            if (object.hasOwnProperty(key)) {
-                count++;
-            }
-        }
-        return count;
-    }
-
-    public padLeft(subject: string, totalLength: number, char: string) {
-        totalLength = totalLength > 1000 ? 1000 : totalLength;
-        while (subject.length < totalLength) {
-            subject = char + subject;
-        }
-        return subject;
-    }
-
-    /**
      * Force the drive letter to lower case
      */
     public driveLetterToLower(fullPath: string) {
@@ -849,21 +750,6 @@ export class Util {
         }
     }
 
-    /**
-     * Determine if two arrays containing primitive values are equal.
-     * This considers order and compares by equality.
-     */
-    public areArraysEqual(arr1: any[], arr2: any[]) {
-        if (arr1.length !== arr2.length) {
-            return false;
-        }
-        for (let i = 0; i < arr1.length; i++) {
-            if (arr1[i] !== arr2[i]) {
-                return false;
-            }
-        }
-        return true;
-    }
     /**
      * Does the string appear to be a uri (i.e. does it start with `file:`)
      */
@@ -930,37 +816,6 @@ export class Util {
         }
     }
 
-
-    /**
-     * Walks up the chain to find the closest bsconfig.json file
-     */
-    public async findClosestConfigFile(currentPath: string): Promise<string | undefined> {
-        //make the path absolute
-        currentPath = path.resolve(
-            path.normalize(
-                currentPath
-            )
-        );
-
-        let previousPath: string | undefined;
-        //using ../ on the root of the drive results in the same file path, so that's how we know we reached the top
-        while (previousPath !== currentPath) {
-            previousPath = currentPath;
-
-            let bsPath = path.join(currentPath, 'bsconfig.json');
-            let brsPath = path.join(currentPath, 'brsconfig.json');
-            if (await this.pathExists(bsPath)) {
-                return bsPath;
-            } else if (await this.pathExists(brsPath)) {
-                return brsPath;
-            } else {
-                //walk upwards one directory
-                currentPath = path.resolve(path.join(currentPath, '../'));
-            }
-        }
-        //got to the root path, no config file exists
-    }
-
     /**
      * Set a timeout for the specified milliseconds, and resolve the promise once the timeout is finished.
      * @param milliseconds the minimum number of milliseconds to sleep for
@@ -974,15 +829,6 @@ export class Util {
                 setTimeout(resolve, milliseconds);
             }
         });
-    }
-
-    /**
-     * Given an array, map and then flatten
-     * @param array the array to flatMap over
-     * @param callback a function that is called for every array item
-     */
-    public flatMap<T, R>(array: T[], callback: (arg: T) => R[]): R[] {
-        return Array.prototype.concat.apply([], array.map(callback));
     }
 
     /**
@@ -1026,30 +872,6 @@ export class Util {
         }
     }
 
-
-    /**
-     * Get a location object back by extracting location information from other objects that contain location
-     */
-    public getRange(startObj: | { range: Range }, endObj: { range: Range }): Range {
-        if (!startObj?.range || !endObj?.range) {
-            return undefined;
-        }
-        return util.createRangeFromPositions(startObj.range?.start, endObj.range?.end);
-    }
-
-    /**
-     * If the two items both start on the same line
-     */
-    public sameStartLine(first: { range: Range }, second: { range: Range }) {
-        if (first && second && (first.range !== undefined) && (second.range !== undefined) &&
-            first.range.start.line === second.range.start.line
-        ) {
-            return true;
-        } else {
-            return false;
-        }
-    }
-
     /**
      * If the two items have lines that touch
      */
@@ -1065,19 +887,6 @@ export class Util {
             return true;
         } else {
             return false;
-        }
-    }
-
-    /**
-     * Given text with (or without) dots separating text, get the rightmost word.
-     * (i.e. given "A.B.C", returns "C". or "B" returns "B because there's no dot)
-     */
-    public getTextAfterFinalDot(name: string) {
-        if (name) {
-            let parts = name.split('.');
-            if (parts.length > 0) {
-                return parts[parts.length - 1];
-            }
         }
     }
 
@@ -1356,18 +1165,6 @@ export class Util {
             line: line,
             character: character
         };
-    }
-
-    /**
-     * Convert a list of tokens into a string, including their leading whitespace
-     */
-    public tokensToString(tokens: Token[]) {
-        let result = '';
-        //skip iterating the final token
-        for (let token of tokens) {
-            result += token.leadingWhitespace + token.text;
-        }
-        return result;
     }
 
     /**
@@ -2099,19 +1896,6 @@ export class Util {
     }
 
     /**
-     * Get the first locatable item found at the specified position
-     * @param locatables an array of items that have a `range` property
-     * @param position the position that the locatable must contain
-     */
-    public getFirstLocatableAt(locatables: Locatable[], position: Position) {
-        for (let token of locatables) {
-            if (util.rangeContains(token.location?.range, position)) {
-                return token;
-            }
-        }
-    }
-
-    /**
      * Sort an array of objects that have a Range
      */
     public sortByRange<T extends { range: Range | undefined }>(locatables: T[]) {
@@ -2154,32 +1938,6 @@ export class Util {
             }
             return 0;
         });
-    }
-
-    /**
-     * Split the given text and return ranges for each chunk.
-     * Only works for single-line strings
-     */
-    public splitGetRange(separator: string, text: string, range: Range) {
-        const chunks = text.split(separator);
-        const result = [] as Array<{ text: string; range: Range }>;
-        let offset = 0;
-        for (let chunk of chunks) {
-            //only keep nonzero chunks
-            if (chunk.length > 0) {
-                result.push({
-                    text: chunk,
-                    range: this.createRange(
-                        range.start.line,
-                        range.start.character + offset,
-                        range.end.line,
-                        range.start.character + offset + chunk.length
-                    )
-                });
-            }
-            offset += chunk.length + separator.length;
-        }
-        return result;
     }
 
     /**
@@ -2256,16 +2014,6 @@ export class Util {
         /* eslint-enable no-var */
     }
 
-    public stringJoin(strings: string[], separator: string) {
-        // eslint-disable-next-line no-var
-        var result = strings[0] ?? '';
-        // eslint-disable-next-line no-var
-        for (var i = 1; i < strings.length; i++) {
-            result += separator + strings[i];
-        }
-        return result;
-    }
-
     /**
      * Break an expression into each part.
      */
@@ -2287,45 +2035,6 @@ export class Util {
             parts.unshift(nextPart);
         }
         return parts;
-    }
-
-    /**
-     * Break an expression into each part, and return any VariableExpression or DottedGet expresisons from left-to-right.
-     */
-    public getDottedGetPath(expression: Expression): [VariableExpression, ...DottedGetExpression[]] {
-        let parts: Expression[] = [];
-        let nextPart = expression;
-        loop: while (nextPart) {
-            switch (nextPart?.kind) {
-                case AstNodeKind.DottedGetExpression:
-                    parts.push(nextPart);
-                    nextPart = (nextPart as DottedGetExpression).obj;
-                    continue;
-                case AstNodeKind.IndexedGetExpression:
-                case AstNodeKind.XmlAttributeGetExpression:
-                    nextPart = (nextPart as IndexedGetExpression | XmlAttributeGetExpression).obj;
-                    parts = [];
-                    continue;
-                case AstNodeKind.CallExpression:
-                case AstNodeKind.CallfuncExpression:
-                    nextPart = (nextPart as CallExpression | CallfuncExpression).callee;
-                    parts = [];
-                    continue;
-                case AstNodeKind.NewExpression:
-                    nextPart = (nextPart as NewExpression).call.callee;
-                    parts = [];
-                    continue;
-                case AstNodeKind.TypeExpression:
-                    nextPart = (nextPart as TypeExpression).expression;
-                    continue;
-                case AstNodeKind.VariableExpression:
-                    parts.push(nextPart);
-                    break loop;
-                default:
-                    return [] as any;
-            }
-        }
-        return parts.reverse() as any;
     }
 
     /**
