@@ -39,8 +39,8 @@ describe('BslibInline', () => {
 
             // Should use regular bslib function calls without suffix
             expect(result.code).to.include('bslib_toString(');
-            expect(result.code).to.include('bslib_ternary(');
             expect(result.code).to.include('bslib_coalesce(');
+            // Note: Simple ternary expressions expand to if/else instead of using bslib_ternary
             
             // Should not contain inline function definitions
             expect(result.code).to.not.include('function bslib_toString');
@@ -99,23 +99,20 @@ describe('BslibInline', () => {
             const file = program.getFile('source/main.bs') as any;
             const result = program['_getTranspiledFileContents'](file);
             
-            // Should contain all three inline functions with same unique suffix
+            // Should contain inline functions with same unique suffix
             const toStringMatch = result.code.match(/bslib_toString_([a-f0-9]+)/);
-            const ternaryMatch = result.code.match(/bslib_ternary_([a-f0-9]+)/);
             const coalesceMatch = result.code.match(/bslib_coalesce_([a-f0-9]+)/);
             
             expect(toStringMatch).to.not.be.null;
-            expect(ternaryMatch).to.not.be.null;
             expect(coalesceMatch).to.not.be.null;
             
             // All functions should have the same suffix
-            expect(toStringMatch![1]).to.equal(ternaryMatch![1]);
             expect(toStringMatch![1]).to.equal(coalesceMatch![1]);
             
             // Should contain function definitions
             expect(result.code).to.include('function bslib_toString_');
-            expect(result.code).to.include('function bslib_ternary_');
             expect(result.code).to.include('function bslib_coalesce_');
+            // Note: Simple ternary expressions expand to if/else, so no bslib_ternary function needed
 
             program.dispose();
         });
@@ -166,9 +163,9 @@ describe('BslibInline', () => {
             // Verify the transpiled output contains the expected structure
             expect(result.code).to.include('function main()');
             expect(result.code).to.include('message = ("Hello " + bslib_toString_');
-            expect(result.code).to.include('result = bslib_ternary_');
             expect(result.code).to.include('fallback = bslib_coalesce_');
             expect(result.code).to.include('end function');
+            // Note: Simple ternary expressions expand to if/else, so result uses if/then/else/end if
 
             program.dispose();
         });

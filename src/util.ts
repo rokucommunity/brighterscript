@@ -1818,8 +1818,8 @@ export class Util {
         }
 
         //apply the `bslib_` prefix and unique suffix to the function names only
-        source = source.replace(/^(\s*(?:function|sub)\s+)([a-z0-9_]+)/gm, (match, prefix, functionName) => {
-            return prefix + 'bslib_' + functionName + suffix;
+        source = source.replace(/^(\s*function\s+)([a-z0-9_]+)(\()/gmi, (match, prefix, functionName, paren) => {
+            return prefix + 'bslib_' + functionName + suffix + paren;
         });
 
         return source;
