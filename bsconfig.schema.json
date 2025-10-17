@@ -299,6 +299,28 @@
             "description": "Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.",
             "type": "boolean",
             "default": false
+        },
+        "bslibDestinationDir": {
+            "description": "Override the destination directory for the bslib.brs file. Use this if you want to customize where the bslib.brs file is located in the staging directory. Note that using a location outside of `source` will break scripts inside `source` that depend on bslib.brs. Defaults to `source`.",
+            "type": "string"
+        },
+        "bslibHandling": {
+            "description": "Configuration for how bslib functions should be handled during transpilation",
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "description": "How bslib functions should be handled. 'shared': Generate a single shared bslib.brs file (default behavior). 'unique-per-file': Inline bslib functions directly into each file with unique suffixes",
+                    "type": "string",
+                    "enum": ["shared", "unique-per-file"],
+                    "default": "shared"
+                },
+                "uniqueStrategy": {
+                    "description": "Strategy for generating unique suffixes when mode is 'unique-per-file'. 'md5': Use MD5 hash of file.srcPath (default). 'guid': Use a generated GUID",
+                    "type": "string",
+                    "enum": ["md5", "guid"],
+                    "default": "md5"
+                }
+            }
         }
     }
 }

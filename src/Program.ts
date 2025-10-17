@@ -1361,7 +1361,10 @@ export class Program {
         });
 
         //if there's no bslib file already loaded into the program, copy it to the staging directory
-        if (!this.getFile(bslibAliasedRokuModulesPkgPath) && !this.getFile(s`source/bslib.brs`)) {
+        //skip copying bslib when using unique-per-file mode since functions are inlined
+        if (this.options.bslibHandling?.mode !== 'unique-per-file' &&
+            !this.getFile(bslibAliasedRokuModulesPkgPath) && 
+            !this.getFile(s`source/bslib.brs`)) {
             promises.push(util.copyBslibToStaging(stagingDir, this.options.bslibDestinationDir));
         }
         await Promise.all(promises);
