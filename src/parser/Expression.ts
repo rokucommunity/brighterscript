@@ -319,8 +319,8 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     public toSourceNode(state: TranspileState): SourceNode {
         return state.toSourceNode(
             state.tokenToSourceNodeWithTrivia(this.functionType),
-            //include the name (if we have a parent FunctionStatement)
-            isFunctionStatement(this.parent) ? state.tokenToSourceNodeWithTrivia(this.parent.name) : undefined,
+            //include the name (if we have a parent FunctionStatement or MethodStatement)
+            (isFunctionStatement(this.parent) || isMethodStatement(this.parent)) ? state.tokenToSourceNodeWithTrivia(this.parent.name) : undefined,
             state.tokenToSourceNodeWithTrivia(this.leftParen),
             ...this.parameters?.map((x, i) => ([
                 x.toSourceNode(state),
@@ -1904,7 +1904,7 @@ export class AnnotationExpression extends Expression {
     public toSourceNode(state: TranspileState): SourceNode {
         return state.toSourceNode(
             state.tokenToSourceNodeWithTrivia(this.atToken),
-            this.call.toSourceNode(state)
+            this.call?.toSourceNode(state)
         );
     }
 
