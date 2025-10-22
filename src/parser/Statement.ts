@@ -184,7 +184,8 @@ export class AssignmentStatement extends Statement {
     public toSourceNode(state: TranspileState): SourceNode {
         return state.toSourceNode(
             state.tokenToSourceNodeWithTrivia(this.name),
-            state.tokenToSourceNodeWithTrivia(this.equals),
+            // Ensure space before equals
+            state.tokenToSourceNodeWithTrivia(state.ensureLeadingWhitespace(this.equals)),
             this.value.toSourceNode(state)
         );
     }

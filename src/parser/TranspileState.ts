@@ -41,6 +41,42 @@ export class TranspileState {
     }
 
     /**
+     * Ensures a token has some leading whitespace. If the token already has leadingTrivia or leadingWhitespace,
+     * returns the token as-is. If the token has a range (was parsed from source), returns it as-is to preserve
+     * original formatting. Otherwise, returns a token with the specified default whitespace.
+     * This is useful for plugin-contributed tokens that may be missing proper trivia.
+     *
+     * @param token The token to ensure has whitespace
+     * @param defaultWhitespace The whitespace to add if none exists (defaults to ' ')
+     * @returns A token guaranteed to have some form of leading whitespace (if it's synthetic/plugin-contributed)
+     */
+    public ensureLeadingWhitespace<T extends { leadingTrivia?: Token[]; leadingWhitespace?: string; range?: Range }>(
+        token: T,
+        defaultWhitespace = ' '
+    ): T {
+        if (!token) {
+            return token;
+        }
+
+        // If token already has trivia or whitespace, use it as-is
+        if (token.leadingTrivia?.length > 0 || token.leadingWhitespace) {
+            return token;
+        }
+
+        // If token has a range, it was parsed from source code - preserve original formatting (even if no space)
+        // Only inject whitespace for synthetic/plugin-contributed tokens (no range)
+        if (token.range) {
+            return token;
+        }
+
+        // Token is synthetic/plugin-contributed and missing trivia - add default whitespace
+        return {
+            ...token,
+            leadingWhitespace: defaultWhitespace
+        };
+    }
+
+    /**
      * The number of active parent blocks for the current location of the state.
      */
     get blockDepth() {
@@ -101,22 +137,53 @@ export class TranspileState {
     /**
      * Create a SourceNode from a token. This is more efficient than the above `sourceNode` function
      * because the entire token is passed by reference, instead of the raw string being copied to the parameter,
-     * only to then be copied again for the SourceNode constructor
+     * only to then be copied again for the SourceNode constructor.
+     *
+     * This method automatically sanitizes tokens that may be missing proper trivia (e.g., from plugins),
+     * ensuring they have at least empty arrays and handling leadingWhitespace gracefully.
      */
-    public tokenToSourceNodeWithTrivia(token: { range?: Range; text: string; leadingTrivia: Token[] }) {
+    public tokenToSourceNodeWithTrivia(token: { range?: Range; text: string; leadingTrivia?: Token[]; leadingWhitespace?: string }) {
+        if (!token) {
+            return new SourceNode(1, 0, null, []);
+        }
+
         const result: SourceNode[] = [];
-        for (const item of [...token?.leadingTrivia ?? [], token]) {
-            if (token) {
+
+        // Sanitize the token - ensure leadingTrivia exists even if plugins didn't set it
+        const sanitizedTrivia = token.leadingTrivia ?? [];
+
+        // Handle leadingWhitespace if it exists but wasn't captured in leadingTrivia
+        // This can happen with plugin-contributed tokens that don't properly set trivia
+        if (token.leadingWhitespace && sanitizedTrivia.length === 0) {
+            // Create a synthetic whitespace token to preserve spacing
+            result.push(new SourceNode(1, 0, null, token.leadingWhitespace));
+        }
+
+        // Process all leading trivia tokens
+        for (const triviaItem of sanitizedTrivia) {
+            if (triviaItem?.range && triviaItem.text !== undefined) {
                 result.push(new SourceNode(
-                    //convert 0-based range line to 1-based SourceNode line
-                    item.range.start.line + 1,
-                    //range and SourceNode character are both 0-based, so no conversion necessary
-                    item.range.start.character,
+                    triviaItem.range.start.line + 1,
+                    triviaItem.range.start.character,
                     this.srcPath,
-                    item.text
+                    triviaItem.text
                 ));
             }
         }
+
+        // Add the main token
+        if (token.range && token.text !== undefined) {
+            result.push(new SourceNode(
+                token.range.start.line + 1,
+                token.range.start.character,
+                this.srcPath,
+                token.text
+            ));
+        } else if (token.text !== undefined) {
+            // Token without range - still output the text
+            result.push(new SourceNode(1, 0, null, token.text));
+        }
+
         return new SourceNode(1, 0, null, result);
     }
 

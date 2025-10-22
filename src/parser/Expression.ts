@@ -49,7 +49,8 @@ export class BinaryExpression extends Expression {
     public toSourceNode(state: TranspileState): SourceNode {
         return state.toSourceNode(
             this.left?.toSourceNode(state),
-            state.tokenToSourceNodeWithTrivia(this.operator),
+            // Ensure space before binary operator
+            state.tokenToSourceNodeWithTrivia(state.ensureLeadingWhitespace(this.operator)),
             this.right?.toSourceNode(state)
         );
     }
@@ -317,10 +318,15 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     }
 
     public toSourceNode(state: TranspileState): SourceNode {
+        // For function name: ensure space after 'function' keyword if name exists
+        const parentName = (isFunctionStatement(this.parent) || isMethodStatement(this.parent))
+            ? this.parent.name
+            : undefined;
+
         return state.toSourceNode(
             state.tokenToSourceNodeWithTrivia(this.functionType),
             //include the name (if we have a parent FunctionStatement or MethodStatement)
-            (isFunctionStatement(this.parent) || isMethodStatement(this.parent)) ? state.tokenToSourceNodeWithTrivia(this.parent.name) : undefined,
+            parentName ? state.tokenToSourceNodeWithTrivia(state.ensureLeadingWhitespace(parentName)) : undefined,
             state.tokenToSourceNodeWithTrivia(this.leftParen),
             ...this.parameters?.map((x, i) => ([
                 x.toSourceNode(state),
@@ -328,7 +334,8 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             ])).flat() ?? [],
             state.tokenToSourceNodeWithTrivia(this.rightParen),
             state.tokenToSourceNodeWithTrivia(this.asToken),
-            state.tokenToSourceNodeWithTrivia(this.returnTypeToken),
+            // Ensure space before return type token after 'as'
+            this.returnTypeToken ? state.tokenToSourceNodeWithTrivia(state.ensureLeadingWhitespace(this.returnTypeToken)) : undefined,
             this.body?.toSourceNode(state),
             state.tokenToSourceNodeWithTrivia(this.end)
         );
@@ -520,10 +527,14 @@ export class FunctionParameterExpression extends Expression {
     public toSourceNode(state: TranspileState): SourceNode {
         return state.toSourceNode(
             state.tokenToSourceNodeWithTrivia(this.name),
-            state.tokenToSourceNodeWithTrivia(this.equalsToken),
-            this.defaultValue?.toSourceNode(state),
-            state.tokenToSourceNodeWithTrivia(this.asToken),
-            state.tokenToSourceNodeWithTrivia(this.typeToken)
+            // Ensure space before '=' for default value
+            this.equalsToken ? state.tokenToSourceNodeWithTrivia(state.ensureLeadingWhitespace(this.equalsToken)) : undefined,
+            // Ensure space before default value after '='
+            this.defaultValue ? this.defaultValue.toSourceNode(state) : undefined,
+            // Ensure space before 'as' keyword
+            this.asToken ? state.tokenToSourceNodeWithTrivia(state.ensureLeadingWhitespace(this.asToken)) : undefined,
+            // Ensure space before type token after 'as'
+            this.typeToken ? state.tokenToSourceNodeWithTrivia(state.ensureLeadingWhitespace(this.typeToken)) : undefined
         );
     }
 
