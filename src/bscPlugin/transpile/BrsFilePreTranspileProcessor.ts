@@ -221,7 +221,7 @@ export class BrsFilePreTranspileProcessor {
         // If it's a variable expression, try to resolve it as a const
         if (isVariableExpression(value)) {
             const entityName = value.name.text.toLowerCase();
-            
+
             // Prevent infinite recursion by tracking visited constants
             if (visited.has(entityName)) {
                 return value; // Return the original value to avoid infinite loop
@@ -239,7 +239,7 @@ export class BrsFilePreTranspileProcessor {
         if (isDottedGetExpression(value)) {
             const parts = util.splitExpression(value);
             const processedNames: string[] = [];
-            
+
             for (let part of parts) {
                 if (isVariableExpression(part) || isDottedGetExpression(part)) {
                     processedNames.push(part?.name?.text?.toLowerCase());
@@ -247,9 +247,9 @@ export class BrsFilePreTranspileProcessor {
                     return value; // Can't resolve further
                 }
             }
-            
+
             const entityName = processedNames.join('.');
-            
+
             // Prevent infinite recursion
             if (visited.has(entityName)) {
                 return value;

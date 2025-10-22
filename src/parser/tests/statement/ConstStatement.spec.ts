@@ -286,6 +286,26 @@ describe('ConstStatement', () => {
                 end sub
             `);
         });
+
+        it('handles the exact example from the issue - nested consts with namespace references', () => {
+            testTranspile(`
+                namespace aa.bb
+                    const FLAG_A = "test"
+                end namespace
+                const FLAG_B = "another"
+                const AD_BREAK_START = { a: aa.bb.FLAG_A, b: FLAG_B }
+                sub main()
+                    print AD_BREAK_START
+                end sub
+            `, `
+                sub main()
+                    print ({
+                        a: "test"
+                        b: "another"
+                    })
+                end sub
+            `);
+        });
     });
 
     describe('completions', () => {
