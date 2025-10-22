@@ -203,6 +203,89 @@ describe('ConstStatement', () => {
                 end sub
             `);
         });
+
+        it('transpiles nested consts that reference other consts within same namespace', () => {
+            testTranspile(`
+                namespace theming
+                    const FLAG_A = "A"
+                    const FLAG_B = "B"
+                    const AD_BREAK_START = { a: FLAG_A, b: FLAG_B }
+                end namespace
+                sub main()
+                    print theming.AD_BREAK_START
+                end sub
+            `, `
+                sub main()
+                    print ({
+                        a: "A"
+                        b: "B"
+                    })
+                end sub
+            `);
+        });
+
+        it('transpiles nested consts that reference other consts in different namespaces', () => {
+            testTranspile(`
+                namespace aa.bb
+                    const FLAG_A = "A"
+                end namespace
+                namespace main
+                    const FLAG_B = "B"
+                    const AD_BREAK_START = { a: aa.bb.FLAG_A, b: FLAG_B }
+                end namespace
+                sub main()
+                    print main.AD_BREAK_START
+                end sub
+            `, `
+                sub main()
+                    print ({
+                        a: "A"
+                        b: "B"
+                    })
+                end sub
+            `);
+        });
+
+        it('transpiles nested consts that reference other consts across files', () => {
+            program.setFile('source/constants.bs', `
+                namespace theming
+                    const PRIMARY_COLOR = "blue"
+                end namespace
+                const FLAG_B = "B"
+            `);
+            testTranspile(`
+                const SECONDARY_COLOR = theming.PRIMARY_COLOR
+                const AD_BREAK_START = { a: SECONDARY_COLOR, b: FLAG_B }
+                sub main()
+                    print AD_BREAK_START
+                end sub
+            `, `
+                sub main()
+                    print ({
+                        a: "blue"
+                        b: "B"
+                    })
+                end sub
+            `);
+        });
+
+        it('recursively resolves nested consts that reference other consts', () => {
+            testTranspile(`
+                const FLAG_A = "A"
+                const FLAG_B = FLAG_A
+                const AD_BREAK_START = { a: FLAG_A, b: FLAG_B }
+                sub main()
+                    print AD_BREAK_START
+                end sub
+            `, `
+                sub main()
+                    print ({
+                        a: "A"
+                        b: "A"
+                    })
+                end sub
+            `);
+        });
     });
 
     describe('completions', () => {

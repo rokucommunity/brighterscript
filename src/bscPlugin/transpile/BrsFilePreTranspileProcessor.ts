@@ -209,6 +209,64 @@ export class BrsFilePreTranspileProcessor {
 
     }
 
+    /**
+     * Recursively resolve a const value until we get to the final resolved expression
+     */
+    private resolveConstValue(value: Expression, scope: Scope | undefined, containingNamespace: string | undefined, visited = new Set<string>()): Expression {
+        // If it's already a literal, return it as-is
+        if (isLiteralExpression(value)) {
+            return value;
+        }
+
+        // If it's a variable expression, try to resolve it as a const
+        if (isVariableExpression(value)) {
+            const entityName = value.name.text.toLowerCase();
+            
+            // Prevent infinite recursion by tracking visited constants
+            if (visited.has(entityName)) {
+                return value; // Return the original value to avoid infinite loop
+            }
+            visited.add(entityName);
+
+            const constStatement = scope?.getConstFileLink(entityName, containingNamespace)?.item;
+            if (constStatement) {
+                // Recursively resolve the const value
+                return this.resolveConstValue(constStatement.value, scope, containingNamespace, visited);
+            }
+        }
+
+        // If it's a dotted get expression (e.g., namespace.const), try to resolve it
+        if (isDottedGetExpression(value)) {
+            const parts = util.splitExpression(value);
+            const processedNames: string[] = [];
+            
+            for (let part of parts) {
+                if (isVariableExpression(part) || isDottedGetExpression(part)) {
+                    processedNames.push(part?.name?.text?.toLowerCase());
+                } else {
+                    return value; // Can't resolve further
+                }
+            }
+            
+            const entityName = processedNames.join('.');
+            
+            // Prevent infinite recursion
+            if (visited.has(entityName)) {
+                return value;
+            }
+            visited.add(entityName);
+
+            const constStatement = scope?.getConstFileLink(entityName, containingNamespace)?.item;
+            if (constStatement) {
+                // Recursively resolve the const value
+                return this.resolveConstValue(constStatement.value, scope, containingNamespace, visited);
+            }
+        }
+
+        // Return the value as-is if we can't resolve it further
+        return value;
+    }
+
     private processExpression(ternaryExpression: Expression, scope: Scope | undefined) {
         let containingNamespace = this.event.file.getNamespaceStatementForPosition(ternaryExpression.range.start)?.getName(ParseMode.BrighterScript);
 
@@ -229,7 +287,8 @@ export class BrsFilePreTranspileProcessor {
             //did we find a const? transpile the value
             let constStatement = scope?.getConstFileLink(entityName, containingNamespace)?.item;
             if (constStatement) {
-                value = constStatement.value;
+                // Recursively resolve the const value to its final form
+                value = this.resolveConstValue(constStatement.value, scope, containingNamespace);
             } else {
                 //did we find an enum member? transpile that
                 let enumInfo = this.getEnumInfo(entityName, containingNamespace, scope);
