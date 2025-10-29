@@ -306,6 +306,152 @@ describe('ConstStatement', () => {
                 end sub
             `);
         });
+
+        it('handles cyclical const references without infinite loop', () => {
+            testTranspile(`
+                const A = B
+                const B = C
+                const C = A
+                sub main()
+                    print A
+                end sub
+            `, `
+                sub main()
+                    print A
+                end sub
+            `);
+        });
+
+        it('resolves consts inside array literals', () => {
+            testTranspile(`
+                const FLAG_A = "A"
+                const FLAG_B = "B"
+                const MY_ARRAY = [FLAG_A, FLAG_B, "C"]
+                sub main()
+                    print MY_ARRAY
+                end sub
+            `, `
+                sub main()
+                    print ([
+                        "A"
+                        "B"
+                        "C"
+                    ])
+                end sub
+            `);
+        });
+
+        it('resolves enum used in const - same file', () => {
+            testTranspile(`
+                namespace Theming
+                    enum Color
+                        RED = "#FF0000"
+                        BLUE = "#0000FF"
+                    end enum
+                    const PRIMARY_COLOR = Theming.Color.BLUE
+                end namespace
+                sub main()
+                    a = Theming.PRIMARY_COLOR
+                end sub
+            `, `
+                sub main()
+                    a = "#0000FF"
+                end sub
+            `);
+        });
+
+        it('resolves enum used in const - cross file', () => {
+            program.setFile('source/theming.bs', `
+                namespace Theming
+                    enum Color
+                        BLACK = "#000000"
+                        BLUE = "#0000FF"
+                    end enum
+                end namespace
+            `);
+            testTranspile(`
+                namespace Theming
+                    const PRIMARY_COLOR = Theming.Color.BLUE
+                end namespace
+                sub main()
+                    a = Theming.PRIMARY_COLOR
+                end sub
+            `, `
+                sub main()
+                    a = "#0000FF"
+                end sub
+            `);
+        });
+
+        it('resolves const -> enum -> const -> enum chain across files', () => {
+            program.setFile('source/theming1.bs', `
+                namespace Theming
+                    const BACKGROUND_COLOR = Theming.Color.BLACK
+                end namespace
+            `);
+            program.setFile('source/theming2.bs', `
+                namespace Theming
+                    enum Color
+                        BLACK = "#000000"
+                        WHITE = "#FFFFFF"
+                    end enum
+                end namespace
+            `);
+            program.setFile('source/theming3.bs', `
+                namespace Theming
+                    const OVERLAY_COLOR = Theming.BACKGROUND_COLOR
+                end namespace
+            `);
+            testTranspile(`
+                sub test()
+                    aa = {
+                        backgroundOverlay: {
+                            color: Theming.OVERLAY_COLOR
+                        }
+                    }
+                end sub
+            `, `
+                sub test()
+                    aa = {
+                        backgroundOverlay: {
+                            color: "#000000"
+                        }
+                    }
+                end sub
+            `);
+        });
+
+        it('resolves complex multi-file const-enum chain', () => {
+            program.setFile('source/colors.bs', `
+                namespace Theme
+                    enum Color
+                        PRIMARY = "#0000FF"
+                        SECONDARY = "#00FF00"
+                    end enum
+                end namespace
+            `);
+            program.setFile('source/constants.bs', `
+                namespace Theme
+                    const MAIN_COLOR = Theme.Color.PRIMARY
+                    const ALT_COLOR = Theme.MAIN_COLOR
+                end namespace
+            `);
+            testTranspile(`
+                sub main()
+                    colors = {
+                        main: Theme.ALT_COLOR
+                        secondary: Theme.Color.SECONDARY
+                    }
+                end sub
+            `, `
+                sub main()
+                    colors = {
+                        main: "#0000FF"
+                        secondary: "#00FF00"
+                    }
+                end sub
+            `);
+        });
     });
 
     describe('completions', () => {
