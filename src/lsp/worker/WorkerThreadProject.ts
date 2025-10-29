@@ -5,8 +5,6 @@ import { MessageHandler } from './MessageHandler';
 import util from '../../util';
 import type { LspDiagnostic, ActivateResponse, ProjectConfig } from '../LspProject';
 import { type LspProject } from '../LspProject';
-import { isMainThread, parentPort } from 'worker_threads';
-import { WorkerThreadProjectRunner } from './WorkerThreadProjectRunner';
 import { WorkerPool } from './WorkerPool';
 import type { Hover, MaybePromise, SemanticToken } from '../../interfaces';
 import type { DocumentAction, DocumentActionWithStatus } from '../DocumentManager';
@@ -16,28 +14,39 @@ import type { Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAc
 import type { Logger } from '../../logging';
 import { createLogger } from '../../logging';
 import * as fsExtra from 'fs-extra';
+import * as path from 'path';
+import { standardizePath as s } from '../../util';
+
 
 export const workerPool = new WorkerPool(() => {
+    //construct the path to the `./run.ts` (or `./run.js`) script in this same directory
+    const runScriptPath = s`${__dirname}/run${path.extname(__filename)}`;
+
+    // Prepare execArgv for debugging support
+    const execArgv = [];
+
+    // Add ts-node if we're running TypeScript
+    if (/\.ts$/i.test(runScriptPath)) {
+        execArgv.push('--require', 'ts-node/register');
+    }
+
+    // Enable debugging for worker threads if the main process is being debugged
+    // Check if debugging is enabled via execArgv or environment variables
+    const isDebugging = process.execArgv.some(arg => arg.startsWith('--inspect')) || process.env.NODE_OPTIONS?.includes('--inspect');
+
+    if (isDebugging) {
+        // Node.js will automatically assign a unique port for each worker when using --inspect=0
+        // This allows VSCode to automatically attach to worker threads
+        execArgv.push('--inspect=0');
+    }
+
     return new Worker(
-        __filename,
+        runScriptPath,
         {
-            //this needs to align with the same flag in the if statement below
-            argv: ['--run-worker-thread-project-runner'],
-            //wire up ts-node if we're running in ts-node
-            execArgv: /\.ts$/i.test(__filename)
-                ? ['--require', 'ts-node/register']
-                /* istanbul ignore next */
-                : undefined
+            execArgv: execArgv.length > 0 ? execArgv : undefined
         }
     );
 });
-
-//if this script is running in a Worker, start the project runner
-/* istanbul ignore next */
-if (!isMainThread && process.argv.includes('--run-worker-thread-project-runner')) {
-    const runner = new WorkerThreadProjectRunner();
-    runner.run(parentPort);
-}
 
 export class WorkerThreadProject implements LspProject {
     public constructor(
