@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.70.2](https://github.com/rokucommunity/brighterscript/compare/0.70.1...v0.70.2) - 2025-10-10
+### Changed
+ - Add info for brightscript components `roUtils` and `roRenderThreadQueue` ([#1574](https://github.com/rokucommunity/brighterscript/pull/1574))
+ - Roku sdk updates ([#1573](https://github.com/rokucommunity/brighterscript/pull/1573))
+
+
+
+## [0.70.1](https://github.com/rokucommunity/brighterscript/compare/0.70.0...v0.70.1) - 2025-09-11
+### Changed
+ - Flag param names that are reserved words ([#1556](https://github.com/rokucommunity/brighterscript/pull/1556))
+### Fixed
+ - Fix for adding files on beforeProgramValidate ([#1568](https://github.com/rokucommunity/brighterscript/pull/1568))
+ - Fix typdef generation of default param func ([#1551](https://github.com/rokucommunity/brighterscript/pull/1551))
+
+
+
 ## [0.70.0](https://github.com/rokucommunity/brighterscript/compare/0.69.13...v0.70.0) - 2025-08-11
 ### Added
  - Transpile class methods as named functions ([#1548](https://github.com/rokucommunity/brighterscript/pull/1548))

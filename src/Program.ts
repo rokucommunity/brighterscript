@@ -727,7 +727,7 @@ export class Program {
                 this.plugins.emit('beforeProgramValidate', this);
                 beforeProgramValidateWasEmitted = true;
             })
-            .forEach(Object.values(this.files), (file) => {
+            .forEach(() => Object.values(this.files), (file) => {
                 if (!file.isValidated) {
                     this.plugins.emit('beforeFileValidate', {
                         program: this,
