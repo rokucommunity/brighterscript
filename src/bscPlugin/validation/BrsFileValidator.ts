@@ -531,7 +531,7 @@ export class BrsFileValidator {
         const memberName = expr.name.text;
         
         // Find the enum in the parser references
-        const enumStmt = this.event.file.parser.references.enumStatementLookup[enumName.toLowerCase()];
+        const enumStmt = this.event.file.parser.references.enumStatementLookup.get(enumName.toLowerCase());
         if (!enumStmt) {
             return undefined;
         }
@@ -557,10 +557,8 @@ export class BrsFileValidator {
     private resolveConstValue(expr: import('../../parser/Expression').VariableExpression): string | undefined {
         const constName = expr.name.text;
         
-        // Find the const in the file
-        const constStmt = this.event.file.parser.ast.statements.find(
-            stmt => isConstStatement(stmt) && stmt.tokens.name?.text === constName
-        ) as import('../../parser/Statement').ConstStatement | undefined;
+        // Find the const in the parser references
+        const constStmt = this.event.file.parser.references.constStatementLookup.get(constName.toLowerCase());
         
         if (!constStmt) {
             return undefined;
