@@ -3,6 +3,8 @@ import { Parser } from '../../Parser';
 import type { AssignmentStatement } from '../../Statement';
 import type { AALiteralExpression, AAIndexedMemberExpression } from '../../Expression';
 import { isAAIndexedMemberExpression, isAALiteralExpression, isAssignmentStatement, isDottedGetExpression, isVariableExpression } from '../../../astUtils/reflection';
+import { Program } from '../../../Program';
+import { getTestTranspile } from '../../../testHelpers.spec';
 
 describe('parser AAIndexedMemberExpression', () => {
     describe('basic syntax', () => {
@@ -228,6 +230,121 @@ describe('parser AAIndexedMemberExpression', () => {
                 }
             `);
             expect(diagnostics.length).to.be.greaterThan(0);
+        });
+    });
+
+    describe('transpile', () => {
+        let rootDir = process.cwd();
+        let program: Program;
+        let testTranspile = getTestTranspile(() => [program, rootDir]);
+
+        beforeEach(() => {
+            program = new Program({ rootDir: rootDir });
+        });
+        afterEach(() => {
+            program.dispose();
+        });
+
+        it('transpiles enum member as key', () => {
+            testTranspile(`
+                enum MyEnum
+                    KEY1 = "key1"
+                    KEY2 = "key2"
+                end enum
+
+                sub main()
+                    myAA = {
+                        [MyEnum.KEY1]: "value1",
+                        [MyEnum.KEY2]: "value2"
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        "key1": "value1",
+                        "key2": "value2"
+                    }
+                end sub
+            `);
+        });
+
+        it('transpiles const as key', () => {
+            testTranspile(`
+                const MY_KEY1 = "key1"
+                const MY_KEY2 = "key2"
+
+                sub main()
+                    myAA = {
+                        [MY_KEY1]: "value1",
+                        [MY_KEY2]: "value2"
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        "key1": "value1",
+                        "key2": "value2"
+                    }
+                end sub
+            `);
+        });
+
+        it('transpiles mixed indexed and normal members', () => {
+            testTranspile(`
+                enum MyEnum
+                    KEY = "enumKey"
+                end enum
+
+                const MY_CONST = "constKey"
+
+                sub main()
+                    myAA = {
+                        normalKey: "value0",
+                        [MyEnum.KEY]: "value1",
+                        [MY_CONST]: "value2",
+                        anotherKey: "value3"
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        normalKey: "value0"
+                        "enumKey": "value1",
+                        "constKey": "value2",
+                        anotherKey: "value3"
+                    }
+                end sub
+            `);
+        });
+
+        it('transpiles nested AA literals with indexed members', () => {
+            testTranspile(`
+                enum MyEnum
+                    KEY1 = "key1"
+                    KEY2 = "key2"
+                    KEY3 = "key3"
+                end enum
+
+                sub main()
+                    myAA = {
+                        [MyEnum.KEY1]: {
+                            [MyEnum.KEY2]: {
+                                [MyEnum.KEY3]: "deeply nested"
+                            }
+                        }
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        "key1": {
+                            "key2": {
+                                "key3": "deeply nested"
+                            }
+                        }
+                    }
+                end sub
+            `);
         });
     });
 });

@@ -1072,6 +1072,10 @@ export class AALiteralExpression extends Expression {
                 );
                 //value
                 result.push(...element.value.transpile(state));
+                //comma (if present)
+                if (element.commaToken) {
+                    result.push(state.transpileToken(element.commaToken));
+                }
             } else {
                 //key
                 result.push(
