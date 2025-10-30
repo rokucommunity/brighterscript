@@ -1089,6 +1089,10 @@ export class AALiteralExpression extends Expression {
 
                 //value
                 result.push(...element.value.transpile(state));
+                // Note: For normal AA members, commas are already included in the keyToken's
+                // trailing whitespace when transpiled, so we don't need explicit comma handling here.
+                // Only AAIndexedMemberExpression needs explicit comma handling because we replace
+                // the entire key with resolvedKeyText.
             }
 
 
