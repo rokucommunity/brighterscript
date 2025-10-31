@@ -1769,6 +1769,37 @@ export class Util {
         //just return empty string so log functions don't crash with undefined project numbers
         return '';
     }
+
+    /**
+     * Combine all the documentation found before a token (i.e. comment tokens)
+     */
+    public getTokenDocumentation(tokens: Token[], token?: Token) {
+        const comments = [] as Token[];
+        if (!token) {
+            return undefined;
+        }
+        const idx = tokens?.indexOf(token);
+        if (!idx || idx === -1) {
+            return undefined;
+        }
+        for (let i = idx - 1; i >= 0; i--) {
+            const currentToken = tokens[i];
+            //skip whitespace and newline chars
+            if (currentToken.kind === TokenKind.Comment) {
+                comments.push(currentToken);
+            } else if (currentToken.kind === TokenKind.Newline || currentToken.kind === TokenKind.Whitespace) {
+                //skip these tokens
+                continue;
+
+                //any other token means there are no more comments
+            } else {
+                break;
+            }
+        }
+        if (comments.length > 0) {
+            return comments.reverse().map(x => x.text.replace(/^('|rem)/i, '')).join('\n');
+        }
+    }
 }
 
 /**
