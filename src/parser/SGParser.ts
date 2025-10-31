@@ -187,7 +187,10 @@ function mapElement({ children }: ElementCstNode, diagnostics: Diagnostic[]): SG
     const name = mapToken(nameToken);
     const attributes = mapAttributes(children.attribute);
     const content = children.content?.[0];
-    switch (name.text) {
+
+    // Use case-insensitive matching to handle incorrect casing
+    const lowerCaseName = name.text.toLowerCase();
+    switch (lowerCaseName) {
         case 'component':
             const componentContent = mapElements(content, ['interface', 'script', 'children', 'customization'], diagnostics);
             return new SGComponent(name, attributes, componentContent, range);
@@ -254,14 +257,24 @@ function mapElements(content: ContentCstNode, allow: string[], diagnostics: Diag
         for (const entry of element) {
             const name = entry.children.Name?.[0];
             if (name?.image) {
+                // First check if it's exactly allowed
                 if (allow.includes(name.image)) {
                     tags.push(mapElement(entry, diagnostics));
                 } else {
-                    //unexpected tag
-                    diagnostics.push({
-                        ...DiagnosticMessages.xmlUnexpectedTag(name.image),
-                        range: rangeFromTokens(name)
-                    });
+                    // Check if this is a case mismatch for a known tag
+                    const lowerCaseTag = name.image.toLowerCase();
+                    const matchingAllowedTag = allow.find(allowedTag => allowedTag.toLowerCase() === lowerCaseTag);
+
+                    if (matchingAllowedTag) {
+                        // Case mismatch for a known tag - create the AST object but validation will catch the casing issue
+                        tags.push(mapElement(entry, diagnostics));
+                    } else {
+                        // Truly unexpected tag
+                        diagnostics.push({
+                            ...DiagnosticMessages.xmlUnexpectedTag(name.image),
+                            range: rangeFromTokens(name)
+                        });
+                    }
                 }
             } else {
                 //bad xml syntax...
