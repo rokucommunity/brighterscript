@@ -7,4 +7,7 @@ import { WorkerThreadProjectRunner } from './WorkerThreadProjectRunner';
 
 // eslint-disable-next-line no-debugger
 const runner = new WorkerThreadProjectRunner();
+if (!parentPort) {
+    throw new Error('This script must be run as a worker thread');
+}
 runner.run(parentPort);
