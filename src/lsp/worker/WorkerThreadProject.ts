@@ -23,7 +23,7 @@ export const workerPool = new WorkerPool(() => {
     const runScriptPath = s`${__dirname}/run${path.extname(__filename)}`;
 
     // Prepare execArgv for debugging support
-    const execArgv = [];
+    const execArgv: string[] = [];
 
     // Add ts-node if we're running TypeScript
     if (/\.ts$/i.test(runScriptPath)) {
