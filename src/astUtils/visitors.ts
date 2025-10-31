@@ -189,6 +189,7 @@ export function createVisitor(
         EscapedCharCodeLiteralExpression?: (expression: EscapedCharCodeLiteralExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
         ArrayLiteralExpression?: (expression: ArrayLiteralExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
         AAMemberExpression?: (expression: AAMemberExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        AAIndexedMemberExpression?: (expression: import('../parser/Expression').AAIndexedMemberExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
         AALiteralExpression?: (expression: AALiteralExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
         UnaryExpression?: (expression: UnaryExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
         VariableExpression?: (expression: VariableExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;

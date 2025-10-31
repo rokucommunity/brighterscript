@@ -64,6 +64,7 @@ import { util } from '../util';
 import {
     AALiteralExpression,
     AAMemberExpression,
+    AAIndexedMemberExpression,
     AnnotationExpression,
     ArrayLiteralExpression,
     BinaryExpression,
@@ -93,7 +94,7 @@ import {
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import type { Logger } from '../logging';
 import { createLogger } from '../logging';
-import { isAAMemberExpression, isAnnotationExpression, isBinaryExpression, isCallExpression, isCallfuncExpression, isMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAAMemberExpression, isAnnotationExpression, isBinaryExpression, isCallExpression, isCallfuncExpression, isMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import { Cache } from '../Cache';
@@ -157,12 +158,14 @@ export class Parser {
             this._references.propertyHints[name.toLowerCase()] = name;
         } else {
             for (const member of item.elements) {
-                if (!isCommentStatement(member)) {
+                if (!isCommentStatement(member) && isAAMemberExpression(member)) {
                     const name = member.keyToken.text;
                     if (!name.startsWith('"')) {
                         this._references.propertyHints[name.toLowerCase()] = name;
                     }
                 }
+                // Note: We don't add property hints for AAIndexedMemberExpression
+                // since the key is computed at runtime
             }
         }
     }
@@ -2897,7 +2900,7 @@ export class Parser {
 
     private aaLiteral() {
         let openingBrace = this.previous();
-        let members: Array<AAMemberExpression | CommentStatement> = [];
+        let members: Array<AAMemberExpression | AAIndexedMemberExpression | CommentStatement> = [];
 
         let key = () => {
             let result = {
@@ -2928,11 +2931,32 @@ export class Parser {
         while (this.match(TokenKind.Newline)) { }
         let closingBrace: Token;
         if (!this.match(TokenKind.RightCurlyBrace)) {
-            let lastAAMember: AAMemberExpression;
+            let lastAAMember: AAMemberExpression | AAIndexedMemberExpression;
             try {
                 if (this.check(TokenKind.Comment)) {
                     lastAAMember = null;
                     members.push(new CommentStatement([this.advance()]));
+                } else if (this.check(TokenKind.LeftSquareBracket)) {
+                    // Handle indexed member: [expression]: value
+                    let openBracket = this.advance();
+                    let keyExpr = this.expression();
+                    let closeBracket = this.consume(
+                        DiagnosticMessages.expectedRightSquareBraceAfterArrayOrObjectIndex(),
+                        TokenKind.RightSquareBracket
+                    );
+                    let colonToken = this.consume(
+                        DiagnosticMessages.expectedColonBetweenAAKeyAndvalue(),
+                        TokenKind.Colon
+                    );
+                    let expr = this.expression();
+                    lastAAMember = new AAIndexedMemberExpression(
+                        openBracket,
+                        keyExpr,
+                        closeBracket,
+                        colonToken,
+                        expr
+                    );
+                    members.push(lastAAMember);
                 } else {
                     let k = key();
                     let expr = this.expression();
@@ -2968,14 +2992,37 @@ export class Parser {
                         if (this.check(TokenKind.RightCurlyBrace)) {
                             break;
                         }
-                        let k = key();
-                        let expr = this.expression();
-                        lastAAMember = new AAMemberExpression(
-                            k.keyToken,
-                            k.colonToken,
-                            expr
-                        );
-                        members.push(lastAAMember);
+                        if (this.check(TokenKind.LeftSquareBracket)) {
+                            // Handle indexed member: [expression]: value
+                            let openBracket = this.advance();
+                            let keyExpr = this.expression();
+                            let closeBracket = this.consume(
+                                DiagnosticMessages.expectedRightSquareBraceAfterArrayOrObjectIndex(),
+                                TokenKind.RightSquareBracket
+                            );
+                            let colonToken = this.consume(
+                                DiagnosticMessages.expectedColonBetweenAAKeyAndvalue(),
+                                TokenKind.Colon
+                            );
+                            let expr = this.expression();
+                            lastAAMember = new AAIndexedMemberExpression(
+                                openBracket,
+                                keyExpr,
+                                closeBracket,
+                                colonToken,
+                                expr
+                            );
+                            members.push(lastAAMember);
+                        } else {
+                            let k = key();
+                            let expr = this.expression();
+                            lastAAMember = new AAMemberExpression(
+                                k.keyToken,
+                                k.colonToken,
+                                expr
+                            );
+                            members.push(lastAAMember);
+                        }
                     }
                 }
             } catch (error: any) {
@@ -3331,6 +3378,9 @@ export class Parser {
                 this._references.expressions.add(e);
                 for (const member of e.elements) {
                     if (isAAMemberExpression(member)) {
+                        this._references.expressions.add(member.value);
+                    } else if (isAAIndexedMemberExpression(member)) {
+                        this._references.expressions.add(member.keyExpression);
                         this._references.expressions.add(member.value);
                     }
                 }

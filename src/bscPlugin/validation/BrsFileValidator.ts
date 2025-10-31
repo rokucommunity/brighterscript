@@ -1,4 +1,4 @@
-import { isAliasStatement, isBody, isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isTypecastStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isBody, isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isTypecastStatement, isUnaryExpression, isVariableExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -180,6 +180,9 @@ export class BrsFileValidator {
             },
             ContinueStatement: (node) => {
                 this.validateContinueStatement(node);
+            },
+            AAIndexedMemberExpression: (node) => {
+                this.validateAAIndexedMemberExpression(node);
             }
         });
 
@@ -445,5 +448,127 @@ export class BrsFileValidator {
                 nodes.push(node.parent);
             }
         }
+    }
+
+    private validateAAIndexedMemberExpression(node: import('../../parser/Expression').AAIndexedMemberExpression) {
+        const keyExpr = node.keyExpression;
+        
+        // Check if the key expression is a valid type (enum member access or const variable)
+        const isValidKey = this.isValidAAIndexedKey(keyExpr);
+        
+        if (!isValidKey) {
+            this.event.file.addDiagnostic({
+                ...DiagnosticMessages.aaIndexedMemberMustBeEnumOrConst(),
+                range: keyExpr.range
+            });
+            return;
+        }
+
+        // Try to resolve the key expression to a string value at compile time
+        const resolvedValue = this.resolveAAIndexedKey(keyExpr);
+        if (resolvedValue) {
+            // Store the resolved value for transpilation
+            node.resolvedKeyText = resolvedValue;
+        } else {
+            // Could not resolve at compile time
+            this.event.file.addDiagnostic({
+                ...DiagnosticMessages.aaIndexedMemberCannotBeResolved(),
+                range: keyExpr.range
+            });
+        }
+    }
+
+    /**
+     * Check if the expression is a valid key for AA indexed member (enum member or const variable)
+     */
+    private isValidAAIndexedKey(expr: Expression): boolean {
+        // Allow DottedGetExpression (e.g., myEnum.KEY)
+        if (isDottedGetExpression(expr)) {
+            return true;
+        }
+        
+        // Allow VariableExpression (e.g., MY_CONST)
+        if (isVariableExpression(expr)) {
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
+     * Attempt to resolve the key expression to a string value at compile time
+     */
+    private resolveAAIndexedKey(expr: Expression): string | undefined {
+        // For DottedGetExpression (enum member access)
+        if (isDottedGetExpression(expr)) {
+            const resolved = this.resolveEnumMemberValue(expr);
+            if (resolved !== undefined) {
+                return `"${resolved}"`;
+            }
+        }
+        
+        // For VariableExpression (const variable)
+        if (isVariableExpression(expr)) {
+            const resolved = this.resolveConstValue(expr);
+            if (resolved !== undefined) {
+                return `"${resolved}"`;
+            }
+        }
+        
+        return undefined;
+    }
+
+    /**
+     * Resolve an enum member access to its value
+     */
+    private resolveEnumMemberValue(expr: import('../../parser/Expression').DottedGetExpression): string | undefined {
+        // Get the enum name from the DottedGetExpression
+        if (!isVariableExpression(expr.obj)) {
+            return undefined;
+        }
+        
+        const enumName = expr.obj.name.text;
+        const memberName = expr.name.text;
+        
+        // Find the enum in the parser references
+        const enumStmt = this.event.file.parser.references.enumStatementLookup.get(enumName.toLowerCase());
+        if (!enumStmt) {
+            return undefined;
+        }
+        
+        // Find the member in the enum
+        const members = enumStmt.getMembers();
+        const member = members.find(m => m.name?.toLowerCase() === memberName.toLowerCase());
+        if (!member) {
+            return undefined;
+        }
+        
+        // Get the value of the member
+        if (member.value && isLiteralExpression(member.value)) {
+            return member.value.token.text.replace(/^"(.*)"$/, '$1'); // Remove quotes if string literal
+        }
+        
+        return undefined;
+    }
+
+    /**
+     * Resolve a const variable to its value
+     */
+    private resolveConstValue(expr: import('../../parser/Expression').VariableExpression): string | undefined {
+        const constName = expr.name.text;
+        
+        // Find the const in the parser references
+        const constStmt = this.event.file.parser.references.constStatementLookup.get(constName.toLowerCase());
+        
+        if (!constStmt) {
+            return undefined;
+        }
+        
+        // Get the value of the const
+        if (constStmt.value && isLiteralExpression(constStmt.value)) {
+            return constStmt.value.token.text.replace(/^"(.*)"$/, '$1'); // Remove quotes if string literal
+        }
+        
+        return undefined;
     }
 }

@@ -747,6 +747,16 @@ export let DiagnosticMessages = {
         message: `Non-void ${functionType} must return a value`,
         code: 1142,
         severity: DiagnosticSeverity.Error
+    }),
+    aaIndexedMemberMustBeEnumOrConst: () => ({
+        message: `Associative array indexed member key must be an enum member or const variable`,
+        code: 1143,
+        severity: DiagnosticSeverity.Error
+    }),
+    aaIndexedMemberCannotBeResolved: () => ({
+        message: `Associative array indexed member key cannot be resolved at compile time`,
+        code: 1144,
+        severity: DiagnosticSeverity.Error
     })
 };
 

@@ -490,4 +490,174 @@ describe('BrsFileValidator', () => {
             }]);
         });
     });
+
+    describe('AAIndexedMemberExpression validation', () => {
+        it('allows enum member as key', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                enum MyEnum
+                    KEY1 = "key1"
+                    KEY2 = "key2"
+                end enum
+
+                sub main()
+                    myAA = {
+                        [MyEnum.KEY1]: "value1",
+                        [MyEnum.KEY2]: "value2"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows const variable as key', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                const MY_KEY1 = "key1"
+                const MY_KEY2 = "key2"
+
+                sub main()
+                    myAA = {
+                        [MY_KEY1]: "value1",
+                        [MY_KEY2]: "value2"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('resolves enum member values at compile time', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                enum MyEnum
+                    KEY1 = "actualKey1"
+                    KEY2 = "actualKey2"
+                end enum
+
+                sub main()
+                    myAA = {
+                        [MyEnum.KEY1]: "value1"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            
+            // Check that the key was resolved
+            const func = file.parser.ast.statements[1] as FunctionStatement;
+            const assignment = func.func.body.statements[0] as import('../../parser/Statement').AssignmentStatement;
+            const aaLiteral = assignment.value as AALiteralExpression;
+            const indexedMember = aaLiteral.elements[0] as import('../../parser/Expression').AAIndexedMemberExpression;
+            expect(indexedMember.resolvedKeyText).to.equal('"actualKey1"');
+        });
+
+        it('resolves const values at compile time', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                const MY_KEY = "actualKey"
+
+                sub main()
+                    myAA = {
+                        [MY_KEY]: "value1"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            
+            // Check that the key was resolved
+            const func = file.parser.ast.statements[1] as FunctionStatement;
+            const assignment = func.func.body.statements[0] as import('../../parser/Statement').AssignmentStatement;
+            const aaLiteral = assignment.value as AALiteralExpression;
+            const indexedMember = aaLiteral.elements[0] as import('../../parser/Expression').AAIndexedMemberExpression;
+            expect(indexedMember.resolvedKeyText).to.equal('"actualKey"');
+        });
+
+        it('reports diagnostic for invalid key expression (not enum or const)', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    myAA = {
+                        [1 + 2]: "value1"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.aaIndexedMemberMustBeEnumOrConst()
+            ]);
+        });
+
+        it('reports diagnostic when enum is not found', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    myAA = {
+                        [UnknownEnum.KEY]: "value1"
+                    }
+                end sub
+            `);
+            program.validate();
+            // We expect two diagnostics: one for unknown name, one for cannot resolve
+            const diagnostics = program.getDiagnostics();
+            expect(diagnostics.length).to.equal(2);
+            expect(diagnostics.some(d => d.code === 1001)).to.be.true; // Cannot find name
+            expect(diagnostics.some(d => d.code === 1144)).to.be.true; // Cannot be resolved
+        });
+
+        it('reports diagnostic when const is not found', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    myAA = {
+                        [UNKNOWN_CONST]: "value1"
+                    }
+                end sub
+            `);
+            program.validate();
+            // We expect two diagnostics: one for unknown name, one for cannot resolve
+            const diagnostics = program.getDiagnostics();
+            expect(diagnostics.length).to.equal(2);
+            expect(diagnostics.some(d => d.code === 1001)).to.be.true; // Cannot find name
+            expect(diagnostics.some(d => d.code === 1144)).to.be.true; // Cannot be resolved
+        });
+
+        it('allows mixed indexed and normal members', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                enum MyEnum
+                    KEY1 = "key1"
+                end enum
+
+                const MY_CONST = "const_key"
+
+                sub main()
+                    myAA = {
+                        normalKey: "value0",
+                        [MyEnum.KEY1]: "value1",
+                        [MY_CONST]: "value2",
+                        anotherNormalKey: "value3"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('supports nested AA literals with indexed members', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                enum MyEnum
+                    KEY1 = "key1"
+                    KEY2 = "key2"
+                    KEY3 = "key3"
+                end enum
+
+                sub main()
+                    myAA = {
+                        [MyEnum.KEY1]: {
+                            [MyEnum.KEY2]: {
+                                [MyEnum.KEY3]: "deeply nested value"
+                            }
+                        }
+                    }
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
 });
