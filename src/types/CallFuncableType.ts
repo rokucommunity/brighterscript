@@ -4,7 +4,7 @@ import { SymbolTable } from '../SymbolTable';
 import type { BscType } from './BscType';
 import { InheritableType } from './InheritableType';
 import util from '../util';
-import type { ReferenceType } from './ReferenceType';
+import { ReferenceType } from './ReferenceType';
 import type { ExtraSymbolData, TypeCompatibilityData } from '../interfaces';
 import type { BaseFunctionType } from './BaseFunctionType';
 import { isAnyReferenceType, isCallFuncableType, isPrimitiveType, isReferenceType, isTypedFunctionType } from '../astUtils/reflection';
@@ -97,6 +97,9 @@ export abstract class CallFuncableType extends InheritableType {
             for (const type of typesToCheck) {
                 addAssociatedTypesTableAsSiblingToMemberTable(type, this.callFuncAssociatedTypesTable, SymbolTypeFlag.runtime);
             }
+        } else {
+            // return a reference type for potentially finding this in the future
+            return new ReferenceType(name, name, options.flags, () => this.callFuncMemberTable);
         }
 
         return callFuncType;
