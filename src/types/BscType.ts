@@ -52,15 +52,11 @@ export abstract class BscType {
         throw new Error('Method not implemented.');
     }
 
-    getCallFuncMemberType(name: string, options: GetSymbolTypeOptions) {
+    getCallFuncTable(): SymbolTable {
         throw new Error('Method not implemented.');
     }
 
-    getCallFuncMemberTable() {
-        throw new Error('Method not implemented.');
-    }
-
-    getCallFuncType(name: string, options: GetSymbolTypeOptions) {
+    getCallFuncType(name: string, options: GetSymbolTypeOptions): BscType {
         return undefined;
     }
 

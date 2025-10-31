@@ -2222,6 +2222,65 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
             });
 
+            it('allows interfaces to extend components', () => {
+                program.setFile('components/MyNode.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="MyNode" extends="Group">
+                        <script uri="MyNode.bs"/>
+                        <interface>
+                            <field id="myProp" type="integer" />
+                        </interface>
+                    </component>
+                `);
+
+                program.setFile(s`components/MyNode.bs`, `
+                `);
+
+                program.setFile(`source/main.bs`, `
+                    interface MyIFace extends roSGNodeMyNode
+                    end interface
+
+                    sub foo(iface as MyIFace)
+                        value = iface.myProp
+                        print value
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows interfaces to have callfunc members from parent components', () => {
+                program.setFile('components/MyNode.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="MyNode" extends="Group">
+                        <script uri="MyNode.bs"/>
+                        <interface>
+                            <field id="myProp" type="integer" />
+                            <function name="someCallfunc" />
+                        </interface>
+                    </component>
+                `);
+
+                program.setFile(s`components/MyNode.bs`, `
+                    function someCallfunc() as integer
+                        return m.top.myProp
+                    end function
+                `);
+
+                program.setFile(`source/main.bs`, `
+                    interface MyIFace extends roSGNodeMyNode
+                    end interface
+
+
+                    sub foo(iface as MyIFace)
+                        value = iface@.someCallfunc()
+                        print value
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
         });
 
 
@@ -3715,6 +3774,46 @@ describe('Scope', () => {
 
                 expectTypeToBe(thingType, InterfaceType);
                 expect(thingType.name).to.eq('WidgetInternal');
+                sourceScope.unlinkSymbolTable();
+            });
+
+            it('should correctly get return value of interfaces with callfunc members', () => {
+                program.setFile('components/MyNode.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="MyNode" extends="Group">
+                        <script uri="MyNode.bs"/>
+                        <interface>
+                            <field id="myProp" type="integer" />
+                            <function name="someCallfunc" />
+                        </interface>
+                    </component>
+                `);
+
+                program.setFile(s`components/MyNode.bs`, `
+                    function someCallfunc() as integer
+                        return m.top.myProp
+                    end function
+                `);
+
+                let utilFile = program.setFile<BrsFile>(`source/util.bs`, `
+                    interface MyIFace extends roSGNodeMyNode
+                    end interface
+
+                    sub foo(iface as MyIFace)
+                        value = iface@.someCallfunc()
+                        print value
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = utilFile.getFunctionScopeAtPosition(util.createPosition(5, 31));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                const sourceScope = program.getScopeByName('source');
+                sourceScope.linkSymbolTable();
+                const thingType = symbolTable.getSymbolType('value', opts) as IntegerType;
+
+                expectTypeToBe(thingType, IntegerType);
                 sourceScope.unlinkSymbolTable();
             });
         });

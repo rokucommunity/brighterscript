@@ -1,13 +1,13 @@
 import type { TypeCompatibilityData } from '../interfaces';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
-import { isDynamicType, isInterfaceType, isInvalidType, isObjectType } from '../astUtils/reflection';
+import { isCallFuncableType, isDynamicType, isInterfaceType, isInvalidType, isObjectType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
-import { InheritableType } from './InheritableType';
 import { isUnionTypeCompatible } from './helpers';
 import type { ReferenceType } from './ReferenceType';
+import { CallFuncableType } from './CallFuncableType';
 
-export class InterfaceType extends InheritableType {
+export class InterfaceType extends CallFuncableType {
     public constructor(
         public name: string,
         public readonly superInterface?: InterfaceType | ReferenceType
@@ -24,9 +24,11 @@ export class InterfaceType extends InheritableType {
             isUnionTypeCompatible(this, targetType, data)) {
             return true;
         }
-        if (isInterfaceType(targetType)) {
-            return this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data);
+        if (isCallFuncableType(targetType)) {
+            return this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data) &&
+                this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data, this.callFuncMemberTable, targetType.callFuncMemberTable);
         }
+
         const ancestorTypes = this.getAncestorTypeList();
         if (ancestorTypes?.find(ancestorType => ancestorType.isEqual(targetType))) {
             return true;
