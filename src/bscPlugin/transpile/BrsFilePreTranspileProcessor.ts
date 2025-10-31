@@ -209,6 +209,81 @@ export class BrsFilePreTranspileProcessor {
 
     }
 
+    /**
+     * Recursively resolve a const or enum value until we get to the final resolved expression
+     * Returns an object with the resolved value and a flag indicating if a circular reference was detected
+     */
+    private resolveConstValue(value: Expression, scope: Scope | undefined, containingNamespace: string | undefined, visited = new Set<string>()): { value: Expression; isCircular: boolean } {
+        // If it's already a literal, return it as-is
+        if (isLiteralExpression(value)) {
+            return { value: value, isCircular: false };
+        }
+
+        // If it's a variable expression, try to resolve it as a const or enum
+        if (isVariableExpression(value)) {
+            const entityName = value.name.text.toLowerCase();
+
+            // Prevent infinite recursion by tracking visited constants
+            if (visited.has(entityName)) {
+                return { value: value, isCircular: true }; // Return the original value to avoid infinite loop
+            }
+            visited.add(entityName);
+
+            // Try to resolve as const first
+            const constStatement = scope?.getConstFileLink(entityName, containingNamespace)?.item;
+            if (constStatement) {
+                // Recursively resolve the const value
+                return this.resolveConstValue(constStatement.value, scope, containingNamespace, visited);
+            }
+
+            // Try to resolve as enum member
+            const enumInfo = this.getEnumInfo(entityName, containingNamespace, scope);
+            if (enumInfo?.value) {
+                // Enum values are already resolved to literals by getEnumInfo
+                return { value: enumInfo.value, isCircular: false };
+            }
+        }
+
+        // If it's a dotted get expression (e.g., namespace.const or namespace.enum.member), try to resolve it
+        if (isDottedGetExpression(value)) {
+            const parts = util.splitExpression(value);
+            const processedNames: string[] = [];
+
+            for (let part of parts) {
+                if (isVariableExpression(part) || isDottedGetExpression(part)) {
+                    processedNames.push(part?.name?.text?.toLowerCase());
+                } else {
+                    return { value: value, isCircular: false }; // Can't resolve further
+                }
+            }
+
+            const entityName = processedNames.join('.');
+
+            // Prevent infinite recursion
+            if (visited.has(entityName)) {
+                return { value: value, isCircular: true };
+            }
+            visited.add(entityName);
+
+            // Try to resolve as const first
+            const constStatement = scope?.getConstFileLink(entityName, containingNamespace)?.item;
+            if (constStatement) {
+                // Recursively resolve the const value
+                return this.resolveConstValue(constStatement.value, scope, containingNamespace, visited);
+            }
+
+            // Try to resolve as enum member
+            const enumInfo = this.getEnumInfo(entityName, containingNamespace, scope);
+            if (enumInfo?.value) {
+                // Enum values are already resolved to literals by getEnumInfo
+                return { value: enumInfo.value, isCircular: false };
+            }
+        }
+
+        // Return the value as-is if we can't resolve it further
+        return { value: value, isCircular: false };
+    }
+
     private processExpression(ternaryExpression: Expression, scope: Scope | undefined) {
         let containingNamespace = this.event.file.getNamespaceStatementForPosition(ternaryExpression.range.start)?.getName(ParseMode.BrighterScript);
 
@@ -225,11 +300,15 @@ export class BrsFilePreTranspileProcessor {
             }
 
             let value: Expression;
+            let isCircular = false;
 
             //did we find a const? transpile the value
             let constStatement = scope?.getConstFileLink(entityName, containingNamespace)?.item;
             if (constStatement) {
-                value = constStatement.value;
+                // Recursively resolve the const value to its final form
+                const resolved = this.resolveConstValue(constStatement.value, scope, containingNamespace);
+                value = resolved.value;
+                isCircular = resolved.isCircular;
             } else {
                 //did we find an enum member? transpile that
                 let enumInfo = this.getEnumInfo(entityName, containingNamespace, scope);
@@ -238,7 +317,7 @@ export class BrsFilePreTranspileProcessor {
                 }
             }
 
-            if (value) {
+            if (value && !isCircular) {
                 //override the transpile for this item.
                 this.event.editor.setProperty(part, 'transpile', (state) => {
                     if (isLiteralExpression(value)) {
