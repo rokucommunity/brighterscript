@@ -1203,13 +1203,10 @@ export class Program {
                 }
             })
             .forEach('beforeScopeValidate', () => scopesToValidate, (scope) => {
-                if (scope.shouldValidate(this.currentScopeValidationOptions)) {
-                    scopesToValidate.push(scope);
-                    this.plugins.emit('beforeScopeValidate', {
-                        program: this,
-                        scope: scope
-                    });
-                }
+                this.plugins.emit('beforeScopeValidate', {
+                    program: this,
+                    scope: scope
+                });
             })
             .forEach('validate scope', () => scopesToValidate, (scope) => {
                 scope.validate(this.currentScopeValidationOptions);
