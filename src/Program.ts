@@ -1020,30 +1020,13 @@ export class Program {
                     program: this
                 });
             })
-            //handle some component symbol stuff
-            .forEach('addDeferredComponentTypeSymbolCreation',
-                () => {
-                    filesToProcess = Object.values(this.files).sort(firstBy(x => x.srcPath)).filter(x => !x.isValidated);
-                    for (const file of filesToProcess) {
-                        filesToBeValidatedInScopeContext.add(file);
-                    }
-
-                    //return the list of files that need to be processed
-                    return filesToProcess;
-                }, (file) => {
-                    // cast a wide net for potential changes in components
-                    if (isXmlFile(file)) {
-                        this.addDeferredComponentTypeSymbolCreation(file);
-                    } else if (isBrsFile(file)) {
-                        for (const scope of this.getScopesForFile(file)) {
-                            if (isXmlScope(scope)) {
-                                this.addDeferredComponentTypeSymbolCreation(scope.xmlFile);
-                            }
-                        }
-                    }
+            .once('get files to be validated', () => {
+                filesToProcess = Object.values(this.files).sort(firstBy(x => x.srcPath)).filter(x => !x.isValidated);
+                for (const file of filesToProcess) {
+                    filesToBeValidatedInScopeContext.add(file);
                 }
-            )
-            .once('addComponentReferenceTypes', () => {
+            })
+            .once('add component reference types', () => {
                 // Create reference component types for any component that changes
                 for (let [componentKey, componentName] of this.componentSymbolsToUpdate.entries()) {
                     this.addComponentReferenceType(componentKey, componentName);
@@ -1076,8 +1059,24 @@ export class Program {
                     file: file
                 });
             })
-            .once('Build component types for any component that changes', () => {
+            .forEach('do deferred component creation', () => [...brsFilesValidated, ...xmlFilesValidated], (file) => {
+                if (isXmlFile(file)) {
+                    this.addDeferredComponentTypeSymbolCreation(file);
+                } else if (isBrsFile(file)) {
+                    const fileHasChanges = file.providedSymbols.changes.get(SymbolTypeFlag.runtime).size > 0 || file.providedSymbols.changes.get(SymbolTypeFlag.typetime).size > 0;
+                    if (fileHasChanges) {
+                        this.logger.info('File changes: ', file.srcPath, file.providedSymbols.changes);
+                        for (const scope of this.getScopesForFile(file)) {
+                            if (isXmlScope(scope)) {
+                                this.addDeferredComponentTypeSymbolCreation(scope.xmlFile);
+                            }
+                        }
+                    }
+                }
+            })
+            .once('build component types for any component that changes', () => {
                 this.logger.time(LogLevel.info, ['Build component types'], () => {
+                    this.logger.info(`Component Symbols to update:`, [...this.componentSymbolsToUpdate.entries()].sort());
                     for (let [componentKey, componentName] of this.componentSymbolsToUpdate.entries()) {
                         if (this.updateComponentSymbolInGlobalScope(componentKey, componentName)) {
                             changedComponentTypes.push(util.getSgNodeTypeName(componentName).toLowerCase());
@@ -1160,11 +1159,11 @@ export class Program {
                 this.validationDetails.xmlFilesValidated = [];
             })
             .once('tracks changed symbols and prepares files and scopes for validation', () => {
-                if (this.options.logLevel === LogLevel.debug) {
+                if (this.options.logLevel === LogLevel.debug || this.options.logLevel === LogLevel.info) {
                     const changedRuntime = Array.from(changedSymbols.get(SymbolTypeFlag.runtime)).sort();
-                    this.logger.debug('Changed Symbols (runTime):', changedRuntime.join(', '));
+                    this.logger.info('Changed Symbols (runTime):', changedRuntime.join(', '));
                     const changedTypetime = Array.from(changedSymbols.get(SymbolTypeFlag.typetime)).sort();
-                    this.logger.debug('Changed Symbols (typeTime):', changedTypetime.join(', '));
+                    this.logger.info('Changed Symbols (typeTime):', changedTypetime.join(', '));
                 }
 
                 const scopesToCheck = this.getScopesForCrossScopeValidation(changedComponentTypes.length > 0);
@@ -1193,9 +1192,16 @@ export class Program {
                     }
                 }
             })
-            .forEach('validate scopes', () => this.getSortedScopeNames(), (scopeName) => {
+            .once('checking scopes to validate', () => {
                 //sort the scope names so we get consistent results
-                let scope = this.scopes[scopeName];
+                for (const scopeName of this.getSortedScopeNames()) {
+                    let scope = this.scopes[scopeName];
+                    if (scope.shouldValidate(this.currentScopeValidationOptions)) {
+                        scopesToValidate.push(scope);
+                    }
+                }
+            })
+            .forEach('beforeScopeValidate', () => scopesToValidate, (scope) => {
                 if (scope.shouldValidate(this.currentScopeValidationOptions)) {
                     scopesToValidate.push(scope);
                     this.plugins.emit('beforeScopeValidate', {
