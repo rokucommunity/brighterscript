@@ -1065,7 +1065,6 @@ export class Program {
                 } else if (isBrsFile(file)) {
                     const fileHasChanges = file.providedSymbols.changes.get(SymbolTypeFlag.runtime).size > 0 || file.providedSymbols.changes.get(SymbolTypeFlag.typetime).size > 0;
                     if (fileHasChanges) {
-                        this.logger.info('File changes: ', file.srcPath, file.providedSymbols.changes);
                         for (const scope of this.getScopesForFile(file)) {
                             if (isXmlScope(scope)) {
                                 this.addDeferredComponentTypeSymbolCreation(scope.xmlFile);
@@ -1076,7 +1075,7 @@ export class Program {
             })
             .once('build component types for any component that changes', () => {
                 this.logger.time(LogLevel.info, ['Build component types'], () => {
-                    this.logger.info(`Component Symbols to update:`, [...this.componentSymbolsToUpdate.entries()].sort());
+                    this.logger.debug(`Component Symbols to update:`, [...this.componentSymbolsToUpdate.entries()].sort());
                     for (let [componentKey, componentName] of this.componentSymbolsToUpdate.entries()) {
                         if (this.updateComponentSymbolInGlobalScope(componentKey, componentName)) {
                             changedComponentTypes.push(util.getSgNodeTypeName(componentName).toLowerCase());
@@ -1166,7 +1165,7 @@ export class Program {
                     this.logger.debug('Changed Symbols (typeTime):', changedTypetime.join(', '));
                 }
                 const didComponentChange = changedComponentTypes.length > 0;
-                const didProvidedSymbolChange = changedSymbols.get(SymbolTypeFlag.runtime).size > 0 || changedSymbols.get(SymbolTypeFlag.runtime).size > 0;
+                const didProvidedSymbolChange = changedSymbols.get(SymbolTypeFlag.runtime).size > 0 || changedSymbols.get(SymbolTypeFlag.typetime).size > 0;
                 const scopesToCheck = this.getScopesForCrossScopeValidation(didComponentChange, didProvidedSymbolChange);
                 this.crossScopeValidation.buildComponentsMap();
                 this.crossScopeValidation.addDiagnosticsForScopes(scopesToCheck);
