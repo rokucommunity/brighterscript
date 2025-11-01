@@ -1159,14 +1159,15 @@ export class Program {
                 this.validationDetails.xmlFilesValidated = [];
             })
             .once('tracks changed symbols and prepares files and scopes for validation', () => {
-                if (this.options.logLevel === LogLevel.debug || this.options.logLevel === LogLevel.info) {
+                if (this.options.logLevel === LogLevel.debug) {
                     const changedRuntime = Array.from(changedSymbols.get(SymbolTypeFlag.runtime)).sort();
-                    this.logger.info('Changed Symbols (runTime):', changedRuntime.join(', '));
+                    this.logger.debug('Changed Symbols (runTime):', changedRuntime.join(', '));
                     const changedTypetime = Array.from(changedSymbols.get(SymbolTypeFlag.typetime)).sort();
-                    this.logger.info('Changed Symbols (typeTime):', changedTypetime.join(', '));
+                    this.logger.debug('Changed Symbols (typeTime):', changedTypetime.join(', '));
                 }
-
-                const scopesToCheck = this.getScopesForCrossScopeValidation(changedComponentTypes.length > 0);
+                const didComponentChange = changedComponentTypes.length > 0;
+                const didProvidedSymbolChange = changedSymbols.get(SymbolTypeFlag.runtime).size > 0 || changedSymbols.get(SymbolTypeFlag.runtime).size > 0;
+                const scopesToCheck = this.getScopesForCrossScopeValidation(didComponentChange, didProvidedSymbolChange);
                 this.crossScopeValidation.buildComponentsMap();
                 this.crossScopeValidation.addDiagnosticsForScopes(scopesToCheck);
                 const filesToRevalidate = this.crossScopeValidation.getFilesRequiringChangedSymbol(scopesToCheck, changedSymbols);
@@ -1278,11 +1279,18 @@ export class Program {
         this.logger.info(`Validation Metrics: ${logs.join(', ')}`);
     }
 
-    private getScopesForCrossScopeValidation(someComponentTypeChanged = false) {
-        const scopesForCrossScopeValidation = [];
+    private getScopesForCrossScopeValidation(someComponentTypeChanged: boolean, providedSymbolsChanged: boolean) {
+        const scopesForCrossScopeValidation: Scope[] = [];
         for (let scopeName of this.getSortedScopeNames()) {
             let scope = this.scopes[scopeName];
-            if (this.globalScope !== scope && (someComponentTypeChanged || !scope.isValidated)) {
+            if (this.globalScope === scope) {
+                continue;
+            }
+            if (someComponentTypeChanged) {
+                scopesForCrossScopeValidation.push(scope);
+            }
+
+            if (providedSymbolsChanged && !scope.isValidated) {
                 scopesForCrossScopeValidation.push(scope);
             }
         }
