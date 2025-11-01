@@ -1159,7 +1159,7 @@ export class Program {
                 this.validationDetails.brsFilesValidated = [];
                 this.validationDetails.xmlFilesValidated = [];
             })
-            .once('tracks changed symbols and prepares files and scopes for validation.', () => {
+            .once('tracks changed symbols and prepares files and scopes for validation', () => {
                 if (this.options.logLevel === LogLevel.debug) {
                     const changedRuntime = Array.from(changedSymbols.get(SymbolTypeFlag.runtime)).sort();
                     this.logger.debug('Changed Symbols (runTime):', changedRuntime.join(', '));
@@ -1204,9 +1204,7 @@ export class Program {
                     });
                 }
             })
-            .forEach('validate scope', () => this.getSortedScopeNames(), (scopeName) => {
-                //sort the scope names so we get consistent results
-                let scope = this.scopes[scopeName];
+            .forEach('validate scope', () => scopesToValidate, (scope) => {
                 scope.validate(this.currentScopeValidationOptions);
             })
             .forEach('afterScopeValidate', () => scopesToValidate, (scope) => {
