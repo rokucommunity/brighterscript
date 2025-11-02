@@ -11,7 +11,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallableType, isCallExpression, isCallfuncExpression, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallableType, isCallExpression, isCallfuncExpression, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -200,6 +200,11 @@ export class CallExpression extends Expression {
         if (isNewExpression(this.parent)) {
             return calleeType;
         }
+        if (isInterfaceType(calleeType) && calleeType?.isBuiltIn && calleeType?.name === 'roFunction') {
+            // things typed as `roFunction` can be called, but we don't know the return type
+            return DynamicType.instance;
+        }
+
         const specialCaseReturnType = util.getSpecialCaseCallExpressionReturnType(this, options);
         if (specialCaseReturnType) {
             return specialCaseReturnType;

@@ -16,6 +16,7 @@ import { tempDir, rootDir } from '../../testHelpers.spec';
 import { isReturnStatement } from '../../astUtils/reflection';
 import { ScopeValidator } from './ScopeValidator';
 import type { ReturnStatement } from '../../parser/Statement';
+import { Logger } from '@rokucommunity/logger';
 
 describe('ScopeValidator', () => {
 
@@ -2891,6 +2892,34 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
+        });
+
+        it('allows returning a function call', () => {
+            const spy = sinon.spy(Logger.prototype, 'error');
+            program.setFile<BrsFile>('source/main.bs', `
+                function abc(func as function) as dynamic
+                    return func()
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(
+                spy.getCalls().map(x => (x.args?.[0] as string)?.toString()).filter(x => x?.includes('Error when calling plugin'))
+            ).to.eql([]);
+        });
+
+        it('allows returning a roFunction call', () => {
+            const spy = sinon.spy(Logger.prototype, 'error');
+            program.setFile<BrsFile>('source/main.bs', `
+                function abc(func as roFunction) as dynamic
+                    return func()
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(
+                spy.getCalls().map(x => (x.args?.[0] as string)?.toString()).filter(x => x?.includes('Error when calling plugin'))
+            ).to.eql([]);
         });
     });
 
