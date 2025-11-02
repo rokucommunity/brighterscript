@@ -50,7 +50,7 @@ import { CrossScopeValidator } from './CrossScopeValidator';
 import { DiagnosticManager } from './DiagnosticManager';
 import { ProgramValidatorDiagnosticsTag } from './bscPlugin/validation/ProgramValidator';
 import type { ProvidedSymbolInfo, BrsFile } from './files/BrsFile';
-import type { XmlFile } from './files/XmlFile';
+import type { UnresolvedXMLSymbol, XmlFile } from './files/XmlFile';
 import { SymbolTable } from './SymbolTable';
 import { ReferenceType, TypesCreated } from './types';
 import type { Statement } from './parser/AstNode';
@@ -944,6 +944,18 @@ export class Program {
             filesToBeValidatedInScopeContext: new Set<BscFile>()
         };
 
+    public lastValidationInfo: {
+        brsFilesSrcPath: Set<string>;
+        xmlFilesSrcPath: Set<string>;
+        scopeNames: Set<string>;
+        componentsRebuilt: Set<string>;
+    } = {
+            brsFilesSrcPath: new Set<string>(),
+            xmlFilesSrcPath: new Set<string>(),
+            scopeNames: new Set<string>(),
+            componentsRebuilt: new Set<string>()
+        };
+
     /**
      * Counter used to track which validation run is being logged
      */
@@ -1066,7 +1078,7 @@ export class Program {
                     const fileHasChanges = file.providedSymbols.changes.get(SymbolTypeFlag.runtime).size > 0 || file.providedSymbols.changes.get(SymbolTypeFlag.typetime).size > 0;
                     if (fileHasChanges) {
                         for (const scope of this.getScopesForFile(file)) {
-                            if (isXmlScope(scope)) {
+                            if (isXmlScope(scope) && this.doesXmlFileRequireProvidedSymbols(scope.xmlFile, file.providedSymbols.changes)) {
                                 this.addDeferredComponentTypeSymbolCreation(scope.xmlFile);
                             }
                         }
@@ -1076,7 +1088,9 @@ export class Program {
             .once('build component types for any component that changes', () => {
                 this.logger.time(LogLevel.info, ['Build component types'], () => {
                     this.logger.debug(`Component Symbols to update:`, [...this.componentSymbolsToUpdate.entries()].sort());
+                    this.lastValidationInfo.componentsRebuilt = new Set<string>();
                     for (let [componentKey, componentName] of this.componentSymbolsToUpdate.entries()) {
+                        this.lastValidationInfo.componentsRebuilt.add(componentName?.toLowerCase());
                         if (this.updateComponentSymbolInGlobalScope(componentKey, componentName)) {
                             changedComponentTypes.push(util.getSgNodeTypeName(componentName).toLowerCase());
                         }
@@ -1153,6 +1167,9 @@ export class Program {
 
                 changedSymbols.set(SymbolTypeFlag.typetime, new Set([...changedSymbols.get(SymbolTypeFlag.typetime), ...changedTypeSymbols, ...dependentTypesChanged]));
 
+                this.lastValidationInfo.brsFilesSrcPath = new Set<string>(this.validationDetails.brsFilesValidated.map(f => f.srcPath?.toLowerCase() ?? ''));
+                this.lastValidationInfo.xmlFilesSrcPath = new Set<string>(this.validationDetails.xmlFilesValidated.map(f => f.srcPath?.toLowerCase() ?? ''));
+
                 // can reset filesValidatedList, because they are no longer needed
                 this.validationDetails.brsFilesValidated = [];
                 this.validationDetails.xmlFilesValidated = [];
@@ -1167,8 +1184,11 @@ export class Program {
                 const didComponentChange = changedComponentTypes.length > 0;
                 const didProvidedSymbolChange = changedSymbols.get(SymbolTypeFlag.runtime).size > 0 || changedSymbols.get(SymbolTypeFlag.typetime).size > 0;
                 const scopesToCheck = this.getScopesForCrossScopeValidation(didComponentChange, didProvidedSymbolChange);
+
                 this.crossScopeValidation.buildComponentsMap();
-                this.crossScopeValidation.addDiagnosticsForScopes(scopesToCheck);
+                this.logger.time(LogLevel.info, ['addDiagnosticsForScopes'], () => {
+                    this.crossScopeValidation.addDiagnosticsForScopes(scopesToCheck);
+                });
                 const filesToRevalidate = this.crossScopeValidation.getFilesRequiringChangedSymbol(scopesToCheck, changedSymbols);
                 for (const file of filesToRevalidate) {
                     filesToBeValidatedInScopeContext.add(file);
@@ -1200,6 +1220,7 @@ export class Program {
                         scopesToValidate.push(scope);
                     }
                 }
+                this.lastValidationInfo.scopeNames = new Set<string>(scopesToValidate.map(s => s.name?.toLowerCase() ?? ''));
             })
             .forEach('beforeScopeValidate', () => scopesToValidate, (scope) => {
                 this.plugins.emit('beforeScopeValidate', {
@@ -1267,15 +1288,7 @@ export class Program {
         }
     }
 
-    protected logValidationMetrics(metrics: Record<string, number | string>) {
-        let logs = [] as string[];
-        for (const key in metrics) {
-            logs.push(`${key}=${chalk.yellow(metrics[key].toString())}`);
-        }
-        this.logger.info(`Validation Metrics: ${logs.join(', ')}`);
-    }
-
-    private getScopesForCrossScopeValidation(someComponentTypeChanged: boolean, providedSymbolsChanged: boolean) {
+    private getScopesForCrossScopeValidation(someComponentTypeChanged: boolean, didProvidedSymbolChange: boolean) {
         const scopesForCrossScopeValidation: Scope[] = [];
         for (let scopeName of this.getSortedScopeNames()) {
             let scope = this.scopes[scopeName];
@@ -1285,12 +1298,22 @@ export class Program {
             if (someComponentTypeChanged) {
                 scopesForCrossScopeValidation.push(scope);
             }
-
-            if (providedSymbolsChanged && !scope.isValidated) {
+            if (didProvidedSymbolChange && !scope.isValidated) {
                 scopesForCrossScopeValidation.push(scope);
             }
         }
         return scopesForCrossScopeValidation;
+    }
+
+    private doesXmlFileRequireProvidedSymbols(file: XmlFile, providedSymbolsByFlag: Map<SymbolTypeFlag, Set<string>>) {
+        for (const required of file.requiredSymbols) {
+            const symbolNameLower = (required as UnresolvedXMLSymbol).name.toLowerCase();
+            const requiredSymbolIsProvided = providedSymbolsByFlag.get(required.flags).has(symbolNameLower);
+            if (requiredSymbolIsProvided) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
