@@ -465,7 +465,7 @@ export function isInheritableType(target): target is InheritableType {
 }
 
 export function isCallableType(target): target is BaseFunctionType {
-    return isFunctionTypeLike(target) || isTypedFunctionType(target) || (isDynamicType(target) && !isAnyReferenceType(target));
+    return isFunctionTypeLike(target) || isTypedFunctionType(target) || isObjectType(target) || (isDynamicType(target) && !isAnyReferenceType(target));
 }
 
 export function isAnyReferenceType(target): target is AnyReferenceType {
