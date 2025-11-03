@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as fsExtra from 'fs-extra';
+import * as crypto from 'crypto';
 import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
@@ -403,7 +404,11 @@ export class Util {
             emitDefinitions: config.emitDefinitions === true ? true : false,
             removeParameterTypes: config.removeParameterTypes === true ? true : false,
             logLevel: logLevel,
-            bslibDestinationDir: bslibDestinationDir
+            bslibDestinationDir: bslibDestinationDir,
+            bslibHandling: {
+                mode: config.bslibHandling?.mode ?? 'shared',
+                uniqueStrategy: config.bslibHandling?.uniqueStrategy ?? 'md5'
+            }
         };
 
         //mutate `config` in case anyone is holding a reference to the incomplete one
@@ -1768,6 +1773,56 @@ export class Util {
         }
         //just return empty string so log functions don't crash with undefined project numbers
         return '';
+    }
+
+    /**
+     * Generate a unique suffix for bslib functions based on the specified strategy
+     */
+    public generateBslibSuffix(srcPath: string, strategy: 'md5' | 'guid' = 'md5'): string {
+        if (strategy === 'guid') {
+            // Generate a simple GUID-like identifier
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0;
+                const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        } else {
+            // Use MD5 hash of srcPath
+            return crypto.createHash('md5').update(srcPath).digest('hex').substring(0, 16);
+        }
+    }
+
+    /**
+     * Get the bslib functions with unique suffixes for inlining into a specific file
+     */
+    public getBslibFunctionsWithSuffix(suffix: string, usedFunctions?: Set<string>): string {
+        // eslint-disable-next-line
+        const bslib = require('@rokucommunity/bslib');
+        let source = bslib.source as string;
+
+        // If usedFunctions is provided, filter to only include those functions
+        if (usedFunctions && usedFunctions.size > 0) {
+            const functionRegex = /^(\s*(?:function|sub)\s+)([a-z0-9_]+)([\s\S]*?)^end\s+(?:function|sub)/gmi;
+            const functions: string[] = [];
+            let match: RegExpExecArray | null;
+
+            // eslint-disable-next-line no-cond-assign
+            while (match = functionRegex.exec(source)) {
+                const functionName = match[2];
+                if (usedFunctions.has(functionName)) {
+                    functions.push(match[0]);
+                }
+            }
+
+            source = functions.join('\n\n');
+        }
+
+        //apply the `bslib_` prefix and unique suffix to the function names only
+        source = source.replace(/^(\s*function\s+)([a-z0-9_]+)(\()/gmi, (match, prefix, functionName, paren) => {
+            return prefix + 'bslib_' + functionName + suffix + paren;
+        });
+
+        return source;
     }
 }
 
