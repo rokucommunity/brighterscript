@@ -68,6 +68,38 @@ export class Lexer {
     private leadingWhitespace = '';
 
     /**
+     * Stack to track nested template string expression state.
+     * Each entry contains the brace depth for that template expression level.
+     * Empty stack means we're not in any template expression.
+     */
+    private templateExpressionStack: number[] = [];
+
+    /**
+     * Returns true if we're currently inside any template string expression
+     */
+    private get isInTemplateExpression(): boolean {
+        return this.templateExpressionStack.length > 0;
+    }
+
+    /**
+     * Returns the current template expression brace depth (0 if not in template expression)
+     */
+    private get templateExpressionBraceDepth(): number {
+        return this.templateExpressionStack.length > 0 
+            ? this.templateExpressionStack[this.templateExpressionStack.length - 1] 
+            : 0;
+    }
+
+    /**
+     * Sets the current template expression brace depth
+     */
+    private set templateExpressionBraceDepth(depth: number) {
+        if (this.templateExpressionStack.length > 0) {
+            this.templateExpressionStack[this.templateExpressionStack.length - 1] = depth;
+        }
+    }
+
+    /**
      * A convenience function, equivalent to `new Lexer().scan(toScan)`, that converts a string
      * containing BrightScript code to an array of `Token` objects that will later be used to build
      * an abstract syntax tree.
@@ -147,6 +179,27 @@ export class Lexer {
         '"': Lexer.prototype.string,
         '\'': Lexer.prototype.comment,
         '`': Lexer.prototype.templateString,
+        '{': function (this: Lexer) {
+            if (this.isInTemplateExpression) {
+                this.templateExpressionBraceDepth++;
+            }
+            this.addToken(TokenKind.LeftCurlyBrace);
+        },
+        '}': function (this: Lexer) {
+            if (this.isInTemplateExpression) {
+                if (this.templateExpressionBraceDepth > 0) {
+                    this.templateExpressionBraceDepth--;
+                    this.addToken(TokenKind.RightCurlyBrace);
+                } else {
+                    // This is the closing brace for the template expression
+                    // Pop the current template expression level from the stack
+                    this.templateExpressionStack.pop();
+                    this.addToken(TokenKind.TemplateStringExpressionEnd);
+                }
+            } else {
+                this.addToken(TokenKind.RightCurlyBrace);
+            }
+        },
         '.': function (this: Lexer) {
             // this might be a float/double literal, because decimals without a leading 0
             // are allowed
@@ -332,8 +385,6 @@ export class Lexer {
         ')': TokenKind.RightParen,
         '=': TokenKind.Equal,
         ',': TokenKind.Comma,
-        '{': TokenKind.LeftCurlyBrace,
-        '}': TokenKind.RightCurlyBrace,
         '[': TokenKind.LeftSquareBracket,
         ']': TokenKind.RightSquareBracket,
         '^': TokenKind.Caret,
@@ -612,19 +663,13 @@ export class Lexer {
                 this.advance();
                 this.advance();
                 this.addToken(TokenKind.TemplateStringExpressionBegin);
-                while (!this.isAtEnd() && !this.check('}')) {
+
+                // Enter template expression mode by pushing a new level onto the stack
+                this.templateExpressionStack.push(0);
+
+                while (!this.isAtEnd() && this.isInTemplateExpression) {
                     this.start = this.current;
                     this.scanToken();
-                }
-                if (this.check('}')) {
-                    this.advance();
-                    this.addToken(TokenKind.TemplateStringExpressionEnd);
-                } else {
-
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.unexpectedConditionalCompilationString(),
-                        range: this.rangeOf()
-                    });
                 }
 
                 this.start = this.current;
