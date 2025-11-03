@@ -747,6 +747,11 @@ export let DiagnosticMessages = {
         message: `Non-void ${functionType} must return a value`,
         code: 1142,
         severity: DiagnosticSeverity.Error
+    }),
+    xmlTagCaseMismatch: (tagName: string, expectedTagName: string) => ({
+        message: `Tag '${tagName}' must be all lower case. Use '${expectedTagName}' instead.`,
+        code: 1143,
+        severity: DiagnosticSeverity.Error
     })
 };
 

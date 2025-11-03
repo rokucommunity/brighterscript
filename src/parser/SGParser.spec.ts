@@ -113,6 +113,46 @@ describe('SGParser', () => {
         });
     });
 
+    it('Does not add case mismatch error during parsing (now handled in validation)', () => {
+        const parser = new SGParser();
+        parser.parse(
+            'pkg:/components/ParentScene.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="ChildScene" extends="ParentScene">
+                <Children>
+                    <Label id="test" />
+                </Children>
+            </component>
+        `);
+        expect(parser.diagnostics).to.be.lengthOf(0);
+    });
+
+    it('Does not add case mismatch error during parsing for interface tag (now handled in validation)', () => {
+        const parser = new SGParser();
+        parser.parse(
+            'pkg:/components/ParentScene.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="ChildScene" extends="ParentScene">
+                <Interface>
+                    <field id="test" type="string" />
+                </Interface>
+            </component>
+        `);
+        expect(parser.diagnostics).to.be.lengthOf(0);
+    });
+
+    it('Does not add case mismatch error during parsing for script tag (now handled in validation)', () => {
+        const parser = new SGParser();
+        parser.parse(
+            'pkg:/components/ParentScene.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="ChildScene" extends="ParentScene">
+                <Script type="text/brightscript" uri="./test.brs" />
+            </component>
+        `);
+        expect(parser.diagnostics).to.be.lengthOf(0);
+    });
+
     it('Adds error when a leaf tag is found to have children', () => {
         const parser = new SGParser();
         parser.parse(
