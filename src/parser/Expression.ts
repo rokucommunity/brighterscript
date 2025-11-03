@@ -19,6 +19,7 @@ import { FunctionType } from '../types/FunctionType';
 import type { AstNode } from './AstNode';
 import { Expression } from './AstNode';
 import { SymbolTable } from '../SymbolTable';
+import type { TranspileState } from './TranspileState';
 import { SourceNode } from 'source-map';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
@@ -43,6 +44,14 @@ export class BinaryExpression extends Expression {
             ' ',
             state.sourceNode(this.right, this.right.transpile(state))
         ];
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            this.left?.toSourceNode(state),
+            state.tokenToSourceNodeWithTrivia(this.operator),
+            this.right?.toSourceNode(state)
+        );
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -81,7 +90,7 @@ export class CallExpression extends Expression {
         readonly openingParen: Token,
         readonly closingParen: Token,
         readonly args: Expression[],
-        unused?: any
+        readonly argCommas: Token[]
     ) {
         super();
         this.range = util.createBoundingRange(this.callee, this.openingParen, ...args ?? [], this.closingParen);
@@ -126,6 +135,18 @@ export class CallExpression extends Expression {
         return result;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            this.callee?.toSourceNode(state),
+            state.tokenToSourceNodeWithTrivia(this.openingParen),
+            ...this.args.map((x, i) => ([
+                x.toSourceNode(state),
+                state.tokenToSourceNodeWithTrivia(this.argCommas[i])
+            ])).flat(),
+            state.tokenToSourceNodeWithTrivia(this.closingParen)
+        );
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'callee', visitor, options);
@@ -139,7 +160,8 @@ export class CallExpression extends Expression {
                 this.callee?.clone(),
                 util.cloneToken(this.openingParen),
                 util.cloneToken(this.closingParen),
-                this.args?.map(e => e?.clone())
+                this.args?.map(e => e?.clone()),
+                this.argCommas?.map(x => util.cloneToken(x))
             ),
             ['callee', 'args']
         );
@@ -155,7 +177,8 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         readonly leftParen: Token,
         readonly rightParen: Token,
         readonly asToken?: Token,
-        readonly returnTypeToken?: Token
+        readonly returnTypeToken?: Token,
+        readonly paramCommas?: Token[]
     ) {
         super();
         this.setReturnType(); // set the initial return type that we parse
@@ -293,7 +316,25 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         return results;
     }
 
-    getTypedef(state: BrsTranspileState) {
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.functionType),
+            //include the name (if we have a parent FunctionStatement)
+            isFunctionStatement(this.parent) ? state.tokenToSourceNodeWithTrivia(this.parent.name) : undefined,
+            state.tokenToSourceNodeWithTrivia(this.leftParen),
+            ...this.parameters?.map((x, i) => ([
+                x.toSourceNode(state),
+                state.tokenToSourceNodeWithTrivia(this.paramCommas?.[i])
+            ])).flat() ?? [],
+            state.tokenToSourceNodeWithTrivia(this.rightParen),
+            state.tokenToSourceNodeWithTrivia(this.asToken),
+            state.tokenToSourceNodeWithTrivia(this.returnTypeToken),
+            this.body?.toSourceNode(state),
+            state.tokenToSourceNodeWithTrivia(this.end)
+        );
+    }
+
+    getTypedef(state: BrsTranspileState, name?: Identifier) {
         let results = [
             new SourceNode(1, 0, null, [
                 //'function'|'sub'
@@ -394,7 +435,8 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 util.cloneToken(this.leftParen),
                 util.cloneToken(this.rightParen),
                 util.cloneToken(this.asToken),
-                util.cloneToken(this.returnTypeToken)
+                util.cloneToken(this.returnTypeToken),
+                this.paramCommas?.map(x => util.cloneToken(x))
             ),
             ['body']
         );
@@ -414,7 +456,8 @@ export class FunctionParameterExpression extends Expression {
         public name: Identifier,
         public typeToken?: Token,
         public defaultValue?: Expression,
-        public asToken?: Token
+        public asToken?: Token,
+        readonly equalsToken?: Token
     ) {
         super();
         if (typeToken) {
@@ -474,6 +517,16 @@ export class FunctionParameterExpression extends Expression {
         return results;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.name),
+            state.tokenToSourceNodeWithTrivia(this.equalsToken),
+            this.defaultValue?.toSourceNode(state),
+            state.tokenToSourceNodeWithTrivia(this.asToken),
+            state.tokenToSourceNodeWithTrivia(this.typeToken)
+        );
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         // eslint-disable-next-line no-bitwise
         if (this.defaultValue && options.walkMode & InternalWalkMode.walkExpressions) {
@@ -487,7 +540,8 @@ export class FunctionParameterExpression extends Expression {
                 util.cloneToken(this.name),
                 util.cloneToken(this.typeToken),
                 this.defaultValue?.clone(),
-                util.cloneToken(this.asToken)
+                util.cloneToken(this.asToken),
+                util.cloneToken(this.equalsToken)
             ),
             ['defaultValue']
         );
@@ -508,6 +562,10 @@ export class NamespacedVariableNameExpression extends Expression {
         return [
             state.sourceNode(this, this.getName(ParseMode.BrightScript))
         ];
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return this.expression?.toSourceNode(state);
     }
 
     public getNameParts() {
@@ -588,6 +646,14 @@ export class DottedGetExpression extends Expression {
         ];
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            this.obj?.toSourceNode(state),
+            state.tokenToSourceNodeWithTrivia(this.dot),
+            state.tokenToSourceNodeWithTrivia(this.name)
+        );
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'obj', visitor, options);
@@ -627,6 +693,14 @@ export class XmlAttributeGetExpression extends Expression {
             state.transpileToken(this.at),
             state.transpileToken(this.name)
         ];
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            this.obj?.toSourceNode(state),
+            state.tokenToSourceNodeWithTrivia(this.at),
+            state.tokenToSourceNodeWithTrivia(this.name)
+        );
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -693,6 +767,16 @@ export class IndexedGetExpression extends Expression {
         return result;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            this.obj?.toSourceNode(state),
+            state.tokenToSourceNodeWithTrivia(this.questionDotToken),
+            state.tokenToSourceNodeWithTrivia(this.openingSquare),
+            this.index?.toSourceNode(state),
+            state.tokenToSourceNodeWithTrivia(this.closingSquare)
+        );
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'obj', visitor, options);
@@ -739,6 +823,14 @@ export class GroupingExpression extends Expression {
             ...this.expression.transpile(state),
             state.transpileToken(this.tokens.right)
         ];
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.left),
+            this.expression?.toSourceNode(state),
+            state.tokenToSourceNodeWithTrivia(this.tokens.right)
+        );
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -799,6 +891,12 @@ export class LiteralExpression extends Expression {
         ];
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return new SourceNode(0, 0, null, [
+            state.tokenToSourceNodeWithTrivia(this.token)
+        ]);
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
@@ -831,6 +929,10 @@ export class EscapedCharCodeLiteralExpression extends Expression {
         ];
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.tokenToSourceNodeWithTrivia(this.token);
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
@@ -849,10 +951,19 @@ export class ArrayLiteralExpression extends Expression {
         readonly elements: Array<Expression | CommentStatement>,
         readonly open: Token,
         readonly close: Token,
-        readonly hasSpread = false
+        /**
+         * An array of commas used to separate elements.
+         * Since commas are optional, but we need indexes to be aligned,
+         * there should be an entry in here for every element, even if `undefined`
+         */
+        readonly commas: Array<Token | undefined>
     ) {
         super();
         this.range = util.createBoundingRange(this.open, ...this.elements ?? [], this.close);
+        //this param used to be `hasSpread as bool`. guard against non-arrays to avoid old code breaking new code
+        if (!Array.isArray(this.commas)) {
+            this.commas = undefined;
+        }
     }
 
     public readonly range: Range | undefined;
@@ -905,6 +1016,17 @@ export class ArrayLiteralExpression extends Expression {
         return result;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.open),
+            ...this.elements?.map((x, i) => ([
+                x?.toSourceNode(state),
+                state.tokenToSourceNodeWithTrivia(this.commas[i])
+            ])).flat() ?? [],
+            state.tokenToSourceNodeWithTrivia(this.close)
+        );
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walkArray(this.elements, visitor, options, this);
@@ -917,7 +1039,7 @@ export class ArrayLiteralExpression extends Expression {
                 this.elements?.map(e => e?.clone()),
                 util.cloneToken(this.open),
                 util.cloneToken(this.close),
-                this.hasSpread
+                this.commas?.map(x => util.cloneToken(x))
             ),
             ['elements']
         );
@@ -941,6 +1063,15 @@ export class AAMemberExpression extends Expression {
     transpile(state: BrsTranspileState) {
         //TODO move the logic from AALiteralExpression loop into this function
         return [];
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.keyToken),
+            //colon tokens are technically trivia, so we don't need to include that here
+            this.value?.toSourceNode(state),
+            state.tokenToSourceNodeWithTrivia(this.commaToken)
+        );
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -1042,6 +1173,14 @@ export class AALiteralExpression extends Expression {
         return result;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.open),
+            state.arrayToSourceNodeWithTrivia(this.elements, isCommentStatement),
+            state.tokenToSourceNodeWithTrivia(this.close)
+        );
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walkArray(this.elements, visitor, options, this);
@@ -1084,6 +1223,13 @@ export class UnaryExpression extends Expression {
             separatingWhitespace ?? ' ',
             ...this.right.transpile(state)
         ];
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.operator),
+            this.right?.toSourceNode(state)
+        );
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -1143,6 +1289,10 @@ export class VariableExpression extends Expression {
         return [
             state.transpileToken(this.name)
         ];
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.tokenToSourceNodeWithTrivia(this.name);
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -1258,6 +1408,10 @@ export class SourceLiteralExpression extends Expression {
         ];
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.tokenToSourceNodeWithTrivia(this.token);
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
@@ -1307,6 +1461,13 @@ export class NewExpression extends Expression {
         return this.call.transpile(state, cls?.getName(ParseMode.BrightScript));
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.newKeyword),
+            this.call?.toSourceNode(state)
+        );
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'call', visitor, options);
@@ -1331,7 +1492,8 @@ export class CallfuncExpression extends Expression {
         readonly methodName: Identifier,
         readonly openingParen: Token,
         readonly args: Expression[],
-        readonly closingParen: Token
+        readonly closingParen: Token,
+        readonly argCommas: Token[]
     ) {
         super();
         this.range = util.createBoundingRange(
@@ -1384,6 +1546,20 @@ export class CallfuncExpression extends Expression {
         return result;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            this.callee?.toSourceNode(state),
+            state.tokenToSourceNodeWithTrivia(this.operator),
+            state.tokenToSourceNodeWithTrivia(this.methodName),
+            state.tokenToSourceNodeWithTrivia(this.openingParen),
+            ...this.args.map((x, i) => ([
+                x.toSourceNode(state),
+                state.tokenToSourceNodeWithTrivia(this.argCommas[i])
+            ]))?.flat() ?? [],
+            state.tokenToSourceNodeWithTrivia(this.closingParen)
+        );
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'callee', visitor, options);
@@ -1399,7 +1575,8 @@ export class CallfuncExpression extends Expression {
                 util.cloneToken(this.methodName),
                 util.cloneToken(this.openingParen),
                 this.args?.map(e => e?.clone()),
-                util.cloneToken(this.closingParen)
+                util.cloneToken(this.closingParen),
+                this.argCommas?.map(x => util.cloneToken(x))
             ),
             ['callee', 'args']
         );
@@ -1439,6 +1616,12 @@ export class TemplateStringQuasiExpression extends Expression {
         return result;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            ...this.expressions.map(x => x.toSourceNode(state))
+        );
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walkArray(this.expressions, visitor, options, this);
@@ -1460,7 +1643,9 @@ export class TemplateStringExpression extends Expression {
         readonly openingBacktick: Token,
         readonly quasis: TemplateStringQuasiExpression[],
         readonly expressions: Expression[],
-        readonly closingBacktick: Token
+        readonly closingBacktick: Token,
+        readonly expressionBeginTokens: Token[],
+        readonly expressionEndTokens: Token[]
     ) {
         super();
         this.range = util.createBoundingRange(
@@ -1527,6 +1712,21 @@ export class TemplateStringExpression extends Expression {
         return result;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.openingBacktick),
+            ...this.quasis?.map((x, i) => ([
+                this.quasis[i]?.toSourceNode(state),
+                ...(this.expressions?.[i] ? [
+                    state.tokenToSourceNodeWithTrivia(this.expressionBeginTokens[i]),
+                    this.expressions[i]?.toSourceNode(state),
+                    state.tokenToSourceNodeWithTrivia(this.expressionEndTokens[i])
+                ] : [])
+            ])).flat() ?? [],
+            state.tokenToSourceNodeWithTrivia(this.closingBacktick)
+        );
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             //walk the quasis and expressions in left-to-right order
@@ -1547,7 +1747,9 @@ export class TemplateStringExpression extends Expression {
                 util.cloneToken(this.openingBacktick),
                 this.quasis?.map(e => e?.clone()),
                 this.expressions?.map(e => e?.clone()),
-                util.cloneToken(this.closingBacktick)
+                util.cloneToken(this.closingBacktick),
+                this.expressionBeginTokens?.map(x => util.cloneToken(x)),
+                this.expressionEndTokens?.map(x => util.cloneToken(x))
             ),
             ['quasis', 'expressions']
         );
@@ -1560,7 +1762,9 @@ export class TaggedTemplateStringExpression extends Expression {
         readonly openingBacktick: Token,
         readonly quasis: TemplateStringQuasiExpression[],
         readonly expressions: Expression[],
-        readonly closingBacktick: Token
+        readonly closingBacktick: Token,
+        readonly expressionBeginTokens: Token[],
+        readonly expressionEndTokens: Token[]
     ) {
         super();
         this.range = util.createBoundingRange(
@@ -1616,6 +1820,22 @@ export class TaggedTemplateStringExpression extends Expression {
         return result;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tagName),
+            state.tokenToSourceNodeWithTrivia(this.openingBacktick),
+            ...this.quasis?.map((x, i) => ([
+                this.quasis[i]?.toSourceNode(state),
+                ...(this.expressions?.[i] ? [
+                    state.tokenToSourceNodeWithTrivia(this.expressionBeginTokens[i]),
+                    this.expressions[i]?.toSourceNode(state),
+                    state.tokenToSourceNodeWithTrivia(this.expressionEndTokens[i])
+                ] : [])
+            ])).flat() ?? [],
+            state.tokenToSourceNodeWithTrivia(this.closingBacktick)
+        );
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             //walk the quasis and expressions in left-to-right order
@@ -1637,7 +1857,9 @@ export class TaggedTemplateStringExpression extends Expression {
                 util.cloneToken(this.openingBacktick),
                 this.quasis?.map(e => e?.clone()),
                 this.expressions?.map(e => e?.clone()),
-                util.cloneToken(this.closingBacktick)
+                util.cloneToken(this.closingBacktick),
+                this.expressionBeginTokens?.map(x => util.cloneToken(x)),
+                this.expressionEndTokens?.map(x => util.cloneToken(x))
             ),
             ['quasis', 'expressions']
         );
@@ -1677,6 +1899,13 @@ export class AnnotationExpression extends Expression {
 
     transpile(state: BrsTranspileState) {
         return [];
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.atToken),
+            this.call.toSourceNode(state)
+        );
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -1786,6 +2015,17 @@ export class TernaryExpression extends Expression {
         return result;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            this.test?.toSourceNode(state),
+            state.tokenToSourceNodeWithTrivia(this.questionMarkToken),
+            this.consequent?.toSourceNode(state),
+            // don't add the colon because colons are included in leadingTrivia
+            // state.tokenToSourceNodeWithTrivia(this.colonToken),
+            this.alternate?.toSourceNode(state)
+        );
+    }
+
     public walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'test', visitor, options);
@@ -1888,6 +2128,14 @@ export class NullCoalescingExpression extends Expression {
         return result;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            this.consequent?.toSourceNode(state),
+            state.tokenToSourceNodeWithTrivia(this.questionQuestionToken),
+            this.alternate?.toSourceNode(state)
+        );
+    }
+
     public walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'consequent', visitor, options);
@@ -1945,6 +2193,12 @@ export class RegexLiteralExpression extends Expression {
         ];
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.regexLiteral)
+        );
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
@@ -1978,6 +2232,15 @@ export class TypeCastExpression extends Expression {
     public transpile(state: BrsTranspileState): TranspileResult {
         return this.obj.transpile(state);
     }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            this.obj?.toSourceNode(state),
+            state.tokenToSourceNodeWithTrivia(this.asToken),
+            state.tokenToSourceNodeWithTrivia(this.typeToken)
+        );
+    }
+
     public walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'obj', visitor, options);

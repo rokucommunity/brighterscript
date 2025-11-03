@@ -1066,7 +1066,8 @@ export class Util {
                 range: this.cloneRange(token.range),
                 text: token.text,
                 isReserved: token.isReserved,
-                leadingWhitespace: token.leadingWhitespace
+                leadingWhitespace: token.leadingWhitespace,
+                leadingTrivia: token.leadingTrivia?.map(x => this.cloneToken(x))
             } as T;
             //handle those tokens that have charCode
             if ('charCode' in token) {

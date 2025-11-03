@@ -92,7 +92,8 @@ export function createToken<T extends TokenKind>(kind: T, text?: string, range?:
         text: text ?? tokenDefaults[kind as string] ?? kind.toString().toLowerCase(),
         isReserved: !text || text === kind.toString(),
         range: range,
-        leadingWhitespace: ''
+        leadingWhitespace: '',
+        leadingTrivia: []
     };
 }
 
@@ -102,7 +103,8 @@ export function createIdentifier(name: string, range?: Range): Identifier {
         text: name,
         isReserved: false,
         range: range,
-        leadingWhitespace: ''
+        leadingWhitespace: '',
+        leadingTrivia: []
     };
 }
 
@@ -172,7 +174,8 @@ export function createCall(callee: Expression, args?: Expression[]) {
         callee,
         createToken(TokenKind.LeftParen, '('),
         createToken(TokenKind.RightParen, ')'),
-        args || []
+        args || [],
+        []
     );
 }
 
