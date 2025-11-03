@@ -364,7 +364,7 @@ export class TypePropertyReferenceType extends BscType {
 
                 if (propName === 'getTarget') {
                     return () => {
-                        return this.resolve();
+                        return this.getTarget();
                     };
                 }
 
@@ -400,7 +400,7 @@ export class TypePropertyReferenceType extends BscType {
                         return () => false;
                     }
                 }
-                let inner = this.resolve();
+                let inner = this.getTarget();
 
                 if (!inner) {
                     inner = DynamicType.instance;
@@ -426,7 +426,7 @@ export class TypePropertyReferenceType extends BscType {
         });
     }
 
-    resolve(): BscType {
+    getTarget(): BscType {
         let actualOuterType = this.outerType;
         if (isAnyReferenceType(this.outerType)) {
             if ((this.outerType as ReferenceType).isResolvable()) {
