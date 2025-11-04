@@ -52,7 +52,9 @@ import { ProgramValidatorDiagnosticsTag } from './bscPlugin/validation/ProgramVa
 import type { ProvidedSymbolInfo, BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import { SymbolTable } from './SymbolTable';
-import { BscType, ReferenceType, TypesCreated } from './types';
+import type { BscType } from './types/BscType';
+import { ReferenceType } from './types/ReferenceType';
+import { TypesCreated } from './types/helpers';
 import type { Statement } from './parser/AstNode';
 import { CallExpressionInfo } from './bscPlugin/CallExpressionInfo';
 import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
