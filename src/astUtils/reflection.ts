@@ -339,7 +339,7 @@ export function isFunctionType(value: any): value is FunctionType {
     return value?.kind === BscTypeKind.FunctionType;
 }
 export function isRoFunctionType(value: any): value is InterfaceType {
-    return isBuiltInType(value, 'roFunction');
+    return value?.kind === BscTypeKind.RoFunctionType || isBuiltInType(value, 'roFunction');
 }
 export function isFunctionTypeLike(value: any): value is FunctionType | InterfaceType {
     return isFunctionType(value) || isRoFunctionType(value);
@@ -465,7 +465,7 @@ export function isInheritableType(target): target is InheritableType {
 }
 
 export function isCallableType(target): target is BaseFunctionType {
-    return isFunctionTypeLike(target) || isTypedFunctionType(target) || (isDynamicType(target) && !isAnyReferenceType(target));
+    return isFunctionTypeLike(target) || isTypedFunctionType(target) || isObjectType(target) || (isDynamicType(target) && !isAnyReferenceType(target));
 }
 
 export function isAnyReferenceType(target): target is AnyReferenceType {

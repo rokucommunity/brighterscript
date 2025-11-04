@@ -362,6 +362,12 @@ export class TypePropertyReferenceType extends BscType {
                     return outerType;
                 }
 
+                if (propName === 'getTarget') {
+                    return () => {
+                        return this.getTarget();
+                    };
+                }
+
                 if (propName === 'isResolvable') {
                     return () => {
                         return !!(isAnyReferenceType(this.outerType) ? (this.outerType as any).getTarget() : this.outerType?.isResolvable());
@@ -394,7 +400,7 @@ export class TypePropertyReferenceType extends BscType {
                         return () => false;
                     }
                 }
-                let inner = (isAnyReferenceType(this.outerType) ? (this.outerType as ReferenceType).getTarget() : this.outerType)?.[this.propertyName];
+                let inner = this.getTarget();
 
                 if (!inner) {
                     inner = DynamicType.instance;
@@ -420,11 +426,18 @@ export class TypePropertyReferenceType extends BscType {
         });
     }
 
-    getTarget: () => BscType;
+    getTarget(): BscType {
+        let actualOuterType = this.outerType;
+        if (isAnyReferenceType(this.outerType)) {
+            if ((this.outerType as ReferenceType).isResolvable()) {
+                actualOuterType = (this.outerType as ReferenceType)?.getTarget();
+            }
+        }
+        return actualOuterType?.[this.propertyName];
+    }
 
     tableProvider: SymbolTableProvider;
 }
-
 
 /**
  * Use this class for when there is a binary operator and either the left hand side and/or the right hand side
