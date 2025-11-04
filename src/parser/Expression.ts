@@ -200,10 +200,6 @@ export class CallExpression extends Expression {
         if (isNewExpression(this.parent)) {
             return calleeType;
         }
-        if (isInterfaceType(calleeType) && calleeType?.isBuiltIn && calleeType?.name === 'roFunction') {
-            // things typed as `roFunction` can be called, but we don't know the return type
-            return DynamicType.instance;
-        }
 
         const specialCaseReturnType = util.getSpecialCaseCallExpressionReturnType(this, options);
         if (specialCaseReturnType) {
