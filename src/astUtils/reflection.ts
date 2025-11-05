@@ -29,6 +29,7 @@ import type { UnionType } from '../types/UnionType';
 import type { UninitializedType } from '../types/UninitializedType';
 import type { ArrayType } from '../types/ArrayType';
 import type { InheritableType } from '../types/InheritableType';
+import type { CallFuncableType } from '../types/CallFuncableType';
 import { BscTypeKind } from '../types/BscTypeKind';
 import type { NamespaceType } from '../types/NamespaceType';
 import type { BaseFunctionType } from '../types/BaseFunctionType';
@@ -38,6 +39,7 @@ import type { AssociativeArrayType } from '../types/AssociativeArrayType';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Program } from '../Program';
 import type { Project } from '../lsp/Project';
+
 
 // File reflection
 export function isBrsFile(file: BscFile | undefined): file is BrsFile {
@@ -461,7 +463,11 @@ export function isAssociativeArrayType(value: any): value is AssociativeArrayTyp
     return value?.kind === BscTypeKind.AssociativeArrayType;
 }
 export function isInheritableType(target): target is InheritableType {
-    return isClassType(target) || isInterfaceType(target) || isComponentType(target);
+    return isClassType(target) || isCallFuncableType(target);
+}
+
+export function isCallFuncableType(target): target is CallFuncableType {
+    return isInterfaceType(target) || isComponentType(target);
 }
 
 export function isCallableType(target): target is BaseFunctionType {
