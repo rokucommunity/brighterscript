@@ -200,6 +200,7 @@ export class CallExpression extends Expression {
         if (isNewExpression(this.parent)) {
             return calleeType;
         }
+
         const specialCaseReturnType = util.getSpecialCaseCallExpressionReturnType(this, options);
         if (specialCaseReturnType) {
             return specialCaseReturnType;

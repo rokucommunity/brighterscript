@@ -18,6 +18,7 @@ export enum BscTypeKind {
     NamespaceType = 'NamespaceType',
     ObjectType = 'ObjectType',
     ReferenceType = 'ReferenceType',
+    RoFunctionType = 'RoFunctionType',
     StringType = 'StringType',
     UninitializedType = 'UninitializedType',
     UnionType = 'UnionType',

@@ -36,6 +36,10 @@ export class ObjectType extends BscType {
     isEqual(otherType: BscType) {
         return isObjectType(otherType) && this.checkCompatibilityBasedOnMembers(otherType, SymbolTypeFlag.runtime);
     }
+
+    get returnType() {
+        return DynamicType.instance;
+    }
 }
 
 
