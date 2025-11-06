@@ -34,6 +34,7 @@ import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { FunctionType } from '../types/FunctionType';
 import type { BaseFunctionType } from '../types/BaseFunctionType';
 import { brsDocParser } from './BrightScriptDocParser';
+import { InlineInterfaceType } from '../types/InlineInterfaceType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -2730,6 +2731,142 @@ export class TypedArrayExpression extends Expression {
                 rightBracket: util.cloneToken(this.tokens.rightBracket)
             }),
             ['innerType']
+        );
+    }
+}
+
+export class InlineInterfaceExpression extends Expression {
+    constructor(options: {
+        open?: Token;
+        members: InlineInterfaceMemberExpression[];
+        close?: Token;
+    }) {
+        super();
+        this.tokens = {
+            open: options.open,
+            close: options.close
+        };
+        this.members = options.members;
+        this.location = util.createBoundingLocation(
+            this.tokens.open,
+            ...this.members,
+            this.tokens.close
+        );
+    }
+
+    public readonly tokens: {
+        readonly open?: Token;
+        readonly close?: Token;
+    };
+
+    public readonly members: InlineInterfaceMemberExpression[];
+
+    public readonly kind = AstNodeKind.InlineInterfaceExpression;
+
+    public readonly location: Location;
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return [this.getType({ flags: SymbolTypeFlag.typetime }).toTypeString()];
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walkArray(this.members, visitor, options, this);
+        }
+    }
+
+    public getType(options: GetTypeOptions): BscType {
+        const resultType = new InlineInterfaceType();
+        for (const member of this.members) {
+            let memberName = member.tokens?.name?.text ?? '';
+            if (member.tokens.name.kind === TokenKind.StringLiteral) {
+                memberName = memberName.replace(/"/g, ''); // remove quotes if it was a stringLiteral
+            }
+            if (memberName) {
+                const memberType = member?.getType({ ...options, typeChain: undefined }); // no typechain info needed
+                let flag = SymbolTypeFlag.runtime;
+                if (member.isOptional) {
+                    flag |= SymbolTypeFlag.optional;
+                }
+                resultType.addMember(memberName, { definingNode: member }, memberType, flag);
+            }
+        }
+        return resultType;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new InlineInterfaceExpression({
+                open: util.cloneToken(this.tokens.open),
+                members: this.members?.map(x => x?.clone()),
+                close: util.cloneToken(this.tokens.close)
+            }),
+            ['members']
+        );
+    }
+}
+
+export class InlineInterfaceMemberExpression extends Expression {
+    constructor(options: {
+        optional?: Token;
+        name: Token;
+        as?: Token;
+        typeExpression?: TypeExpression;
+    }) {
+        super();
+        this.tokens = {
+            name: options.name,
+            as: options.as,
+            optional: options.optional
+        };
+        this.typeExpression = options.typeExpression;
+        this.location = util.createBoundingLocation(
+            this.tokens.optional,
+            this.tokens.name,
+            this.tokens.as,
+            this.typeExpression
+        );
+    }
+
+    public readonly kind = AstNodeKind.InlineInterfaceMemberExpression;
+
+    readonly tokens: {
+        readonly optional?: Token;
+        readonly name: Token;
+        readonly as?: Token;
+    };
+
+    public readonly typeExpression?: TypeExpression;
+
+    public readonly location: Location;
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        throw new Error('Method not implemented.');
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'typeExpression', visitor, options);
+        }
+    }
+
+    public getType(options: GetTypeOptions): BscType {
+        return this.typeExpression?.getType(options) ?? DynamicType.instance;
+    }
+
+    public get isOptional() {
+        return !!this.tokens.optional;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new InlineInterfaceMemberExpression({
+                typeExpression: this.typeExpression?.clone(),
+                as: util.cloneToken(this.tokens.as),
+                name: util.cloneToken(this.tokens.name),
+                optional: util.cloneToken(this.tokens.optional)
+            }),
+            ['typeExpression']
         );
     }
 }
