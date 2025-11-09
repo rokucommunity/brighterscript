@@ -2574,7 +2574,7 @@ describe('parser', () => {
         });
     });
 
-    describe('inline interfaces', () => {
+    describe.only('inline interfaces', () => {
         it('inline interface param types disallowed in brightscript mode', () => {
             let { diagnostics } = parse(`
                 sub test(foo as {x as string})
@@ -2659,6 +2659,41 @@ describe('parser', () => {
             expect(isInlineInterfaceExpression(inlineIface)).to.be.true;
             expect(inlineIface.members).to.have.length(2);
             expect(inlineIface.members[1].isOptional).to.be.true;
+        });
+
+        it('is allowed as typecast', () => {
+            let { diagnostics } = parse(`
+                sub test(p)
+                    print (p as {name as string}).name
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('is allowed as class and interface field', () => {
+            let { diagnostics } = parse(`
+                class Klass
+                    x as {name as string}
+                end class
+
+                interface Iface
+                    y as {age as integer}
+                end interface
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have custom type as member type', () => {
+            let { diagnostics } = parse(`
+                interface IFace
+                   name as string
+                end interface
+
+                function test(z as {foo as IFace})
+                    return z.foo.name
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
         });
     });
 });
