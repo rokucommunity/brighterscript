@@ -2574,7 +2574,7 @@ describe('parser', () => {
         });
     });
 
-    describe.only('inline interfaces', () => {
+    describe('inline interfaces', () => {
         it('inline interface param types disallowed in brightscript mode', () => {
             let { diagnostics } = parse(`
                 sub test(foo as {x as string})
@@ -2691,6 +2691,33 @@ describe('parser', () => {
 
                 function test(z as {foo as IFace})
                     return z.foo.name
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have per-member doc comment', () => {
+            let { diagnostics } = parse(`
+                interface IFace
+                    inline as {
+                        ' comment 1
+                        name as string
+                        ' comment 2
+                        age as integer
+                    }
+                end interface
+
+                function test(z as {foo as IFace})
+                    return z.foo.inline.name
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have string literals as members', () => {
+            let { diagnostics } = parse(`
+                function test(z as {"this is a stringliteral" as string})
+                    return z["this is a stringliteral"]
                 end function
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(diagnostics);

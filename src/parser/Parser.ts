@@ -3115,7 +3115,7 @@ export class Parser {
             this.current--;
         }
 
-        if (!this.checkAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers)) {
+        if (!this.checkAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers, TokenKind.StringLiteral)) {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedParameterNameButFound(this.peek().text),
                 location: this.peek().location

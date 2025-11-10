@@ -4037,6 +4037,69 @@ describe('Scope', () => {
             expectTypeToBe(assigns[1].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }), AssociativeArrayType);
             expectTypeToBe(assigns[1].getSymbolTable().getSymbolType('x', { flags: SymbolTypeFlag.runtime }), DynamicType);
         });
+
+
+        describe('inline interfaces', () => {
+            it('understands type of inline interface member', () => {
+                const file = program.setFile<BrsFile>('source/test.bs', `
+                    sub testFunc(input as {x as string})
+                        value = input.x
+                        print value
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const funcExprBody = file.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const table = funcExprBody.getSymbolTable();
+                const valueSymbol = table.getSymbol('value', SymbolTypeFlag.runtime)[0];
+                expectTypeToBe(valueSymbol.type, StringType);
+            });
+
+            it('understands type of inline interface member with complex type with external source', () => {
+                const file = program.setFile<BrsFile>('source/test.bs', `
+                    import "test2.bs"
+
+                    sub testFunc(input as {x as OtherIface})
+                        value = input.x.data.name
+                        print value
+                    end sub
+                `);
+                program.setFile<BrsFile>('source/test2.bs', `
+                    interface OtherIface
+                        data as {name as string}
+                    end interface
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const funcExprBody = file.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const table = funcExprBody.getSymbolTable();
+                const valueSymbol = table.getSymbol('value', SymbolTypeFlag.runtime)[0];
+                expectTypeToBe(valueSymbol.type, StringType);
+            });
+
+            it('understands type of inline interface member from typecast', () => {
+                const file = program.setFile<BrsFile>('source/test.bs', `
+                    import "test2.bs"
+
+                    sub testFunc(input)
+                        input2 as {x as OtherIface} = input
+                        value = input2.x.data.name
+                        print value
+                    end sub
+                `);
+                program.setFile<BrsFile>('source/test2.bs', `
+                    interface OtherIface
+                        data as {name as string}
+                    end interface
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const funcExprBody = file.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const table = funcExprBody.getSymbolTable();
+                const valueSymbol = table.getSymbol('value', SymbolTypeFlag.runtime)[0];
+                expectTypeToBe(valueSymbol.type, StringType);
+            });
+        });
     });
 
     describe('symbol tables with pocket tables', () => {
