@@ -18,7 +18,7 @@ transpiles to
 ```BrightScript
 name = "John Smith"
 text = ("hello " + bslib_toString(name))
-text = "first line text" + chr(10) + "second line text"
+text = ("first line text" + chr(10) + "second line text")
 text = tag(["hello ", " how are you"], [name])
 ```
 
@@ -38,7 +38,7 @@ line2
 
 Transpiles to
 ```BrightScript
-text = "line1" + chr(10) + "line2" + chr(10)
+text = ("line1" + chr(10) + "line2" + chr(10))
 ```
 
 You can also use escape characters in your text. For example, `\n` for unix-style line endings and `\r\n` for windows-style line endings.
@@ -50,8 +50,8 @@ windowsText = `line1\r\nline2`
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
-unixText = "line1" + chr(10) + "line2"
-windowsText = "line1" + chr(13) + chr(10) + "line2"
+unixText = ("line1" + chr(10) + "line2")
+windowsText = ("line1" + chr(13) + chr(10) + "line2")
 ```
 </details>
 
@@ -63,7 +63,7 @@ textWithBacktick = `this is a backtick \` character`
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
-textWithBacktick = "this is a backtick " + chr(96) + " character"
+textWithBacktick = ("this is a backtick " + chr(96) + " character")
 ```
 </details>
 
@@ -75,7 +75,7 @@ text = `look \${here}`
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
-text = "look " + chr(36) + "{here}"
+text = ("look " + chr(36) + "{here}")
 ```
 </details>
 
@@ -89,7 +89,7 @@ text = `abc\c22def`
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
-text = "abc" + chr(22) + "def"
+text = ("abc" + chr(22) + "def")
 ```
 </details>
 
@@ -102,7 +102,7 @@ stringWithQuotes = `hello "John"`
 ```
 transpiles to
 ```BrightScript
-stringWithQuotes = "hello " + chr(34) + "John" + chr(34)
+stringWithQuotes = ("hello " + chr(34) + "John" + chr(34))
 ```
 
 

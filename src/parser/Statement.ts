@@ -2666,14 +2666,19 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
+
+        const className = this.getName(ParseMode.BrightScript).replace(/\./g, '_');
+        const ancestors = this.getAncestors(state);
+        const body = this.getTranspiledClassBody(ancestors);
+
+        //make the methods
+        result.push(...this.getTranspiledMethods(state, className, body));
         //make the builder
-        result.push(...this.getTranspiledBuilder(state));
-        result.push(
-            '\n',
-            state.indent()
-        );
+        result.push(...this.getTranspiledBuilder(state, className, ancestors, body));
+        result.push('\n', state.indent());
         //make the class assembler (i.e. the public-facing class creator method)
-        result.push(...this.getTranspiledClassFunction(state));
+        result.push(...this.getTranspiledClassFunction(state, className));
+
         return result;
     }
 
@@ -2795,11 +2800,12 @@ export class ClassStatement extends Statement implements TypedefProvider {
         return ancestors;
     }
 
-    private getBuilderName(name: string) {
-        if (name.includes('.')) {
-            name = name.replace(/\./gi, '_');
-        }
-        return `__${name}_builder`;
+    private getBuilderName(transpiledClassName: string) {
+        return `__${transpiledClassName}_builder`;
+    }
+
+    private getMethodIdentifier(transpiledClassName: string, statement: MethodStatement) {
+        return { ...statement.tokens.name, text: `__${transpiledClassName}_method_${statement.tokens.name.text}` };
     }
 
     public getConstructorType() {
@@ -2850,17 +2856,12 @@ export class ClassStatement extends Statement implements TypedefProvider {
      * This needs to be a separate function so that child classes can call the builder from their parent
      * without instantiating the parent constructor at that point in time.
      */
-    private getTranspiledBuilder(state: BrsTranspileState) {
+    private getTranspiledBuilder(state: BrsTranspileState, transpiledClassName: string, ancestors: ClassStatement[], body: Statement[]) {
         let result = [] as TranspileResult;
-        result.push(`function ${this.getBuilderName(this.getName(ParseMode.BrightScript)!)}()\n`);
+        result.push(`function ${this.getBuilderName(transpiledClassName)}()\n`);
         state.blockDepth++;
         //indent
         result.push(state.indent());
-
-        /**
-         * The lineage of this class. index 0 is a direct parent, index 1 is index 0's parent, etc...
-         */
-        let ancestors = this.getAncestors(state);
 
         //construct parent class or empty object
         if (ancestors[0]) {
@@ -2869,9 +2870,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 ancestors[0].getName(ParseMode.BrighterScript)!,
                 ancestorNamespace?.getName(ParseMode.BrighterScript)
             );
-            result.push(
-                'instance = ',
-                this.getBuilderName(fullyQualifiedClassName), '()');
+            result.push(`instance = ${this.getBuilderName(fullyQualifiedClassName.replace(/\./g, '_'))}()`);
         } else {
             //use an empty object.
             result.push('instance = {}');
@@ -2881,47 +2880,6 @@ export class ClassStatement extends Statement implements TypedefProvider {
             state.indent()
         );
         let parentClassIndex = this.getParentClassIndex(state);
-
-        let body = this.body;
-        //inject an empty "new" method if missing
-        if (!this.getConstructorFunction()) {
-            if (ancestors.length === 0) {
-                body = [
-                    createMethodStatement('new', TokenKind.Sub),
-                    ...this.body
-                ];
-            } else {
-                const params = this.getConstructorParams(ancestors);
-                const call = new ExpressionStatement({
-                    expression: new CallExpression({
-                        callee: new VariableExpression({
-                            name: createToken(TokenKind.Identifier, 'super')
-                        }),
-                        openingParen: createToken(TokenKind.LeftParen),
-                        args: params.map(x => new VariableExpression({
-                            name: util.cloneToken(x.tokens.name)
-                        })),
-                        closingParen: createToken(TokenKind.RightParen)
-                    })
-                });
-                body = [
-                    new MethodStatement({
-                        name: createIdentifier('new'),
-                        func: new FunctionExpression({
-                            parameters: params.map(x => x.clone()),
-                            body: new Block({
-                                statements: [call]
-                            }),
-                            functionType: createToken(TokenKind.Sub),
-                            endFunctionType: createToken(TokenKind.EndSub),
-                            leftParen: createToken(TokenKind.LeftParen),
-                            rightParen: createToken(TokenKind.RightParen)
-                        })
-                    }),
-                    ...this.body
-                ];
-            }
-        }
 
         for (let statement of body) {
             //is field statement
@@ -2959,7 +2917,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                     'instance.',
                     state.transpileToken(statement.tokens.name),
                     ' = ',
-                    ...statement.transpile(state),
+                    state.transpileToken(this.getMethodIdentifier(transpiledClassName, statement)),
                     state.newline,
                     state.indent()
                 );
@@ -2983,12 +2941,79 @@ export class ClassStatement extends Statement implements TypedefProvider {
     }
 
     /**
+     * Returns a copy of the class' body, with the constructor function added if it doesn't exist.
+     */
+    private getTranspiledClassBody(ancestors: ClassStatement[]): Statement[] {
+        const body = [];
+        body.push(...this.body);
+
+        //inject an empty "new" method if missing
+        if (!this.getConstructorFunction()) {
+            if (ancestors.length === 0) {
+                body.unshift(createMethodStatement('new', TokenKind.Sub));
+            } else {
+                const params = this.getConstructorParams(ancestors);
+                const call = new ExpressionStatement({
+                    expression: new CallExpression({
+                        callee: new VariableExpression({
+                            name: createToken(TokenKind.Identifier, 'super')
+                        }),
+                        openingParen: createToken(TokenKind.LeftParen),
+                        args: params.map(x => new VariableExpression({
+                            name: x.tokens.name
+                        })),
+                        closingParen: createToken(TokenKind.RightParen)
+                    })
+                });
+                body.unshift(
+                    new MethodStatement({
+                        modifiers: [],
+                        name: createIdentifier('new'),
+                        func: new FunctionExpression({
+                            parameters: params.map(x => x.clone()),
+                            body: new Block({ statements: [call] }),
+                            functionType: createToken(TokenKind.Sub),
+                            endFunctionType: createToken(TokenKind.EndSub),
+                            leftParen: createToken(TokenKind.LeftParen),
+                            rightParen: createToken(TokenKind.RightParen)
+                        }),
+                        override: null
+                    })
+                );
+            }
+        }
+
+        return body;
+    }
+
+    /**
+     * These are the methods that are defined in this class. They are transpiled outside of the class body
+     * to ensure they don't appear as "$anon_#" in stack traces and crash logs.
+     */
+    private getTranspiledMethods(state: BrsTranspileState, transpiledClassName: string, body: Statement[]) {
+        let result = [] as TranspileResult;
+        for (let statement of body) {
+            if (isMethodStatement(statement)) {
+                state.classStatement = this;
+                result.push(
+                    ...statement.transpile(state, this.getMethodIdentifier(transpiledClassName, statement)),
+                    state.newline,
+                    state.indent()
+                );
+                delete state.classStatement;
+            }
+        }
+        return result;
+    }
+
+    /**
      * The class function is the function with the same name as the class. This is the function that
      * consumers should call to create a new instance of that class.
      * This invokes the builder, gets an instance of the class, then invokes the "new" function on that class.
      */
-    private getTranspiledClassFunction(state: BrsTranspileState) {
+    private getTranspiledClassFunction(state: BrsTranspileState, transpiledClassName: string) {
         let result: TranspileResult = state.transpileAnnotations(this);
+
         const constructorFunction = this.getConstructorFunction();
         let constructorParams = [];
         if (constructorFunction) {
@@ -3021,7 +3046,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
         state.blockDepth++;
         result.push(state.indent());
-        result.push(`instance = ${this.getBuilderName(this.getName(ParseMode.BrightScript)!)}()\n`);
+        result.push(`instance = ${this.getBuilderName(transpiledClassName)}()\n`);
 
         result.push(state.indent());
         result.push(`instance.new(`);
@@ -3168,7 +3193,7 @@ export class MethodStatement extends FunctionStatement {
         return this.func.leadingTrivia;
     }
 
-    transpile(state: BrsTranspileState) {
+    transpile(state: BrsTranspileState, name?: Identifier) {
         if (this.tokens.name.text.toLowerCase() === 'new') {
             this.ensureSuperConstructorCall(state);
             //TODO we need to undo this at the bottom of this method
@@ -3197,7 +3222,7 @@ export class MethodStatement extends FunctionStatement {
             visitor(statement, undefined);
             statement.walk(visitor, walkOptions);
         }
-        return this.func.transpile(state);
+        return this.func.transpile(state, name);
     }
 
     getTypedef(state: BrsTranspileState) {

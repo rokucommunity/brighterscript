@@ -497,11 +497,11 @@ export class ProjectManager {
 
         //if the request has been cancelled since originally requested due to idle time being slow, skip the rest of the wor
         if (options?.cancellationToken?.isCancellationRequested) {
-            this.logger.log('ProjectManager getCompletions cancelled', options);
+            this.logger.debug('ProjectManager getCompletions cancelled', options);
             return;
         }
 
-        this.logger.log('ProjectManager getCompletions', options);
+        this.logger.debug('ProjectManager getCompletions', options);
         //Ask every project for results, keep whichever one responds first that has a valid response
         let result = await util.promiseRaceMatch(
             this.projects.map(x => x.getCompletions(options)),
@@ -734,7 +734,8 @@ export class ProjectManager {
             cwd: workspaceConfig.workspaceFolder,
             followSymbolicLinks: false,
             absolute: true,
-            onlyFiles: true
+            onlyFiles: true,
+            deep: workspaceConfig.languageServer.projectDiscoveryMaxDepth ?? 15
         });
 
         //filter the files to only include those that are allowed by the path filterer
@@ -755,7 +756,8 @@ export class ProjectManager {
                 cwd: workspaceConfig.workspaceFolder,
                 followSymbolicLinks: false,
                 absolute: true,
-                onlyFiles: true
+                onlyFiles: true,
+                deep: workspaceConfig.languageServer.projectDiscoveryMaxDepth ?? 15
             })).map(async manifestEntry => {
                 const manifestDir = path.dirname(manifestEntry);
                 //TODO validate that manifest is a Roku manifest
@@ -968,9 +970,17 @@ export interface WorkspaceConfig {
          */
         enableProjectDiscovery: boolean;
         /**
+         * A list of glob patterns used to _exclude_ files from project discovery
+         */
+        projectDiscoveryExclude?: Record<string, boolean>;
+        /**
          * The log level to use for this workspace
          */
         logLevel?: LogLevel | string;
+        /**
+         * Maximum depth to search for Roku projects
+         */
+        projectDiscoveryMaxDepth?: number;
     };
 }
 

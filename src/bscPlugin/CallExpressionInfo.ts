@@ -93,6 +93,9 @@ export class CallExpressionInfo {
     }
 
     isPositionBetweenParentheses() {
+        if (!this.callExpression) {
+            return false;
+        }
         let boundingRange = util.createBoundingRange(this.callExpression.tokens.openingParen?.location, this.callExpression.tokens.closingParen?.location);
         return util.rangeContains(boundingRange, this.position);
     }
@@ -106,8 +109,8 @@ export class CallExpressionInfo {
         let callExpression = expression?.findAncestor<CallExpression | CallfuncExpression>(isCallFuncOrCallExpression);
         if (callExpression && callExpression.callee === expression) {
             //this expression is the NAME of a CallExpression
-            callExpression = expression.parent.findAncestor<CallExpression | CallfuncExpression>(isCallFuncOrCallExpression);
-        } else if (isDottedGetExpression(expression.parent) && expression?.parent?.parent === callExpression) {
+            callExpression = expression.parent?.findAncestor<CallExpression | CallfuncExpression>(isCallFuncOrCallExpression);
+        } else if (isDottedGetExpression(expression?.parent) && expression?.parent?.parent === callExpression) {
             callExpression = callExpression.findAncestor<CallExpression | CallfuncExpression>(isCallFuncOrCallExpression);
         }
 
@@ -151,6 +154,9 @@ export class CallExpressionInfo {
     }
 
     private getParameterIndex() {
+        if (!this.callExpression || !this.callExpression.args) {
+            return 0;
+        }
         for (let i = this.callExpression.args.length - 1; i > -1; i--) {
             let argExpression = this.callExpression.args[i];
             let comparison = util.comparePositionToRange(this.position, argExpression.location?.range);
@@ -160,7 +166,6 @@ export class CallExpressionInfo {
         }
 
         return 0;
-
     }
 
 }

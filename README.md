@@ -71,6 +71,8 @@ BrighterScript adds several new features to the BrightScript language such as na
 
   - Full BrighterScript support for syntax checking, validation, and intellisense is available within the [Brightscript Language](https://marketplace.visualstudio.com/items?itemName=celsoaf.brightscript) VSCode extension.
 
+  - Configure the language server behavior using [language server settings](https://github.com/rokucommunity/brighterscript/blob/master/docs/language-server.md).
+
   - And if it's not enough, the [plugin API](https://github.com/rokucommunity/brighterscript/blob/master/docs/plugins.md) allows extending the compiler to provide extra diagnostics or transformations.
 
 ## Who uses Brighterscript?

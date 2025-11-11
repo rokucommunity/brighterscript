@@ -255,6 +255,26 @@ describe('BrsFile', () => {
         expectZeroDiagnostics(program);
     });
 
+    it('supports roUtils as a brightscript object', () => {
+        program.setFile('source/main.brs', `
+            sub test()
+                utils = CreateObject("roUtils")
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
+    it('supports roRenderThreadQueue as a brightscript object', () => {
+        program.setFile('source/main.brs', `
+            sub test()
+                utils = CreateObject("roRenderThreadQueue")
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
     it('sets needsTranspiled to true for .bs files', () => {
         //BrightScript
         expect(new BrsFile({
@@ -1801,6 +1821,19 @@ describe('BrsFile', () => {
             `, undefined, undefined, false);
         });
 
+        it('namespaced functions default param values in d.bs files are transpiled correctly', () => {
+            testGetTypedef(`
+                namespace alpha
+                    function beta()
+                    end function
+                    function charlie(fn = alpha.beta, fn2 = beta)
+                    end function
+                end namespace
+                function delta(fn = alpha.beta)
+                end function
+            `);
+        });
+
         describe('null tokens', () => {
             it('succeeds when token locations are omitted', () => {
                 doTest(`
@@ -1983,14 +2016,16 @@ describe('BrsFile', () => {
                         ' alpha.charlie()
                     end sub
 
+                    sub __Person_method_new()
+                        m.name = invalid
+                        print m.name
+                    end sub
+                    sub __Person_method_test()
+                    end sub
                     function __Person_builder()
                         instance = {}
-                        instance.new = sub()
-                            m.name = invalid
-                            print m.name
-                        end sub
-                        instance.test = sub()
-                        end sub
+                        instance.new = __Person_method_new
+                        instance.test = __Person_method_test
                         return instance
                     end function
                     function Person()
