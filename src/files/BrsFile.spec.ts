@@ -1821,8 +1821,8 @@ describe('BrsFile', () => {
             `, undefined, undefined, false);
         });
 
-        it('namespaced functions default param values in d.bs files are transpiled correctly', () => {
-            testGetTypedef(`
+        it('namespaced functions default param values in d.bs files are transpiled correctly', async () => {
+            await testGetTypedef(`
                 namespace alpha
                     function beta()
                     end function

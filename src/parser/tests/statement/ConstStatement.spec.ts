@@ -213,8 +213,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('transpiles nested consts that reference other consts within same namespace', () => {
-            testTranspile(`
+        it('transpiles nested consts that reference other consts within same namespace', async () => {
+            await testTranspile(`
                 namespace theming
                     const FLAG_A = "A"
                     const FLAG_B = "B"
@@ -233,8 +233,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('transpiles nested consts that reference other consts in different namespaces', () => {
-            testTranspile(`
+        it('transpiles nested consts that reference other consts in different namespaces', async () => {
+            await testTranspile(`
                 namespace aa.bb
                     const FLAG_A = "A"
                 end namespace
@@ -255,14 +255,14 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('transpiles nested consts that reference other consts across files', () => {
+        it('transpiles nested consts that reference other consts across files', async () => {
             program.setFile('source/constants.bs', `
                 namespace theming
                     const PRIMARY_COLOR = "blue"
                 end namespace
                 const FLAG_B = "B"
             `);
-            testTranspile(`
+            await testTranspile(`
                 const SECONDARY_COLOR = theming.PRIMARY_COLOR
                 const AD_BREAK_START = { a: SECONDARY_COLOR, b: FLAG_B }
                 sub main()
@@ -278,8 +278,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('recursively resolves nested consts that reference other consts', () => {
-            testTranspile(`
+        it('recursively resolves nested consts that reference other consts', async () => {
+            await testTranspile(`
                 const FLAG_A = "A"
                 const FLAG_B = FLAG_A
                 const AD_BREAK_START = { a: FLAG_A, b: FLAG_B }
@@ -296,8 +296,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('handles the exact example from the issue - nested consts with namespace references', () => {
-            testTranspile(`
+        it('handles the exact example from the issue - nested consts with namespace references', async () => {
+            await testTranspile(`
                 namespace aa.bb
                     const FLAG_A = "test"
                 end namespace
@@ -316,8 +316,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('handles cyclical const references without infinite loop', () => {
-            testTranspile(`
+        it('handles cyclical const references without infinite loop', async () => {
+            await testTranspile(`
                 const A = B
                 const B = C
                 const C = A
@@ -331,8 +331,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('resolves consts inside array literals', () => {
-            testTranspile(`
+        it('resolves consts inside array literals', async () => {
+            await testTranspile(`
                 const FLAG_A = "A"
                 const FLAG_B = "B"
                 const MY_ARRAY = [FLAG_A, FLAG_B, "C"]
@@ -350,8 +350,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('resolves enum used in const - same file', () => {
-            testTranspile(`
+        it('resolves enum used in const - same file', async () => {
+            await testTranspile(`
                 namespace Theming
                     enum Color
                         RED = "#FF0000"
@@ -369,7 +369,7 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('resolves enum used in const - cross file', () => {
+        it('resolves enum used in const - cross file', async () => {
             program.setFile('source/theming.bs', `
                 namespace Theming
                     enum Color
@@ -378,7 +378,7 @@ describe('ConstStatement', () => {
                     end enum
                 end namespace
             `);
-            testTranspile(`
+            await testTranspile(`
                 namespace Theming
                     const PRIMARY_COLOR = Theming.Color.BLUE
                 end namespace
@@ -392,7 +392,7 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('resolves const -> enum -> const -> enum chain across files', () => {
+        it('resolves const -> enum -> const -> enum chain across files', async () => {
             program.setFile('source/theming1.bs', `
                 namespace Theming
                     const BACKGROUND_COLOR = Theming.Color.BLACK
@@ -411,7 +411,7 @@ describe('ConstStatement', () => {
                     const OVERLAY_COLOR = Theming.BACKGROUND_COLOR
                 end namespace
             `);
-            testTranspile(`
+            await testTranspile(`
                 sub test()
                     aa = {
                         backgroundOverlay: {
@@ -430,7 +430,7 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('resolves complex multi-file const-enum chain', () => {
+        it('resolves complex multi-file const-enum chain', async () => {
             program.setFile('source/colors.bs', `
                 namespace Theme
                     enum Color
@@ -445,7 +445,7 @@ describe('ConstStatement', () => {
                     const ALT_COLOR = Theme.MAIN_COLOR
                 end namespace
             `);
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     colors = {
                         main: Theme.ALT_COLOR
