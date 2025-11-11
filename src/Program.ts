@@ -52,12 +52,15 @@ import { ProgramValidatorDiagnosticsTag } from './bscPlugin/validation/ProgramVa
 import type { ProvidedSymbolInfo, BrsFile } from './files/BrsFile';
 import type { UnresolvedXMLSymbol, XmlFile } from './files/XmlFile';
 import { SymbolTable } from './SymbolTable';
-import { ReferenceType, TypesCreated } from './types';
+import type { BscType } from './types/BscType';
+import { ReferenceType } from './types/ReferenceType';
+import { TypesCreated } from './types/helpers';
 import type { Statement } from './parser/AstNode';
 import { CallExpressionInfo } from './bscPlugin/CallExpressionInfo';
 import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
 import { Sequencer } from './common/Sequencer';
 import { Deferred } from './deferred';
+import { roFunctionType } from './types/roFunctionType';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -216,20 +219,28 @@ export class Program {
         }
 
         for (const ifaceData of Object.values(interfaces) as BRSInterfaceData[]) {
-            const nodeType = new InterfaceType(ifaceData.name);
-            nodeType.addBuiltInInterfaces();
-            nodeType.isBuiltIn = true;
-            this.globalScope.symbolTable.addSymbol(ifaceData.name, { ...builtInSymbolData, description: ifaceData.description }, nodeType, SymbolTypeFlag.typetime);
+            const ifaceType = new InterfaceType(ifaceData.name);
+            ifaceType.addBuiltInInterfaces();
+            ifaceType.isBuiltIn = true;
+            this.globalScope.symbolTable.addSymbol(ifaceData.name, { ...builtInSymbolData, description: ifaceData.description }, ifaceType, SymbolTypeFlag.typetime);
         }
 
         for (const componentData of Object.values(components) as BRSComponentData[]) {
-            const nodeType = new InterfaceType(componentData.name);
-            nodeType.addBuiltInInterfaces();
-            nodeType.isBuiltIn = true;
-            if (componentData.name !== 'roSGNode') {
+            let roComponentType: BscType;
+            const lowerComponentName = componentData.name.toLowerCase();
+
+            if (lowerComponentName === 'rosgnode') {
                 // we will add `roSGNode` as shorthand for `roSGNodeNode`, since all roSgNode components are SceneGraph nodes
-                this.globalScope.symbolTable.addSymbol(componentData.name, { ...builtInSymbolData, description: componentData.description }, nodeType, SymbolTypeFlag.typetime);
+                continue;
             }
+            if (lowerComponentName === 'rofunction') {
+                roComponentType = new roFunctionType();
+            } else {
+                roComponentType = new InterfaceType(componentData.name);
+            }
+            roComponentType.addBuiltInInterfaces();
+            roComponentType.isBuiltIn = true;
+            this.globalScope.symbolTable.addSymbol(componentData.name, { ...builtInSymbolData, description: componentData.description }, roComponentType, SymbolTypeFlag.typetime);
         }
 
         for (const nodeData of Object.values(nodes) as SGNodeData[]) {
@@ -237,10 +248,10 @@ export class Program {
         }
 
         for (const eventData of Object.values(events) as BRSEventData[]) {
-            const nodeType = new InterfaceType(eventData.name);
-            nodeType.addBuiltInInterfaces();
-            nodeType.isBuiltIn = true;
-            this.globalScope.symbolTable.addSymbol(eventData.name, { ...builtInSymbolData, description: eventData.description }, nodeType, SymbolTypeFlag.typetime);
+            const eventType = new InterfaceType(eventData.name);
+            eventType.addBuiltInInterfaces();
+            eventType.isBuiltIn = true;
+            this.globalScope.symbolTable.addSymbol(eventData.name, { ...builtInSymbolData, description: eventData.description }, eventType, SymbolTypeFlag.typetime);
         }
 
     }

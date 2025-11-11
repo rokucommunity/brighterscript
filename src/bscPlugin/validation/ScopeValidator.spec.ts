@@ -16,6 +16,7 @@ import { tempDir, rootDir } from '../../testHelpers.spec';
 import { isReturnStatement } from '../../astUtils/reflection';
 import { ScopeValidator } from './ScopeValidator';
 import type { ReturnStatement } from '../../parser/Statement';
+import { Logger } from '@rokucommunity/logger';
 
 describe('ScopeValidator', () => {
 
@@ -2892,6 +2893,75 @@ describe('ScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('allows returning a function call', () => {
+            const spy = sinon.spy(Logger.prototype, 'error');
+            program.setFile<BrsFile>('source/main.bs', `
+                function abc(func as function) as dynamic
+                    return func()
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(
+                spy.getCalls().map(x => (x.args?.[0] as string)?.toString()).filter(x => x?.includes('Error when calling plugin'))
+            ).to.eql([]);
+        });
+
+        it('allows returning a roFunction call', () => {
+            const spy = sinon.spy(Logger.prototype, 'error');
+            program.setFile<BrsFile>('source/main.bs', `
+                function abc(func as roFunction) as dynamic
+                    return func()
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(
+                spy.getCalls().map(x => (x.args?.[0] as string)?.toString()).filter(x => x?.includes('Error when calling plugin'))
+            ).to.eql([]);
+        });
+
+        it('allows returning a call on an object type', () => {
+            const spy = sinon.spy(Logger.prototype, 'error');
+            program.setFile<BrsFile>('source/main.bs', `
+                function abc(func as object) as dynamic
+                    return func()
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(
+                spy.getCalls().map(x => (x.args?.[0] as string)?.toString()).filter(x => x?.includes('Error when calling plugin'))
+            ).to.eql([]);
+        });
+
+        it('allows calling func returned from other func', () => {
+            const spy = sinon.spy(Logger.prototype, 'error');
+            program.setFile<BrsFile>('source/calc.bs', `
+                sub otherFuncFirst()
+                  ' forces getOperation to be referenceType called from ReferenceType
+                end sub
+
+                function calc(a as dynamic, b as dynamic, op as string) as dynamic
+                    op = getOperation(op)
+                    return op(1, 2)
+                end function
+
+                function getOperation(name as string) as object
+                    return {
+                        "sum": function(a as dynamic, b as dynamic) as dynamic
+                            return a + b
+                        end function
+                    }[name]
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(
+                spy.getCalls().map(x => (x.args?.[0] as string)?.toString()).filter(x => x?.includes('Error when calling plugin'))
+            ).to.eql([]);
+        });
     });
 
     describe('returnTypeCoercionMismatch', () => {
@@ -4617,6 +4687,16 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.notCallable('12345').message,
                 DiagnosticMessages.notCallable('"string"').message
             ]);
+        });
+
+        it('allows calling an object type', () => {
+            program.setFile<BrsFile>('source/calc.bs', `
+                function someFunc(otherFunc as object) as dynamic
+                    return otherFunc()
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
         });
     });
 
