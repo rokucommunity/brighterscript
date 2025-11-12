@@ -991,6 +991,27 @@ describe('Program', () => {
                 expect(changedFunctions).to.include('bar');
             });
         });
+
+        it('includes files added during beforeProgramValidate in validation', () => {
+            program.setFile('source/a.brs', `
+                sub a()
+                    b()
+                end sub
+            `);
+
+            program.plugins.add({
+                name: 'add file in beforeProgramValidate',
+                beforeProgramValidate: () => {
+                    program.setFile('source/b.brs', `
+                        sub b()
+                        end sub
+                    `);
+                }
+            });
+
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('hasFile', () => {
@@ -2887,6 +2908,54 @@ describe('Program', () => {
                 expect(signatureHelp, `failed on col ${col}`).to.have.lengthOf(1);
                 expect(signatureHelp[0].index, `failed on col ${col}`).to.equal(0);
             }
+        });
+
+        it('does not crash on malformed function declaration with trailing comma', () => {
+            program.setFile('source/main.bs', `
+                sub test(p1 = invalid,
+                    result = 1
+                end sub
+            `);
+            program.validate();
+
+            // Try to get signature help at the position after the comma
+            // This should not crash even though the function declaration is malformed
+            const signatureHelp = program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(1, 34));
+
+            // We don't necessarily expect specific results, just that it doesn't crash
+            expect(signatureHelp).to.be.an('array');
+        });
+
+        it('does not crash on incomplete function call', () => {
+            program.setFile('source/main.bs', `
+                function main()
+                    someFunction(
+                end function
+                function someFunction(param1 as string)
+                end function
+            `);
+            program.validate();
+
+            // Try to get signature help after the opening parenthesis
+            const signatureHelp = program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(2, 32));
+
+            // We don't necessarily expect specific results, just that it doesn't crash
+            expect(signatureHelp).to.be.an('array');
+        });
+
+        it('does not crash on malformed function declaration with missing closing paren', () => {
+            program.setFile('source/main.bs', `
+                sub test(p1 = invalid
+                    result = 1
+                end sub
+            `);
+            program.validate();
+
+            // Try to get signature help at the position where closing paren should be
+            const signatureHelp = program.getSignatureHelp(`${rootDir}/source/main.bs`, Position.create(1, 33));
+
+            // We don't necessarily expect specific results, just that it doesn't crash
+            expect(signatureHelp).to.be.an('array');
         });
     });
 
