@@ -2703,10 +2703,11 @@ describe('BrsFile', () => {
                         end function
                     end namespace
                 `, `
+                    sub __alpha_foo_method_new()
+                    end sub
                     function __alpha_foo_builder()
                         instance = {}
-                        instance.new = sub()
-                        end sub
+                        instance.new = __alpha_foo_method_new
                         return instance
                     end function
                     function alpha_foo()
@@ -3166,10 +3167,11 @@ describe('BrsFile', () => {
                 class Beta
                 end class
             `, `
+                sub __Beta_method_new()
+                end sub
                 function __Beta_builder()
                     instance = {}
-                    instance.new = sub()
-                    end sub
+                    instance.new = __Beta_method_new
                     return instance
                 end function
                 'comment1

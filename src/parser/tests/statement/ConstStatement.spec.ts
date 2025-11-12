@@ -235,15 +235,15 @@ describe('ConstStatement', () => {
 
         it('transpiles nested consts that reference other consts in different namespaces', async () => {
             await testTranspile(`
-                namespace aa.bb
+                namespace alpha.beta
                     const FLAG_A = "A"
                 end namespace
-                namespace main
+                namespace charlie
                     const FLAG_B = "B"
-                    const AD_BREAK_START = { a: aa.bb.FLAG_A, b: FLAG_B }
+                    const AD_BREAK_START = { a: alpha.beta.FLAG_A, b: FLAG_B }
                 end namespace
                 sub main()
-                    print main.AD_BREAK_START
+                    print charlie.AD_BREAK_START
                 end sub
             `, `
                 sub main()
