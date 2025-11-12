@@ -1832,6 +1832,38 @@ describe('ScopeValidator', () => {
             });
         });
 
+        describe.only('inline interfaces', () => {
+            it('allows function param with compatible interface', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    sub takesInline(datum as {name as string})
+                    end sub
+
+                    sub callsTakesInline()
+                        takesInline({age: 123, name: "test"})
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates function param with incompatible interface', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    sub takesInline(datum as {name as string})
+                    end sub
+
+                    sub callsTakesInline()
+                        takesInline({name: 123})
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('roAssociativeArray', '{name as string}', {
+                        fieldMismatches: [{ name: 'name', expectedType: StringType.instance, actualType: IntegerType.instance }]
+                    }).message
+                ]);
+            });
+        });
+
     });
 
     describe('cannotFindName', () => {
@@ -2342,6 +2374,31 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
+        });
+
+        describe('inline interfaces', () => {
+            it('finds members of inline interface', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    sub takesInline(datum as {name as string})
+                        print datum.name.split(",")
+                    end sub
+
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates using invalid member name', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    sub takesInline(datum as {name as string})
+                        print datum.notThere.split(",")
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindName('notThere', '{name as string}.notThere', '{name as string}')
+                ]);
+            });
         });
     });
 
@@ -2961,6 +3018,42 @@ describe('ScopeValidator', () => {
             expect(
                 spy.getCalls().map(x => (x.args?.[0] as string)?.toString()).filter(x => x?.includes('Error when calling plugin'))
             ).to.eql([]);
+        });
+
+        describe.only('inline interfaces', () => {
+            it('allows returning an Associative Array that meets the interface', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    function takesInline() as  {id as string}
+                        return { id: "test" }
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows returning a Node that meets the interface', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    function takesInline() as  {id as string}
+                        return createObject("roSGNode", "Poster")
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates returning a n AA that does not meet the interface', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    function takesInline() as {id as integer}
+                        return {id: "hello"}
+                    end function
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.returnTypeMismatch('roAssociativeArray', '{id as integer}', {
+                        fieldMismatches: [{ name: 'id', expectedType: IntegerType.instance, actualType: StringType.instance }]
+                    }).message
+                ]);
+            });
         });
     });
 
