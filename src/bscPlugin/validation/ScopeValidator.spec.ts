@@ -1832,7 +1832,7 @@ describe('ScopeValidator', () => {
             });
         });
 
-        describe.only('inline interfaces', () => {
+        describe('inline interfaces', () => {
             it('allows function param with compatible interface', () => {
                 program.setFile<BrsFile>('source/main.bs', `
                     sub takesInline(datum as {name as string})
@@ -3020,7 +3020,7 @@ describe('ScopeValidator', () => {
             ).to.eql([]);
         });
 
-        describe.only('inline interfaces', () => {
+        describe('inline interfaces', () => {
             it('allows returning an Associative Array that meets the interface', () => {
                 program.setFile<BrsFile>('source/main.bs', `
                     function takesInline() as  {id as string}
@@ -3041,7 +3041,7 @@ describe('ScopeValidator', () => {
                 expectZeroDiagnostics(program);
             });
 
-            it('validates returning a n AA that does not meet the interface', () => {
+            it('validates returning an AA that does not meet the interface', () => {
                 program.setFile<BrsFile>('source/main.bs', `
                     function takesInline() as {id as integer}
                         return {id: "hello"}
@@ -3520,6 +3520,40 @@ describe('ScopeValidator', () => {
                 program.validate();
                 expectDiagnostics(program, [
                     DiagnosticMessages.assignmentTypeMismatch('Array<string>', 'Array<roAssociativeArray>', typeCompatData).message
+                ]);
+            });
+        });
+
+        describe('inline interfaces', () => {
+            it('allows assigning an Associative Array that meets the interface', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    interface Iface
+                        inlineMember as {name as string}
+                    end interface
+
+                    sub takesInline(someIface as Iface}
+                        someIface.inlineMember = {name: "test"}
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates assigning an AA that does not meet the interface', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    interface Iface
+                        inlineMember as {name as string}
+                    end interface
+
+                    sub takesInline(someIface as Iface}
+                        someIface.inlineMember = {name: 123}
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('roAssociativeArray', '{name as string}', {
+                        fieldMismatches: [{ name: 'name', expectedType: StringType.instance, actualType: IntegerType.instance }]
+                    }).message
                 ]);
             });
         });
