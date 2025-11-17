@@ -1524,6 +1524,27 @@ describe('parser', () => {
             `, ParseMode.BrightScript);
             expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.expectedStatement()]);
         });
+
+        it('allows union types in parameters', () => {
+            let { diagnostics } = parse(`
+                sub main(param as string or integer)
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows union types in type casts', () => {
+            let { diagnostics } = parse(`
+                sub main(val)
+                    printThing(val as string or integer)
+                end sub
+                sub printThing(thing as string or integer)
+                    print thing
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
     });
 
     describe('typed arrays', () => {
