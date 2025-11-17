@@ -548,8 +548,13 @@ export class FunctionParameterExpression extends Expression {
             paramTypeFromCode = undefined;
         }
         const paramTypeFromDoc = docs.getParamBscType(paramName, { ...options, fullName: paramName, typeChain: undefined, tableProvider: () => this.getSymbolTable() });
+        const paramType = util.chooseTypeFromCodeOrDocComment(paramTypeFromCode, paramTypeFromDoc, options) ?? DynamicType.instance;
 
-        let paramType = util.chooseTypeFromCodeOrDocComment(paramTypeFromCode, paramTypeFromDoc, options) ?? DynamicType.instance;
+        const docDescription = docs.getParam(paramName)?.description;
+        if (docDescription) {
+            options.data = options.data ?? {};
+            options.data.description = docDescription;
+        }
         options.typeChain?.push(new TypeChainEntry({ name: paramName, type: paramType, data: options.data, astNode: this }));
         return paramType;
     }
@@ -2765,6 +2770,10 @@ export class InlineInterfaceExpression extends Expression {
 
     public readonly location: Location;
 
+    get leadingTrivia(): Token[] {
+        return this.tokens.open?.leadingTrivia;
+    }
+
     public transpile(state: BrsTranspileState): TranspileResult {
         return [this.getType({ flags: SymbolTypeFlag.typetime }).toTypeString()];
     }
@@ -2839,6 +2848,10 @@ export class InlineInterfaceMemberExpression extends Expression {
     public readonly typeExpression?: TypeExpression;
 
     public readonly location: Location;
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.optional?.leadingTrivia ?? this.tokens.name.leadingTrivia;
+    }
 
     public transpile(state: BrsTranspileState): TranspileResult {
         throw new Error('Method not implemented.');
