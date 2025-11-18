@@ -328,7 +328,7 @@ describe('ConstStatement', () => {
                 sub main()
                     print A
                 end sub
-            `);
+            `, 'trim', 'source/main.bs', false);
         });
 
         it('resolves consts inside array literals', async () => {

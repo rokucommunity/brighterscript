@@ -359,6 +359,19 @@ export class ScopeValidator {
         return isKnownType;
     }
 
+    private getCircularReference(exprType: BscType) {
+        if (exprType?.isResolvable()) {
+            return { isCircularReference: false };
+        }
+        if (isReferenceType(exprType)) {
+
+            const info = exprType.getCircularReferenceInfo();
+            return info;
+        }
+        return { isCircularReference: false };
+    }
+
+
     /**
      * If this is the lhs of an assignment, we don't need to flag it as unresolved
      */
@@ -952,9 +965,16 @@ export class ScopeValidator {
             } else if (!(typeData?.isFromDocComment)) {
                 // only show "cannot find... " errors if the type is not defined from a doc comment
                 const typeChainScan = util.processTypeChain(typeChain);
+                const circularReferenceInfo = this.getCircularReference(exprType);
                 if (isCallExpression(typeChainScan.astNode.parent) && typeChainScan.astNode.parent.callee === expression) {
                     this.addMultiScopeDiagnostic({
                         ...DiagnosticMessages.cannotFindFunction(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
+                        location: typeChainScan?.location
+                    });
+                } else if (circularReferenceInfo?.isCircularReference) {
+                    let diagnosticDetail = util.getCircularReferenceDetail(circularReferenceInfo, typeChainScan.fullNameOfItem);
+                    this.addMultiScopeDiagnostic({
+                        ...DiagnosticMessages.circularReferenceDetected(diagnosticDetail),
                         location: typeChainScan?.location
                     });
                 } else {

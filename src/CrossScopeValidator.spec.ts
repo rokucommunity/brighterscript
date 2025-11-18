@@ -1067,7 +1067,7 @@ describe('CrossScopeValidator', () => {
 
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindName('get2')
+                DiagnosticMessages.circularReferenceDetected('get2')
             ]);
             program.setFile('components/widget.bs', `
                 alias get2 = get 'no more circular reference

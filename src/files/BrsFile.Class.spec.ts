@@ -1420,8 +1420,8 @@ describe('BrsFile BrighterScript classes', () => {
         expect(
             program.getDiagnostics().map(x => x.message).sort()
         ).to.eql([
-            DiagnosticMessages.circularReferenceDetected(['Child', 'Parent', 'Child'], 'source').message,
-            DiagnosticMessages.circularReferenceDetected(['Parent', 'Child', 'Parent'], 'source').message
+            DiagnosticMessages.circularReferenceDetected(['Child', 'Parent', 'Child']).message,
+            DiagnosticMessages.circularReferenceDetected(['Parent', 'Child', 'Parent']).message
         ]);
     });
 
@@ -1441,9 +1441,9 @@ describe('BrsFile BrighterScript classes', () => {
         expect(
             program.getDiagnostics().map(x => x.message).sort()
         ).to.eql([
-            DiagnosticMessages.circularReferenceDetected(['Child', 'Parent', 'Grandchild', 'Child'], 'source').message,
-            DiagnosticMessages.circularReferenceDetected(['Grandchild', 'Child', 'Parent', 'Grandchild'], 'source').message,
-            DiagnosticMessages.circularReferenceDetected(['Parent', 'Grandchild', 'Child', 'Parent'], 'source').message
+            DiagnosticMessages.circularReferenceDetected(['Child', 'Parent', 'Grandchild', 'Child']).message,
+            DiagnosticMessages.circularReferenceDetected(['Grandchild', 'Child', 'Parent', 'Grandchild']).message,
+            DiagnosticMessages.circularReferenceDetected(['Parent', 'Grandchild', 'Child', 'Parent']).message
         ]);
     });
 
