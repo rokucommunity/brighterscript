@@ -2737,9 +2737,14 @@ export class Parser {
                 typeToken = this.advance();
             } else if (this.options.mode === ParseMode.BrighterScript) {
                 try {
-                    // see if we can get a namespaced identifer
-                    const qualifiedType = this.getNamespacedVariableNameExpression(ignoreDiagnostics);
-                    typeToken = createToken(TokenKind.Identifier, qualifiedType.getName(this.options.mode), qualifiedType.range);
+                    if (this.check(TokenKind.LeftCurlyBrace)) {
+                        // could be an inline interface
+                        typeToken = this.inlineInterface();
+                    } else {
+                        // see if we can get a namespaced identifer
+                        const qualifiedType = this.getNamespacedVariableNameExpression(ignoreDiagnostics);
+                        typeToken = createToken(TokenKind.Identifier, qualifiedType.getName(this.options.mode), qualifiedType.range);
+                    }
                 } catch {
                     //could not get an identifier - just get whatever's next
                     typeToken = this.advance();
@@ -2750,7 +2755,7 @@ export class Parser {
             }
             resultToken = resultToken ?? typeToken;
             if (resultToken && this.options.mode === ParseMode.BrighterScript) {
-                // check for brackets
+                // check for brackets for typed arrays
                 while (this.check(TokenKind.LeftSquareBracket) && this.peekNext().kind === TokenKind.RightSquareBracket) {
                     const leftBracket = this.advance();
                     const rightBracket = this.advance();
@@ -2770,6 +2775,76 @@ export class Parser {
             resultToken = createToken(TokenKind.Dynamic, null, util.createBoundingRange(resultToken, typeToken));
         }
         return resultToken;
+    }
+
+    private inlineInterface() {
+        const openToken = this.advance();
+        const memberTokens: Token[] = [];
+        memberTokens.push(openToken);
+        while (this.matchAny(TokenKind.Newline, TokenKind.Comment)) { }
+        while (this.checkAny(TokenKind.Identifier, ...AllowedProperties, TokenKind.StringLiteral, TokenKind.Optional)) {
+            let optionalKeyword = this.consumeTokenIf(TokenKind.Optional);
+            if (this.checkAny(TokenKind.Identifier, ...AllowedProperties, TokenKind.StringLiteral)) {
+                if (this.check(TokenKind.As)) {
+                    if (this.checkAnyNext(TokenKind.Comment, TokenKind.Newline)) {
+                        // as <EOL>
+                        // `as` is the field name
+                    } else if (this.checkNext(TokenKind.As)) {
+                        //  as as ____
+                        // first `as` is the field name
+                    } else if (optionalKeyword) {
+                        // optional as ____
+                        // optional is the field name, `as` starts type
+                        // rewind current token
+                        optionalKeyword = null;
+                        this.current--;
+                    }
+                }
+            } else {
+                // no name after `optional` ... optional is the name
+                // rewind current token
+                optionalKeyword = null;
+                this.current--;
+            }
+            if (optionalKeyword) {
+                memberTokens.push(optionalKeyword);
+            }
+            if (!this.checkAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers, TokenKind.StringLiteral)) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.unexpectedToken(this.peek().text),
+                    range: this.peek().range
+                });
+                throw this.lastDiagnosticAsError();
+            }
+            if (this.checkAny(TokenKind.Identifier, ...AllowedProperties, TokenKind.StringLiteral)) {
+                this.advance();
+            } else {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.unexpectedToken(this.peek().text),
+                    range: this.peek().range
+                });
+                throw this.lastDiagnosticAsError();
+            }
+
+            if (this.check(TokenKind.As)) {
+                memberTokens.push(this.advance()); // as
+                memberTokens.push(this.typeToken()); // type
+            }
+            while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Comment)) { }
+        }
+        if (!this.check(TokenKind.RightCurlyBrace)) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.unexpectedToken(this.peek().text),
+                range: this.peek().range
+            });
+            throw this.lastDiagnosticAsError();
+        }
+        const closeToken = this.advance();
+        memberTokens.push(closeToken);
+
+        const completeInlineInterfaceToken = createToken(TokenKind.Dynamic, null, util.createBoundingRange(...memberTokens));
+
+        return completeInlineInterfaceToken;
     }
 
     private primary(): Expression {
