@@ -30,6 +30,7 @@ import type { BinaryExpression, CallExpression, DottedGetExpression, FunctionExp
 import { ObjectType } from './types';
 import undent from 'undent';
 import * as fsExtra from 'fs-extra';
+import { InlineInterfaceType } from './types/InlineInterfaceType';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -4098,6 +4099,22 @@ describe('Scope', () => {
                 const table = funcExprBody.getSymbolTable();
                 const valueSymbol = table.getSymbol('value', SymbolTypeFlag.runtime)[0];
                 expectTypeToBe(valueSymbol.type, StringType);
+            });
+
+            it('understands type of inline interface member with string literal name', () => {
+                const file = program.setFile<BrsFile>('source/test.bs', `
+                    sub testFunc(input as {"my string literal" as string})
+                        print input
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const funcExprBody = file.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const table = funcExprBody.getSymbolTable();
+                const inputSymbol = table.getSymbol('input', SymbolTypeFlag.runtime)[0];
+                expectTypeToBe(inputSymbol.type, InlineInterfaceType);
+                const memberType = inputSymbol.type.getMemberType('my string literal', { flags: SymbolTypeFlag.runtime });
+                expectTypeToBe(memberType, StringType);
             });
         });
     });

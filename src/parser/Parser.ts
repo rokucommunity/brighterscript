@@ -3117,7 +3117,7 @@ export class Parser {
 
         if (!this.checkAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers, TokenKind.StringLiteral)) {
             this.diagnostics.push({
-                ...DiagnosticMessages.expectedParameterNameButFound(this.peek().text),
+                ...DiagnosticMessages.expectedIdentifier(this.peek().text),
                 location: this.peek().location
             });
             throw this.lastDiagnosticAsError();
@@ -3125,14 +3125,8 @@ export class Parser {
         let name: Token;
         if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
             name = this.identifier(...AllowedProperties);
-        } else if (this.check(TokenKind.StringLiteral)) {
-            name = this.advance();
         } else {
-            this.diagnostics.push({
-                ...DiagnosticMessages.unexpectedAAKey(),
-                location: this.peek().location
-            });
-            throw this.lastDiagnosticAsError();
+            name = this.advance();
         }
 
         let typeExpression: TypeExpression;
