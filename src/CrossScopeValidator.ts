@@ -493,6 +493,25 @@ export class CrossScopeValidator {
         return filesThatNeedRevalidation;
     }
 
+    getScopesRequiringChangedSymbol(scopes: Scope[], changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
+        const scopesThatNeedRevalidation = new Set<Scope>();
+        const filesAlreadyChecked = new Set<BrsFile>();
+
+        for (const scope of scopes) {
+            scope.enumerateBrsFiles((file) => {
+                if (filesAlreadyChecked.has(file) || scopesThatNeedRevalidation.has(scope)) {
+                    return;
+                }
+                filesAlreadyChecked.add(file);
+
+                if (util.hasAnyRequiredSymbolChanged(file.requiredSymbols, changedSymbols)) {
+                    scopesThatNeedRevalidation.add(scope);
+                }
+            });
+        }
+        return scopesThatNeedRevalidation;
+    }
+
     buildComponentsMap() {
         this.componentsMap.clear();
         // Add custom components

@@ -4621,6 +4621,89 @@ describe('Scope', () => {
             });
         });
 
+        describe('xmlFiles', () => {
+
+            it('does not rebuild component if import file has no substantive changes', () => {
+                program.setFile<BrsFile>('source/util.bs', `
+                    function test1() as integer
+                        return 1
+                    end function
+
+
+                    function test2() as boolean
+                        return true
+                    end function
+                `);
+                program.setFile<BrsFile>('source/file2.bs', ``);
+                //let widgetXml =
+                program.setFile<BrsFile>('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script uri="pkg:/source/util.bs"/>
+                        <interface>
+                            <function name="test1" />
+                            <function name="test2" />
+                        </interface>
+                    </component>
+                `);
+                program.validate();
+
+
+                program.setFile<BrsFile>('source/util.bs', `
+                     function test1() as integer
+                        return 1
+                    end function
+
+
+                    function test2() as boolean
+                        return false ' changed value, but not type!
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                expect(program.lastValidationInfo.componentsRebuilt).to.be.empty;
+            });
+
+            it('rebuilds component if import file has substantive changes', () => {
+                program.setFile<BrsFile>('source/util.bs', `
+                    function test1() as integer
+                        return 1
+                    end function
+
+                    function test2() as boolean
+                        return true
+                    end function
+                `);
+                program.setFile<BrsFile>('source/file2.bs', ``);
+                //let widgetXml =
+                program.setFile<BrsFile>('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script uri="pkg:/source/util.bs"/>
+                        <interface>
+                            <function name="test1" />
+                            <function name="test2" />
+                        </interface>
+                    </component>
+                `);
+                program.validate();
+
+
+                program.setFile<BrsFile>('source/util.bs', `
+                     function test1() as integer
+                        return 1
+                    end function
+
+                    function test2() as integer ' changed type
+                        return 2
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                expect(program.lastValidationInfo.componentsRebuilt.has('widget')).to.be.true;
+            });
+        });
+
     });
 
     describe('shadowing', () => {
