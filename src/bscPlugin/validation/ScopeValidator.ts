@@ -972,7 +972,7 @@ export class ScopeValidator {
                         location: typeChainScan?.location
                     });
                 } else if (circularReferenceInfo?.isCircularReference) {
-                    let diagnosticDetail = util.getCircularReferenceDetail(circularReferenceInfo, typeChainScan.fullNameOfItem);
+                    let diagnosticDetail = util.getCircularReferenceDiagnosticDetail(circularReferenceInfo, typeChainScan.fullNameOfItem);
                     this.addMultiScopeDiagnostic({
                         ...DiagnosticMessages.circularReferenceDetected(diagnosticDetail),
                         location: typeChainScan?.location

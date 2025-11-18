@@ -6,7 +6,7 @@ import { expect } from 'chai';
 import type { TypeCompatibilityData } from '../../interfaces';
 import { IntegerType } from '../../types/IntegerType';
 import { StringType } from '../../types/StringType';
-import { BrsFile } from '../../files/BrsFile';
+import type { BrsFile } from '../../files/BrsFile';
 import { FloatType, InterfaceType, TypedFunctionType, VoidType } from '../../types';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';

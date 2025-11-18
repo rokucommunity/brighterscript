@@ -690,7 +690,7 @@ export class CrossScopeValidator {
         if (isReferenceType(symbolType)) {
             const circularReferenceInfo = symbolType.getCircularReferenceInfo();
             if (circularReferenceInfo.isCircularReference) {
-                let diagnosticDetail = util.getCircularReferenceDetail(circularReferenceInfo, typeChainResult.fullNameOfItem);
+                let diagnosticDetail = util.getCircularReferenceDiagnosticDetail(circularReferenceInfo, typeChainResult.fullNameOfItem);
                 return DiagnosticMessages.circularReferenceDetected(diagnosticDetail);
             }
         }

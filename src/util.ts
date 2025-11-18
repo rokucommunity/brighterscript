@@ -2252,7 +2252,7 @@ export class Util {
         };
     }
 
-    public getCircularReferenceDetail(circularReferenceInfo: TypeCircularReferenceInfo, defaultName = ''): string[] {
+    public getCircularReferenceDiagnosticDetail(circularReferenceInfo: TypeCircularReferenceInfo, defaultName = ''): string[] {
         if (!circularReferenceInfo || !circularReferenceInfo.referenceChainNames) {
             if (defaultName) {
                 return [defaultName];
