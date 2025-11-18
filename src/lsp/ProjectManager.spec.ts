@@ -373,6 +373,195 @@ describe('ProjectManager', () => {
         });
     });
 
+    describe('maxDepth configuration', () => {
+        function writeTestFiles(files: Record<string, string>) {
+            for (const [filePath, content] of Object.entries(files)) {
+                fsExtra.outputFileSync(`${rootDir}/${filePath}`, content);
+            }
+        }
+
+        it('respects maxDepth of 1 when discovering projects', async () => {
+            // Create bsconfig.json files at different depths
+            writeTestFiles({
+                'bsconfig.json': '',
+                'level1/bsconfig.json': '',
+                'level1/level2/bsconfig.json': '',
+                'level1/level2/level3/bsconfig.json': ''
+            });
+
+            await manager.syncProjects([{
+                ...workspaceSettings,
+                languageServer: {
+                    ...workspaceSettings.languageServer,
+                    projectDiscoveryMaxDepth: 1
+                }
+            }]);
+
+            // maxDepth: 1 should find files at depth 0 only
+            expect(
+                manager.projects.map(x => x.projectKey).sort()
+            ).to.eql([
+                s`${rootDir}/bsconfig.json`
+            ]);
+        });
+
+        it('respects maxDepth of 5 when discovering projects', async () => {
+            // Create bsconfig.json files at different depths
+            writeTestFiles({
+                'bsconfig.json': '',
+                'level1/bsconfig.json': '',
+                'level1/level2/bsconfig.json': '',
+                'level1/level2/level3/bsconfig.json': '',
+                'level1/level2/level3/level4/bsconfig.json': '',
+                'level1/level2/level3/level4/level5/bsconfig.json': '',
+                'level1/level2/level3/level4/level5/level6/bsconfig.json': ''
+            });
+
+            await manager.syncProjects([{
+                ...workspaceSettings,
+                languageServer: {
+                    ...workspaceSettings.languageServer,
+                    projectDiscoveryMaxDepth: 5
+                }
+            }]);
+
+            // maxDepth: 5 should find files at depths 0, 1, 2, 3, 4
+            expect(
+                manager.projects.map(x => x.projectKey).sort()
+            ).to.eql([
+                s`${rootDir}/bsconfig.json`,
+                s`${rootDir}/level1/bsconfig.json`,
+                s`${rootDir}/level1/level2/bsconfig.json`,
+                s`${rootDir}/level1/level2/level3/bsconfig.json`,
+                s`${rootDir}/level1/level2/level3/level4/bsconfig.json`
+            ]);
+        });
+
+        it('respects maxDepth of 20 when discovering projects', async () => {
+            // Create bsconfig.json files at different depths, skipping some levels in between
+            // and proving it stops at level 20 by creating files at level 20 and 21
+            // Note: depth 20 means the file is in the 20th directory level from root
+            writeTestFiles({
+                'bsconfig.json': '',
+                'level1/bsconfig.json': '',
+                'level1/level2/level3/level4/level5/bsconfig.json': '',
+                'level1/level2/level3/level4/level5/level6/level7/level8/level9/level10/level11/level12/level13/level14/level15/level16/level17/level18/level19/bsconfig.json': '',
+                'level1/level2/level3/level4/level5/level6/level7/level8/level9/level10/level11/level12/level13/level14/level15/level16/level17/level18/level19/level20/bsconfig.json': ''
+            });
+
+            await manager.syncProjects([{
+                ...workspaceSettings,
+                languageServer: {
+                    ...workspaceSettings.languageServer,
+                    projectDiscoveryMaxDepth: 20
+                }
+            }]);
+
+            // maxDepth: 20 should find file at level 19 (depth 20) but not at level 20 (depth 21)
+            expect(
+                manager.projects.map(x => x.projectKey).sort()
+            ).to.eql([
+                s`${rootDir}/bsconfig.json`,
+                s`${rootDir}/level1/bsconfig.json`,
+                s`${rootDir}/level1/level2/level3/level4/level5/bsconfig.json`,
+                s`${rootDir}/level1/level2/level3/level4/level5/level6/level7/level8/level9/level10/level11/level12/level13/level14/level15/level16/level17/level18/level19/bsconfig.json`
+            ]);
+        });
+
+        it('uses default maxDepth of 15 when no maxDepth is specified', async () => {
+            // Create bsconfig.json files at different depths, skipping some levels in between
+            // and proving it stops at level 15 by creating files at level 15 and 16
+            // Note: depth 15 means the file is in the 15th directory level from root
+            writeTestFiles({
+                'bsconfig.json': '',
+                'level1/bsconfig.json': '',
+                'level1/level2/level3/level4/level5/bsconfig.json': '',
+                'level1/level2/level3/level4/level5/level6/level7/level8/level9/level10/level11/level12/level13/level14/bsconfig.json': '',
+                'level1/level2/level3/level4/level5/level6/level7/level8/level9/level10/level11/level12/level13/level14/level15/bsconfig.json': ''
+            });
+
+            await manager.syncProjects([workspaceSettings]);
+
+            // Default maxDepth: 15 should find file at level 14 (depth 15) but not at level 15 (depth 16)
+            expect(
+                manager.projects.map(x => x.projectKey).sort()
+            ).to.eql([
+                s`${rootDir}/bsconfig.json`,
+                s`${rootDir}/level1/bsconfig.json`,
+                s`${rootDir}/level1/level2/level3/level4/level5/bsconfig.json`,
+                s`${rootDir}/level1/level2/level3/level4/level5/level6/level7/level8/level9/level10/level11/level12/level13/level14/bsconfig.json`
+            ]);
+        });
+
+        it('respects maxDepth of 1 when discovering roku projects with manifest files', async () => {
+            // Create manifest files at different depths
+            writeTestFiles({
+                'manifest': '',
+                'source/main.brs': '',
+                'level1/manifest': '',
+                'level1/source/main.brs': '',
+                'level1/level2/manifest': '',
+                'level1/level2/source/main.brs': '',
+                'level1/level2/level3/manifest': '',
+                'level1/level2/level3/source/main.brs': ''
+            });
+
+            await manager.syncProjects([{
+                ...workspaceSettings,
+                languageServer: {
+                    ...workspaceSettings.languageServer,
+                    projectDiscoveryMaxDepth: 1
+                }
+            }]);
+
+            // maxDepth: 1 should find projects at depth 0 only
+            expect(
+                manager.projects.map(x => x.projectKey).sort()
+            ).to.eql([
+                s`${rootDir}`
+            ]);
+        });
+
+        it('respects maxDepth of 5 when discovering roku projects with manifest files', async () => {
+            // Create manifest files at different depths
+            writeTestFiles({
+                'manifest': '',
+                'source/main.brs': '',
+                'level1/manifest': '',
+                'level1/source/main.brs': '',
+                'level1/level2/manifest': '',
+                'level1/level2/source/main.brs': '',
+                'level1/level2/level3/manifest': '',
+                'level1/level2/level3/source/main.brs': '',
+                'level1/level2/level3/level4/manifest': '',
+                'level1/level2/level3/level4/source/main.brs': '',
+                'level1/level2/level3/level4/level5/manifest': '',
+                'level1/level2/level3/level4/level5/source/main.brs': '',
+                'level1/level2/level3/level4/level5/level6/manifest': '',
+                'level1/level2/level3/level4/level5/level6/source/main.brs': ''
+            });
+
+            await manager.syncProjects([{
+                ...workspaceSettings,
+                languageServer: {
+                    ...workspaceSettings.languageServer,
+                    projectDiscoveryMaxDepth: 5
+                }
+            }]);
+
+            // maxDepth: 5 should find projects at depths 0, 1, 2, 3, 4
+            expect(
+                manager.projects.map(x => x.projectKey).sort()
+            ).to.eql([
+                s`${rootDir}`,
+                s`${rootDir}/level1`,
+                s`${rootDir}/level1/level2`,
+                s`${rootDir}/level1/level2/level3`,
+                s`${rootDir}/level1/level2/level3/level4`
+            ]);
+        });
+    });
+
     describe('getCompletions', () => {
         it('works for quick file changes', async () => {
             //set up the project

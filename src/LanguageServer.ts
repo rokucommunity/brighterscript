@@ -430,11 +430,14 @@ export class LanguageServer {
                 return {
                     workspaceFolder: workspaceFolder,
                     excludePatterns: await this.getWorkspaceExcludeGlobs(workspaceFolder),
-                    projects: this.normalizeProjectPaths(workspaceFolder, brightscriptConfig.projects),
+                    projects: this.normalizeProjectPaths(workspaceFolder, brightscriptConfig?.projects),
                     languageServer: {
-                        enableThreading: brightscriptConfig.languageServer?.enableThreading ?? LanguageServer.enableThreadingDefault,
-                        enableProjectDiscovery: brightscriptConfig.languageServer?.enableProjectDiscovery ?? LanguageServer.enableProjectDiscoveryDefault,
+                        enableThreading: brightscriptConfig?.languageServer?.enableThreading ?? LanguageServer.enableThreadingDefault,
+                        enableProjectDiscovery: brightscriptConfig?.languageServer?.enableProjectDiscovery ?? LanguageServer.enableProjectDiscoveryDefault,
+                        projectDiscoveryMaxDepth: brightscriptConfig?.languageServer?.projectDiscoveryMaxDepth ?? 15,
+                        projectDiscoveryExclude: brightscriptConfig?.languageServer?.projectDiscoveryExclude,
                         logLevel: brightscriptConfig?.languageServer?.logLevel
+
                     }
                 };
             })
@@ -672,33 +675,42 @@ export class LanguageServer {
     }
 
     /**
-     * Ask the client for the list of `files.exclude` patterns. Useful when determining if we should process a file
+     * Ask the client for the list of `files.exclude` and `files.watcherExclude` patterns. Useful when determining if we should process a file
      */
     private async getWorkspaceExcludeGlobs(workspaceFolder: string): Promise<string[]> {
-        const filesConfig = await this.getClientConfiguration<{ exclude: string[] }>(workspaceFolder, 'files');
-        const fileExcludes = this.extractExcludes(filesConfig);
+        const filesConfig = await this.getClientConfiguration<{ exclude: Record<string, boolean>; watcherExclude: Record<string, boolean> }>(workspaceFolder, 'files');
+        const searchConfig = await this.getClientConfiguration<{ exclude: Record<string, boolean> }>(workspaceFolder, 'search');
+        const languageServerConfig = await this.getClientConfiguration<BrightScriptClientConfiguration>(workspaceFolder, 'brightscript');
 
-        const searchConfig = await this.getClientConfiguration<{ exclude: string[] }>(workspaceFolder, 'search');
-        const searchExcludes = this.extractExcludes(searchConfig);
-
-        return [...fileExcludes, ...searchExcludes];
+        return [
+            ...this.extractExcludes(filesConfig?.exclude),
+            ...this.extractExcludes(filesConfig?.watcherExclude),
+            ...this.extractExcludes(searchConfig?.exclude),
+            ...this.extractExcludes(languageServerConfig?.languageServer?.projectDiscoveryExclude)
+        ];
     }
 
-    private extractExcludes(config: { exclude: string[] }): string[] {
-        if (!config?.exclude) {
+    private extractExcludes(exclude: Record<string, boolean>): string[] {
+        //if the exclude is not defined, return an empty array
+        if (!exclude) {
             return [];
         }
         return Object
-            .keys(config.exclude)
-            .filter(x => config.exclude[x])
+            .keys(exclude)
+            .filter(x => exclude[x])
             //vscode files.exclude patterns support ignoring folders without needing to add `**/*`. So for our purposes, we need to
             //append **/* to everything without a file extension or magic at the end
-            .map(pattern => [
-                //send the pattern as-is (this handles weird cases and exact file matches)
-                pattern,
+            .map(pattern => {
+                const result = [
+                    //send the pattern as-is (this handles weird cases and exact file matches)
+                    pattern
+                ];
                 //treat the pattern as a directory (no harm in doing this because if it's a file, the pattern will just never match anything)
-                `${pattern}/**/*`
-            ])
+                if (!pattern.endsWith('/**/*')) {
+                    result.push(`${pattern}/**/*`);
+                }
+                return result;
+            })
             .flat(1);
     }
 
@@ -824,7 +836,9 @@ export interface BrightScriptClientConfiguration {
     languageServer: {
         enableThreading: boolean;
         enableProjectDiscovery: boolean;
+        projectDiscoveryExclude?: Record<string, boolean>;
         logLevel: LogLevel | string;
+        projectDiscoveryMaxDepth?: number;
     };
 }
 

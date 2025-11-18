@@ -1115,6 +1115,11 @@ export interface TypeChainProcessResult {
     crossedCallFunc: boolean;
 }
 
+export interface TypeCircularReferenceInfo {
+    isCircularReference: boolean;
+    referenceChainNames?: string[];
+}
+
 export interface TypeCompatibilityData {
     missingFields?: { name: string; expectedType: BscType }[];
     fieldMismatches?: { name: string; expectedType: BscType; actualType: BscType }[];

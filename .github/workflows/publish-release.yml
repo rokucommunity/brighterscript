@@ -18,6 +18,10 @@ jobs:
   run:
     if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'release/')
     uses: rokucommunity/workflows/.github/workflows/publish-release.yml@master
+    permissions:
+      id-token: write
+      contents: write
+      pull-requests: write
     with:
       release-type: "npm" # or "vsce"
       ref: ${{ github.event.inputs.tag || github.event.pull_request.merge_commit_sha }}
