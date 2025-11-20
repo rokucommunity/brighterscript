@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isStringType, isTemplateStringExpression, isTypeCastExpression, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isStringType, isTemplateStringExpression, isTypeCastExpression, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
@@ -960,9 +960,58 @@ export class AAMemberExpression extends Expression {
 
 }
 
+/**
+ * Represents an associative array member with a computed key expression inside brackets.
+ * Example: { [myEnum.KEY]: "value" }
+ */
+export class AAIndexedMemberExpression extends Expression {
+    constructor(
+        public openBracketToken: Token,
+        /** The expression inside brackets that evaluates to the key (e.g., myEnum.KEY or MY_CONST) */
+        public keyExpression: Expression,
+        public closeBracketToken: Token,
+        public colonToken: Token,
+        /** The expression evaluated to determine the member's initial value. */
+        public value: Expression
+    ) {
+        super();
+        this.range = util.createBoundingRange(this.openBracketToken, this.keyExpression, this.closeBracketToken, this.colonToken, this.value);
+    }
+
+    public range: Range | undefined;
+    public commaToken?: Token;
+    /** The resolved string value of the key expression (computed during validation) */
+    public resolvedKeyText?: string;
+
+    transpile(state: BrsTranspileState) {
+        //TODO move the logic from AALiteralExpression loop into this function
+        return [];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'keyExpression', visitor, options);
+            walk(this, 'value', visitor, options);
+        }
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new AAIndexedMemberExpression(
+                util.cloneToken(this.openBracketToken),
+                this.keyExpression?.clone(),
+                util.cloneToken(this.closeBracketToken),
+                util.cloneToken(this.colonToken),
+                this.value?.clone()
+            ),
+            ['keyExpression', 'value']
+        );
+    }
+}
+
 export class AALiteralExpression extends Expression {
     constructor(
-        readonly elements: Array<AAMemberExpression | CommentStatement>,
+        readonly elements: Array<AAMemberExpression | AAIndexedMemberExpression | CommentStatement>,
         readonly open: Token,
         readonly close: Token
     ) {
@@ -1003,6 +1052,30 @@ export class AALiteralExpression extends Expression {
             //render comments
             if (isCommentStatement(element)) {
                 result.push(...element.transpile(state));
+            } else if (isAAIndexedMemberExpression(element)) {
+                // For indexed members, use the resolved key text (should be set during validation)
+                // If not resolved yet, fall back to transpiling the expression as-is (for error recovery)
+                if (element.resolvedKeyText) {
+                    result.push(element.resolvedKeyText);
+                } else {
+                    // Fallback: transpile brackets and expression (this shouldn't happen in valid code)
+                    result.push(
+                        state.transpileToken(element.openBracketToken),
+                        ...element.keyExpression.transpile(state),
+                        state.transpileToken(element.closeBracketToken)
+                    );
+                }
+                //colon
+                result.push(
+                    state.transpileToken(element.colonToken),
+                    ' '
+                );
+                //value
+                result.push(...element.value.transpile(state));
+                //comma (if present)
+                if (element.commaToken) {
+                    result.push(state.transpileToken(element.commaToken));
+                }
             } else {
                 //key
                 result.push(
@@ -1016,6 +1089,10 @@ export class AALiteralExpression extends Expression {
 
                 //value
                 result.push(...element.value.transpile(state));
+                // Note: For normal AA members, commas are already included in the keyToken's
+                // trailing whitespace when transpiled, so we don't need explicit comma handling here.
+                // Only AAIndexedMemberExpression needs explicit comma handling because we replace
+                // the entire key with resolvedKeyText.
             }
 
 
@@ -2025,7 +2102,13 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
     if (isAALiteralExpression(expr)) {
         return expr.elements.reduce((acc, e) => {
             if (!isCommentStatement(e)) {
-                acc[e.keyToken.text] = expressionToValue(e.value, strict);
+                if (isAAIndexedMemberExpression(e)) {
+                    // For indexed members, use resolvedKeyText if available
+                    const key = e.resolvedKeyText ?? '[computed]';
+                    acc[key] = expressionToValue(e.value, strict);
+                } else {
+                    acc[e.keyToken.text] = expressionToValue(e.value, strict);
+                }
             }
             return acc;
         }, {});
