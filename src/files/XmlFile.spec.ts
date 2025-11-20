@@ -1324,4 +1324,128 @@ describe('XmlFile', () => {
             expect(program.getComponent('comp1')!.file.pkgPath).to.equal(comp2.pkgPath);
         });
     });
+
+    describe('XML tag casing validation', () => {
+        it('Adds error when incorrect casing is used for children tag', () => {
+            file = program.setFile('components/ChildScene.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="ParentScene">
+                    <Children>
+                        <Label id="test" />
+                    </Children>
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                {
+                    ...DiagnosticMessages.xmlTagCaseMismatch('Children', 'children'),
+                    range: Range.create(2, 5, 2, 13)
+                }
+            ]);
+        });
+
+        it('Adds error when incorrect casing is used for interface tag', () => {
+            file = program.setFile('components/ChildScene.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="ParentScene">
+                    <Interface>
+                        <field id="test" type="string" />
+                    </Interface>
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                {
+                    ...DiagnosticMessages.xmlTagCaseMismatch('Interface', 'interface'),
+                    range: Range.create(2, 5, 2, 14)
+                }
+            ]);
+        });
+
+        it('Adds error when incorrect casing is used for script tag', () => {
+            file = program.setFile('components/ChildScene.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="ParentScene">
+                    <Script type="text/brightscript">
+                        sub init()
+                        end sub
+                    </Script>
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                {
+                    ...DiagnosticMessages.xmlTagCaseMismatch('Script', 'script'),
+                    range: Range.create(2, 5, 2, 11)
+                }
+            ]);
+        });
+
+        it('Adds error when incorrect casing is used for field tag in interface', () => {
+            file = program.setFile('components/ChildScene.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="ParentScene">
+                    <interface>
+                        <Field id="test" type="string" />
+                    </interface>
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                {
+                    ...DiagnosticMessages.xmlTagCaseMismatch('Field', 'field'),
+                    range: Range.create(3, 9, 3, 14)
+                }
+            ]);
+        });
+
+        it('Does not add error for correctly cased tags', () => {
+            file = program.setFile('components/ChildScene.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="ParentScene">
+                    <interface>
+                        <field id="test" type="string" />
+                    </interface>
+                    <script type="text/brightscript">
+                        sub init()
+                        end sub
+                    </script>
+                    <children>
+                        <Label id="test" />
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('Catches casing issues when plugins modify AST after parsing', () => {
+            // This is the test requested in the comment - plugins modify tag casing and validation catches it
+            program.plugins.add({
+                name: 'test-plugin-modify-casing',
+                afterFileParse: (file) => {
+                    if (isXmlFile(file) && file.parser.ast.component?.children) {
+                        // Plugin modifies the children tag to incorrect casing
+                        file.parser.ast.component.children.tag.text = 'Children';
+                    }
+                }
+            });
+
+            file = program.setFile('components/ChildScene.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="ParentScene">
+                    <children>
+                        <Label id="test" />
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                {
+                    ...DiagnosticMessages.xmlTagCaseMismatch('Children', 'children'),
+                    range: Range.create(2, 5, 2, 13)
+                }
+            ]);
+        });
+    });
 });
