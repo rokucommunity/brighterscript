@@ -1,4 +1,4 @@
-import { isBrsFile, isClassStatement, isDottedGetExpression, isNamespaceStatement, isXmlFile, isXmlScope } from '../../astUtils/reflection';
+import { isBrsFile, isClassStatement, isDottedGetExpression, isImportStatement, isNamespaceStatement, isXmlFile, isXmlScope } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ProvideDefinitionEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
@@ -10,6 +10,7 @@ import { URI } from 'vscode-uri';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
 import type { Token } from '../../lexer/Token';
 import type { XmlFile } from '../../files/XmlFile';
+import * as path from 'path';
 
 export class DefinitionProvider {
     constructor(
@@ -128,6 +129,22 @@ export class DefinitionProvider {
         }
 
         if (token.kind === TokenKind.StringLiteral) {
+            if (isImportStatement(expression)) {
+                const resolvedPath = expression.filePath.startsWith('pkg:/')
+                    ? expression.filePath.replace('pkg:/', '')
+                    : path.resolve(path.dirname(file.srcPath), expression.filePath);
+                const importedFile = this.event.program.getFile(resolvedPath);
+                if (importedFile) {
+                    this.event.definitions.push(
+                        util.createLocation(
+                            URI.file(importedFile.srcPath).toString(),
+                            util.createRange(1, 0, 1, 0)
+                        )
+                    );
+                    return;
+                }
+            }
+
             // We need to strip off the quotes but only if present
             const startIndex = textToSearchFor.startsWith('"') ? 1 : 0;
 

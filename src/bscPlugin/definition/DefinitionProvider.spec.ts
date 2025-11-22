@@ -77,7 +77,6 @@ describe('DefinitionProvider', () => {
         ).to.eql([]);
     });
 
-
     it('handles goto', () => {
         const main = program.setFile('source/main.brs', `
             sub main()
@@ -92,6 +91,48 @@ describe('DefinitionProvider', () => {
         ).to.eql([{
             uri: URI.file(main.srcPath).toString(),
             range: util.createRange(2, 16, 2, 22)
+        }]);
+    });
+
+    it('handles import statements', () => {
+        const utils = program.setFile('source/utils.brs', `
+            function helper()
+            end function
+        `);
+        const utils2 = program.setFile('source/subfolder/utils2.brs', `
+            import "../utils.brs"
+            function helper2()
+                helper()
+            end function
+        `);
+        const main = program.setFile('source/main.brs', `
+            import "utils.brs"
+            import "pkg:/source/subfolder/utils2.brs"
+            sub main()
+                helper()
+                helper2()
+            end sub
+        `);
+        // import "u|tils.brs"
+        expect(
+            program.getDefinition(main.srcPath, util.createPosition(1, 21))
+        ).to.eql([{
+            uri: URI.file(utils.srcPath).toString(),
+            range: util.createRange(1, 0, 1, 0)
+        }]);
+        // import "pkg:/subfolder/ut|ils2.brs"
+        expect(
+            program.getDefinition(main.srcPath, util.createPosition(2, 44))
+        ).to.eql([{
+            uri: URI.file(utils2.srcPath).toString(),
+            range: util.createRange(1, 0, 1, 0)
+        }]);
+        // import "../u|tils.brs"
+        expect(
+            program.getDefinition(utils2.srcPath, util.createPosition(1, 21))
+        ).to.eql([{
+            uri: URI.file(utils.srcPath).toString(),
+            range: util.createRange(1, 0, 1, 0)
         }]);
     });
 });
