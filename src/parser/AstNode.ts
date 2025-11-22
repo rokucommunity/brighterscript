@@ -8,6 +8,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import type { TranspileResult } from '../interfaces';
 import type { AnnotationExpression } from './Expression';
 import util from '../util';
+import { isExpression, isStatement } from '../astUtils/reflection';
 
 /**
  * A BrightScript AST node
@@ -158,6 +159,55 @@ export abstract class AstNode {
         return clone;
     }
 
+
+    /**
+     * Get the root of this expression chain.
+     * For example, `alpha.beta(charlie.delta)`, the roots would be the DottedGetExpression for `delta`, and the `CallExpression for `beta(...)`.
+     * @deprecated this is a preview feature and may be removed or changed in the future
+     */
+    public getExpressionChainRoot(): Expression | undefined {
+        let node: Expression = this;
+
+        while (node) {
+            //if the node is a root, return it
+            if (node.isExpressionChainRoot) {
+                return node;
+                //if we have a parent, do another iteration
+            } else if (isExpression(node.parent)) {
+                node = node.parent;
+            } else {
+                //there's no parent, this node must be the root
+                return node;
+            }
+        }
+        return undefined;
+    }
+
+    /**
+     * Is this node the root of an expression chain?
+     * @deprecated this is a preview feature and may be removed or changed in the future
+     */
+    public get isExpressionChainRoot() {
+        //if any of these conditions are true, then this node is an expression chain root
+        if (
+            //if there is no parent,
+            !this.parent ||
+            //our parent is a `Statement`
+            isStatement(this.parent) ||
+            //is NOT a part of our parents expression chain
+            this.parent.childIsInExpressionChain?.(this) === false
+        ) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Is the node a direct child in the expression chain of this node?
+     * @param child the child node to check
+     * @deprecated this is a preview feature and may be removed or changed in the future
+     */
+    protected abstract childIsInExpressionChain(child: AstNode): boolean;
 }
 
 export abstract class Statement extends AstNode {
@@ -169,6 +219,11 @@ export abstract class Statement extends AstNode {
      * Annotations for this statement
      */
     public annotations: AnnotationExpression[] | undefined;
+
+    protected childIsInExpressionChain(child: AstNode): boolean {
+        // statements cannot contribute child nodes to the same expression chain
+        return false;
+    }
 }
 
 

@@ -25,7 +25,7 @@ export class CallExpressionInfo {
     expression?: Expression;
 
     //the contextually relevant callExpression, which relates to it
-    callExpression?: CallExpression;
+    callExpression?: CallExpression | CallfuncExpression;
     type: CallExpressionType;
 
     file: BrsFile;
@@ -100,9 +100,9 @@ export class CallExpressionInfo {
         return util.rangeContains(boundingRange, this.position);
     }
 
-    ascertainCallExpression(): CallExpression {
+    ascertainCallExpression(): CallExpression | CallfuncExpression {
         let expression = this.expression;
-        function isCallFuncOrCallExpression(expression: Expression) {
+        function isCallFuncOrCallExpression(expression: Expression): expression is CallExpression | CallfuncExpression {
             return isCallfuncExpression(expression) || isCallExpression(expression);
         }
 
