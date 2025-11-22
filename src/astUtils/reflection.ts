@@ -20,6 +20,7 @@ import { DynamicType } from '../types/DynamicType';
 import type { InterfaceType } from '../types/InterfaceType';
 import type { ObjectType } from '../types/ObjectType';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
+import type { Token } from '../lexer/Token';
 
 // File reflection
 
@@ -198,9 +199,9 @@ export function isAliasStatement(element: AstNode | undefined): element is Alias
  * this will work for StringLiteralExpression -> Expression,
  * but will not work CustomStringLiteralExpression -> StringLiteralExpression -> Expression
  */
-export function isExpression(element: AstNode | undefined): element is Expression {
+export function isExpression(element: AstNode | Token | undefined): element is Expression {
     // eslint-disable-next-line no-bitwise
-    return !!(element && element.visitMode & InternalWalkMode.visitExpressions);
+    return !!(element && (element as any).visitMode & InternalWalkMode.visitExpressions);
 }
 
 export function isBinaryExpression(element: AstNode | undefined): element is BinaryExpression {

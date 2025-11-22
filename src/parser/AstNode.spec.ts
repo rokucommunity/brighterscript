@@ -6,10 +6,10 @@ import { expect } from '../chai-config.spec';
 import type { AALiteralExpression, AAMemberExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, GroupingExpression, IndexedGetExpression, NewExpression, NullCoalescingExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, TypeCastExpression, UnaryExpression, XmlAttributeGetExpression } from './Expression';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
 import { tempDir, rootDir, stagingDir } from '../testHelpers.spec';
+import { ParseMode, Parser } from './Parser';
 import { isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isCallfuncExpression, isCatchStatement, isClassStatement, isCommentStatement, isConstStatement, isDimStatement, isDottedGetExpression, isDottedSetStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isGroupingExpression, isIfStatement, isIncrementStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isLibraryStatement, isMethodStatement, isNamespaceStatement, isNewExpression, isNullCoalescingExpression, isPrintStatement, isReturnStatement, isTaggedTemplateStringExpression, isTemplateStringExpression, isTemplateStringQuasiExpression, isTernaryExpression, isThrowStatement, isTryCatchStatement, isTypeCastExpression, isUnaryExpression, isWhileStatement, isXmlAttributeGetExpression } from '../astUtils/reflection';
 import type { ClassStatement, FunctionStatement, InterfaceFieldStatement, InterfaceMethodStatement, MethodStatement, InterfaceStatement, CatchStatement, ThrowStatement, EnumStatement, EnumMemberStatement, ConstStatement, Block, CommentStatement, PrintStatement, DimStatement, ForStatement, WhileStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, TryCatchStatement, DottedSetStatement } from './Statement';
 import { AssignmentStatement, EmptyStatement } from './Statement';
-import { ParseMode, Parser } from './Parser';
 import type { AstNode } from './AstNode';
 
 type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };
@@ -1668,6 +1668,47 @@ describe('AstNode', () => {
             `).ast;
 
             testClone(original);
+        });
+    });
+
+    describe('toString', () => {
+        function testToString(text: string) {
+            expect(
+                Parser.parse(text).ast.toString()
+            ).to.eql(
+                text
+            );
+        }
+        it('retains full fidelity', () => {
+            testToString(`
+                thing = true
+
+                if true
+                    thing = true
+                end if
+
+                if true
+                    thing = true
+                else
+                    thing = true
+                end if
+
+                if true
+                    thing = true
+                else if true
+                    thing = true
+                else
+                    thing = true
+                end if
+
+                for i = 0 to 10 step 1
+                    print true,false;3
+                end for
+
+                for each item in thing
+                    print 1
+                end for
+            `);
         });
     });
 });

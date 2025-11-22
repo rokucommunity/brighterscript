@@ -103,25 +103,29 @@ describe('parser for loops', () => {
                 kind: TokenKind.For,
                 text: 'for',
                 isReserved: true,
-                range: Range.create(0, 0, 0, 3)
+                range: Range.create(0, 0, 0, 3),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'i',
                 isReserved: false,
-                range: Range.create(0, 4, 0, 5)
+                range: Range.create(0, 4, 0, 5),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
-                range: Range.create(0, 6, 0, 7)
+                range: Range.create(0, 6, 0, 7),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '0',
                 isReserved: false,
-                range: Range.create(0, 8, 0, 9)
+                range: Range.create(0, 8, 0, 9),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.To,
@@ -130,19 +134,22 @@ describe('parser for loops', () => {
                 range: {
                     start: { line: 0, character: 10 },
                     end: { line: 0, character: 12 }
-                }
+                },
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '10',
                 isReserved: false,
-                range: Range.create(0, 13, 0, 15)
+                range: Range.create(0, 13, 0, 15),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
-                range: Range.create(0, 15, 0, 16)
+                range: Range.create(0, 15, 0, 16),
+                leadingTrivia: []
             },
             // loop body isn't significant for location tracking, so helper functions are safe
             identifier('Rnd'),
@@ -154,7 +161,8 @@ describe('parser for loops', () => {
                 kind: TokenKind.EndFor,
                 text: 'end for',
                 isReserved: false,
-                range: Range.create(2, 0, 2, 8)
+                range: Range.create(2, 0, 2, 8),
+                leadingTrivia: []
             },
             EOF
         ]);
