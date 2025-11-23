@@ -1,6 +1,6 @@
 
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
-import { isArrayType, isDynamicType, isEnumMemberType, isObjectType } from '../astUtils/reflection';
+import { isArrayType, isDynamicType, isEnumMemberType, isInvalidType, isObjectType } from '../astUtils/reflection';
 import type { TypeCompatibilityData } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
@@ -52,6 +52,8 @@ export class ArrayType extends BscType {
         if (isDynamicType(targetType)) {
             return true;
         } else if (isObjectType(targetType)) {
+            return true;
+        } else if (isInvalidType(targetType)) {
             return true;
         } else if (isUnionTypeCompatible(this, targetType)) {
             return true;
