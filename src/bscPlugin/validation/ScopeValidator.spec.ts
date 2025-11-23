@@ -1832,6 +1832,22 @@ describe('ScopeValidator', () => {
             });
         });
 
+        it('allows using invalid as argument for typed array params', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub takesIntArray(arr as integer[])
+                end sub
+
+                sub takesStrArray(arr as string[])
+                end sub
+
+                sub test()
+                    takesIntArray(invalid)
+                    takesStrArray(invalid)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('cannotFindName', () => {
@@ -2962,6 +2978,17 @@ describe('ScopeValidator', () => {
                 spy.getCalls().map(x => (x.args?.[0] as string)?.toString()).filter(x => x?.includes('Error when calling plugin'))
             ).to.eql([]);
         });
+
+        it('allows returning invalid instead of typed array', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                function getNumbers() as integer[]
+                    return invalid
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
     });
 
     describe('returnTypeCoercionMismatch', () => {
@@ -3429,6 +3456,17 @@ describe('ScopeValidator', () => {
                     DiagnosticMessages.assignmentTypeMismatch('Array<string>', 'Array<roAssociativeArray>', typeCompatData).message
                 ]);
             });
+        });
+
+        it('allows assigning invalid to typed arrays', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub test()
+                    intArray as integer[] = invalid
+                    strArray as string[] = invalid
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
         });
     });
 
