@@ -1,4 +1,4 @@
-import type { Body, AssignmentStatement, Block, ExpressionStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement, EnumStatement, EnumMemberStatement, TryCatchStatement, CatchStatement, ThrowStatement, MethodStatement, FieldStatement, ConstStatement, ContinueStatement, DimStatement, TypecastStatement, AliasStatement, AugmentedAssignmentStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ConditionalCompileStatement, ExitStatement } from '../parser/Statement';
+import type { Body, AssignmentStatement, Block, ExpressionStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement, EnumStatement, EnumMemberStatement, TryCatchStatement, CatchStatement, ThrowStatement, MethodStatement, FieldStatement, ConstStatement, ContinueStatement, DimStatement, TypecastStatement, AliasStatement, AugmentedAssignmentStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ConditionalCompileStatement, ExitStatement, TypeStatement } from '../parser/Statement';
 import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, TernaryExpression, NullCoalescingExpression, PrintSeparatorExpression, TypecastExpression, TypedArrayExpression, TypeExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
@@ -224,6 +224,9 @@ export function isTypecastStatement(element: AstNode | undefined): element is Ty
 }
 export function isAliasStatement(element: AstNode | undefined): element is AliasStatement {
     return element?.constructor?.name === 'AliasStatement';
+}
+export function isTypeStatement(element: AstNode | undefined): element is TypeStatement {
+    return element?.constructor?.name === 'TypeStatement';
 }
 
 // Expressions reflection

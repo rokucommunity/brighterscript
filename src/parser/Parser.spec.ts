@@ -4,11 +4,11 @@ import { ReservedWords, TokenKind } from '../lexer/TokenKind';
 import type { AAMemberExpression, BinaryExpression, LiteralExpression, TypecastExpression, UnaryExpression } from './Expression';
 import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression, VariableExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
-import type { AliasStatement, AssignmentStatement, Block, ClassStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ConditionalCompileStatement, ExitStatement, ForStatement, IfStatement, InterfaceStatement, ReturnStatement, TypecastStatement } from './Statement';
+import type { AliasStatement, AssignmentStatement, Block, ClassStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ConditionalCompileStatement, ExitStatement, ForStatement, IfStatement, InterfaceStatement, ReturnStatement, TypecastStatement, TypeStatement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isAliasStatement, isAssignmentStatement, isBinaryExpression, isBlock, isBody, isCallExpression, isCallfuncExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isDottedGetExpression, isExitStatement, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAliasStatement, isAssignmentStatement, isBinaryExpression, isBlock, isBody, isCallExpression, isCallfuncExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isDottedGetExpression, isExitStatement, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isTypeStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, rootDir } from '../testHelpers.spec';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { Expression, Statement } from './AstNode';
@@ -2443,6 +2443,71 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(diagnostics);
             expect(((ast.statements[0] as FunctionStatement).func.body.statements[0] as AssignmentStatement).tokens.name.text).to.eq('alias');
+        });
+    });
+
+    describe('type statement', () => {
+        it('allows type statement ', () => {
+            let { ast, diagnostics } = parse(`
+                TYPE x = string
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(isTypeStatement(ast.statements[0])).to.be.true;
+            const stmt = ast.statements[0] as TypeStatement;
+            expect(stmt.tokens.type.text).to.eq('TYPE');
+            expect(stmt.value).to.exist;
+        });
+
+        it('is disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                type x = string
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('type statements')
+            ]);
+        });
+
+        it('disallows `type` for function name', () => {
+            let { diagnostics } = parse(`
+                function type() as integer
+                    return 1
+                end function
+            `, ParseMode.BrighterScript);
+            expectDiagnostics(diagnostics, [
+                DiagnosticMessages.cannotUseReservedWordAsIdentifier('type').message
+            ]);
+        });
+
+        it('disallows `type` for variable name', () => {
+            let { diagnostics } = parse(`
+                function foo() as integer
+                    type = 1
+                    return type
+                end function
+            `, ParseMode.BrighterScript);
+            expectDiagnostics(diagnostics, [
+                DiagnosticMessages.cannotUseReservedWordAsIdentifier('type').message
+            ]);
+        });
+
+        it('has error when rhs is not a type', () => {
+            let { diagnostics } = parse(`
+                type x = 123
+            `, ParseMode.BrighterScript);
+            expectDiagnostics(diagnostics, [
+                DiagnosticMessages.expectedIdentifier('=').message
+            ]);
+        });
+
+        it('allows type statement with complicated type', () => {
+            let { ast, diagnostics } = parse(`
+                type x = string or CustomKlass or roAssociativeArray
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(isTypeStatement(ast.statements[0])).to.be.true;
+            const stmt = ast.statements[0] as TypeStatement;
+            expect(stmt.tokens.type.text).to.eq('type');
+            expect(stmt.value).to.exist;
         });
     });
 
