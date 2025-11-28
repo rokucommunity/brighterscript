@@ -1832,6 +1832,42 @@ describe('ScopeValidator', () => {
             });
         });
 
+        describe('wrapped types', () => {
+            it('allows compatible wrapped types to be passed to functions expecting normal types', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    type number = integer or float
+
+                    sub takesNumber(x as number)
+                        takesInteger(x)
+                    end sub
+
+                    sub takesInteger(x as integer)
+                        print x
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('disallows incompatible wrapped types to be passed to functions expecting normal types', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    type whatever = float or string
+
+                    sub takesNumber(x as whatever)
+                        takesInteger(x)
+                    end sub
+
+                    sub takesInteger(x as integer)
+                        print x
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('whatever', 'integer').message
+                ]);
+            });
+        });
+
     });
 
     describe('cannotFindName', () => {
@@ -2342,6 +2378,20 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
+        });
+
+        it('validates accessing a bad member on a wrapped type', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                type numberOrString = integer or string
+
+                function test(x as numberOrString)
+                    print x.nonExistentMember
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('nonExistentMember', 'numberOrString.nonExistentMember', 'numberOrString')
+            ]);
         });
     });
 
@@ -2961,6 +3011,27 @@ describe('ScopeValidator', () => {
             expect(
                 spy.getCalls().map(x => (x.args?.[0] as string)?.toString()).filter(x => x?.includes('Error when calling plugin'))
             ).to.eql([]);
+        });
+
+
+        it('allows returning something that matches a wrapped type', () => {
+            program.setFile('source/util.bs', `
+                interface Person
+                    name as string
+                    age as integer
+                end interface
+
+                type Wrapped = Person
+
+                function getWrapped() as Wrapped
+                    return {
+                        name: "Alice",
+                        age: 30
+                    }
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
         });
     });
 
@@ -3720,6 +3791,37 @@ describe('ScopeValidator', () => {
                     j = a <= b
                     j = a > b
                     j = a >= b
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows unions of compatible types', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                function test(s as string or roString, i as integer or longinteger)
+                    s1 = s + "test"
+                    s2 = "test" + s
+
+                    i1 = i + 5
+                    i2 = 5 + i
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows wrapped types of compatible types', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                type number = integer or float
+                type MyString = string or roString
+
+                function test(s as MyString, i as number)
+                    s1 = s + "test"
+                    s2 = "test" + s
+
+                    i1 = i + 5
+                    i2 = 5 + i
                 end function
             `);
             program.validate();
