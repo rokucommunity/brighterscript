@@ -398,7 +398,7 @@ export class SymbolTable implements SymbolTypeGetter {
             resolvedType = SymbolTable.referenceTypeFactory(name, options.fullName, options.flags, options.tableProvider);
         }
         const resolvedTypeIsReference = isAnyReferenceType(resolvedType);
-        const newNonReferenceType = originalIsReferenceType && !isAnyReferenceType(resolvedType);
+        const newNonReferenceType = originalIsReferenceType && !isAnyReferenceType(resolvedType) && resolvedType;
         doSetCache = doSetCache && (options.onlyCacheResolvedTypes ? !resolvedTypeIsReference : true);
         if (doSetCache || newNonReferenceType) {
             this.setCachedType(name, { type: resolvedType, data: data, flags: foundFlags }, options);
@@ -415,6 +415,7 @@ export class SymbolTable implements SymbolTypeGetter {
             options.data.isFromDocComment = data?.isFromDocComment;
             options.data.isBuiltIn = data?.isBuiltIn;
             options.data.isFromCallFunc = data?.isFromCallFunc;
+            options.data.isWrappedType = data?.isWrappedType;
         }
         return resolvedType;
     }
@@ -562,7 +563,7 @@ export class SymbolTable implements SymbolTypeGetter {
     }
 
     setCachedType(name: string, cacheEntry: TypeCacheEntry, options: GetTypeOptions) {
-        if (!cacheEntry) {
+        if (!cacheEntry || !cacheEntry.type) {
             return;
         }
         if (SymbolTable.cacheVerifier) {

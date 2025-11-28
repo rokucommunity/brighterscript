@@ -39,6 +39,7 @@ import type { AssociativeArrayType } from '../types/AssociativeArrayType';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Program } from '../Program';
 import type { Project } from '../lsp/Project';
+import { WrapperType } from '../types/WrapperType';
 
 
 // File reflection
@@ -333,7 +334,7 @@ export function isRoStringType(value: any): value is InterfaceType {
     return isBuiltInType(value, 'roString');
 }
 export function isStringTypeLike(value: any): value is StringType | InterfaceType {
-    return isStringType(value) || isRoStringType(value);
+    return isStringType(value) || isRoStringType(value) || (isWrapperType(value) && isStringTypeLike(value.wrappedType));
 }
 
 export function isTypedFunctionType(value: any): value is TypedFunctionType {
@@ -347,7 +348,7 @@ export function isRoFunctionType(value: any): value is InterfaceType {
     return value?.kind === BscTypeKind.RoFunctionType || isBuiltInType(value, 'roFunction');
 }
 export function isFunctionTypeLike(value: any): value is FunctionType | InterfaceType {
-    return isFunctionType(value) || isRoFunctionType(value);
+    return isFunctionType(value) || isRoFunctionType(value) || (isWrapperType(value) && isFunctionTypeLike(value.wrappedType));
 }
 
 export function isBooleanType(value: any): value is BooleanType {
@@ -357,7 +358,7 @@ export function isRoBooleanType(value: any): value is InterfaceType {
     return isBuiltInType(value, 'roBoolean');
 }
 export function isBooleanTypeLike(value: any): value is BooleanType | InterfaceType {
-    return isBooleanType(value) || isRoBooleanType(value);
+    return isBooleanType(value) || isRoBooleanType(value) || (isWrapperType(value) && isBooleanTypeLike(value.wrappedType));
 }
 
 export function isIntegerType(value: any): value is IntegerType {
@@ -367,7 +368,7 @@ export function isRoIntType(value: any): value is LongIntegerType {
     return isBuiltInType(value, 'roInt');
 }
 export function isIntegerTypeLike(value: any): value is IntegerType | InterfaceType {
-    return isIntegerType(value) || isRoIntType(value);
+    return isIntegerType(value) || isRoIntType(value) || (isWrapperType(value) && isIntegerTypeLike(value.wrappedType));
 }
 
 export function isLongIntegerType(value: any): value is LongIntegerType {
@@ -377,7 +378,7 @@ export function isRoLongIntegerType(value: any): value is InterfaceType {
     return isBuiltInType(value, 'roLongInteger');
 }
 export function isLongIntegerTypeLike(value: any): value is LongIntegerType | InterfaceType {
-    return isLongIntegerType(value) || isRoLongIntegerType(value);
+    return isLongIntegerType(value) || isRoLongIntegerType(value) || (isWrapperType(value) && isLongIntegerTypeLike(value.wrappedType));
 }
 
 export function isFloatType(value: any): value is FloatType {
@@ -387,9 +388,8 @@ export function isRoFloatType(value: any): value is InterfaceType {
     return isBuiltInType(value, 'roFloat');
 }
 export function isFloatTypeLike(value: any): value is FloatType | InterfaceType {
-    return isFloatType(value) || isRoFloatType(value);
+    return isFloatType(value) || isRoFloatType(value) || (isWrapperType(value) && isFloatTypeLike(value.wrappedType));
 }
-
 
 export function isDoubleType(value: any): value is DoubleType {
     return value?.kind === BscTypeKind.DoubleType;
@@ -398,7 +398,7 @@ export function isRoDoubleType(value: any): value is InterfaceType {
     return isBuiltInType(value, 'roDouble');
 }
 export function isDoubleTypeLike(value: any): value is DoubleType | InterfaceType {
-    return isDoubleType(value) || isRoDoubleType(value);
+    return isDoubleType(value) || isRoDoubleType(value) || (isWrapperType(value) && isDoubleTypeLike(value.wrappedType));
 }
 
 export function isInvalidType(value: any): value is InvalidType {
@@ -408,7 +408,7 @@ export function isRoInvalidType(value: any): value is InterfaceType {
     return isBuiltInType(value, 'roInvalid');
 }
 export function isInvalidTypeLike(value: any): value is InvalidType | InterfaceType {
-    return isInvalidType(value) || isRoInvalidType(value);
+    return isInvalidType(value) || isRoInvalidType(value) || (isWrapperType(value) && isInvalidTypeLike(value.wrappedType));
 }
 
 export function isVoidType(value: any): value is VoidType {
@@ -465,6 +465,10 @@ export function isArrayType(value: any): value is ArrayType {
 export function isAssociativeArrayType(value: any): value is AssociativeArrayType {
     return value?.kind === BscTypeKind.AssociativeArrayType;
 }
+export function isWrapperType(value: any): value is WrapperType {
+    return value?.kind === BscTypeKind.WrapperType;
+}
+
 export function isInheritableType(target): target is InheritableType {
     return isClassType(target) || isCallFuncableType(target);
 }
@@ -486,17 +490,19 @@ export function isNumberType(value: any): value is IntegerType | LongIntegerType
     return isIntegerTypeLike(value) ||
         isLongIntegerTypeLike(value) ||
         isFloatTypeLike(value) ||
-        isDoubleTypeLike(value);
+        isDoubleTypeLike(value) ||
+        (isWrapperType(value) && isNumberType(value.wrappedType));
 }
 
 export function isPrimitiveType(value: any = false): value is IntegerType | LongIntegerType | FloatType | DoubleType | StringType | BooleanType | InterfaceType {
     return isNumberType(value) ||
         isBooleanTypeLike(value) ||
-        isStringTypeLike(value);
+        isStringTypeLike(value) || (isWrapperType(value) && isPrimitiveType(value.wrappedType));
 }
 
 export function isBuiltInType(value: any, name: string): value is InterfaceType {
-    return isInterfaceType(value) && value.name.toLowerCase() === name.toLowerCase() && value.isBuiltIn;
+    return (isInterfaceType(value) && value.name.toLowerCase() === name.toLowerCase() && value.isBuiltIn) ||
+        (isWrapperType(value) && isBuiltInType(value.wrappedType, name));
 }
 
 const nativeTypeKinds = [

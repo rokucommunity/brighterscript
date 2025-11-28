@@ -3909,6 +3909,92 @@ describe('Scope', () => {
 
         });
 
+        describe('wrapped types (type Statements)', () => {
+            it('allows wrapped types of primitives in function params', () => {
+                program.setFile<BrsFile>('source/wrapped.bs', `
+                    type myString  = string
+                    sub useWrappedType(data as myString)
+                        print data.len()
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows wrapped types of primitives in variable declarations', () => {
+                program.setFile<BrsFile>('source/wrapped.bs', `
+                    type myInteger = integer
+                    sub useWrappedType()
+                        value as myInteger = 123
+                        print value.toStr()
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows wrapped types of unions in function params', () => {
+                program.setFile<BrsFile>('source/wrapped.bs', `
+                    type StringOrInteger = string or integer
+                    sub useWrappedType(data as StringOrInteger)
+                        print data
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows wrapped custom types in function params', () => {
+                program.setFile<BrsFile>('source/wrapped.bs', `
+                    interface WithName1
+                        name as string
+                    end interface
+
+                    interface WithName2
+                        name as string
+                    end interface
+
+                    type HasName = WithName1 or WithName2
+
+                    sub useWrappedType(data as HasName)
+                        print data.name
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('provides a wrapped type when importing a file', () => {
+                program.setFile<BrsFile>('source/wrapped.bs', `
+                    interface WithName1
+                        name as string
+                    end interface
+
+                    interface WithName2
+                        name as string
+                    end interface
+
+                    type HasName = WithName1 or WithName2
+                `);
+
+                program.setFile<BrsFile>('components/useWrapped.xml', `
+                    <component name="useWrapped" extends="Group">
+                        <script uri="useWrapped.bs"/>
+                    </component>
+                `);
+
+                program.setFile<BrsFile>('components/useWrapped.bs', `
+                    import "pkg:/source/wrapped.bs"
+                    sub useWrappedType(data as HasName)
+                        print data.name
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+        });
+
         it('classes in namespaces that reference themselves without namespace work', () => {
             program.setFile<BrsFile>('source/class.bs', `
                 namespace Alpha

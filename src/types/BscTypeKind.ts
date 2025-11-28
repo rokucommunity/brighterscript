@@ -22,5 +22,6 @@ export enum BscTypeKind {
     StringType = 'StringType',
     UninitializedType = 'UninitializedType',
     UnionType = 'UnionType',
+    WrapperType = 'WrapperType',
     VoidType = 'VoidType'
 }

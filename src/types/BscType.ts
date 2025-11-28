@@ -5,17 +5,23 @@ import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { ExtraSymbolData, TypeCompatibilityData } from '../interfaces';
 import { isArrayType, isInheritableType, isReferenceType } from '../astUtils/reflection';
 import { TypesCreated } from './helpers';
+import type { BscTypeKind } from './BscTypeKind';
 
 export abstract class BscType {
 
-    public readonly memberTable: SymbolTable;
+    private readonly _memberTable: SymbolTable;
+    public get memberTable(): SymbolTable {
+        return this._memberTable;
+    }
     protected __identifier: string;
     protected hasAddedBuiltInInterfaces = false;
     public isBuiltIn = false;
 
+    public readonly kind: BscTypeKind = null;
+
     constructor(name = '') {
         this.__identifier = `${this.constructor.name}${name ? ': ' + name : ''}`;
-        this.memberTable = new SymbolTable(this.__identifier);
+        this._memberTable = new SymbolTable(this.__identifier);
         if (TypesCreated[this.constructor.name] === undefined) {
             TypesCreated[this.constructor.name] = 0;
         }

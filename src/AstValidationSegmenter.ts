@@ -1,5 +1,5 @@
 import type { DottedGetExpression, TypeExpression, VariableExpression } from './parser/Expression';
-import { isAliasStatement, isArrayType, isBinaryExpression, isBlock, isBody, isClassStatement, isConditionalCompileStatement, isDottedGetExpression, isInterfaceStatement, isNamespaceStatement, isTypecastStatement, isTypeExpression, isVariableExpression } from './astUtils/reflection';
+import { isAliasStatement, isArrayType, isBinaryExpression, isBlock, isBody, isClassStatement, isConditionalCompileStatement, isDottedGetExpression, isInterfaceStatement, isNamespaceStatement, isTypecastStatement, isTypeExpression, isTypeStatement, isVariableExpression } from './astUtils/reflection';
 import { ChildrenSkipper, WalkMode, createVisitor } from './astUtils/visitors';
 import type { ExtraSymbolData, GetTypeOptions, TypeChainEntry } from './interfaces';
 import type { AstNode, Expression } from './parser/AstNode';
@@ -115,6 +115,13 @@ export class AstValidationSegmenter {
                     extraData.definingNode.value.getType({ ...options, flags: SymbolTypeFlag.runtime | SymbolTypeFlag.typetime, typeChain: aliasTypeChain });
                     typeChain = [...aliasTypeChain, ...typeChain.slice(1)];
                 }
+                if (extraData.isWrappedType && isTypeStatement(extraData.definingNode)) {
+                    //set the unwrapped version of this symbol as required.
+                    const wrappedTypeChain = [];
+                    // eslint-disable-next-line no-bitwise
+                    extraData.definingNode.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: wrappedTypeChain });
+                    typeChain = [...wrappedTypeChain, ...typeChain.slice(1)];
+                }
                 const possibleNamespace = this.currentNamespaceStatement?.getNameParts()?.map(t => t.text)?.join('.').toLowerCase() ?? '';
                 const fullChainName = util.processTypeChain(typeChain).fullChainName?.toLowerCase();
                 const possibleNamesLower = [] as string[];
@@ -181,6 +188,7 @@ export class AstValidationSegmenter {
         }
 
 
+
         this.segmentsForValidation.push(segment);
         this.validatedSegments.set(segment, false);
         let foundUnresolvedInSegment = false;
@@ -197,6 +205,12 @@ export class AstValidationSegmenter {
         let unresolvedTypeCastTypeExpression: TypeExpression;
         if (this.unresolvedTypeCastTypeExpressions.length > 0) {
             unresolvedTypeCastTypeExpression = this.unresolvedTypeCastTypeExpressions[this.unresolvedTypeCastTypeExpressions.length - 1];
+        }
+
+        if (isTypeStatement(segment)) {
+            // this is a straight assignment,
+            assignedSymbols.add({ token: segment.tokens.name, node: segment });
+            assignedSymbolsNames.add(segment.tokens.name.text.toLowerCase());
         }
 
         segment.walk(createVisitor({
