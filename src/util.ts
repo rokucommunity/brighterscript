@@ -25,7 +25,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -1421,12 +1421,12 @@ export class Util {
         let hasInvalid = isInvalidTypeLike(leftType) || isInvalidTypeLike(rightType);
         let hasDynamic = isDynamicType(leftType) || isDynamicType(rightType);
         let bothDynamic = isDynamicType(leftType) && isDynamicType(rightType);
-        let bothNumbers = isNumberType(leftType) && isNumberType(rightType);
-        let hasNumber = isNumberType(leftType) || isNumberType(rightType);
+        let bothNumbers = isNumberTypeLike(leftType) && isNumberTypeLike(rightType);
+        let hasNumber = isNumberTypeLike(leftType) || isNumberTypeLike(rightType);
         let bothStrings = isStringTypeLike(leftType) && isStringTypeLike(rightType);
         let hasString = isStringTypeLike(leftType) || isStringTypeLike(rightType);
         let hasBoolean = isBooleanTypeLike(leftType) || isBooleanTypeLike(rightType);
-        let eitherBooleanOrNum = (isNumberType(leftType) || isBooleanTypeLike(leftType)) && (isNumberType(rightType) || isBooleanTypeLike(rightType));
+        let eitherBooleanOrNum = (isNumberTypeLike(leftType) || isBooleanTypeLike(leftType)) && (isNumberTypeLike(rightType) || isBooleanTypeLike(rightType));
 
         let leftIsPrimitive = isPrimitiveType(leftType);
         let rightIsPrimitive = isPrimitiveType(rightType);
@@ -1642,7 +1642,7 @@ export class Util {
             // Math operators
             case TokenKind.Plus: // (`num = +num` is valid syntax)
             case TokenKind.Minus:
-                if (isNumberType(exprType)) {
+                if (isNumberTypeLike(exprType)) {
                     // a negative number will be the same type, eg, double->double, int->int, etc.
                     return this.getUnboxedType(exprType);
                 }
@@ -1650,7 +1650,7 @@ export class Util {
             case TokenKind.Not:
                 if (isBooleanTypeLike(exprType)) {
                     return BooleanType.instance;
-                } else if (isNumberType(exprType)) {
+                } else if (isNumberTypeLike(exprType)) {
                     //numbers can be "notted"
                     // by default they go to ints, except longints, which stay that way
                     if (isLongIntegerTypeLike(exprType)) {

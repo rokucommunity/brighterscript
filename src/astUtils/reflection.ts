@@ -487,18 +487,31 @@ export function isAnyReferenceType(target): target is AnyReferenceType {
 }
 
 export function isNumberType(value: any): value is IntegerType | LongIntegerType | FloatType | DoubleType | InterfaceType {
+    return isIntegerType(value) ||
+        isLongIntegerType(value) ||
+        isFloatType(value) ||
+        isDoubleType(value);
+}
+
+export function isNumberTypeLike(value: any): value is IntegerType | LongIntegerType | FloatType | DoubleType | InterfaceType {
     return isIntegerTypeLike(value) ||
         isLongIntegerTypeLike(value) ||
         isFloatTypeLike(value) ||
         isDoubleTypeLike(value) ||
-        isComplexTypeOf(value, isNumberType);
+        isComplexTypeOf(value, isNumberTypeLike);
 }
 
 export function isPrimitiveType(value: any = false): value is IntegerType | LongIntegerType | FloatType | DoubleType | StringType | BooleanType | InterfaceType {
     return isNumberType(value) ||
+        isBooleanType(value) ||
+        isStringType(value);
+}
+
+export function isPrimitiveTypeLike(value: any = false): value is IntegerType | LongIntegerType | FloatType | DoubleType | StringType | BooleanType | InterfaceType {
+    return isNumberTypeLike(value) ||
         isBooleanTypeLike(value) ||
         isStringTypeLike(value) ||
-        isComplexTypeOf(value, isPrimitiveType);
+        isWrapperOf(value, isPrimitiveTypeLike);
 }
 
 export function isBuiltInType(value: any, name: string): value is InterfaceType {
@@ -525,7 +538,9 @@ export function isUnionTypeOf(value: any, typeGuard: (val: any) => boolean) {
 }
 
 export function isComplexTypeOf(value: any, typeGuard: (val: any) => boolean) {
-    return isWrapperOf(value, typeGuard) || isUnionTypeOf(value, typeGuard);
+    // TODO: add more complex type checks as needed, like IntersectionType
+    return isWrapperOf(value, typeGuard) ||
+        isUnionTypeOf(value, typeGuard);
 }
 
 
