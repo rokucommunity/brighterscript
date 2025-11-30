@@ -1868,6 +1868,22 @@ describe('ScopeValidator', () => {
             });
         });
 
+        it('allows using invalid as argument for typed array params', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub takesIntArray(arr as integer[])
+                end sub
+
+                sub takesStrArray(arr as string[])
+                end sub
+
+                sub test()
+                    takesIntArray(invalid)
+                    takesStrArray(invalid)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('cannotFindName', () => {
@@ -3013,7 +3029,6 @@ describe('ScopeValidator', () => {
             ).to.eql([]);
         });
 
-
         it('allows returning something that matches a wrapped type', () => {
             program.setFile('source/util.bs', `
                 interface Person
@@ -3028,6 +3043,16 @@ describe('ScopeValidator', () => {
                         name: "Alice",
                         age: 30
                     }
+                 end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows returning invalid instead of typed array', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                function getNumbers() as integer[]
+                    return invalid
                 end function
             `);
             program.validate();
@@ -3500,6 +3525,17 @@ describe('ScopeValidator', () => {
                     DiagnosticMessages.assignmentTypeMismatch('Array<string>', 'Array<roAssociativeArray>', typeCompatData).message
                 ]);
             });
+        });
+
+        it('allows assigning invalid to typed arrays', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub test()
+                    intArray as integer[] = invalid
+                    strArray as string[] = invalid
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
         });
     });
 
