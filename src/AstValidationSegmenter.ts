@@ -187,8 +187,6 @@ export class AstValidationSegmenter {
             return;
         }
 
-
-
         this.segmentsForValidation.push(segment);
         this.validatedSegments.set(segment, false);
         let foundUnresolvedInSegment = false;
