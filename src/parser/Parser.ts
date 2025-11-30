@@ -956,6 +956,14 @@ export class Parser {
         // force the name into an identifier so the AST makes some sense
         name.kind = TokenKind.Identifier;
 
+        //add diagnostic if name is a reserved word that cannot be used as an identifier
+        if (DisallowedLocalIdentifiersText.has(name.text.toLowerCase())) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.cannotUseReservedWordAsIdentifier(name.text),
+                location: name.location
+            });
+        }
+
         let typeExpression: TypeExpression;
         let defaultValue;
         let equalToken: Token;

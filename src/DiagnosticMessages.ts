@@ -883,12 +883,25 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'deprecated-brightscript-component'
     }),
-    circularReferenceDetected: (items: string[], scopeName: string) => ({
-        message: `Circular inheritance detected between ${Array.isArray(items) ? items.join(' -> ') : ''} in scope '${scopeName}'`,
-        legacyCode: 1132,
-        severity: DiagnosticSeverity.Error,
-        code: 'circular-inheritance'
-    }),
+    circularReferenceDetected: (items: string | string[] = []) => {
+        let detail = '';
+        if (Array.isArray(items)) {
+            if (items.length > 1) {
+                detail += ' between';
+            }
+            if (items.length > 0) {
+                detail += ' ' + items.map(item => `'${item}'`).join(' -> ');
+            }
+        } else if (items) {
+            detail = ` '${items}'`;
+        }
+        return {
+            message: `Circular reference detected${detail}`,
+            legacyCode: 1132,
+            severity: DiagnosticSeverity.Error,
+            code: 'circular-reference'
+        };
+    },
     unexpectedStatementOutsideFunction: () => ({
         message: `Unexpected statement found outside of function body`,
         legacyCode: 1133,

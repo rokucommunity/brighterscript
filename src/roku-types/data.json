@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2025-08-28T16:32:09.734Z",
+    "generatedDate": "2025-10-10T15:16:43.437Z",
     "nodes": {
         "animation": {
             "description": "Extends [**AnimationBase**](https://developer.roku.com/docs/references/scenegraph/abstract-nodes/animationbase.md\n\nThe Animation node class provides animations of renderable nodes, by applying interpolator functions to the values in specified renderable node fields. For an animation to take effect, an Animation node definition must include a child field interpolator node ([FloatFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/floatfieldinterpolator.md\"FloatFieldInterpolator\"), [Vector2DFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/vector2dfieldinterpolator.md\"Vector2DFieldInterpolator\"), [ColorFieldInterpolator](https://developer.roku.com/docs/references/scenegraph/animation-nodes/colorfieldinterpolator.md\"ColorFieldInterpolator\")) definition for each renderable node field that is animated.\n\nThe Animation node class provides a simple linear interpolator function, where the animation takes place smoothly and simply from beginning to end. The Animation node class also provides several more complex interpolator functions to allow custom animation effects. For example, you can move a graphic image around the screen at differing speeds and curved trajectories at different times in the animation by specifying the appropriate function in the easeFunction field (quadratic and exponential are two examples of functions that can be specified). The interpolator functions are divided into two parts: the beginning of the animation (ease-in), and the end of the animation (ease-out). You can apply a specified interpolator function to either or both ease-in and ease-out, or specify no function for either or both (which is the linear function). You can also change the portion of the animation that is ease-in and ease-out to arbitrary fractional values for a quadratic interpolator function applied to both ease-in and ease-out.",
@@ -2130,7 +2130,7 @@
             "url": "https://developer.roku.com/docs/references/scenegraph/dialog-nodes/dialog.md"
         },
         "dialogbase": {
-            "description": "The base dialog component....blablabla",
+            "description": "The base dialog component.",
             "events": [],
             "extends": {
                 "name": "Group",
@@ -8721,6 +8721,84 @@
             "name": "roRemoteInfo",
             "url": "https://developer.roku.com/docs/references/brightscript/components/roremoteinfo.md"
         },
+        "rorenderthreadqueue": {
+            "constructors": [],
+            "events": [],
+            "interfaces": [],
+            "methods": [
+                {
+                    "description": "Registers a handler for messages received on the async message channel with the given message ID. The handler is called on the render thread for each message received. You can register multiple handlers for a single ID. In this case, the handlers are called in the order they were registered. This function can only be called on the render thread.",
+                    "name": "AddMessageHandler",
+                    "params": [
+                        {
+                            "default": null,
+                            "description": "The ID of the message channel to which this handler should be registered.",
+                            "isRequired": true,
+                            "name": "message_id",
+                            "type": "string"
+                        },
+                        {
+                            "default": null,
+                            "description": "The name of the handler function to be called for each message received.",
+                            "isRequired": true,
+                            "name": "handler",
+                            "type": "string"
+                        }
+                    ],
+                    "returnDescription": "Returns an object that can be used to unregister the handler, if required, by calling `handle.unregister()`",
+                    "returnType": "Object"
+                },
+                {
+                    "description": "Post a message to the queue. The data is moved and becomes unavailable to the calling thread. The call returns immediately and does not block the calling thread. This function may be called from any thread.",
+                    "name": "PostMessage",
+                    "params": [
+                        {
+                            "default": null,
+                            "description": "The ID of the channel to which this message should be posted.",
+                            "isRequired": true,
+                            "name": "message_id",
+                            "type": "String"
+                        },
+                        {
+                            "default": null,
+                            "description": "The contents of the message to be passed to any registered handlers. This must be recursively copyable. Non-copyable objects are silently ignored. Copyable objects include:\n - roAssociativeArray\n - roArray\n - integer, long integer\n - string\n - bool\n - float, double\n - invalid\n - roSGNode",
+                            "isRequired": true,
+                            "name": "data",
+                            "type": "Object"
+                        }
+                    ],
+                    "returnType": "Void"
+                },
+                {
+                    "description": "Copy a message to the queue. The call returns immediately and does not block the calling thread. This function is similar to the `PostMessage()` function, but it copies data instead of moving it.",
+                    "name": "CopyMessage",
+                    "params": [
+                        {
+                            "default": null,
+                            "description": "The ID of the channel to which this message should be posted.",
+                            "isRequired": true,
+                            "name": "message_id",
+                            "type": "String"
+                        },
+                        {
+                            "default": null,
+                            "description": "The contents of the message to be passed to any registered handlers. This must be recursively copyable. Non-copyable objects are silently ignored. Copyable objects include:\n - roAssociativeArray\n - roArray\n - integer, long integer\n - string\n - bool\n - float, double\n - invalid\n - roSGNode",
+                            "isRequired": true,
+                            "name": "data",
+                            "type": "Object"
+                        }
+                    ],
+                    "returnType": "Void"
+                },
+                {
+                    "description": "Returns the total number of objects for the channel that were copied by the PostMessage() function instead of being moved.",
+                    "name": "NumCopies",
+                    "params": [],
+                    "returnType": "Integer"
+                }
+            ],
+            "name": "roRenderThreadQueue"
+        },
         "rorsa": {
             "constructors": [
                 {
@@ -9162,6 +9240,51 @@
             "name": "roUrlTransfer",
             "url": "https://developer.roku.com/docs/references/brightscript/components/rourltransfer.md"
         },
+        "routils": {
+            "constructors": [],
+            "events": [],
+            "interfaces": [],
+            "methods": [
+                {
+                    "description": "Performs a deep copy of the source node object (it copies the obejct and all of its nested objects). If the source object contains items that are not copyable, they are skipped.",
+                    "name": "DeepCopy",
+                    "params": [
+                        {
+                            "default": null,
+                            "description": "The object to be copied",
+                            "isRequired": true,
+                            "name": "data",
+                            "type": "Object"
+                        }
+                    ],
+                    "returnDescription": "This function returns a copy of the specified object.",
+                    "returnType": "Object"
+                },
+                {
+                    "description": "Checks whether two BrightScript objects refer to the same instance and returns a flag indicating the result.",
+                    "name": "IsSameObject",
+                    "params": [
+                        {
+                            "default": null,
+                            "description": "First object",
+                            "isRequired": true,
+                            "name": "data1",
+                            "type": "Object"
+                        },
+                        {
+                            "default": null,
+                            "description": "Second object",
+                            "isRequired": true,
+                            "name": "data2",
+                            "type": "Object"
+                        }
+                    ],
+                    "returnDescription": "Returns true if data1 and data2 reference the same object; otherwise, this returns false.",
+                    "returnType": "Boolean"
+                }
+            ],
+            "name": "roUtils"
+        },
         "rovideoplayer": {
             "constructors": [
                 {
@@ -9253,21 +9376,21 @@
                     "name": "GetDevID",
                     "params": [],
                     "returnDescription": "App's Developer ID",
-                    "returnType": "string"
+                    "returnType": "String"
                 },
                 {
                     "description": "Returns the app's channel ID.",
                     "name": "GetID",
                     "params": [],
                     "returnDescription": "Channel ID; e.g., \"12345\" or \"dev\"",
-                    "returnType": "string"
+                    "returnType": "String"
                 },
                 {
                     "description": "Returns the title value from the manifest.",
                     "name": "GetTitle",
                     "params": [],
                     "returnDescription": "Title of the app",
-                    "returnType": "string"
+                    "returnType": "String"
                 },
                 {
                     "description": "Returns the named manifest value, or an empty string if the entry is does not exist.",
@@ -9289,7 +9412,7 @@
                     "name": "GetVersion",
                     "params": [],
                     "returnDescription": "App version number. e.g. \"1.2.3\"",
-                    "returnType": "string"
+                    "returnType": "String"
                 },
                 {
                     "description": "Returns true if the application is sideloaded, i.e. the app ID is \"dev\".",
@@ -9316,7 +9439,7 @@
                     "description": "Returns a roAssociativeArray that includes an exit code indicating why an app was terminated, a timestamp, the state of the app and Roku media player at the time the app was exited, and the memory limit exceeded (if applicable). This helps developers monitor and debug memory issues with their apps.",
                     "name": "GetLastExitInfo",
                     "params": [],
-                    "returnType": "object"
+                    "returnType": "Object"
                 },
                 {
                     "description": "Returns the user's screensaver wait time setting in number of minutes, or zero if the screensaver is disabled.",
@@ -9352,7 +9475,7 @@
                         }
                     ],
                     "returnDescription": "A boolean indicating whether the specified BrightScript app is installed.",
-                    "returnType": "boolean"
+                    "returnType": "Boolean"
                 },
                 {
                     "description": "Enables or disables the automatic screen reader and override any manifest setting.This is useful for apps that want to temporarily turn off the automatic screen reader for specific screens.",
@@ -9456,7 +9579,7 @@
                     "description": "Returns the amount of foreground and background memory the app may use and the maximum amount of memory that the RokuOS may allocate on behalf of the app (the memory that shows up in the app's heap memory statistics). This helps developers debug memory issues and find out the maximum available memory for scenarios such as when their app has been suspended and is in the background, is playing a video, and so on.",
                     "name": "GetChannelMemoryLimit",
                     "params": [],
-                    "returnType": "object"
+                    "returnType": "Object"
                 },
                 {
                     "description": "Returns the usage percentage of memory limit for the app.",
@@ -9748,7 +9871,7 @@
                         }
                     ],
                     "returnDescription": "\n\n or \n\nShallow copy of specified portion of the array",
-                    "returnType": "object or Object"
+                    "returnType": "Object"
                 }
             ],
             "name": "ifArraySlice",
@@ -10259,7 +10382,7 @@
                         }
                     ],
                     "returnDescription": "",
-                    "returnType": "void"
+                    "returnType": "Void"
                 }
             ],
             "name": "ifAudioResource",
@@ -10647,7 +10770,7 @@
                     "description": "The **getAllPurchases** function is similar to the [**getPurchases** function](#getpurchases-as-void) except that it requests the historical list of all canceled, expired, and terminated subscriptions over the lifetime of the current user account—in addition to the active subscriptions. You can use this method to leverage purchase history in order to implement subscription renewal flows and more easily determine if subscriptions have expired.",
                     "name": "GetAllPurchases",
                     "params": [],
-                    "returnType": "void"
+                    "returnType": "Void"
                 },
                 {
                     "description": "Requests the list of in-app products that are linked to the running app.",
@@ -10675,7 +10798,7 @@
                         }
                     ],
                     "returnDescription": "The generated JWT token. The following demonstrates a sample JWT that is returned to the app. Developers can use a [JWT debugger](https://jwt.io/#debugger-io) to decode this token.",
-                    "returnType": "string"
+                    "returnType": "String"
                 },
                 {
                     "description": "Returns a unique number for this object that can be used to identify whether a roChannelStoreEvent event originated from this object, by comparing with the roChannelStoreEvent object's GetSourceIdentity() value.",
@@ -10994,6 +11117,21 @@
                     "returnType": "string"
                 },
                 {
+                    "description": "Returns the localized date of the device.",
+                    "name": "asDateStringLoc",
+                    "params": [
+                        {
+                            "default": null,
+                            "description": "Specify the format of the date string to be returned:  *   full *   long *   medium *   short *   custom formatting string using date symbols (for example, \"MMM d, y\")",
+                            "isRequired": true,
+                            "name": "format",
+                            "type": "String"
+                        }
+                    ],
+                    "returnDescription": "A date string corresponding to the specified format:",
+                    "returnType": "String"
+                },
+                {
                     "description": "Returns the date/time in long-date format.",
                     "name": "AsDateStringNoParam",
                     "params": [],
@@ -11028,6 +11166,28 @@
                     ],
                     "returnDescription": "A time string corresponding to the specified format:",
                     "returnType": "string"
+                },
+                {
+                    "description": "Returns a LongInteger representing the date/time as the number of seconds from the Unix epoch (00:00:00 1/1/1970 GMT).",
+                    "name": "AsSecondsLong",
+                    "params": [],
+                    "returnDescription": "Number of seconds as a LongInteger.",
+                    "returnType": "Object"
+                },
+                {
+                    "description": "Returns the localized time of the device.",
+                    "name": "asTimeStringLoc",
+                    "params": [
+                        {
+                            "default": null,
+                            "description": "Specify the format of the time string to be returned:  *   short *   short-h12 *   short-h24 *   custom formatting string using time symbols (for example, \"h:mm a\")",
+                            "isRequired": true,
+                            "name": "format",
+                            "type": "String"
+                        }
+                    ],
+                    "returnDescription": "A time string corresponding to the specified format:",
+                    "returnType": "String"
                 },
                 {
                     "description": "Sets the date/time using a string in the ISO 8601 format. For example \"YYYY-MM-DD HH:MM:SS\" e.g \"2009-01-01 01:00:00.000\" or \"2009-01-01T01:00:00.000\".",
@@ -11071,11 +11231,24 @@
                     "returnType": "void"
                 },
                 {
+                    "description": "Sets the date/time value using the number of seconds from the Unix epoch.",
+                    "name": "FromSecondsLong",
+                    "params": [
+                        {
+                            "default": null,
+                            "isRequired": true,
+                            "name": "numSeconds",
+                            "type": "LongInteger"
+                        }
+                    ],
+                    "returnType": "Void"
+                },
+                {
                     "description": "Returns the date/time value's day of the month.",
                     "name": "GetDayOfMonth",
                     "params": [],
                     "returnDescription": "Date value as an Integer (1-31).",
-                    "returnType": "integer"
+                    "returnType": "Integer"
                 },
                 {
                     "description": "Returns the date/time value's day of week.",
@@ -11145,7 +11318,7 @@
                     "name": "GetYear",
                     "params": [],
                     "returnDescription": "Returns the year value as an Integer, e.g. 2015",
-                    "returnType": "integer"
+                    "returnType": "Integer"
                 },
                 {
                     "description": "Sets the date/time value to the current UTC date and time.",
@@ -11166,7 +11339,7 @@
                         }
                     ],
                     "returnDescription": "ISO 8601 as String, e.g. \"2021-03-25T18:53:03+0000\"\n\n or \n\nISO 8601 as String with milliseconds precision, e.g. \"2021-03-25T18:53:03.220+0000\"",
-                    "returnType": "string"
+                    "returnType": "String"
                 },
                 {
                     "description": "Offsets the date/time value from an assumed UTC date/time to a local date/time using the system time zone setting. This function is not idempotent, and multiple calls will do multiple timezone adjustments to the time yielding an incorrect result.",
@@ -11396,6 +11569,21 @@
                     "returnType": "dynamic"
                 },
                 {
+                    "description": "Notifies the app when the device's system clock becomes valid.",
+                    "name": "EnableValidClockEvent",
+                    "params": [
+                        {
+                            "default": null,
+                            "description": "A flag specifying whether to enable valid system clock events.",
+                            "isRequired": true,
+                            "name": "enable",
+                            "type": "Boolean"
+                        }
+                    ],
+                    "returnDescription": "A flag indicating whether valid system clock events are enabled (true) or disabled (false).",
+                    "returnType": "Dynamic"
+                },
+                {
                     "description": "Forces a new internet connection check. A new check will only be initiated if the cached internet status is older than 10 seconds.",
                     "name": "ForceInternetStatusCheck",
                     "params": [],
@@ -11454,7 +11642,7 @@
                     "name": "GetChannelClientId",
                     "params": [],
                     "returnDescription": "A unique identifier. This identifier is different across apps so each app will get a different identifier when calling this function",
-                    "returnType": "string"
+                    "returnType": "String"
                 },
                 {
                     "deprecatedDescription": "**This method is deprecated**.\n\nDevelopers must update their apps to use the [GetChannelClientId](/docs/references/brightscript/interfaces/ifdeviceinfo.md#getchannelclientid-as-string) method to get the unique identifier.\n",
@@ -11463,7 +11651,7 @@
                     "name": "GetClientTrackingId",
                     "params": [],
                     "returnDescription": "A unique identifier. This identifier is different across apps so each app will get a different identifier when calling this function",
-                    "returnType": "string"
+                    "returnType": "String"
                 },
                 {
                     "description": "Checks whether the system settings for Time (**Setting > System > Time**) is set to a 12 or 24-hour format.",
@@ -11491,7 +11679,7 @@
                     "name": "GetCountryCode",
                     "params": [],
                     "returnDescription": "A value that indicates the Streaming Store associated with a user’s Roku account. Typically, the value returned will be an ISO 3166-1 (2-letter) country code representing the country. Alternatively, if the app owner entered into an additional agreement to have the app published to a curated [Roku Powered Streaming Store](https://www.roku.com/roku-powered) instead of the user country, then a Roku Powered Streaming Store Identifier will instead be returned. This may be one of the following values:",
-                    "returnType": "string"
+                    "returnType": "String"
                 },
                 {
                     "description": "Gets the current locale value based on the user's language setting.",
@@ -11535,7 +11723,7 @@
                     "name": "GetDisplaySize",
                     "params": [],
                     "returnDescription": "An associative array with the screen width and height. Specifically, the keys \"w\" and \"h\" contain the values for the screen width and height respectively. This may be one of the following:",
-                    "returnType": "object"
+                    "returnType": "Object"
                 },
                 {
                     "description": "Gets the text corresponding to the button selection in the Player Info Settings/Display Type page.",
@@ -11578,14 +11766,14 @@
                     "name": "GetGeneralMemoryLevel",
                     "params": [],
                     "returnDescription": "Returns the general memory levels of the app, which may be one of the following values:",
-                    "returnType": "string"
+                    "returnType": "String"
                 },
                 {
                     "description": "Checks the graphics features supported by the device.",
                     "name": "GetGraphicsFeatures",
                     "params": [],
                     "returnDescription": "An associative array containing the following key/value pairs:",
-                    "returnType": "object"
+                    "returnType": "Object"
                 },
                 {
                     "description": "Checks the graphics platform of the device.",
@@ -11655,7 +11843,7 @@
                     "name": "GetPreferredCaptionLanguage",
                     "params": [],
                     "returnDescription": "The two-letter ISO 639-1 language terminology code, which may be one of the following values:",
-                    "returnType": "string"
+                    "returnType": "String"
                 },
                 {
                     "description": "Returns a randomly generated unique identifier. Each time this function is called, a different identifier is returned",
@@ -11768,14 +11956,14 @@
                     "description": "Returns a flag indicating whether autoplay is enabled on a device. Developers can use this function to ensure that the autoplay device setting is respected when customers browse content in their apps.",
                     "name": "IsAutoplayEnabled",
                     "params": [],
-                    "returnType": "boolean"
+                    "returnType": "Boolean"
                 },
                 {
                     "description": "Checks if the device's system clock is valid.",
                     "name": "IsClockValid",
                     "params": [],
                     "returnDescription": "A flag indicating whether the system clock on the device is valid.",
-                    "returnType": "dynamic"
+                    "returnType": "Dynamic"
                 },
                 {
                     "deprecatedDescription": "**This method is deprecated**.\n\nDevelopers must use the [ifHdmiStatus](/docs/references/brightscript/interfaces/ifhdmistatus.md) interface functions instead.\n",
@@ -11792,6 +11980,13 @@
                     "params": [],
                     "returnDescription": "A flag indicating whether the passthrough device is rendering audio.",
                     "returnType": "boolean"
+                },
+                {
+                    "description": "Indicates whether a passthrough device that owns the codec (a TV, audio receiver, or soundbar connected to a Roku device via HDMI) is rendering audio.",
+                    "name": "IsPassthruCodecActive",
+                    "params": [],
+                    "returnDescription": "A flag indicating whether the passthrough device is rendering audio.",
+                    "returnType": "Boolean"
                 },
                 {
                     "description": "Indicates whether tracking via Roku's ID for Advertisers (RIDA) is disabled on the device.",
@@ -12244,6 +12439,63 @@
                     ],
                     "returnDescription": "A flag indicating whether the object was successfully drawn.",
                     "returnType": "boolean"
+                },
+                {
+                    "description": "**OVERLOADED METHOD**\n\nDraws and then scales and rotates the source object, where src is an [roBitmap](https://developer.roku.com/docs/references/brightscript/components/robitmap.md\"roBitmap\") or an [roRegion](https://developer.roku.com/docs/references/brightscript/components/roregion.md\"roRegion\") object; at position x,y; scaled in the x direction by scaleX and in the y direction by scaleY; and rotated by angle theta degrees.",
+                    "name": "DrawTransformedObject",
+                    "params": [
+                        {
+                            "default": null,
+                            "description": "The x-coordinate of the source object.",
+                            "isRequired": true,
+                            "name": "x",
+                            "type": "Integer"
+                        },
+                        {
+                            "default": null,
+                            "description": "The y-coordinate of the source object.",
+                            "isRequired": true,
+                            "name": "y",
+                            "type": "Integer"
+                        },
+                        {
+                            "default": null,
+                            "description": "The position which to rotate the source object. This may be 0, 90, 180, and 270 degrees.",
+                            "isRequired": true,
+                            "name": "theta",
+                            "type": "Float"
+                        },
+                        {
+                            "default": null,
+                            "description": "The x direction in which the source object is to be scaled.",
+                            "isRequired": true,
+                            "name": "scaleX",
+                            "type": "Float"
+                        },
+                        {
+                            "default": null,
+                            "description": "The y direction in which the source object is to be scaled.",
+                            "isRequired": true,
+                            "name": "scaleY",
+                            "type": "Float"
+                        },
+                        {
+                            "default": null,
+                            "description": "The [roBitmap](https://developer.roku.com/docs/references/brightscript/components/robitmap.md\"roBitmap\") or an [roRegion](https://developer.roku.com/docs/references/brightscript/components/roregion.md\"roRegion\") object to be drawn.",
+                            "isRequired": true,
+                            "name": "src",
+                            "type": "Object"
+                        },
+                        {
+                            "default": null,
+                            "description": "The RGBA color of the source object.",
+                            "isRequired": false,
+                            "name": "rgba",
+                            "type": "Integer"
+                        }
+                    ],
+                    "returnDescription": "A flag indicating whether the object was successfully drawn.",
+                    "returnType": "Boolean"
                 },
                 {
                     "description": "Realizes the bitmap by finishing all queued draw calls. Until Finish() is called, prior graphics operations may not be user visible. For example, they may be in the graphics display pipeline, or in a server queue.",
@@ -12996,22 +13248,22 @@
                 {
                     "name": "GetAscent",
                     "params": [],
-                    "returnType": "integer"
+                    "returnType": "Integer"
                 },
                 {
                     "name": "GetDescent",
                     "params": [],
-                    "returnType": "integer"
+                    "returnType": "Integer"
                 },
                 {
                     "name": "GetMaxAdvance",
                     "params": [],
-                    "returnType": "integer"
+                    "returnType": "Integer"
                 },
                 {
                     "name": "GetOneLineHeight",
                     "params": [],
-                    "returnType": "integer"
+                    "returnType": "Integer"
                 },
                 {
                     "description": "Each glyph and the needed spacing between glyphs is measured. The returned number of pixels will be no larger than MaxWidth. MaxWidth is generally the amount of pixels available for rendering on this line.",
@@ -13030,7 +13282,7 @@
                             "type": "Integer"
                         }
                     ],
-                    "returnType": "integer"
+                    "returnType": "Integer"
                 }
             ],
             "name": "ifFont",
@@ -13109,7 +13361,7 @@
                         }
                     ],
                     "returnDescription": "The system font as its default size.\n\n or \n\nAn roFont object representing the system font.",
-                    "returnType": "object"
+                    "returnType": "Object"
                 },
                 {
                     "description": "Returns the default font size.",
@@ -14146,7 +14398,7 @@
                         }
                     ],
                     "returnDescription": "An roAssociativeArray containing two roArray components: one for the current program and another for the next program on the app. Each roArray contains the following key/value pairs detailing the program:",
-                    "returnType": "dynamic"
+                    "returnType": "Dynamic"
                 },
                 {
                     "description": "Returns the programs falling within the given time range.",
@@ -15190,14 +15442,14 @@
                     "name": "getAll",
                     "params": [],
                     "returnDescription": "An roArray with the all the existing nodes created by the app.",
-                    "returnType": "object"
+                    "returnType": "Object"
                 },
                 {
                     "description": "Returns a string with every existing node created by the currently running app (similar to the [getAll()](#getall-as-object) method) organized as an XML forest of trees according to the usual parent-child node relationship. Cycles are handled with a reference entry in the tree rather than indefinite recursion.",
                     "name": "getAllMeta",
                     "params": [],
                     "returnDescription": "A string with the all the existing nodes created by the app.",
-                    "returnType": "object"
+                    "returnType": "Object"
                 },
                 {
                     "description": "Returns the child node specified by the index.",
@@ -15261,7 +15513,7 @@
                     "name": "getRootsMeta",
                     "params": [],
                     "returnDescription": "A string with every existing node without a parent created by the currently running app.",
-                    "returnType": "object"
+                    "returnType": "Object"
                 },
                 {
                     "description": "Returns the node's root Scene. This returns a valid Scene even if the node is not parented.",
@@ -15496,7 +15748,7 @@
                             "type": "String"
                         }
                     ],
-                    "returnType": "dynamic"
+                    "returnType": "Dynamic"
                 },
                 {
                     "description": "Returns a copy of the entire node tree or just a shallow copy.",
@@ -15752,7 +16004,7 @@
                         }
                     ],
                     "returnDescription": "A flag indicating whether this operation was successful.",
-                    "returnType": "boolean"
+                    "returnType": "Boolean"
                 },
                 {
                     "description": "Sets up a connection between the observed node's field and the current component from which this call is made. This method is similar to the [observeField()](https://developer.roku.com/docs/references/brightscript/interfaces/ifsgnodefield.mdobservefieldfieldname-as-string-functionname-as-string-as-boolean \"observeField(fieldName as String, functionName as String)\") method.",
@@ -15781,7 +16033,7 @@
                         }
                     ],
                     "returnDescription": "A flag indicating whether this operation was successful.",
-                    "returnType": "boolean"
+                    "returnType": "Boolean"
                 },
                 {
                     "description": "Makes subsequent operations on the node fields to queue on the node itself rather than on the [Scene](https://developer.roku.com/docs/references/scenegraph/scene.md\"Scene\") node render thread. This prevents the operations from being executed immediately.",
@@ -15884,7 +16136,7 @@
                     "name": "threadinfo",
                     "params": [],
                     "returnDescription": "An roAssociativeArray with the following information:",
-                    "returnType": "object"
+                    "returnType": "Object"
                 },
                 {
                     "description": "Removes the previously established connections between the subject node field identified by fieldName and any callback functions or message ports.",
@@ -16382,6 +16634,13 @@
                     "returnType": "Object"
                 },
                 {
+                    "description": "Returns the message port (if any) currently associated with the object",
+                    "name": "GetMessagePort",
+                    "params": [],
+                    "returnDescription": "The message port.",
+                    "returnType": "Object"
+                },
+                {
                     "description": "Checks whether underlying select determines non-blocking read of OOB data is possible.",
                     "name": "IsException",
                     "params": [],
@@ -16443,6 +16702,20 @@
                         }
                     ],
                     "returnType": "void"
+                },
+                {
+                    "description": "Sets the roMessagePort to be used to receive events.",
+                    "name": "SetMessagePort",
+                    "params": [
+                        {
+                            "default": null,
+                            "description": "The port to be used to receive events.",
+                            "isRequired": true,
+                            "name": "port",
+                            "type": "Object"
+                        }
+                    ],
+                    "returnType": "Void"
                 },
                 {
                     "description": "Sets the roMessagePort to be used to receive events.",
@@ -17356,6 +17629,13 @@
                     "returnType": "boolean"
                 },
                 {
+                    "description": "Checks whether a string is empty.",
+                    "name": "IsEmpty",
+                    "params": [],
+                    "returnDescription": "A flag indicating whether the string is empty (true), or contains characters (false).",
+                    "returnType": "Boolean"
+                },
+                {
                     "description": "Sets the calling String object to the specified string value.",
                     "name": "SetString",
                     "params": [
@@ -17430,7 +17710,7 @@
                     "name": "EncodeUriComponent",
                     "params": [],
                     "returnDescription": "The provided string encoded as a Uniform Resource Identifier (URI).",
-                    "returnType": "string"
+                    "returnType": "String"
                 },
                 {
                     "description": "**OVERLOADED METHOD**\n\nChecks whether the string ends with the substring specified in **matchString**, starting at the end of the string.\n\n or \n\nChecks whether the string ends with the substring specified in **matchString**, starting at the position specified in the **length** parameter.",
@@ -17470,6 +17750,14 @@
                     "returnType": "string"
                 },
                 {
+                    "description": "Returns a format conversion using the specified printf-like [format string](https://developer.roku.com/docs/references/brightscript/language/global-string-functions.mdformat-strings) and matching dynamic parameters.",
+                    "isVariadic": true,
+                    "name": "Format",
+                    "params": [],
+                    "returnDescription": "The formatted string.",
+                    "returnType": "String"
+                },
+                {
                     "description": "Returns the string with the following characters replaced with their corresponding HTML entity encoding sequences below:",
                     "name": "GetEntityEncode",
                     "params": [],
@@ -17496,7 +17784,7 @@
                         }
                     ],
                     "returnDescription": "The index of the first instance of the substring within the string.\n\n or \n\nThe index of the first instance of the substring within the string, based on the specified starting position.",
-                    "returnType": "integer"
+                    "returnType": "Integer"
                 },
                 {
                     "description": "Returns a string consisting of the first len characters of the string.",
@@ -17540,7 +17828,7 @@
                         }
                     ],
                     "returnDescription": "The string generated by the method.\n\n or \n\n",
-                    "returnType": "string"
+                    "returnType": "String"
                 },
                 {
                     "description": "Returns a copy of the string with all instances of **fromStr** replaced with **toStr**. If **fromStr** is empty the return value is the same as the source string.",
@@ -17561,7 +17849,7 @@
                             "type": "String"
                         }
                     ],
-                    "returnType": "string"
+                    "returnType": "String"
                 },
                 {
                     "description": "Returns a string consisting of the last len characters of the string.",
@@ -17612,7 +17900,7 @@
                         }
                     ],
                     "returnDescription": "An array of the split token strings (not including the delimiter).",
-                    "returnType": "object"
+                    "returnType": "Object"
                 },
                 {
                     "description": "**OVERLOADED METHOD**\n\nChecks whether the string starts with the substring specified in **matchString**, starting at the beginning of the string (position 0).\n\n or \n\nChecks whether the string starts with the substring specified in **matchString**, starting at the **matchPos** parameter (0-based character offset).",
@@ -17706,6 +17994,27 @@
                         }
                     ],
                     "returnType": "void"
+                },
+                {
+                    "description": "Returns the message port (if any) currently associated with the object",
+                    "name": "GetMessagePort",
+                    "params": [],
+                    "returnDescription": "The message port.",
+                    "returnType": "Object"
+                },
+                {
+                    "description": "Sets the roMessagePort to be used to receive events.",
+                    "name": "SetMessagePort",
+                    "params": [
+                        {
+                            "default": null,
+                            "description": "The port to be used to receive events.",
+                            "isRequired": true,
+                            "name": "port",
+                            "type": "Object"
+                        }
+                    ],
+                    "returnType": "Void"
                 },
                 {
                     "description": "Returns the message port (if any) currently associated with the object",
@@ -18085,6 +18394,13 @@
                     "returnType": "integer"
                 },
                 {
+                    "description": "Returns the total number of microseconds from the \"Mark\" point to the current time.",
+                    "name": "TotalMicroseconds",
+                    "params": [],
+                    "returnDescription": "The number of microseconds.",
+                    "returnType": "Integer"
+                },
+                {
                     "description": "Returns the total number of milliseconds from the \"Mark\" point to the current time.",
                     "name": "TotalMilliseconds",
                     "params": [],
@@ -18160,7 +18476,7 @@
                         }
                     ],
                     "returnDescription": "The string.\n\n or \n\nThe formatted string.",
-                    "returnType": "string"
+                    "returnType": "String"
                 }
             ],
             "name": "ifToStr",
@@ -18409,6 +18725,13 @@
                     "returnType": "string"
                 },
                 {
+                    "description": "Returns the user agent of the device, which can then be passed into server-side ad requests.",
+                    "name": "GetUserAgent",
+                    "params": [],
+                    "returnDescription": "The device user agent, which has the following syntax: \"Roku/DVP-major.minor (major.minor.revision.build-plid)\". For example, Roku/DVP‑12.0 (12.0.0.4171‑29).",
+                    "returnType": "String"
+                },
+                {
                     "description": "Synchronously performs an HTTP HEAD request and returns an [roUrlTransfer](https://developer.roku.com/docs/references/brightscript/interfaces/ifurltransfer.md\"roUrlTransfer\") object.",
                     "name": "Head",
                     "params": [],
@@ -18637,7 +18960,7 @@
                     "name": "GetCaptionRenderer",
                     "params": [],
                     "returnDescription": "The roCaptionRenderer instance associated with this roVideoPlayer.",
-                    "returnType": "object"
+                    "returnType": "Object"
                 },
                 {
                     "description": "Returns the duration of the video, in seconds. This information may not be available until after the video starts playing.",
@@ -18750,7 +19073,7 @@
                         }
                     ],
                     "returnDescription": "",
-                    "returnType": "void"
+                    "returnType": "Void"
                 },
                 {
                     "description": "Mutes the audio during video playback. This is useful, for example, for implementing a video preview feature in an app.",
@@ -19231,7 +19554,7 @@
                     "description": "Returns an associative array with the following key/value pair:",
                     "name": "GetInfo",
                     "params": [],
-                    "returnType": "object"
+                    "returnType": "Object"
                 }
             ],
             "name": "roAppMemoryNotificationEvent",
@@ -19251,13 +19574,13 @@
                     "description": "Checks whether a segment in an adaptive stream (HLS, Smooth, or DASH) has been downloaded. This method returns true if a segment in an adaptive stream (HLS, Smooth, or DASH) has been downloaded; otherwise, it returns false. Specific information about the event can be obtained by calling the GetMessage(), GetIndex() and GetInfo() methods on the event.",
                     "name": "isDownloadSegmentInfo",
                     "params": [],
-                    "returnType": "boolean"
+                    "returnType": "Boolean"
                 },
                 {
                     "description": "Checks whether an event has been fired when the format of all tracks in the media stream have been identified.",
                     "name": "isFormatDetected",
                     "params": [],
-                    "returnType": "boolean"
+                    "returnType": "Boolean"
                 },
                 {
                     "description": "Audio playback completed at end of content.",
@@ -19305,7 +19628,7 @@
                     "description": "Checks whether the individual segments in an HLS or smooth stream are about to be downloaded. This method returns true if segments in the stream are going to be downloaded; otherwise, it returns false.",
                     "name": "isSegmentDownloadStarted",
                     "params": [],
-                    "returnType": "boolean"
+                    "returnType": "Boolean"
                 },
                 {
                     "description": "Status information is available.",
@@ -19317,7 +19640,7 @@
                     "description": "Checks whether playback has begun of a segment in an HLS, DASH, or smooth stream. This method returns true if the playback of a segment in an HLS, DASH, or smooth stream has begun; otherwise, it returns false. Specific information about the event can be obtained by calling the GetMessage(), GetIndex() and GetInfo() methods on the event.",
                     "name": "isStreamSegmentInfo",
                     "params": [],
-                    "returnType": "boolean"
+                    "returnType": "Boolean"
                 },
                 {
                     "description": "This event is fired when an ID3 timecode has passed with an event that includes key/value pairs for timed metadata that the Brightscript app is interested in.",
@@ -19420,7 +19743,7 @@
                     "description": "Indicates whether the user has changed the closed caption mode or track. This method returns true if the caption mode changed; otherwise, it returns false.",
                     "name": "isCaptionModeChanged",
                     "params": [],
-                    "returnType": "boolean"
+                    "returnType": "Boolean"
                 },
                 {
                     "description": "Checks if the device status has changed. This method returns true if the device status has changed; otherwise, it returns false.",

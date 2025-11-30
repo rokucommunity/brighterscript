@@ -6,10 +6,11 @@ import { Parser, ParseMode } from './Parser';
 import type { FunctionStatement, AssignmentStatement, FieldStatement } from './Statement';
 import { ClassStatement } from './Statement';
 import { NewExpression } from './Expression';
-import { expectDiagnosticsIncludes, expectZeroDiagnostics } from '../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics } from '../testHelpers.spec';
 import { isClassStatement } from '../astUtils/reflection';
 import { StringType } from '../types/StringType';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
+import util from '../util';
 
 describe('parser class', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -94,6 +95,45 @@ describe('parser class', () => {
         `);
 
         expect(parser.diagnostics[0]?.message).to.eql(DiagnosticMessages.cannotUseReservedWordAsIdentifier('throw').message);
+    });
+
+    it('does not allow function param named "type"', () => {
+        const parser = Parser.parse(`
+            sub test(type as string)
+            end sub
+        `);
+
+        expectDiagnostics(parser, [{
+            ...DiagnosticMessages.cannotUseReservedWordAsIdentifier('type'),
+            location: util.createLocation(1, 21, 1, 25)
+        }]);
+    });
+
+    it('does not allow class method named "type"', () => {
+        const parser = Parser.parse(`
+            class Person
+                sub test(type as string)
+                end sub
+            end class
+        `, { mode: ParseMode.BrighterScript });
+
+        expectDiagnostics(parser, [{
+            ...DiagnosticMessages.cannotUseReservedWordAsIdentifier('type'),
+            location: util.createLocation(2, 25, 2, 29)
+        }]);
+    });
+
+    it('does not allow interface method named "type"', () => {
+        const parser = Parser.parse(`
+            interface Person
+                sub test(type as string)
+            end interface
+        `, { mode: ParseMode.BrighterScript });
+
+        expectDiagnostics(parser, [{
+            ...DiagnosticMessages.cannotUseReservedWordAsIdentifier('type'),
+            location: util.createLocation(2, 25, 2, 29)
+        }]);
     });
 
     it('supports the try/catch keywords in various places', () => {

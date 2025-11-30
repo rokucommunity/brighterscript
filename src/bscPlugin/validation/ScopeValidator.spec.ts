@@ -1864,6 +1864,22 @@ describe('ScopeValidator', () => {
             });
         });
 
+        it('allows using invalid as argument for typed array params', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub takesIntArray(arr as integer[])
+                end sub
+
+                sub takesStrArray(arr as string[])
+                end sub
+
+                sub test()
+                    takesIntArray(invalid)
+                    takesStrArray(invalid)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('cannotFindName', () => {
@@ -3055,6 +3071,16 @@ describe('ScopeValidator', () => {
                 ]);
             });
         });
+        it('allows returning invalid instead of typed array', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                function getNumbers() as integer[]
+                    return invalid
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
     });
 
     describe('returnTypeCoercionMismatch', () => {
@@ -3556,6 +3582,15 @@ describe('ScopeValidator', () => {
                     }).message
                 ]);
             });
+        it('allows assigning invalid to typed arrays', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub test()
+                    intArray as integer[] = invalid
+                    strArray as string[] = invalid
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
         });
     });
 
@@ -4150,6 +4185,26 @@ describe('ScopeValidator', () => {
             ]);
         });
 
+    });
+
+    describe('circularReferenceDetected', () => {
+        it('finds circular references in consts', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                const A = B ' this is circular-reference
+                const B = C ' this is circular-reference
+                const C = A ' this is circular-reference
+                sub main()
+                    print A ' this is circular-reference
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.circularReferenceDetected(['B', 'C', 'B']).message,
+                DiagnosticMessages.circularReferenceDetected(['B', 'C', 'B']).message,
+                DiagnosticMessages.circularReferenceDetected(['B', 'C', 'B']).message,
+                DiagnosticMessages.circularReferenceDetected(['C', 'B', 'C']).message
+            ]);
+        });
     });
 
     describe('revalidation', () => {

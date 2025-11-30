@@ -9,7 +9,7 @@ import { Range, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, Plugin, ExpressionInfo, TranspileResult, MaybePromise, DisposableLike, ExtraSymbolData, GetTypeOptions, TypeChainProcessResult, PluginFactory } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, Plugin, ExpressionInfo, TranspileResult, MaybePromise, DisposableLike, ExtraSymbolData, GetTypeOptions, TypeChainProcessResult, PluginFactory, TypeCircularReferenceInfo } from './interfaces';
 import { TypeChainEntry } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
@@ -2250,6 +2250,21 @@ export class Util {
             astNode: astNode,
             crossedCallFunc: crossedCallFunc
         };
+    }
+
+    public getCircularReferenceDiagnosticDetail(circularReferenceInfo: TypeCircularReferenceInfo, defaultName = ''): string[] {
+        if (!circularReferenceInfo || !circularReferenceInfo.referenceChainNames) {
+            if (defaultName) {
+                return [defaultName];
+            }
+            return [];
+        }
+
+        if (circularReferenceInfo.referenceChainNames[0] === circularReferenceInfo.referenceChainNames[circularReferenceInfo.referenceChainNames.length - 1]) {
+            // last element is same as first it will read okay
+            return circularReferenceInfo.referenceChainNames;
+        }
+        return [...circularReferenceInfo.referenceChainNames, circularReferenceInfo.referenceChainNames[0]];
     }
 
 

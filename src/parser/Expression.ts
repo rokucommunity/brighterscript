@@ -596,7 +596,7 @@ export class FunctionParameterExpression extends Expression {
         const results = [this.tokens.name.text] as TranspileResult;
 
         if (this.defaultValue) {
-            results.push(' = ', ...this.defaultValue.transpile(state));
+            results.push(' = ', ...(this.defaultValue.getTypedef(state) ?? this.defaultValue.transpile(state)));
         }
 
         if (this.tokens.as) {
@@ -681,6 +681,15 @@ export class DottedGetExpression extends Expression {
                 state.transpileToken(this.tokens.name)
             ];
         }
+    }
+
+    getTypedef(state: BrsTranspileState) {
+        //always transpile the dots for typedefs
+        return [
+            ...this.obj.transpile(state),
+            state.transpileToken(this.tokens.dot),
+            state.transpileToken(this.tokens.name)
+        ];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -1479,6 +1488,12 @@ export class VariableExpression extends Expression {
             );
         }
         return result;
+    }
+
+    getTypedef(state: BrsTranspileState) {
+        return [
+            state.transpileToken(this.tokens.name)
+        ];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {

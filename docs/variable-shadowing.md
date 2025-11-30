@@ -132,13 +132,14 @@ end namespace
 transpiles to
 
 ```BrightScript
+'alias get2 = get
+'Do an HTTP request
 sub http_get()
-    print get_aa().data
+    print get_aa().data 'using `get2` aliased symbol here. it's now clear which item we intended to use
 end sub
-
-sub get_aa()
+function get_aa()
     return {
         data: "abc"
     }
-end sub
+end function
 ```
