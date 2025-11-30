@@ -3582,15 +3582,16 @@ describe('ScopeValidator', () => {
                     }).message
                 ]);
             });
-        it('allows assigning invalid to typed arrays', () => {
-            program.setFile<BrsFile>('source/main.bs', `
+            it('allows assigning invalid to typed arrays', () => {
+                program.setFile<BrsFile>('source/main.bs', `
                 sub test()
                     intArray as integer[] = invalid
                     strArray as string[] = invalid
                 end sub
             `);
-            program.validate();
-            expectZeroDiagnostics(program);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
         });
     });
 
