@@ -80,6 +80,64 @@ describe('BrsFile', () => {
         });
     });
 
+    it('does not show "missing function" diagnostic for `call().dottedGet` as a statement', () => {
+        program.setFile(`source/main.brs`, `
+            sub main()
+                test().disabled
+            end sub
+            sub test()
+            end sub
+        `);
+        program.validate();
+        expectDiagnostics(program, [
+            DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression('DottedGetExpression')
+        ]);
+    });
+
+    it('does not show "missing function" diagnostic for `call()["indexedGet"]` as a statement', () => {
+        program.setFile(`source/main.brs`, `
+            sub main()
+                test()["disabled"]
+            end sub
+            sub test()
+            end sub
+        `);
+        program.validate();
+        expectDiagnostics(program, [
+            DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression('IndexedGetExpression')
+        ]);
+    });
+
+    it('does not show "missing function" diagnostic for `call()["indexedGet"]` as a statement', () => {
+        program.setFile(`source/main.brs`, `
+            sub test()
+            end sub
+            sub main()
+                test()@disabled
+            end sub
+        `);
+        program.validate();
+        expectDiagnostics(program, [
+            DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression('XmlAttributeGetExpression')
+        ]);
+    });
+
+    it('does not flag two chained calls together', () => {
+        program.setFile(`source/main.brs`, `
+            sub main()
+                test().test()
+            end sub
+            function test()
+                print "test"
+                return {
+                    test: test
+                }
+            end function
+        `);
+        program.validate();
+        expectDiagnostics(program, []);
+    });
+
     it('flags namespaces used as variables', () => {
         program.setFile('source/main.bs', `
             sub main()

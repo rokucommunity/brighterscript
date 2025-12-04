@@ -93,7 +93,7 @@ import {
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import type { Logger } from '../logging';
 import { createLogger } from '../logging';
-import { isAAMemberExpression, isAnnotationExpression, isBinaryExpression, isCallExpression, isCallfuncExpression, isMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAAMemberExpression, isAnnotationExpression, isBinaryExpression, isCallExpression, isCallfuncExpression, isMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression, isDottedSetStatement, isXmlAttributeGetExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import { Cache } from '../Cache';
@@ -2123,11 +2123,23 @@ export class Parser {
             return new ExpressionStatement(expr);
         }
 
+
+        //you're not allowed to do dottedGet or indexedGet expressions after a function call
+        if (isDottedGetExpression(expr) || isIndexedGetExpression(expr) || isXmlAttributeGetExpression(expr)) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression(expr.constructor.name),
+                range: expressionStart.range
+            });
+            //we can recover gracefully here even though it's invalid syntax
+            return new ExpressionStatement(expr);
+        }
+
         //at this point, it's probably an error. However, we recover a little more gracefully by creating an assignment
         this.diagnostics.push({
             ...DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression(),
             range: expressionStart.range
         });
+
         throw this.lastDiagnosticAsError();
     }
 

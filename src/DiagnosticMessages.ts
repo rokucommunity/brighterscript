@@ -354,8 +354,8 @@ export let DiagnosticMessages = {
         code: 1065,
         severity: DiagnosticSeverity.Error
     }),
-    expectedStatementOrFunctionCallButReceivedExpression: () => ({
-        message: `Expected statement or function call but instead found expression`,
+    expectedStatementOrFunctionCallButReceivedExpression: (expressionType = 'expression') => ({
+        message: `Expected statement or function call but instead found ${expressionType}`,
         code: 1066,
         severity: DiagnosticSeverity.Error
     }),
