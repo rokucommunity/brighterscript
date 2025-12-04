@@ -354,8 +354,8 @@ export let DiagnosticMessages = {
         code: 1065,
         severity: DiagnosticSeverity.Error
     }),
-    expectedStatementOrFunctionCallButReceivedExpression: () => ({
-        message: `Expected statement or function call but instead found expression`,
+    expectedStatementOrFunctionCallButReceivedExpression: (expressionType = 'expression') => ({
+        message: `Expected statement or function call but instead found ${expressionType}`,
         code: 1066,
         severity: DiagnosticSeverity.Error
     }),
@@ -746,6 +746,11 @@ export let DiagnosticMessages = {
     nonVoidFunctionMustReturnValue: (functionType = 'function') => ({
         message: `Non-void ${functionType} must return a value`,
         code: 1142,
+        severity: DiagnosticSeverity.Error
+    }),
+    propAccessNotPermittedAfterFunctionCallInExpressionStatement: (accessDescription: string) => ({
+        message: `${accessDescription} access not permitted after a function call when used in an expression statement`,
+        code: 1143,
         severity: DiagnosticSeverity.Error
     })
 };
