@@ -93,7 +93,7 @@ import {
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import type { Logger } from '../logging';
 import { createLogger } from '../logging';
-import { isAAMemberExpression, isAnnotationExpression, isBinaryExpression, isCallExpression, isCallfuncExpression, isMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression, isDottedSetStatement, isXmlAttributeGetExpression } from '../astUtils/reflection';
+import { isAAMemberExpression, isAnnotationExpression, isBinaryExpression, isCallExpression, isCallfuncExpression, isMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression, isXmlAttributeGetExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import { Cache } from '../Cache';
@@ -2124,15 +2124,33 @@ export class Parser {
         }
 
 
-        //you're not allowed to do dottedGet or indexedGet expressions after a function call
-        if (isDottedGetExpression(expr) || isIndexedGetExpression(expr) || isXmlAttributeGetExpression(expr)) {
+        //you're not allowed to do dottedGet or XmlAttrGet after a function call
+        if (isDottedGetExpression(expr)) {
             this.diagnostics.push({
-                ...DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression(expr.constructor.name),
-                range: expressionStart.range
+                ...DiagnosticMessages.propAccessNotPermittedAfterFunctionCallInExpressionStatement('Property'),
+                range: util.createBoundingRange(expr.dot, expr.name)
+            });
+            //we can recover gracefully here even though it's invalid syntax
+            return new ExpressionStatement(expr);
+
+            //you're not allowed to do indexedGet expressions after a function call
+        } else if (isIndexedGetExpression(expr)) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.propAccessNotPermittedAfterFunctionCallInExpressionStatement('Index'),
+                range: util.createBoundingRange(expr.openingSquare, expr.index, expr.closingSquare)
+            });
+            //we can recover gracefully here even though it's invalid syntax
+            return new ExpressionStatement(expr);
+            //you're not allowed to do XmlAttrGet after a function call
+        } else if (isXmlAttributeGetExpression(expr)) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.propAccessNotPermittedAfterFunctionCallInExpressionStatement('XML attribute'),
+                range: util.createBoundingRange(expr.at, expr.name)
             });
             //we can recover gracefully here even though it's invalid syntax
             return new ExpressionStatement(expr);
         }
+
 
         //at this point, it's probably an error. However, we recover a little more gracefully by creating an assignment
         this.diagnostics.push({

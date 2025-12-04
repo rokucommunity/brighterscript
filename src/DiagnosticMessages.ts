@@ -747,6 +747,11 @@ export let DiagnosticMessages = {
         message: `Non-void ${functionType} must return a value`,
         code: 1142,
         severity: DiagnosticSeverity.Error
+    }),
+    propAccessNotPermittedAfterFunctionCallInExpressionStatement: (accessDescription: string) => ({
+        message: `${accessDescription} access not permitted after a function call when used in an expression statement`,
+        code: 1143,
+        severity: DiagnosticSeverity.Error
     })
 };
 

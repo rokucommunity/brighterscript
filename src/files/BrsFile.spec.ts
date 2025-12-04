@@ -90,7 +90,10 @@ describe('BrsFile', () => {
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression('DottedGetExpression')
+            {
+                range: util.createRange(2, 22, 2, 31),
+                message: DiagnosticMessages.propAccessNotPermittedAfterFunctionCallInExpressionStatement('Property').message
+            }
         ]);
     });
 
@@ -104,21 +107,27 @@ describe('BrsFile', () => {
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression('IndexedGetExpression')
+            {
+                range: util.createRange(2, 22, 2, 34),
+                message: DiagnosticMessages.propAccessNotPermittedAfterFunctionCallInExpressionStatement('Index').message
+            }
         ]);
     });
 
-    it('does not show "missing function" diagnostic for `call()["indexedGet"]` as a statement', () => {
+    it('does not show "missing function" diagnostic for `call()@xmlAttr` as a statement', () => {
         program.setFile(`source/main.brs`, `
-            sub test()
-            end sub
             sub main()
                 test()@disabled
+            end sub
+            sub test()
             end sub
         `);
         program.validate();
         expectDiagnostics(program, [
-            DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression('XmlAttributeGetExpression')
+            {
+                range: util.createRange(2, 22, 2, 31),
+                message: DiagnosticMessages.propAccessNotPermittedAfterFunctionCallInExpressionStatement('XML attribute').message
+            }
         ]);
     });
 
