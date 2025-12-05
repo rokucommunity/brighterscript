@@ -10,7 +10,6 @@ import { URI } from 'vscode-uri';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
 import type { Token } from '../../lexer/Token';
 import type { XmlFile } from '../../files/XmlFile';
-import * as path from 'path';
 
 export class DefinitionProvider {
     constructor(
