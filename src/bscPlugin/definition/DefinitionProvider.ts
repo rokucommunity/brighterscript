@@ -130,10 +130,8 @@ export class DefinitionProvider {
 
         if (token.kind === TokenKind.StringLiteral) {
             if (isImportStatement(expression)) {
-                const resolvedPath = expression.filePath.startsWith('pkg:/')
-                    ? expression.filePath.replace('pkg:/', '')
-                    : path.resolve(path.dirname(file.srcPath), expression.filePath);
-                const importedFile = this.event.program.getFile(resolvedPath);
+                const pkgPath = util.getPkgPathFromTarget(file.pkgPath, expression.filePath);
+                const importedFile = this.event.program.getFile(pkgPath);
                 if (importedFile) {
                     this.event.definitions.push(
                         util.createLocation(

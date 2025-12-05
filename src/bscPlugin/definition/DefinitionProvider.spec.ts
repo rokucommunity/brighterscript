@@ -5,6 +5,7 @@ let rootDir = s`${process.cwd()}/rootDir`;
 import { createSandbox } from 'sinon';
 import { DefinitionProvider } from './DefinitionProvider';
 import { URI } from 'vscode-uri';
+import { tempDir } from '../../testHelpers.spec';
 const sinon = createSandbox();
 
 describe('DefinitionProvider', () => {
@@ -91,6 +92,64 @@ describe('DefinitionProvider', () => {
         ).to.eql([{
             uri: URI.file(main.srcPath).toString(),
             range: util.createRange(2, 16, 2, 22)
+        }]);
+    });
+
+    it('handles import statements with src;dest remapped paths', () => {
+        //map all of these files from arbitrary locations into the pkg
+        program.setFile({
+            src: s`${tempDir}/flavor1/flavorSource/utils.brs`,
+            dest: 'source/utils.brs'
+        }, `
+            function helper()
+            end function
+        `);
+        const utils2 = program.setFile({
+            src: s`${tempDir}/flavor2/flavorSource/sub/utils2.brs`,
+            dest: 'source/subfolder/utils2.brs'
+        }, `
+            import "../utils.brs"
+            function helper2()
+                helper()
+            end function
+        `);
+        const main = program.setFile({
+            src: s`${tempDir}/mainApp/src/source1/main.brs`,
+            dest: 'source/main.brs'
+        }, `
+            import "utils.brs"
+            import "pkg:/source/subfolder/utils2.brs"
+            sub main()
+                helper()
+                helper2()
+            end sub
+        `);
+
+        //main.brs
+        // import "u|tils.brs"
+        expect(
+            program.getDefinition(main.srcPath, util.createPosition(1, 21))
+        ).to.eql([{
+            uri: URI.file(s`${tempDir}/flavor1/flavorSource/utils.brs`).toString(),
+            range: util.createRange(1, 0, 1, 0)
+        }]);
+
+        //main.brs
+        // import "pkg:/subfolder/ut|ils2.brs"
+        expect(
+            program.getDefinition(main.srcPath, util.createPosition(2, 44))
+        ).to.eql([{
+            uri: URI.file(s`${tempDir}/flavor2/flavorSource/sub/utils2.brs`).toString(),
+            range: util.createRange(1, 0, 1, 0)
+        }]);
+
+        //utils2.brs
+        // import "../u|tils.brs"
+        expect(
+            program.getDefinition(utils2.srcPath, util.createPosition(1, 21))
+        ).to.eql([{
+            uri: URI.file(s`${tempDir}/flavor1/flavorSource/utils.brs`).toString(),
+            range: util.createRange(1, 0, 1, 0)
         }]);
     });
 
