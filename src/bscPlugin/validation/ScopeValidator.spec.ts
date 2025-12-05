@@ -1832,6 +1832,38 @@ describe('ScopeValidator', () => {
             });
         });
 
+        describe('inline interfaces', () => {
+            it('allows function param with compatible interface', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    sub takesInline(datum as {name as string})
+                    end sub
+
+                    sub callsTakesInline()
+                        takesInline({age: 123, name: "test"})
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates function param with incompatible interface', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    sub takesInline(datum as {name as string})
+                    end sub
+
+                    sub callsTakesInline()
+                        takesInline({name: 123})
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('roAssociativeArray', '{name as string}', {
+                        fieldMismatches: [{ name: 'name', expectedType: StringType.instance, actualType: IntegerType.instance }]
+                    }).message
+                ]);
+            });
+        });
+
         describe('type statement types', () => {
             it('allows compatible type statement types to be passed to functions expecting normal types', () => {
                 program.setFile<BrsFile>('source/main.bs', `
@@ -1843,7 +1875,7 @@ describe('ScopeValidator', () => {
 
                     sub takesInteger(x as integer)
                         print x
-                    end sub
+                      end sub
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
@@ -2396,7 +2428,7 @@ describe('ScopeValidator', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('validates accessing a bad member on a wrapped type', () => {
+        it('validates accessing a bad member on a type statement type', () => {
             program.setFile<BrsFile>('source/main.bs', `
                 type numberOrString = integer or string
 
@@ -2408,6 +2440,31 @@ describe('ScopeValidator', () => {
             expectDiagnostics(program, [
                 DiagnosticMessages.cannotFindName('nonExistentMember', 'numberOrString.nonExistentMember', 'numberOrString')
             ]);
+        });
+
+        describe('inline interfaces', () => {
+            it('finds members of inline interface', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    sub takesInline(datum as {name as string})
+                        print datum.name.split(",")
+                    end sub
+
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates using invalid member name', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    sub takesInline(datum as {name as string})
+                        print datum.notThere.split(",")
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindName('notThere', '{name as string}.notThere', '{name as string}')
+                ]);
+            });
         });
     });
 
@@ -3029,7 +3086,7 @@ describe('ScopeValidator', () => {
             ).to.eql([]);
         });
 
-        it('allows returning something that matches a wrapped type', () => {
+        it('allows returning something that matches a type statement type', () => {
             program.setFile('source/util.bs', `
                 interface Person
                     name as string
@@ -3049,6 +3106,41 @@ describe('ScopeValidator', () => {
             expectZeroDiagnostics(program);
         });
 
+        describe('inline interfaces', () => {
+            it('allows returning an Associative Array that meets the interface', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    function takesInline() as  {id as string}
+                        return { id: "test" }
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows returning a Node that meets the interface', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    function takesInline() as  {id as string}
+                        return createObject("roSGNode", "Poster")
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates returning an AA that does not meet the interface', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    function takesInline() as {id as integer}
+                        return {id: "hello"}
+                    end function
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.returnTypeMismatch('roAssociativeArray', '{id as integer}', {
+                        fieldMismatches: [{ name: 'id', expectedType: IntegerType.instance, actualType: StringType.instance }]
+                    }).message
+                ]);
+            });
+        });
         it('allows returning invalid instead of typed array', () => {
             program.setFile<BrsFile>('source/main.bs', `
                 function getNumbers() as integer[]
@@ -3527,15 +3619,48 @@ describe('ScopeValidator', () => {
             });
         });
 
-        it('allows assigning invalid to typed arrays', () => {
-            program.setFile<BrsFile>('source/main.bs', `
+        describe('inline interfaces', () => {
+            it('allows assigning an Associative Array that meets the interface', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    interface Iface
+                        inlineMember as {name as string}
+                    end interface
+
+                    sub takesInline(someIface as Iface}
+                        someIface.inlineMember = {name: "test"}
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates assigning an AA that does not meet the interface', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    interface Iface
+                        inlineMember as {name as string}
+                    end interface
+
+                    sub takesInline(someIface as Iface}
+                        someIface.inlineMember = {name: 123}
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('roAssociativeArray', '{name as string}', {
+                        fieldMismatches: [{ name: 'name', expectedType: StringType.instance, actualType: IntegerType.instance }]
+                    }).message
+                ]);
+            });
+            it('allows assigning invalid to typed arrays', () => {
+                program.setFile<BrsFile>('source/main.bs', `
                 sub test()
                     intArray as integer[] = invalid
                     strArray as string[] = invalid
                 end sub
             `);
-            program.validate();
-            expectZeroDiagnostics(program);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
         });
     });
 

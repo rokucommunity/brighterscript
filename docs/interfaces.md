@@ -133,7 +133,7 @@ interface Video
     length as float
     optional subtitleUrl as string
     optional rating as string
-    optional genre as string[]
+    optional genres as string[]
 end interface
 ```
 
@@ -146,24 +146,26 @@ end interface
 
 </details>
 
-## Optional members
+## Inline Interfaces
 
-Interfaces can include optional members. Optional members are denoted with the keyword `optional` before the name of fields, or before the `function` or `sub` keyword for methods. Interfaces with optional members will not incur a validation diagnostic if an object that is missing that member is passed to it, yet optional members will be included in completion results, and if referenced, they are inferred to be their declared type.
+Interfaces can be declared inline in any type expression. This provides a quick way to declare the members of an object without having to specify the name of the object or interface.
 
 ```brighterscript
-interface Video
-    url as string
-    length as float
-    optional subtitleUrl as string
-    optional rating as string
-    optional genre as string
-end interface
+
+function getId(obj as {id as string}) as string
+    return obj.id ' obj.id must exist, and it must be a string
+end function
+
 ```
 
 <details>
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
+
+function getId(obj as dynamic) as string
+    return obj.id ' obj.id must exist, and it must be a string
+end function
 
 ```
 
