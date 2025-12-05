@@ -1,14 +1,14 @@
 import { expect, assert } from '../chai-config.spec';
 import { Lexer } from '../lexer/Lexer';
 import { ReservedWords, TokenKind } from '../lexer/TokenKind';
-import type { AAMemberExpression, BinaryExpression, LiteralExpression, TypecastExpression, UnaryExpression } from './Expression';
+import type { AAMemberExpression, BinaryExpression, InlineInterfaceExpression, LiteralExpression, TypecastExpression, UnaryExpression } from './Expression';
 import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression, VariableExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
 import type { AliasStatement, AssignmentStatement, Block, ClassStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ConditionalCompileStatement, ExitStatement, ForStatement, IfStatement, InterfaceStatement, ReturnStatement, TypecastStatement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isAliasStatement, isAssignmentStatement, isBinaryExpression, isBlock, isBody, isCallExpression, isCallfuncExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isDottedGetExpression, isExitStatement, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAliasStatement, isAssignmentStatement, isBinaryExpression, isBlock, isBody, isCallExpression, isCallfuncExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isDottedGetExpression, isExitStatement, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInlineInterfaceExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, rootDir } from '../testHelpers.spec';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { Expression, Statement } from './AstNode';
@@ -16,8 +16,9 @@ import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { IntegerType } from '../types/IntegerType';
 import { FloatType } from '../types/FloatType';
 import { StringType } from '../types/StringType';
-import { ArrayType, UnionType } from '../types';
+import { ArrayType, DynamicType, UnionType } from '../types';
 import { standardizePath as s } from '../util';
+import { InlineInterfaceType } from '../types/InlineInterfaceType';
 
 describe('parser', () => {
     it('emits empty object when empty token list is provided', () => {
@@ -1538,7 +1539,6 @@ describe('parser', () => {
                 sub main(val)
                     printThing(val as string or integer)
                 end sub
-
                 sub printThing(thing as string or integer)
                     print thing
                 end sub
@@ -2589,6 +2589,156 @@ describe('parser', () => {
             let { diagnostics } = parse(`
                 function test(foo) as Whatever
                     return foo.x
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+    });
+
+    describe('inline interfaces', () => {
+        it('inline interface param types disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                sub test(foo as {x as string})
+                    print foo.x
+                end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types')
+            ]);
+        });
+
+        it('inline interface return types disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                function test() as {x as string}
+                    print {x: "hello"}
+                end function
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types')
+            ]);
+        });
+
+        it('inline interface as param type', () => {
+            let { ast, diagnostics } = parse(`
+                sub test(foo as {x as string})
+                    print foo.x
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements.length).to.eq(1);
+            const func = (ast.statements[0] as FunctionStatement).func;
+            expect(isInlineInterfaceExpression(func.parameters[0].typeExpression?.expression)).to.be.true;
+        });
+
+        it('inline interface as return type', () => {
+            let { ast, diagnostics } = parse(`
+               function test() as {x as string}
+                    print {x: "hello"}
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements.length).to.eq(1);
+            const func = (ast.statements[0] as FunctionStatement).func;
+            expect(isInlineInterfaceExpression(func.returnTypeExpression.expression)).to.be.true;
+        });
+
+        it('parses a big inline interface as param type', () => {
+            let { ast, diagnostics } = parse(`
+                sub test(foo as {
+                    x as string,
+                    y as {a as integer}
+                    z})
+                    print foo.x + y.a.toStr()
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements.length).to.eq(1);
+            const func = (ast.statements[0] as FunctionStatement).func;
+            const inlineIface = func.parameters[0].typeExpression?.expression as InlineInterfaceExpression;
+            expect(isInlineInterfaceExpression(inlineIface)).to.be.true;
+
+            expect(inlineIface.tokens.open).not.to.be.undefined;
+            expect(inlineIface.tokens.close).not.to.be.undefined;
+            expect(inlineIface.members).to.have.length(3);
+            const iFaceType = inlineIface.getType({ flags: SymbolTypeFlag.typetime });
+            expectTypeToBe(iFaceType, InlineInterfaceType);
+
+            expectTypeToBe(iFaceType.getMemberType('x', { flags: SymbolTypeFlag.runtime }), StringType);
+            expectTypeToBe(iFaceType.getMemberType('y', { flags: SymbolTypeFlag.runtime }), InlineInterfaceType);
+            expectTypeToBe(iFaceType.getMemberType('z', { flags: SymbolTypeFlag.runtime }), DynamicType);
+        });
+
+        it('allows optional members', () => {
+            let { ast, diagnostics } = parse(`
+                sub test(p as {x as string, optional y})
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements.length).to.eq(1);
+            const func = (ast.statements[0] as FunctionStatement).func;
+            const inlineIface = func.parameters[0].typeExpression?.expression as InlineInterfaceExpression;
+            expect(isInlineInterfaceExpression(inlineIface)).to.be.true;
+            expect(inlineIface.members).to.have.length(2);
+            expect(inlineIface.members[1].isOptional).to.be.true;
+        });
+
+        it('is allowed as typecast', () => {
+            let { diagnostics } = parse(`
+                sub test(p)
+                    print (p as {name as string}).name
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('is allowed as class and interface field', () => {
+            let { diagnostics } = parse(`
+                class Klass
+                    x as {name as string}
+                end class
+
+                interface Iface
+                    y as {age as integer}
+                end interface
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have custom type as member type', () => {
+            let { diagnostics } = parse(`
+                interface IFace
+                   name as string
+                end interface
+
+                function test(z as {foo as IFace})
+                    return z.foo.name
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have per-member doc comment', () => {
+            let { diagnostics } = parse(`
+                interface IFace
+                    inline as {
+                        ' comment 1
+                        name as string
+                        ' comment 2
+                        age as integer
+                    }
+                end interface
+
+                function test(z as {foo as IFace})
+                    return z.foo.inline.name
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have string literals as members', () => {
+            let { diagnostics } = parse(`
+                function test(z as {"this is a stringliteral" as string})
+                    return z["this is a stringliteral"]
                 end function
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(diagnostics);

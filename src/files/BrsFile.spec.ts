@@ -4334,6 +4334,24 @@ describe('BrsFile', () => {
                 `);
             });
         });
+
+        describe('inline interfaces', () => {
+            it('transpiles to "dynamic"', async () => {
+                await testTranspile(`
+                    function foo(input as {name as string}) as {id as string}
+                        output as {id as string} = {id: input.name}
+                        return output
+                    end function
+                    `, `
+                    function foo(input as dynamic) as dynamic
+                        output = {
+                            id: input.name
+                        }
+                        return output
+                    end function
+                `);
+            });
+        });
     });
 
     describe('union types', () => {
