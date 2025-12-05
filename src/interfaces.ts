@@ -1022,7 +1022,7 @@ export interface ExtraSymbolData {
     /**
      * Is this type created from a type statement - eg. is it a nickname for another type?
      */
-    isWrappedType?: boolean;
+    isFromTypeStatement?: boolean;
 }
 
 export interface GetTypeOptions {

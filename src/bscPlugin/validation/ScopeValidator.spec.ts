@@ -1832,8 +1832,8 @@ describe('ScopeValidator', () => {
             });
         });
 
-        describe('wrapped types', () => {
-            it('allows compatible wrapped types to be passed to functions expecting normal types', () => {
+        describe('type statement types', () => {
+            it('allows compatible type statement types to be passed to functions expecting normal types', () => {
                 program.setFile<BrsFile>('source/main.bs', `
                     type number = integer or float
 
@@ -1849,7 +1849,7 @@ describe('ScopeValidator', () => {
                 expectZeroDiagnostics(program);
             });
 
-            it('disallows incompatible wrapped types to be passed to functions expecting normal types', () => {
+            it('disallows incompatible type statement types to be passed to functions expecting normal types', () => {
                 program.setFile<BrsFile>('source/main.bs', `
                     type whatever = float or string
 
@@ -3847,7 +3847,7 @@ describe('ScopeValidator', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('allows wrapped types of compatible types', () => {
+        it('allows type statement type of compatible types', () => {
             program.setFile<BrsFile>('source/main.bs', `
                 type number = integer or float
                 type MyString = string or roString

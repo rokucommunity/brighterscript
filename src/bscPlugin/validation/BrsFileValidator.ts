@@ -17,7 +17,7 @@ import type { Range } from 'vscode-languageserver';
 import type { Token } from '../../lexer/Token';
 import type { BrightScriptDoc } from '../../parser/BrightScriptDocParser';
 import brsDocParser from '../../parser/BrightScriptDocParser';
-import { WrapperType } from '../../types/WrapperType';
+import { TypeStatementType } from '../../types/TypeStatementType';
 
 export class BrsFileValidator {
     constructor(
@@ -329,8 +329,8 @@ export class BrsFileValidator {
             TypeStatement: (node) => {
                 this.validateDeclarationLocations(node, 'type', () => util.createBoundingRange(node.tokens.type, node.tokens.name));
                 const wrappedNodeType = node.getType({ flags: SymbolTypeFlag.runtime });
-                const wrapperType = new WrapperType(node.tokens.name.text, wrappedNodeType);
-                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node, isWrappedType: true }, wrapperType, SymbolTypeFlag.typetime);
+                const typeStmtType = new TypeStatementType(node.tokens.name.text, wrappedNodeType);
+                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node, isFromTypeStatement: true }, typeStmtType, SymbolTypeFlag.typetime);
 
             },
             IfStatement: (node) => {

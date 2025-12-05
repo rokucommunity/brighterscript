@@ -39,7 +39,7 @@ import type { AssociativeArrayType } from '../types/AssociativeArrayType';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Program } from '../Program';
 import type { Project } from '../lsp/Project';
-import type { WrapperType } from '../types/WrapperType';
+import type { TypeStatementType } from '../types/TypeStatementType';
 
 
 // File reflection
@@ -465,8 +465,8 @@ export function isArrayType(value: any): value is ArrayType {
 export function isAssociativeArrayType(value: any): value is AssociativeArrayType {
     return value?.kind === BscTypeKind.AssociativeArrayType;
 }
-export function isWrapperType(value: any): value is WrapperType {
-    return value?.kind === BscTypeKind.WrapperType;
+export function isTypeStatementType(value: any): value is TypeStatementType {
+    return value?.kind === BscTypeKind.TypeStatementType;
 }
 
 export function isInheritableType(target): target is InheritableType {
@@ -511,12 +511,12 @@ export function isPrimitiveTypeLike(value: any = false): value is IntegerType | 
     return isNumberTypeLike(value) ||
         isBooleanTypeLike(value) ||
         isStringTypeLike(value) ||
-        isWrapperOf(value, isPrimitiveTypeLike);
+        isTypeStatementTypeOf(value, isPrimitiveTypeLike);
 }
 
 export function isBuiltInType(value: any, name: string): value is InterfaceType {
     return (isInterfaceType(value) && value.name.toLowerCase() === name.toLowerCase() && value.isBuiltIn) ||
-        (isWrapperType(value) && isBuiltInType(value.wrappedType, name));
+        (isTypeStatementType(value) && isBuiltInType(value.wrappedType, name));
 }
 
 const nativeTypeKinds = [
@@ -529,8 +529,8 @@ export function isNativeType(value: any): value is IntegerType | LongIntegerType
     return isPrimitiveType(value) || nativeTypeKinds.includes(value?.kind);
 }
 
-export function isWrapperOf(value: any, typeGuard: (val: any) => boolean) {
-    return isWrapperType(value) && typeGuard(value.wrappedType);
+export function isTypeStatementTypeOf(value: any, typeGuard: (val: any) => boolean) {
+    return isTypeStatementType(value) && typeGuard(value.wrappedType);
 }
 
 export function isUnionTypeOf(value: any, typeGuard: (val: any) => boolean) {
@@ -539,7 +539,7 @@ export function isUnionTypeOf(value: any, typeGuard: (val: any) => boolean) {
 
 export function isComplexTypeOf(value: any, typeGuard: (val: any) => boolean) {
     // TODO: add more complex type checks as needed, like IntersectionType
-    return isWrapperOf(value, typeGuard) ||
+    return isTypeStatementTypeOf(value, typeGuard) ||
         isUnionTypeOf(value, typeGuard);
 }
 

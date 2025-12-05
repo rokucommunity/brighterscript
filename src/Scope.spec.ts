@@ -3909,11 +3909,11 @@ describe('Scope', () => {
 
         });
 
-        describe('wrapped types (type Statements)', () => {
-            it('allows wrapped types of primitives in function params', () => {
+        describe('type Statements', () => {
+            it('allows type statement types of primitives in function params', () => {
                 program.setFile<BrsFile>('source/wrapped.bs', `
                     type myString  = string
-                    sub useWrappedType(data as myString)
+                    sub useTypeStatementType(data as myString)
                         print data.len()
                     end sub
                 `);
@@ -3921,10 +3921,10 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
             });
 
-            it('allows wrapped types of primitives in variable declarations', () => {
+            it('allows type statement types of primitives in variable declarations', () => {
                 program.setFile<BrsFile>('source/wrapped.bs', `
                     type myInteger = integer
-                    sub useWrappedType()
+                    sub useTypeStatementType()
                         value as myInteger = 123
                         print value.toStr()
                     end sub
@@ -3933,10 +3933,10 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
             });
 
-            it('allows wrapped types of unions in function params', () => {
+            it('allows type statement types of unions in function params', () => {
                 program.setFile<BrsFile>('source/wrapped.bs', `
                     type StringOrInteger = string or integer
-                    sub useWrappedType(data as StringOrInteger)
+                    sub useTypeStatementType(data as StringOrInteger)
                         print data
                     end sub
                 `);
@@ -3944,7 +3944,7 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
             });
 
-            it('allows wrapped custom types in function params', () => {
+            it('allows type statement types wrapping custom types in function params', () => {
                 program.setFile<BrsFile>('source/wrapped.bs', `
                     interface WithName1
                         name as string
@@ -3956,7 +3956,7 @@ describe('Scope', () => {
 
                     type HasName = WithName1 or WithName2
 
-                    sub useWrappedType(data as HasName)
+                    sub useTypeStatementType(data as HasName)
                         print data.name
                     end sub
                 `);
@@ -3964,7 +3964,7 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
             });
 
-            it('provides a wrapped type when importing a file', () => {
+            it('provides a type statement type when importing a file', () => {
                 program.setFile<BrsFile>('source/wrapped.bs', `
                     interface WithName1
                         name as string
@@ -3985,7 +3985,7 @@ describe('Scope', () => {
 
                 program.setFile<BrsFile>('components/useWrapped.bs', `
                     import "pkg:/source/wrapped.bs"
-                    sub useWrappedType(data as HasName)
+                    sub useTypeStatementType(data as HasName)
                         print data.name
                     end sub
                 `);

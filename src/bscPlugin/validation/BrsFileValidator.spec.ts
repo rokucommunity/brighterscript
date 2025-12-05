@@ -21,7 +21,7 @@ import { ParseMode } from '../../parser/Parser';
 import type { ExtraSymbolData } from '../../interfaces';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { EnumType } from '../../types';
-import { WrapperType } from '../../types/WrapperType';
+import { TypeStatementType } from '../../types/TypeStatementType';
 
 describe('BrsFileValidator', () => {
     let program: Program;
@@ -877,14 +877,14 @@ describe('BrsFileValidator', () => {
 
             const symbolTable = func.getSymbolTable();
 
-            expectTypeToBe(symbolTable.getSymbolType('t', { flags: SymbolTypeFlag.typetime }), WrapperType);
-            const tType = symbolTable.getSymbolType('t', { flags: SymbolTypeFlag.typetime }) as WrapperType;
+            expectTypeToBe(symbolTable.getSymbolType('t', { flags: SymbolTypeFlag.typetime }), TypeStatementType);
+            const tType = symbolTable.getSymbolType('t', { flags: SymbolTypeFlag.typetime }) as TypeStatementType;
             expect(tType.name).to.eq('t');
             expectTypeToBe(tType.wrappedType, InterfaceType);
             expect((tType.wrappedType as InterfaceType).name).to.eq('Thing1');
 
-            expectTypeToBe(symbolTable.getSymbolType('t2', { flags: SymbolTypeFlag.typetime }), WrapperType);
-            const t2Type = symbolTable.getSymbolType('t2', { flags: SymbolTypeFlag.typetime }) as WrapperType;
+            expectTypeToBe(symbolTable.getSymbolType('t2', { flags: SymbolTypeFlag.typetime }), TypeStatementType);
+            const t2Type = symbolTable.getSymbolType('t2', { flags: SymbolTypeFlag.typetime }) as TypeStatementType;
             expectTypeToBe(t2Type.wrappedType, EnumType);
             expect((t2Type.wrappedType as EnumType).name).to.eq('alpha.beta.someEnum');
         });

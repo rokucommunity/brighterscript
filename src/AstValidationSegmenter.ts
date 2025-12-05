@@ -115,7 +115,7 @@ export class AstValidationSegmenter {
                     extraData.definingNode.value.getType({ ...options, flags: SymbolTypeFlag.runtime | SymbolTypeFlag.typetime, typeChain: aliasTypeChain });
                     typeChain = [...aliasTypeChain, ...typeChain.slice(1)];
                 }
-                if (extraData.isWrappedType && isTypeStatement(extraData.definingNode)) {
+                if (extraData.isFromTypeStatement && isTypeStatement(extraData.definingNode)) {
                     //set the unwrapped version of this symbol as required.
                     const wrappedTypeChain = [];
                     // eslint-disable-next-line no-bitwise

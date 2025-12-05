@@ -415,7 +415,7 @@ export class SymbolTable implements SymbolTypeGetter {
             options.data.isFromDocComment = data?.isFromDocComment;
             options.data.isBuiltIn = data?.isBuiltIn;
             options.data.isFromCallFunc = data?.isFromCallFunc;
-            options.data.isWrappedType = data?.isWrappedType;
+            options.data.isFromTypeStatement = data?.isFromTypeStatement;
         }
         return resolvedType;
     }

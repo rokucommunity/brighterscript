@@ -2,9 +2,9 @@ import { BscType } from './BscType';
 import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { BscTypeKind } from './BscTypeKind';
 
-export class WrapperType extends BscType {
+export class TypeStatementType extends BscType {
 
-    public kind: BscTypeKind = BscTypeKind.WrapperType;
+    public kind: BscTypeKind = BscTypeKind.TypeStatementType;
 
     constructor(public name: string, public wrappedType: BscType) {
         super();
