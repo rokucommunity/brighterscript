@@ -1,5 +1,5 @@
 import type { Body, AssignmentStatement, Block, ExpressionStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement, EnumStatement, EnumMemberStatement, TryCatchStatement, CatchStatement, ThrowStatement, MethodStatement, FieldStatement, ConstStatement, ContinueStatement, DimStatement, TypecastStatement, AliasStatement, AugmentedAssignmentStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ConditionalCompileStatement, ExitStatement } from '../parser/Statement';
-import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, TernaryExpression, NullCoalescingExpression, PrintSeparatorExpression, TypecastExpression, TypedArrayExpression, TypeExpression } from '../parser/Expression';
+import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, TernaryExpression, NullCoalescingExpression, PrintSeparatorExpression, TypecastExpression, TypedArrayExpression, TypeExpression, InlineInterfaceMemberExpression, InlineInterfaceExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
 import type { BsDiagnostic, TypedefProvider } from '../interfaces';
@@ -320,7 +320,12 @@ export function isTypedArrayExpression(element: any): element is TypedArrayExpre
 export function isPrintSeparatorExpression(element: any): element is PrintSeparatorExpression {
     return element?.kind === AstNodeKind.PrintSeparatorExpression;
 }
-
+export function isInlineInterfaceExpression(element: any): element is InlineInterfaceExpression {
+    return element?.kind === AstNodeKind.InlineInterfaceExpression;
+}
+export function isInlineInterfaceMemberExpression(element: any): element is InlineInterfaceMemberExpression {
+    return element?.kind === AstNodeKind.InlineInterfaceMemberExpression;
+}
 
 // BscType reflection
 export function isStringType(value: any): value is StringType {

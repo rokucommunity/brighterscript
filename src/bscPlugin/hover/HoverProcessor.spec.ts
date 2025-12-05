@@ -781,6 +781,26 @@ describe('HoverProcessor', () => {
             hover = program.getHover(file.srcPath, util.createPosition(4, 35))[0];
             expect(hover?.contents).eql([fence('whatever as dynamic')]);
         });
+
+        it('should include leading Trivia of inline interface members', () => {
+            const file = program.setFile('source/main.bs', `
+                ' @param input from doc comment
+                sub fooFunc(input as {
+                    ' description of name prop
+                    name as string
+                })
+                    print input.name
+                end sub
+            `);
+            program.validate();
+
+            // print input.na|me
+            let hover = program.getHover(file.srcPath, util.createPosition(6, 35))[0];
+            expect(hover?.contents).to.eql([`${fence('{name as string}.name as string')}${commentSep}description of name prop`]);
+            // print in|put.name
+            hover = program.getHover(file.srcPath, util.createPosition(6, 29))[0];
+            expect(hover?.contents).to.eql([`${fence('input as {name as string}')}${commentSep}from doc comment`]);
+        });
     });
 
     describe('callFunc', () => {
@@ -1019,6 +1039,22 @@ describe('HoverProcessor', () => {
             // sub printName(da|ta)
             let hover = program.getHover(file.srcPath, util.createPosition(3, 37))[0];
             expect(hover?.contents).eql([fence('data as alpha.DataType')]);
+        });
+
+
+        it('should include doc comment descriptions in hover for params', () => {
+            const file = program.setFile('source/test.bs', `
+                '@param {string} data A cool JSON string of data
+                sub printName(data)
+                    print data
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            // sub printName(da|ta)
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 33))[0];
+            expect(hover?.contents).eql([`${fence('data as string')}${commentSep}A cool JSON string of data`]);
         });
     });
 });
