@@ -1,4 +1,4 @@
-import { isBrsFile, isClassStatement, isDottedGetExpression, isNamespaceStatement, isXmlFile, isXmlScope } from '../../astUtils/reflection';
+import { isBrsFile, isClassStatement, isDottedGetExpression, isImportStatement, isNamespaceStatement, isXmlFile, isXmlScope } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ProvideDefinitionEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
@@ -128,6 +128,20 @@ export class DefinitionProvider {
         }
 
         if (token.kind === TokenKind.StringLiteral) {
+            if (isImportStatement(expression)) {
+                const pkgPath = util.getPkgPathFromTarget(file.pkgPath, expression.filePath);
+                const importedFile = this.event.program.getFile(pkgPath);
+                if (importedFile) {
+                    this.event.definitions.push(
+                        util.createLocation(
+                            URI.file(importedFile.srcPath).toString(),
+                            util.createRange(1, 0, 1, 0)
+                        )
+                    );
+                    return;
+                }
+            }
+
             // We need to strip off the quotes but only if present
             const startIndex = textToSearchFor.startsWith('"') ? 1 : 0;
 
