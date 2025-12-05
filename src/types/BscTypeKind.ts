@@ -1,3 +1,5 @@
+import { IntersectionType } from "./IntersectionType";
+
 export enum BscTypeKind {
     ArrayType = 'ArrayType',
     AssociativeArrayType = 'AssociativeArrayType',
@@ -22,5 +24,6 @@ export enum BscTypeKind {
     StringType = 'StringType',
     UninitializedType = 'UninitializedType',
     UnionType = 'UnionType',
-    VoidType = 'VoidType'
+    VoidType = 'VoidType',
+    IntersectionType = 'IntersectionType'
 }

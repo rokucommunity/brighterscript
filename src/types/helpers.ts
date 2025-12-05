@@ -1,9 +1,10 @@
 import type { TypeCompatibilityData } from '../interfaces';
-import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isReferenceType, isTypePropertyReferenceType, isUnionType, isVoidType } from '../astUtils/reflection';
+import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isComplexType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isReferenceType, isTypePropertyReferenceType, isUnionType, isVoidType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import type { UnionType } from './UnionType';
 import type { SymbolTable } from '../SymbolTable';
 import type { SymbolTypeFlag } from '../SymbolTypeFlag';
+import type { IntersectionType } from './IntersectionType';
 
 export function findTypeIntersection(typesArr1: BscType[], typesArr2: BscType[]) {
     if (!typesArr1 || !typesArr2) {
@@ -202,12 +203,12 @@ export function isNativeInterfaceCompatibleNumber(thisType: BscType, otherType: 
     return false;
 }
 
-export function getAllTypesFromUnionType(union: UnionType): BscType[] {
+export function getAllTypesFromComplexType(complex: UnionType | IntersectionType): BscType[] {
     const results = [];
 
-    for (const type of union.types) {
-        if (isUnionType(type)) {
-            results.push(...getAllTypesFromUnionType(type));
+    for (const type of complex.types) {
+        if (isComplexType(type)) {
+            results.push(...getAllTypesFromComplexType(type));
         } else {
             results.push(type);
         }

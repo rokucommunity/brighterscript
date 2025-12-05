@@ -25,7 +25,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -51,6 +51,7 @@ import type { NamespaceType } from './types/NamespaceType';
 import { getUniqueType } from './types/helpers';
 import { InvalidType } from './types/InvalidType';
 import { TypedFunctionType } from './types';
+import { IntersectionType } from './types/IntersectionType';
 
 export class Util {
     public clearConsole() {
@@ -2529,6 +2530,14 @@ export class Util {
         return false;
     }
 
+    public isIntersectionOfFunctions(type: BscType, allowReferenceTypes = false): type is IntersectionType {
+        if (isIntersectionType(type)) {
+            const callablesInUnion = type.types.filter(t => isCallableType(t) || (allowReferenceTypes && isReferenceType(t)));
+            return callablesInUnion.length === type.types.length && callablesInUnion.length > 0;
+        }
+        return false;
+    }
+
     public getFunctionTypeFromUnion(type: BscType): BscType {
         if (this.isUnionOfFunctions(type)) {
             const typedFuncsInUnion = type.types.filter(isTypedFunctionType);
@@ -2548,6 +2557,25 @@ export class Util {
         return undefined;
     }
 
+    public getFunctionTypeFromIntersection(type: BscType): BscType {
+        if (this.isIntersectionOfFunctions(type)) {
+            const typedFuncsInUnion = type.types.filter(isTypedFunctionType);
+            if (typedFuncsInUnion.length < type.types.length) {
+                // has non-typedFuncs in union
+                return FunctionType.instance;
+            }
+            const exampleFunc = typedFuncsInUnion[0];
+            const cumulativeFunction = new TypedFunctionType(getUniqueType(typedFuncsInUnion.map(f => f.returnType), (types) => new IntersectionType(types)))
+                .setName(exampleFunc.name)
+                .setSub(exampleFunc.isSub);
+            for (const param of exampleFunc.params) {
+                cumulativeFunction.addParameter(param.name, param.type, param.isOptional);
+            }
+            return cumulativeFunction;
+        }
+        return undefined;
+    }
+
     public getReturnTypeOfUnionOfFunctions(type: UnionType): BscType {
         if (this.isUnionOfFunctions(type, true)) {
             const typedFuncsInUnion = type.types.filter(t => isTypedFunctionType(t) || isReferenceType(t)) as TypedFunctionType[];
@@ -2557,6 +2585,19 @@ export class Util {
             }
             const funcReturns = typedFuncsInUnion.map(f => f.returnType);
             return getUniqueType(funcReturns, (types) => new UnionType(types));
+        }
+        return InvalidType.instance;
+    }
+
+    public getReturnTypeOfIntersectionOfFunctions(type: IntersectionType): BscType {
+        if (this.isIntersectionOfFunctions(type, true)) {
+            const typedFuncsInUnion = type.types.filter(t => isTypedFunctionType(t) || isReferenceType(t)) as TypedFunctionType[];
+            if (typedFuncsInUnion.length < type.types.length) {
+                // is non-typedFuncs in union
+                return DynamicType.instance;
+            }
+            const funcReturns = typedFuncsInUnion.map(f => f.returnType);
+            return new IntersectionType(funcReturns);//getUniqueType(funcReturns, (types) => new UnionType(types));
         }
         return InvalidType.instance;
     }
