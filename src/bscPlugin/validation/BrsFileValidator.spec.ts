@@ -20,6 +20,8 @@ import { TypedFunctionType } from '../../types/TypedFunctionType';
 import { ParseMode } from '../../parser/Parser';
 import type { ExtraSymbolData } from '../../interfaces';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
+import { EnumType } from '../../types';
+import { TypeStatementType } from '../../types/TypeStatementType';
 
 describe('BrsFileValidator', () => {
     let program: Program;
@@ -783,6 +785,113 @@ describe('BrsFileValidator', () => {
         it('has diagnostic when rhs not found', () => {
             program.setFile('source/main.bs', `
                 alias x = notThere
+                sub noop()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('notThere').message
+            ]);
+        });
+
+    });
+
+    describe('type statement', () => {
+        it('allows being at top of ast', () => {
+            program.setFile('source/main.bs', `
+                type x = string
+                sub noop(input as x)
+                    print input
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('no diagnostic if more than one usage per block', () => {
+            program.setFile('source/main.bs', `
+                type x = string
+                type y = integer
+                sub noop(input as x) as y
+                   return input.len()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('has diagnostic if used not at top of file', () => {
+            program.setFile('source/main.bs', `
+                namespace alpha
+                    sub noop()
+                        type y = string
+                        print "hello"
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel('type').message
+            ]);
+        });
+
+        it('sets the type of the name', () => {
+            program.setFile('source/types.bs', `
+                interface Thing1
+                    value as string
+                end interface
+                namespace alpha.beta
+                    enum someEnum
+                        up = "up"
+                        down = "down"
+                    end enum
+                end namespace
+            `);
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                import "types.bs"
+                type t = Thing1
+                type t2 = alpha.beta.someEnum
+
+                namespace ns1.ns2
+                    function getDirection(x as t) as t2
+                        if x.value = "go up" then
+                            return alpha.beta.someEnum.up
+                        else
+                            return alpha.beta.someEnum.down
+                        end if
+                    end function
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            let func: FunctionExpression;
+
+            // find places in AST where "x" is assigned
+            file.ast.walk(createVisitor({
+                FunctionStatement: (stmt) => {
+                    if (stmt.getName(ParseMode.BrighterScript) === 'ns1.ns2.getDirection') {
+                        func = stmt.func;
+                    }
+                }
+            }), { walkMode: WalkMode.visitAllRecursive });
+
+            const symbolTable = func.getSymbolTable();
+
+            expectTypeToBe(symbolTable.getSymbolType('t', { flags: SymbolTypeFlag.typetime }), TypeStatementType);
+            const tType = symbolTable.getSymbolType('t', { flags: SymbolTypeFlag.typetime }) as TypeStatementType;
+            expect(tType.name).to.eq('t');
+            expectTypeToBe(tType.wrappedType, InterfaceType);
+            expect((tType.wrappedType as InterfaceType).name).to.eq('Thing1');
+
+            expectTypeToBe(symbolTable.getSymbolType('t2', { flags: SymbolTypeFlag.typetime }), TypeStatementType);
+            const t2Type = symbolTable.getSymbolType('t2', { flags: SymbolTypeFlag.typetime }) as TypeStatementType;
+            expectTypeToBe(t2Type.wrappedType, EnumType);
+            expect((t2Type.wrappedType as EnumType).name).to.eq('alpha.beta.someEnum');
+        });
+
+        it('has diagnostic when rhs not found', () => {
+            program.setFile('source/main.bs', `
+                type x = notThere
                 sub noop()
                 end sub
             `);

@@ -54,6 +54,9 @@ export class BrsFileSemanticTokensProcessor {
             },
             FunctionParameterExpression: (node) => {
                 this.addToken(node.tokens.name, SemanticTokenTypes.parameter);
+            },
+            TypeStatement: (node) => {
+                this.tryAddToken(node, node.tokens.name);
             }
         }), {
             walkMode: WalkMode.visitAllRecursive

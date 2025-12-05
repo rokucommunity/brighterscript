@@ -4568,3 +4568,79 @@ export class ConditionalCompileConstStatement extends Statement {
         );
     }
 }
+
+
+export class TypeStatement extends Statement {
+    constructor(options: {
+        type?: Token;
+        name: Token;
+        equals?: Token;
+        value: TypeExpression;
+    }
+    ) {
+        super();
+        this.tokens = {
+            type: options.type,
+            name: options.name,
+            equals: options.equals
+        };
+        this.value = options.value;
+        this.location = util.createBoundingLocation(
+            this.tokens.type,
+            this.tokens.name,
+            this.tokens.equals,
+            this.value
+        );
+    }
+
+    public readonly tokens: {
+        readonly type?: Token;
+        readonly name: Token;
+        readonly equals?: Token;
+    };
+
+    public readonly value: TypeExpression;
+
+    public readonly kind = AstNodeKind.TypeStatement;
+
+    public readonly location: Location;
+
+    transpile(state: BrsTranspileState) {
+        //the alias statement is a comment just for debugging purposes
+        return [
+            state.transpileToken(this.tokens.type, 'type', true),
+            ' ',
+            state.transpileToken(this.tokens.name),
+            ' ',
+            state.transpileToken(this.tokens.equals, '='),
+            ' ',
+            this.value.transpile(state)
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'value', visitor, options);
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.type?.leadingTrivia ?? [];
+    }
+
+    getType(options: GetTypeOptions): BscType {
+        return this.value.getType(options);
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new TypeStatement({
+                type: util.cloneToken(this.tokens.type),
+                name: util.cloneToken(this.tokens.name),
+                equals: util.cloneToken(this.tokens.equals),
+                value: this.value?.clone()
+            }),
+            ['value']
+        );
+    }
+}

@@ -2554,6 +2554,39 @@ describe('CompletionsProcessor', () => {
 
     });
 
+    describe('type statement', () => {
+        it('includes type members', () => {
+            program.setFile('source/main.bs', `
+                sub greet(p as Programmer)
+                    print p.
+                end sub
+
+                interface Person
+                    name as string
+                    age as integer
+                end interface
+
+                interface Employee
+                    name as string
+                    age as integer
+                    employeeId as integer
+                end interface
+
+                type Programmer = Person or Employee
+            `);
+            program.validate();
+            //   print p.|
+            let completions = program.getCompletions('source/main.bs', util.createPosition(2, 29));
+            expect(completions.length).to.eql(2);
+            expectCompletionsIncludes(completions, [{
+                label: 'name',
+                kind: CompletionItemKind.Field
+            }, {
+                label: 'age',
+                kind: CompletionItemKind.Field
+            }]);
+        });
+    });
     describe('incomplete statements', () => {
 
         it('should complete after if', () => {

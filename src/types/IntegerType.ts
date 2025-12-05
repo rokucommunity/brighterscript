@@ -1,4 +1,4 @@
-import { isDynamicType, isIntegerTypeLike, isNumberType, isObjectType } from '../astUtils/reflection';
+import { isDynamicType, isIntegerTypeLike, isNumberTypeLike, isObjectType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { isEnumTypeCompatible, isNativeInterfaceCompatibleNumber, isUnionTypeCompatible } from './helpers';
@@ -16,7 +16,7 @@ export class IntegerType extends BscType {
         return (
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
-            isNumberType(targetType) ||
+            isNumberTypeLike(targetType) ||
             isUnionTypeCompatible(this, targetType, data) ||
             isEnumTypeCompatible(this, targetType, data) ||
             isNativeInterfaceCompatibleNumber(this, targetType, data)

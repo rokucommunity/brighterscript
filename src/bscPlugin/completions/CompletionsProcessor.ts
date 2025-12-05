@@ -1,4 +1,4 @@
-import { isAliasStatement, isBrsFile, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isTypedFunctionType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isBrsFile, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isTypedFunctionType, isTypeStatementType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
 import type { ExtraSymbolData, FileReference, ProvideCompletionsEvent } from '../../interfaces';
 import type { BscFile } from '../../files/BscFile';
 import { AllowedTriviaTokens, DeclarableTypes, Keywords, TokenKind } from '../../lexer/TokenKind';
@@ -413,6 +413,9 @@ export class CompletionsProcessor {
 
     private getCompletionKindFromSymbol(symbol: BscSymbol, areMembers = false) {
         let type = symbol?.type;
+        if (isTypeStatementType(type)) {
+            type = type.wrappedType;
+        }
         const extraData = symbol?.data;
         let definingNode = extraData?.definingNode;
         let isAlias = extraData?.isAlias;

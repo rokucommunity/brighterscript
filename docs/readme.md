@@ -134,6 +134,15 @@ function getY(translation as float[]) as float
 end function
 ```
 
+## [Type Statements](type-statements.md)
+```brighterscript
+type number = integer or float or double
+
+function sum(x as number, y as number) as number
+    return x + y
+end function
+```
+
 ## [Union Types](union-types.md)
 ```brighterscript
 sub logData(data as string or number)
