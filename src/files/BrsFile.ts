@@ -616,6 +616,9 @@ export class BrsFile {
                 functionType.addParameter(callableParam.name, callableParam.type, isOptional);
             }
 
+            // Extract documentation from comment tokens
+            const documentation = util.getTokenDocumentation(this.parser.tokens, statement.func.functionType);
+
             this.callables.push({
                 isSub: statement.func.functionType.text.toLowerCase() === 'sub',
                 name: statement.name.text,
@@ -626,7 +629,8 @@ export class BrsFile {
                 type: functionType,
                 getName: statement.getName.bind(statement),
                 hasNamespace: !!statement.findAncestor<NamespaceStatement>(isNamespaceStatement),
-                functionStatement: statement
+                functionStatement: statement,
+                shortDescription: documentation
             });
         }
     }
