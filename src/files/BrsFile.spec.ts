@@ -4420,6 +4420,24 @@ describe('BrsFile', () => {
                 end sub
             `);
         });
+
+        describe('inline interfaces', () => {
+            it('transpiles to "dynamic"', () => {
+                testTranspile(`
+                    function foo(input as {name as string}) as {id as string}
+                        output as {id as string} = {id: input.name}
+                        return output
+                    end function
+                    `, `
+                    function foo(input as dynamic) as dynamic
+                        output = {
+                            id: input.name
+                        }
+                        return output
+                    end function
+                `);
+            });
+        });
     });
 
     it('allows up to 63 function params', () => {
