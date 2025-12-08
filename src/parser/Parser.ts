@@ -1084,8 +1084,8 @@ export class Parser {
         if (this.isAtRootLevel() && isTypeToken) {
             return true;
 
-            //not at root level, alias statements are all invalid here, but try to detect if the tokens look
-            //like a alias statement (and let the type function handle emitting the diagnostics)
+            //not at root level, type statements are all invalid here, but try to detect if the tokens look
+            //like a type statement (and let the type function handle emitting the diagnostics)
         } else if (isTypeToken && this.checkNext(TokenKind.Identifier)) {
             return true;
 

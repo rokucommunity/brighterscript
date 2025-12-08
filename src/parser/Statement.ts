@@ -4312,7 +4312,7 @@ export class AliasStatement extends Statement {
     public readonly location: Location;
 
     transpile(state: BrsTranspileState) {
-        //the alias statement is a comment just for debugging purposes
+        //transpile to a comment just for debugging purposes
         return [
             state.transpileToken(this.tokens.alias, 'alias', true),
             ' ',
@@ -4606,7 +4606,7 @@ export class TypeStatement extends Statement {
     public readonly location: Location;
 
     transpile(state: BrsTranspileState) {
-        //the alias statement is a comment just for debugging purposes
+        //transpile to a comment just for debugging purposes
         return [
             state.transpileToken(this.tokens.type, 'type', true),
             ' ',
