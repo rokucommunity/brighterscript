@@ -28,10 +28,6 @@ export class TypeStatementType extends BscType {
         return this.wrappedType.isEqual(targetType);
     }
 
-    public get memberTable() {
-        return this.wrappedType.memberTable;
-    }
-
     getMemberType(memberName: string, options: GetTypeOptions) {
         return this.wrappedType.getMemberType(memberName, options);
     }

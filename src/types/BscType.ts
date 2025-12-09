@@ -9,10 +9,8 @@ import type { BscTypeKind } from './BscTypeKind';
 
 export abstract class BscType {
 
-    private readonly _memberTable: SymbolTable;
-    public get memberTable(): SymbolTable {
-        return this._memberTable;
-    }
+    public readonly memberTable: SymbolTable;
+
     protected __identifier: string;
     protected hasAddedBuiltInInterfaces = false;
     public isBuiltIn = false;
@@ -21,7 +19,7 @@ export abstract class BscType {
 
     constructor(name = '') {
         this.__identifier = `${this.constructor.name}${name ? ': ' + name : ''}`;
-        this._memberTable = new SymbolTable(this.__identifier);
+        this.memberTable = new SymbolTable(this.__identifier);
         if (TypesCreated[this.constructor.name] === undefined) {
             TypesCreated[this.constructor.name] = 0;
         }
