@@ -1,5 +1,5 @@
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
-import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallFuncableType, isCallableType, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallFuncableType, isCallableType, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -662,7 +662,7 @@ export class ScopeValidator {
     }
 
     private checkAllowedArgConversions(paramType: BscType, argType: BscType): boolean {
-        if (isNumberType(argType) && isBooleanType(paramType)) {
+        if (isNumberTypeLike(argType) && isBooleanTypeLike(paramType)) {
             return true;
         }
         return false;
@@ -872,7 +872,7 @@ export class ScopeValidator {
             // because you need to verify each combination of types
         } else if (isDynamicType(rightType) || isObjectType(rightType)) {
             // operand is basically "any" type... ignore
-        } else if (isNumberType(rightType)) {
+        } else if (isNumberTypeLike(rightType)) {
             // operand is a number.. this is ok
         } else {
             // rhs is not a number, so no increment operator is not allowed
