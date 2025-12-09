@@ -455,6 +455,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
  - all the type tracking stuff!
 
+## [0.70.3](https://github.com/rokucommunity/brighterscript/compare/0.70.2...v0.70.3) - 2025-10-31
+### Changed
+ - upgrade to [roku-deploy@3.14.4](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3144---2025-10-30). Notable changes since 3.13.0:
+     - Add specific error classes for reboot and check for updates functions ([#216](https://github.com/rokucommunity/brighterscript/pull/216))
+     - Add 'rebootDevice' and 'checkForUpdate' functionality for supported OS versions ([#208](https://github.com/rokucommunity/brighterscript/pull/208))
+### Fixed
+ - Fix crash when bsc plugin in worker loads another version of bsc ([#1579](https://github.com/rokucommunity/brighterscript/pull/1579))
+ - Fix recursive const and enum resolution during transpilation ([#1578](https://github.com/rokucommunity/brighterscript/pull/1578))
+
+
+
+## [0.70.2](https://github.com/rokucommunity/brighterscript/compare/0.70.1...v0.70.2) - 2025-10-10
+### Changed
+ - Add info for brightscript components `roUtils` and `roRenderThreadQueue` ([#1574](https://github.com/rokucommunity/brighterscript/pull/1574))
+ - Roku sdk updates ([#1573](https://github.com/rokucommunity/brighterscript/pull/1573))
+
+
+
+## [0.70.1](https://github.com/rokucommunity/brighterscript/compare/0.70.0...v0.70.1) - 2025-09-11
+### Changed
+ - Flag param names that are reserved words ([#1556](https://github.com/rokucommunity/brighterscript/pull/1556))
+### Fixed
+ - Fix for adding files on beforeProgramValidate ([#1568](https://github.com/rokucommunity/brighterscript/pull/1568))
+ - Fix typdef generation of default param func ([#1551](https://github.com/rokucommunity/brighterscript/pull/1551))
+
+
+
+## [0.70.0](https://github.com/rokucommunity/brighterscript/compare/0.69.13...v0.70.0) - 2025-08-11
+### Added
+ - Transpile class methods as named functions ([#1548](https://github.com/rokucommunity/brighterscript/pull/1548))
+### Changed
+ - upgrade to [roku-deploy@3.13.0](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3130---2025-08-04). Notable changes since 3.12.6:
+     - Add standards-compliant User-Agent header ([#203](https://github.com/rokucommunity/brighterscript/pull/203))
+
+
+
+## [0.69.13](https://github.com/rokucommunity/brighterscript/compare/0.69.12...v0.69.13) - 2025-08-04
+### Added
+ - Add projectDiscoveryExclude setting and files.watcherExclude support ([#1535](https://github.com/rokucommunity/brighterscript/pull/1535))
+ - Add max depth configuration for Roku project discovery ([#1533](https://github.com/rokucommunity/brighterscript/pull/1533))
+### Fixed
+ - Fix signature help crash on malformed function declarations ([#1536](https://github.com/rokucommunity/brighterscript/pull/1536))
+
+
+
 ## [0.69.12](https://github.com/rokucommunity/brighterscript/compare/0.69.11...v0.69.12) - 2025-07-07
 ### Fixed
  - Fix discovery when `projects` is empty ([#1529](https://github.com/rokucommunity/brighterscript/pull/1529))

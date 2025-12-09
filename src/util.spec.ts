@@ -140,20 +140,18 @@ describe('util', () => {
                 ]
             };
             util.resolvePathsRelativeTo(config, 'plugins', s`${rootDir}/config`);
-            expect(config?.plugins?.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
+            expect(config?.plugins?.map(p => (p ? pathSepNormalize(p, '/') : undefined))).to.deep.equal([
                 `${rootDir}/config/plugins.js`,
                 `${rootDir}/config/scripts/plugins.js`,
                 `${rootDir}/scripts/plugins.js`,
                 'bsplugin'
-            ].map(p => util.pathSepNormalize(p, '/')));
+            ].map(p => pathSepNormalize(p, '/')));
         });
 
         it('resolves path relatively to config file', () => {
             const mockConfig: BsConfig = {
-                outFile: 'out/app.zip',
                 rootDir: 'rootDir',
-                cwd: 'cwd',
-                stagingDir: 'stagingDir'
+                cwd: 'cwd'
             };
             fsExtra.outputFileSync(s`${rootDir}/child.json`, JSON.stringify(mockConfig));
             let config = util.loadConfigFile(s`${rootDir}/child.json`);
@@ -162,9 +160,7 @@ describe('util', () => {
                     s`${rootDir}/child.json`
                 ],
                 'cwd': s`${rootDir}/cwd`,
-                'outFile': s`${rootDir}/out/app.zip`,
-                'rootDir': s`${rootDir}/rootDir`,
-                'stagingDir': s`${rootDir}/stagingDir`
+                'rootDir': s`${rootDir}/rootDir`
             });
         });
 
@@ -179,10 +175,10 @@ describe('util', () => {
                 ]
             };
             util.resolvePathsRelativeTo(config, 'plugins', s`${process.cwd()}/config`);
-            expect(config?.plugins?.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
+            expect(config?.plugins?.map(p => (p ? pathSepNormalize(p, '/') : undefined))).to.deep.equal([
                 s`${process.cwd()}/config/plugins.js`,
                 'bsplugin'
-            ].map(p => util.pathSepNormalize(p, '/')));
+            ].map(p => pathSepNormalize(p, '/')));
         });
     });
 
@@ -236,8 +232,8 @@ describe('util', () => {
 
     describe('pathSepNormalize', () => {
         it('works for both types of separators', () => {
-            expect(util.pathSepNormalize('c:/some\\path', '\\')).to.equal('c:\\some\\path');
-            expect(util.pathSepNormalize('c:/some\\path', '/')).to.equal('c:/some/path');
+            expect(pathSepNormalize('c:/some\\path', '\\')).to.equal('c:\\some\\path');
+            expect(pathSepNormalize('c:/some\\path', '/')).to.equal('c:/some/path');
         });
         it('does not throw when given `undefined`', () => {
             expect(undefined).to.be.undefined;
@@ -254,6 +250,37 @@ describe('util', () => {
     });
 
     describe('findClosestConfigFile', () => {
+
+        /**
+         * Walks up the chain to find the closest bsconfig.json file
+         */
+        async function findClosestConfigFile(currentPath: string): Promise<string | undefined> {
+            //make the path absolute
+            currentPath = path.resolve(
+                path.normalize(
+                    currentPath
+                )
+            );
+
+            let previousPath: string | undefined;
+            //using ../ on the root of the drive results in the same file path, so that's how we know we reached the top
+            while (previousPath !== currentPath) {
+                previousPath = currentPath;
+
+                let bsPath = path.join(currentPath, 'bsconfig.json');
+                let brsPath = path.join(currentPath, 'brsconfig.json');
+                if (await util.pathExists(bsPath)) {
+                    return bsPath;
+                } else if (await util.pathExists(brsPath)) {
+                    return brsPath;
+                } else {
+                    //walk upwards one directory
+                    currentPath = path.resolve(path.join(currentPath, '../'));
+                }
+            }
+            //got to the root path, no config file exists
+        }
+
         it('finds config up the chain', async () => {
             const brsFilePath = s`${rootDir}/src/app.brs`;
             const currentDirBsConfigPath = s`${rootDir}/src/bsconfig.json`;
@@ -266,13 +293,13 @@ describe('util', () => {
             fsExtra.outputFileSync(parentDirBsConfigPath, '');
             fsExtra.outputFileSync(parentDirBrsConfigPath, '');
 
-            expect(await util.findClosestConfigFile(brsFilePath)).to.equal(currentDirBsConfigPath);
+            expect(await findClosestConfigFile(brsFilePath)).to.equal(currentDirBsConfigPath);
             fsExtra.removeSync(currentDirBsConfigPath);
-            expect(await util.findClosestConfigFile(brsFilePath)).to.equal(currentDirBrsConfigPath);
+            expect(await findClosestConfigFile(brsFilePath)).to.equal(currentDirBrsConfigPath);
             fsExtra.removeSync(currentDirBrsConfigPath);
-            expect(await util.findClosestConfigFile(brsFilePath)).to.equal(parentDirBsConfigPath);
+            expect(await findClosestConfigFile(brsFilePath)).to.equal(parentDirBsConfigPath);
             fsExtra.removeSync(parentDirBsConfigPath);
-            expect(await util.findClosestConfigFile(brsFilePath)).to.equal(parentDirBrsConfigPath);
+            expect(await findClosestConfigFile(brsFilePath)).to.equal(parentDirBrsConfigPath);
         });
 
     });
@@ -355,21 +382,21 @@ describe('util', () => {
         });
 
         it('loads project from disc', () => {
-            fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{ "outFile": "customOutDir/pkg.zip" }`);
+            fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{ "outDir": "customOutDir" }`);
             let config = util.normalizeAndResolveConfig({
                 project: s`${tempDir}/rootDir/bsconfig.json`
             });
             expect(
-                config.outFile
+                config.outDir
             ).to.equal(
-                s`${tempDir}/rootDir/customOutDir/pkg.zip`
+                s`${tempDir}/rootDir/customOutDir`
             );
         });
 
         it('loads project from disc and extends it', () => {
             //the extends file
             fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.base.json`, `{
-                "outFile": "customOutDir/pkg1.zip",
+                "outDir": "customOutDir",
                 "rootDir": "core"
             }`);
 
@@ -381,7 +408,7 @@ describe('util', () => {
 
             let config = util.normalizeAndResolveConfig({ project: s`${tempDir}/rootDir/bsconfig.json` });
 
-            expect(config.outFile).to.equal(s`${tempDir}/rootDir/customOutDir/pkg1.zip`);
+            expect(config.outDir).to.equal(s`${tempDir}/rootDir/customOutDir`);
             expect(config.rootDir).to.equal(s`${tempDir}/rootDir/core`);
             expect(config.watch).to.equal(true);
         });
@@ -436,20 +463,85 @@ describe('util', () => {
                 expect(util.normalizeConfig(<any>{ bslibDestinationDir: input }).bslibDestinationDir).to.equal('source/opt');
             });
         });
+
+        it('used default noEmit value', () => {
+            let config = util.normalizeConfig({} as any);
+            expect(config.noEmit).to.be.false;
+        });
+
+        it('used noEmit value over copyToStaging', () => {
+            let config = util.normalizeConfig({ noEmit: true, copyToStaging: false } as any);
+            expect(config.noEmit).to.be.true;
+            config = util.normalizeConfig({ noEmit: false, copyToStaging: false } as any);
+            expect(config.noEmit).to.be.false;
+        });
+
+        it('used copyToStaging when noEmit is not present', () => {
+            let config = util.normalizeConfig({ copyToStaging: true } as any);
+            expect(config.noEmit).to.be.false;
+            config = util.normalizeConfig({ copyToStaging: false } as any);
+            expect(config.noEmit).to.be.true;
+        });
+
+        it('defaults outDir to ./out', () => {
+            let config = util.normalizeConfig({} as any);
+            expect(config.outDir).to.equal('./out');
+        });
+
+        it('uses stagingDir when outDir is not provided', () => {
+            let config = util.normalizeConfig({ stagingDir: 'staging' } as any);
+            expect(config.outDir).to.equal('staging');
+        });
+
+        it('uses stagingFolderPath when outDir is not provided', () => {
+            let config = util.normalizeConfig({ stagingFolderPath: 'stagingPath' } as any);
+            expect(config.outDir).to.equal('stagingPath');
+        });
+
+        it('uses outDir when stagingDir is provided', () => {
+            let config = util.normalizeConfig({ outDir: 'outTest', stagingDir: 'staging' } as any);
+            expect(config.outDir).to.equal('outTest');
+        });
+
+        it('uses outDir when stagingFolderPath is provided', () => {
+            let config = util.normalizeConfig({ outDir: 'outTest', stagingFolderPath: 'stagingPath' } as any);
+            expect(config.outDir).to.equal('outTest');
+        });
+
+        it('uses outDir when stagingFolderPath and stagingDir are provided', () => {
+            let config = util.normalizeConfig({ outDir: 'outTest', stagingDir: 'staging', stagingFolderPath: 'stagingPath' } as any);
+            expect(config.outDir).to.equal('outTest');
+        });
     });
 
     describe('areArraysEqual', () => {
+        /**
+         * Determine if two arrays containing primitive values are equal.
+         * This considers order and compares by equality.
+         */
+        function areArraysEqual(arr1: any[], arr2: any[]) {
+            if (arr1.length !== arr2.length) {
+                return false;
+            }
+            for (let i = 0; i < arr1.length; i++) {
+                if (arr1[i] !== arr2[i]) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         it('finds equal arrays', () => {
-            expect(util.areArraysEqual([1, 2], [1, 2])).to.be.true;
-            expect(util.areArraysEqual(['cat', 'dog'], ['cat', 'dog'])).to.be.true;
+            expect(areArraysEqual([1, 2], [1, 2])).to.be.true;
+            expect(areArraysEqual(['cat', 'dog'], ['cat', 'dog'])).to.be.true;
         });
         it('detects non-equal arrays', () => {
-            expect(util.areArraysEqual([1, 2], [1])).to.be.false;
-            expect(util.areArraysEqual([1, 2], [2])).to.be.false;
-            expect(util.areArraysEqual([2], [1])).to.be.false;
-            expect(util.areArraysEqual([2], [0])).to.be.false;
-            expect(util.areArraysEqual(['cat', 'dog'], ['cat', 'dog', 'mouse'])).to.be.false;
-            expect(util.areArraysEqual(['cat', 'dog'], ['dog', 'cat'])).to.be.false;
+            expect(areArraysEqual([1, 2], [1])).to.be.false;
+            expect(areArraysEqual([1, 2], [2])).to.be.false;
+            expect(areArraysEqual([2], [1])).to.be.false;
+            expect(areArraysEqual([2], [0])).to.be.false;
+            expect(areArraysEqual(['cat', 'dog'], ['cat', 'dog', 'mouse'])).to.be.false;
+            expect(areArraysEqual(['cat', 'dog'], ['dog', 'cat'])).to.be.false;
         });
     });
 
@@ -500,12 +592,6 @@ describe('util', () => {
         });
         it('works when source and target are in different subs', () => {
             expect(util.getRelativePath('sub1/file.xml', 'sub2/file.brs')).to.equal(s`../sub2/file.brs`);
-        });
-    });
-
-    describe('padLeft', () => {
-        it('stops at an upper limit to prevent terrible memory explosions', () => {
-            expect(util.padLeft('', Number.MAX_VALUE, ' ')).to.be.lengthOf(1000);
         });
     });
 
@@ -910,9 +996,34 @@ describe('util', () => {
     });
 
     describe('splitWithLocation', () => {
+        /**
+         * Split the given text and return ranges for each chunk.
+         * Only works for single-line strings
+         */
+        function splitGetRange(separator: string, text: string, range: Range) {
+            const chunks = text.split(separator);
+            const result = [] as Array<{ text: string; range: Range }>;
+            let offset = 0;
+            for (let chunk of chunks) {
+                //only keep nonzero chunks
+                if (chunk.length > 0) {
+                    result.push({
+                        text: chunk,
+                        range: util.createRange(
+                            range.start.line,
+                            range.start.character + offset,
+                            range.end.line,
+                            range.start.character + offset + chunk.length
+                        )
+                    });
+                }
+                offset += chunk.length + separator.length;
+            }
+            return result;
+        }
         it('works with no split items', () => {
             expect(
-                util.splitGetRange('.', 'hello', util.createRange(2, 10, 2, 15))
+                splitGetRange('.', 'hello', util.createRange(2, 10, 2, 15))
             ).to.eql([{
                 text: 'hello',
                 range: util.createRange(2, 10, 2, 15)
@@ -921,7 +1032,7 @@ describe('util', () => {
 
         it('handles empty chunks', () => {
             expect(
-                util.splitGetRange('l', 'hello', util.createRange(2, 10, 2, 15))
+                splitGetRange('l', 'hello', util.createRange(2, 10, 2, 15))
             ).to.eql([{
                 text: 'he',
                 range: util.createRange(2, 10, 2, 12)
@@ -933,7 +1044,7 @@ describe('util', () => {
 
         it('handles multiple non-empty chunks', () => {
             expect(
-                util.splitGetRange('.', 'abc.d.efgh.i', util.createRange(2, 10, 2, 2))
+                splitGetRange('.', 'abc.d.efgh.i', util.createRange(2, 10, 2, 2))
             ).to.eql([{
                 text: 'abc',
                 range: util.createRange(2, 10, 2, 13)
@@ -1653,3 +1764,15 @@ describe('util', () => {
         });
     });
 });
+
+
+/**
+ * Given a path to a file/directory, replace all path separators with the current system's version.
+ */
+function pathSepNormalize(filePath: string, separator?: string) {
+    if (!filePath) {
+        return filePath;
+    }
+    separator = separator ? separator : path.sep;
+    return filePath.replace(/[\\/]+/g, separator);
+}

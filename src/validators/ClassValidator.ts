@@ -94,7 +94,7 @@ export class BsClassValidator {
                 if (lowerClassName && names.has(lowerClassName)) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.circularReferenceDetected(
-                            Array.from(names.values()).concat(className), this.scope.name),
+                            Array.from(names.values()).concat(className)),
                         location: cls.tokens.name.location
                     });
                     break;

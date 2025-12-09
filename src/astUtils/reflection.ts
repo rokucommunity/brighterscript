@@ -1,5 +1,5 @@
 import type { Body, AssignmentStatement, Block, ExpressionStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement, EnumStatement, EnumMemberStatement, TryCatchStatement, CatchStatement, ThrowStatement, MethodStatement, FieldStatement, ConstStatement, ContinueStatement, DimStatement, TypecastStatement, AliasStatement, AugmentedAssignmentStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ConditionalCompileStatement, ExitStatement } from '../parser/Statement';
-import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, TernaryExpression, NullCoalescingExpression, PrintSeparatorExpression, TypecastExpression, TypedArrayExpression, TypeExpression } from '../parser/Expression';
+import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, TernaryExpression, NullCoalescingExpression, PrintSeparatorExpression, TypecastExpression, TypedArrayExpression, TypeExpression, InlineInterfaceMemberExpression, InlineInterfaceExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
 import type { BsDiagnostic, TypedefProvider } from '../interfaces';
@@ -29,6 +29,7 @@ import type { UnionType } from '../types/UnionType';
 import type { UninitializedType } from '../types/UninitializedType';
 import type { ArrayType } from '../types/ArrayType';
 import type { InheritableType } from '../types/InheritableType';
+import type { CallFuncableType } from '../types/CallFuncableType';
 import { BscTypeKind } from '../types/BscTypeKind';
 import type { NamespaceType } from '../types/NamespaceType';
 import type { BaseFunctionType } from '../types/BaseFunctionType';
@@ -38,6 +39,7 @@ import type { AssociativeArrayType } from '../types/AssociativeArrayType';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Program } from '../Program';
 import type { Project } from '../lsp/Project';
+
 
 // File reflection
 export function isBrsFile(file: BscFile | undefined): file is BrsFile {
@@ -318,7 +320,12 @@ export function isTypedArrayExpression(element: any): element is TypedArrayExpre
 export function isPrintSeparatorExpression(element: any): element is PrintSeparatorExpression {
     return element?.kind === AstNodeKind.PrintSeparatorExpression;
 }
-
+export function isInlineInterfaceExpression(element: any): element is InlineInterfaceExpression {
+    return element?.kind === AstNodeKind.InlineInterfaceExpression;
+}
+export function isInlineInterfaceMemberExpression(element: any): element is InlineInterfaceMemberExpression {
+    return element?.kind === AstNodeKind.InlineInterfaceMemberExpression;
+}
 
 // BscType reflection
 export function isStringType(value: any): value is StringType {
@@ -339,7 +346,7 @@ export function isFunctionType(value: any): value is FunctionType {
     return value?.kind === BscTypeKind.FunctionType;
 }
 export function isRoFunctionType(value: any): value is InterfaceType {
-    return isBuiltInType(value, 'roFunction');
+    return value?.kind === BscTypeKind.RoFunctionType || isBuiltInType(value, 'roFunction');
 }
 export function isFunctionTypeLike(value: any): value is FunctionType | InterfaceType {
     return isFunctionType(value) || isRoFunctionType(value);
@@ -461,11 +468,15 @@ export function isAssociativeArrayType(value: any): value is AssociativeArrayTyp
     return value?.kind === BscTypeKind.AssociativeArrayType;
 }
 export function isInheritableType(target): target is InheritableType {
-    return isClassType(target) || isInterfaceType(target) || isComponentType(target);
+    return isClassType(target) || isCallFuncableType(target);
+}
+
+export function isCallFuncableType(target): target is CallFuncableType {
+    return isInterfaceType(target) || isComponentType(target);
 }
 
 export function isCallableType(target): target is BaseFunctionType {
-    return isFunctionTypeLike(target) || isTypedFunctionType(target) || (isDynamicType(target) && !isAnyReferenceType(target));
+    return isFunctionTypeLike(target) || isTypedFunctionType(target) || isObjectType(target) || (isDynamicType(target) && !isAnyReferenceType(target));
 }
 
 export function isAnyReferenceType(target): target is AnyReferenceType {

@@ -446,11 +446,11 @@ export interface Plugin {
 
 
     /**
-     * Called right before the program builds (i.e. generates the code and puts it in the stagingDir
+     * Called right before the program builds (i.e. generates the code and puts it in the outDir
      */
     beforeBuildProgram?(event: BeforeBuildProgramEvent): any;
     /**
-     * Called right after the program builds (i.e. generates the code and puts it in the stagingDir
+     * Called right after the program builds (i.e. generates the code and puts it in the outDir
      */
     afterBuildProgram?(event: AfterBuildProgramEvent): any;
 
@@ -963,7 +963,7 @@ export type AfterSerializeFileEvent<TFile extends BscFile = BscFile> = Serialize
 
 export interface BeforeWriteProgramEvent {
     program: Program;
-    stagingDir: string;
+    outDir: string;
     files: Map<BscFile, SerializedFile[]>;
 }
 export type AfterWriteProgramEvent = BeforeWriteProgramEvent;
@@ -987,7 +987,7 @@ export type AfterWriteFileEvent = BeforeWriteFileEvent;
 export interface TranspileObj {
     file: BscFile;
     /**
-     * The absolute path to where the file should be written during build. (i.e. somewhere inside the stagingDir)
+     * The absolute path to where the file should be written during build. (i.e. somewhere inside the outDir)
      */
     outputPath: string;
 }
@@ -1191,6 +1191,11 @@ export interface TypeChainProcessResult {
      * Does the chain contain a type that crossed a callFunc boundary?
      */
     crossedCallFunc: boolean;
+}
+
+export interface TypeCircularReferenceInfo {
+    isCircularReference: boolean;
+    referenceChainNames?: string[];
 }
 
 export interface TypeCompatibilityData {

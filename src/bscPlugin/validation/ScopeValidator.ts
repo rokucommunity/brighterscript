@@ -1,5 +1,5 @@
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
-import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanType, isBrsFile, isCallExpression, isCallFuncableType, isCallableType, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberType, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -359,6 +359,19 @@ export class ScopeValidator {
         return isKnownType;
     }
 
+    private getCircularReference(exprType: BscType) {
+        if (exprType?.isResolvable()) {
+            return { isCircularReference: false };
+        }
+        if (isReferenceType(exprType)) {
+
+            const info = exprType.getCircularReferenceInfo();
+            return info;
+        }
+        return { isCircularReference: false };
+    }
+
+
     /**
      * If this is the lhs of an assignment, we don't need to flag it as unresolved
      */
@@ -475,7 +488,7 @@ export class ScopeValidator {
         }
 
         const callerType = call.callee.obj?.getType({ flags: SymbolTypeFlag.runtime });
-        if (!isComponentType(callerType)) {
+        if (!isCallFuncableType(callerType)) {
             return;
         }
         const firstArgToken = call?.args[0]?.tokens.value;
@@ -541,7 +554,7 @@ export class ScopeValidator {
         if (!funcType?.isResolvable() || !isCallableType(funcType)) {
             const funcName = util.getAllDottedGetPartsAsString(callee, ParseMode.BrighterScript, isCallfuncExpression(callee) ? '@.' : '.');
             if (isUnionType(funcType)) {
-                if (!util.isUnionOfFunctions(funcType)) {
+                if (!util.isUnionOfFunctions(funcType) && !isCallfuncExpression(callee)) {
                     // union of func and non func. not callable
                     this.addMultiScopeDiagnostic({
                         ...DiagnosticMessages.notCallable(funcName),
@@ -952,9 +965,16 @@ export class ScopeValidator {
             } else if (!(typeData?.isFromDocComment)) {
                 // only show "cannot find... " errors if the type is not defined from a doc comment
                 const typeChainScan = util.processTypeChain(typeChain);
+                const circularReferenceInfo = this.getCircularReference(exprType);
                 if (isCallExpression(typeChainScan.astNode.parent) && typeChainScan.astNode.parent.callee === expression) {
                     this.addMultiScopeDiagnostic({
                         ...DiagnosticMessages.cannotFindFunction(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
+                        location: typeChainScan?.location
+                    });
+                } else if (circularReferenceInfo?.isCircularReference) {
+                    let diagnosticDetail = util.getCircularReferenceDiagnosticDetail(circularReferenceInfo, typeChainScan.fullNameOfItem);
+                    this.addMultiScopeDiagnostic({
+                        ...DiagnosticMessages.circularReferenceDetected(diagnosticDetail),
                         location: typeChainScan?.location
                     });
                 } else {

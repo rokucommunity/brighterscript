@@ -16,6 +16,7 @@ import { tempDir, rootDir } from '../../testHelpers.spec';
 import { isReturnStatement } from '../../astUtils/reflection';
 import { ScopeValidator } from './ScopeValidator';
 import type { ReturnStatement } from '../../parser/Statement';
+import { Logger } from '@rokucommunity/logger';
 
 describe('ScopeValidator', () => {
 
@@ -1831,6 +1832,54 @@ describe('ScopeValidator', () => {
             });
         });
 
+        describe('inline interfaces', () => {
+            it('allows function param with compatible interface', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    sub takesInline(datum as {name as string})
+                    end sub
+
+                    sub callsTakesInline()
+                        takesInline({age: 123, name: "test"})
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates function param with incompatible interface', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    sub takesInline(datum as {name as string})
+                    end sub
+
+                    sub callsTakesInline()
+                        takesInline({name: 123})
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('roAssociativeArray', '{name as string}', {
+                        fieldMismatches: [{ name: 'name', expectedType: StringType.instance, actualType: IntegerType.instance }]
+                    }).message
+                ]);
+            });
+        });
+
+        it('allows using invalid as argument for typed array params', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub takesIntArray(arr as integer[])
+                end sub
+
+                sub takesStrArray(arr as string[])
+                end sub
+
+                sub test()
+                    takesIntArray(invalid)
+                    takesStrArray(invalid)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('cannotFindName', () => {
@@ -2341,6 +2390,31 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
+        });
+
+        describe('inline interfaces', () => {
+            it('finds members of inline interface', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    sub takesInline(datum as {name as string})
+                        print datum.name.split(",")
+                    end sub
+
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates using invalid member name', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    sub takesInline(datum as {name as string})
+                        print datum.notThere.split(",")
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindName('notThere', '{name as string}.notThere', '{name as string}')
+                ]);
+            });
         });
     });
 
@@ -2892,6 +2966,121 @@ describe('ScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('allows returning a function call', () => {
+            const spy = sinon.spy(Logger.prototype, 'error');
+            program.setFile<BrsFile>('source/main.bs', `
+                function abc(func as function) as dynamic
+                    return func()
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(
+                spy.getCalls().map(x => (x.args?.[0] as string)?.toString()).filter(x => x?.includes('Error when calling plugin'))
+            ).to.eql([]);
+        });
+
+        it('allows returning a roFunction call', () => {
+            const spy = sinon.spy(Logger.prototype, 'error');
+            program.setFile<BrsFile>('source/main.bs', `
+                function abc(func as roFunction) as dynamic
+                    return func()
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(
+                spy.getCalls().map(x => (x.args?.[0] as string)?.toString()).filter(x => x?.includes('Error when calling plugin'))
+            ).to.eql([]);
+        });
+
+        it('allows returning a call on an object type', () => {
+            const spy = sinon.spy(Logger.prototype, 'error');
+            program.setFile<BrsFile>('source/main.bs', `
+                function abc(func as object) as dynamic
+                    return func()
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(
+                spy.getCalls().map(x => (x.args?.[0] as string)?.toString()).filter(x => x?.includes('Error when calling plugin'))
+            ).to.eql([]);
+        });
+
+        it('allows calling func returned from other func', () => {
+            const spy = sinon.spy(Logger.prototype, 'error');
+            program.setFile<BrsFile>('source/calc.bs', `
+                sub otherFuncFirst()
+                  ' forces getOperation to be referenceType called from ReferenceType
+                end sub
+
+                function calc(a as dynamic, b as dynamic, op as string) as dynamic
+                    op = getOperation(op)
+                    return op(1, 2)
+                end function
+
+                function getOperation(name as string) as object
+                    return {
+                        "sum": function(a as dynamic, b as dynamic) as dynamic
+                            return a + b
+                        end function
+                    }[name]
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(
+                spy.getCalls().map(x => (x.args?.[0] as string)?.toString()).filter(x => x?.includes('Error when calling plugin'))
+            ).to.eql([]);
+        });
+
+        describe('inline interfaces', () => {
+            it('allows returning an Associative Array that meets the interface', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    function takesInline() as  {id as string}
+                        return { id: "test" }
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows returning a Node that meets the interface', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    function takesInline() as  {id as string}
+                        return createObject("roSGNode", "Poster")
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates returning an AA that does not meet the interface', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    function takesInline() as {id as integer}
+                        return {id: "hello"}
+                    end function
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.returnTypeMismatch('roAssociativeArray', '{id as integer}', {
+                        fieldMismatches: [{ name: 'id', expectedType: IntegerType.instance, actualType: StringType.instance }]
+                    }).message
+                ]);
+            });
+        });
+        it('allows returning invalid instead of typed array', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                function getNumbers() as integer[]
+                    return invalid
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
     });
 
     describe('returnTypeCoercionMismatch', () => {
@@ -3358,6 +3547,50 @@ describe('ScopeValidator', () => {
                 expectDiagnostics(program, [
                     DiagnosticMessages.assignmentTypeMismatch('Array<string>', 'Array<roAssociativeArray>', typeCompatData).message
                 ]);
+            });
+        });
+
+        describe('inline interfaces', () => {
+            it('allows assigning an Associative Array that meets the interface', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    interface Iface
+                        inlineMember as {name as string}
+                    end interface
+
+                    sub takesInline(someIface as Iface}
+                        someIface.inlineMember = {name: "test"}
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates assigning an AA that does not meet the interface', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    interface Iface
+                        inlineMember as {name as string}
+                    end interface
+
+                    sub takesInline(someIface as Iface}
+                        someIface.inlineMember = {name: 123}
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('roAssociativeArray', '{name as string}', {
+                        fieldMismatches: [{ name: 'name', expectedType: StringType.instance, actualType: IntegerType.instance }]
+                    }).message
+                ]);
+            });
+            it('allows assigning invalid to typed arrays', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                sub test()
+                    intArray as integer[] = invalid
+                    strArray as string[] = invalid
+                end sub
+            `);
+                program.validate();
+                expectZeroDiagnostics(program);
             });
         });
     });
@@ -3953,6 +4186,26 @@ describe('ScopeValidator', () => {
             ]);
         });
 
+    });
+
+    describe('circularReferenceDetected', () => {
+        it('finds circular references in consts', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                const A = B ' this is circular-reference
+                const B = C ' this is circular-reference
+                const C = A ' this is circular-reference
+                sub main()
+                    print A ' this is circular-reference
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.circularReferenceDetected(['B', 'C', 'B']).message,
+                DiagnosticMessages.circularReferenceDetected(['B', 'C', 'B']).message,
+                DiagnosticMessages.circularReferenceDetected(['B', 'C', 'B']).message,
+                DiagnosticMessages.circularReferenceDetected(['C', 'B', 'C']).message
+            ]);
+        });
     });
 
     describe('revalidation', () => {
@@ -4617,6 +4870,16 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.notCallable('12345').message,
                 DiagnosticMessages.notCallable('"string"').message
             ]);
+        });
+
+        it('allows calling an object type', () => {
+            program.setFile<BrsFile>('source/calc.bs', `
+                function someFunc(otherFunc as object) as dynamic
+                    return otherFunc()
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
         });
     });
 

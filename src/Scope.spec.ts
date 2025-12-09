@@ -30,6 +30,7 @@ import type { BinaryExpression, CallExpression, DottedGetExpression, FunctionExp
 import { ObjectType } from './types';
 import undent from 'undent';
 import * as fsExtra from 'fs-extra';
+import { InlineInterfaceType } from './types/InlineInterfaceType';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -2222,6 +2223,65 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
             });
 
+            it('allows interfaces to extend components', () => {
+                program.setFile('components/MyNode.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="MyNode" extends="Group">
+                        <script uri="MyNode.bs"/>
+                        <interface>
+                            <field id="myProp" type="integer" />
+                        </interface>
+                    </component>
+                `);
+
+                program.setFile(s`components/MyNode.bs`, `
+                `);
+
+                program.setFile(`source/main.bs`, `
+                    interface MyIFace extends roSGNodeMyNode
+                    end interface
+
+                    sub foo(iface as MyIFace)
+                        value = iface.myProp
+                        print value
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows interfaces to have callfunc members from parent components', () => {
+                program.setFile('components/MyNode.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="MyNode" extends="Group">
+                        <script uri="MyNode.bs"/>
+                        <interface>
+                            <field id="myProp" type="integer" />
+                            <function name="someCallfunc" />
+                        </interface>
+                    </component>
+                `);
+
+                program.setFile(s`components/MyNode.bs`, `
+                    function someCallfunc() as integer
+                        return m.top.myProp
+                    end function
+                `);
+
+                program.setFile(`source/main.bs`, `
+                    interface MyIFace extends roSGNodeMyNode
+                    end interface
+
+
+                    sub foo(iface as MyIFace)
+                        value = iface@.someCallfunc()
+                        print value
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
         });
 
 
@@ -3717,6 +3777,46 @@ describe('Scope', () => {
                 expect(thingType.name).to.eq('WidgetInternal');
                 sourceScope.unlinkSymbolTable();
             });
+
+            it('should correctly get return value of interfaces with callfunc members', () => {
+                program.setFile('components/MyNode.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="MyNode" extends="Group">
+                        <script uri="MyNode.bs"/>
+                        <interface>
+                            <field id="myProp" type="integer" />
+                            <function name="someCallfunc" />
+                        </interface>
+                    </component>
+                `);
+
+                program.setFile(s`components/MyNode.bs`, `
+                    function someCallfunc() as integer
+                        return m.top.myProp
+                    end function
+                `);
+
+                let utilFile = program.setFile<BrsFile>(`source/util.bs`, `
+                    interface MyIFace extends roSGNodeMyNode
+                    end interface
+
+                    sub foo(iface as MyIFace)
+                        value = iface@.someCallfunc()
+                        print value
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const processFnScope = utilFile.getFunctionScopeAtPosition(util.createPosition(5, 31));
+                const symbolTable = processFnScope.symbolTable;
+                const opts = { flags: SymbolTypeFlag.runtime };
+                const sourceScope = program.getScopeByName('source');
+                sourceScope.linkSymbolTable();
+                const thingType = symbolTable.getSymbolType('value', opts) as IntegerType;
+
+                expectTypeToBe(thingType, IntegerType);
+                sourceScope.unlinkSymbolTable();
+            });
         });
 
 
@@ -3937,6 +4037,85 @@ describe('Scope', () => {
             // method1 - uses untypecast 'm'
             expectTypeToBe(assigns[1].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }), AssociativeArrayType);
             expectTypeToBe(assigns[1].getSymbolTable().getSymbolType('x', { flags: SymbolTypeFlag.runtime }), DynamicType);
+        });
+
+
+        describe('inline interfaces', () => {
+            it('understands type of inline interface member', () => {
+                const file = program.setFile<BrsFile>('source/test.bs', `
+                    sub testFunc(input as {x as string})
+                        value = input.x
+                        print value
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const funcExprBody = file.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const table = funcExprBody.getSymbolTable();
+                const valueSymbol = table.getSymbol('value', SymbolTypeFlag.runtime)[0];
+                expectTypeToBe(valueSymbol.type, StringType);
+            });
+
+            it('understands type of inline interface member with complex type with external source', () => {
+                const file = program.setFile<BrsFile>('source/test.bs', `
+                    import "test2.bs"
+
+                    sub testFunc(input as {x as OtherIface})
+                        value = input.x.data.name
+                        print value
+                    end sub
+                `);
+                program.setFile<BrsFile>('source/test2.bs', `
+                    interface OtherIface
+                        data as {name as string}
+                    end interface
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const funcExprBody = file.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const table = funcExprBody.getSymbolTable();
+                const valueSymbol = table.getSymbol('value', SymbolTypeFlag.runtime)[0];
+                expectTypeToBe(valueSymbol.type, StringType);
+            });
+
+            it('understands type of inline interface member from typecast', () => {
+                const file = program.setFile<BrsFile>('source/test.bs', `
+                    import "test2.bs"
+
+                    sub testFunc(input)
+                        input2 as {x as OtherIface} = input
+                        value = input2.x.data.name
+                        print value
+                    end sub
+                `);
+                program.setFile<BrsFile>('source/test2.bs', `
+                    interface OtherIface
+                        data as {name as string}
+                    end interface
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const funcExprBody = file.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const table = funcExprBody.getSymbolTable();
+                const valueSymbol = table.getSymbol('value', SymbolTypeFlag.runtime)[0];
+                expectTypeToBe(valueSymbol.type, StringType);
+            });
+
+            it('understands type of inline interface member with string literal name', () => {
+                const file = program.setFile<BrsFile>('source/test.bs', `
+                    sub testFunc(input as {"my string literal" as string})
+                        print input
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const funcExprBody = file.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const table = funcExprBody.getSymbolTable();
+                const inputSymbol = table.getSymbol('input', SymbolTypeFlag.runtime)[0];
+                expectTypeToBe(inputSymbol.type, InlineInterfaceType);
+                const memberType = inputSymbol.type.getMemberType('my string literal', { flags: SymbolTypeFlag.runtime });
+                expectTypeToBe(memberType, StringType);
+            });
         });
     });
 
@@ -4519,6 +4698,89 @@ describe('Scope', () => {
                 expect(file1.requiredSymbols.length).to.eq(2);
                 const validationSegments = file1.validationSegmenter.getSegmentsWithChangedSymbols(file1.providedSymbols.changes);
                 expect(validationSegments).to.not.undefined;
+            });
+        });
+
+        describe('xmlFiles', () => {
+
+            it('does not rebuild component if import file has no substantive changes', () => {
+                program.setFile<BrsFile>('source/util.bs', `
+                    function test1() as integer
+                        return 1
+                    end function
+
+
+                    function test2() as boolean
+                        return true
+                    end function
+                `);
+                program.setFile<BrsFile>('source/file2.bs', ``);
+                //let widgetXml =
+                program.setFile<BrsFile>('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script uri="pkg:/source/util.bs"/>
+                        <interface>
+                            <function name="test1" />
+                            <function name="test2" />
+                        </interface>
+                    </component>
+                `);
+                program.validate();
+
+
+                program.setFile<BrsFile>('source/util.bs', `
+                     function test1() as integer
+                        return 1
+                    end function
+
+
+                    function test2() as boolean
+                        return false ' changed value, but not type!
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                expect(program.lastValidationInfo.componentsRebuilt).to.be.empty;
+            });
+
+            it('rebuilds component if import file has substantive changes', () => {
+                program.setFile<BrsFile>('source/util.bs', `
+                    function test1() as integer
+                        return 1
+                    end function
+
+                    function test2() as boolean
+                        return true
+                    end function
+                `);
+                program.setFile<BrsFile>('source/file2.bs', ``);
+                //let widgetXml =
+                program.setFile<BrsFile>('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script uri="pkg:/source/util.bs"/>
+                        <interface>
+                            <function name="test1" />
+                            <function name="test2" />
+                        </interface>
+                    </component>
+                `);
+                program.validate();
+
+
+                program.setFile<BrsFile>('source/util.bs', `
+                     function test1() as integer
+                        return 1
+                    end function
+
+                    function test2() as integer ' changed type
+                        return 2
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                expect(program.lastValidationInfo.componentsRebuilt.has('widget')).to.be.true;
             });
         });
 

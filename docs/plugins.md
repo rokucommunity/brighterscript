@@ -363,11 +363,11 @@ export interface CompilerPlugin {
 
 
     /**
-     * Called right before the program builds (i.e. generates the code and puts it in the stagingDir
+     * Called right before the program builds (i.e. generates the code and puts it in the outDir
      */
     beforeBuildProgram?(event: BeforeBuildProgramEvent): any;
     /**
-     * Called right after the program builds (i.e. generates the code and puts it in the stagingDir
+     * Called right after the program builds (i.e. generates the code and puts it in the outDir
      */
     afterBuildProgram?(event: AfterBuildProgramEvent): any;
 

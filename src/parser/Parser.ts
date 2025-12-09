@@ -93,7 +93,9 @@ import {
     UnaryExpression,
     VariableExpression,
     XmlAttributeGetExpression,
-    PrintSeparatorExpression
+    PrintSeparatorExpression,
+    InlineInterfaceExpression,
+    InlineInterfaceMemberExpression
 } from './Expression';
 import type { Range } from 'vscode-languageserver';
 import type { Logger } from '../logging';
@@ -409,7 +411,7 @@ export class Parser {
                 }
                 //consume the statement separator
                 this.consumeStatementSeparators();
-            } else if (this.peek().kind !== TokenKind.Identifier && !this.checkAny(...DeclarableTypes, ...AllowedTypeIdentifiers)) {
+            } else if (!this.checkAny(TokenKind.Identifier, TokenKind.LeftCurlyBrace, ...DeclarableTypes, ...AllowedTypeIdentifiers)) {
                 if (!ignoreDiagnostics) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.expectedIdentifier(asToken.text),
@@ -953,6 +955,14 @@ export class Parser {
         let name = this.advance() as Identifier;
         // force the name into an identifier so the AST makes some sense
         name.kind = TokenKind.Identifier;
+
+        //add diagnostic if name is a reserved word that cannot be used as an identifier
+        if (DisallowedLocalIdentifiersText.has(name.text.toLowerCase())) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.cannotUseReservedWordAsIdentifier(name.text),
+                location: name.location
+            });
+        }
 
         let typeExpression: TypeExpression;
         let defaultValue;
@@ -3015,7 +3025,7 @@ export class Parser {
      * @returns an expression that was successfully parsed
      */
     private getTypeExpressionPart(changedTokens: { token: Token; oldKind: TokenKind }[]) {
-        let expr: VariableExpression | DottedGetExpression | TypedArrayExpression;
+        let expr: VariableExpression | DottedGetExpression | TypedArrayExpression | InlineInterfaceExpression;
 
         if (this.checkAny(...DeclarableTypes)) {
             // if this is just a type, just use directly
@@ -3027,13 +3037,17 @@ export class Parser {
                 return expr;
             }
 
-            if (this.checkAny(...AllowedTypeIdentifiers)) {
-                // Since the next token is allowed as a type identifier, change the kind
-                let nextToken = this.peek();
-                changedTokens.push({ token: nextToken, oldKind: nextToken.kind });
-                nextToken.kind = TokenKind.Identifier;
+            if (this.match(TokenKind.LeftCurlyBrace)) {
+                expr = this.inlineInterface();
+            } else {
+                if (this.checkAny(...AllowedTypeIdentifiers)) {
+                    // Since the next token is allowed as a type identifier, change the kind
+                    let nextToken = this.peek();
+                    changedTokens.push({ token: nextToken, oldKind: nextToken.kind });
+                    nextToken.kind = TokenKind.Identifier;
+                }
+                expr = this.identifyingExpression(AllowedTypeIdentifiers);
             }
-            expr = this.identifyingExpression(AllowedTypeIdentifiers);
         }
 
         //Check if it has square brackets, thus making it an array
@@ -3057,6 +3071,85 @@ export class Parser {
         }
 
         return expr;
+    }
+
+
+    private inlineInterface() {
+        let expr: InlineInterfaceExpression;
+        const openToken = this.previous();
+        const members: InlineInterfaceMemberExpression[] = [];
+        while (this.match(TokenKind.Newline)) { }
+        while (this.checkAny(TokenKind.Identifier, ...AllowedProperties, TokenKind.StringLiteral, TokenKind.Optional)) {
+            const member = this.inlineInterfaceMember();
+            members.push(member);
+            while (this.matchAny(TokenKind.Comma, TokenKind.Newline)) { }
+        }
+        if (!this.check(TokenKind.RightCurlyBrace)) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.expectedParameterNameButFound(this.peek().text),
+                location: this.peek().location
+            });
+            throw this.lastDiagnosticAsError();
+        }
+        const closeToken = this.advance();
+
+        expr = new InlineInterfaceExpression({ open: openToken, members: members, close: closeToken });
+        return expr;
+    }
+
+    private inlineInterfaceMember(): InlineInterfaceMemberExpression {
+        let optionalKeyword = this.consumeTokenIf(TokenKind.Optional);
+
+        if (this.checkAny(TokenKind.Identifier, ...AllowedProperties, TokenKind.StringLiteral)) {
+            if (this.check(TokenKind.As)) {
+                if (this.checkAnyNext(TokenKind.Comment, TokenKind.Newline)) {
+                    // as <EOL>
+                    // `as` is the field name
+                } else if (this.checkNext(TokenKind.As)) {
+                    //  as as ____
+                    // first `as` is the field name
+                } else if (optionalKeyword) {
+                    // optional as ____
+                    // optional is the field name, `as` starts type
+                    // rewind current token
+                    optionalKeyword = null;
+                    this.current--;
+                }
+            }
+        } else {
+            // no name after `optional` ... optional is the name
+            // rewind current token
+            optionalKeyword = null;
+            this.current--;
+        }
+
+        if (!this.checkAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers, TokenKind.StringLiteral)) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.expectedIdentifier(this.peek().text),
+                location: this.peek().location
+            });
+            throw this.lastDiagnosticAsError();
+        }
+        let name: Token;
+        if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
+            name = this.identifier(...AllowedProperties);
+        } else {
+            name = this.advance();
+        }
+
+        let typeExpression: TypeExpression;
+
+        let asToken: Token = null;
+        if (this.check(TokenKind.As)) {
+            [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
+
+        }
+        return new InlineInterfaceMemberExpression({
+            name: name,
+            as: asToken,
+            typeExpression: typeExpression,
+            optional: optionalKeyword
+        });
     }
 
     private primary(): Expression {

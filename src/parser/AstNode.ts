@@ -31,6 +31,13 @@ export abstract class AstNode {
     public bsConsts?: Map<string, boolean>;
 
     /**
+     * Get the typedef for this node. (defaults to transpiling the node, should be overridden by subclasses if there's a more specific typedef requirement)
+     */
+    public getTypedef(state: BrsTranspileState) {
+        return this.transpile(state);
+    }
+
+    /**
      * When being considered by the walk visitor, this describes what type of element the current class is.
      */
     public visitMode = InternalWalkMode.visitStatements;
@@ -346,5 +353,7 @@ export enum AstNodeKind {
     ConditionalCompileConstStatement = 'ConditionalCompileConstStatement',
     ConditionalCompileErrorStatement = 'ConditionalCompileErrorStatement',
     AugmentedAssignmentStatement = 'AugmentedAssignmentStatement',
-    PrintSeparatorExpression = 'PrintSeparatorExpression'
+    PrintSeparatorExpression = 'PrintSeparatorExpression',
+    InlineInterfaceExpression = 'InlineInterfaceExpression',
+    InlineInterfaceMemberExpression = 'InlineInterfaceMemberExpression'
 }

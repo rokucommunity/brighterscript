@@ -12,7 +12,7 @@ import { BrsFile } from './files/BrsFile';
 import { expectZeroDiagnostics } from './testHelpers.spec';
 import type { BsConfig } from './BsConfig';
 import type { BscFile } from './files/BscFile';
-import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
+import { tempDir, rootDir, outDir } from './testHelpers.spec';
 import { Deferred } from './deferred';
 import type { AfterProvideProgramEvent, BsDiagnostic } from './interfaces';
 
@@ -51,11 +51,10 @@ describe('ProgramBuilder', () => {
         fsExtra.outputFileSync(`${rootDir}/manifest`, '');
         await builder.run({
             ...builder.options,
-            stagingDir: stagingDir,
-            retainStagingDir: true,
+            outDir: outDir,
             files: ['**/*']
         });
-        const newData = fsExtra.readFileSync(s`${stagingDir}/assets/image.png`);
+        const newData = fsExtra.readFileSync(s`${outDir}/assets/image.png`);
         expect(
             data.compare(newData as any)
         ).to.eql(0);
@@ -192,17 +191,16 @@ describe('ProgramBuilder', () => {
 
             await builder.run({
                 ...builder.options,
-                stagingDir: stagingDir,
-                retainStagingDir: true,
+                outDir: outDir,
                 files: [
                     '**/*'
                 ]
             });
 
-            expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs`)).to.be.true;
-            expect(fsExtra.pathExistsSync(s`${stagingDir}/manifest`)).to.be.true;
-            expect(fsExtra.pathExistsSync(s`${stagingDir}/assets/images/logo.png`)).to.be.true;
-            expect(fsExtra.pathExistsSync(s`${stagingDir}/locale/en_US/translations.xml`)).to.be.true;
+            expect(fsExtra.pathExistsSync(s`${outDir}/source/main.brs`)).to.be.true;
+            expect(fsExtra.pathExistsSync(s`${outDir}/manifest`)).to.be.true;
+            expect(fsExtra.pathExistsSync(s`${outDir}/assets/images/logo.png`)).to.be.true;
+            expect(fsExtra.pathExistsSync(s`${outDir}/locale/en_US/translations.xml`)).to.be.true;
         });
 
         it('uses default options when the config file fails to parse', async () => {
@@ -212,10 +210,10 @@ describe('ProgramBuilder', () => {
             fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, '{');
             await builder.run({
                 project: s`${rootDir}/bsconfig.json`,
-                username: 'john'
+                outDir: 'testOut'
             });
             // TODO: this is not run - builder.run throws a diagnostic
-            expect(builder.program.options.username).to.equal('rokudev');
+            expect(builder.program.options.outDir).to.equal('./out');
         });
 
         //this fails on the windows travis build for some reason. skipping for now since it's not critical
@@ -236,9 +234,7 @@ describe('ProgramBuilder', () => {
 
             await builder.run({
                 rootDir: s`${rootDir}/testProject`,
-                createPackage: false,
-                deploy: false,
-                copyToStaging: false,
+                noEmit: true,
                 //both files should want to be the `source/lib.brs` file...but only the last one should win
                 files: [{
                     src: s`${rootDir}/testProject/source/lib1.brs`,
@@ -261,9 +257,7 @@ describe('ProgramBuilder', () => {
 
             await builder.run({
                 rootDir: rootDir,
-                createPackage: false,
-                deploy: false,
-                copyToStaging: false,
+                noEmit: true,
                 //both files should want to be the `source/lib.brs` file...but only the last one should win
                 files: ['source/**/*']
             });
@@ -281,9 +275,7 @@ describe('ProgramBuilder', () => {
 
             await builder.run({
                 rootDir: rootDir,
-                createPackage: false,
-                deploy: false,
-                copyToStaging: false,
+                noEmit: true,
                 validate: false,
                 //both files should want to be the `source/lib.brs` file...but only the last one should win
                 files: ['source/**/*']
@@ -309,13 +301,11 @@ describe('ProgramBuilder', () => {
             builder1.run({
                 logLevel: LogLevel.info,
                 rootDir: rootDir,
-                stagingDir: stagingDir,
                 watch: false
             }),
             builder2.run({
                 logLevel: LogLevel.error,
                 rootDir: rootDir,
-                stagingDir: stagingDir,
                 watch: false
             })
         ]);
@@ -325,15 +315,14 @@ describe('ProgramBuilder', () => {
         expect(builder2.logger.logLevel).to.equal(LogLevel.error);
     });
 
-    it('does not error when loading stagingDir from bsconfig.json', async () => {
+    it('does not error when loading outDir from bsconfig.json', async () => {
         fsExtra.ensureDirSync(rootDir);
         fsExtra.writeFileSync(`${rootDir}/bsconfig.json`, `{
-            "stagingDir": "./out"
+            "outDir": "./out"
         }`);
         let builder = new ProgramBuilder();
         await builder.run({
-            cwd: rootDir,
-            createPackage: false
+            cwd: rootDir
         });
     });
 
@@ -345,9 +334,7 @@ describe('ProgramBuilder', () => {
             beforeValidateProgram: beforeValidateProgram,
             afterValidateProgram: afterValidateProgram
         });
-        await builder.run({
-            createPackage: false
-        });
+        await builder.run({});
         expect(beforeValidateProgram.callCount).to.equal(1);
         expect(afterValidateProgram.callCount).to.equal(1);
     });
@@ -473,8 +460,7 @@ describe('ProgramBuilder', () => {
 
             builder = new ProgramBuilder();
             await builder.run({
-                cwd: workingDir,
-                createPackage: false
+                cwd: workingDir
             });
             expect(
                 fsExtra.pathExistsSync(relativeOutputPath)

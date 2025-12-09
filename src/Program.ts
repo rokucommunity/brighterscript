@@ -50,14 +50,17 @@ import { CrossScopeValidator } from './CrossScopeValidator';
 import { DiagnosticManager } from './DiagnosticManager';
 import { ProgramValidatorDiagnosticsTag } from './bscPlugin/validation/ProgramValidator';
 import type { ProvidedSymbolInfo, BrsFile } from './files/BrsFile';
-import type { XmlFile } from './files/XmlFile';
+import type { UnresolvedXMLSymbol, XmlFile } from './files/XmlFile';
 import { SymbolTable } from './SymbolTable';
-import { ReferenceType, TypesCreated } from './types';
+import type { BscType } from './types/BscType';
+import { ReferenceType } from './types/ReferenceType';
+import { TypesCreated } from './types/helpers';
 import type { Statement } from './parser/AstNode';
 import { CallExpressionInfo } from './bscPlugin/CallExpressionInfo';
 import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
 import { Sequencer } from './common/Sequencer';
 import { Deferred } from './deferred';
+import { roFunctionType } from './types/roFunctionType';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
@@ -216,20 +219,28 @@ export class Program {
         }
 
         for (const ifaceData of Object.values(interfaces) as BRSInterfaceData[]) {
-            const nodeType = new InterfaceType(ifaceData.name);
-            nodeType.addBuiltInInterfaces();
-            nodeType.isBuiltIn = true;
-            this.globalScope.symbolTable.addSymbol(ifaceData.name, { ...builtInSymbolData, description: ifaceData.description }, nodeType, SymbolTypeFlag.typetime);
+            const ifaceType = new InterfaceType(ifaceData.name);
+            ifaceType.addBuiltInInterfaces();
+            ifaceType.isBuiltIn = true;
+            this.globalScope.symbolTable.addSymbol(ifaceData.name, { ...builtInSymbolData, description: ifaceData.description }, ifaceType, SymbolTypeFlag.typetime);
         }
 
         for (const componentData of Object.values(components) as BRSComponentData[]) {
-            const nodeType = new InterfaceType(componentData.name);
-            nodeType.addBuiltInInterfaces();
-            nodeType.isBuiltIn = true;
-            if (componentData.name !== 'roSGNode') {
+            let roComponentType: BscType;
+            const lowerComponentName = componentData.name.toLowerCase();
+
+            if (lowerComponentName === 'rosgnode') {
                 // we will add `roSGNode` as shorthand for `roSGNodeNode`, since all roSgNode components are SceneGraph nodes
-                this.globalScope.symbolTable.addSymbol(componentData.name, { ...builtInSymbolData, description: componentData.description }, nodeType, SymbolTypeFlag.typetime);
+                continue;
             }
+            if (lowerComponentName === 'rofunction') {
+                roComponentType = new roFunctionType();
+            } else {
+                roComponentType = new InterfaceType(componentData.name);
+            }
+            roComponentType.addBuiltInInterfaces();
+            roComponentType.isBuiltIn = true;
+            this.globalScope.symbolTable.addSymbol(componentData.name, { ...builtInSymbolData, description: componentData.description }, roComponentType, SymbolTypeFlag.typetime);
         }
 
         for (const nodeData of Object.values(nodes) as SGNodeData[]) {
@@ -237,10 +248,10 @@ export class Program {
         }
 
         for (const eventData of Object.values(events) as BRSEventData[]) {
-            const nodeType = new InterfaceType(eventData.name);
-            nodeType.addBuiltInInterfaces();
-            nodeType.isBuiltIn = true;
-            this.globalScope.symbolTable.addSymbol(eventData.name, { ...builtInSymbolData, description: eventData.description }, nodeType, SymbolTypeFlag.typetime);
+            const eventType = new InterfaceType(eventData.name);
+            eventType.addBuiltInInterfaces();
+            eventType.isBuiltIn = true;
+            this.globalScope.symbolTable.addSymbol(eventData.name, { ...builtInSymbolData, description: eventData.description }, eventType, SymbolTypeFlag.typetime);
         }
 
     }
@@ -952,6 +963,18 @@ export class Program {
             filesToBeValidatedInScopeContext: new Set<BscFile>()
         };
 
+    public lastValidationInfo: {
+        brsFilesSrcPath: Set<string>;
+        xmlFilesSrcPath: Set<string>;
+        scopeNames: Set<string>;
+        componentsRebuilt: Set<string>;
+    } = {
+            brsFilesSrcPath: new Set<string>(),
+            xmlFilesSrcPath: new Set<string>(),
+            scopeNames: new Set<string>(),
+            componentsRebuilt: new Set<string>()
+        };
+
     /**
      * Counter used to track which validation run is being logged
      */
@@ -1028,30 +1051,13 @@ export class Program {
                     program: this
                 });
             })
-            //handle some component symbol stuff
-            .forEach('addDeferredComponentTypeSymbolCreation',
-                () => {
-                    filesToProcess = Object.values(this.files).sort(firstBy(x => x.srcPath)).filter(x => !x.isValidated);
-                    for (const file of filesToProcess) {
-                        filesToBeValidatedInScopeContext.add(file);
-                    }
-
-                    //return the list of files that need to be processed
-                    return filesToProcess;
-                }, (file) => {
-                    // cast a wide net for potential changes in components
-                    if (isXmlFile(file)) {
-                        this.addDeferredComponentTypeSymbolCreation(file);
-                    } else if (isBrsFile(file)) {
-                        for (const scope of this.getScopesForFile(file)) {
-                            if (isXmlScope(scope)) {
-                                this.addDeferredComponentTypeSymbolCreation(scope.xmlFile);
-                            }
-                        }
-                    }
+            .once('get files to be validated', () => {
+                filesToProcess = Object.values(this.files).sort(firstBy(x => x.srcPath)).filter(x => !x.isValidated);
+                for (const file of filesToProcess) {
+                    filesToBeValidatedInScopeContext.add(file);
                 }
-            )
-            .once('addComponentReferenceTypes', () => {
+            })
+            .once('add component reference types', () => {
                 // Create reference component types for any component that changes
                 for (let [componentKey, componentName] of this.componentSymbolsToUpdate.entries()) {
                     this.addComponentReferenceType(componentKey, componentName);
@@ -1084,9 +1090,26 @@ export class Program {
                     file: file
                 });
             })
-            .once('Build component types for any component that changes', () => {
+            .forEach('do deferred component creation', () => [...brsFilesValidated, ...xmlFilesValidated], (file) => {
+                if (isXmlFile(file)) {
+                    this.addDeferredComponentTypeSymbolCreation(file);
+                } else if (isBrsFile(file)) {
+                    const fileHasChanges = file.providedSymbols.changes.get(SymbolTypeFlag.runtime).size > 0 || file.providedSymbols.changes.get(SymbolTypeFlag.typetime).size > 0;
+                    if (fileHasChanges) {
+                        for (const scope of this.getScopesForFile(file)) {
+                            if (isXmlScope(scope) && this.doesXmlFileRequireProvidedSymbols(scope.xmlFile, file.providedSymbols.changes)) {
+                                this.addDeferredComponentTypeSymbolCreation(scope.xmlFile);
+                            }
+                        }
+                    }
+                }
+            })
+            .once('build component types for any component that changes', () => {
                 this.logger.time(LogLevel.info, ['Build component types'], () => {
+                    this.logger.debug(`Component Symbols to update:`, [...this.componentSymbolsToUpdate.entries()].sort());
+                    this.lastValidationInfo.componentsRebuilt = new Set<string>();
                     for (let [componentKey, componentName] of this.componentSymbolsToUpdate.entries()) {
+                        this.lastValidationInfo.componentsRebuilt.add(componentName?.toLowerCase());
                         if (this.updateComponentSymbolInGlobalScope(componentKey, componentName)) {
                             changedComponentTypes.push(util.getSgNodeTypeName(componentName).toLowerCase());
                         }
@@ -1163,21 +1186,28 @@ export class Program {
 
                 changedSymbols.set(SymbolTypeFlag.typetime, new Set([...changedSymbols.get(SymbolTypeFlag.typetime), ...changedTypeSymbols, ...dependentTypesChanged]));
 
+                this.lastValidationInfo.brsFilesSrcPath = new Set<string>(this.validationDetails.brsFilesValidated.map(f => f.srcPath?.toLowerCase() ?? ''));
+                this.lastValidationInfo.xmlFilesSrcPath = new Set<string>(this.validationDetails.xmlFilesValidated.map(f => f.srcPath?.toLowerCase() ?? ''));
+
                 // can reset filesValidatedList, because they are no longer needed
                 this.validationDetails.brsFilesValidated = [];
                 this.validationDetails.xmlFilesValidated = [];
             })
-            .once('tracks changed symbols and prepares files and scopes for validation.', () => {
+            .once('tracks changed symbols and prepares files and scopes for validation', () => {
                 if (this.options.logLevel === LogLevel.debug) {
                     const changedRuntime = Array.from(changedSymbols.get(SymbolTypeFlag.runtime)).sort();
                     this.logger.debug('Changed Symbols (runTime):', changedRuntime.join(', '));
                     const changedTypetime = Array.from(changedSymbols.get(SymbolTypeFlag.typetime)).sort();
                     this.logger.debug('Changed Symbols (typeTime):', changedTypetime.join(', '));
                 }
+                const didComponentChange = changedComponentTypes.length > 0;
+                const didProvidedSymbolChange = changedSymbols.get(SymbolTypeFlag.runtime).size > 0 || changedSymbols.get(SymbolTypeFlag.typetime).size > 0;
+                const scopesToCheck = this.getScopesForCrossScopeValidation(didComponentChange, didProvidedSymbolChange);
 
-                const scopesToCheck = this.getScopesForCrossScopeValidation(changedComponentTypes.length > 0);
                 this.crossScopeValidation.buildComponentsMap();
-                this.crossScopeValidation.addDiagnosticsForScopes(scopesToCheck);
+                this.logger.time(LogLevel.info, ['addDiagnosticsForScopes'], () => {
+                    this.crossScopeValidation.addDiagnosticsForScopes(scopesToCheck);
+                });
                 const filesToRevalidate = this.crossScopeValidation.getFilesRequiringChangedSymbol(scopesToCheck, changedSymbols);
                 for (const file of filesToRevalidate) {
                     filesToBeValidatedInScopeContext.add(file);
@@ -1201,20 +1231,23 @@ export class Program {
                     }
                 }
             })
-            .forEach('validate scopes', () => this.getSortedScopeNames(), (scopeName) => {
+            .once('checking scopes to validate', () => {
                 //sort the scope names so we get consistent results
-                let scope = this.scopes[scopeName];
-                if (scope.shouldValidate(this.currentScopeValidationOptions)) {
-                    scopesToValidate.push(scope);
-                    this.plugins.emit('beforeValidateScope', {
-                        program: this,
-                        scope: scope
-                    });
+                for (const scopeName of this.getSortedScopeNames()) {
+                    let scope = this.scopes[scopeName];
+                    if (scope.shouldValidate(this.currentScopeValidationOptions)) {
+                        scopesToValidate.push(scope);
+                    }
                 }
+                this.lastValidationInfo.scopeNames = new Set<string>(scopesToValidate.map(s => s.name?.toLowerCase() ?? ''));
             })
-            .forEach('validate scope', () => this.getSortedScopeNames(), (scopeName) => {
-                //sort the scope names so we get consistent results
-                let scope = this.scopes[scopeName];
+            .forEach('beforeScopeValidate', () => scopesToValidate, (scope) => {
+                this.plugins.emit('beforeValidateScope', {
+                    program: this,
+                    scope: scope
+                });
+            })
+            .forEach('validate scope', () => scopesToValidate, (scope) => {
                 scope.validate(this.currentScopeValidationOptions);
             })
             .forEach('afterValidateScope', () => scopesToValidate, (scope) => {
@@ -1274,23 +1307,32 @@ export class Program {
         }
     }
 
-    protected logValidationMetrics(metrics: Record<string, number | string>) {
-        let logs = [] as string[];
-        for (const key in metrics) {
-            logs.push(`${key}=${chalk.yellow(metrics[key].toString())}`);
-        }
-        this.logger.info(`Validation Metrics: ${logs.join(', ')}`);
-    }
-
-    private getScopesForCrossScopeValidation(someComponentTypeChanged = false) {
-        const scopesForCrossScopeValidation = [];
+    private getScopesForCrossScopeValidation(someComponentTypeChanged: boolean, didProvidedSymbolChange: boolean) {
+        const scopesForCrossScopeValidation: Scope[] = [];
         for (let scopeName of this.getSortedScopeNames()) {
             let scope = this.scopes[scopeName];
-            if (this.globalScope !== scope && (someComponentTypeChanged || !scope.isValidated)) {
+            if (this.globalScope === scope) {
+                continue;
+            }
+            if (someComponentTypeChanged) {
+                scopesForCrossScopeValidation.push(scope);
+            }
+            if (didProvidedSymbolChange && !scope.isValidated) {
                 scopesForCrossScopeValidation.push(scope);
             }
         }
         return scopesForCrossScopeValidation;
+    }
+
+    private doesXmlFileRequireProvidedSymbols(file: XmlFile, providedSymbolsByFlag: Map<SymbolTypeFlag, Set<string>>) {
+        for (const required of file.requiredSymbols) {
+            const symbolNameLower = (required as UnresolvedXMLSymbol).name.toLowerCase();
+            const requiredSymbolIsProvided = providedSymbolsByFlag.get(required.flags).has(symbolNameLower);
+            if (requiredSymbolIsProvided) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -1809,14 +1851,14 @@ export class Program {
     /**
      * Get the absolute output path for a file
      */
-    private getOutputPath(file: { pkgPath?: string }, stagingDir = this.getStagingDir()) {
-        return s`${stagingDir}/${file.pkgPath}`;
+    private getOutputPath(file: { pkgPath?: string }, outDir = this.getOutDir()) {
+        return s`${outDir}/${file.pkgPath}`;
     }
 
-    private getStagingDir(stagingDir?: string) {
-        let result = stagingDir ?? this.options.stagingDir ?? this.options.stagingDir;
+    private getOutDir(outDir?: string) {
+        let result = outDir ?? this.options.outDir ?? this.options.outDir;
         if (!result) {
-            result = rokuDeploy.getOptions(this.options as any).stagingDir;
+            result = rokuDeploy.getOptions(this.options as any).outDir;
         }
         result = s`${path.resolve(this.options.cwd ?? process.cwd(), result ?? '/')}`;
         return result;
@@ -1855,7 +1897,7 @@ export class Program {
         await this.plugins.emitAsync('beforePrepareProgram', programEvent);
         await this.plugins.emitAsync('prepareProgram', programEvent);
 
-        const stagingDir = this.getStagingDir();
+        const outDir = this.getOutDir();
 
         const entries: TranspileObj[] = [];
 
@@ -1873,7 +1915,7 @@ export class Program {
                 file: file,
                 editor: file.editor,
                 scope: scope,
-                outputPath: this.getOutputPath(file, stagingDir)
+                outputPath: this.getOutputPath(file, outDir)
             } as PrepareFileEvent & { outputPath: string };
 
             await this.plugins.emitAsync('beforePrepareFile', event);
@@ -1944,14 +1986,14 @@ export class Program {
     /**
      * Write the entire project to disk
      */
-    private async write(stagingDir: string, files: Map<BscFile, SerializedFile[]>) {
+    private async write(outDir: string, files: Map<BscFile, SerializedFile[]>) {
         const programEvent = await this.plugins.emitAsync('beforeWriteProgram', {
             program: this,
             files: files,
-            stagingDir: stagingDir
+            outDir: outDir
         });
-        //empty the staging directory
-        await fsExtra.emptyDir(stagingDir);
+        //empty the out directory
+        await fsExtra.emptyDir(outDir);
 
         const serializedFiles = [...files]
             .map(([, serializedFiles]) => serializedFiles)
@@ -1963,7 +2005,7 @@ export class Program {
                 const event = await this.plugins.emitAsync('beforeWriteFile', {
                     program: this,
                     file: file,
-                    outputPath: this.getOutputPath(file, stagingDir),
+                    outputPath: this.getOutputPath(file, outDir),
                     processedFiles: new Set<SerializedFile>()
                 });
 
@@ -1985,7 +2027,7 @@ export class Program {
     public async build(options?: ProgramBuildOptions) {
         //run a single build at a time
         await this.buildPipeline.run(async () => {
-            const stagingDir = this.getStagingDir(options?.stagingDir);
+            const outDir = this.getOutDir(options?.outDir);
 
             const event = await this.plugins.emitAsync('beforeBuildProgram', {
                 program: this,
@@ -1999,7 +2041,7 @@ export class Program {
             //stage the entire program
             const serializedFilesByFile = await this.serialize(event.files);
 
-            await this.write(stagingDir, serializedFilesByFile);
+            await this.write(outDir, serializedFilesByFile);
 
             await this.plugins.emitAsync('afterBuildProgram', event);
 
@@ -2214,7 +2256,7 @@ export interface ProgramBuildOptions {
     /**
      * The directory where the final built files should be placed. This directory will be cleared before running
      */
-    stagingDir?: string;
+    outDir?: string;
     /**
      * An array of files to build. If omitted, the entire list of files from the program will be used instead.
      * Typically you will want to leave this blank

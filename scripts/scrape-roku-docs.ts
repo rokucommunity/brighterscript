@@ -31,7 +31,8 @@ const foundTypesTranslation = {
     'object (string array)': 'object',
     'robytearray object': 'roByteArray',
     'rolist of roassociativearray items': 'roList',
-    'roassociative array': 'roAssociativeArray'
+    'roassociative array': 'roAssociativeArray',
+    'uri string': 'uri'
 };
 
 const turndownService = new TurndownService({
@@ -238,7 +239,7 @@ class Runner {
             component.events ??= [];
             component.events.sort(nameComparer);
 
-            component.interfaces.sort(nameComparer);
+            component.interfaces ??= [];
             component.interfaces.sort(nameComparer);
         }
 
@@ -887,6 +888,9 @@ class Runner {
         if (!opts?.allowSpaces) {
             result = result?.split(' ')?.[0];
         }
+        if (foundTypesTranslation[result.toLowerCase()]) {
+            result = foundTypesTranslation[result.toLowerCase()];
+        }
         return result;
     }
 
@@ -1320,7 +1324,7 @@ class Runner {
                 },
                 dialogbase: {
                     name: 'DialogBase',
-                    description: 'The base dialog component....blablabla',
+                    description: 'The base dialog component.',
                     extends: {
                         name: 'Group',
                         url: 'https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md'
@@ -1422,6 +1426,7 @@ class Runner {
             },
             components: {
                 rourltransfer: {
+                    name: 'roUrlTransfer',
                     methods: [{
                         description: 'Sets the roMessagePort to be used to receive events',
                         isDeprecated: true,
@@ -1441,12 +1446,127 @@ class Runner {
                     }]
                 },
                 roregion: {
+                    name: 'roRegion',
                     interfaces: [{
                         name: 'ifDraw2D',
                         url: 'https://developer.roku.com/docs/references/brightscript/interfaces/ifdraw2d.md'
                     }]
+                },
+                routils: {
+                    name: 'roUtils',
+                    methods: [{
+                        name: 'DeepCopy',
+                        description: 'Performs a deep copy of the source node object (it copies the obejct and all of its nested objects). If the source object contains items that are not copyable, they are skipped.',
+                        params: [
+                            {
+                                name: 'data',
+                                default: null,
+                                description: 'The object to be copied',
+                                isRequired: true,
+                                type: 'Object'
+                            }
+                        ],
+                        returnType: 'Object',
+                        returnDescription: 'This function returns a copy of the specified object.'
+                    }, {
+                        name: 'IsSameObject',
+                        description: 'Checks whether two BrightScript objects refer to the same instance and returns a flag indicating the result.',
+                        params: [
+                            {
+                                name: 'data1',
+                                default: null,
+                                description: 'First object',
+                                isRequired: true,
+                                type: 'Object'
+                            },
+                            {
+                                name: 'data2',
+                                default: null,
+                                description: 'Second object',
+                                isRequired: true,
+                                type: 'Object'
+                            }
+                        ],
+                        returnType: 'Boolean',
+                        returnDescription: 'Returns true if data1 and data2 reference the same object; otherwise, this returns false.'
+                    }],
+                    interfaces: []
+                },
+                rorenderthreadqueue: {
+                    name: 'roRenderThreadQueue',
+                    methods: [{
+                        name: 'AddMessageHandler',
+                        description: 'Registers a handler for messages received on the async message channel with the given message ID. The handler is called on the render thread for each message received. You can register multiple handlers for a single ID. In this case, the handlers are called in the order they were registered. This function can only be called on the render thread.',
+                        params: [
+                            {
+                                name: 'message_id',
+                                default: null,
+                                description: 'The ID of the message channel to which this handler should be registered.',
+                                isRequired: true,
+                                type: 'string'
+                            },
+                            {
+                                name: 'handler',
+                                default: null,
+                                description: 'The name of the handler function to be called for each message received.',
+                                isRequired: true,
+                                type: 'string'
+                            }
+                        ],
+                        returnType: 'Object',
+                        returnDescription: 'Returns an object that can be used to unregister the handler, if required, by calling `handle.unregister()`'
+                    }, {
+                        name: 'PostMessage',
+                        description: 'Post a message to the queue. The data is moved and becomes unavailable to the calling thread. The call returns immediately and does not block the calling thread. This function may be called from any thread.',
+                        params: [
+                            {
+                                name: 'message_id',
+                                default: null,
+                                description: 'The ID of the channel to which this message should be posted.',
+                                isRequired: true,
+                                type: 'String'
+                            },
+                            {
+                                name: 'data',
+                                default: null,
+                                description: 'The contents of the message to be passed to any registered handlers. This must be recursively copyable. Non-copyable objects are silently ignored. Copyable objects include:\n - roAssociativeArray\n - roArray\n - integer, long integer\n - string\n - bool\n - float, double\n - invalid\n - roSGNode',
+                                isRequired: true,
+                                type: 'Object'
+                            }
+                        ],
+                        returnType: 'Void',
+                        returnDescription: undefined
+                    }, {
+                        name: 'CopyMessage',
+                        description: 'Copy a message to the queue. The call returns immediately and does not block the calling thread. This function is similar to the `PostMessage()` function, but it copies data instead of moving it.',
+                        params: [
+                            {
+                                name: 'message_id',
+                                default: null,
+                                description: 'The ID of the channel to which this message should be posted.',
+                                isRequired: true,
+                                type: 'String'
+                            },
+                            {
+                                name: 'data',
+                                default: null,
+                                description: 'The contents of the message to be passed to any registered handlers. This must be recursively copyable. Non-copyable objects are silently ignored. Copyable objects include:\n - roAssociativeArray\n - roArray\n - integer, long integer\n - string\n - bool\n - float, double\n - invalid\n - roSGNode',
+                                isRequired: true,
+                                type: 'Object'
+                            }
+                        ],
+                        returnType: 'Void',
+                        returnDescription: undefined
+                    }, {
+                        name: 'NumCopies',
+                        description: 'Returns the total number of objects for the channel that were copied by the PostMessage() function instead of being moved.',
+                        params: [],
+                        returnType: 'Integer',
+                        returnDescription: undefined
+                    }],
+                    interfaces: []
                 }
-            } as Record<string, Partial<BrightScriptComponent>>,
+            } as Record<string, Partial<BrightScriptComponent> & { name: string }>,
             events: {},
             interfaces: {
                 ifsgnodechildren: {

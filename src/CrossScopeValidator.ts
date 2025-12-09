@@ -493,6 +493,25 @@ export class CrossScopeValidator {
         return filesThatNeedRevalidation;
     }
 
+    getScopesRequiringChangedSymbol(scopes: Scope[], changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
+        const scopesThatNeedRevalidation = new Set<Scope>();
+        const filesAlreadyChecked = new Set<BrsFile>();
+
+        for (const scope of scopes) {
+            scope.enumerateBrsFiles((file) => {
+                if (filesAlreadyChecked.has(file) || scopesThatNeedRevalidation.has(scope)) {
+                    return;
+                }
+                filesAlreadyChecked.add(file);
+
+                if (util.hasAnyRequiredSymbolChanged(file.requiredSymbols, changedSymbols)) {
+                    scopesThatNeedRevalidation.add(scope);
+                }
+            });
+        }
+        return scopesThatNeedRevalidation;
+    }
+
     buildComponentsMap() {
         this.componentsMap.clear();
         // Add custom components
@@ -615,7 +634,7 @@ export class CrossScopeValidator {
 
             for (const scope of scopeList) {
                 this.program.diagnostics.register({
-                    ...this.getCannotFindDiagnostic(scope, typeChainResult),
+                    ...this.getCannotFindDiagnostic(scope, symbol, typeChainResult),
                     location: typeChainResult.location
                 }, {
                     scope: scope,
@@ -684,8 +703,17 @@ export class CrossScopeValidator {
         return incompatibleResolutions;
     }
 
-    private getCannotFindDiagnostic(scope: Scope, typeChainResult: TypeChainProcessResult) {
+    private getCannotFindDiagnostic(scope: Scope, unresolvedSymbol: UnresolvedSymbol, typeChainResult: TypeChainProcessResult) {
         const parentDescriptor = this.getParentTypeDescriptor(this.getProvidedTree(scope)?.providedTree, typeChainResult);
+        const symbolType = typeChainResult.astNode?.getType({ flags: unresolvedSymbol.flags });
+        if (isReferenceType(symbolType)) {
+            const circularReferenceInfo = symbolType.getCircularReferenceInfo();
+            if (circularReferenceInfo.isCircularReference) {
+                let diagnosticDetail = util.getCircularReferenceDiagnosticDetail(circularReferenceInfo, typeChainResult.fullNameOfItem);
+                return DiagnosticMessages.circularReferenceDetected(diagnosticDetail);
+            }
+        }
+
         if (isCallExpression(typeChainResult.astNode?.parent) && typeChainResult.astNode?.parent.callee === typeChainResult.astNode) {
             return DiagnosticMessages.cannotFindFunction(typeChainResult.itemName, typeChainResult.fullNameOfItem, typeChainResult.itemParentTypeName, parentDescriptor);
         }

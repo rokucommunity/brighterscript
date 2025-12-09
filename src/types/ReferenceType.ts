@@ -1,4 +1,4 @@
-import type { GetTypeOptions, TypeChainEntry, TypeCompatibilityData } from '../interfaces';
+import type { GetTypeOptions, TypeChainEntry, TypeCircularReferenceInfo, TypeCompatibilityData } from '../interfaces';
 import type { GetSymbolTypeOptions, SymbolTable, SymbolTableProvider, SymbolTypeGetterProvider } from '../SymbolTable';
 import type { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isArrayType, isBinaryOperatorReferenceType, isComponentType, isDynamicType, isParamTypeFromValueReferenceType, isReferenceType, isTypePropertyReferenceType } from '../astUtils/reflection';
@@ -47,6 +47,11 @@ export class ReferenceType extends BscType {
                             resultSoFar = (resultSoFar as any).getTarget?.();
                         }
                         return !!resultSoFar;
+                    };
+                }
+                if (propName === 'getCircularReferenceInfo') {
+                    return (stopAtTypes: ReferenceType[] = []) => {
+                        return this.getCircularReferenceInfo(stopAtTypes);
                     };
                 }
                 if (propName === 'getTarget') {
@@ -245,6 +250,7 @@ export class ReferenceType extends BscType {
             // could not find this member
             return;
         }
+
         if (isAnyReferenceType(resolvedType)) {
             // If this is a referenceType, keep digging down until we have a non reference Type.
             while (resolvedType && isAnyReferenceType(resolvedType)) {
@@ -277,6 +283,30 @@ export class ReferenceType extends BscType {
     makeMemberFullName(memberName: string) {
         return this.fullName + '.' + memberName;
     }
+
+    getCircularReferenceInfo(stopAtTypes: ReferenceType[] = []): TypeCircularReferenceInfo {
+        this.resolve();
+        const isCircRef = this.circRefCount > 1;
+
+        const referenceChainNames: string[] = [];
+        stopAtTypes.push(this);
+        if (isCircRef) {
+            referenceChainNames.push(this.fullName);
+            for (const chainItem of this.referenceChain) {
+                if (!isReferenceType(chainItem) || chainItem === this) {
+                    continue;
+                }
+                if (stopAtTypes.map(t => t.fullName).includes(chainItem.fullName)) {
+                    break;
+                }
+                const chainItemCircInfo = chainItem.getCircularReferenceInfo(stopAtTypes);
+                referenceChainNames.push(...chainItemCircInfo.referenceChainNames);
+            }
+        }
+
+        return { isCircularReference: isCircRef, referenceChainNames: referenceChainNames };
+    }
+
     private circRefCount = 0;
 
     private referenceChain = new Set<BscType>();
@@ -362,6 +392,12 @@ export class TypePropertyReferenceType extends BscType {
                     return outerType;
                 }
 
+                if (propName === 'getTarget') {
+                    return () => {
+                        return this.getTarget();
+                    };
+                }
+
                 if (propName === 'isResolvable') {
                     return () => {
                         return !!(isAnyReferenceType(this.outerType) ? (this.outerType as any).getTarget() : this.outerType?.isResolvable());
@@ -394,7 +430,7 @@ export class TypePropertyReferenceType extends BscType {
                         return () => false;
                     }
                 }
-                let inner = (isAnyReferenceType(this.outerType) ? (this.outerType as ReferenceType).getTarget() : this.outerType)?.[this.propertyName];
+                let inner = this.getTarget();
 
                 if (!inner) {
                     inner = DynamicType.instance;
@@ -420,11 +456,18 @@ export class TypePropertyReferenceType extends BscType {
         });
     }
 
-    getTarget: () => BscType;
+    getTarget(): BscType {
+        let actualOuterType = this.outerType;
+        if (isAnyReferenceType(this.outerType)) {
+            if ((this.outerType as ReferenceType).isResolvable()) {
+                actualOuterType = (this.outerType as ReferenceType)?.getTarget();
+            }
+        }
+        return actualOuterType?.[this.propertyName];
+    }
 
     tableProvider: SymbolTableProvider;
 }
-
 
 /**
  * Use this class for when there is a binary operator and either the left hand side and/or the right hand side

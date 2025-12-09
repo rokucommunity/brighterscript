@@ -7,7 +7,6 @@ import type { Token } from './Token';
 import { isToken } from './Token';
 import { rangeToArray } from '../parser/Parser.spec';
 import { Range } from 'vscode-languageserver';
-import util from '../util';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 
 describe('lexer', () => {
@@ -1338,6 +1337,17 @@ describe('lexer', () => {
     });
 
     it('properly tracks leadingWhitespace', () => {
+        /**
+         * Convert a list of tokens into a string, including their leading whitespace
+         */
+        function tokensToString(tokens: Token[]) {
+            let result = '';
+            //skip iterating the final token
+            for (let token of tokens) {
+                result += token.leadingWhitespace + token.text;
+            }
+            return result;
+        }
         const text = `
             sub main()
 
@@ -1346,7 +1356,7 @@ describe('lexer', () => {
             end sub
         `;
         const { tokens } = Lexer.scan(text, { includeWhitespace: false });
-        expect(util.tokensToString(tokens)).to.equal(text);
+        expect(tokensToString(tokens)).to.equal(text);
     });
 
     it('properly detects try/catch tokens', () => {

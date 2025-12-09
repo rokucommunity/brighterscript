@@ -11,13 +11,22 @@ import SGParser from '../parser/SGParser';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
 import type { DependencyChangedEvent, DependencyGraph } from '../DependencyGraph';
-import type { SGToken } from '../parser/SGTypes';
+import type { SGInterfaceField, SGInterfaceFunction, SGToken } from '../parser/SGTypes';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { IToken, TokenType } from 'chevrotain';
 import { TranspileState } from '../parser/TranspileState';
 import type { BscFile } from './BscFile';
 import type { Editor } from '../astUtils/Editor';
 import type { FunctionScope } from '../FunctionScope';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
+
+
+export interface UnresolvedXMLSymbol {
+    flags: SymbolTypeFlag;
+    name: string;
+    file: XmlFile;
+}
+
 
 export class XmlFile implements BscFile {
     /**
@@ -185,6 +194,48 @@ export class XmlFile implements BscFile {
             }
             this.logDebug('computed allAvailableScriptImports', () => result);
             return result;
+        });
+    }
+
+    public get requiredSymbols() {
+        return this.cache.getOrAdd(`requiredSymbols`, () => {
+            this.program.logger.debug('Getting required symbols', this.srcPath);
+
+
+            const requiredSymbols: UnresolvedXMLSymbol[] = [];
+
+            const allInterfaceFunctions = this.parser.ast.componentElement?.interfaceElement?.getElementsByTagName<SGInterfaceFunction>('function') ?? [];
+
+            for (const node of allInterfaceFunctions) {
+                if (node.name) {
+                    requiredSymbols.push({
+                        flags: SymbolTypeFlag.runtime,
+                        file: this,
+                        name: node.name.toLowerCase()
+                    });
+                }
+            }
+
+            const allInterfaceFields = this.parser.ast.componentElement?.interfaceElement?.getElementsByTagName<SGInterfaceField>('field') ?? [];
+
+            for (const node of allInterfaceFields) {
+                if (node.onChange) {
+                    requiredSymbols.push({
+                        flags: SymbolTypeFlag.runtime,
+                        file: this,
+                        name: node.onChange.toLowerCase()
+                    });
+                }
+                // TODO: when we can specify proper types in fields, add those types too:
+                //if (node.type && isCustomXmlType(node.type)) {
+                //    requiredSymbols.push({
+                //        flags: SymbolTypeFlag.typetime,
+                //        file: this,
+                //        name: node.type.toLowerCase()
+                //    });
+                //}
+            }
+            return requiredSymbols;
         });
     }
 

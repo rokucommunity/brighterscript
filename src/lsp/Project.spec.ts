@@ -134,7 +134,7 @@ describe('Project', () => {
                 workspaceFolder: undefined,
                 bsconfigPath: undefined
             });
-            expect(project['builder'].program.options.copyToStaging).to.be.false;
+            expect(project['builder'].program.options.noEmit).to.be.true;
         });
     });
 
