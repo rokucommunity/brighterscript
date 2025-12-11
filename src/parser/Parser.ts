@@ -56,7 +56,8 @@ import {
     TryCatchStatement,
     WhileStatement,
     TypecastStatement,
-    AliasStatement
+    AliasStatement,
+    TypeStatement
 } from './Statement';
 import type { DiagnosticInfo } from '../DiagnosticMessages';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -1117,6 +1118,24 @@ export class Parser {
         }
     }
 
+    private checkTypeStatement() {
+        let isTypeToken = this.check(TokenKind.Type);
+
+        //if we are at the top level, any line that starts with "type" should be considered a type statement
+        if (this.isAtRootLevel() && isTypeToken) {
+            return true;
+
+            //not at root level, type statements are all invalid here, but try to detect if the tokens look
+            //like a type statement (and let the type function handle emitting the diagnostics)
+        } else if (isTypeToken && this.checkNext(TokenKind.Identifier)) {
+            return true;
+
+            //definitely not a type statement
+        } else {
+            return false;
+        }
+    }
+
     private statement(): Statement | undefined {
         if (this.checkLibrary()) {
             return this.libraryStatement();
@@ -1132,6 +1151,10 @@ export class Parser {
 
         if (this.checkAlias()) {
             return this.aliasStatement();
+        }
+
+        if (this.checkTypeStatement()) {
+            return this.typeStatement();
         }
 
         if (this.check(TokenKind.Stop)) {
@@ -1616,6 +1639,27 @@ export class Parser {
             annotation.call = this.finishCall(leftParen, annotation, false);
         }
         return annotation;
+    }
+
+    private typeStatement(): TypeStatement | undefined {
+        this.warnIfNotBrighterScriptMode('type statements');
+        const typeToken = this.advance();
+        const name = this.identifier(...this.allowedLocalIdentifiers);
+        const equals = this.tryConsume(
+            DiagnosticMessages.expectedToken(TokenKind.Equal),
+            TokenKind.Equal
+        );
+        let value = this.typeToken();
+
+        let typeStmt = new TypeStatement({
+            type: typeToken,
+            name: name,
+            equals: equals,
+            value: value
+
+        });
+        this._references.typeStatements.push(typeStmt);
+        return typeStmt;
     }
 
     private ternaryExpression(test?: Expression): TernaryExpression {
@@ -3477,6 +3521,9 @@ export class Parser {
             },
             IncrementStatement: e => {
                 this._references.expressions.add(e);
+            },
+            TypeStatement: (s) => {
+                this._references.typeStatements.push(s);
             }
         }), {
             walkMode: WalkMode.visitAllRecursive
@@ -3595,6 +3642,7 @@ export class References {
     public importStatements = [] as ImportStatement[];
     public libraryStatements = [] as LibraryStatement[];
     public namespaceStatements = [] as NamespaceStatement[];
+    public typeStatements = [] as TypeStatement[];
     public newExpressions = [] as NewExpression[];
     public propertyHints = {} as Record<string, string>;
 }

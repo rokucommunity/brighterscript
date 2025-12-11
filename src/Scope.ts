@@ -7,7 +7,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableContainerMap, FileLink, Callable } from './interfaces';
 import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
-import type { NamespaceStatement, FunctionStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement, ConstStatement } from './parser/Statement';
+import type { NamespaceStatement, FunctionStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement, ConstStatement, TypeStatement } from './parser/Statement';
 import type { NewExpression } from './parser/Expression';
 import { ParseMode } from './parser/Parser';
 import { util } from './util';
@@ -99,6 +99,10 @@ export class Scope {
      */
     public getEnum(enumName: string, containingNamespace?: string): EnumStatement {
         return this.getEnumFileLink(enumName, containingNamespace)?.item;
+    }
+
+    public getTypeStatement(typeName: string, containingNamespace?: string): Statement {
+        return this.getTypeStatementFileLink(typeName, containingNamespace)?.item;
     }
 
     /**
@@ -203,6 +207,25 @@ export class Scope {
     }
 
     /**
+     * Get an TypeStatement and its containing file by the type name
+     * @param typeName - The TypeStatement name, including the namespace of the type if possible
+     * @param containingNamespace - The namespace used to resolve relative type names. (i.e. the namespace around the current statement trying to find a type)
+     */
+    public getTypeStatementFileLink(typeName: string, containingNamespace?: string): FileLink<TypeStatement> {
+        const lowerName = typeName?.toLowerCase();
+        const typeStatementMap = this.getTypeStatementMap();
+
+        let typeStatement = typeStatementMap.get(
+            util.getFullyQualifiedClassName(lowerName, containingNamespace?.toLowerCase())
+        );
+        //if we couldn't find the enum by its full namespaced name, look for a global enum with that name
+        if (!typeStatement) {
+            typeStatement = typeStatementMap.get(lowerName);
+        }
+        return typeStatement;
+    }
+
+    /**
      * Get a map of all enums by their member name.
      * The keys are lower-case fully-qualified paths to the enum and its member. For example:
      * namespace.enum.value
@@ -218,6 +241,7 @@ export class Scope {
             return result;
         });
     }
+
 
     /**
      * Tests if a class exists with the specified name
@@ -244,6 +268,10 @@ export class Scope {
      */
     public hasEnum(enumName: string, namespaceName?: string): boolean {
         return !!this.getEnum(enumName, namespaceName);
+    }
+
+    public hasTypeStatementType(typeName: string, namespaceName?: string): boolean {
+        return !!this.getTypeStatement(typeName, namespaceName);
     }
 
     /**
@@ -323,6 +351,26 @@ export class Scope {
                     //only track enums with a defined name (i.e. exclude nameless malformed enums)
                     if (lowerEnumName) {
                         map.set(lowerEnumName, { item: stmt, file: file });
+                    }
+                }
+            });
+            return map;
+        });
+    }
+
+    /**
+     * A dictionary of all TypeStatements in this scope. This includes namespaced types always with their full name.
+     * The key is stored in lower case
+     */
+    public getTypeStatementMap(): Map<string, FileLink<TypeStatement>> {
+        return this.cache.getOrAdd('typeStatementMap', () => {
+            const map = new Map<string, FileLink<TypeStatement>>();
+            this.enumerateBrsFiles((file) => {
+                for (let stmt of file.parser.references.typeStatements) {
+                    const lowerTypeName = stmt.fullName.toLowerCase();
+                    //only track enums with a defined name (i.e. exclude nameless malformed enums)
+                    if (lowerTypeName) {
+                        map.set(lowerTypeName, { item: stmt, file: file });
                     }
                 }
             });
@@ -880,7 +928,7 @@ export class Scope {
                 const currentNamespaceName = func.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
                 // check for built in types
                 const isBuiltInType = util.isBuiltInType(returnTypeName);
-                if (!isBuiltInType && !this.hasClass(returnTypeName, currentNamespaceName) && !this.hasInterface(returnTypeName) && !this.hasEnum(returnTypeName)) {
+                if (!isBuiltInType && !this.hasClass(returnTypeName, currentNamespaceName) && !this.hasInterface(returnTypeName) && !this.hasEnum(returnTypeName) && !this.hasTypeStatementType(returnTypeName)) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.invalidFunctionReturnType(returnTypeName),
                         range: func.returnTypeToken.range,
@@ -896,7 +944,7 @@ export class Scope {
                     // check for built in types
                     const isBuiltInType = util.isBuiltInType(paramTypeName);
 
-                    if (!isBuiltInType && !this.hasClass(paramTypeName, currentNamespaceName) && !this.hasInterface(paramTypeName) && !this.hasEnum(paramTypeName)) {
+                    if (!isBuiltInType && !this.hasClass(paramTypeName, currentNamespaceName) && !this.hasInterface(paramTypeName) && !this.hasEnum(paramTypeName) && !this.hasTypeStatementType(paramTypeName)) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.functionParameterTypeIsInvalid(param.name.text, paramTypeName),
                             range: param.typeToken.range,

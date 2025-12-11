@@ -3375,3 +3375,70 @@ export class AliasStatement extends Statement {
     }
 }
 
+export class TypeStatement extends Statement {
+    constructor(options: {
+        type?: Token;
+        name: Token;
+        equals?: Token;
+        value: Token;
+    }
+    ) {
+        super();
+        this.tokens = {
+            type: options.type,
+            name: options.name,
+            equals: options.equals,
+            value: options.value
+        };
+        this.range = util.createBoundingRange(
+            this.tokens.type,
+            this.tokens.name,
+            this.tokens.equals,
+            this.tokens.value
+        );
+    }
+
+    public readonly tokens: {
+        readonly type?: Token;
+        readonly name: Token;
+        readonly equals?: Token;
+        readonly value: Token;
+    };
+
+    public readonly range: Range;
+
+    transpile(state: BrsTranspileState) {
+        return [];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+    public get fullName() {
+        const name = this.tokens.name?.text;
+        if (name) {
+            const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            if (namespace) {
+                let namespaceName = namespace.getName(ParseMode.BrighterScript);
+                return `${namespaceName}.${name}`;
+            } else {
+                return name;
+            }
+        } else {
+            //return undefined which will allow outside callers to know that this doesn't have a name
+            return undefined;
+        }
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new TypeStatement({
+                type: util.cloneToken(this.tokens.type),
+                name: util.cloneToken(this.tokens.name),
+                equals: util.cloneToken(this.tokens.equals),
+                value: util.cloneToken(this.tokens.value)
+            })
+        );
+    }
+}
