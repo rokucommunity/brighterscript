@@ -4438,6 +4438,36 @@ describe('BrsFile', () => {
                 `);
             });
         });
+
+        describe('type statements interfaces', () => {
+            it('transpiles statement to nothing', () => {
+                testTranspile(`
+                     type number = integer or float
+
+                    sub foo()
+                        print "hello"
+                    end sub
+                `, `
+                    sub foo()
+                        print "hello"
+                    end sub
+                `);
+            });
+
+            it('transpiles type statement to object', () => {
+                testTranspile(`
+                     type number = integer or float
+
+                    sub foo(node as number)
+                        print node[m.keyProp]
+                    end sub
+                `, `
+                    sub foo(node as object)
+                        print node[m.keyProp]
+                    end sub
+                `);
+            });
+        });
     });
 
     it('allows up to 63 function params', () => {

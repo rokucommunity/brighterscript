@@ -4,11 +4,11 @@ import { ReservedWords, TokenKind } from '../lexer/TokenKind';
 import type { AAMemberExpression } from './Expression';
 import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
-import type { AliasStatement, AssignmentStatement, ClassStatement, TypecastStatement } from './Statement';
+import type { AliasStatement, AssignmentStatement, ClassStatement, TypecastStatement, TypeStatement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isAliasStatement, isBlock, isCommentStatement, isFunctionStatement, isIfStatement, isIndexedGetExpression, isTypecastStatement } from '../astUtils/reflection';
+import { isAliasStatement, isBlock, isCommentStatement, isFunctionStatement, isIfStatement, isIndexedGetExpression, isTypecastStatement, isTypeStatement } from '../astUtils/reflection';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics } from '../testHelpers.spec';
 import { BrsTranspileState } from './BrsTranspileState';
 import { SourceNode } from 'source-map';
@@ -1422,6 +1422,72 @@ describe('parser', () => {
             expect(((ast.statements[0] as FunctionStatement).func.body.statements[0] as AssignmentStatement).name.text).to.eq('alias');
         });
     });
+
+    describe('type statement', () => {
+        it('allows type statement ', () => {
+            let { ast, diagnostics } = parse(`
+                TYPE x = string
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(isTypeStatement(ast.statements[0])).to.be.true;
+            const stmt = ast.statements[0] as TypeStatement;
+            expect(stmt.tokens.type.text).to.eq('TYPE');
+            expect(stmt.tokens.value).to.exist;
+        });
+
+        it('is disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                type x = string
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('type statements')
+            ]);
+        });
+
+        it('disallows `type` for function name', () => {
+            let { diagnostics } = parse(`
+                function type() as integer
+                    return 1
+                end function
+            `, ParseMode.BrighterScript);
+            expectDiagnostics(diagnostics, [
+                DiagnosticMessages.cannotUseReservedWordAsIdentifier('type').message
+            ]);
+        });
+
+        it('disallows `type` for variable name', () => {
+            let { diagnostics } = parse(`
+                function foo() as integer
+                    type = 1
+                    return type
+                end function
+            `, ParseMode.BrighterScript);
+            expectDiagnostics(diagnostics, [
+                DiagnosticMessages.cannotUseReservedWordAsIdentifier('type').message
+            ]);
+        });
+
+        it('has error when rhs is not a type', () => {
+            let { diagnostics } = parse(`
+                type x = 123
+            `, ParseMode.BrighterScript);
+            expectDiagnostics(diagnostics, [
+                DiagnosticMessages.expectedIdentifierAfterKeyword('=').message
+            ]);
+        });
+
+        it('allows type statement with complicated type', () => {
+            let { ast, diagnostics } = parse(`
+                type x = string or CustomKlass or roAssociativeArray
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(isTypeStatement(ast.statements[0])).to.be.true;
+            const stmt = ast.statements[0] as TypeStatement;
+            expect(stmt.tokens.type.text).to.eq('type');
+            expect(stmt.tokens.value).to.exist;
+        });
+    });
+
 
     describe('inline interfaces', () => {
         it('inline interface param types disallowed in brightscript mode', () => {
