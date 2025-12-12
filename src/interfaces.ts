@@ -1023,6 +1023,11 @@ export interface ExtraSymbolData {
      * Is this type created from a type statement - eg. is it a nickname for another type?
      */
     isFromTypeStatement?: boolean;
+    /**
+     * Is this type from a function parameter?
+     */
+    isFunctionParam?: boolean;
+
 }
 
 export interface GetTypeOptions {

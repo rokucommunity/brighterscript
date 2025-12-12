@@ -4490,6 +4490,29 @@ describe('Scope', () => {
             expect((dataVarType as UnionType).types).to.include(IntegerType.instance);
         });
 
+
+        it('should understand changing the type of a param in try/catch', () => {
+            const testFile = program.setFile<BrsFile>('source/test.bs', `
+                sub testPocket1(msg as string)
+                    try
+                        if msg = "" then
+                            msg = "hello!"
+                        end if
+                        msg = 123
+                    catch e
+                    end try
+                    print msg
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const printStmts = testFile.ast.findChildren<PrintStatement>(isPrintStatement);
+            let msgVar = printStmts[0].expressions[0];
+            let msgVarType = msgVar.getType({ flags: SymbolTypeFlag.runtime });
+            expectTypeToBe(msgVarType, UnionType);
+            expect((msgVarType as UnionType).types).to.include(StringType.instance);
+            expect((msgVarType as UnionType).types).to.include(IntegerType.instance);
+        });
     });
 
     describe('unlinkSymbolTable', () => {

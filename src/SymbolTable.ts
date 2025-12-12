@@ -226,7 +226,11 @@ export class SymbolTable implements SymbolTypeGetter {
                 this.sortSymbolsByAssignmentOrderInPlace(currentResults);
                 const lastResult = currentResults[currentResults.length - 1];
                 currentResults = [lastResult];
-                precedingAssignmentIndex = lastResult.data?.definingNode?.statementIndex ?? -1;
+                precedingAssignmentIndex = -1;
+                if (!lastResult.data?.isFunctionParam) {
+                    // this is not a function param - we can use its statement index
+                    precedingAssignmentIndex = lastResult.data?.definingNode?.statementIndex ?? -1;
+                }
             }
 
             if (result?.length > 0) {
@@ -444,6 +448,7 @@ export class SymbolTable implements SymbolTypeGetter {
             options.data.isBuiltIn = data?.isBuiltIn;
             options.data.isFromCallFunc = data?.isFromCallFunc;
             options.data.isFromTypeStatement = data?.isFromTypeStatement;
+            options.data.isFunctionParam = data?.isFunctionParam;
         }
         return resolvedType;
     }
