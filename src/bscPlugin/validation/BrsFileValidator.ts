@@ -342,7 +342,8 @@ export class BrsFileValidator {
                     // this block is in a function. order matters!
                     blockSymbolTable.isOrdered = true;
                 }
-                if (!isFunctionExpression(node.parent)) {
+                if (!isFunctionExpression(node.parent) && node.parent) {
+                    node.symbolTable.name = `Block-${node.parent.kind}@${node.location?.range?.start?.line}`;
                     // we're a block inside another block (or body). This block is a pocket in the bigger block
                     node.parent.getSymbolTable().addPocketTable({
                         index: node.parent.statementIndex,

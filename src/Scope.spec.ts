@@ -4400,6 +4400,96 @@ describe('Scope', () => {
             let lhs2 = (ifStmts[1].condition as BinaryExpression).left as DottedGetExpression;
             expectTypeToBe(lhs2.obj.getType({ flags: SymbolTypeFlag.runtime }), ObjectType);
         });
+
+        it('should understand assignment within try/catch blocks', () => {
+            const testFile = program.setFile<BrsFile>('source/test.bs', `
+                sub test()
+                    data = "hello"
+                    print data ' printStmt 0 - should be string
+                    try
+                        data = 123
+                        print data ' printStmt 1 - should be int
+                    catch error
+                        print error ' printStmt 2 - (ignored)
+                    end try
+                    print data ' printStmt 3 - should be (string or int)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const printStmts = testFile.ast.findChildren<PrintStatement>(isPrintStatement);
+            let dataVar = printStmts[0].expressions[0];
+            expectTypeToBe(dataVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
+            dataVar = printStmts[1].expressions[0];
+            expectTypeToBe(dataVar.getType({ flags: SymbolTypeFlag.runtime }), IntegerType);
+            dataVar = printStmts[3].expressions[0];
+            let dataVarType = dataVar.getType({ flags: SymbolTypeFlag.runtime });
+            expectTypeToBe(dataVarType, UnionType);
+            expect((dataVarType as UnionType).types).to.include(StringType.instance);
+            expect((dataVarType as UnionType).types).to.include(IntegerType.instance);
+        });
+
+        it('should understand assignment in if/then in try/catch blocks', () => {
+            const testFile = program.setFile<BrsFile>('source/test.bs', `
+                sub test()
+                    data = "hello"
+                    print data ' printStmt 0 - should be string
+                    try
+                        if data = "hello"
+                            data = "goodbye"
+                        end if
+                        print data ' printStmt 1 - should be string
+                    catch error
+                        print error ' printStmt 2 - (ignored)
+                    end try
+                    print data ' printStmt 3 - should be (string)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const printStmts = testFile.ast.findChildren<PrintStatement>(isPrintStatement);
+            let dataVar = printStmts[0].expressions[0];
+            expectTypeToBe(dataVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
+            dataVar = printStmts[1].expressions[0];
+            expectTypeToBe(dataVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
+            dataVar = printStmts[3].expressions[0];
+            let dataVarType = dataVar.getType({ flags: SymbolTypeFlag.runtime });
+            expectTypeToBe(dataVarType, StringType);
+        });
+
+        it('should understand assignment that changes types in if/then in try/catch blocks', () => {
+            const testFile = program.setFile<BrsFile>('source/test.bs', `
+                sub test()
+                    data = "hello"
+                    print data ' printStmt 0 - should be string
+                    try
+                        if data = "hello"
+                            data = 123
+                        end if
+                        print data ' printStmt 1 - should be union (string or int)
+                    catch error
+                        print error ' printStmt 2 - (ignored)
+                    end try
+                    print data ' printStmt 3 - should be union (string or int)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const printStmts = testFile.ast.findChildren<PrintStatement>(isPrintStatement);
+            let dataVar = printStmts[0].expressions[0];
+            expectTypeToBe(dataVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
+            dataVar = printStmts[1].expressions[0];
+            let dataVarType = dataVar.getType({ flags: SymbolTypeFlag.runtime });
+            expectTypeToBe(dataVarType, UnionType);
+            expect((dataVarType as UnionType).types).to.include(StringType.instance);
+            expect((dataVarType as UnionType).types).to.include(IntegerType.instance);
+            dataVar = printStmts[3].expressions[0];
+            dataVarType = dataVar.getType({ flags: SymbolTypeFlag.runtime });
+            expectTypeToBe(dataVarType, UnionType);
+            expect((dataVarType as UnionType).types).to.include(StringType.instance);
+            expect((dataVarType as UnionType).types).to.include(IntegerType.instance);
+        });
+
     });
 
     describe('unlinkSymbolTable', () => {
