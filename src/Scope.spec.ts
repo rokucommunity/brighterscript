@@ -4559,6 +4559,79 @@ describe('Scope', () => {
             let dataTypeType = dataType.getType({ flags: SymbolTypeFlag.runtime });
             expectTypeToBe(dataTypeType, IntegerType);
         });
+
+        it('handles this long function from Rooibos', () => {
+            program.setFile<BrsFile>('source/test.bs', `
+                function assertAAHasKeys(aa as dynamic, keys as dynamic, msg = "" as string) as boolean
+                    if m.currentResult.isFail then
+                        return false
+                    end if
+
+                    try
+                        if not isAA(aa) then
+                            if msg = "" then
+                                msg = "expected to be an AssociativeArray"
+                            end if
+                            fail(msg, "", "", true)
+                            return false
+                        end if
+
+                        if not isArray(keys) then
+                            if msg = "" then
+                                msg = "expected to be an Array"
+                            end if
+                            fail(msg, "", "", true)
+                            return false
+                        end if
+
+                        foundKeys = []
+                        missingKeys = []
+                        for each key in keys
+                            if not aa.ifAssociativeArray.DoesExist(key) then
+                                missingKeys.push(key)
+                            else
+                                foundKeys.push(key)
+                            end if
+                        end for
+
+                        if missingKeys.count() > 0 then
+                            actual = "blah"
+                            expected = "blah"
+                            if msg = "" then
+                                msg = "expected to have properties"
+                            end if
+                            fail(msg, actual, expected, true)
+                            return false
+                        end if
+                        return true
+                    catch error
+                        failCrash(error, msg)
+                    end try
+                    return false
+                end function
+
+
+                function isAA(value as dynamic) as boolean
+                    return type(value) = "roAssociativeArray"
+                end function
+
+
+                function isArray(value as dynamic) as boolean
+                    return type(value) = "roArray"
+                end function
+
+
+                sub fail(msg as string, actual as dynamic, expected as dynamic, isSoftFail as boolean)
+                    print "fail"
+                end sub
+
+                sub failCrash(error as dynamic, msg as string)
+                    print "fail crash"
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('unlinkSymbolTable', () => {
