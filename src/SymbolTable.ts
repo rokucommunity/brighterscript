@@ -218,7 +218,8 @@ export class SymbolTable implements SymbolTypeGetter {
             let currentResults = currentTable.symbolMap.get(key);
             if (currentResults) {
                 // eslint-disable-next-line no-bitwise
-                currentResults = currentResults.filter(symbol => symbol.flags & bitFlags).filter(this.getSymbolLookupFilter(currentTable, maxStatementIndex, memberOfAncestor));
+                currentResults = currentResults.filter(symbol => symbol.flags & bitFlags)
+                    .filter(this.getSymbolLookupFilter(currentTable, maxStatementIndex, memberOfAncestor));
             }
 
             let precedingAssignmentIndex = -1;
@@ -226,11 +227,7 @@ export class SymbolTable implements SymbolTypeGetter {
                 this.sortSymbolsByAssignmentOrderInPlace(currentResults);
                 const lastResult = currentResults[currentResults.length - 1];
                 currentResults = [lastResult];
-                precedingAssignmentIndex = -1;
-                if (!lastResult.data?.isFunctionParam) {
-                    // this is not a function param - we can use its statement index
-                    precedingAssignmentIndex = lastResult.data?.definingNode?.statementIndex ?? -1;
-                }
+                precedingAssignmentIndex = lastResult.data?.definingNode?.statementIndex ?? -1;
             }
 
             if (result?.length > 0) {
@@ -448,7 +445,6 @@ export class SymbolTable implements SymbolTypeGetter {
             options.data.isBuiltIn = data?.isBuiltIn;
             options.data.isFromCallFunc = data?.isFromCallFunc;
             options.data.isFromTypeStatement = data?.isFromTypeStatement;
-            options.data.isFunctionParam = data?.isFunctionParam;
         }
         return resolvedType;
     }
@@ -683,6 +679,7 @@ export class SymbolTable implements SymbolTypeGetter {
                 // order doesn't matter for current table
                 return true;
             }
+
             if (maxAllowedStatementIndex >= 0 && t.data?.definingNode) {
                 if (memberOfAncestor || t.data.canUseInDefinedAstNode) {
                     // if we've already gone up a level, it's possible to have a variable assigned and used

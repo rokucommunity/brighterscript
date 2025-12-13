@@ -81,7 +81,7 @@ export class AstValidationSegmenter {
             if (isArrayType(typeInTypeExpression)) {
                 typeInTypeExpression = typeInTypeExpression.defaultType;
             }
-            if (typeInTypeExpression.isResolvable()) {
+            if (typeInTypeExpression?.isResolvable()) {
                 return this.handleTypeCastTypeExpression(segment, expression);
             }
         }

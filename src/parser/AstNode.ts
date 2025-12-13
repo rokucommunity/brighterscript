@@ -11,7 +11,7 @@ import util from '../util';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import type { Token } from '../lexer/Token';
-import { isBlock, isBody } from '../astUtils/reflection';
+import { isBlock, isBody, isFunctionParameterExpression } from '../astUtils/reflection';
 
 /**
  * A BrightScript AST node
@@ -248,8 +248,13 @@ export abstract class AstNode {
             return -1;
         }
         let currentNode: AstNode = this;
+        if (isFunctionParameterExpression(currentNode)) {
+            // function parameters are not part of statement lists
+            return -1;
+        }
         while (currentNode && !(isBlock(currentNode?.parent) || isBody(currentNode?.parent))) {
             currentNode = currentNode.parent;
+
         }
         if (isBlock(currentNode?.parent) || isBody(currentNode?.parent)) {
             return currentNode.parent.statements.indexOf(currentNode);
