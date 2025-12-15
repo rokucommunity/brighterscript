@@ -132,6 +132,85 @@ export function reduceTypesToMostGeneric(types: BscType[], allowNameEquality = t
 
 
 /**
+ * Reduces a list of types based on equality or inheritance
+ * If all types are the same - just that type is returned
+ * If one of the types is Dynamic, then Dynamic.instance is returned
+ * If any types inherit another type, the more Specific type is returned, eg. the one with the most members
+ * @param types array of types
+ * @returns an array of the most specific types
+ */
+export function reduceTypesForIntersectionType(types: BscType[], allowNameEquality = true): BscType[] {
+    if (!types || types?.length === 0) {
+        return undefined;
+    }
+
+    if (types.length === 1) {
+        // only one type
+        return [types[0]];
+    }
+
+    types = types.map(t => {
+        if (isReferenceType(t) && t.isResolvable()) {
+            return (t as any).getTarget() ?? t;
+        }
+        return t;
+    });
+
+    // Get a list of unique types, based on the `isEqual()` method
+    const uniqueTypes = getUniqueTypesFromArray(types, allowNameEquality).map(t => {
+        // map to object with `shouldIgnore` flag
+        return { type: t, shouldIgnore: false };
+    });
+
+    if (uniqueTypes.length === 1) {
+        // only one type after filtering
+        return [uniqueTypes[0].type];
+    }
+    const existingDynamicType = uniqueTypes.find(t => !isAnyReferenceType(t.type) && isDynamicType(t.type));
+    if (existingDynamicType) {
+        // If it includes dynamic, then the result is dynamic
+        return [existingDynamicType.type];
+    }
+    const specificTypes = [];
+    //check assignability:
+    for (let i = 0; i < uniqueTypes.length; i++) {
+        const currentType = uniqueTypes[i].type;
+        if (i === uniqueTypes.length - 1) {
+            if (!uniqueTypes[i].shouldIgnore) {
+                //this type was not convertible to anything else... it is as general as possible
+                specificTypes.push(currentType);
+            }
+            break;
+        }
+        for (let j = i + 1; j < uniqueTypes.length; j++) {
+            if (uniqueTypes[j].shouldIgnore) {
+                continue;
+            }
+            const checkType = uniqueTypes[j].type;
+
+            if (currentType.isResolvable() && currentType.isEqual(uniqueTypes[j].type, { allowNameEquality: allowNameEquality })) {
+                uniqueTypes[j].shouldIgnore = true;
+            } else if (isInheritableType(currentType) && isInheritableType(checkType)) {
+                if (checkType.isTypeDescendent(currentType)) {
+                    //the type we're checking is more general than the current type... it can be ignored
+                    uniqueTypes[j].shouldIgnore = true;
+                }
+                if (currentType.isTypeDescendent(checkType)) {
+                    // the currentType is an ancestor to some other type - it won't be in the final set
+                    break;
+                }
+            }
+            if (j === uniqueTypes.length - 1) {
+                //this type was not convertible to anything else... it is as general as possible
+                specificTypes.push(currentType);
+            }
+        }
+    }
+    return specificTypes;
+}
+
+
+/**
  * Gets a Unique type from a list of types
  * @param types array of types
  * @returns either the singular most general type, if there is one, otherwise a UnionType of the most general types

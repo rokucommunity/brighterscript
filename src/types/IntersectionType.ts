@@ -1,15 +1,14 @@
 import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
-import { isDynamicType, isIntersectionType, isObjectType, isTypedFunctionType, isUnionType } from '../astUtils/reflection';
+import { isDynamicType, isIntersectionType, isObjectType, isTypedFunctionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { ReferenceType } from './ReferenceType';
-import { addAssociatedTypesTableAsSiblingToMemberTable, findTypeUnion, findTypeUnionDeepCheck, getAllTypesFromComplexType, getUniqueType, isEnumTypeCompatible, reduceTypesToMostGeneric } from './helpers';
+import { addAssociatedTypesTableAsSiblingToMemberTable, getAllTypesFromComplexType, isEnumTypeCompatible, reduceTypesForIntersectionType } from './helpers';
 import { BscTypeKind } from './BscTypeKind';
 import type { TypeCacheEntry } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import { util } from '../util';
-import { unionTypeFactory } from './UnionType';
 
 export function intersectionTypeFactory(types: BscType[]) {
     return new IntersectionType(types);
@@ -33,26 +32,30 @@ export class IntersectionType extends BscType {
 
     isResolvable(): boolean {
         for (const type of this.types) {
-            if (!type.isResolvable()) {
-                return false;
+            // resolvable if any inner type is resolvable
+            if (type.isResolvable()) {
+                return true;
             }
         }
-        return true;
+        return false;
     }
 
     private getMemberTypeFromInnerTypes(name: string, options: GetTypeOptions): BscType {
-        const typeFromMembers = this.types.map((innerType) => innerType?.getMemberType(name, options)).filter(t => t !== undefined);
+        const typeFromMembers = this.types.map((innerType) => {
+            return innerType?.getMemberType(name, options);
+        });
+        const filteredTypes = reduceTypesForIntersectionType(typeFromMembers.filter(t => t !== undefined));
 
-        if (typeFromMembers.length === 0) {
+        if (filteredTypes.length === 0) {
             return undefined;
-        } else if (typeFromMembers.length === 1) {
-            return typeFromMembers[0];
+        } else if (filteredTypes.length === 1) {
+            return filteredTypes[0];
         }
-        return new IntersectionType(typeFromMembers);
+        return new IntersectionType(filteredTypes);
     }
 
     private getCallFuncFromInnerTypes(name: string, options: GetTypeOptions): BscType {
-        const typeFromMembers = this.types.map((innerType) => innerType?.getCallFuncType(name, options)).filter(t => t !== undefined);
+        const typeFromMembers = reduceTypesForIntersectionType(this.types.map((innerType) => innerType?.getCallFuncType(name, options)).filter(t => t !== undefined));
 
         if (typeFromMembers.length === 0) {
             return undefined;
@@ -136,10 +139,17 @@ export class IntersectionType extends BscType {
         if (isEnumTypeCompatible(this, targetType, data)) {
             return true;
         }
-        if (isUnionType(targetType)) {
-            // check if this set of inner types is a SUPERSET of targetTypes's inner types
-            for (const targetInnerType of targetType.types) {
-                if (!this.isTypeCompatible(targetInnerType, data)) {
+        if (isIntersectionType(targetType)) {
+            // check if this all the types of this type are in the target (eg, target is a super set of this types)
+            for (const memberType of this.types) {
+                let foundCompatibleInnerType = false;
+                for (const targetInnerType of targetType.types) {
+                    if (memberType.isTypeCompatible(targetInnerType, data)) {
+                        foundCompatibleInnerType = true;
+                        continue;
+                    }
+                }
+                if (!foundCompatibleInnerType) {
                     return false;
                 }
             }
@@ -193,6 +203,8 @@ export class IntersectionType extends BscType {
             type.addBuiltInInterfaces();
             for (const symbol of type.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime)) {
                 const foundType = this.getMemberTypeFromInnerTypes(symbol.name, { flags: SymbolTypeFlag.runtime });
+                /*
+
                 const allResolvableTypes = foundType.reduce((acc, curType) => {
                     return acc && curType?.isResolvable();
                 }, true);
@@ -200,8 +212,8 @@ export class IntersectionType extends BscType {
                 if (!allResolvableTypes) {
                     continue;
                 }
-                const uniqueType = getUniqueType(findTypeUnion(foundType), unionTypeFactory);
-                intersectionTable.addSymbol(symbol.name, {}, uniqueType, SymbolTypeFlag.runtime);
+                const uniqueType = getUniqueType(findTypeUnion(foundType), intersectionTypeFactory);*/
+                intersectionTable.addSymbol(symbol.name, {}, foundType, SymbolTypeFlag.runtime);
             }
         }
         const firstType = this.types[0];
@@ -211,17 +223,17 @@ export class IntersectionType extends BscType {
         firstType.addBuiltInInterfaces();
         for (const symbol of firstType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime)) {
             const foundType = this.getMemberTypeFromInnerTypes(symbol.name, { flags: SymbolTypeFlag.runtime });
-            const allResolvableTypes = foundType.reduce((acc, curType) => {
-                return acc && curType?.isResolvable();
-            }, true);
+            /* const allResolvableTypes = foundType.reduce((acc, curType) => {
+                 return acc && curType?.isResolvable();
+             }, true);
 
-            if (!allResolvableTypes) {
-                continue;
-            }
-            const uniqueType = getUniqueType(findTypeUnion(foundType), unionTypeFactory);
-            unionTable.addSymbol(symbol.name, {}, uniqueType, SymbolTypeFlag.runtime);
+             if (!allResolvableTypes) {
+                 continue;
+             }
+             const uniqueType = getUniqueType(findTypeUnion(foundType), unionTypeFactory);*/
+            intersectionTable.addSymbol(symbol.name, {}, foundType, SymbolTypeFlag.runtime);
         }
-        return unionTable;
+        return intersectionTable;
     }
 }
 
@@ -233,34 +245,3 @@ function joinTypesString(types: BscType[]) {
 BuiltInInterfaceAdder.intersectionTypeFactory = (types: BscType[]) => {
     return new IntersectionType(types);
 };
-
-
-
-interface iface1 {
-    name: string;
-    age: number;
-    address: string;
-}
-
-interface ifaceWrapper1 {
-    y: iface1;
-}
-
-interface iface2 {
-    name: string;
-    shoeSize: number;
-}
-
-interface ifaceWrapper2 {
-    y: iface2;
-}
-
-type combined = ifaceWrapper1 & ifaceWrapper2;
-
-
-function foo(param: combined) {
-    param.y.name; // valid
-    param.y.age; // valid
-    param.y.shoeSize; // valid
-    param.y.address; // valid
-}
