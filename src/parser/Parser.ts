@@ -415,7 +415,7 @@ export class Parser {
                 }
                 //consume the statement separator
                 this.consumeStatementSeparators();
-            } else if (!this.checkAny(TokenKind.Identifier, TokenKind.LeftCurlyBrace, ...DeclarableTypes, ...AllowedTypeIdentifiers)) {
+            } else if (!this.checkAny(TokenKind.Identifier, TokenKind.LeftCurlyBrace, TokenKind.LeftParen, ...DeclarableTypes, ...AllowedTypeIdentifiers)) {
                 if (!ignoreDiagnostics) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.expectedIdentifier(asToken.text),
@@ -3039,7 +3039,7 @@ export class Parser {
         const changedTokens: { token: Token; oldKind: TokenKind }[] = [];
         try {
             let expr: Expression = this.getTypeExpressionPart(changedTokens);
-            while (this.options.mode === ParseMode.BrighterScript && this.matchAny(TokenKind.Or)) {
+            while (this.options.mode === ParseMode.BrighterScript && this.matchAny(TokenKind.Or, TokenKind.And)) {
                 // If we're in Brighterscript mode, allow union types with "or" between types
                 // TODO: Handle Union types in parens? eg. "(string or integer)"
                 let operator = this.previous();
@@ -3071,7 +3071,7 @@ export class Parser {
      * @returns an expression that was successfully parsed
      */
     private getTypeExpressionPart(changedTokens: { token: Token; oldKind: TokenKind }[]) {
-        let expr: VariableExpression | DottedGetExpression | TypedArrayExpression | InlineInterfaceExpression;
+        let expr: VariableExpression | DottedGetExpression | TypedArrayExpression | InlineInterfaceExpression | GroupingExpression;
 
         if (this.checkAny(...DeclarableTypes)) {
             // if this is just a type, just use directly
@@ -3085,6 +3085,14 @@ export class Parser {
 
             if (this.match(TokenKind.LeftCurlyBrace)) {
                 expr = this.inlineInterface();
+            } else if (this.match(TokenKind.LeftParen)) {
+                let left = this.previous();
+                let typeExpr = this.typeExpression();
+                let right = this.consume(
+                    DiagnosticMessages.unmatchedLeftToken(left.text, 'type expression'),
+                    TokenKind.RightParen
+                );
+                expr = new GroupingExpression({ leftParen: left, rightParen: right, expression: typeExpr });
             } else {
                 if (this.checkAny(...AllowedTypeIdentifiers)) {
                     // Since the next token is allowed as a type identifier, change the kind

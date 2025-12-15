@@ -1,10 +1,11 @@
 import type { TypeCompatibilityData } from '../interfaces';
-import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isComplexType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isReferenceType, isTypePropertyReferenceType, isUnionType, isVoidType } from '../astUtils/reflection';
+import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isComplexType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isIntersectionType, isReferenceType, isTypePropertyReferenceType, isUnionType, isVoidType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import type { UnionType } from './UnionType';
 import type { SymbolTable } from '../SymbolTable';
 import type { SymbolTypeFlag } from '../SymbolTypeFlag';
 import type { IntersectionType } from './IntersectionType';
+import type { BscTypeKind } from './BscTypeKind';
 
 export function findTypeIntersection(typesArr1: BscType[], typesArr2: BscType[]) {
     if (!typesArr1 || !typesArr2) {
@@ -314,3 +315,13 @@ export function addAssociatedTypesTableAsSiblingToMemberTable(type: BscType, ass
  * A map of all types created in the program during its lifetime. This applies across all programs, validate runs, etc. Mostly useful for a single run to track types created.
  */
 export const TypesCreated: Record<string, number> = {};
+
+export function joinTypesString(types: BscType[], separator: string, thisTypeKind: BscTypeKind): string {
+    return [...new Set(types.map(t => {
+        const typeString = t.toString();
+        if ((isUnionType(t) || isIntersectionType(t)) && t.kind !== thisTypeKind) {
+            return `(${typeString})`;
+        }
+        return t.toString();
+    }))].join(` ${separator} `);
+}

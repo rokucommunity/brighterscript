@@ -2837,6 +2837,46 @@ describe('Scope', () => {
                 expect(resultType.types.map(t => t.toString())).includes(IntegerType.instance.toString());
             });
 
+            it('should handle union types grouped', () => {
+                const mainFile = program.setFile<BrsFile>('source/main.bs', `
+                    sub nestedUnion(thing as (Person or Pet) or (Vehicle or Duck)
+                        id = thing.id
+                        print id
+                    end sub
+
+                    sub takesIntOrString(x as (integer or string))
+                        print x
+                    end sub
+
+                    class Person
+                        id as integer
+                    end class
+
+                    class Pet
+                        id as integer
+                    end class
+
+                    class Vehicle
+                        id as string
+                    end class
+
+                    class Duck
+                        id as string
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const sourceScope = program.getScopeByName('source');
+                expect(sourceScope).to.exist;
+                sourceScope.linkSymbolTable();
+                expect(mainFnScope).to.exist;
+                const mainSymbolTable = mainFnScope.symbolTable;
+                const idType = mainSymbolTable.getSymbolType('id', { flags: SymbolTypeFlag.runtime }) as UnionType;
+                expectTypeToBe(idType, UnionType);
+                expect(idType.types).includes(StringType.instance);
+                expect(idType.types).includes(IntegerType.instance);
+            });
         });
 
         describe('type casts', () => {

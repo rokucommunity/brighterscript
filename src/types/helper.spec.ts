@@ -196,4 +196,13 @@ describe('reduceTypesToMostGeneric', () => {
         const genericTypes = reduceTypesToMostGeneric([retRefType1, retRefType2]);
         expect(genericTypes.length).to.eq(2);
     });
+
+    it('should handle unions of unions', () => {
+        const union1 = new UnionType([IntegerType.instance, StringType.instance]);
+        const union2 = new UnionType([StringType.instance, FloatType.instance]);
+        const genericTypes = reduceTypesToMostGeneric([union1, union2]);
+        expect(genericTypes.length).to.eq(2);
+        expect(genericTypes).to.include(union1);
+        expect(genericTypes).to.include(union2);
+    });
 });

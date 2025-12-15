@@ -2,7 +2,7 @@ import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { isDynamicType, isIntersectionType, isObjectType, isTypedFunctionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { ReferenceType } from './ReferenceType';
-import { addAssociatedTypesTableAsSiblingToMemberTable, getAllTypesFromComplexType, isEnumTypeCompatible, reduceTypesForIntersectionType } from './helpers';
+import { addAssociatedTypesTableAsSiblingToMemberTable, getAllTypesFromComplexType, isEnumTypeCompatible, joinTypesString, reduceTypesForIntersectionType } from './helpers';
 import { BscTypeKind } from './BscTypeKind';
 import type { TypeCacheEntry } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
@@ -18,7 +18,7 @@ export class IntersectionType extends BscType {
     constructor(
         public types: BscType[]
     ) {
-        super(joinTypesString(types));
+        super(joinTypesString(types, 'and', BscTypeKind.IntersectionType));
         this.callFuncAssociatedTypesTable = new SymbolTable(`Intersection: CallFuncAssociatedTypes`);
     }
 
@@ -165,7 +165,7 @@ export class IntersectionType extends BscType {
         return false;
     }
     toString(): string {
-        return joinTypesString(this.types);
+        return joinTypesString(this.types, 'and', BscTypeKind.IntersectionType);
     }
 
     /**
@@ -193,7 +193,19 @@ export class IntersectionType extends BscType {
         if (this === targetType) {
             return true;
         }
-        return this.isTypeCompatible(targetType) && targetType.isTypeCompatible(this);
+        for (const type of this.types) {
+            let foundMatch = false;
+            for (const targetTypeInner of targetType.types) {
+                if (type.isEqual(targetTypeInner)) {
+                    foundMatch = true;
+                    break;
+                }
+            }
+            if (!foundMatch) {
+                return false;
+            }
+        }
+        return true;
     }
 
     getMemberTable(): SymbolTable {
@@ -235,11 +247,6 @@ export class IntersectionType extends BscType {
         }
         return intersectionTable;
     }
-}
-
-
-function joinTypesString(types: BscType[]) {
-    return [...new Set(types.map(t => t.toString()))].join(' and ');
 }
 
 BuiltInInterfaceAdder.intersectionTypeFactory = (types: BscType[]) => {

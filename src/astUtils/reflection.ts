@@ -479,7 +479,7 @@ export function isTypeStatementType(value: any): value is TypeStatementType {
 }
 
 export function isInheritableType(target): target is InheritableType {
-    return isClassType(target) || isCallFuncableType(target) || isComplexTypeOf(target, isInheritableType);
+    return isClassType(target) || isCallFuncableType(target);
 }
 
 export function isCallFuncableType(target): target is CallFuncableType {
