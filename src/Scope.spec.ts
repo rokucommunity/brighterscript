@@ -3910,6 +3910,92 @@ describe('Scope', () => {
 
         });
 
+        describe('type Statements', () => {
+            it('allows type statement types of primitives in function params', () => {
+                program.setFile<BrsFile>('source/wrapped.bs', `
+                    type myString  = string
+                    sub useTypeStatementType(data as myString)
+                        print data.len()
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows type statement types of primitives in variable declarations', () => {
+                program.setFile<BrsFile>('source/wrapped.bs', `
+                    type myInteger = integer
+                    sub useTypeStatementType()
+                        value as myInteger = 123
+                        print value.toStr()
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows type statement types of unions in function params', () => {
+                program.setFile<BrsFile>('source/wrapped.bs', `
+                    type StringOrInteger = string or integer
+                    sub useTypeStatementType(data as StringOrInteger)
+                        print data
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows type statement types wrapping custom types in function params', () => {
+                program.setFile<BrsFile>('source/wrapped.bs', `
+                    interface WithName1
+                        name as string
+                    end interface
+
+                    interface WithName2
+                        name as string
+                    end interface
+
+                    type HasName = WithName1 or WithName2
+
+                    sub useTypeStatementType(data as HasName)
+                        print data.name
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('provides a type statement type when importing a file', () => {
+                program.setFile<BrsFile>('source/wrapped.bs', `
+                    interface WithName1
+                        name as string
+                    end interface
+
+                    interface WithName2
+                        name as string
+                    end interface
+
+                    type HasName = WithName1 or WithName2
+                `);
+
+                program.setFile<BrsFile>('components/useWrapped.xml', `
+                    <component name="useWrapped" extends="Group">
+                        <script uri="useWrapped.bs"/>
+                    </component>
+                `);
+
+                program.setFile<BrsFile>('components/useWrapped.bs', `
+                    import "pkg:/source/wrapped.bs"
+                    sub useTypeStatementType(data as HasName)
+                        print data.name
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+        });
+
         it('classes in namespaces that reference themselves without namespace work', () => {
             program.setFile<BrsFile>('source/class.bs', `
                 namespace Alpha

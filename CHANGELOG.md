@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.49](https://github.com/rokucommunity/brighterscript/compare/1.0.0-alpha.48...v1.0.0-alpha.49) - 2025-12-10
+### Added
+ - Adds `TypeStatement` for declaring new types ([#1597](https://github.com/rokucommunity/brighterscript/pull/1597))
+ - Adds Inline interfaces ([#1591](https://github.com/rokucommunity/brighterscript/pull/1591))
+### Changed
+ - Make Invalid compatible with typed arrays ([#1596](https://github.com/rokucommunity/brighterscript/pull/1596))
+ - Limit scope Validation ([#1586](https://github.com/rokucommunity/brighterscript/pull/1586))
+ - Interface extending node includes callfuncs ([#1585](https://github.com/rokucommunity/brighterscript/pull/1585))
+ - Remove zip and sideload ([#1562](https://github.com/rokucommunity/brighterscript/pull/1562))
+ - upgrade to [roku-deploy@3.14.4](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3144---2025-10-30)
+### Fixed
+ - Fix validation exception when calling `roFunction` ([#1588](https://github.com/rokucommunity/brighterscript/pull/1588))
+ - Fix `MaskGroup.maskUri` type ([#1559](https://github.com/rokucommunity/brighterscript/pull/1559))
+### Removed
+ - Remove unused util functions ([#1565](https://github.com/rokucommunity/brighterscript/pull/1565))
+
+
+
 ## [1.0.0-alpha.48](https://github.com/rokucommunity/brighterscript/compare/1.0.0-alpha.47...v1.0.0-alpha.48) - 2025-07-16
 ### Changed
  - Union Return type consistency ([#1508](https://github.com/rokucommunity/brighterscript/pull/1508))

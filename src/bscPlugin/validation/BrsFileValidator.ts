@@ -1,4 +1,4 @@
-import { isAliasStatement, isBlock, isBody, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isBlock, isBody, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypecastExpression, isTypecastStatement, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -17,6 +17,7 @@ import type { Range } from 'vscode-languageserver';
 import type { Token } from '../../lexer/Token';
 import type { BrightScriptDoc } from '../../parser/BrightScriptDocParser';
 import brsDocParser from '../../parser/BrightScriptDocParser';
+import { TypeStatementType } from '../../types/TypeStatementType';
 
 export class BrsFileValidator {
     constructor(
@@ -325,6 +326,13 @@ export class BrsFileValidator {
                 node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node, doNotMerge: true, isAlias: true }, targetType, SymbolTypeFlag.runtime | SymbolTypeFlag.typetime);
 
             },
+            TypeStatement: (node) => {
+                this.validateDeclarationLocations(node, 'type', () => util.createBoundingRange(node.tokens.type, node.tokens.name));
+                const wrappedNodeType = node.getType({ flags: SymbolTypeFlag.runtime });
+                const typeStmtType = new TypeStatementType(node.tokens.name.text, wrappedNodeType);
+                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node, isFromTypeStatement: true }, typeStmtType, SymbolTypeFlag.typetime);
+
+            },
             IfStatement: (node) => {
                 this.setUpComplementSymbolTables(node, isIfStatement);
             },
@@ -552,7 +560,8 @@ export class BrsFileValidator {
                     !isConditionalCompileConstStatement(statement) &&
                     !isConditionalCompileErrorStatement(statement) &&
                     !isConditionalCompileStatement(statement) &&
-                    !isAliasStatement(statement)
+                    !isAliasStatement(statement) &&
+                    !isTypeStatement(statement)
                 ) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.unexpectedStatementOutsideFunction(),

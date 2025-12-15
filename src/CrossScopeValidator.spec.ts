@@ -1635,5 +1635,24 @@ describe('CrossScopeValidator', () => {
                 DiagnosticMessages.nameCollision('Interface', 'Const', 'alpha.beta.Test')
             ]);
         });
+
+        it('finds duplicates when using type statements', () => {
+            program.setFile('source/utils.bs', `
+                namespace alpha
+                    type myInt = integer
+
+
+                    interface myInt
+                        value as string
+                    end interface
+                end namespace
+            `);
+
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.nameCollision('Type', 'Interface', 'alpha.myInt'),
+                DiagnosticMessages.nameCollision('Interface', 'Type', 'alpha.myInt')
+            ]);
+        });
     });
 });

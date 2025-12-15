@@ -1,4 +1,4 @@
-import type { Body, AssignmentStatement, Block, ExpressionStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement, EnumStatement, EnumMemberStatement, TryCatchStatement, CatchStatement, ThrowStatement, MethodStatement, FieldStatement, ConstStatement, ContinueStatement, DimStatement, TypecastStatement, AliasStatement, AugmentedAssignmentStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ConditionalCompileStatement, ExitStatement } from '../parser/Statement';
+import type { Body, AssignmentStatement, Block, ExpressionStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement, EnumStatement, EnumMemberStatement, TryCatchStatement, CatchStatement, ThrowStatement, MethodStatement, FieldStatement, ConstStatement, ContinueStatement, DimStatement, TypecastStatement, AliasStatement, AugmentedAssignmentStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ConditionalCompileStatement, ExitStatement, TypeStatement } from '../parser/Statement';
 import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, TernaryExpression, NullCoalescingExpression, PrintSeparatorExpression, TypecastExpression, TypedArrayExpression, TypeExpression, InlineInterfaceMemberExpression, InlineInterfaceExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
@@ -40,6 +40,7 @@ import { TokenKind } from '../lexer/TokenKind';
 import type { Program } from '../Program';
 import type { Project } from '../lsp/Project';
 import type { IntersectionType } from '../types/IntersectionType';
+import type { TypeStatementType } from '../types/TypeStatementType';
 
 
 // File reflection
@@ -226,6 +227,9 @@ export function isTypecastStatement(element: AstNode | undefined): element is Ty
 export function isAliasStatement(element: AstNode | undefined): element is AliasStatement {
     return element?.constructor?.name === 'AliasStatement';
 }
+export function isTypeStatement(element: AstNode | undefined): element is TypeStatement {
+    return element?.constructor?.name === 'TypeStatement';
+}
 
 // Expressions reflection
 /**
@@ -336,7 +340,7 @@ export function isRoStringType(value: any): value is InterfaceType {
     return isBuiltInType(value, 'roString');
 }
 export function isStringTypeLike(value: any): value is StringType | InterfaceType {
-    return isStringType(value) || isRoStringType(value);
+    return isStringType(value) || isRoStringType(value) || isComplexTypeOf(value, isStringTypeLike);
 }
 
 export function isTypedFunctionType(value: any): value is TypedFunctionType {
@@ -350,7 +354,7 @@ export function isRoFunctionType(value: any): value is InterfaceType {
     return value?.kind === BscTypeKind.RoFunctionType || isBuiltInType(value, 'roFunction');
 }
 export function isFunctionTypeLike(value: any): value is FunctionType | InterfaceType {
-    return isFunctionType(value) || isRoFunctionType(value);
+    return isFunctionType(value) || isRoFunctionType(value) || isComplexTypeOf(value, isFunctionTypeLike);
 }
 
 export function isBooleanType(value: any): value is BooleanType {
@@ -360,7 +364,7 @@ export function isRoBooleanType(value: any): value is InterfaceType {
     return isBuiltInType(value, 'roBoolean');
 }
 export function isBooleanTypeLike(value: any): value is BooleanType | InterfaceType {
-    return isBooleanType(value) || isRoBooleanType(value);
+    return isBooleanType(value) || isRoBooleanType(value) || isComplexTypeOf(value, isBooleanTypeLike);
 }
 
 export function isIntegerType(value: any): value is IntegerType {
@@ -370,7 +374,7 @@ export function isRoIntType(value: any): value is LongIntegerType {
     return isBuiltInType(value, 'roInt');
 }
 export function isIntegerTypeLike(value: any): value is IntegerType | InterfaceType {
-    return isIntegerType(value) || isRoIntType(value);
+    return isIntegerType(value) || isRoIntType(value) || isComplexTypeOf(value, isIntegerTypeLike);
 }
 
 export function isLongIntegerType(value: any): value is LongIntegerType {
@@ -380,7 +384,7 @@ export function isRoLongIntegerType(value: any): value is InterfaceType {
     return isBuiltInType(value, 'roLongInteger');
 }
 export function isLongIntegerTypeLike(value: any): value is LongIntegerType | InterfaceType {
-    return isLongIntegerType(value) || isRoLongIntegerType(value);
+    return isLongIntegerType(value) || isRoLongIntegerType(value) || isComplexTypeOf(value, isLongIntegerTypeLike);
 }
 
 export function isFloatType(value: any): value is FloatType {
@@ -390,9 +394,8 @@ export function isRoFloatType(value: any): value is InterfaceType {
     return isBuiltInType(value, 'roFloat');
 }
 export function isFloatTypeLike(value: any): value is FloatType | InterfaceType {
-    return isFloatType(value) || isRoFloatType(value);
+    return isFloatType(value) || isRoFloatType(value) || isComplexTypeOf(value, isFloatTypeLike);
 }
-
 
 export function isDoubleType(value: any): value is DoubleType {
     return value?.kind === BscTypeKind.DoubleType;
@@ -401,7 +404,7 @@ export function isRoDoubleType(value: any): value is InterfaceType {
     return isBuiltInType(value, 'roDouble');
 }
 export function isDoubleTypeLike(value: any): value is DoubleType | InterfaceType {
-    return isDoubleType(value) || isRoDoubleType(value);
+    return isDoubleType(value) || isRoDoubleType(value) || isComplexTypeOf(value, isDoubleTypeLike);
 }
 
 export function isInvalidType(value: any): value is InvalidType {
@@ -411,7 +414,7 @@ export function isRoInvalidType(value: any): value is InterfaceType {
     return isBuiltInType(value, 'roInvalid');
 }
 export function isInvalidTypeLike(value: any): value is InvalidType | InterfaceType {
-    return isInvalidType(value) || isRoInvalidType(value);
+    return isInvalidType(value) || isRoInvalidType(value) || isComplexTypeOf(value, isInvalidTypeLike);
 }
 
 export function isVoidType(value: any): value is VoidType {
@@ -471,12 +474,16 @@ export function isArrayType(value: any): value is ArrayType {
 export function isAssociativeArrayType(value: any): value is AssociativeArrayType {
     return value?.kind === BscTypeKind.AssociativeArrayType;
 }
+export function isTypeStatementType(value: any): value is TypeStatementType {
+    return value?.kind === BscTypeKind.TypeStatementType;
+}
+
 export function isInheritableType(target): target is InheritableType {
-    return isClassType(target) || isCallFuncableType(target);
+    return isClassType(target) || isCallFuncableType(target) || isComplexTypeOf(target, isInheritableType);
 }
 
 export function isCallFuncableType(target): target is CallFuncableType {
-    return isInterfaceType(target) || isComponentType(target);
+    return isInterfaceType(target) || isComponentType(target) || isComplexTypeOf(target, isCallFuncableType);
 }
 
 export function isCallableType(target): target is BaseFunctionType {
@@ -489,20 +496,36 @@ export function isAnyReferenceType(target): target is AnyReferenceType {
 }
 
 export function isNumberType(value: any): value is IntegerType | LongIntegerType | FloatType | DoubleType | InterfaceType {
+    return isIntegerType(value) ||
+        isLongIntegerType(value) ||
+        isFloatType(value) ||
+        isDoubleType(value);
+}
+
+export function isNumberTypeLike(value: any): value is IntegerType | LongIntegerType | FloatType | DoubleType | InterfaceType {
     return isIntegerTypeLike(value) ||
         isLongIntegerTypeLike(value) ||
         isFloatTypeLike(value) ||
-        isDoubleTypeLike(value);
+        isDoubleTypeLike(value) ||
+        isComplexTypeOf(value, isNumberTypeLike);
 }
 
 export function isPrimitiveType(value: any = false): value is IntegerType | LongIntegerType | FloatType | DoubleType | StringType | BooleanType | InterfaceType {
     return isNumberType(value) ||
+        isBooleanType(value) ||
+        isStringType(value);
+}
+
+export function isPrimitiveTypeLike(value: any = false): value is IntegerType | LongIntegerType | FloatType | DoubleType | StringType | BooleanType | InterfaceType {
+    return isNumberTypeLike(value) ||
         isBooleanTypeLike(value) ||
-        isStringTypeLike(value);
+        isStringTypeLike(value) ||
+        isTypeStatementTypeOf(value, isPrimitiveTypeLike);
 }
 
 export function isBuiltInType(value: any, name: string): value is InterfaceType {
-    return isInterfaceType(value) && value.name.toLowerCase() === name.toLowerCase() && value.isBuiltIn;
+    return (isInterfaceType(value) && value.name.toLowerCase() === name.toLowerCase() && value.isBuiltIn) ||
+        (isTypeStatementType(value) && isBuiltInType(value.wrappedType, name));
 }
 
 const nativeTypeKinds = [
@@ -513,6 +536,20 @@ const nativeTypeKinds = [
 ];
 export function isNativeType(value: any): value is IntegerType | LongIntegerType | FloatType | DoubleType | StringType | BooleanType | VoidType | DynamicType | ObjectType | FunctionType | InterfaceType {
     return isPrimitiveType(value) || nativeTypeKinds.includes(value?.kind);
+}
+
+export function isTypeStatementTypeOf(value: any, typeGuard: (val: any) => boolean) {
+    return isTypeStatementType(value) && typeGuard(value.wrappedType);
+}
+
+export function isUnionTypeOf(value: any, typeGuard: (val: any) => boolean) {
+    return isUnionType(value) && value.types.every(typeGuard);
+}
+
+export function isComplexTypeOf(value: any, typeGuard: (val: any) => boolean) {
+    // TODO: add more complex type checks as needed, like IntersectionType
+    return isTypeStatementTypeOf(value, typeGuard) ||
+        isUnionTypeOf(value, typeGuard);
 }
 
 
