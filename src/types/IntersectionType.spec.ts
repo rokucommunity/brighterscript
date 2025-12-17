@@ -7,7 +7,6 @@ import { InterfaceType } from './InterfaceType';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { BooleanType } from './BooleanType';
 import { expectTypeToBe } from '../testHelpers.spec';
-import { isReferenceType } from '../astUtils/reflection';
 import { SymbolTable } from '../SymbolTable';
 import { ReferenceType } from './ReferenceType';
 
@@ -31,10 +30,8 @@ describe('IntersectionType', () => {
 
         expectTypeToBe(nameType, StringType);
 
-        expectTypeToBe(addressType, IntersectionType);
-        expect((addressType as IntersectionType).types.length).to.eq(2);
-        expect((addressType as IntersectionType).types).to.include(addressInterfaceType);
-        expect((addressType as IntersectionType).types.filter(isReferenceType).length).to.equal(1); // no address in iface1, so it is reference
+        expectTypeToBe(addressType, InterfaceType);
+        expect(addressType).to.equal(addressInterfaceType);
 
         expectTypeToBe(ageType, IntersectionType);
         expect((ageType as IntersectionType).types.length).to.eq(2);
@@ -71,6 +68,53 @@ describe('IntersectionType', () => {
         expect(myInter2.isResolvable()).to.be.false;
     });
 
+    it('inner type order does not affect equality', () => {
+        const inter1 = new IntersectionType([StringType.instance, IntegerType.instance, FloatType.instance]);
+        const inter2 = new IntersectionType([FloatType.instance, StringType.instance, IntegerType.instance]);
+        expect(inter1.isEqual(inter2)).to.be.true;
+    });
+
+    it('more specific intersections are compatible with less specific ones', () => {
+        const inter1 = new IntersectionType([StringType.instance, BooleanType.instance, FloatType.instance]);
+        const inter2 = new IntersectionType([FloatType.instance, BooleanType.instance]);
+        expect(inter1.isTypeCompatible(inter2)).to.be.false;
+        expect(inter2.isTypeCompatible(inter1)).to.be.true;
+    });
+
+
+    it('more specific member interface is compatible with less specific ones', () => {
+        const iFace1 = new InterfaceType('iFace1');
+        iFace1.addMember('age', null, IntegerType.instance, SymbolTypeFlag.runtime);
+        iFace1.addMember('name', null, StringType.instance, SymbolTypeFlag.runtime);
+
+        const iFace2 = new InterfaceType('iFace2');
+        iFace2.addMember('age', null, IntegerType.instance, SymbolTypeFlag.runtime);
+        iFace2.addMember('name', null, StringType.instance, SymbolTypeFlag.runtime);
+        iFace2.addMember('height', null, FloatType.instance, SymbolTypeFlag.runtime);
+
+        const inter1 = new IntersectionType([iFace1, StringType.instance]);
+        const inter2 = new IntersectionType([iFace2, StringType.instance]);
+        expect(inter2.isTypeCompatible(inter1)).to.be.false;
+        expect(inter1.isTypeCompatible(inter2)).to.be.true;
+    });
+
+
+    it('interface is compatible with intersection with common members and vice versa', () => {
+        const iFace1 = new InterfaceType('iFace1');
+        iFace1.addMember('age', null, IntegerType.instance, SymbolTypeFlag.runtime);
+        iFace1.addMember('name', null, StringType.instance, SymbolTypeFlag.runtime);
+
+        const iFace2 = new InterfaceType('iFace2');
+        iFace2.addMember('age', null, IntegerType.instance, SymbolTypeFlag.runtime);
+
+        const iFace3 = new InterfaceType('iFace3');
+        iFace3.addMember('name', null, StringType.instance, SymbolTypeFlag.runtime);
+
+        const inter = new IntersectionType([iFace2, iFace3]);
+        expect(iFace1.isTypeCompatible(inter)).to.be.true;
+        expect(inter.isTypeCompatible(iFace1)).to.be.true;
+    });
+
 
     describe('getMemberType', () => {
         it('will find the intersection of inner types', () => {
@@ -99,7 +143,7 @@ describe('IntersectionType', () => {
         });
 
 
-        it('will return reference types if any inner type does not include the member', () => {
+        it('will not return reference types if at least one inner type includes the member', () => {
             const iFace1 = new InterfaceType('iFace1');
             iFace1.addMember('age', null, IntegerType.instance, SymbolTypeFlag.runtime);
             iFace1.addMember('name', null, StringType.instance, SymbolTypeFlag.runtime);
@@ -112,17 +156,16 @@ describe('IntersectionType', () => {
             const myInter = new IntersectionType([iFace1, iFace2]);
             const options = { flags: SymbolTypeFlag.runtime };
             const heightType1 = myInter.getMemberType('height', options);
-            expectTypeToBe(heightType1, IntersectionType);
-            const heightTypes1 = (heightType1 as IntersectionType).types;
-            expect(heightTypes1.length).to.eq(2);
-            expectTypeToBe(heightTypes1[0], FloatType);
-            // height does not exist in iFace2
-            expect(isReferenceType(heightTypes1[1])).to.be.true;
-            expect(heightTypes1[1].isResolvable()).to.be.false;
+            expectTypeToBe(heightType1, FloatType);
 
-            iFace2.addMember('height', null, FloatType.instance, SymbolTypeFlag.runtime);
+            // adding new member to iFace2, result will be intersection
+            iFace2.addMember('height', null, BooleanType.instance, SymbolTypeFlag.runtime);
             const heightType2 = myInter.getMemberType('height', options);
-            expectTypeToBe(heightType2, FloatType);
+            expectTypeToBe(heightType2, IntersectionType);
+            const heightTypes2 = (heightType2 as IntersectionType).types;
+            expect(heightTypes2.length).to.eq(2);
+            expectTypeToBe(heightTypes2[0], FloatType);
+            expectTypeToBe(heightTypes2[1], BooleanType);
         });
     });
 

@@ -1,5 +1,5 @@
 import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
-import { isDynamicType, isIntersectionType, isObjectType, isTypedFunctionType } from '../astUtils/reflection';
+import { isAssociativeArrayType, isDynamicType, isIntersectionType, isObjectType, isTypedFunctionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { ReferenceType } from './ReferenceType';
 import { addAssociatedTypesTableAsSiblingToMemberTable, getAllTypesFromComplexType, isEnumTypeCompatible, joinTypesString, reduceTypesForIntersectionType } from './helpers';
@@ -9,6 +9,7 @@ import { SymbolTable } from '../SymbolTable';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import { util } from '../util';
+import { DynamicType } from './DynamicType';
 
 export function intersectionTypeFactory(types: BscType[]) {
     return new IntersectionType(types);
@@ -42,11 +43,14 @@ export class IntersectionType extends BscType {
 
     private getMemberTypeFromInnerTypes(name: string, options: GetTypeOptions): BscType {
         const typeFromMembers = this.types.map((innerType) => {
-            return innerType?.getMemberType(name, options);
+            return innerType?.getMemberType(name, { ...options, ignoreAADefaultDynamicMembers: true });
         });
         const filteredTypes = reduceTypesForIntersectionType(typeFromMembers.filter(t => t !== undefined));
 
         if (filteredTypes.length === 0) {
+            if (this.types.some(isAssociativeArrayType)) {
+                return DynamicType.instance;
+            }
             return undefined;
         } else if (filteredTypes.length === 1) {
             return filteredTypes[0];

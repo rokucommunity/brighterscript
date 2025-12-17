@@ -151,11 +151,15 @@ export function reduceTypesForIntersectionType(types: BscType[], allowNameEquali
     }
 
     types = types.map(t => {
-        if (isReferenceType(t) && t.isResolvable()) {
-            return (t as any).getTarget() ?? t;
+        if (isReferenceType(t)) {
+            if (t.isResolvable()) {
+                return (t as any).getTarget() ?? t;
+
+            }
+            return undefined;
         }
         return t;
-    });
+    }).filter(t => t);
 
     // Get a list of unique types, based on the `isEqual()` method
     const uniqueTypes = getUniqueTypesFromArray(types, allowNameEquality).map(t => {

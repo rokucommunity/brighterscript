@@ -35,6 +35,7 @@ import { FunctionType } from '../types/FunctionType';
 import type { BaseFunctionType } from '../types/BaseFunctionType';
 import { brsDocParser } from './BrightScriptDocParser';
 import { InlineInterfaceType } from '../types/InlineInterfaceType';
+import { IntersectionType } from '../types/IntersectionType';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -88,6 +89,8 @@ export class BinaryExpression extends Expression {
             switch (operatorKind) {
                 case TokenKind.Or:
                     return new UnionType([this.left.getType(options), this.right.getType(options)]);
+                case TokenKind.And:
+                    return new IntersectionType([this.left.getType(options), this.right.getType(options)]);
                 //TODO: Intersection Types?, eg. case TokenKind.And:
             }
         } else if (options.flags & SymbolTypeFlag.runtime) {
