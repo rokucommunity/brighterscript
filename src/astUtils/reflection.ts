@@ -39,6 +39,7 @@ import type { AssociativeArrayType } from '../types/AssociativeArrayType';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Program } from '../Program';
 import type { Project } from '../lsp/Project';
+import type { IntersectionType } from '../types/IntersectionType';
 import type { TypeStatementType } from '../types/TypeStatementType';
 
 
@@ -461,6 +462,9 @@ export function isNamespaceType(value: any): value is NamespaceType {
 export function isUnionType(value: any): value is UnionType {
     return value?.kind === BscTypeKind.UnionType;
 }
+export function isIntersectionType(value: any): value is IntersectionType {
+    return value?.kind === BscTypeKind.IntersectionType;
+}
 export function isUninitializedType(value: any): value is UninitializedType {
     return value?.kind === BscTypeKind.UninitializedType;
 }
@@ -475,7 +479,7 @@ export function isTypeStatementType(value: any): value is TypeStatementType {
 }
 
 export function isInheritableType(target): target is InheritableType {
-    return isClassType(target) || isCallFuncableType(target) || isComplexTypeOf(target, isInheritableType);
+    return isClassType(target) || isCallFuncableType(target);
 }
 
 export function isCallFuncableType(target): target is CallFuncableType {
@@ -548,6 +552,10 @@ export function isComplexTypeOf(value: any, typeGuard: (val: any) => boolean) {
         isUnionTypeOf(value, typeGuard);
 }
 
+
+export function isComplexType(value: any): value is UnionType | IntersectionType {
+    return isUnionType(value) || isIntersectionType(value);
+}
 
 // Literal reflection
 

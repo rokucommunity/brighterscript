@@ -10,6 +10,7 @@ import type { ComponentType } from './ComponentType';
 import { util } from '../util';
 import type { UnionType } from './UnionType';
 import type { ExtraSymbolData } from '../interfaces';
+import type { IntersectionType } from './IntersectionType';
 
 
 export interface BuiltInInterfaceOverride {
@@ -29,6 +30,7 @@ export class BuiltInInterfaceAdder {
     static readonly primitiveTypeInstanceCache = new Cache<string, BscType>();
 
     static typedFunctionFactory: (type: BscType) => TypedFunctionType;
+    static intersectionTypeFactory: (types: BscType[]) => IntersectionType;
     static unionTypeFactory: (types: BscType[]) => UnionType;
 
     static getLookupTable: () => SymbolTable;

@@ -13,6 +13,7 @@ export enum BscTypeKind {
     TypedFunctionType = 'TypedFunctionType',
     IntegerType = 'IntegerType',
     InterfaceType = 'InterfaceType',
+    IntersectionType = 'IntersectionType',
     InvalidType = 'InvalidType',
     LongIntegerType = 'LongIntegerType',
     NamespaceType = 'NamespaceType',
@@ -20,8 +21,8 @@ export enum BscTypeKind {
     ReferenceType = 'ReferenceType',
     RoFunctionType = 'RoFunctionType',
     StringType = 'StringType',
+    TypeStatementType = 'TypeStatementType',
     UninitializedType = 'UninitializedType',
     UnionType = 'UnionType',
-    TypeStatementType = 'TypeStatementType',
     VoidType = 'VoidType'
 }

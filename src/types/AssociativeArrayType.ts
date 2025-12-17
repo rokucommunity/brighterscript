@@ -41,7 +41,11 @@ export class AssociativeArrayType extends BscType {
 
     getMemberType(name: string, options: GetTypeOptions) {
         // if a member has specifically been added, cool. otherwise, assume dynamic
-        return super.getMemberType(name, options) ?? DynamicType.instance;
+        const memberType = super.getMemberType(name, options);
+        if (!memberType && !options.ignoreAADefaultDynamicMembers) {
+            return DynamicType.instance;
+        }
+        return memberType;
     }
 
     isEqual(otherType: BscType) {
