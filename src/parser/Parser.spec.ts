@@ -1,14 +1,14 @@
 import { expect, assert } from '../chai-config.spec';
 import { Lexer } from '../lexer/Lexer';
 import { ReservedWords, TokenKind } from '../lexer/TokenKind';
-import type { AAMemberExpression, BinaryExpression, InlineInterfaceExpression, LiteralExpression, TypecastExpression, UnaryExpression } from './Expression';
+import type { AAMemberExpression, BinaryExpression, GroupingExpression, InlineInterfaceExpression, LiteralExpression, TypecastExpression, TypeExpression, UnaryExpression } from './Expression';
 import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression, VariableExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
 import type { AliasStatement, AssignmentStatement, Block, ClassStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ConditionalCompileStatement, ExitStatement, ForStatement, IfStatement, InterfaceStatement, ReturnStatement, TypecastStatement, TypeStatement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isAliasStatement, isAssignmentStatement, isBinaryExpression, isBlock, isBody, isCallExpression, isCallfuncExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isDottedGetExpression, isExitStatement, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInlineInterfaceExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isTypeStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAliasStatement, isAssignmentStatement, isBinaryExpression, isBlock, isBody, isCallExpression, isCallfuncExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isDottedGetExpression, isExitStatement, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInlineInterfaceExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, rootDir } from '../testHelpers.spec';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { Expression, Statement } from './AstNode';
@@ -1676,6 +1676,27 @@ describe('parser', () => {
             const leftAndExpr = binExpr.left as BinaryExpression;
             expect(leftAndExpr.tokens.operator.kind).to.equal(TokenKind.And);
         });
+
+        it('allows grouped expression to override order of operations', () => {
+            let { ast, diagnostics } = parse(`
+                sub main(param as string and (integer or float))
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const func = (ast.statements[0] as FunctionStatement).func;
+            const paramExpr = func.parameters[0];
+            let binExpr = paramExpr.typeExpression.expression as BinaryExpression;
+            //first level should be 'and'
+            expect(binExpr.tokens.operator.kind).to.equal(TokenKind.And);
+            //right side should be 'or'
+            expect(isGroupingExpression(binExpr.right)).to.be.true;
+            const groupedExpr = binExpr.right as GroupingExpression;
+            expect(isGroupingExpression(groupedExpr)).to.be.true;
+            expect(isTypeExpression(groupedExpr.expression)).to.be.true;
+            const rightOrExpr = (groupedExpr.expression as TypeExpression).expression as BinaryExpression;
+            expect(rightOrExpr.tokens.operator.kind).to.equal(TokenKind.Or);
+        });
     });
 
 
@@ -2634,6 +2655,18 @@ describe('parser', () => {
         it('allows type statement with complicated type', () => {
             let { ast, diagnostics } = parse(`
                 type x = string or CustomKlass or roAssociativeArray
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(isTypeStatement(ast.statements[0])).to.be.true;
+            const stmt = ast.statements[0] as TypeStatement;
+            expect(stmt.tokens.type.text).to.eq('type');
+            expect(stmt.value).to.exist;
+        });
+
+        it('allows grouped expressions in type statement', () => {
+            let { ast, diagnostics } = parse(`
+                type guy = ({name as string} or {age as integer}) and {foo as boolean, age as integer}
+
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(diagnostics);
             expect(isTypeStatement(ast.statements[0])).to.be.true;

@@ -7,7 +7,7 @@ import { Program } from './Program';
 import PluginInterface from './PluginInterface';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim } from './testHelpers.spec';
 import type { BrsFile } from './files/BrsFile';
-import type { AssignmentStatement, ForEachStatement, IfStatement, NamespaceStatement, PrintStatement } from './parser/Statement';
+import type { AssignmentStatement, ForEachStatement, IfStatement, NamespaceStatement, PrintStatement, TypeStatement } from './parser/Statement';
 import type { CompilerPlugin, OnScopeValidateEvent } from './interfaces';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { EnumMemberType, EnumType } from './types/EnumType';
@@ -20,7 +20,7 @@ import { FloatType } from './types/FloatType';
 import { NamespaceType } from './types/NamespaceType';
 import { DoubleType } from './types/DoubleType';
 import { UnionType } from './types/UnionType';
-import { isBlock, isCallExpression, isForEachStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isNamespaceStatement, isPrintStatement } from './astUtils/reflection';
+import { isBlock, isCallExpression, isForEachStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isNamespaceStatement, isPrintStatement, isTypeStatement } from './astUtils/reflection';
 import { ArrayType } from './types/ArrayType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { InterfaceType } from './types/InterfaceType';
@@ -3040,6 +3040,26 @@ describe('Scope', () => {
                 expectTypeToBe(customDataType, StringType);
                 const countType = mainSymbolTable.getSymbolType('y', { flags: SymbolTypeFlag.runtime });
                 expectTypeToBe(countType, IntegerType);
+            });
+
+            it('allows grouped expressions in type statement', () => {
+                const mainFile = program.setFile<BrsFile>('source/main.bs', `
+                    type guy = ({name as string, age as integer} or {id as integer, age as integer}) and {foo as boolean}
+
+
+                    sub foo(person as guy)
+                        if person.foo
+                            print person.age + 123
+                        end if
+                    end sub
+                `);
+                const ast = mainFile.ast;
+                program.validate();
+                expectZeroDiagnostics(program);
+                expect(isTypeStatement(ast.statements[0])).to.be.true;
+                const stmt = ast.statements[0] as TypeStatement;
+                expect(stmt.tokens.type.text).to.eq('type');
+                expect(stmt.value).to.exist;
             });
         });
 

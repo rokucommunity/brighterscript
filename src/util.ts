@@ -25,7 +25,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isComplexType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -34,7 +34,7 @@ import type { XmlFile } from './files/XmlFile';
 import type { AstNode, Expression, Statement } from './parser/AstNode';
 import { AstNodeKind } from './parser/AstNode';
 import type { UnresolvedSymbol } from './AstValidationSegmenter';
-import type { BscSymbol, GetSymbolTypeOptions, SymbolTable } from './SymbolTable';
+import type { GetSymbolTypeOptions, SymbolTable } from './SymbolTable';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { createIdentifier, createToken } from './astUtils/creators';
 import { MAX_RELATED_INFOS_COUNT } from './diagnosticUtils';
@@ -2327,17 +2327,19 @@ export class Util {
         return false;
     }
 
-    public getCustomTypesInSymbolTree(setToFill: Set<BscType>, type: BscType, filter?: (t: BscSymbol) => boolean) {
-        const subSymbols = type.getMemberTable()?.getAllSymbols(SymbolTypeFlag.runtime) ?? [];
-        for (const subSymbol of subSymbols) {
-            if (!subSymbol.type?.isBuiltIn && !setToFill.has(subSymbol.type)) {
-                if (filter && !filter(subSymbol)) {
+    public getCustomTypesInSymbolTree(setToFill: Set<BscType>, type: BscType, filter?: (t: BscType) => boolean) {
+        const subSymbolTypes = isComplexType(type)
+            ? type.types
+            : type.getMemberTable()?.getAllSymbols(SymbolTypeFlag.runtime).map(sym => sym.type) ?? [];
+        for (const subSymbolType of subSymbolTypes) {
+            if (!subSymbolType?.isBuiltIn && !setToFill.has(subSymbolType)) {
+                if (filter && !filter(subSymbolType)) {
                     continue;
                 }
                 // if this is a custom type, and we haven't added it to the types to check to see if can add it to the additional types
                 // add the type, and investigate any members
-                setToFill.add(subSymbol.type);
-                this.getCustomTypesInSymbolTree(setToFill, subSymbol.type, filter);
+                setToFill.add(subSymbolType);
+                this.getCustomTypesInSymbolTree(setToFill, subSymbolType, filter);
             }
 
         }
