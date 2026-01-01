@@ -3038,20 +3038,42 @@ export class Parser {
     private typeExpression(): TypeExpression {
         const changedTokens: { token: Token; oldKind: TokenKind }[] = [];
         try {
+            // handle types with 'and'/'or' operators
+            const expressionsWithOperator: { expression: Expression; operator?: Token }[] = [];
+
+            // find all expressions and operators
             let expr: Expression = this.getTypeExpressionPart(changedTokens);
             while (this.options.mode === ParseMode.BrighterScript && this.matchAny(TokenKind.Or, TokenKind.And)) {
-                // If we're in Brighterscript mode, allow union types with "or" between types
-                // TODO: Handle Union types in parens? eg. "(string or integer)"
                 let operator = this.previous();
-                let right = this.getTypeExpressionPart(changedTokens);
-                if (right) {
-                    expr = new BinaryExpression({ left: expr, operator: operator, right: right });
-                } else {
-                    break;
-                }
+                expressionsWithOperator.push({ expression: expr, operator: operator });
+                expr = this.getTypeExpressionPart(changedTokens);
             }
-            if (expr) {
-                return new TypeExpression({ expression: expr });
+            // add last expression
+            expressionsWithOperator.push({ expression: expr });
+
+            // handle expressions with order of operations - first "and", then "or"
+            const combineExpressions = (opToken: TokenKind) => {
+                let exprWithOp = expressionsWithOperator[0];
+                let index = 0;
+                while (exprWithOp?.operator) {
+                    if (exprWithOp.operator.kind === opToken) {
+                        const nextExpr = expressionsWithOperator[index + 1];
+                        const combinedExpr = new BinaryExpression({ left: exprWithOp.expression, operator: exprWithOp.operator, right: nextExpr.expression });
+                        // replace the two expressions with the combined one
+                        expressionsWithOperator.splice(index, 2, { expression: combinedExpr, operator: nextExpr.operator });
+                        exprWithOp = expressionsWithOperator[index];
+                    } else {
+                        index++;
+                        exprWithOp = expressionsWithOperator[index];
+                    }
+                }
+            };
+
+            combineExpressions(TokenKind.And);
+            combineExpressions(TokenKind.Or);
+
+            if (expressionsWithOperator[0]?.expression) {
+                return new TypeExpression({ expression: expressionsWithOperator[0].expression });
             }
 
         } catch (error) {

@@ -1639,6 +1639,43 @@ describe('parser', () => {
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(diagnostics);
         });
+
+        it('follows order of operations with "or" first lexically', () => {
+            let { ast, diagnostics } = parse(`
+                sub main(param as string or integer and float)
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const func = (ast.statements[0] as FunctionStatement).func;
+            const paramExpr = func.parameters[0];
+            let binExpr = paramExpr.typeExpression.expression as BinaryExpression;
+            //first level should be 'or'
+            expect(binExpr.tokens.operator.kind).to.equal(TokenKind.Or);
+            //right side should be 'and'
+            expect(isBinaryExpression(binExpr.right)).to.be.true;
+            const rightAndExpr = binExpr.right as BinaryExpression;
+            expect(rightAndExpr.tokens.operator.kind).to.equal(TokenKind.And);
+        });
+
+
+        it('follows order of operations with "and" first lexically', () => {
+            let { ast, diagnostics } = parse(`
+                sub main(param as string and integer or float)
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const func = (ast.statements[0] as FunctionStatement).func;
+            const paramExpr = func.parameters[0];
+            let binExpr = paramExpr.typeExpression.expression as BinaryExpression;
+            //first level should be 'or'
+            expect(binExpr.tokens.operator.kind).to.equal(TokenKind.Or);
+            //left side should be 'and'
+            expect(isBinaryExpression(binExpr.left)).to.be.true;
+            const leftAndExpr = binExpr.left as BinaryExpression;
+            expect(leftAndExpr.tokens.operator.kind).to.equal(TokenKind.And);
+        });
     });
 
 
