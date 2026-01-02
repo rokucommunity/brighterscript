@@ -3047,7 +3047,6 @@ export class Parser {
                 let operator = this.previous();
                 expressionsWithOperator.push({ expression: expr, operator: operator });
                 expr = this.getTypeExpressionPart(changedTokens);
-                console.log('got type part', this.current);
             }
             // add last expression
             expressionsWithOperator.push({ expression: expr });
@@ -3057,7 +3056,6 @@ export class Parser {
                 let exprWithOp = expressionsWithOperator[0];
                 let index = 0;
                 while (exprWithOp?.operator) {
-                    console.log(`checking operator ${TokenKind[exprWithOp.operator.kind]} against ${TokenKind[opToken]}`, index);
                     if (exprWithOp.operator.kind === opToken) {
                         const nextExpr = expressionsWithOperator[index + 1];
                         const combinedExpr = new BinaryExpression({ left: exprWithOp.expression, operator: exprWithOp.operator, right: nextExpr.expression });

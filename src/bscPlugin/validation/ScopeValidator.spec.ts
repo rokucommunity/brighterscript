@@ -7,7 +7,7 @@ import type { TypeCompatibilityData } from '../../interfaces';
 import { IntegerType } from '../../types/IntegerType';
 import { StringType } from '../../types/StringType';
 import type { BrsFile } from '../../files/BrsFile';
-import { FloatType, InterfaceType, TypedFunctionType, VoidType } from '../../types';
+import { FloatType, InterfaceType, TypedFunctionType, VoidType, BooleanType } from '../../types';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import undent from 'undent';
@@ -276,6 +276,25 @@ describe('ScopeValidator', () => {
             program.validate();
             expectDiagnostics(program, [
                 DiagnosticMessages.mismatchArgumentCount(1, 0).message
+            ]);
+        });
+
+        it.only('validates against functions defined in intersection types', () => {
+            program.setFile('source/main.bs', `
+                interface IFirst
+                    num as integer
+                end interface
+                interface ISecond
+                    function doThing2(a as integer, b as string) as void
+                end interface
+
+                sub main(thing as IFirst and ISecond)
+                    thing.doThing2(thing.num)
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(2, 1).message
             ]);
         });
     });
@@ -1915,6 +1934,99 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
+        });
+
+        describe.only('intersection types', () => {
+
+            it('validates against functions defined in intersection types', () => {
+                program.setFile('source/main.bs', `
+                    interface IFirst
+                        num as integer
+                    end interface
+                    interface ISecond
+                        function doThing2(a as integer, b as string) as void
+                    end interface
+
+                    sub main(thing as IFirst and ISecond)
+                        thing.doThing2(thing.num, false) ' b should be a string
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('boolean', 'string').message
+                ]);
+            });
+
+            it('allows passing AAs that satisfy intersection types', () => {
+                program.setFile('source/main.bs', `
+                    interface IFirst
+                        num as integer
+                    end interface
+                    interface ISecond
+                        function doThing2(a as integer, b as string) as void
+                    end interface
+
+                    sub main()
+                        thing = {
+                            num: 123,
+                            doThing2: function(a as integer, b as string) as void
+                                print a
+                                print b
+                            end function
+                        }
+                        usesThing(thing)
+                    end sub
+
+                    sub usesThing(thing as IFirst and ISecond)
+                        thing.doThing2(thing.num, "hello")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates passing AAs that  do not satisfy intersection types', () => {
+                program.setFile('source/main.bs', `
+                    interface IFirst
+                        num as integer
+                    end interface
+                    interface ISecond
+                        function doThing2(a as integer, b as string) as void
+                    end interface
+
+                    sub main()
+                        thing = {
+                            num: false,
+                            doThing2: function(a as integer, b as boolean) as void
+                                print a
+                                print b
+                            end function
+                        }
+                        usesThing(thing)
+                    end sub
+
+                    sub usesThing(thing as IFirst and ISecond)
+                    end sub
+                `);
+                program.validate();
+                const expectedDoThing2 = new TypedFunctionType(VoidType.instance);
+                expectedDoThing2.name = 'doThing2';
+                expectedDoThing2.addParameter('a', IntegerType.instance, false);
+                expectedDoThing2.addParameter('b', StringType.instance, false);
+
+                const actualDoThing2 = new TypedFunctionType(VoidType.instance);
+                actualDoThing2.addParameter('a', IntegerType.instance, false);
+                actualDoThing2.addParameter('b', BooleanType.instance, false);
+                expectDiagnostics(program,
+                    [
+                        DiagnosticMessages.argumentTypeMismatch('roAssociativeArray', 'IFirst and ISecond', {
+                            fieldMismatches: [
+                                { name: 'num', expectedType: IntegerType.instance, actualType: BooleanType.instance },
+                                { name: 'doThing2', expectedType: expectedDoThing2, actualType: actualDoThing2 }
+                            ]
+                        }).message
+                    ]);
+            });
         });
     });
 
