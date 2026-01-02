@@ -279,7 +279,7 @@ describe('ScopeValidator', () => {
             ]);
         });
 
-        it.only('validates against functions defined in intersection types', () => {
+        it('validates against functions defined in intersection types', () => {
             program.setFile('source/main.bs', `
                 interface IFirst
                     num as integer
@@ -1936,7 +1936,7 @@ describe('ScopeValidator', () => {
             expectZeroDiagnostics(program);
         });
 
-        describe.only('intersection types', () => {
+        describe('intersection types', () => {
 
             it('validates against functions defined in intersection types', () => {
                 program.setFile('source/main.bs', `
