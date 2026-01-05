@@ -1521,7 +1521,7 @@ describe('parser', () => {
                     print param
                 end sub
             `, ParseMode.BrightScript);
-            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.expectedStatement()]);
+            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types')]);
         });
 
         it('allows group type expressions in parameters', () => {
@@ -1582,7 +1582,7 @@ describe('parser', () => {
                     print param
                 end sub
             `, ParseMode.BrightScript);
-            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.expectedStatement()]);
+            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types')]);
         });
 
         it('allows union types in parameters', () => {
@@ -1616,7 +1616,7 @@ describe('parser', () => {
                     print param
                 end sub
             `, ParseMode.BrightScript);
-            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.expectedStatement()]);
+            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types')]);
         });
 
         it('allows intersection types in parameters', () => {
@@ -1696,6 +1696,36 @@ describe('parser', () => {
             expect(isTypeExpression(groupedExpr.expression)).to.be.true;
             const rightOrExpr = (groupedExpr.expression as TypeExpression).expression as BinaryExpression;
             expect(rightOrExpr.tokens.operator.kind).to.equal(TokenKind.Or);
+        });
+
+        describe('invalid syntax', () => {
+
+            it('flags union type with missing sides', () => {
+                let { diagnostics } = parse(`
+                    sub main(param as Thing or )
+                        print param
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedIdentifier('or').message);
+            });
+
+            it('flags missing type inside binary type', () => {
+                let { diagnostics } = parse(`
+                    sub main(param as string or and float)
+                        print param
+                    end sub
+                `, ParseMode.BrighterScript);
+                expect(diagnostics[0]?.message).to.exist;
+            });
+
+            it('flags missing group paren', () => {
+                let { diagnostics } = parse(`
+                    sub main(param as (string or float)
+                        print param
+                    end sub
+                `, ParseMode.BrighterScript);
+                expect(diagnostics[0]?.message).to.exist;
+            });
         });
     });
 
@@ -1936,13 +1966,14 @@ describe('parser', () => {
         });
 
         it('gets multiple lines of leading trivia', () => {
-            let { ast } = parse(`
+            let { ast, diagnostics } = parse(`
                 ' Say hello to someone
                 '
                 ' @param {string} name the person you want to say hello to.
-                sub sayHello(name as string = "world")
+                sub sayHello(name = "world" as string)
                 end sub
             `);
+            expectZeroDiagnostics(diagnostics);
             const funcStatements = ast.statements.filter(isFunctionStatement);
             const helloTrivia = funcStatements[0].leadingTrivia;
             expect(helloTrivia.length).to.be.greaterThan(0);
@@ -1969,7 +2000,7 @@ describe('parser', () => {
                 @annotation
                 ' hello comment 3
                 @otherAnnotation
-                sub sayHello(name as string = "world")
+                sub sayHello(name  = "world" as string)
                 end sub
             `, ParseMode.BrighterScript);
             const funcStatements = ast.statements.filter(isFunctionStatement);

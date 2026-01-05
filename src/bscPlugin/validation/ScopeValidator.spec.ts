@@ -1985,7 +1985,7 @@ describe('ScopeValidator', () => {
                 expectZeroDiagnostics(program);
             });
 
-            it('validates passing AAs that  do not satisfy intersection types', () => {
+            it('validates passing AAs that do not satisfy intersection types', () => {
                 program.setFile('source/main.bs', `
                     interface IFirst
                         num as integer
@@ -3738,7 +3738,7 @@ describe('ScopeValidator', () => {
                         inlineMember as {name as string}
                     end interface
 
-                    sub takesInline(someIface as Iface}
+                    sub takesInline(someIface as Iface)
                         someIface.inlineMember = {name: "test"}
                     end sub
                 `);
@@ -3752,7 +3752,7 @@ describe('ScopeValidator', () => {
                         inlineMember as {name as string}
                     end interface
 
-                    sub takesInline(someIface as Iface}
+                    sub takesInline(someIface as Iface)
                         someIface.inlineMember = {name: 123}
                     end sub
                 `);

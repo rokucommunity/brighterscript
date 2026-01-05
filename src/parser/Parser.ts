@@ -105,6 +105,7 @@ import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDotte
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { Expression, Statement } from './AstNode';
 import type { BsDiagnostic, DeepWriteable } from '../interfaces';
+import { warn } from 'console';
 
 
 const declarableTypesLower = DeclarableTypes.map(tokenKind => tokenKind.toLowerCase());
@@ -425,6 +426,9 @@ export class Parser {
             } else {
                 typeExpression = this.typeExpression();
             }
+        }
+        if (this.checkAny(TokenKind.And, TokenKind.Or)) {
+            this.warnIfNotBrighterScriptMode('custom types');
         }
         return [asToken, typeExpression];
     }
@@ -882,8 +886,10 @@ export class Parser {
                     params.push(this.functionParameter());
                 } while (this.match(TokenKind.Comma));
             }
-            let rightParen = this.advance();
-
+            let rightParen = this.consume(
+                DiagnosticMessages.unmatchedLeftToken(leftParen.text, 'function parameter list'),
+                TokenKind.RightParen
+            );
             if (this.check(TokenKind.As)) {
                 [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
             }
@@ -3102,6 +3108,7 @@ export class Parser {
             if (this.options.mode === ParseMode.BrightScript && !declarableTypesLower.includes(this.peek()?.text?.toLowerCase())) {
                 // custom types arrays not allowed in Brightscript
                 this.warnIfNotBrighterScriptMode('custom types');
+                this.advance(); // skip custom type token
                 return expr;
             }
 

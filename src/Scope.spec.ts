@@ -2840,7 +2840,7 @@ describe('Scope', () => {
 
             it('should handle union types grouped', () => {
                 const mainFile = program.setFile<BrsFile>('source/main.bs', `
-                    sub nestedUnion(thing as (Person or Pet) or (Vehicle or Duck)
+                    sub nestedUnion(thing as (Person or Pet) or (Vehicle or Duck))
                         id = thing.id
                         print id
                     end sub
