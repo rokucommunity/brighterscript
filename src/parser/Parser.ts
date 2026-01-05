@@ -105,7 +105,6 @@ import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDotte
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { Expression, Statement } from './AstNode';
 import type { BsDiagnostic, DeepWriteable } from '../interfaces';
-import { warn } from 'console';
 
 
 const declarableTypesLower = DeclarableTypes.map(tokenKind => tokenKind.toLowerCase());
