@@ -39,12 +39,12 @@ describe('IntersectionType', () => {
         expect((ageType as IntersectionType).types).to.include(IntegerType.instance);
     });
 
-    it('can assign to a more general Intersection', () => {
+    it('can assign to a more specific Intersection', () => {
         const myInter = new IntersectionType([StringType.instance, FloatType.instance]);
-        const otheInter = new IntersectionType([FloatType.instance, StringType.instance, BooleanType.instance]);
+        const otherInter = new IntersectionType([FloatType.instance, StringType.instance, BooleanType.instance]);
 
-        expect(myInter.isTypeCompatible(otheInter)).to.be.true;
-        expect(otheInter.isTypeCompatible(myInter)).to.be.false;
+        expect(myInter.isTypeCompatible(otherInter)).to.be.true;
+        expect(otherInter.isTypeCompatible(myInter)).to.be.false;
     });
 
 
@@ -115,6 +115,23 @@ describe('IntersectionType', () => {
         expect(inter.isTypeCompatible(iFace1)).to.be.true;
     });
 
+    it('is not compatible when it must satisfy conflicting member types', () => {
+        const iFace1 = new InterfaceType('iFace1');
+        iFace1.addMember('age', null, IntegerType.instance, SymbolTypeFlag.runtime);
+
+        const iFace2 = new InterfaceType('iFace2');
+        iFace2.addMember('name', null, StringType.instance, SymbolTypeFlag.runtime);
+
+        const inter = new IntersectionType([iFace1, iFace2]);
+
+        const iFace3 = new InterfaceType('iFace3');
+        iFace3.addMember('age', null, BooleanType.instance, SymbolTypeFlag.runtime);
+        iFace3.addMember('name', null, StringType.instance, SymbolTypeFlag.runtime);
+
+        expect(inter.isTypeCompatible(iFace3)).to.be.false;
+        expect(iFace3.isTypeCompatible(inter)).to.be.false;
+    });
+
 
     describe('getMemberType', () => {
         it('will find the intersection of inner types', () => {
@@ -170,4 +187,3 @@ describe('IntersectionType', () => {
     });
 
 });
-

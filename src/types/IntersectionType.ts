@@ -145,28 +145,29 @@ export class IntersectionType extends BscType {
         }
         if (isIntersectionType(targetType)) {
             // check if this all the types of this type are in the target (eg, target is a super set of this types)
+            let allMembersSatisfied = true;
             for (const memberType of this.types) {
                 let foundCompatibleInnerType = false;
                 for (const targetInnerType of targetType.types) {
                     if (memberType.isTypeCompatible(targetInnerType, data)) {
                         foundCompatibleInnerType = true;
-                        continue;
+                        break;
                     }
                 }
                 if (!foundCompatibleInnerType) {
-                    return false;
+                    allMembersSatisfied = false;
                 }
             }
-            return true;
+            return allMembersSatisfied;
         }
+        let foundCompatibleInnerType = true;
         for (const innerType of this.types) {
-            const foundCompatibleInnerType = innerType.isTypeCompatible(targetType, data);
-            if (foundCompatibleInnerType) {
-                return true;
+            if (!innerType.isTypeCompatible(targetType, data)) {
+                foundCompatibleInnerType = false;
             }
         }
 
-        return false;
+        return foundCompatibleInnerType;
     }
     toString(): string {
         return joinTypesString(this.types, 'and', BscTypeKind.IntersectionType);

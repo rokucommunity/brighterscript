@@ -3262,6 +3262,85 @@ describe('ScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        describe('intersection types', () => {
+
+            it('validates when type is intersection of primitive', () => {
+                program.setFile('source/main.bs', `
+                    function foo() as {id as string} and string
+                        return {id: "test"}
+                    end function
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.returnTypeMismatch('roAssociativeArray', '{id as string} and string').message
+                ]);
+            });
+
+            it('allows passing AAs that satisfy intersection types', () => {
+                program.setFile('source/main.bs', `
+                    interface IFirst
+                        num as integer
+                    end interface
+                    interface ISecond
+                        function doThing2(a as integer, b as string) as void
+                    end interface
+
+                    function getThing() as IFirst and ISecond
+                        thing = {
+                            num: 123,
+                            doThing2: function(a as integer, b as string) as void
+                                print a
+                                print b
+                            end function
+                        }
+                        return thing
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates passing AAs that do not satisfy intersection types', () => {
+                program.setFile('source/main.bs', `
+                    interface IFirst
+                        num as integer
+                    end interface
+                    interface ISecond
+                        function doThing2(a as integer, b as string) as void
+                    end interface
+
+                    function getThing() as IFirst and ISecond
+                        thing = {
+                            num: false,
+                            doThing2: function(a as integer, b as boolean) as void
+                                print a
+                                print b
+                            end function
+                        }
+                        return thing
+                    end function
+                `);
+                program.validate();
+                const expectedDoThing2 = new TypedFunctionType(VoidType.instance);
+                expectedDoThing2.name = 'doThing2';
+                expectedDoThing2.addParameter('a', IntegerType.instance, false);
+                expectedDoThing2.addParameter('b', StringType.instance, false);
+
+                const actualDoThing2 = new TypedFunctionType(VoidType.instance);
+                actualDoThing2.addParameter('a', IntegerType.instance, false);
+                actualDoThing2.addParameter('b', BooleanType.instance, false);
+                expectDiagnostics(program,
+                    [
+                        DiagnosticMessages.returnTypeMismatch('roAssociativeArray', 'IFirst and ISecond', {
+                            fieldMismatches: [
+                                { name: 'num', expectedType: IntegerType.instance, actualType: BooleanType.instance },
+                                { name: 'doThing2', expectedType: expectedDoThing2, actualType: actualDoThing2 }
+                            ]
+                        }).message
+                    ]);
+            });
+        });
     });
 
     describe('returnTypeCoercionMismatch', () => {
