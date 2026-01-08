@@ -1708,6 +1708,31 @@ describe('util', () => {
             });
 
         });
+
+        describe('virtual:/ paths', () => {
+            it('preserves virtual:/ prefix on windows', () => {
+                isWindows = true;
+                test('virtual:/ButtonPrimary.brs', 'virtual:/buttonprimary.brs');
+                test('virtual:\\ButtonPrimary.brs', 'virtual:/buttonprimary.brs');
+            });
+
+            it('preserves virtual:/ prefix on unix', () => {
+                isWindows = false;
+                test('virtual:/ButtonPrimary.brs', 'virtual:/buttonprimary.brs');
+                test('virtual:\\ButtonPrimary.brs', 'virtual:/buttonprimary.brs');
+            });
+
+            it('normalizes consecutive slashes in virtual paths', () => {
+                isWindows = true;
+                test('virtual://one//two.brs', 'virtual:/one/two.brs');
+                isWindows = false;
+                test('virtual://one//two.brs', 'virtual:/one/two.brs');
+            });
+
+            it('lowercases virtual path content', () => {
+                test('virtual:/UPPER/CasePath.brs', 'virtual:/upper/casepath.brs');
+            });
+        });
     });
 
     describe('isClassUsedAsFunction', () => {
