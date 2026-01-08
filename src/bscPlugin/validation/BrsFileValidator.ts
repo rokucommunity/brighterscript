@@ -1,4 +1,4 @@
-import { isAliasStatement, isBlock, isBody, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypecastExpression, isTypecastStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isBlock, isBody, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypecastExpression, isTypecastStatement, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -17,6 +17,7 @@ import type { Range } from 'vscode-languageserver';
 import type { Token } from '../../lexer/Token';
 import type { BrightScriptDoc } from '../../parser/BrightScriptDocParser';
 import brsDocParser from '../../parser/BrightScriptDocParser';
+import { TypeStatementType } from '../../types/TypeStatementType';
 
 export class BrsFileValidator {
     constructor(
@@ -204,10 +205,16 @@ export class BrsFileValidator {
                 // add param symbol at expression level, so it can be used as default value in other params
                 const funcExpr = node.findAncestor<FunctionExpression>(isFunctionExpression);
                 const funcSymbolTable = funcExpr?.getSymbolTable();
-                funcSymbolTable?.addSymbol(paramName, { definingNode: node, isInstance: true, isFromDocComment: data.isFromDocComment, description: data.description }, nodeType, SymbolTypeFlag.runtime);
+                const extraSymbolData: ExtraSymbolData = {
+                    definingNode: node,
+                    isInstance: true,
+                    isFromDocComment: data.isFromDocComment,
+                    description: data.description
+                };
+                funcSymbolTable?.addSymbol(paramName, extraSymbolData, nodeType, SymbolTypeFlag.runtime);
 
                 //also add param symbol at block level, as it may be redefined, and if so, should show a union
-                funcExpr.body.getSymbolTable()?.addSymbol(paramName, { definingNode: node, isInstance: true, isFromDocComment: data.isFromDocComment }, nodeType, SymbolTypeFlag.runtime);
+                funcExpr.body.getSymbolTable()?.addSymbol(paramName, extraSymbolData, nodeType, SymbolTypeFlag.runtime);
             },
             InterfaceStatement: (node) => {
                 if (!node.tokens.name) {
@@ -325,6 +332,13 @@ export class BrsFileValidator {
                 node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node, doNotMerge: true, isAlias: true }, targetType, SymbolTypeFlag.runtime | SymbolTypeFlag.typetime);
 
             },
+            TypeStatement: (node) => {
+                this.validateDeclarationLocations(node, 'type', () => util.createBoundingRange(node.tokens.type, node.tokens.name));
+                const wrappedNodeType = node.getType({ flags: SymbolTypeFlag.runtime });
+                const typeStmtType = new TypeStatementType(node.tokens.name.text, wrappedNodeType);
+                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node, isFromTypeStatement: true }, typeStmtType, SymbolTypeFlag.typetime);
+
+            },
             IfStatement: (node) => {
                 this.setUpComplementSymbolTables(node, isIfStatement);
             },
@@ -334,7 +348,8 @@ export class BrsFileValidator {
                     // this block is in a function. order matters!
                     blockSymbolTable.isOrdered = true;
                 }
-                if (!isFunctionExpression(node.parent)) {
+                if (!isFunctionExpression(node.parent) && node.parent) {
+                    node.symbolTable.name = `Block-${node.parent.kind}@${node.location?.range?.start?.line}`;
                     // we're a block inside another block (or body). This block is a pocket in the bigger block
                     node.parent.getSymbolTable().addPocketTable({
                         index: node.parent.statementIndex,
@@ -552,7 +567,8 @@ export class BrsFileValidator {
                     !isConditionalCompileConstStatement(statement) &&
                     !isConditionalCompileErrorStatement(statement) &&
                     !isConditionalCompileStatement(statement) &&
-                    !isAliasStatement(statement)
+                    !isAliasStatement(statement) &&
+                    !isTypeStatement(statement)
                 ) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.unexpectedStatementOutsideFunction(),

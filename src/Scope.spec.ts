@@ -3910,6 +3910,92 @@ describe('Scope', () => {
 
         });
 
+        describe('type Statements', () => {
+            it('allows type statement types of primitives in function params', () => {
+                program.setFile<BrsFile>('source/wrapped.bs', `
+                    type myString  = string
+                    sub useTypeStatementType(data as myString)
+                        print data.len()
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows type statement types of primitives in variable declarations', () => {
+                program.setFile<BrsFile>('source/wrapped.bs', `
+                    type myInteger = integer
+                    sub useTypeStatementType()
+                        value as myInteger = 123
+                        print value.toStr()
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows type statement types of unions in function params', () => {
+                program.setFile<BrsFile>('source/wrapped.bs', `
+                    type StringOrInteger = string or integer
+                    sub useTypeStatementType(data as StringOrInteger)
+                        print data
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows type statement types wrapping custom types in function params', () => {
+                program.setFile<BrsFile>('source/wrapped.bs', `
+                    interface WithName1
+                        name as string
+                    end interface
+
+                    interface WithName2
+                        name as string
+                    end interface
+
+                    type HasName = WithName1 or WithName2
+
+                    sub useTypeStatementType(data as HasName)
+                        print data.name
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('provides a type statement type when importing a file', () => {
+                program.setFile<BrsFile>('source/wrapped.bs', `
+                    interface WithName1
+                        name as string
+                    end interface
+
+                    interface WithName2
+                        name as string
+                    end interface
+
+                    type HasName = WithName1 or WithName2
+                `);
+
+                program.setFile<BrsFile>('components/useWrapped.xml', `
+                    <component name="useWrapped" extends="Group">
+                        <script uri="useWrapped.bs"/>
+                    </component>
+                `);
+
+                program.setFile<BrsFile>('components/useWrapped.bs', `
+                    import "pkg:/source/wrapped.bs"
+                    sub useTypeStatementType(data as HasName)
+                        print data.name
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+        });
+
         it('classes in namespaces that reference themselves without namespace work', () => {
             program.setFile<BrsFile>('source/class.bs', `
                 namespace Alpha
@@ -4313,6 +4399,238 @@ describe('Scope', () => {
             const ifStmts = file.ast.findChildren<IfStatement>(isIfStatement);
             let lhs2 = (ifStmts[1].condition as BinaryExpression).left as DottedGetExpression;
             expectTypeToBe(lhs2.obj.getType({ flags: SymbolTypeFlag.runtime }), ObjectType);
+        });
+
+        it('should understand assignment within try/catch blocks', () => {
+            const testFile = program.setFile<BrsFile>('source/test.bs', `
+                sub test()
+                    data = "hello"
+                    print data ' printStmt 0 - should be string
+                    try
+                        data = 123
+                        print data ' printStmt 1 - should be int
+                    catch error
+                        print error ' printStmt 2 - (ignored)
+                    end try
+                    print data ' printStmt 3 - should be (string or int)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const printStmts = testFile.ast.findChildren<PrintStatement>(isPrintStatement);
+            let dataVar = printStmts[0].expressions[0];
+            expectTypeToBe(dataVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
+            dataVar = printStmts[1].expressions[0];
+            expectTypeToBe(dataVar.getType({ flags: SymbolTypeFlag.runtime }), IntegerType);
+            dataVar = printStmts[3].expressions[0];
+            let dataVarType = dataVar.getType({ flags: SymbolTypeFlag.runtime });
+            expectTypeToBe(dataVarType, UnionType);
+            expect((dataVarType as UnionType).types).to.include(StringType.instance);
+            expect((dataVarType as UnionType).types).to.include(IntegerType.instance);
+        });
+
+        it('should understand assignment in if/then in try/catch blocks', () => {
+            const testFile = program.setFile<BrsFile>('source/test.bs', `
+                sub test()
+                    data = "hello"
+                    print data ' printStmt 0 - should be string
+                    try
+                        if data = "hello"
+                            data = "goodbye"
+                        end if
+                        print data ' printStmt 1 - should be string
+                    catch error
+                        print error ' printStmt 2 - (ignored)
+                    end try
+                    print data ' printStmt 3 - should be (string)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const printStmts = testFile.ast.findChildren<PrintStatement>(isPrintStatement);
+            let dataVar = printStmts[0].expressions[0];
+            expectTypeToBe(dataVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
+            dataVar = printStmts[1].expressions[0];
+            expectTypeToBe(dataVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
+            dataVar = printStmts[3].expressions[0];
+            let dataVarType = dataVar.getType({ flags: SymbolTypeFlag.runtime });
+            expectTypeToBe(dataVarType, StringType);
+        });
+
+        it('should understand assignment that changes types in if/then in try/catch blocks', () => {
+            const testFile = program.setFile<BrsFile>('source/test.bs', `
+                sub test()
+                    data = "hello"
+                    print data ' printStmt 0 - should be string
+                    try
+                        if data = "hello"
+                            data = 123
+                        end if
+                        print data ' printStmt 1 - should be union (string or int)
+                    catch error
+                        print error ' printStmt 2 - (ignored)
+                    end try
+                    print data ' printStmt 3 - should be union (string or int)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const printStmts = testFile.ast.findChildren<PrintStatement>(isPrintStatement);
+            let dataVar = printStmts[0].expressions[0];
+            expectTypeToBe(dataVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
+            dataVar = printStmts[1].expressions[0];
+            let dataVarType = dataVar.getType({ flags: SymbolTypeFlag.runtime });
+            expectTypeToBe(dataVarType, UnionType);
+            expect((dataVarType as UnionType).types).to.include(StringType.instance);
+            expect((dataVarType as UnionType).types).to.include(IntegerType.instance);
+            dataVar = printStmts[3].expressions[0];
+            dataVarType = dataVar.getType({ flags: SymbolTypeFlag.runtime });
+            expectTypeToBe(dataVarType, UnionType);
+            expect((dataVarType as UnionType).types).to.include(StringType.instance);
+            expect((dataVarType as UnionType).types).to.include(IntegerType.instance);
+        });
+
+        it('should understand changing the type of a param in try/catch', () => {
+            const testFile = program.setFile<BrsFile>('source/test.bs', `
+                sub testPocket1(msg as string)
+                    try
+                        if msg = "" then
+                            msg = "hello!"
+                        end if
+                        msg = 123
+                    catch e
+                    end try
+                    print msg
+                    print msg.toStr() ' confirming msg is string|int, and not uninitialized
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const printStmts = testFile.ast.findChildren<PrintStatement>(isPrintStatement);
+            let msgVar = printStmts[0].expressions[0];
+            let msgVarType = msgVar.getType({ flags: SymbolTypeFlag.runtime });
+            expectTypeToBe(msgVarType, UnionType);
+            expect((msgVarType as UnionType).types).to.include(StringType.instance);
+            expect((msgVarType as UnionType).types).to.include(IntegerType.instance);
+        });
+
+        it('should understand changing the type of a param in try/catch in non-first function', () => {
+            const testFile = program.setFile<BrsFile>('source/test.bs', `
+                function foo() as string
+                    msg = "test"
+                    return msg
+                end function
+
+                sub testPocket1(msg as string)
+                    try
+                        if msg = "" then
+                            msg = "hello!"
+                        end if
+                        msg = 123
+                    catch e
+                    end try
+                    print msg
+                    print msg.toStr() ' confirming msg is string|int, and not uninitialized
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const printStmts = testFile.ast.findChildren<PrintStatement>(isPrintStatement);
+            let msgVar = printStmts[0].expressions[0];
+            let msgVarType = msgVar.getType({ flags: SymbolTypeFlag.runtime });
+            expectTypeToBe(msgVarType, UnionType);
+            expect((msgVarType as UnionType).types).to.include(StringType.instance);
+            expect((msgVarType as UnionType).types).to.include(IntegerType.instance);
+        });
+
+
+        it('should allow redefinition of function param and immediate use', () => {
+            const testFile = program.setFile<BrsFile>('source/test.bs', `
+                sub testPocket1(data as string)
+                    data = 123
+                    data += 1
+                    print data
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const printStmts = testFile.ast.findChildren<PrintStatement>(isPrintStatement);
+            let dataType = printStmts[0].expressions[0];
+            let dataTypeType = dataType.getType({ flags: SymbolTypeFlag.runtime });
+            expectTypeToBe(dataTypeType, IntegerType);
+        });
+
+        it('handles this long function from Rooibos', () => {
+            program.setFile<BrsFile>('source/test.bs', `
+                function assertAAHasKeys(aa as dynamic, keys as dynamic, msg = "" as string) as boolean
+                    if m.currentResult.isFail then
+                        return false
+                    end if
+
+                    try
+                        if not isAA(aa) then
+                            if msg = "" then
+                                msg = "expected to be an AssociativeArray"
+                            end if
+                            fail(msg, "", "", true)
+                            return false
+                        end if
+
+                        if not isArray(keys) then
+                            if msg = "" then
+                                msg = "expected to be an Array"
+                            end if
+                            fail(msg, "", "", true)
+                            return false
+                        end if
+
+                        foundKeys = []
+                        missingKeys = []
+                        for each key in keys
+                            if not aa.ifAssociativeArray.DoesExist(key) then
+                                missingKeys.push(key)
+                            else
+                                foundKeys.push(key)
+                            end if
+                        end for
+
+                        if missingKeys.count() > 0 then
+                            actual = "blah"
+                            expected = "blah"
+                            if msg = "" then
+                                msg = "expected to have properties"
+                            end if
+                            fail(msg, actual, expected, true)
+                            return false
+                        end if
+                        return true
+                    catch error
+                        failCrash(error, msg)
+                    end try
+                    return false
+                end function
+
+
+                function isAA(value as dynamic) as boolean
+                    return type(value) = "roAssociativeArray"
+                end function
+
+
+                function isArray(value as dynamic) as boolean
+                    return type(value) = "roArray"
+                end function
+
+
+                sub fail(msg as string, actual as dynamic, expected as dynamic, isSoftFail as boolean)
+                    print "fail"
+                end sub
+
+                sub failCrash(error as dynamic, msg as string)
+                    print "fail crash"
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
         });
     });
 

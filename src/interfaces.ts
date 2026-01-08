@@ -1097,6 +1097,10 @@ export interface ExtraSymbolData {
      * For example, loop variables in for loops
      */
     canUseInDefinedAstNode?: boolean;
+    /**
+     * Is this type created from a type statement - eg. is it a nickname for another type?
+     */
+    isFromTypeStatement?: boolean;
 }
 
 export interface GetTypeOptions {

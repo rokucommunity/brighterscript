@@ -101,6 +101,7 @@ export class SymbolTable implements SymbolTypeGetter {
     public pocketTables = new Array<PocketTable>();
 
     public addPocketTable(pocketTable: PocketTable) {
+        pocketTable.table.isPocketTable = true;
         this.pocketTables.push(pocketTable);
         return () => {
             const index = this.pocketTables.findIndex(pt => pt === pocketTable);
@@ -108,6 +109,18 @@ export class SymbolTable implements SymbolTypeGetter {
                 this.pocketTables.splice(index, 1);
             }
         };
+    }
+
+    private isPocketTable = false;
+
+    private getCurrentPocketTableDepth() {
+        let depth = 0;
+        let currentTable: SymbolTable = this;
+        while (currentTable.isPocketTable) {
+            depth++;
+            currentTable = currentTable.parent;
+        }
+        return depth;
     }
 
     public getStatementIndexOfPocketTable(symbolTable: SymbolTable) {
@@ -202,27 +215,41 @@ export class SymbolTable implements SymbolTypeGetter {
             }
 
             // look in our map first
-            result = currentTable.symbolMap.get(key);
-            if (result) {
+            let currentResults = currentTable.symbolMap.get(key);
+            if (currentResults) {
                 // eslint-disable-next-line no-bitwise
-                result = result.filter(symbol => symbol.flags & bitFlags).filter(this.getSymbolLookupFilter(currentTable, maxStatementIndex, memberOfAncestor));
+                currentResults = currentResults.filter(symbol => symbol.flags & bitFlags)
+                    .filter(this.getSymbolLookupFilter(currentTable, maxStatementIndex, memberOfAncestor));
             }
 
             let precedingAssignmentIndex = -1;
-            if (result?.length > 0 && currentTable.isOrdered && maxStatementIndex >= 0) {
-                this.sortSymbolsByAssignmentOrderInPlace(result);
-                const lastResult = result[result.length - 1];
-                result = [lastResult];
+            if (currentResults?.length > 0 && currentTable.isOrdered && maxStatementIndex >= 0) {
+                this.sortSymbolsByAssignmentOrderInPlace(currentResults);
+                const lastResult = currentResults[currentResults.length - 1];
+                currentResults = [lastResult];
                 precedingAssignmentIndex = lastResult.data?.definingNode?.statementIndex ?? -1;
             }
 
-            result = currentTable.augmentSymbolResultsWithPocketTableResults(name, bitFlags, result, {
+            if (result?.length > 0) {
+                // we already have results from a deeper pocketTable
+                if (currentResults?.length > 0) {
+                    result.push(...currentResults);
+                }
+            } else if (currentResults?.length > 0) {
+                result = currentResults;
+            }
+
+            let depth = additionalOptions?.depth ?? currentTable.getCurrentPocketTableDepth();
+            const augmentationResult = currentTable.augmentSymbolResultsWithPocketTableResults(name, bitFlags, result, {
                 ...additionalOptions,
+                depth: depth,
                 maxStatementIndex: maxStatementIndex,
                 precedingAssignmentIndex: precedingAssignmentIndex
             });
+            result = augmentationResult.symbols;
+            const needCheckParent = (!augmentationResult.exhaustive && depth > 0);
 
-            if (result?.length > 0) {
+            if (result?.length > 0 && !needCheckParent) {
                 result = result.map(addAncestorInfo);
                 break;
             }
@@ -244,7 +271,7 @@ export class SymbolTable implements SymbolTypeGetter {
         return result;
     }
 
-    private augmentSymbolResultsWithPocketTableResults(name: string, bitFlags: SymbolTypeFlag, result: BscSymbol[], additionalOptions: { precedingAssignmentIndex?: number } & GetSymbolAdditionalOptions = {}): BscSymbol[] {
+    private augmentSymbolResultsWithPocketTableResults(name: string, bitFlags: SymbolTypeFlag, result: BscSymbol[], additionalOptions: { precedingAssignmentIndex?: number } & GetSymbolAdditionalOptions = {}): { symbols: BscSymbol[]; exhaustive: boolean } {
         let pocketTableResults: BscSymbol[] = [];
         let pocketTablesWeFoundSomethingIn = this.getSymbolDataFromPocketTables(name, bitFlags, additionalOptions);
         let pocketTablesAreExhaustive = false;
@@ -307,7 +334,9 @@ export class SymbolTable implements SymbolTypeGetter {
                 result.push(...pocketTableResults);
             }
         }
-        return result;
+        // Do the results cover all possible execution paths?
+        const areResultsExhaustive = pocketTablesAreExhaustive || pocketTablesWeFoundSomethingIn.length === 0;
+        return { symbols: result, exhaustive: areResultsExhaustive };
     }
 
     private getSymbolDataFromPocketTables(name: string, bitFlags: SymbolTypeFlag, additionalOptions: { precedingAssignmentIndex?: number } & GetSymbolAdditionalOptions = {}): Array<{ pocketTable: PocketTable; results: BscSymbol[] }> {
@@ -398,7 +427,7 @@ export class SymbolTable implements SymbolTypeGetter {
             resolvedType = SymbolTable.referenceTypeFactory(name, options.fullName, options.flags, options.tableProvider);
         }
         const resolvedTypeIsReference = isAnyReferenceType(resolvedType);
-        const newNonReferenceType = originalIsReferenceType && !isAnyReferenceType(resolvedType);
+        const newNonReferenceType = originalIsReferenceType && !isAnyReferenceType(resolvedType) && resolvedType;
         doSetCache = doSetCache && (options.onlyCacheResolvedTypes ? !resolvedTypeIsReference : true);
         if (doSetCache || newNonReferenceType) {
             this.setCachedType(name, { type: resolvedType, data: data, flags: foundFlags }, options);
@@ -415,6 +444,7 @@ export class SymbolTable implements SymbolTypeGetter {
             options.data.isFromDocComment = data?.isFromDocComment;
             options.data.isBuiltIn = data?.isBuiltIn;
             options.data.isFromCallFunc = data?.isFromCallFunc;
+            options.data.isFromTypeStatement = data?.isFromTypeStatement;
         }
         return resolvedType;
     }
@@ -562,7 +592,7 @@ export class SymbolTable implements SymbolTypeGetter {
     }
 
     setCachedType(name: string, cacheEntry: TypeCacheEntry, options: GetTypeOptions) {
-        if (!cacheEntry) {
+        if (!cacheEntry || !cacheEntry.type) {
             return;
         }
         if (SymbolTable.cacheVerifier) {
@@ -649,6 +679,7 @@ export class SymbolTable implements SymbolTypeGetter {
                 // order doesn't matter for current table
                 return true;
             }
+
             if (maxAllowedStatementIndex >= 0 && t.data?.definingNode) {
                 if (memberOfAncestor || t.data.canUseInDefinedAstNode) {
                     // if we've already gone up a level, it's possible to have a variable assigned and used
