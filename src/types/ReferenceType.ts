@@ -644,7 +644,10 @@ export class ParamTypeFromValueReferenceType extends BscType {
     }
 }
 
-
+/**
+ * Used when an IntersectionType has at least one member that may have default dynamic members.
+ * If the inner type is not resolvable, this type will resolve to DynamicType.
+ */
 export class IntersectionWithDefaultDynamicReferenceType extends BscType {
     constructor(public baseType: BscType) {
         super('IntersectionWithDefaultDynamicReferenceType');
