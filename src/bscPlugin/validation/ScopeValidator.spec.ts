@@ -2578,6 +2578,83 @@ describe('ScopeValidator', () => {
                 ]);
             });
         });
+
+        describe('intersection types', () => {
+            it('finds members from intersection types', () => {
+                program.setFile('source/main.bs', `
+                    interface IFirst
+                        num as integer
+                    end interface
+                    interface ISecond
+                        function doThing2(a as integer, b as string) as void
+                    end interface
+
+                    sub main(thing as IFirst and ISecond)
+                        print thing.num
+                        thing.doThing2(thing.num, "hello")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds random members of intersections with AA types', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    sub printData(data as {customData as string} and roAssociativeArray)
+                        x = data.someDynamicKey
+                        y = data.customData
+                        print x
+                        print y
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+
+            it('handles type statements that are intersections of classes and AA', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    sub printData(data as MyKlassAA)
+                        x = data.customData
+                        data.append({
+                            newKey: "newValue"
+                        })
+                        print x
+                        y = data.newKey
+                        print y
+                    end sub
+
+
+                    type MyKlassAA = MyKlass and roAssociativeArray
+
+                    class MyKlass
+                        customData as string
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates missing members from intersection types', () => {
+                program.setFile('source/main.bs', `
+                    interface IFirst
+                        num as integer
+                    end interface
+                    interface ISecond
+                        function doThing2(a as integer, b as string) as void
+                    end interface
+
+                    sub main(thing as IFirst and ISecond)
+                        print thing.nonExistentMember
+                        thing.doThing2(thing.num, "hello")
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindName('nonExistentMember', '(IFirst and ISecond).nonExistentMember', '(IFirst and ISecond)')
+                ]);
+            });
+        });
     });
 
     describe('itemCannotBeUsedAsVariable', () => {

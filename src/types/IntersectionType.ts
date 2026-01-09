@@ -1,8 +1,8 @@
 import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
-import { isAssociativeArrayType, isDynamicType, isIntersectionType, isObjectType, isTypedFunctionType } from '../astUtils/reflection';
+import { isDynamicType, isIntersectionType, isObjectType, isTypedFunctionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
-import { ReferenceType } from './ReferenceType';
-import { addAssociatedTypesTableAsSiblingToMemberTable, getAllTypesFromComplexType, isEnumTypeCompatible, joinTypesString, reduceTypesForIntersectionType } from './helpers';
+import { IntersectionWithDefaultDynamicReferenceType, ReferenceType } from './ReferenceType';
+import { addAssociatedTypesTableAsSiblingToMemberTable, getAllTypesFromComplexType, isEnumTypeCompatible, isTypeWithPotentialDefaultDynamicMember, joinTypesString, reduceTypesForIntersectionType } from './helpers';
 import { BscTypeKind } from './BscTypeKind';
 import type { TypeCacheEntry } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
@@ -43,14 +43,17 @@ export class IntersectionType extends BscType {
 
     private getMemberTypeFromInnerTypes(name: string, options: GetTypeOptions): BscType {
         const typeFromMembers = this.types.map((innerType) => {
-            return innerType?.getMemberType(name, { ...options, ignoreAADefaultDynamicMembers: true });
+            return innerType?.getMemberType(name, { ...options, ignoreDefaultDynamicMembers: true });
         });
-        const filteredTypes = reduceTypesForIntersectionType(typeFromMembers.filter(t => t !== undefined));
+        let filteredTypes = reduceTypesForIntersectionType(typeFromMembers.map(t => t).filter(t => t !== undefined));
 
+        if (filteredTypes.length === 0 && this.types.some(isTypeWithPotentialDefaultDynamicMember)) {
+            const typesFromMembersWithDynamicAA = this.types.map((innerType) => {
+                return innerType?.getMemberType(name, options);
+            });
+            filteredTypes = reduceTypesForIntersectionType(typesFromMembersWithDynamicAA.map(t => t).filter(t => t !== undefined));
+        }
         if (filteredTypes.length === 0) {
-            if (this.types.some(isAssociativeArrayType)) {
-                return DynamicType.instance;
-            }
             return undefined;
         } else if (filteredTypes.length === 1) {
             return filteredTypes[0];
@@ -80,6 +83,9 @@ export class IntersectionType extends BscType {
                     getSymbolType: (innerName: string, innerOptions: GetTypeOptions) => {
                         const referenceTypeInnerMemberTypes = this.getMemberTypeFromInnerTypes(name, options);
                         if (!referenceTypeInnerMemberTypes) {
+                            if (this.hasMemberTypeWithDefaultDynamicMember && !innerOptions.ignoreDefaultDynamicMembers) {
+                                return DynamicType.instance;
+                            }
                             return undefined;
                         }
                         return referenceTypeInnerMemberTypes;
@@ -92,6 +98,12 @@ export class IntersectionType extends BscType {
                     }
                 };
             });
+        }
+        if (!innerTypesMemberType?.isResolvable()) {
+            const shouldCreateDynamicAAMember = this.hasMemberTypeWithDefaultDynamicMember && !options.ignoreDefaultDynamicMembers;
+            if (shouldCreateDynamicAAMember) {
+                return new IntersectionWithDefaultDynamicReferenceType(innerTypesMemberType);
+            }
         }
         return innerTypesMemberType;
     }
@@ -107,7 +119,9 @@ export class IntersectionType extends BscType {
                     getSymbolType: (innerName: string, innerOptions: GetTypeOptions) => {
                         const referenceTypeInnerMemberType = this.getCallFuncFromInnerTypes(name, options);
                         if (!referenceTypeInnerMemberType) {
-                            return undefined;
+                            if (this.hasMemberTypeWithDefaultDynamicMember && !innerOptions.ignoreDefaultDynamicMembers) {
+                                return DynamicType.instance;
+                            }
                         }
                         return referenceTypeInnerMemberType;
                     },
@@ -119,6 +133,13 @@ export class IntersectionType extends BscType {
                     }
                 };
             });
+        }
+
+        if (!resultCallFuncType?.isResolvable()) {
+            const shouldCreateDynamicAAMember = this.hasMemberTypeWithDefaultDynamicMember && !options.ignoreDefaultDynamicMembers;
+            if (shouldCreateDynamicAAMember) {
+                return new IntersectionWithDefaultDynamicReferenceType(resultCallFuncType);
+            }
         }
 
         if (isTypedFunctionType(resultCallFuncType)) {
@@ -220,16 +241,6 @@ export class IntersectionType extends BscType {
             type.addBuiltInInterfaces();
             for (const symbol of type.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime)) {
                 const foundType = this.getMemberTypeFromInnerTypes(symbol.name, { flags: SymbolTypeFlag.runtime });
-                /*
-
-                const allResolvableTypes = foundType.reduce((acc, curType) => {
-                    return acc && curType?.isResolvable();
-                }, true);
-
-                if (!allResolvableTypes) {
-                    continue;
-                }
-                const uniqueType = getUniqueType(findTypeUnion(foundType), intersectionTypeFactory);*/
                 intersectionTable.addSymbol(symbol.name, {}, foundType, SymbolTypeFlag.runtime);
             }
         }
@@ -240,17 +251,26 @@ export class IntersectionType extends BscType {
         firstType.addBuiltInInterfaces();
         for (const symbol of firstType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime)) {
             const foundType = this.getMemberTypeFromInnerTypes(symbol.name, { flags: SymbolTypeFlag.runtime });
-            /* const allResolvableTypes = foundType.reduce((acc, curType) => {
-                 return acc && curType?.isResolvable();
-             }, true);
-
-             if (!allResolvableTypes) {
-                 continue;
-             }
-             const uniqueType = getUniqueType(findTypeUnion(foundType), unionTypeFactory);*/
             intersectionTable.addSymbol(symbol.name, {}, foundType, SymbolTypeFlag.runtime);
         }
         return intersectionTable;
+    }
+
+
+    private _hasMemberTypeWithDefaultDynamicMember: boolean = undefined;
+    get hasMemberTypeWithDefaultDynamicMember(): boolean {
+        if (this._hasMemberTypeWithDefaultDynamicMember !== undefined) {
+            return this._hasMemberTypeWithDefaultDynamicMember;
+        }
+        this._hasMemberTypeWithDefaultDynamicMember = false;
+
+        for (const type of this.types) {
+            if (isTypeWithPotentialDefaultDynamicMember(type)) {
+                this._hasMemberTypeWithDefaultDynamicMember = true;
+                break;
+            }
+        }
+        return this._hasMemberTypeWithDefaultDynamicMember;
     }
 }
 

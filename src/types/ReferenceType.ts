@@ -644,6 +644,51 @@ export class ParamTypeFromValueReferenceType extends BscType {
     }
 }
 
+
+export class IntersectionWithDefaultDynamicReferenceType extends BscType {
+    constructor(public baseType: BscType) {
+        super('IntersectionWithDefaultDynamicReferenceType');
+        // eslint-disable-next-line no-constructor-return
+        return new Proxy(this, {
+            get: (target, propName, receiver) => {
+
+                if (propName === '__reflection') {
+                    // Cheeky way to get `isIntersectionWithDefaultDynamicReferenceType` reflection to work
+                    return { name: 'IntersectionWithDefaultDynamicReferenceType' };
+                }
+
+                if (propName === 'isResolvable') {
+                    return () => {
+                        return true;
+                    };
+                }
+                let innerType = this.getTarget();
+
+                if (!innerType) {
+                    innerType = DynamicType.instance;
+                }
+
+                if (innerType) {
+                    const result = Reflect.get(innerType, propName, innerType);
+                    return result;
+                }
+            }
+        });
+    }
+
+    getTarget(): BscType {
+        if (isAnyReferenceType(this.baseType)) {
+            if (this.baseType.isResolvable()) {
+                return (this.baseType as any)?.getTarget();
+            }
+        }
+        return this.baseType;
+    }
+
+    tableProvider: SymbolTableProvider;
+}
+
+
 /**
  * Gives an array of all the symbol names that need to be resolved to make the given reference type be resolved
  */

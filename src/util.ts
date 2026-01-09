@@ -2203,7 +2203,7 @@ export class Util {
                 let typeString = chainItem.type?.toString();
                 let typeToFindStringFor = chainItem.type;
                 while (typeToFindStringFor) {
-                    if (isUnionType(chainItem.type)) {
+                    if (isComplexType(chainItem.type)) {
                         typeString = `(${typeToFindStringFor.toString()})`;
                         break;
                     } else if (isCallableType(typeToFindStringFor)) {

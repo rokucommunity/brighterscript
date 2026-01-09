@@ -28,8 +28,9 @@ export class ObjectType extends BscType {
     }
 
     getMemberType(name: string, options: GetTypeOptions) {
-        // TODO: How should we handle accessing properties of an object?
-        // For example, we could add fields as properties to m.top, but there could be other members added programmatically
+        if (options.ignoreDefaultDynamicMembers) {
+            return undefined;
+        }
         return DynamicType.instance;
     }
 

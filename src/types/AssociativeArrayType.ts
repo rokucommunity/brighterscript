@@ -1,6 +1,6 @@
 import { SymbolTable } from '../SymbolTable';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
-import { isAssociativeArrayType, isClassType, isDynamicType, isObjectType } from '../astUtils/reflection';
+import { isAssociativeArrayType, isAssociativeArrayTypeLike, isClassType, isDynamicType, isObjectType } from '../astUtils/reflection';
 import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
@@ -21,7 +21,7 @@ export class AssociativeArrayType extends BscType {
             return true;
         } else if (isUnionTypeCompatible(this, targetType)) {
             return true;
-        } else if (isAssociativeArrayType(targetType)) {
+        } else if (isAssociativeArrayTypeLike(targetType)) {
             return true;
         } else if (this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data)) {
             return true;
@@ -42,7 +42,7 @@ export class AssociativeArrayType extends BscType {
     getMemberType(name: string, options: GetTypeOptions) {
         // if a member has specifically been added, cool. otherwise, assume dynamic
         const memberType = super.getMemberType(name, options);
-        if (!memberType && !options.ignoreAADefaultDynamicMembers) {
+        if (!memberType && !options.ignoreDefaultDynamicMembers) {
             return DynamicType.instance;
         }
         return memberType;
