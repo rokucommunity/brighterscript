@@ -1824,6 +1824,14 @@ export class Util {
             return thePath;
         }
 
+        //handle `virtual:/` paths specially - just normalize slashes, don't use path.normalize which would mangle the `virtual:` prefix
+        if (/^virtual:[\/\\]/i.test(thePath)) {
+            // Strip the `virtual:` prefix, normalize slashes, then re-add the prefix
+            thePath = 'virtual:/' + thePath.slice(8).replace(/^[\/\\]+/, '').replace(/[\/\\]+/g, '/').toLowerCase();
+            this.standardizePathCache.set(originalPath, thePath);
+            return thePath;
+        }
+
         //windows path.normalize will convert all slashes to backslashes and remove duplicates
         if (this.isWindows) {
             thePath = path.win32.normalize(thePath);
