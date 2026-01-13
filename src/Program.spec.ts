@@ -19,7 +19,7 @@ import type { SinonSpy } from 'sinon';
 import { createSandbox } from 'sinon';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { AssetFile } from './files/AssetFile';
-import type { ProvideFileEvent, Plugin, BeforeProvideFileEvent, AfterProvideFileEvent, BeforeFileAddEvent, AfterFileAddEvent, BeforeFileRemoveEvent, AfterFileRemoveEvent, ScopeValidationOptions, AfterFileValidateEvent, BeforeScopeValidateEvent, OnScopeValidateEvent, BeforeFileValidateEvent, OnFileValidateEvent, AfterScopeValidateEvent, CompilerPlugin } from './interfaces';
+import type { ProvideFileEvent, Plugin, BeforeProvideFileEvent, AfterProvideFileEvent, BeforeAddFileEvent, AfterAddFileEvent, BeforeRemoveFileEvent, AfterRemoveFileEvent, ScopeValidationOptions, AfterValidateFileEvent, BeforeValidateScopeEvent, ValidateScopeEvent, BeforeValidateFileEvent, ValidateFileEvent, AfterValidateScopeEvent, CompilerPlugin } from './interfaces';
 import { StringType, TypedFunctionType, DynamicType, FloatType, IntegerType, InterfaceType, ArrayType, BooleanType, DoubleType, UnionType } from './types';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
@@ -199,24 +199,24 @@ describe('Program', () => {
         });
 
         it(`emits events for scope and file creation`, () => {
-            const beforeProgramValidate = sinon.spy();
-            const afterProgramValidate = sinon.spy();
-            const afterScopeCreate = sinon.spy();
-            const beforeScopeValidate = sinon.spy();
-            const afterScopeValidate = sinon.spy();
-            const beforeFileParse = sinon.spy();
-            const afterFileParse = sinon.spy();
-            const afterFileValidate = sinon.spy();
+            const beforeValidateProgram = sinon.spy();
+            const afterValidateProgram = sinon.spy();
+            const afterProvideScope = sinon.spy();
+            const beforeValidateScope = sinon.spy();
+            const afterValidateScope = sinon.spy();
+            const beforeProvideFile = sinon.spy();
+            const afterProvideFile = sinon.spy();
+            const afterValidateFile = sinon.spy();
             program.plugins.add({
                 name: 'emits events for scope and file creation',
-                beforeProgramValidate: beforeProgramValidate,
-                afterProgramValidate: afterProgramValidate,
-                afterScopeCreate: afterScopeCreate,
-                beforeScopeValidate: beforeScopeValidate,
-                afterScopeValidate: afterScopeValidate,
-                beforeFileParse: beforeFileParse,
-                afterFileParse: afterFileParse,
-                afterFileValidate: afterFileValidate
+                beforeValidateProgram: beforeValidateProgram,
+                afterValidateProgram: afterValidateProgram,
+                afterProvideScope: afterProvideScope,
+                beforeValidateScope: beforeValidateScope,
+                afterValidateScope: afterValidateScope,
+                beforeProvideFile: beforeProvideFile,
+                afterProvideFile: afterProvideFile,
+                afterValidateFile: afterValidateFile
             });
 
             //add a new source file
@@ -230,17 +230,17 @@ describe('Program', () => {
             program.validate();
 
             //program events
-            expect(beforeProgramValidate.callCount).to.equal(1);
-            expect(afterProgramValidate.callCount).to.equal(1);
+            expect(beforeValidateProgram.callCount).to.equal(1);
+            expect(afterValidateProgram.callCount).to.equal(1);
             //scope events
             //(we get component scope event only because source is created in beforeEach)
-            expect(afterScopeCreate.callCount).to.equal(1);
-            expect(beforeScopeValidate.callCount).to.equal(2);
-            expect(afterScopeValidate.callCount).to.equal(2);
+            expect(afterProvideScope.callCount).to.equal(1);
+            expect(beforeValidateScope.callCount).to.equal(2);
+            expect(afterValidateScope.callCount).to.equal(2);
             //file events
-            expect(beforeFileParse.callCount).to.equal(2);
-            expect(afterFileParse.callCount).to.equal(2);
-            expect(afterFileValidate.callCount).to.equal(2);
+            expect(beforeProvideFile.callCount).to.equal(2);
+            expect(afterProvideFile.callCount).to.equal(2);
+            expect(afterValidateFile.callCount).to.equal(2);
         });
     });
 
@@ -299,7 +299,7 @@ describe('Program', () => {
             let count = 0;
             const plugin = {
                 name: 'cancel validation',
-                beforeProgramValidate: () => {
+                beforeValidateProgram: () => {
                     count++;
                     //if this is the second validate, remove the plugin and change the file to invalidate the scopes again
                     if (count === 2) {
@@ -307,7 +307,7 @@ describe('Program', () => {
                         program.setFile('source/test.bs', program.getFile<BrsFile>('source/test.bs').fileContents + `'comment`);
                     }
                 },
-                afterScopeValidate: () => {
+                afterValidateScope: () => {
                     //if the diagnostic is avaiable, we know it's safe to cancel
                     if (program.getDiagnostics().find(x => x.code === DiagnosticMessages.cannotFindName('down', 'Direction').code)) {
                         cancel.cancel();
@@ -858,48 +858,48 @@ describe('Program', () => {
 
         describe('cancelled', () => {
 
-            type eventName = 'beforeFileValidate' | 'onFileValidate' | 'afterFileValidate' | 'beforeScopeValidate' | 'onScopeValidate' | 'afterScopeValidate';
+            type eventName = 'beforeValidateFile' | 'validateFile' | 'afterValidateFile' | 'beforeValidateScope' | 'validateScope' | 'afterValidateScope';
             interface CancellationPluginOptions {
                 cancelOn?: eventName[];
-                eventWhenCancelled?: BeforeFileValidateEvent | OnFileValidateEvent | AfterFileValidateEvent | BeforeScopeValidateEvent | OnScopeValidateEvent | AfterScopeValidateEvent;
+                eventWhenCancelled?: BeforeValidateFileEvent | ValidateFileEvent | AfterValidateFileEvent | BeforeValidateScopeEvent | ValidateScopeEvent | AfterValidateScopeEvent;
                 cancelTokenSource: CancellationTokenSource;
             }
 
             function getCancellationPlugin(option: CancellationPluginOptions): Plugin {
                 return {
                     name: 'cancelPlugin',
-                    beforeFileValidate: (event) => {
-                        if (option?.cancelOn.includes('beforeFileValidate')) {
+                    beforeValidateFile: (event) => {
+                        if (option?.cancelOn.includes('beforeValidateFile')) {
                             option.eventWhenCancelled = event;
                             option.cancelTokenSource.cancel();
                         }
                     },
-                    onFileValidate: (event) => {
-                        if (option?.cancelOn.includes('onFileValidate')) {
+                    validateFile: (event) => {
+                        if (option?.cancelOn.includes('validateFile')) {
                             option.eventWhenCancelled = event;
                             option.cancelTokenSource.cancel();
                         }
                     },
-                    afterFileValidate: (event) => {
-                        if (option?.cancelOn.includes('afterFileValidate')) {
+                    afterValidateFile: (event) => {
+                        if (option?.cancelOn.includes('afterValidateFile')) {
                             option.eventWhenCancelled = event;
                             option.cancelTokenSource.cancel();
                         }
                     },
-                    beforeScopeValidate: (event) => {
-                        if (option?.cancelOn.includes('beforeScopeValidate')) {
+                    beforeValidateScope: (event) => {
+                        if (option?.cancelOn.includes('beforeValidateScope')) {
                             option.eventWhenCancelled = event;
                             option.cancelTokenSource.cancel();
                         }
                     },
-                    onScopeValidate: (event) => {
-                        if (option?.cancelOn.includes('onScopeValidate')) {
+                    validateScope: (event) => {
+                        if (option?.cancelOn.includes('validateScope')) {
                             option.eventWhenCancelled = event;
                             option.cancelTokenSource.cancel();
                         }
                     },
-                    afterScopeValidate: (event) => {
-                        if (option?.cancelOn.includes('afterScopeValidate')) {
+                    afterValidateScope: (event) => {
+                        if (option?.cancelOn.includes('afterValidateScope')) {
                             option.eventWhenCancelled = event;
                             option.cancelTokenSource.cancel();
                         }
@@ -925,7 +925,7 @@ describe('Program', () => {
                 // do an initial validation
                 program.validate();
                 expectZeroDiagnostics(program);
-                options.cancelOn = ['afterFileValidate'];
+                options.cancelOn = ['afterValidateFile'];
 
                 // change file
                 program.setFile('source/file2.bs', `
@@ -935,7 +935,7 @@ describe('Program', () => {
                 `);
                 options.cancelTokenSource = new CancellationTokenSource();
                 await program.validate({ async: true, cancellationToken: options.cancelTokenSource.token });
-                const event = options.eventWhenCancelled as AfterFileValidateEvent;
+                const event = options.eventWhenCancelled as AfterValidateFileEvent;
                 expect(event).not.to.undefined;
                 expect(event.file.srcPath).includes('file2.bs');
             });
@@ -958,7 +958,7 @@ describe('Program', () => {
                 // do an initial validation
                 program.validate();
                 expectZeroDiagnostics(program);
-                options.cancelOn = ['beforeScopeValidate'];
+                options.cancelOn = ['beforeValidateScope'];
 
                 // change file2
                 program.setFile('source/file2.bs', `
@@ -979,10 +979,10 @@ describe('Program', () => {
                     end function
                 `);
 
-                options.cancelOn = ['onScopeValidate'];
+                options.cancelOn = ['validateScope'];
                 options.cancelTokenSource = new CancellationTokenSource();
                 await program.validate({ async: true, cancellationToken: options.cancelTokenSource.token });
-                const event = options.eventWhenCancelled as OnScopeValidateEvent;
+                const event = options.eventWhenCancelled as ValidateScopeEvent;
                 // Event details has info from both changes at scope validation step
                 const srcPaths = event.changedFiles.map(file => file.srcPath);
                 expect(srcPaths.length).to.eq(2);
@@ -1834,8 +1834,7 @@ describe('Program', () => {
             `);
         });
     });
-
-    it('beforeProgramTranspile sends entries in alphabetical order', async () => {
+    it('beforeBuildProgram sends entries in alphabetical order', async () => {
         const destPaths: string[] = [];
         program.plugins.add({
             name: 'test',
@@ -1933,7 +1932,7 @@ describe('Program', () => {
             expect(literalExpression!.tokens.value.text).to.eql('"hello world"');
         });
 
-        it('handles Editor for beforeProgramTranspile', async () => {
+        it('handles Editor for beforeBuildProgram', async () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
                 sub main()
                     print "hello world"
@@ -3027,17 +3026,17 @@ describe('Program', () => {
                 afterProvideFile: (e: AfterProvideFileEvent) => {
                     events.push(`afterProvideFile:${e.destPath}`);
                 },
-                beforeFileAdd: (e: BeforeFileAddEvent) => {
-                    events.push(`beforeFileAdd:${e.file.destPath}`);
+                beforeAddFile: (e: BeforeAddFileEvent) => {
+                    events.push(`beforeAddFile:${e.file.destPath}`);
                 },
-                afterFileAdd: (e: AfterFileAddEvent) => {
-                    events.push(`afterFileAdd:${e.file.destPath}`);
+                afterAddFile: (e: AfterAddFileEvent) => {
+                    events.push(`afterAddFile:${e.file.destPath}`);
                 },
-                beforeFileRemove: (e: BeforeFileRemoveEvent) => {
-                    events.push(`beforeFileRemove:${e.file.destPath}`);
+                beforeRemoveFile: (e: BeforeRemoveFileEvent) => {
+                    events.push(`beforeRemoveFile:${e.file.destPath}`);
                 },
-                afterFileRemove: (e: AfterFileRemoveEvent) => {
-                    events.push(`afterFileRemove:${e.file.destPath}`);
+                afterRemoveFile: (e: AfterRemoveFileEvent) => {
+                    events.push(`afterRemoveFile:${e.file.destPath}`);
                 }
             };
             program.plugins.add(plugin);
@@ -3049,14 +3048,14 @@ describe('Program', () => {
                 'beforeProvideFile:' + s('source/buttons.component.bs'),
                 'provideFile:' + s('source/buttons.component.bs'),
                 'afterProvideFile:' + s('source/buttons.component.bs'),
-                'beforeFileAdd:' + s('source/buttons.component.bs'),
-                'afterFileAdd:' + s('source/buttons.component.bs'),
-                'beforeFileAdd:' + s('source/buttons.component.bs.two'),
-                'afterFileAdd:' + s('source/buttons.component.bs.two'),
-                'beforeFileRemove:' + s('source/buttons.component.bs'),
-                'afterFileRemove:' + s('source/buttons.component.bs'),
-                'beforeFileRemove:' + s('source/buttons.component.bs.two'),
-                'afterFileRemove:' + s('source/buttons.component.bs.two')
+                'beforeAddFile:' + s('source/buttons.component.bs'),
+                'afterAddFile:' + s('source/buttons.component.bs'),
+                'beforeAddFile:' + s('source/buttons.component.bs.two'),
+                'afterAddFile:' + s('source/buttons.component.bs.two'),
+                'beforeRemoveFile:' + s('source/buttons.component.bs'),
+                'afterRemoveFile:' + s('source/buttons.component.bs'),
+                'beforeRemoveFile:' + s('source/buttons.component.bs.two'),
+                'afterRemoveFile:' + s('source/buttons.component.bs.two')
             ]);
         });
 
@@ -3075,11 +3074,11 @@ describe('Program', () => {
                         })
                     );
                 },
-                beforeFileRemove: (e: BeforeFileRemoveEvent) => {
-                    events.push(`beforeFileRemove:${e.file.destPath}`);
+                beforeRemoveFile: (e: BeforeRemoveFileEvent) => {
+                    events.push(`beforeRemoveFile:${e.file.destPath}`);
                 },
-                afterFileRemove: (e: AfterFileRemoveEvent) => {
-                    events.push(`afterFileRemove:${e.file.destPath}`);
+                afterRemoveFile: (e: AfterRemoveFileEvent) => {
+                    events.push(`afterRemoveFile:${e.file.destPath}`);
                 }
             };
             program.plugins.add(plugin);
@@ -3093,51 +3092,51 @@ describe('Program', () => {
 
             //we should only have one set of events per file
             expect(events).to.eql([
-                'beforeFileRemove:' + s('source/buttons.component.bs.two'),
-                'afterFileRemove:' + s('source/buttons.component.bs.two'),
-                'beforeFileRemove:' + s('source/buttons.component.bs'),
-                'afterFileRemove:' + s('source/buttons.component.bs')
+                'beforeRemoveFile:' + s('source/buttons.component.bs.two'),
+                'afterRemoveFile:' + s('source/buttons.component.bs.two'),
+                'beforeRemoveFile:' + s('source/buttons.component.bs'),
+                'afterRemoveFile:' + s('source/buttons.component.bs')
             ]);
         });
 
         it('emits file validation events', () => {
             const plugin = {
                 name: 'test',
-                beforeFileValidate: sinon.spy(),
-                onFileValidate: sinon.spy(),
-                afterFileValidate: sinon.spy()
+                beforeValidateFile: sinon.spy(),
+                validateFile: sinon.spy(),
+                afterValidateFile: sinon.spy()
             };
             program.plugins.add(plugin);
             program.setFile('source/main.brs', '');
             program.validate();
-            expect(plugin.beforeFileValidate.callCount).to.equal(1);
-            expect(plugin.onFileValidate.callCount).to.equal(1);
-            expect(plugin.afterFileValidate.callCount).to.equal(1);
+            expect(plugin.beforeValidateFile.callCount).to.equal(1);
+            expect(plugin.validateFile.callCount).to.equal(1);
+            expect(plugin.afterValidateFile.callCount).to.equal(1);
         });
 
         it('emits file validation events', () => {
             const plugin = {
                 name: 'test',
-                beforeFileValidate: sinon.spy(),
-                onFileValidate: sinon.spy(),
-                afterFileValidate: sinon.spy()
+                beforeValidateFile: sinon.spy(),
+                validateFile: sinon.spy(),
+                afterValidateFile: sinon.spy()
             };
             program.plugins.add(plugin);
             program.setFile('components/main.xml', '');
             program.validate();
-            expect(plugin.beforeFileValidate.callCount).to.equal(1);
-            expect(plugin.onFileValidate.callCount).to.equal(1);
-            expect(plugin.afterFileValidate.callCount).to.equal(1);
+            expect(plugin.beforeValidateFile.callCount).to.equal(1);
+            expect(plugin.validateFile.callCount).to.equal(1);
+            expect(plugin.afterValidateFile.callCount).to.equal(1);
         });
 
         it('emits program dispose event', () => {
             const plugin = {
                 name: 'test',
-                beforeProgramDispose: sinon.spy()
+                beforeRemoveProgram: sinon.spy()
             };
             program.plugins.add(plugin);
             program.dispose();
-            expect(plugin.beforeProgramDispose.callCount).to.equal(1);
+            expect(plugin.beforeRemoveProgram.callCount).to.equal(1);
         });
     });
 

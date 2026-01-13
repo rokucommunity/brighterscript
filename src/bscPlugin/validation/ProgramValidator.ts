@@ -1,13 +1,13 @@
 import { isBrsFile } from '../../astUtils/reflection';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
-import type { AfterProgramValidateEvent } from '../../interfaces';
+import type { AfterValidateProgramEvent } from '../../interfaces';
 import util from '../../util';
 
 export const ProgramValidatorDiagnosticsTag = 'ProgramValidator';
 
 export class ProgramValidator {
     constructor(
-        private event: AfterProgramValidateEvent
+        private event: AfterValidateProgramEvent
     ) { }
 
     public process() {

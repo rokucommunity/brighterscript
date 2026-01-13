@@ -3,7 +3,7 @@ import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBina
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { BsDiagnostic, CallableContainer, ExtraSymbolData, FileReference, GetTypeOptions, OnScopeValidateEvent, TypeChainEntry, TypeChainProcessResult, TypeCompatibilityData } from '../../interfaces';
+import type { BsDiagnostic, CallableContainer, ExtraSymbolData, FileReference, GetTypeOptions, ValidateScopeEvent, TypeChainEntry, TypeChainProcessResult, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, DottedSetStatement, IncrementStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
 import { util } from '../../util';
@@ -58,7 +58,7 @@ const enum ScopeValidatorDiagnosticTag {
 
 /**
  * A validator that handles all scope validations for a program validation cycle.
- * You should create ONE of these to handle all scope events between beforeProgramValidate and afterProgramValidate,
+ * You should create ONE of these to handle all scope events between beforeValidateProgram and afterValidateProgram,
  * and call reset() before using it again in the next cycle
  */
 export class ScopeValidator {
@@ -66,12 +66,12 @@ export class ScopeValidator {
     /**
      * The event currently being processed. This will change multiple times throughout the lifetime of this validator
      */
-    private event: OnScopeValidateEvent;
+    private event: ValidateScopeEvent;
 
     private segmentsMetrics = new Map<string, { segments: number; time: string }>();
     private validationKindsMetrics = new Map<string, { timeMs: number; count: number }>();
 
-    public processEvent(event: OnScopeValidateEvent) {
+    public processEvent(event: ValidateScopeEvent) {
         this.event = event;
         if (this.event.program.globalScope === this.event.scope) {
             return;
