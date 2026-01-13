@@ -283,7 +283,9 @@ export class Util {
      * @param config a bsconfig object to use as the baseline for the resulting config
      */
     public normalizeAndResolveConfig(config: BsConfig | undefined): FinalizedBsConfig {
-        let result = this.normalizeConfig({});
+        let result = this.normalizeConfig({
+            ...config
+        });
 
         if (config?.noProject) {
             return result;
