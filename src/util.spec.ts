@@ -364,6 +364,36 @@ describe('util', () => {
                 });
             }).not.to.throw;
         });
+
+        it('remaps stagingDir to outDir', () => {
+            expect(util.normalizeAndResolveConfig({
+                stagingDir: './staging'
+            })).to.include({
+                outDir: './staging'
+            });
+        });
+
+        it('remaps stagingFolderPath to outDir', () => {
+            expect(util.normalizeAndResolveConfig({
+                stagingFolderPath: './staging'
+            })).to.include({
+                outDir: './staging'
+            });
+        });
+
+        it('uses provided outDir', () => {
+            expect(util.normalizeAndResolveConfig({
+                outDir: './staging'
+            })).to.include({
+                outDir: './staging'
+            });
+        });
+
+        it('uses default outDir', () => {
+            expect(util.normalizeAndResolveConfig({})).to.include({
+                outDir: './out'
+            });
+        });
     });
 
     describe('normalizeConfig', () => {
