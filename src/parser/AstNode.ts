@@ -45,7 +45,7 @@ export abstract class AstNode {
     public abstract walk(visitor: WalkVisitor, options: WalkOptions);
 
     /**
-     * The parent node for this statement. This is set dynamically during `onFileValidate`, and should not be set directly.
+     * The parent node for this statement. This is set dynamically during `validateFile`, and should not be set directly.
      */
     public parent?: AstNode;
 

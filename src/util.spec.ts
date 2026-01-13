@@ -364,6 +364,36 @@ describe('util', () => {
                 });
             }).not.to.throw;
         });
+
+        it('remaps stagingDir to outDir', () => {
+            expect(util.normalizeAndResolveConfig({
+                stagingDir: './staging'
+            })).to.include({
+                outDir: './staging'
+            });
+        });
+
+        it('remaps stagingFolderPath to outDir', () => {
+            expect(util.normalizeAndResolveConfig({
+                stagingFolderPath: './staging'
+            })).to.include({
+                outDir: './staging'
+            });
+        });
+
+        it('uses provided outDir', () => {
+            expect(util.normalizeAndResolveConfig({
+                outDir: './staging'
+            })).to.include({
+                outDir: './staging'
+            });
+        });
+
+        it('uses default outDir', () => {
+            expect(util.normalizeAndResolveConfig({})).to.include({
+                outDir: './out'
+            });
+        });
     });
 
     describe('normalizeConfig', () => {
@@ -1707,6 +1737,31 @@ describe('util', () => {
                 test('\\\\one\\\\two\\\\three\\\\', '/one/two/three/');
             });
 
+        });
+
+        describe('virtual:/ paths', () => {
+            it('preserves virtual:/ prefix on windows', () => {
+                isWindows = true;
+                test('virtual:/ButtonPrimary.brs', 'virtual:/buttonprimary.brs');
+                test('virtual:\\ButtonPrimary.brs', 'virtual:/buttonprimary.brs');
+            });
+
+            it('preserves virtual:/ prefix on unix', () => {
+                isWindows = false;
+                test('virtual:/ButtonPrimary.brs', 'virtual:/buttonprimary.brs');
+                test('virtual:\\ButtonPrimary.brs', 'virtual:/buttonprimary.brs');
+            });
+
+            it('normalizes consecutive slashes in virtual paths', () => {
+                isWindows = true;
+                test('virtual://one//two.brs', 'virtual:/one/two.brs');
+                isWindows = false;
+                test('virtual://one//two.brs', 'virtual:/one/two.brs');
+            });
+
+            it('lowercases virtual path content', () => {
+                test('virtual:/UPPER/CasePath.brs', 'virtual:/upper/casepath.brs');
+            });
         });
     });
 

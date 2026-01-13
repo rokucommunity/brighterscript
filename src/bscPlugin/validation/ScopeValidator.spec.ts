@@ -4730,8 +4730,8 @@ describe('ScopeValidator', () => {
                     file: file
                 };
                 //emit an event to allow plugins to contribute to the file validation process
-                program.plugins.emit('onFileValidate', validateFileEvent);
-                program.plugins.emit('afterFileValidate', validateFileEvent);
+                program.plugins.emit('validateFile', validateFileEvent);
+                program.plugins.emit('afterValidateFile', validateFileEvent);
             }
 
             const commonContents = `

@@ -8,7 +8,7 @@ import PluginInterface from './PluginInterface';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim } from './testHelpers.spec';
 import type { BrsFile } from './files/BrsFile';
 import type { AssignmentStatement, ForEachStatement, IfStatement, NamespaceStatement, PrintStatement, TypeStatement } from './parser/Statement';
-import type { CompilerPlugin, OnScopeValidateEvent } from './interfaces';
+import type { CompilerPlugin, ValidateScopeEvent } from './interfaces';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { EnumMemberType, EnumType } from './types/EnumType';
 import { ClassType } from './types/ClassType';
@@ -1275,25 +1275,25 @@ describe('Scope', () => {
             program.plugins = new PluginInterface();
             const plugin = program.plugins.add({
                 name: 'Emits validation events',
-                beforeScopeValidate: sinon.spy(),
-                onScopeValidate: sinon.spy(),
-                afterScopeValidate: sinon.spy()
+                beforeValidateScope: sinon.spy(),
+                validateScope: sinon.spy(),
+                afterValidateScope: sinon.spy()
             });
             program.validate();
             let scopeNames = program.getScopes().map(x => x.name).filter(x => x !== 'global').sort();
 
-            const scopes = plugin.beforeScopeValidate.getCalls().map(x => x.args[0].scope);
-            expect(plugin.beforeScopeValidate.callCount).to.equal(2);
+            const scopes = plugin.beforeValidateScope.getCalls().map(x => x.args[0].scope);
+            expect(plugin.beforeValidateScope.callCount).to.equal(2);
             expect(scopes).to.include(sourceScope);
             expect(scopes).to.include(compScope);
 
-            expect(plugin.onScopeValidate.callCount).to.equal(2);
-            expect(plugin.onScopeValidate.getCalls().map(
-                x => (x.args[0] as OnScopeValidateEvent).scope.name
+            expect(plugin.validateScope.callCount).to.equal(2);
+            expect(plugin.validateScope.getCalls().map(
+                x => (x.args[0] as ValidateScopeEvent).scope.name
             ).sort()).to.eql(scopeNames);
 
             scopeNames = program.getScopes().map(x => x.name).filter(x => x !== 'global').sort();
-            expect(plugin.afterScopeValidate.callCount).to.equal(2);
+            expect(plugin.afterValidateScope.callCount).to.equal(2);
             expect(scopes).to.include(sourceScope);
             expect(scopes).to.include(compScope);
         });
@@ -5094,7 +5094,7 @@ describe('Scope', () => {
             let changedSymbolsSize = -1;
             class TestScopeValidator implements CompilerPlugin {
                 name = 'TestScopeValidator';
-                public onScopeValidate(event: OnScopeValidateEvent) {
+                public validateScope(event: ValidateScopeEvent) {
                     changedSymbolsSize = event.changedSymbols.get(SymbolTypeFlag.runtime).size;
                 }
             }
@@ -5123,7 +5123,7 @@ describe('Scope', () => {
             let symbolChanges: Map<SymbolTypeFlag, Set<string>>;
             class TestScopeValidator implements CompilerPlugin {
                 name = 'TestScopeValidator';
-                public onScopeValidate(event: OnScopeValidateEvent) {
+                public validateScope(event: ValidateScopeEvent) {
                     symbolChanges = event.changedSymbols;
                 }
             }
@@ -5173,7 +5173,7 @@ describe('Scope', () => {
             let symbolChanges: Map<SymbolTypeFlag, Set<string>>;
             class TestScopeValidator implements CompilerPlugin {
                 name = 'TestScopeValidator';
-                public onScopeValidate(event: OnScopeValidateEvent) {
+                public validateScope(event: ValidateScopeEvent) {
                     symbolChanges = event.changedSymbols;
                 }
             }

@@ -63,6 +63,16 @@ export interface BsConfig {
     outDir?: string;
 
     /**
+     * @deprecated use `outDir` instead
+     */
+    stagingDir?: string;
+
+    /**
+     * @deprecated use `outDir` instead
+     */
+    stagingFolderPath?: string;
+
+    /**
      * A list of error codes the compiler should NOT emit, even if encountered.
      */
     ignoreErrorCodes?: (number | string)[];
@@ -187,7 +197,9 @@ type OptionalBsConfigFields =
     | 'require'
     | 'outDir'
     | 'diagnosticLevel'
-    | 'rootDir';
+    | 'rootDir'
+    | 'stagingDir'
+    | 'stagingFolderPath';
 
 export type FinalizedBsConfig =
     Omit<Required<BsConfig>, OptionalBsConfigFields>

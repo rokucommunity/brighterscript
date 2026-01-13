@@ -284,7 +284,9 @@ export class Util {
      * @param config a bsconfig object to use as the baseline for the resulting config
      */
     public normalizeAndResolveConfig(config: BsConfig | undefined): FinalizedBsConfig {
-        let result = this.normalizeConfig({});
+        let result = this.normalizeConfig({
+            ...config
+        });
 
         if (config?.noProject) {
             return result;
@@ -1820,6 +1822,14 @@ export class Util {
         const originalPath = thePath;
 
         if (typeof thePath !== 'string') {
+            return thePath;
+        }
+
+        //handle `virtual:/` paths specially - just normalize slashes, don't use path.normalize which would mangle the `virtual:` prefix
+        if (/^virtual:[\/\\]/i.test(thePath)) {
+            // Strip the `virtual:` prefix, normalize slashes, then re-add the prefix
+            thePath = 'virtual:/' + thePath.slice(8).replace(/^[\/\\]+/, '').replace(/[\/\\]+/g, '/').toLowerCase();
+            this.standardizePathCache.set(originalPath, thePath);
             return thePath;
         }
 

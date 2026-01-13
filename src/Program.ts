@@ -6,7 +6,7 @@ import { CancellationTokenSource } from 'vscode-languageserver';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeFileAddEvent, BeforeFileRemoveEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData } from './interfaces';
+import type { FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeAddFileEvent, BeforeRemoveFileEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DependencyGraph } from './DependencyGraph';
@@ -615,17 +615,17 @@ export class Program {
      * Update internal maps with this file reference
      */
     private assignFile<T extends BscFile = BscFile>(file: T) {
-        const fileAddEvent: BeforeFileAddEvent = {
+        const fileAddEvent: BeforeAddFileEvent = {
             file: file,
             program: this
         };
 
-        this.plugins.emit('beforeFileAdd', fileAddEvent);
+        this.plugins.emit('beforeAddFile', fileAddEvent);
 
         this.files[file.srcPath.toLowerCase()] = file;
         this.destMap.set(file.destPath.toLowerCase(), file);
 
-        this.plugins.emit('afterFileAdd', fileAddEvent);
+        this.plugins.emit('afterAddFile', fileAddEvent);
 
         return file;
     }
@@ -732,15 +732,23 @@ export class Program {
 
                 //if this is an xml file in the components folder, register it as a component
                 if (this.isComponentsXmlFile(file)) {
+                    this.plugins.emit('beforeProvideScope', {
+                        program: this,
+                        scope: undefined
+                    });
                     //create a new scope for this xml file
                     let scope = new XmlScope(file, this);
                     this.addScope(scope);
 
                     //register this componet now that we have parsed it and know its component name
                     this.registerComponent(file, scope);
+                    this.plugins.emit('provideScope', {
+                        program: this,
+                        scope: scope
+                    });
 
                     //notify plugins that the scope is created and the component is registered
-                    this.plugins.emit('afterScopeCreate', {
+                    this.plugins.emit('afterProvideScope', {
                         program: this,
                         scope: scope
                     });
@@ -839,7 +847,7 @@ export class Program {
             const sourceScope = new Scope('source', this, 'scope:source');
             sourceScope.attachDependencyGraph(this.dependencyGraph);
             this.addScope(sourceScope);
-            this.plugins.emit('afterScopeCreate', {
+            this.plugins.emit('afterProvideScope', {
                 program: this,
                 scope: sourceScope
             });
@@ -876,24 +884,24 @@ export class Program {
             }
             this.diagnostics.clearForFile(file.srcPath);
 
-            const event: BeforeFileRemoveEvent = { file: file, program: this };
-            this.plugins.emit('beforeFileRemove', event);
+            const event: BeforeRemoveFileEvent = { file: file, program: this };
+            this.plugins.emit('beforeRemoveFile', event);
 
             //if there is a scope named the same as this file's path, remove it (i.e. xml scopes)
             let scope = this.scopes[file.destPath];
             if (scope) {
                 this.logger.debug('Removing associated scope', scope.name);
-                const scopeDisposeEvent = {
+                const scopeRemoveEvent = {
                     program: this,
                     scope: scope
                 };
-                this.plugins.emit('beforeScopeDispose', scopeDisposeEvent);
-                this.plugins.emit('onScopeDispose', scopeDisposeEvent);
+                this.plugins.emit('beforeRemoveScope', scopeRemoveEvent);
+                this.plugins.emit('removeScope', scopeRemoveEvent);
                 scope.dispose();
                 //notify dependencies of this scope that it has been removed
                 this.dependencyGraph.remove(scope.dependencyGraphKey!);
                 this.removeScope(this.scopes[file.destPath]);
-                this.plugins.emit('afterScopeDispose', scopeDisposeEvent);
+                this.plugins.emit('afterRemoveScope', scopeRemoveEvent);
             }
             //remove the file from the program
             this.unassignFile(file);
@@ -930,7 +938,7 @@ export class Program {
             //dispose file
             file?.dispose?.();
 
-            this.plugins.emit('afterFileRemove', event);
+            this.plugins.emit('afterRemoveFile', event);
         }
     }
 
@@ -1002,7 +1010,7 @@ export class Program {
             throw new Error('Cannot run synchronous validation while an async validation is in progress');
         }
 
-        let beforeProgramValidateWasEmitted = false;
+        let beforeValidateProgramWasEmitted = false;
 
         const brsFilesValidated: BrsFile[] = this.validationDetails.brsFilesValidated;
         const xmlFilesValidated: XmlFile[] = this.validationDetails.xmlFilesValidated;
@@ -1035,11 +1043,11 @@ export class Program {
             .once('before and on programValidate', () => {
                 logValidateEnd = this.logger.timeStart(LogLevel.log, `Validating project${(this.logger.logLevel as LogLevel) > LogLevel.log ? ` (run ${validationRunId})` : ''}`);
                 this.diagnostics.clearForTag(ProgramValidatorDiagnosticsTag);
-                this.plugins.emit('beforeProgramValidate', {
+                this.plugins.emit('beforeValidateProgram', {
                     program: this
                 });
-                beforeProgramValidateWasEmitted = true;
-                this.plugins.emit('onProgramValidate', {
+                beforeValidateProgramWasEmitted = true;
+                this.plugins.emit('validateProgram', {
                     program: this
                 });
             })
@@ -1055,16 +1063,16 @@ export class Program {
                     this.addComponentReferenceType(componentKey, componentName);
                 }
             })
-            .forEach('beforeFileValidate', () => filesToProcess, (file) => {
+            .forEach('beforeValidateFile', () => filesToProcess, (file) => {
                 //run the beforeFilevalidate event for every unvalidated file
-                this.plugins.emit('beforeFileValidate', {
+                this.plugins.emit('beforeValidateFile', {
                     program: this,
                     file: file
                 });
             })
-            .forEach('onFileValidate', () => filesToProcess, (file) => {
-                //run the onFileValidate event for every unvalidated file
-                this.plugins.emit('onFileValidate', {
+            .forEach('validateFile', () => filesToProcess, (file) => {
+                //run the validateFile event for every unvalidated file
+                this.plugins.emit('validateFile', {
                     program: this,
                     file: file
                 });
@@ -1075,9 +1083,9 @@ export class Program {
                     xmlFilesValidated.push(file);
                 }
             })
-            .forEach('afterFileValidate', () => filesToProcess, (file) => {
-                //run the onFileValidate event for every unvalidated file
-                this.plugins.emit('afterFileValidate', {
+            .forEach('afterValidateFile', () => filesToProcess, (file) => {
+                //run the validateFile event for every unvalidated file
+                this.plugins.emit('afterValidateFile', {
                     program: this,
                     file: file
                 });
@@ -1234,7 +1242,7 @@ export class Program {
                 this.lastValidationInfo.scopeNames = new Set<string>(scopesToValidate.map(s => s.name?.toLowerCase() ?? ''));
             })
             .forEach('beforeScopeValidate', () => scopesToValidate, (scope) => {
-                this.plugins.emit('beforeScopeValidate', {
+                this.plugins.emit('beforeValidateScope', {
                     program: this,
                     scope: scope
                 });
@@ -1242,8 +1250,8 @@ export class Program {
             .forEach('validate scope', () => scopesToValidate, (scope) => {
                 scope.validate(this.currentScopeValidationOptions);
             })
-            .forEach('afterScopeValidate', () => scopesToValidate, (scope) => {
-                this.plugins.emit('afterScopeValidate', {
+            .forEach('afterValidateScope', () => scopesToValidate, (scope) => {
+                this.plugins.emit('afterValidateScope', {
                     program: this,
                     scope: scope
                 });
@@ -1265,10 +1273,10 @@ export class Program {
                 logValidateEnd();
             })
             .onComplete(() => {
-                //if we emitted the beforeProgramValidate hook, emit the afterProgramValidate hook as well
-                if (beforeProgramValidateWasEmitted) {
+                //if we emitted the beforeValidateProgram hook, emit the afterValidateProgram hook as well
+                if (beforeValidateProgramWasEmitted) {
                     const wasCancelled = options?.cancellationToken?.isCancellationRequested ?? false;
-                    this.plugins.emit('afterProgramValidate', {
+                    this.plugins.emit('afterValidateProgram', {
                         program: this,
                         wasCancelled: wasCancelled
                     });
@@ -1691,7 +1699,25 @@ export class Program {
 
             const scopes = this.getScopesForFile(file);
 
-            this.plugins.emit('onGetCodeActions', {
+            this.plugins.emit('beforeProvideCodeActions', {
+                program: this,
+                file: file,
+                range: range,
+                diagnostics: diagnostics,
+                scopes: scopes,
+                codeActions: codeActions
+            });
+
+            this.plugins.emit('provideCodeActions', {
+                program: this,
+                file: file,
+                range: range,
+                diagnostics: diagnostics,
+                scopes: scopes,
+                codeActions: codeActions
+            });
+
+            this.plugins.emit('afterProvideCodeActions', {
                 program: this,
                 file: file,
                 range: range,
@@ -1709,8 +1735,20 @@ export class Program {
     public getSemanticTokens(srcPath: string): SemanticToken[] | undefined {
         const file = this.getFile(srcPath);
         if (file) {
+            this.plugins.emit('beforeProvideSemanticTokens', {
+                program: this,
+                file: file,
+                scopes: this.getScopesForFile(file),
+                semanticTokens: undefined
+            });
             const result = [] as SemanticToken[];
-            this.plugins.emit('onGetSemanticTokens', {
+            this.plugins.emit('provideSemanticTokens', {
+                program: this,
+                file: file,
+                scopes: this.getScopesForFile(file),
+                semanticTokens: result
+            });
+            this.plugins.emit('afterProvideSemanticTokens', {
                 program: this,
                 file: file,
                 scopes: this.getScopesForFile(file),
@@ -1912,7 +1950,7 @@ export class Program {
             files: files,
             result: allFiles
         });
-        await this.plugins.emitAsync('onSerializeProgram', serializeProgramEvent);
+        await this.plugins.emitAsync('serializeProgram', serializeProgramEvent);
 
         // serialize each file
         for (const file of files) {
@@ -2173,7 +2211,7 @@ export class Program {
     }
 
     public dispose() {
-        this.plugins.emit('beforeProgramDispose', { program: this });
+        this.plugins.emit('beforeRemoveProgram', { program: this });
 
         for (let filePath in this.files) {
             this.files[filePath]?.dispose?.();
@@ -2183,6 +2221,8 @@ export class Program {
         }
         this.globalScope?.dispose?.();
         this.dependencyGraph?.dispose?.();
+        this.plugins.emit('removeProgram', { program: this });
+        this.plugins.emit('afterRemoveProgram', { program: this });
     }
 }
 

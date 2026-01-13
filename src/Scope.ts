@@ -827,7 +827,7 @@ export class Scope {
                 changedSymbols: validationOptions?.changedSymbols
             };
             t0 = performance.now();
-            this.program.plugins.emit('onScopeValidate', scopeValidateEvent);
+            this.program.plugins.emit('validateScope', scopeValidateEvent);
             this.validationMetrics.validationTime = performance.now() - t0;
             //unlink all symbol tables from this scope (so they don't accidentally stick around)
             this.unlinkSymbolTable();

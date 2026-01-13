@@ -1723,7 +1723,7 @@ describe('LanguageServer', () => {
                 expect(result['pathAbsolute']).to.eql(result.srcPath);
             });
 
-            it('calls beforeProgramTranspile and afterProgramTranspile plugin events', async () => {
+            it('calls beforeBuildProgram and afterBuildProgram plugin events', async () => {
                 fsExtra.outputFileSync(s`${rootDir}/source/main.bs`, `
                     sub main()
                         print \`hello world\`
@@ -1736,7 +1736,7 @@ describe('LanguageServer', () => {
                 //make a plugin that changes string text
                 (server['projectManager'].projects[0] as Project)['builder'].program.plugins.add({
                     name: 'test-plugin',
-                    beforeProgramTranspile: (event) => {
+                    beforeBuildProgram: (event) => {
                         const { program, editor } = event;
                         const file = program.getFile('source/main.bs');
                         if (isBrsFile(file)) {
@@ -1751,7 +1751,7 @@ describe('LanguageServer', () => {
                             });
                         }
                     },
-                    afterProgramTranspile: afterSpy
+                    afterBuildProgram: afterSpy
                 });
 
                 const result = (await server.onExecuteCommand({
