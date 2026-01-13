@@ -25,7 +25,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isComplexType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -2203,7 +2203,7 @@ export class Util {
                 let typeString = chainItem.type?.toString();
                 let typeToFindStringFor = chainItem.type;
                 while (typeToFindStringFor) {
-                    if (isComplexType(chainItem.type)) {
+                    if (isCompoundType(chainItem.type)) {
                         typeString = `(${typeToFindStringFor.toString()})`;
                         break;
                     } else if (isCallableType(typeToFindStringFor)) {
@@ -2328,7 +2328,7 @@ export class Util {
     }
 
     public getCustomTypesInSymbolTree(setToFill: Set<BscType>, type: BscType, filter?: (t: BscType) => boolean) {
-        const subSymbolTypes = isComplexType(type)
+        const subSymbolTypes = isCompoundType(type)
             ? type.types
             : type.getMemberTable()?.getAllSymbols(SymbolTypeFlag.runtime).map(sym => sym.type) ?? [];
         for (const subSymbolType of subSymbolTypes) {

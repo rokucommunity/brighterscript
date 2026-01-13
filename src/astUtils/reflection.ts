@@ -340,7 +340,7 @@ export function isRoStringType(value: any): value is InterfaceType {
     return isBuiltInType(value, 'roString');
 }
 export function isStringTypeLike(value: any): value is StringType | InterfaceType {
-    return isStringType(value) || isRoStringType(value) || isComplexTypeOf(value, isStringTypeLike);
+    return isStringType(value) || isRoStringType(value) || isCompoundTypeOf(value, isStringTypeLike);
 }
 
 export function isTypedFunctionType(value: any): value is TypedFunctionType {
@@ -354,7 +354,7 @@ export function isRoFunctionType(value: any): value is InterfaceType {
     return value?.kind === BscTypeKind.RoFunctionType || isBuiltInType(value, 'roFunction');
 }
 export function isFunctionTypeLike(value: any): value is FunctionType | InterfaceType {
-    return isFunctionType(value) || isRoFunctionType(value) || isComplexTypeOf(value, isFunctionTypeLike);
+    return isFunctionType(value) || isRoFunctionType(value) || isCompoundTypeOf(value, isFunctionTypeLike);
 }
 
 export function isBooleanType(value: any): value is BooleanType {
@@ -364,7 +364,7 @@ export function isRoBooleanType(value: any): value is InterfaceType {
     return isBuiltInType(value, 'roBoolean');
 }
 export function isBooleanTypeLike(value: any): value is BooleanType | InterfaceType {
-    return isBooleanType(value) || isRoBooleanType(value) || isComplexTypeOf(value, isBooleanTypeLike);
+    return isBooleanType(value) || isRoBooleanType(value) || isCompoundTypeOf(value, isBooleanTypeLike);
 }
 
 export function isIntegerType(value: any): value is IntegerType {
@@ -374,7 +374,7 @@ export function isRoIntType(value: any): value is LongIntegerType {
     return isBuiltInType(value, 'roInt');
 }
 export function isIntegerTypeLike(value: any): value is IntegerType | InterfaceType {
-    return isIntegerType(value) || isRoIntType(value) || isComplexTypeOf(value, isIntegerTypeLike);
+    return isIntegerType(value) || isRoIntType(value) || isCompoundTypeOf(value, isIntegerTypeLike);
 }
 
 export function isLongIntegerType(value: any): value is LongIntegerType {
@@ -384,7 +384,7 @@ export function isRoLongIntegerType(value: any): value is InterfaceType {
     return isBuiltInType(value, 'roLongInteger');
 }
 export function isLongIntegerTypeLike(value: any): value is LongIntegerType | InterfaceType {
-    return isLongIntegerType(value) || isRoLongIntegerType(value) || isComplexTypeOf(value, isLongIntegerTypeLike);
+    return isLongIntegerType(value) || isRoLongIntegerType(value) || isCompoundTypeOf(value, isLongIntegerTypeLike);
 }
 
 export function isFloatType(value: any): value is FloatType {
@@ -394,7 +394,7 @@ export function isRoFloatType(value: any): value is InterfaceType {
     return isBuiltInType(value, 'roFloat');
 }
 export function isFloatTypeLike(value: any): value is FloatType | InterfaceType {
-    return isFloatType(value) || isRoFloatType(value) || isComplexTypeOf(value, isFloatTypeLike);
+    return isFloatType(value) || isRoFloatType(value) || isCompoundTypeOf(value, isFloatTypeLike);
 }
 
 export function isDoubleType(value: any): value is DoubleType {
@@ -404,7 +404,7 @@ export function isRoDoubleType(value: any): value is InterfaceType {
     return isBuiltInType(value, 'roDouble');
 }
 export function isDoubleTypeLike(value: any): value is DoubleType | InterfaceType {
-    return isDoubleType(value) || isRoDoubleType(value) || isComplexTypeOf(value, isDoubleTypeLike);
+    return isDoubleType(value) || isRoDoubleType(value) || isCompoundTypeOf(value, isDoubleTypeLike);
 }
 
 export function isInvalidType(value: any): value is InvalidType {
@@ -414,7 +414,7 @@ export function isRoInvalidType(value: any): value is InterfaceType {
     return isBuiltInType(value, 'roInvalid');
 }
 export function isInvalidTypeLike(value: any): value is InvalidType | InterfaceType {
-    return isInvalidType(value) || isRoInvalidType(value) || isComplexTypeOf(value, isInvalidTypeLike);
+    return isInvalidType(value) || isRoInvalidType(value) || isCompoundTypeOf(value, isInvalidTypeLike);
 }
 
 export function isVoidType(value: any): value is VoidType {
@@ -486,7 +486,7 @@ export function isInheritableType(target): target is InheritableType {
 }
 
 export function isCallFuncableType(target): target is CallFuncableType {
-    return isInterfaceType(target) || isComponentType(target) || isComplexTypeOf(target, isCallFuncableType);
+    return isInterfaceType(target) || isComponentType(target) || isCompoundTypeOf(target, isCallFuncableType);
 }
 
 export function isCallableType(target): target is BaseFunctionType {
@@ -510,7 +510,7 @@ export function isNumberTypeLike(value: any): value is IntegerType | LongInteger
         isLongIntegerTypeLike(value) ||
         isFloatTypeLike(value) ||
         isDoubleTypeLike(value) ||
-        isComplexTypeOf(value, isNumberTypeLike);
+        isCompoundTypeOf(value, isNumberTypeLike);
 }
 
 export function isPrimitiveType(value: any = false): value is IntegerType | LongIntegerType | FloatType | DoubleType | StringType | BooleanType | InterfaceType {
@@ -527,7 +527,7 @@ export function isPrimitiveTypeLike(value: any = false): value is IntegerType | 
 }
 
 export function isAssociativeArrayTypeLike(value: any): value is AssociativeArrayType | InterfaceType {
-    return value?.kind === BscTypeKind.AssociativeArrayType || isBuiltInType(value, 'roAssociativeArray') || isComplexTypeOf(value, isAssociativeArrayTypeLike);
+    return value?.kind === BscTypeKind.AssociativeArrayType || isBuiltInType(value, 'roAssociativeArray') || isCompoundTypeOf(value, isAssociativeArrayTypeLike);
 }
 
 export function isBuiltInType(value: any, name: string): value is InterfaceType {
@@ -553,14 +553,14 @@ export function isUnionTypeOf(value: any, typeGuard: (val: any) => boolean) {
     return isUnionType(value) && value.types.every(typeGuard);
 }
 
-export function isComplexTypeOf(value: any, typeGuard: (val: any) => boolean) {
+export function isCompoundTypeOf(value: any, typeGuard: (val: any) => boolean) {
     // TODO: add more complex type checks as needed, like IntersectionType
     return isTypeStatementTypeOf(value, typeGuard) ||
         isUnionTypeOf(value, typeGuard);
 }
 
 
-export function isComplexType(value: any): value is UnionType | IntersectionType {
+export function isCompoundType(value: any): value is UnionType | IntersectionType {
     return isUnionType(value) || isIntersectionType(value);
 }
 

@@ -2,7 +2,7 @@ import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { isDynamicType, isIntersectionType, isObjectType, isTypedFunctionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { IntersectionWithDefaultDynamicReferenceType, ReferenceType } from './ReferenceType';
-import { addAssociatedTypesTableAsSiblingToMemberTable, getAllTypesFromComplexType, isEnumTypeCompatible, isTypeWithPotentialDefaultDynamicMember, joinTypesString, reduceTypesForIntersectionType } from './helpers';
+import { addAssociatedTypesTableAsSiblingToMemberTable, getAllTypesFromCompoundType, isEnumTypeCompatible, isTypeWithPotentialDefaultDynamicMember, joinTypesString, reduceTypesForIntersectionType } from './helpers';
 import { BscTypeKind } from './BscTypeKind';
 import type { TypeCacheEntry } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
@@ -198,7 +198,7 @@ export class IntersectionType extends BscType {
      * Used for transpilation
      */
     toTypeString(): string {
-        const uniqueTypeStrings = new Set<string>(getAllTypesFromComplexType(this).map(t => t.toTypeString()));
+        const uniqueTypeStrings = new Set<string>(getAllTypesFromCompoundType(this).map(t => t.toTypeString()));
 
         if (uniqueTypeStrings.size === 1) {
             return uniqueTypeStrings.values().next().value;

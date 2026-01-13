@@ -11,7 +11,7 @@ import type { ReferenceType } from './types/ReferenceType';
 import { getAllRequiredSymbolNames } from './types/ReferenceType';
 import type { TypeChainEntry, TypeChainProcessResult } from './interfaces';
 import { BscTypeKind } from './types/BscTypeKind';
-import { getAllTypesFromComplexType } from './types/helpers';
+import { getAllTypesFromCompoundType } from './types/helpers';
 import type { BscType } from './types/BscType';
 import type { BscFile } from './files/BscFile';
 import type { ClassStatement, ConstStatement, EnumMemberStatement, EnumStatement, InterfaceStatement, NamespaceStatement } from './parser/Statement';
@@ -222,7 +222,7 @@ export class CrossScopeValidator {
         }
 
         if (isUnionType(symbol.typeChain[0].type) && symbol.typeChain[0].data.isInstance) {
-            const allUnifiedTypes = getAllTypesFromComplexType(symbol.typeChain[0].type);
+            const allUnifiedTypes = getAllTypesFromCompoundType(symbol.typeChain[0].type);
             for (const unifiedType of allUnifiedTypes) {
                 unnamespacedNameLowers.push(joinTypeChainForKey(symbol.typeChain, unifiedType));
             }
