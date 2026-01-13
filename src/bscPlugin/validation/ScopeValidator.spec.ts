@@ -2027,6 +2027,82 @@ describe('ScopeValidator', () => {
                         }).message
                     ]);
             });
+
+            it('accepts a valid intersection when parameter is a union with an intersection', () => {
+                program.setFile('source/main.bs', `
+                    sub fooA(x as {a as integer} and {b as string} or {c as float})
+                        ' noop
+                    end sub
+
+
+                    sub fooB(y as object)
+                        fooA({a: 32, b: y})
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates an incomplete intersection when parameter is a union with an intersection', () => {
+                program.setFile('source/main.bs', `
+                    sub fooA(x as {a as integer} and {b as string} or {c as float})
+                        ' noop
+                    end sub
+
+
+                    sub fooB(y as object)
+                        fooA({a: 32})
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('roAssociativeArray', '({a as integer} and {b as string}) or {c as float}', {
+                        missingFields: [
+                            { name: 'b', expectedType: StringType.instance },
+                            { name: 'c', expectedType: FloatType.instance }
+                        ]
+                    }).message
+                ]);
+            });
+
+            it('accepts a valid intersection when parameter is an intersection with a union', () => {
+                program.setFile('source/main.bs', `
+                    sub fooA(x as {a as integer} and ({b as string} or {c as float}))
+                        ' noop
+                    end sub
+
+
+                    sub fooB(y as dynamic)
+                        fooA({a: 32, b: y}) ' meets first half of union
+                        fooA({a: 32, c: y}) ' meets second half of union
+                        fooA({a: 32, b: "hello", c: 2.178}) ' meets both halves of union
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates an incomplete intersection when parameter is an intersection with a union', () => {
+                program.setFile('source/main.bs', `
+                    sub fooA(x as {a as integer} and ({b as string} or {c as float}))
+                        ' noop
+                    end sub
+
+
+                    sub fooB(y as object)
+                        fooA({a: 32})
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('roAssociativeArray', '{a as integer} and ({b as string} or {c as float})', {
+                        missingFields: [
+                            { name: 'b', expectedType: StringType.instance },
+                            { name: 'c', expectedType: FloatType.instance }
+                        ]
+                    }).message
+                ]);
+            });
         });
     });
 
@@ -6185,6 +6261,154 @@ describe('ScopeValidator', () => {
                         parameterMismatches: [{ index: 0, data: { expectedType: stuff1IFace, actualType: stuff2IFace } }]
                     }
                 }).message
+            ]);
+        });
+
+        it('allows callfunc on intersection of callfuncable types', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getName" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                function getName() as string
+                    return "John Doe"
+                end function
+            `);
+
+            program.setFile('components/Widget2.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget2" extends="Group">
+                    <script uri="Widget2.bs"/>
+                    <interface>
+                        <function name="getName" />
+                        <function name="getAge" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget2.bs', `
+                function getName() as string
+                    return "John Doe"
+                end function
+
+                function getAge() as integer
+                    return 42
+                end function
+            `);
+
+            program.setFile('source/test.bs', `
+                sub doCallfunc(node as roSGNodeWidget and roSGNodeWidget2)
+                    n = node@.getName()
+                    a = node@.getAge()
+                    takesStringAndInt(n, a)
+                end sub
+
+                sub takesStringAndInt(name as string, age as integer)
+                    print name + age.toStr()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('validates callfunc on intersection', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getName" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                function getName(s as string) as string
+                    return "John Doe" + s
+                end function
+            `);
+
+            program.setFile('components/Widget2.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget2" extends="Group">
+                    <script uri="Widget2.bs"/>
+                    <interface>
+                        <function name="getAge" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget2.bs', `
+                function getAge(y as integer) as integer
+                    return 42 + y
+                end function
+            `);
+
+            program.setFile('source/test.bs', `
+                sub doCallfunc(node as roSgNodeWidget and roSgNodeWidget2)
+                    n = node@.getName(123)
+                    a = node@.getAge("123")
+                    takesStringAndInt(n, a)
+                end sub
+
+                sub takesStringAndInt(name as string, age as integer)
+                    print name + age.toStr()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('integer', 'string').message,
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            ]);
+        });
+
+        it('validates callfunc on intersection of nodes with incompatible functions', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getName" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                function getName(s as string) as string
+                    return "John Doe" + s
+                end function
+            `);
+
+            program.setFile('components/Widget2.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget2" extends="Group">
+                    <script uri="Widget2.bs"/>
+                    <interface>
+                        <function name="getName" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget2.bs', `
+                function getName(y as integer) as integer
+                    return 42 + y
+                end function
+            `);
+
+            program.setFile('source/test.bs', `
+                sub doCallfunc(node as roSgNodeWidget and roSgNodeWidget2)
+                    n = node@.getName(123)
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.notCallable('node@.getName').message
             ]);
         });
     });

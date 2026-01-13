@@ -41,6 +41,8 @@ import type { Program } from '../Program';
 import type { Project } from '../lsp/Project';
 import type { IntersectionType } from '../types/IntersectionType';
 import type { TypeStatementType } from '../types/TypeStatementType';
+import type { BscType } from '../types/BscType';
+import type { SymbolTable } from '../SymbolTable';
 
 
 // File reflection
@@ -482,7 +484,7 @@ export function isTypeStatementType(value: any): value is TypeStatementType {
 }
 
 export function isInheritableType(target): target is InheritableType {
-    return isClassType(target) || isCallFuncableType(target);
+    return isClassType(target) || isInterfaceType(target) || isComponentType(target);
 }
 
 export function isCallFuncableType(target): target is CallFuncableType {
@@ -530,6 +532,10 @@ export function isAssociativeArrayTypeLike(value: any): value is AssociativeArra
     return value?.kind === BscTypeKind.AssociativeArrayType || isBuiltInType(value, 'roAssociativeArray') || isCompoundTypeOf(value, isAssociativeArrayTypeLike);
 }
 
+export function isCallFuncableTypeLike(target): target is BscType & { callFuncMemberTable: SymbolTable } {
+    return isCallFuncableType(target) || isCompoundTypeOf(target, isCallFuncableTypeLike);
+}
+
 export function isBuiltInType(value: any, name: string): value is InterfaceType {
     return (isInterfaceType(value) && value.name.toLowerCase() === name.toLowerCase() && value.isBuiltIn) ||
         (isTypeStatementType(value) && isBuiltInType(value.wrappedType, name));
@@ -552,13 +558,15 @@ export function isTypeStatementTypeOf(value: any, typeGuard: (val: any) => boole
 export function isUnionTypeOf(value: any, typeGuard: (val: any) => boolean) {
     return isUnionType(value) && value.types.every(typeGuard);
 }
-
-export function isCompoundTypeOf(value: any, typeGuard: (val: any) => boolean) {
-    // TODO: add more complex type checks as needed, like IntersectionType
-    return isTypeStatementTypeOf(value, typeGuard) ||
-        isUnionTypeOf(value, typeGuard);
+export function isIntersectionTypeOf(value: any, typeGuard: (val: any) => boolean) {
+    return isIntersectionType(value) && value.types.some(typeGuard);
 }
 
+export function isCompoundTypeOf(value: any, typeGuard: (val: any) => boolean) {
+    return isTypeStatementTypeOf(value, typeGuard) ||
+        isUnionTypeOf(value, typeGuard) ||
+        isIntersectionTypeOf(value, typeGuard);
+}
 
 export function isCompoundType(value: any): value is UnionType | IntersectionType {
     return isUnionType(value) || isIntersectionType(value);
