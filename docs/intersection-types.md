@@ -4,7 +4,7 @@ BrighterScript Intersection Types are a way to define a type that combines the m
 
 ## Syntax
 
-Intersection types can be declared with the following syntax: `<type> and <type>`. For example, the parameter to the function below could be meets both the interfaces HasId and HasUrl:
+Intersection types can be declared with the following syntax: `<type> and <type>`. For example, the parameter to the function below could be meets both the interfaces `HasId` and `HasUrl`:
 
 ```BrighterScript
 interface HasId
