@@ -32,7 +32,8 @@ const foundTypesTranslation = {
     'robytearray object': 'roByteArray',
     'rolist of roassociativearray items': 'roList',
     'roassociative array': 'roAssociativeArray',
-    'uri string': 'uri'
+    'uri string': 'uri',
+    'oassociativearray': 'roAssociativeArray'
 };
 
 const turndownService = new TurndownService({
@@ -1730,10 +1731,11 @@ function fixOverloadedMethod(iface: RokuInterface, funcName: string) {
         if (!returnDescriptions.includes(originalOverload.returnDescription)) {
             returnDescriptions.push(originalOverload.returnDescription);
         }
-        if (!returnTypes.includes(originalOverload.returnType)) {
+        if (!returnTypes.map(rt => rt.toLowerCase()).includes(originalOverload.returnType.toLowerCase())) {
             returnTypes.push(originalOverload.returnType);
         }
     }
+
     const mergedFunc: Func = {
         name: originalOverloads[0].name,
         params: [],
