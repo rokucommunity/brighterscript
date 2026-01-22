@@ -1,7 +1,7 @@
 import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { isDynamicType, isIntersectionType, isObjectType, isTypedFunctionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
-import { IntersectionWithDefaultDynamicReferenceType, ReferenceType } from './ReferenceType';
+import { ReferenceTypeWithDefault, ReferenceType } from './ReferenceType';
 import { addAssociatedTypesTableAsSiblingToMemberTable, getAllTypesFromCompoundType, isEnumTypeCompatible, isTypeWithPotentialDefaultDynamicMember, joinTypesString, reduceTypesForIntersectionType } from './helpers';
 import { BscTypeKind } from './BscTypeKind';
 import type { TypeCacheEntry } from '../SymbolTable';
@@ -102,7 +102,7 @@ export class IntersectionType extends BscType {
         if (!innerTypesMemberType?.isResolvable()) {
             const shouldCreateDynamicAAMember = this.hasMemberTypeWithDefaultDynamicMember && !options.ignoreDefaultDynamicMembers;
             if (shouldCreateDynamicAAMember) {
-                return new IntersectionWithDefaultDynamicReferenceType(innerTypesMemberType);
+                return new ReferenceTypeWithDefault(innerTypesMemberType, DynamicType.instance);
             }
         }
         return innerTypesMemberType;
@@ -138,7 +138,7 @@ export class IntersectionType extends BscType {
         if (!resultCallFuncType?.isResolvable()) {
             const shouldCreateDynamicAAMember = this.hasMemberTypeWithDefaultDynamicMember && !options.ignoreDefaultDynamicMembers;
             if (shouldCreateDynamicAAMember) {
-                return new IntersectionWithDefaultDynamicReferenceType(resultCallFuncType);
+                return new ReferenceTypeWithDefault(resultCallFuncType, DynamicType.instance);
             }
         }
 

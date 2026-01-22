@@ -3114,6 +3114,7 @@ export class Parser {
             if (this.match(TokenKind.LeftCurlyBrace)) {
                 expr = this.inlineInterface();
             } else if (this.match(TokenKind.LeftParen)) {
+                // this is a grouping type expression, ie. "(typeExpr)"
                 let left = this.previous();
                 let typeExpr = this.typeExpression();
                 let right = this.consume(

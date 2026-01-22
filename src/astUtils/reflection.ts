@@ -23,7 +23,7 @@ import type { ObjectType } from '../types/ObjectType';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
 import type { AssetFile } from '../files/AssetFile';
 import { AstNodeKind } from '../parser/AstNode';
-import type { TypePropertyReferenceType, ReferenceType, BinaryOperatorReferenceType, ArrayDefaultTypeReferenceType, AnyReferenceType, ParamTypeFromValueReferenceType, IntersectionWithDefaultDynamicReferenceType } from '../types/ReferenceType';
+import type { TypePropertyReferenceType, ReferenceType, BinaryOperatorReferenceType, ArrayDefaultTypeReferenceType, AnyReferenceType, ParamTypeFromValueReferenceType, ReferenceTypeWithDefault } from '../types/ReferenceType';
 import type { EnumMemberType, EnumType } from '../types/EnumType';
 import type { UnionType } from '../types/UnionType';
 import type { UninitializedType } from '../types/UninitializedType';
@@ -458,8 +458,8 @@ export function isArrayDefaultTypeReferenceType(value: any): value is ArrayDefau
 export function isParamTypeFromValueReferenceType(value: any): value is ParamTypeFromValueReferenceType {
     return value?.__reflection?.name === 'ParamTypeFromValueReferenceType';
 }
-export function isIntersectionWithDefaultDynamicReferenceType(value: any): value is IntersectionWithDefaultDynamicReferenceType {
-    return value?.__reflection?.name === 'IntersectionWithDefaultDynamicReferenceType';
+export function isReferenceTypeWithDefault(value: any): value is ReferenceTypeWithDefault {
+    return value?.__reflection?.name === 'ReferenceTypeWithDefault';
 }
 export function isNamespaceType(value: any): value is NamespaceType {
     return value?.kind === BscTypeKind.NamespaceType;
@@ -497,7 +497,7 @@ export function isCallableType(target): target is BaseFunctionType {
 
 export function isAnyReferenceType(target): target is AnyReferenceType {
     const name = target?.__reflection?.name;
-    return name === 'ReferenceType' || name === 'TypePropertyReferenceType' || name === 'BinaryOperatorReferenceType' || name === 'ArrayDefaultTypeReferenceType' || name === 'ParamTypeFromValueReferenceType' || name === 'IntersectionWithDefaultDynamicReferenceType';
+    return name === 'ReferenceType' || name === 'TypePropertyReferenceType' || name === 'BinaryOperatorReferenceType' || name === 'ArrayDefaultTypeReferenceType' || name === 'ParamTypeFromValueReferenceType' || name === 'ReferenceTypeWithDefault';
 }
 
 export function isNumberType(value: any): value is IntegerType | LongIntegerType | FloatType | DoubleType | InterfaceType {

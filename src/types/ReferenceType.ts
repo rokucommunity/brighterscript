@@ -646,18 +646,18 @@ export class ParamTypeFromValueReferenceType extends BscType {
 
 /**
  * Used when an IntersectionType has at least one member that may have default dynamic members.
- * If the inner type is not resolvable, this type will resolve to DynamicType.
+ * If the inner type is not resolvable, this type will resolve to the given type DynamicType.
  */
-export class IntersectionWithDefaultDynamicReferenceType extends BscType {
-    constructor(public baseType: BscType) {
-        super('IntersectionWithDefaultDynamicReferenceType');
+export class ReferenceTypeWithDefault extends BscType {
+    constructor(public baseType: BscType, public defaultType: BscType) {
+        super('ReferenceTypeWithDefault');
         // eslint-disable-next-line no-constructor-return
         return new Proxy(this, {
             get: (target, propName, receiver) => {
 
                 if (propName === '__reflection') {
-                    // Cheeky way to get `isIntersectionWithDefaultDynamicReferenceType` reflection to work
-                    return { name: 'IntersectionWithDefaultDynamicReferenceType' };
+                    // Cheeky way to get `isReferenceTypeWithDefault` reflection to work
+                    return { name: 'ReferenceTypeWithDefault' };
                 }
 
                 if (propName === 'isResolvable') {
@@ -668,7 +668,7 @@ export class IntersectionWithDefaultDynamicReferenceType extends BscType {
                 let innerType = this.getTarget();
 
                 if (!innerType) {
-                    innerType = DynamicType.instance;
+                    innerType = this.defaultType;
                 }
 
                 if (innerType) {
