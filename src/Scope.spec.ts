@@ -7,7 +7,7 @@ import { Program } from './Program';
 import PluginInterface from './PluginInterface';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim } from './testHelpers.spec';
 import type { BrsFile } from './files/BrsFile';
-import type { AssignmentStatement, ForEachStatement, IfStatement, NamespaceStatement, PrintStatement } from './parser/Statement';
+import type { AssignmentStatement, ForEachStatement, IfStatement, NamespaceStatement, PrintStatement, TypeStatement } from './parser/Statement';
 import type { CompilerPlugin, ValidateScopeEvent } from './interfaces';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { EnumMemberType, EnumType } from './types/EnumType';
@@ -20,7 +20,7 @@ import { FloatType } from './types/FloatType';
 import { NamespaceType } from './types/NamespaceType';
 import { DoubleType } from './types/DoubleType';
 import { UnionType } from './types/UnionType';
-import { isBlock, isCallExpression, isForEachStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isNamespaceStatement, isPrintStatement } from './astUtils/reflection';
+import { isBlock, isCallExpression, isForEachStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isNamespaceStatement, isPrintStatement, isTypeStatement } from './astUtils/reflection';
 import { ArrayType } from './types/ArrayType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { InterfaceType } from './types/InterfaceType';
@@ -31,6 +31,7 @@ import { ObjectType } from './types';
 import undent from 'undent';
 import * as fsExtra from 'fs-extra';
 import { InlineInterfaceType } from './types/InlineInterfaceType';
+import { IntersectionType } from './types/IntersectionType';
 
 describe('Scope', () => {
     let sinon = sinonImport.createSandbox();
@@ -2837,6 +2838,307 @@ describe('Scope', () => {
                 expect(resultType.types.map(t => t.toString())).includes(IntegerType.instance.toString());
             });
 
+            it('should handle union types grouped', () => {
+                const mainFile = program.setFile<BrsFile>('source/main.bs', `
+                    sub nestedUnion(thing as (Person or Pet) or (Vehicle or Duck))
+                        id = thing.id
+                        print id
+                    end sub
+
+                    sub takesIntOrString(x as (integer or string))
+                        print x
+                    end sub
+
+                    class Person
+                        id as integer
+                    end class
+
+                    class Pet
+                        id as integer
+                    end class
+
+                    class Vehicle
+                        id as string
+                    end class
+
+                    class Duck
+                        id as string
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const sourceScope = program.getScopeByName('source');
+                expect(sourceScope).to.exist;
+                sourceScope.linkSymbolTable();
+                expect(mainFnScope).to.exist;
+                const mainSymbolTable = mainFnScope.symbolTable;
+                const idType = mainSymbolTable.getSymbolType('id', { flags: SymbolTypeFlag.runtime }) as UnionType;
+                expectTypeToBe(idType, UnionType);
+                expect(idType.types).includes(StringType.instance);
+                expect(idType.types).includes(IntegerType.instance);
+            });
+        });
+
+        describe('intersection types', () => {
+
+            it('should create intersection types', () => {
+                const mainFile = program.setFile<BrsFile>('source/main.bs', `
+                    sub printName(thing as Person and Pet)
+                        name = thing.name
+                        print name
+                        legs = thing.legs
+                        print legs
+                        isAdult = thing.isAdult
+                        print isAdult
+                    end sub
+
+                    class Person
+                        name as string
+                        isAdult as boolean
+                    end class
+
+                    class Pet
+                        name as string
+                        legs as integer
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const sourceScope = program.getScopeByName('source');
+                expect(sourceScope).to.exist;
+                sourceScope.linkSymbolTable();
+                expect(mainFnScope).to.exist;
+                const mainSymbolTable = mainFnScope.symbolTable;
+                const thingType = mainSymbolTable.getSymbolType('thing', { flags: SymbolTypeFlag.runtime }) as IntersectionType;
+                expectTypeToBe(thingType, IntersectionType);
+                expect(thingType.types).to.have.lengthOf(2);
+                expect(thingType.types).to.satisfy((types) => {
+                    return types.some(t => t.toString() === 'Person') &&
+                        types.some(t => t.toString() === 'Pet');
+                });
+                const nameType = mainSymbolTable.getSymbolType('name', { flags: SymbolTypeFlag.runtime });
+                expectTypeToBe(nameType, StringType);
+                const legsType = mainSymbolTable.getSymbolType('legs', { flags: SymbolTypeFlag.runtime });
+                expectTypeToBe(legsType, IntegerType);
+                const isAdultType = mainSymbolTable.getSymbolType('isAdult', { flags: SymbolTypeFlag.runtime });
+                expectTypeToBe(isAdultType, BooleanType);
+            });
+
+
+            it('should allow intersection of types in namespaces', () => {
+                const mainFile = program.setFile<BrsFile>('source/main.bs', `
+                    sub printData(thing as NamespaceA.TypeA and NamespaceB.TypeB)
+                        dataA = thing.dataA
+                        print dataA
+                        dataB = thing.dataB
+                        print dataB
+                    end sub
+
+                    namespace NamespaceA
+                        class TypeA
+                            dataA as string
+                        end class
+                    end namespace
+
+                    namespace NamespaceB
+                        class TypeB
+                            dataB as integer
+                        end class
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const sourceScope = program.getScopeByName('source');
+                expect(sourceScope).to.exist;
+                sourceScope.linkSymbolTable();
+                expect(mainFnScope).to.exist;
+                const mainSymbolTable = mainFnScope.symbolTable;
+                const thingType = mainSymbolTable.getSymbolType('thing', { flags: SymbolTypeFlag.runtime }) as IntersectionType;
+                expectTypeToBe(thingType, IntersectionType);
+                expect(thingType.types).to.have.lengthOf(2);
+                expect(thingType.types).to.satisfy((types) => {
+                    return types.some(t => t.toString() === 'NamespaceA.TypeA') &&
+                        types.some(t => t.toString() === 'NamespaceB.TypeB');
+                });
+                const dataAType = mainSymbolTable.getSymbolType('dataA', { flags: SymbolTypeFlag.runtime });
+                expectTypeToBe(dataAType, StringType);
+                const dataBType = mainSymbolTable.getSymbolType('dataB', { flags: SymbolTypeFlag.runtime });
+                expectTypeToBe(dataBType, IntegerType);
+            });
+
+            it('should allow intersections with types from another file', () => {
+                const mainFile = program.setFile<BrsFile>('source/main.bs', `
+                    sub printInfo(thing as Person and Pet)
+                        name = thing.name
+                        print name
+                        legs = thing.legs
+                        print legs
+                    end sub
+                `);
+                program.setFile<BrsFile>('source/types.bs', `
+                    class Person
+                        name as string
+                    end class
+
+                    class Pet
+                        legs as integer
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const sourceScope = program.getScopeByName('source');
+                expect(sourceScope).to.exist;
+                sourceScope.linkSymbolTable();
+                expect(mainFnScope).to.exist;
+                const mainSymbolTable = mainFnScope.symbolTable;
+                const thingType = mainSymbolTable.getSymbolType('thing', { flags: SymbolTypeFlag.runtime }) as IntersectionType;
+                expectTypeToBe(thingType, IntersectionType);
+                expect(thingType.types).to.have.lengthOf(2);
+                expect(thingType.types).to.satisfy((types) => {
+                    return types.some(t => t.toString() === 'Person') &&
+                        types.some(t => t.toString() === 'Pet');
+                });
+                const nameType = mainSymbolTable.getSymbolType('name', { flags: SymbolTypeFlag.runtime });
+                expectTypeToBe(nameType, StringType);
+                const legsType = mainSymbolTable.getSymbolType('legs', { flags: SymbolTypeFlag.runtime });
+                expectTypeToBe(legsType, IntegerType);
+            });
+
+            it('allows a type intersection with a built in type', () => {
+                const mainFile = program.setFile<BrsFile>('source/main.bs', `
+                    sub printStringInfo(data as MyKlass and roAssociativeArray)
+                        x = data.customData
+                        print x
+                        y = data.count()
+                        print y
+                    end sub
+
+                    class MyKlass
+                        customData as string
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const sourceScope = program.getScopeByName('source');
+                expect(sourceScope).to.exist;
+                sourceScope.linkSymbolTable();
+                expect(mainFnScope).to.exist;
+                const mainSymbolTable = mainFnScope.symbolTable;
+                const dataType = mainSymbolTable.getSymbolType('data', { flags: SymbolTypeFlag.runtime }) as IntersectionType;
+                expectTypeToBe(dataType, IntersectionType);
+                expect(dataType.types).to.have.lengthOf(2);
+                expect(dataType.types).to.satisfy((types) => {
+                    return types.some(t => t.toString() === 'MyKlass') &&
+                        types.some(t => t.toString() === 'roAssociativeArray');
+                });
+                const customDataType = mainSymbolTable.getSymbolType('x', { flags: SymbolTypeFlag.runtime });
+                expectTypeToBe(customDataType, StringType);
+                const countType = mainSymbolTable.getSymbolType('y', { flags: SymbolTypeFlag.runtime });
+                expectTypeToBe(countType, IntegerType);
+            });
+
+            it('allows grouped expressions in type statement', () => {
+                const mainFile = program.setFile<BrsFile>('source/main.bs', `
+                    type guy = ({name as string, age as integer} or {id as integer, age as integer}) and {foo as boolean}
+
+
+                    sub foo(person as guy)
+                        if person.foo
+                            print person.age + 123
+                        end if
+                    end sub
+                `);
+                const ast = mainFile.ast;
+                program.validate();
+                expectZeroDiagnostics(program);
+                expect(isTypeStatement(ast.statements[0])).to.be.true;
+                const stmt = ast.statements[0] as TypeStatement;
+                expect(stmt.tokens.type.text).to.eq('type');
+                expect(stmt.value).to.exist;
+            });
+
+            it('unknown members of intersections with AA types return dynamic', () => {
+                const mainFile = program.setFile<BrsFile>('source/main.bs', `
+                    sub printData(data as {customData as string} and roAssociativeArray)
+                        x = data.someDynamicKey
+                        y = data.customData
+                        print x
+                        print y
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const sourceScope = program.getScopeByName('source');
+                expect(sourceScope).to.exist;
+                sourceScope.linkSymbolTable();
+                expect(mainFnScope).to.exist;
+                const mainSymbolTable = mainFnScope.symbolTable;
+                const dataType = mainSymbolTable.getSymbolType('data', { flags: SymbolTypeFlag.runtime }) as IntersectionType;
+                expectTypeToBe(dataType, IntersectionType);
+                expect(dataType.types).to.have.lengthOf(2);
+                const xType = mainSymbolTable.getSymbolType('x', { flags: SymbolTypeFlag.runtime });
+                expectTypeToBe(xType, DynamicType);
+                const yType = mainSymbolTable.getSymbolType('y', { flags: SymbolTypeFlag.runtime });
+                expectTypeToBe(yType, StringType);
+            });
+
+            it('unknown members of intersections with object type return dynamic', () => {
+                const mainFile = program.setFile<BrsFile>('source/main.bs', `
+                    sub printData(data as {customData as string} and object)
+                        x = data.someDynamicKey
+                        y = data.customData
+                        print x
+                        print y
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const sourceScope = program.getScopeByName('source');
+                expect(sourceScope).to.exist;
+                sourceScope.linkSymbolTable();
+                expect(mainFnScope).to.exist;
+                const mainSymbolTable = mainFnScope.symbolTable;
+                const dataType = mainSymbolTable.getSymbolType('data', { flags: SymbolTypeFlag.runtime }) as IntersectionType;
+                expectTypeToBe(dataType, IntersectionType);
+                expect(dataType.types).to.have.lengthOf(2);
+                const xType = mainSymbolTable.getSymbolType('x', { flags: SymbolTypeFlag.runtime });
+                expectTypeToBe(xType, DynamicType);
+                const yType = mainSymbolTable.getSymbolType('y', { flags: SymbolTypeFlag.runtime });
+                expectTypeToBe(yType, StringType);
+            });
+
+            it('order doesnt matter for intersections with object type and finding members', () => {
+                const mainFile = program.setFile<BrsFile>('source/main.bs', `
+                    sub printData(data as object and {customData as string})
+                        x = data.someDynamicKey
+                        y = data.customData
+                        print x
+                        print y
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const mainFnScope = mainFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const sourceScope = program.getScopeByName('source');
+                expect(sourceScope).to.exist;
+                sourceScope.linkSymbolTable();
+                expect(mainFnScope).to.exist;
+                const mainSymbolTable = mainFnScope.symbolTable;
+                const dataType = mainSymbolTable.getSymbolType('data', { flags: SymbolTypeFlag.runtime }) as IntersectionType;
+                expectTypeToBe(dataType, IntersectionType);
+                expect(dataType.types).to.have.lengthOf(2);
+                const xType = mainSymbolTable.getSymbolType('x', { flags: SymbolTypeFlag.runtime });
+                expectTypeToBe(xType, DynamicType);
+                const yType = mainSymbolTable.getSymbolType('y', { flags: SymbolTypeFlag.runtime });
+                expectTypeToBe(yType, StringType);
+            });
         });
 
         describe('type casts', () => {

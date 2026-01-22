@@ -7,7 +7,7 @@ import type { TypeCompatibilityData } from '../../interfaces';
 import { IntegerType } from '../../types/IntegerType';
 import { StringType } from '../../types/StringType';
 import type { BrsFile } from '../../files/BrsFile';
-import { FloatType, InterfaceType, TypedFunctionType, VoidType } from '../../types';
+import { FloatType, InterfaceType, TypedFunctionType, VoidType, BooleanType } from '../../types';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import undent from 'undent';
@@ -276,6 +276,25 @@ describe('ScopeValidator', () => {
             program.validate();
             expectDiagnostics(program, [
                 DiagnosticMessages.mismatchArgumentCount(1, 0).message
+            ]);
+        });
+
+        it('validates against functions defined in intersection types', () => {
+            program.setFile('source/main.bs', `
+                interface IFirst
+                    num as integer
+                end interface
+                interface ISecond
+                    function doThing2(a as integer, b as string) as void
+                end interface
+
+                sub main(thing as IFirst and ISecond)
+                    thing.doThing2(thing.num)
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(2, 1).message
             ]);
         });
     });
@@ -1916,6 +1935,175 @@ describe('ScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        describe('intersection types', () => {
+
+            it('validates against functions defined in intersection types', () => {
+                program.setFile('source/main.bs', `
+                    interface IFirst
+                        num as integer
+                    end interface
+                    interface ISecond
+                        function doThing2(a as integer, b as string) as void
+                    end interface
+
+                    sub main(thing as IFirst and ISecond)
+                        thing.doThing2(thing.num, false) ' b should be a string
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('boolean', 'string').message
+                ]);
+            });
+
+            it('allows passing AAs that satisfy intersection types', () => {
+                program.setFile('source/main.bs', `
+                    interface IFirst
+                        num as integer
+                    end interface
+                    interface ISecond
+                        function doThing2(a as integer, b as string) as void
+                    end interface
+
+                    sub main()
+                        thing = {
+                            num: 123,
+                            doThing2: function(a as integer, b as string) as void
+                                print a
+                                print b
+                            end function
+                        }
+                        usesThing(thing)
+                    end sub
+
+                    sub usesThing(thing as IFirst and ISecond)
+                        thing.doThing2(thing.num, "hello")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates passing AAs that do not satisfy intersection types', () => {
+                program.setFile('source/main.bs', `
+                    interface IFirst
+                        num as integer
+                    end interface
+                    interface ISecond
+                        function doThing2(a as integer, b as string) as void
+                    end interface
+
+                    sub main()
+                        thing = {
+                            num: false,
+                            doThing2: function(a as integer, b as boolean) as void
+                                print a
+                                print b
+                            end function
+                        }
+                        usesThing(thing)
+                    end sub
+
+                    sub usesThing(thing as IFirst and ISecond)
+                    end sub
+                `);
+                program.validate();
+                const expectedDoThing2 = new TypedFunctionType(VoidType.instance);
+                expectedDoThing2.name = 'doThing2';
+                expectedDoThing2.addParameter('a', IntegerType.instance, false);
+                expectedDoThing2.addParameter('b', StringType.instance, false);
+
+                const actualDoThing2 = new TypedFunctionType(VoidType.instance);
+                actualDoThing2.addParameter('a', IntegerType.instance, false);
+                actualDoThing2.addParameter('b', BooleanType.instance, false);
+                expectDiagnostics(program,
+                    [
+                        DiagnosticMessages.argumentTypeMismatch('roAssociativeArray', 'IFirst and ISecond', {
+                            fieldMismatches: [
+                                { name: 'num', expectedType: IntegerType.instance, actualType: BooleanType.instance },
+                                { name: 'doThing2', expectedType: expectedDoThing2, actualType: actualDoThing2 }
+                            ]
+                        }).message
+                    ]);
+            });
+
+            it('accepts a valid intersection when parameter is a union with an intersection', () => {
+                program.setFile('source/main.bs', `
+                    sub fooA(x as {a as integer} and {b as string} or {c as float})
+                        ' noop
+                    end sub
+
+
+                    sub fooB(y as object)
+                        fooA({a: 32, b: y})
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates an incomplete intersection when parameter is a union with an intersection', () => {
+                program.setFile('source/main.bs', `
+                    sub fooA(x as {a as integer} and {b as string} or {c as float})
+                        ' noop
+                    end sub
+
+
+                    sub fooB(y as object)
+                        fooA({a: 32})
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('roAssociativeArray', '({a as integer} and {b as string}) or {c as float}', {
+                        missingFields: [
+                            { name: 'b', expectedType: StringType.instance },
+                            { name: 'c', expectedType: FloatType.instance }
+                        ]
+                    }).message
+                ]);
+            });
+
+            it('accepts a valid intersection when parameter is an intersection with a union', () => {
+                program.setFile('source/main.bs', `
+                    sub fooA(x as {a as integer} and ({b as string} or {c as float}))
+                        ' noop
+                    end sub
+
+
+                    sub fooB(y as dynamic)
+                        fooA({a: 32, b: y}) ' meets first half of union
+                        fooA({a: 32, c: y}) ' meets second half of union
+                        fooA({a: 32, b: "hello", c: 2.178}) ' meets both halves of union
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates an incomplete intersection when parameter is an intersection with a union', () => {
+                program.setFile('source/main.bs', `
+                    sub fooA(x as {a as integer} and ({b as string} or {c as float}))
+                        ' noop
+                    end sub
+
+
+                    sub fooB(y as object)
+                        fooA({a: 32})
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('roAssociativeArray', '{a as integer} and ({b as string} or {c as float})', {
+                        missingFields: [
+                            { name: 'b', expectedType: StringType.instance },
+                            { name: 'c', expectedType: FloatType.instance }
+                        ]
+                    }).message
+                ]);
+            });
+        });
     });
 
     describe('cannotFindName', () => {
@@ -2463,6 +2651,83 @@ describe('ScopeValidator', () => {
                 program.validate();
                 expectDiagnostics(program, [
                     DiagnosticMessages.cannotFindName('notThere', '{name as string}.notThere', '{name as string}')
+                ]);
+            });
+        });
+
+        describe('intersection types', () => {
+            it('finds members from intersection types', () => {
+                program.setFile('source/main.bs', `
+                    interface IFirst
+                        num as integer
+                    end interface
+                    interface ISecond
+                        function doThing2(a as integer, b as string) as void
+                    end interface
+
+                    sub main(thing as IFirst and ISecond)
+                        print thing.num
+                        thing.doThing2(thing.num, "hello")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds random members of intersections with AA types', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    sub printData(data as {customData as string} and roAssociativeArray)
+                        x = data.someDynamicKey
+                        y = data.customData
+                        print x
+                        print y
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+
+            it('handles type statements that are intersections of classes and AA', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    sub printData(data as MyKlassAA)
+                        x = data.customData
+                        data.append({
+                            newKey: "newValue"
+                        })
+                        print x
+                        y = data.newKey
+                        print y
+                    end sub
+
+
+                    type MyKlassAA = MyKlass and roAssociativeArray
+
+                    class MyKlass
+                        customData as string
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates missing members from intersection types', () => {
+                program.setFile('source/main.bs', `
+                    interface IFirst
+                        num as integer
+                    end interface
+                    interface ISecond
+                        function doThing2(a as integer, b as string) as void
+                    end interface
+
+                    sub main(thing as IFirst and ISecond)
+                        print thing.nonExistentMember
+                        thing.doThing2(thing.num, "hello")
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindName('nonExistentMember', '(IFirst and ISecond).nonExistentMember', '(IFirst and ISecond)')
                 ]);
             });
         });
@@ -3150,6 +3415,85 @@ describe('ScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        describe('intersection types', () => {
+
+            it('validates when type is intersection of primitive', () => {
+                program.setFile('source/main.bs', `
+                    function foo() as {id as string} and string
+                        return {id: "test"}
+                    end function
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.returnTypeMismatch('roAssociativeArray', '{id as string} and string').message
+                ]);
+            });
+
+            it('allows passing AAs that satisfy intersection types', () => {
+                program.setFile('source/main.bs', `
+                    interface IFirst
+                        num as integer
+                    end interface
+                    interface ISecond
+                        function doThing2(a as integer, b as string) as void
+                    end interface
+
+                    function getThing() as IFirst and ISecond
+                        thing = {
+                            num: 123,
+                            doThing2: function(a as integer, b as string) as void
+                                print a
+                                print b
+                            end function
+                        }
+                        return thing
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates passing AAs that do not satisfy intersection types', () => {
+                program.setFile('source/main.bs', `
+                    interface IFirst
+                        num as integer
+                    end interface
+                    interface ISecond
+                        function doThing2(a as integer, b as string) as void
+                    end interface
+
+                    function getThing() as IFirst and ISecond
+                        thing = {
+                            num: false,
+                            doThing2: function(a as integer, b as boolean) as void
+                                print a
+                                print b
+                            end function
+                        }
+                        return thing
+                    end function
+                `);
+                program.validate();
+                const expectedDoThing2 = new TypedFunctionType(VoidType.instance);
+                expectedDoThing2.name = 'doThing2';
+                expectedDoThing2.addParameter('a', IntegerType.instance, false);
+                expectedDoThing2.addParameter('b', StringType.instance, false);
+
+                const actualDoThing2 = new TypedFunctionType(VoidType.instance);
+                actualDoThing2.addParameter('a', IntegerType.instance, false);
+                actualDoThing2.addParameter('b', BooleanType.instance, false);
+                expectDiagnostics(program,
+                    [
+                        DiagnosticMessages.returnTypeMismatch('roAssociativeArray', 'IFirst and ISecond', {
+                            fieldMismatches: [
+                                { name: 'num', expectedType: IntegerType.instance, actualType: BooleanType.instance },
+                                { name: 'doThing2', expectedType: expectedDoThing2, actualType: actualDoThing2 }
+                            ]
+                        }).message
+                    ]);
+            });
+        });
     });
 
     describe('returnTypeCoercionMismatch', () => {
@@ -3626,7 +3970,7 @@ describe('ScopeValidator', () => {
                         inlineMember as {name as string}
                     end interface
 
-                    sub takesInline(someIface as Iface}
+                    sub takesInline(someIface as Iface)
                         someIface.inlineMember = {name: "test"}
                     end sub
                 `);
@@ -3640,7 +3984,7 @@ describe('ScopeValidator', () => {
                         inlineMember as {name as string}
                     end interface
 
-                    sub takesInline(someIface as Iface}
+                    sub takesInline(someIface as Iface)
                         someIface.inlineMember = {name: 123}
                     end sub
                 `);
@@ -5917,6 +6261,154 @@ describe('ScopeValidator', () => {
                         parameterMismatches: [{ index: 0, data: { expectedType: stuff1IFace, actualType: stuff2IFace } }]
                     }
                 }).message
+            ]);
+        });
+
+        it('allows callfunc on intersection of callfuncable types', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getName" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                function getName() as string
+                    return "John Doe"
+                end function
+            `);
+
+            program.setFile('components/Widget2.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget2" extends="Group">
+                    <script uri="Widget2.bs"/>
+                    <interface>
+                        <function name="getName" />
+                        <function name="getAge" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget2.bs', `
+                function getName() as string
+                    return "John Doe"
+                end function
+
+                function getAge() as integer
+                    return 42
+                end function
+            `);
+
+            program.setFile('source/test.bs', `
+                sub doCallfunc(node as roSGNodeWidget and roSGNodeWidget2)
+                    n = node@.getName()
+                    a = node@.getAge()
+                    takesStringAndInt(n, a)
+                end sub
+
+                sub takesStringAndInt(name as string, age as integer)
+                    print name + age.toStr()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('validates callfunc on intersection', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getName" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                function getName(s as string) as string
+                    return "John Doe" + s
+                end function
+            `);
+
+            program.setFile('components/Widget2.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget2" extends="Group">
+                    <script uri="Widget2.bs"/>
+                    <interface>
+                        <function name="getAge" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget2.bs', `
+                function getAge(y as integer) as integer
+                    return 42 + y
+                end function
+            `);
+
+            program.setFile('source/test.bs', `
+                sub doCallfunc(node as roSgNodeWidget and roSgNodeWidget2)
+                    n = node@.getName(123)
+                    a = node@.getAge("123")
+                    takesStringAndInt(n, a)
+                end sub
+
+                sub takesStringAndInt(name as string, age as integer)
+                    print name + age.toStr()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('integer', 'string').message,
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            ]);
+        });
+
+        it('validates callfunc on intersection of nodes with incompatible functions', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="getName" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget.bs', `
+                function getName(s as string) as string
+                    return "John Doe" + s
+                end function
+            `);
+
+            program.setFile('components/Widget2.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget2" extends="Group">
+                    <script uri="Widget2.bs"/>
+                    <interface>
+                        <function name="getName" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/Widget2.bs', `
+                function getName(y as integer) as integer
+                    return 42 + y
+                end function
+            `);
+
+            program.setFile('source/test.bs', `
+                sub doCallfunc(node as roSgNodeWidget and roSgNodeWidget2)
+                    n = node@.getName(123)
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.notCallable('node@.getName').message
             ]);
         });
     });

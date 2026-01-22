@@ -2587,6 +2587,7 @@ describe('CompletionsProcessor', () => {
             }]);
         });
     });
+
     describe('incomplete statements', () => {
 
         it('should complete after if', () => {
@@ -2607,6 +2608,120 @@ describe('CompletionsProcessor', () => {
                 kind: CompletionItemKind.Field
             }]);
             expect(completions.length).to.eql(1);
+        });
+    });
+
+    describe('compound types', () => {
+        it('includes only common members of union types', () => {
+            program.setFile('source/main.bs', `
+                interface Person
+                    name as string
+                    age as integer
+                end interface
+
+                interface Employee
+                    name as string
+                    employeeId as integer
+                end interface
+
+                sub greet(p as Person or Employee)
+                    print p.
+                end sub
+            `);
+            program.validate();
+            //   print p.|
+            let completions = program.getCompletions('source/main.bs', util.createPosition(12, 29));
+            expect(completions.length).to.eql(1);
+            expectCompletionsIncludes(completions, [{
+                label: 'name',
+                kind: CompletionItemKind.Field
+            }]);
+        });
+
+        it('includes all members of intersection types', () => {
+            program.setFile('source/main.bs', `
+                interface Person
+                    name as string
+                    age as integer
+                end interface
+
+                interface Employee
+                    name as string
+                    employeeId as integer
+                end interface
+
+                sub greet(p as Person and Employee)
+                    print p.
+                end sub
+            `);
+            program.validate();
+            //   print p.|
+            let completions = program.getCompletions('source/main.bs', util.createPosition(12, 29));
+            expect(completions.length).to.eql(3);
+            expectCompletionsIncludes(completions, [{
+                label: 'name',
+                kind: CompletionItemKind.Field
+            }, {
+                label: 'age',
+                kind: CompletionItemKind.Field
+            }, {
+                label: 'employeeId',
+                kind: CompletionItemKind.Field
+            }]);
+        });
+
+        it('includes AA members when it is an intersection with an AA', () => {
+            program.setFile('source/main.bs', `
+                interface Person
+                    name as string
+                    age as integer
+                end interface
+
+                sub greet(p as Person and roAssociativeArray)
+                    print p.
+                end sub
+            `);
+            program.validate();
+            //   print p.|
+            let completions = program.getCompletions('source/main.bs', util.createPosition(7, 29));
+            expect(completions.length).to.at.least(4);
+            expectCompletionsIncludes(completions, [{
+                label: 'name', // from Person
+                kind: CompletionItemKind.Field
+            }, {
+                label: 'age', // from Person
+                kind: CompletionItemKind.Field
+            }, {
+                label: 'Append', // from roAssociativeArray
+                kind: CompletionItemKind.Method
+            }, {
+                label: 'Count', // from roAssociativeArray
+                kind: CompletionItemKind.Method
+            }]);
+        });
+
+        it('includes members from non-dynamic when it is an intersection with dynamic', () => {
+            program.setFile('source/main.bs', `
+                interface Person
+                    name as string
+                    age as integer
+                end interface
+
+                sub greet(p as Person and dynamic)
+                    print p.
+                end sub
+            `);
+            program.validate();
+            //   print p.|
+            let completions = program.getCompletions('source/main.bs', util.createPosition(7, 29));
+            expect(completions.length).to.at.least(2);
+            expectCompletionsIncludes(completions, [{
+                label: 'name', // from Person
+                kind: CompletionItemKind.Field
+            }, {
+                label: 'age', // from Person
+                kind: CompletionItemKind.Field
+            }]);
         });
     });
 });

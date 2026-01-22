@@ -1,14 +1,14 @@
 import { expect, assert } from '../chai-config.spec';
 import { Lexer } from '../lexer/Lexer';
 import { ReservedWords, TokenKind } from '../lexer/TokenKind';
-import type { AAMemberExpression, BinaryExpression, InlineInterfaceExpression, LiteralExpression, TypecastExpression, UnaryExpression } from './Expression';
+import type { AAMemberExpression, BinaryExpression, GroupingExpression, InlineInterfaceExpression, LiteralExpression, TypecastExpression, TypeExpression, UnaryExpression } from './Expression';
 import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression, VariableExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
 import type { AliasStatement, AssignmentStatement, Block, ClassStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ConditionalCompileStatement, ExitStatement, ForStatement, IfStatement, InterfaceStatement, ReturnStatement, TypecastStatement, TypeStatement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isAliasStatement, isAssignmentStatement, isBinaryExpression, isBlock, isBody, isCallExpression, isCallfuncExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isDottedGetExpression, isExitStatement, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInlineInterfaceExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isTypeStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAliasStatement, isAssignmentStatement, isBinaryExpression, isBlock, isBody, isCallExpression, isCallfuncExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isDottedGetExpression, isExitStatement, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInlineInterfaceExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, rootDir } from '../testHelpers.spec';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { Expression, Statement } from './AstNode';
@@ -1514,6 +1514,66 @@ describe('parser', () => {
         });
     });
 
+    describe('grouped type expressions', () => {
+        it('is not allowed in brightscript mode', () => {
+            let parser = parse(`
+                sub main(param as (string or integer))
+                    print param
+                end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types')]);
+        });
+
+        it('allows group type expressions in parameters', () => {
+            let { diagnostics } = parse(`
+                sub main(param as (string or integer))
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows group type expressions in type casts', () => {
+            let { diagnostics } = parse(`
+                sub main(val)
+                    printThing(val as (string or integer))
+                end sub
+                sub printThing(thing as (string or integer))
+                    print thing
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows union of grouped type expressions', () => {
+            let { diagnostics } = parse(`
+                sub main(param as (string or integer) or (float or dynamic))
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows nested grouped type expressions', () => {
+            let { diagnostics } = parse(`
+                sub main(param as ((string or integer) or (float or dynamic)))
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+
+        it('allows complicated grouped type expression', () => {
+            let { diagnostics } = parse(`
+                sub main(param as (({name as string} and {age as integer}) or (string and SomeInterface) or Klass and roAssociativeArray) )
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+    });
+
     describe('union types', () => {
 
         it('is not allowed in brightscript mode', () => {
@@ -1522,7 +1582,7 @@ describe('parser', () => {
                     print param
                 end sub
             `, ParseMode.BrightScript);
-            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.expectedStatement()]);
+            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types')]);
         });
 
         it('allows union types in parameters', () => {
@@ -1546,6 +1606,129 @@ describe('parser', () => {
             expectZeroDiagnostics(diagnostics);
         });
     });
+
+
+    describe('intersection types', () => {
+
+        it('is not allowed in brightscript mode', () => {
+            let parser = parse(`
+                sub main(param as string and integer)
+                    print param
+                end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types')]);
+        });
+
+        it('allows intersection types in parameters', () => {
+            let { diagnostics } = parse(`
+                sub main(param as string and integer)
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows intersection types in type casts', () => {
+            let { diagnostics } = parse(`
+                sub main(val)
+                    printThing(val as string and integer)
+                end sub
+                sub printThing(thing as string and integer)
+                    print thing
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('follows order of operations with "or" first lexically', () => {
+            let { ast, diagnostics } = parse(`
+                sub main(param as string or integer and float)
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const func = (ast.statements[0] as FunctionStatement).func;
+            const paramExpr = func.parameters[0];
+            let binExpr = paramExpr.typeExpression.expression as BinaryExpression;
+            //first level should be 'or'
+            expect(binExpr.tokens.operator.kind).to.equal(TokenKind.Or);
+            //right side should be 'and'
+            expect(isBinaryExpression(binExpr.right)).to.be.true;
+            const rightAndExpr = binExpr.right as BinaryExpression;
+            expect(rightAndExpr.tokens.operator.kind).to.equal(TokenKind.And);
+        });
+
+
+        it('follows order of operations with "and" first lexically', () => {
+            let { ast, diagnostics } = parse(`
+                sub main(param as string and integer or float)
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const func = (ast.statements[0] as FunctionStatement).func;
+            const paramExpr = func.parameters[0];
+            let binExpr = paramExpr.typeExpression.expression as BinaryExpression;
+            //first level should be 'or'
+            expect(binExpr.tokens.operator.kind).to.equal(TokenKind.Or);
+            //left side should be 'and'
+            expect(isBinaryExpression(binExpr.left)).to.be.true;
+            const leftAndExpr = binExpr.left as BinaryExpression;
+            expect(leftAndExpr.tokens.operator.kind).to.equal(TokenKind.And);
+        });
+
+        it('allows grouped expression to override order of operations', () => {
+            let { ast, diagnostics } = parse(`
+                sub main(param as string and (integer or float))
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const func = (ast.statements[0] as FunctionStatement).func;
+            const paramExpr = func.parameters[0];
+            let binExpr = paramExpr.typeExpression.expression as BinaryExpression;
+            //first level should be 'and'
+            expect(binExpr.tokens.operator.kind).to.equal(TokenKind.And);
+            //right side should be 'or'
+            expect(isGroupingExpression(binExpr.right)).to.be.true;
+            const groupedExpr = binExpr.right as GroupingExpression;
+            expect(isGroupingExpression(groupedExpr)).to.be.true;
+            expect(isTypeExpression(groupedExpr.expression)).to.be.true;
+            const rightOrExpr = (groupedExpr.expression as TypeExpression).expression as BinaryExpression;
+            expect(rightOrExpr.tokens.operator.kind).to.equal(TokenKind.Or);
+        });
+
+        describe('invalid syntax', () => {
+
+            it('flags union type with missing sides', () => {
+                let { diagnostics } = parse(`
+                    sub main(param as Thing or )
+                        print param
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedIdentifier('or').message);
+            });
+
+            it('flags missing type inside binary type', () => {
+                let { diagnostics } = parse(`
+                    sub main(param as string or and float)
+                        print param
+                    end sub
+                `, ParseMode.BrighterScript);
+                expect(diagnostics[0]?.message).to.exist;
+            });
+
+            it('flags missing group paren', () => {
+                let { diagnostics } = parse(`
+                    sub main(param as (string or float)
+                        print param
+                    end sub
+                `, ParseMode.BrighterScript);
+                expect(diagnostics[0]?.message).to.exist;
+            });
+        });
+    });
+
 
     describe('typed arrays', () => {
 
@@ -1783,13 +1966,14 @@ describe('parser', () => {
         });
 
         it('gets multiple lines of leading trivia', () => {
-            let { ast } = parse(`
+            let { ast, diagnostics } = parse(`
                 ' Say hello to someone
                 '
                 ' @param {string} name the person you want to say hello to.
-                sub sayHello(name as string = "world")
+                sub sayHello(name = "world" as string)
                 end sub
             `);
+            expectZeroDiagnostics(diagnostics);
             const funcStatements = ast.statements.filter(isFunctionStatement);
             const helloTrivia = funcStatements[0].leadingTrivia;
             expect(helloTrivia.length).to.be.greaterThan(0);
@@ -1816,7 +2000,7 @@ describe('parser', () => {
                 @annotation
                 ' hello comment 3
                 @otherAnnotation
-                sub sayHello(name as string = "world")
+                sub sayHello(name  = "world" as string)
                 end sub
             `, ParseMode.BrighterScript);
             const funcStatements = ast.statements.filter(isFunctionStatement);
@@ -2502,6 +2686,18 @@ describe('parser', () => {
         it('allows type statement with complicated type', () => {
             let { ast, diagnostics } = parse(`
                 type x = string or CustomKlass or roAssociativeArray
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(isTypeStatement(ast.statements[0])).to.be.true;
+            const stmt = ast.statements[0] as TypeStatement;
+            expect(stmt.tokens.type.text).to.eq('type');
+            expect(stmt.value).to.exist;
+        });
+
+        it('allows grouped expressions in type statement', () => {
+            let { ast, diagnostics } = parse(`
+                type guy = ({name as string} or {age as integer}) and {foo as boolean, age as integer}
+
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(diagnostics);
             expect(isTypeStatement(ast.statements[0])).to.be.true;

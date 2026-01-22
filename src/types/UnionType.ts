@@ -2,7 +2,7 @@ import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { isDynamicType, isObjectType, isTypedFunctionType, isUnionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { ReferenceType } from './ReferenceType';
-import { addAssociatedTypesTableAsSiblingToMemberTable, findTypeUnion, findTypeUnionDeepCheck, getAllTypesFromUnionType, getUniqueType, isEnumTypeCompatible } from './helpers';
+import { addAssociatedTypesTableAsSiblingToMemberTable, findTypeUnion, findTypeUnionDeepCheck, getAllTypesFromCompoundType, getUniqueType, isEnumTypeCompatible, joinTypesString } from './helpers';
 import { BscTypeKind } from './BscTypeKind';
 import type { TypeCacheEntry } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
@@ -18,7 +18,7 @@ export class UnionType extends BscType {
     constructor(
         public types: BscType[]
     ) {
-        super(joinTypesString(types));
+        super(joinTypesString(types, 'or', BscTypeKind.UnionType));
         this.callFuncAssociatedTypesTable = new SymbolTable(`Union: CallFuncAssociatedTypes`);
     }
 
@@ -57,7 +57,7 @@ export class UnionType extends BscType {
                     name: `UnionType MemberTable: '${this.__identifier}'`,
                     getSymbolType: (innerName: string, innerOptions: GetTypeOptions) => {
                         const referenceTypeInnerMemberTypes = this.getMemberTypeFromInnerTypes(name, options);
-                        if (!innerTypesMemberTypes || innerTypesMemberTypes.includes(undefined)) {
+                        if (!referenceTypeInnerMemberTypes || referenceTypeInnerMemberTypes.includes(undefined)) {
                             return undefined;
                         }
                         return getUniqueType(findTypeUnion(referenceTypeInnerMemberTypes), unionTypeFactory);
@@ -84,7 +84,7 @@ export class UnionType extends BscType {
                     name: `UnionType CallFunc MemberTable: '${this.__identifier}'`,
                     getSymbolType: (innerName: string, innerOptions: GetTypeOptions) => {
                         const referenceTypeInnerMemberTypes = this.getCallFuncFromInnerTypes(name, options);
-                        if (!innerTypesMemberTypes || innerTypesMemberTypes.includes(undefined)) {
+                        if (!referenceTypeInnerMemberTypes || referenceTypeInnerMemberTypes.includes(undefined)) {
                             return undefined;
                         }
                         return getUniqueType(findTypeUnionDeepCheck(referenceTypeInnerMemberTypes), unionTypeFactory);
@@ -142,14 +142,14 @@ export class UnionType extends BscType {
         return false;
     }
     toString(): string {
-        return joinTypesString(this.types);
+        return joinTypesString(this.types, 'or', BscTypeKind.UnionType);
     }
 
     /**
      * Used for transpilation
      */
     toTypeString(): string {
-        const uniqueTypeStrings = new Set<string>(getAllTypesFromUnionType(this).map(t => t.toTypeString()));
+        const uniqueTypeStrings = new Set<string>(getAllTypesFromCompoundType(this).map(t => t.toTypeString()));
 
         if (uniqueTypeStrings.size === 1) {
             return uniqueTypeStrings.values().next().value;
@@ -170,7 +170,23 @@ export class UnionType extends BscType {
         if (this === targetType) {
             return true;
         }
-        return this.isTypeCompatible(targetType) && targetType.isTypeCompatible(this);
+
+        if (this.types.length !== targetType.types.length) {
+            return false;
+        }
+        for (const type of this.types) {
+            let foundMatch = false;
+            for (const targetTypeInner of targetType.types) {
+                if (type.isEqual(targetTypeInner)) {
+                    foundMatch = true;
+                    break;
+                }
+            }
+            if (!foundMatch) {
+                return false;
+            }
+        }
+        return true;
     }
 
     getMemberTable(): SymbolTable {
@@ -196,10 +212,6 @@ export class UnionType extends BscType {
     }
 }
 
-
-function joinTypesString(types: BscType[]) {
-    return [...new Set(types.map(t => t.toString()))].join(' or ');
-}
 
 BuiltInInterfaceAdder.unionTypeFactory = (types: BscType[]) => {
     return new UnionType(types);

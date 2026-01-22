@@ -1120,6 +1120,10 @@ export interface GetTypeOptions {
      */
     statementIndex?: number | 'end';
     ignoreParentTables?: boolean;
+    /**
+     * If this is true, AA's, objects, nodes, etc, do not return dynamic if no member is found
+     */
+    ignoreDefaultDynamicMembers?: boolean;
 }
 
 export class TypeChainEntry {

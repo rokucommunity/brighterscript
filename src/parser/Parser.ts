@@ -415,7 +415,7 @@ export class Parser {
                 }
                 //consume the statement separator
                 this.consumeStatementSeparators();
-            } else if (!this.checkAny(TokenKind.Identifier, TokenKind.LeftCurlyBrace, ...DeclarableTypes, ...AllowedTypeIdentifiers)) {
+            } else if (!this.checkAny(TokenKind.Identifier, TokenKind.LeftCurlyBrace, TokenKind.LeftParen, ...DeclarableTypes, ...AllowedTypeIdentifiers)) {
                 if (!ignoreDiagnostics) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.expectedIdentifier(asToken.text),
@@ -425,6 +425,9 @@ export class Parser {
             } else {
                 typeExpression = this.typeExpression();
             }
+        }
+        if (this.checkAny(TokenKind.And, TokenKind.Or)) {
+            this.warnIfNotBrighterScriptMode('custom types');
         }
         return [asToken, typeExpression];
     }
@@ -882,8 +885,10 @@ export class Parser {
                     params.push(this.functionParameter());
                 } while (this.match(TokenKind.Comma));
             }
-            let rightParen = this.advance();
-
+            let rightParen = this.consume(
+                DiagnosticMessages.unmatchedLeftToken(leftParen.text, 'function parameter list'),
+                TokenKind.RightParen
+            );
             if (this.check(TokenKind.As)) {
                 [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
             }
@@ -3038,20 +3043,42 @@ export class Parser {
     private typeExpression(): TypeExpression {
         const changedTokens: { token: Token; oldKind: TokenKind }[] = [];
         try {
+            // handle types with 'and'/'or' operators
+            const expressionsWithOperator: { expression: Expression; operator?: Token }[] = [];
+
+            // find all expressions and operators
             let expr: Expression = this.getTypeExpressionPart(changedTokens);
-            while (this.options.mode === ParseMode.BrighterScript && this.matchAny(TokenKind.Or)) {
-                // If we're in Brighterscript mode, allow union types with "or" between types
-                // TODO: Handle Union types in parens? eg. "(string or integer)"
+            while (this.options.mode === ParseMode.BrighterScript && this.matchAny(TokenKind.Or, TokenKind.And)) {
                 let operator = this.previous();
-                let right = this.getTypeExpressionPart(changedTokens);
-                if (right) {
-                    expr = new BinaryExpression({ left: expr, operator: operator, right: right });
-                } else {
-                    break;
-                }
+                expressionsWithOperator.push({ expression: expr, operator: operator });
+                expr = this.getTypeExpressionPart(changedTokens);
             }
-            if (expr) {
-                return new TypeExpression({ expression: expr });
+            // add last expression
+            expressionsWithOperator.push({ expression: expr });
+
+            // handle expressions with order of operations - first "and", then "or"
+            const combineExpressions = (opToken: TokenKind) => {
+                let exprWithOp = expressionsWithOperator[0];
+                let index = 0;
+                while (exprWithOp?.operator) {
+                    if (exprWithOp.operator.kind === opToken) {
+                        const nextExpr = expressionsWithOperator[index + 1];
+                        const combinedExpr = new BinaryExpression({ left: exprWithOp.expression, operator: exprWithOp.operator, right: nextExpr.expression });
+                        // replace the two expressions with the combined one
+                        expressionsWithOperator.splice(index, 2, { expression: combinedExpr, operator: nextExpr.operator });
+                        exprWithOp = expressionsWithOperator[index];
+                    } else {
+                        index++;
+                        exprWithOp = expressionsWithOperator[index];
+                    }
+                }
+            };
+
+            combineExpressions(TokenKind.And);
+            combineExpressions(TokenKind.Or);
+
+            if (expressionsWithOperator[0]?.expression) {
+                return new TypeExpression({ expression: expressionsWithOperator[0].expression });
             }
 
         } catch (error) {
@@ -3071,7 +3098,7 @@ export class Parser {
      * @returns an expression that was successfully parsed
      */
     private getTypeExpressionPart(changedTokens: { token: Token; oldKind: TokenKind }[]) {
-        let expr: VariableExpression | DottedGetExpression | TypedArrayExpression | InlineInterfaceExpression;
+        let expr: VariableExpression | DottedGetExpression | TypedArrayExpression | InlineInterfaceExpression | GroupingExpression;
 
         if (this.checkAny(...DeclarableTypes)) {
             // if this is just a type, just use directly
@@ -3080,11 +3107,21 @@ export class Parser {
             if (this.options.mode === ParseMode.BrightScript && !declarableTypesLower.includes(this.peek()?.text?.toLowerCase())) {
                 // custom types arrays not allowed in Brightscript
                 this.warnIfNotBrighterScriptMode('custom types');
+                this.advance(); // skip custom type token
                 return expr;
             }
 
             if (this.match(TokenKind.LeftCurlyBrace)) {
                 expr = this.inlineInterface();
+            } else if (this.match(TokenKind.LeftParen)) {
+                // this is a grouping type expression, ie. "(typeExpr)"
+                let left = this.previous();
+                let typeExpr = this.typeExpression();
+                let right = this.consume(
+                    DiagnosticMessages.unmatchedLeftToken(left.text, 'type expression'),
+                    TokenKind.RightParen
+                );
+                expr = new GroupingExpression({ leftParen: left, rightParen: right, expression: typeExpr });
             } else {
                 if (this.checkAny(...AllowedTypeIdentifiers)) {
                     // Since the next token is allowed as a type identifier, change the kind

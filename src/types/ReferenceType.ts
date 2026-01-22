@@ -645,6 +645,68 @@ export class ParamTypeFromValueReferenceType extends BscType {
 }
 
 /**
+ * Used when an IntersectionType has at least one member that may have default dynamic members.
+ * If the inner type is not resolvable, this type will resolve to the given type instead.
+ * @example
+ * ```brighterscript
+ *   interface HasAge
+ *       age as integer
+ *   end interface
+ *
+ *   type foo = HasAge and roAssociativeArray
+ *
+ *   sub useFoo(f as foo)
+ *       print f.age ' f.age is an integer
+ *       print f.doesExist("key") ' will result in a boolean, from roAssociativeArray
+ *       print f.someKey ' no idea - so this is dynamic, and will not cause a validation error
+ *   end sub
+ * ```
+ */
+export class ReferenceTypeWithDefault extends BscType {
+    constructor(public baseType: BscType, public defaultType: BscType) {
+        super('ReferenceTypeWithDefault');
+        // eslint-disable-next-line no-constructor-return
+        return new Proxy(this, {
+            get: (target, propName, receiver) => {
+
+                if (propName === '__reflection') {
+                    // Cheeky way to get `isReferenceTypeWithDefault` reflection to work
+                    return { name: 'ReferenceTypeWithDefault' };
+                }
+
+                if (propName === 'isResolvable') {
+                    return () => {
+                        return true;
+                    };
+                }
+                let innerType = this.getTarget();
+
+                if (!innerType) {
+                    innerType = this.defaultType;
+                }
+
+                if (innerType) {
+                    const result = Reflect.get(innerType, propName, innerType);
+                    return result;
+                }
+            }
+        });
+    }
+
+    getTarget(): BscType {
+        if (isAnyReferenceType(this.baseType)) {
+            if (this.baseType.isResolvable()) {
+                return (this.baseType as any)?.getTarget();
+            }
+        }
+        return this.baseType;
+    }
+
+    tableProvider: SymbolTableProvider;
+}
+
+
+/**
  * Gives an array of all the symbol names that need to be resolved to make the given reference type be resolved
  */
 export function getAllRequiredSymbolNames(refType: BscType, namespaceLower?: string): Array<{ name: string; namespacedName?: string }> {

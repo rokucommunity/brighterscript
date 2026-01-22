@@ -20,12 +20,15 @@ export abstract class InheritableType extends BscType {
         let hasRoAssociativeArrayAsAncestor = this.name.toLowerCase() === 'roassociativearray' || this.getAncestorTypeList()?.find(ancestorType => ancestorType.name.toLowerCase() === 'roassociativearray');
 
         if (hasRoAssociativeArrayAsAncestor) {
-            return super.getMemberType(memberName, options) ?? DynamicType.instance;
+            return super.getMemberType(memberName, options) ?? (!options?.ignoreDefaultDynamicMembers ? DynamicType.instance : undefined);
         }
 
         const resultType = super.getMemberType(memberName, { ...options, fullName: memberName, tableProvider: () => this.memberTable });
 
         if (this.changeUnknownMemberToDynamic && !resultType.isResolvable()) {
+            if (options.ignoreDefaultDynamicMembers) {
+                return resultType;
+            }
             return DynamicType.instance;
         }
         return resultType;

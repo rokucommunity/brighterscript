@@ -1,6 +1,6 @@
 import type { TypeCompatibilityData } from '../interfaces';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
-import { isCallFuncableType, isDynamicType, isInterfaceType, isInvalidType, isObjectType } from '../astUtils/reflection';
+import { isCallFuncableTypeLike, isDynamicType, isInterfaceType, isInvalidType, isObjectType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { isUnionTypeCompatible } from './helpers';
@@ -24,7 +24,7 @@ export class InterfaceType extends CallFuncableType {
             isUnionTypeCompatible(this, targetType, data)) {
             return true;
         }
-        if (isCallFuncableType(targetType)) {
+        if (isCallFuncableTypeLike(targetType)) {
             return this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data) &&
                 this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data, this.callFuncMemberTable, targetType.callFuncMemberTable);
         }

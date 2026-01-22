@@ -1,5 +1,5 @@
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
-import type { BscSymbol, GetSymbolTypeOptions, SymbolTableProvider } from '../SymbolTable';
+import type { GetSymbolTypeOptions, SymbolTableProvider } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
 import type { BscType } from './BscType';
 import { InheritableType } from './InheritableType';
@@ -60,8 +60,8 @@ export abstract class CallFuncableType extends InheritableType {
 
         for (const type of originalTypesToCheck) {
             if (!type.isBuiltIn) {
-                util.getCustomTypesInSymbolTree(additionalTypesToCheck, type, (subSymbol: BscSymbol) => {
-                    return !originalTypesToCheck.has(subSymbol.type);
+                util.getCustomTypesInSymbolTree(additionalTypesToCheck, type, (subSymbolType: BscType) => {
+                    return !originalTypesToCheck.has(subSymbolType);
                 });
             }
         }
