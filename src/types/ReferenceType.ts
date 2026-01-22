@@ -646,7 +646,21 @@ export class ParamTypeFromValueReferenceType extends BscType {
 
 /**
  * Used when an IntersectionType has at least one member that may have default dynamic members.
- * If the inner type is not resolvable, this type will resolve to the given type DynamicType.
+ * If the inner type is not resolvable, this type will resolve to the given type instead.
+ * @example
+ * ```brighterscript
+ *   interface HasAge
+ *       age as integer
+ *   end interface
+ *
+ *   type foo = HasAge and roAssociativeArray
+ *
+ *   sub useFoo(f as foo)
+ *       print f.age ' f.age is an integer
+ *       print f.doesExist("key") ' will result in a boolean, from roAssociativeArray
+ *       print f.someKey ' no idea - so this is dynamic, and will not cause a validation error
+ *   end sub
+ * ```
  */
 export class ReferenceTypeWithDefault extends BscType {
     constructor(public baseType: BscType, public defaultType: BscType) {
