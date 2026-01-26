@@ -1,6 +1,6 @@
 import { expect } from '../../../chai-config.spec';
 
-import { Parser } from '../../Parser';
+import { ParseMode, Parser } from '../../Parser';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
@@ -119,5 +119,36 @@ describe('parser foreach loops', () => {
         expect(ast.statements[0].location.range).deep.include(
             Range.create(0, 0, 2, 7)
         );
+    });
+
+    it('supports optional type annotation', () => {
+        let { ast, diagnostics } = Parser.parse([
+            token(TokenKind.ForEach, 'for each'),
+            identifier('word'),
+            token(TokenKind.As, 'as'),
+            identifier('String'),
+            identifier('in'),
+            identifier('lipsum'),
+            token(TokenKind.Newline, '\n'),
+
+            // body would go here, but it's not necessary for this test
+            token(TokenKind.EndFor, 'end for'),
+            token(TokenKind.Newline, '\n'),
+            EOF
+        ], { mode: ParseMode.BrighterScript });
+
+        expect(diagnostics).to.be.lengthOf(0);
+        expect(ast.statements).to.exist;
+
+        let forEach = ast.statements[0] as ForEachStatement;
+        expect(forEach).to.be.instanceof(ForEachStatement);
+
+        expect(forEach.tokens.item).to.deep.include(identifier('word'));
+        expect(forEach.tokens.as).to.exist;
+        expect(forEach.tokens.as.text).to.equal('as');
+        expect(forEach.typeExpression).to.exist;
+        expect(forEach.typeExpression?.getName()).to.equal('String');
+        expect(forEach.target).to.be.instanceof(VariableExpression);
+        expect((forEach.target as VariableExpression).tokens.name).to.deep.include(identifier('lipsum'));
     });
 });

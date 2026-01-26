@@ -1359,6 +1359,14 @@ export class Parser {
         let forEach = this.advance();
         let name = this.advance();
 
+        let asToken: Token;
+        let typeExpression: TypeExpression;
+
+        if (this.check(TokenKind.As)) {
+            this.warnIfNotBrighterScriptMode('typed for each loop variable');
+            [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
+        }
+
         let maybeIn = this.peek();
         if (this.check(TokenKind.Identifier) && maybeIn.text.toLowerCase() === 'in') {
             this.advance();
@@ -1396,6 +1404,8 @@ export class Parser {
 
         return new ForEachStatement({
             forEach: forEach,
+            as: asToken,
+            typeExpression: typeExpression,
             in: maybeIn,
             endFor: endForToken,
             item: name,

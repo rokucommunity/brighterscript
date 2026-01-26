@@ -28,6 +28,7 @@ import { TypedFunctionType } from '../types/TypedFunctionType';
 import { ArrayType } from '../types/ArrayType';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import brsDocParser from './BrightScriptDocParser';
+import { ArrayDefaultTypeReferenceType } from '../types/ReferenceType';
 export class EmptyStatement extends Statement {
     constructor(options?: { range?: Location }
     ) {
@@ -1422,6 +1423,8 @@ export class ForEachStatement extends Statement {
     constructor(options: {
         forEach?: Token;
         item: Token;
+        as?: Token;
+        typeExpression?: TypeExpression;
         in?: Token;
         target: Expression;
         body: Block;
@@ -1431,15 +1434,19 @@ export class ForEachStatement extends Statement {
         this.tokens = {
             forEach: options.forEach,
             item: options.item,
+            as: options.as,
             in: options.in,
             endFor: options.endFor
         };
         this.body = options.body;
         this.target = options.target;
+        this.typeExpression = options.typeExpression;
 
         this.location = util.createBoundingLocation(
             this.tokens.forEach,
             this.tokens.item,
+            this.tokens.as,
+            this.typeExpression,
             this.tokens.in,
             this.target,
             this.body,
@@ -1450,11 +1457,13 @@ export class ForEachStatement extends Statement {
     public readonly tokens: {
         readonly forEach?: Token;
         readonly item: Token;
+        readonly as: Token;
         readonly in?: Token;
         readonly endFor?: Token;
     };
     public readonly body: Block;
     public readonly target: Expression;
+    public readonly typeExpression?: TypeExpression;
 
     public readonly kind = AstNodeKind.ForEachStatement;
 
@@ -1499,8 +1508,20 @@ export class ForEachStatement extends Statement {
         }
     }
 
-    getType(options: GetTypeOptions): BscType {
-        return this.getSymbolTable().getSymbolType(this.tokens.item.text, { ...options, statementIndex: this.statementIndex });
+    public getType(options: GetTypeOptions): BscType {
+        // Used for hovers on the statement 'item' token
+        return this.getLoopVariableType(options);
+    }
+
+    getLoopVariableType(options: GetTypeOptions): BscType {
+        if (this.typeExpression) {
+            return this.typeExpression.getType(options);
+        }
+        //register the for loop variable
+        const loopTargetType = this.target.getType({ flags: SymbolTypeFlag.runtime });
+        const loopVarType = new ArrayDefaultTypeReferenceType(loopTargetType);
+
+        return loopVarType;
     }
 
     get leadingTrivia(): Token[] {
@@ -1516,6 +1537,8 @@ export class ForEachStatement extends Statement {
             new ForEachStatement({
                 forEach: util.cloneToken(this.tokens.forEach),
                 in: util.cloneToken(this.tokens.in),
+                as: util.cloneToken(this.tokens.as),
+                typeExpression: this.typeExpression?.clone(),
                 endFor: util.cloneToken(this.tokens.endFor),
                 item: util.cloneToken(this.tokens.item),
                 target: this.target?.clone(),

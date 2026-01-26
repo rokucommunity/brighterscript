@@ -15,7 +15,6 @@ import { Parser, ParseMode } from '../parser/Parser';
 import type { FunctionExpression } from '../parser/Expression';
 import type { ClassStatement, NamespaceStatement, MethodStatement, FieldStatement } from '../parser/Statement';
 import type { Program } from '../Program';
-import { DynamicType } from '../types/DynamicType';
 import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { serializeError } from 'serialize-error';
@@ -507,7 +506,7 @@ export class BrsFile implements BscFile {
                         nameRange: stmt.tokens.item.location?.range,
                         lineIndex: stmt.tokens.item.location?.range?.start.line,
                         name: stmt.tokens.item.text,
-                        getType: () => DynamicType.instance //TODO: Infer types from array
+                        getType: () => stmt.getType({ flags: SymbolTypeFlag.runtime })
                     });
                 },
                 LabelStatement: (stmt) => {
