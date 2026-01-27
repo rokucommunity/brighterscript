@@ -1,4 +1,4 @@
-import { isAssignmentStatement, isBrsFile, isCallfuncExpression, isClassStatement, isDottedGetExpression, isEnumMemberStatement, isEnumStatement, isEnumType, isInheritableType, isInterfaceStatement, isMemberField, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isXmlFile } from '../../astUtils/reflection';
+import { isAssignmentStatement, isBrsFile, isCallfuncExpression, isClassStatement, isDottedGetExpression, isEnumMemberStatement, isEnumStatement, isEnumType, isForStatement, isInheritableType, isInterfaceStatement, isMemberField, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { ExtraSymbolData, Hover, ProvideHoverEvent, TypeChainEntry } from '../../interfaces';
@@ -161,8 +161,13 @@ export class HoverProcessor {
                 let exprType: BscType;
 
                 if (isAssignmentStatement(expression) && token === expression.tokens.name) {
-                    // if this is an assignment, but we're really interested in the value AFTER the assignment
-                    exprType = expression.getSymbolTable().getSymbolType(expression.tokens.name.text, { flags: typeFlag, typeChain: typeChain, data: extraData, statementIndex: expression.statementIndex + 1 });
+                    if (isForStatement(expression.parent) && expression.parent.counterDeclaration === expression) {
+                        // for loop counter variable - its type is always integer
+                        exprType = expression.value.getType({ flags: typeFlag, typeChain: typeChain, data: extraData, statementIndex: expression.statementIndex });
+                    } else {
+                        // if this is an assignment, but we're really interested in the value AFTER the assignment
+                        exprType = expression.getSymbolTable().getSymbolType(expression.tokens.name.text, { flags: typeFlag, typeChain: typeChain, data: extraData, statementIndex: expression.statementIndex + 1 });
+                    }
                 } else {
                     exprType = expression.getType({ flags: typeFlag, typeChain: typeChain, data: extraData, ignoreCall: isCallfuncExpression(expression) });
                 }

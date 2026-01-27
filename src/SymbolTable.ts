@@ -681,7 +681,7 @@ export class SymbolTable implements SymbolTypeGetter {
             }
 
             if (maxAllowedStatementIndex >= 0 && t.data?.definingNode) {
-                if (memberOfAncestor || t.data.canUseInDefinedAstNode) {
+                if (memberOfAncestor) {
                     // if we've already gone up a level, it's possible to have a variable assigned and used
                     // in the same statement, eg. for loop
                     return t.data.definingNode.statementIndex <= maxAllowedStatementIndex;

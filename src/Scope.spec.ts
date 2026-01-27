@@ -27,7 +27,7 @@ import { InterfaceType } from './types/InterfaceType';
 import { ComponentType } from './types/ComponentType';
 import { WalkMode, createVisitor } from './astUtils/visitors';
 import type { BinaryExpression, CallExpression, DottedGetExpression, FunctionExpression } from './parser/Expression';
-import { ObjectType } from './types';
+import { ObjectType, UninitializedType } from './types';
 import undent from 'undent';
 import * as fsExtra from 'fs-extra';
 import { InlineInterfaceType } from './types/InlineInterfaceType';
@@ -3697,9 +3697,15 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
                 const forEachStmt = mainFile.ast.findChild<ForEachStatement>(isForEachStatement);
                 const symbolTable = forEachStmt.getSymbolTable();
-                const opts = { flags: SymbolTypeFlag.runtime };
+                const opts = { flags: SymbolTypeFlag.runtime, statementIndex: forEachStmt.statementIndex + 1 };
                 expectTypeToBe(symbolTable.getSymbolType('total', opts), IntegerType);
-                expectTypeToBe(symbolTable.getSymbolType('num', opts), IntegerType);
+                // at top level, num could possible be uninitialized if loop is not run
+                const loopVarType = symbolTable.getSymbolType('num', opts) as UnionType;
+                expectTypeToBe(loopVarType, UnionType);
+                expect(loopVarType.types).to.include(UninitializedType.instance);
+                // inside the loop, num must be an integer
+                const loopBodySymbolTable = forEachStmt.body.getSymbolTable();
+                expectTypeToBe(loopBodySymbolTable.getSymbolType('num', opts), IntegerType);
                 expectTypeToBe(symbolTable.getSymbolType('nums', opts), ArrayType);
             });
 
@@ -3717,17 +3723,55 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
+                const sourceScope = program.getScopeByName('source');
+                sourceScope.linkSymbolTable();
                 const forEachStmt = mainFile.ast.findChild<ForEachStatement>(isForEachStatement);
-                const symbolTable = forEachStmt.getSymbolTable();
+                const symbolTable = forEachStmt.body.getSymbolTable();
                 const opts = { flags: SymbolTypeFlag.runtime };
                 expectTypeToBe(symbolTable.getSymbolType('data', opts), ArrayType);
                 expectTypeToBe((symbolTable.getSymbolType('data', opts) as ArrayType).defaultType, IntegerType);
-
                 expectTypeToBe(symbolTable.getSymbolType('Alpha', opts).getMemberType('data', opts), ArrayType);
                 expectTypeToBe(((symbolTable.getSymbolType('Alpha', opts).getMemberType('data', opts)) as ArrayType).defaultType, IntegerType);
-
                 expectTypeToBe(symbolTable.getSymbolType('item', opts), IntegerType);
+            });
 
+            it('should set correct type on for each loop items of multi-dimensional arrays', () => {
+                let mainFile = program.setFile<BrsFile>('source/main.bs', `
+                    sub process(numsArray as integer[][]) as integer
+                        total = 0
+                        for each nums in numsArray
+                            for each num in nums
+                                total += num
+                            end for
+                        end for
+                        return total
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const forEachStmts = mainFile.ast.findChildren<ForEachStatement>(isForEachStatement);
+                const outerSymbolTable = forEachStmts[0].body.getSymbolTable();
+                const innerSymbolTable = forEachStmts[1].body.getSymbolTable();
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(outerSymbolTable.getSymbolType('total', opts), IntegerType);
+                expectTypeToBe(outerSymbolTable.getSymbolType('nums', opts), ArrayType);
+                expectTypeToBe(innerSymbolTable.getSymbolType('num', opts), IntegerType);
+            });
+
+            it('should set the type of the loop item based on the declared type', () => {
+                let mainFile = program.setFile<BrsFile>('source/main.bs', `
+                    sub process(strs)
+                        for each str as string in strs
+                            print str
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const forEachStmt = mainFile.ast.findChild<ForEachStatement>(isForEachStatement);
+                const symbolTable = forEachStmt.body.getSymbolTable();
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('str', opts), StringType);
             });
 
             it('should set correct type on array literals', () => {
@@ -3767,8 +3811,8 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const processFnScope = utilFile.getFunctionScopeAtPosition(util.createPosition(2, 24));
-                const symbolTable = processFnScope.symbolTable;
+                const forEachStmt = utilFile.ast.findChild<ForEachStatement>(isForEachStatement);
+                const symbolTable = forEachStmt.body.getSymbolTable();
                 const opts = { flags: SymbolTypeFlag.runtime };
                 expectTypeToBe(symbolTable.getSymbolType('data', opts), ArrayType);
                 expectTypeToBe(symbolTable.getSymbolType('datum', opts), InterfaceType);
@@ -4933,6 +4977,55 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
+        });
+
+        it('properly handles type assignment in for loops', () => {
+            const testFile = program.setFile<BrsFile>('source/test.bs', `
+                sub testPocket1()
+                    i = "hello"
+                    print i ' i is string at this point
+
+                    for i = 0 to 2
+                        print i ' i is a string at this point
+                    end for
+                    print i ' i is integer or string at this point
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const printStmts = testFile.ast.findChildren<PrintStatement>(isPrintStatement);
+            let itemVar = printStmts[0].expressions[0];
+            expectTypeToBe(itemVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
+            itemVar = printStmts[1].expressions[0];
+            expectTypeToBe(itemVar.getType({ flags: SymbolTypeFlag.runtime }), IntegerType);
+            itemVar = printStmts[2].expressions[0];
+            let itemVarType = itemVar.getType({ flags: SymbolTypeFlag.runtime });
+            expectTypeToBe(itemVarType, UnionType);
+        });
+
+        it('properly handles type assignment in for each loops', () => {
+            const testFile = program.setFile<BrsFile>('source/test.bs', `
+                sub testPocket1()
+                    items = ["one", "two", "three"]
+                    item = 1234
+                    print item ' item is integer at this point
+
+                    for each item in items
+                        print item ' item is a string at this point
+                    end for
+                    print item ' item is integer or string at this point
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const printStmts = testFile.ast.findChildren<PrintStatement>(isPrintStatement);
+            let itemVar = printStmts[0].expressions[0];
+            expectTypeToBe(itemVar.getType({ flags: SymbolTypeFlag.runtime }), IntegerType);
+            itemVar = printStmts[1].expressions[0];
+            expectTypeToBe(itemVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
+            itemVar = printStmts[2].expressions[0];
+            let itemVarType = itemVar.getType({ flags: SymbolTypeFlag.runtime });
+            expectTypeToBe(itemVarType, UnionType);
         });
     });
 

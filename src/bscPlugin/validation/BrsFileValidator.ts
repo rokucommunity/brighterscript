@@ -115,6 +115,10 @@ export class BrsFileValidator {
                 if (!node?.tokens?.name) {
                     return;
                 }
+                if (isForStatement(node.parent) && node.parent.counterDeclaration === node) {
+                    // for loop variable variable is added to the block symbol table elsewhere
+                    return;
+                }
                 const data: ExtraSymbolData = {};
                 //register this variable
                 let nodeType = node.getType({ flags: SymbolTypeFlag.runtime, data: data });
@@ -131,8 +135,6 @@ export class BrsFileValidator {
             },
             ForEachStatement: (node) => {
                 //register the for loop variable
-                const loopVarType = node.getLoopVariableType({ flags: SymbolTypeFlag.runtime });
-                node.parent.getSymbolTable()?.addSymbol(node.tokens.item.text, { definingNode: node, isInstance: true, canUseInDefinedAstNode: true }, loopVarType, SymbolTypeFlag.runtime);
             },
             NamespaceStatement: (node) => {
                 if (!node?.nameExpression) {
@@ -350,10 +352,21 @@ export class BrsFileValidator {
                     // we're a block inside another block (or body). This block is a pocket in the bigger block
                     node.parent.getSymbolTable().addPocketTable({
                         index: node.parent.statementIndex,
-                        table: node.symbolTable,
+                        table: blockSymbolTable,
                         // code always flows through ConditionalCompiles, because we walk according to defined BSConsts
                         willAlwaysBeExecuted: isConditionalCompileStatement(node.parent)
                     });
+
+                    if (isForStatement(node.parent)) {
+                        const counterDecl = node.parent.counterDeclaration;
+                        const loopVar = counterDecl.tokens.name;
+                        const loopVarType = counterDecl.getType({ flags: SymbolTypeFlag.runtime });
+                        blockSymbolTable.addSymbol(loopVar.text, { isInstance: true }, loopVarType, SymbolTypeFlag.runtime);
+
+                    } else if (isForEachStatement(node.parent)) {
+                        const loopVarType = node.parent.getLoopVariableType({ flags: SymbolTypeFlag.runtime });
+                        blockSymbolTable.addSymbol(node.parent.tokens.item.text, { isInstance: true }, loopVarType, SymbolTypeFlag.runtime);
+                    }
                 }
             },
             AstNode: (node) => {
