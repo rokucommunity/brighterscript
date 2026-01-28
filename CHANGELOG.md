@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.50](https://github.com/rokucommunity/brighterscript/compare/1.0.0-alpha.49...v1.0.0-alpha.50) - 2026-01-28
+### Added
+ - Adds ability to declare type on "For Each" loop item ([#1614](https://github.com/rokucommunity/brighterscript/pull/1614))
+ - Intersection Type ([#1603](https://github.com/rokucommunity/brighterscript/pull/1603))
+### Changed
+ - Re-ran docs scraper ([#1609](https://github.com/rokucommunity/brighterscript/pull/1609))
+ - Align event names ([#1557](https://github.com/rokucommunity/brighterscript/pull/1557))
+ - upgrade to [roku-deploy@3.16.1](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3161---2025-12-05). Notable changes since 3.14.4:
+### Fixed
+ - Fix bug with `stagingDir` fallback not working ([#1606](https://github.com/rokucommunity/brighterscript/pull/1606))
+ - Fix bug with normalizing `virtual:/` path scheme ([#1607](https://github.com/rokucommunity/brighterscript/pull/1607))
+ - Fixes getting types from pocket tables in try/catch ([#1602](https://github.com/rokucommunity/brighterscript/pull/1602))
+
+
+
 ## [1.0.0-alpha.49](https://github.com/rokucommunity/brighterscript/compare/1.0.0-alpha.48...v1.0.0-alpha.49) - 2025-12-10
 ### Added
  - Adds `TypeStatement` for declaring new types ([#1597](https://github.com/rokucommunity/brighterscript/pull/1597))
