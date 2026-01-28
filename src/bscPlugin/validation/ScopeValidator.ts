@@ -279,7 +279,7 @@ export class ScopeValidator {
                     },
                     ForStatement: (forStmt) => {
                         this.addValidationKindMetric('ForStatement', () => {
-                            this.validateAssignmentInForStatement(file, forStmt);
+                            this.validateForStatement(file, forStmt);
                         });
                     },
                     AstNode: (node) => {
@@ -1397,12 +1397,28 @@ export class ScopeValidator {
         }
     }
 
-    private validateAssignmentInForStatement(file: BrsFile, forStmt: ForStatement) {
+    private validateForStatement(file: BrsFile, forStmt: ForStatement) {
         const assignStmt = forStmt.counterDeclaration;
         const assignValueType = this.getNodeTypeWrapper(file, assignStmt.value, { flags: SymbolTypeFlag.runtime, statementIndex: forStmt.statementIndex });
         if (!IntegerType.instance.isTypeCompatible(assignValueType)) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.assignmentTypeMismatch(assignValueType.toString(), 'integer'),
+                location: assignStmt.location
+            });
+        }
+        if (forStmt.increment) {
+            const incrementValueType = this.getNodeTypeWrapper(file, forStmt.increment, { flags: SymbolTypeFlag.runtime, statementIndex: forStmt.statementIndex });
+            if (!IntegerType.instance.isTypeCompatible(incrementValueType)) {
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.assignmentTypeMismatch(incrementValueType.toString(), 'integer'),
+                    location: assignStmt.location
+                });
+            }
+        }
+        const finalValueType = this.getNodeTypeWrapper(file, forStmt.finalValue, { flags: SymbolTypeFlag.runtime, statementIndex: forStmt.statementIndex });
+        if (!IntegerType.instance.isTypeCompatible(finalValueType)) {
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.assignmentTypeMismatch(finalValueType.toString(), 'integer'),
                 location: assignStmt.location
             });
         }

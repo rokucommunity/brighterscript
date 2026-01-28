@@ -2146,6 +2146,56 @@ describe('ScopeValidator', () => {
                 ]);
             });
 
+            it('validates for loop step of non-number', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        for i = 1 to 8 step "two"' can't set step to string
+                            print i
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
+            });
+
+            it('validates for loop final value of non-number', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        for i = 1 to "eight" step 2 ' can't set final value to string
+                            print i
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
+            });
+
+            it('validates for loop with types from different places', () => {
+                program.setFile('source/main.bs', `
+
+                    function getInt() as integer
+                        return 2
+                    end function
+
+                    namespace TestNamespace
+                        const ONE = 1
+                    end namespace
+
+                    sub main(data as string[])
+                        for i = TestNamespace.ONE to data.count() step getInt()
+                            print i
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+
             it('validates assignment of for each loop variable for array literal', () => {
                 program.setFile('source/main.bs', `
                     sub main()
