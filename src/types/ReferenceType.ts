@@ -1,7 +1,7 @@
 import type { GetTypeOptions, TypeChainEntry, TypeCircularReferenceInfo, TypeCompatibilityData } from '../interfaces';
 import type { GetSymbolTypeOptions, SymbolTable, SymbolTableProvider, SymbolTypeGetterProvider } from '../SymbolTable';
 import type { SymbolTypeFlag } from '../SymbolTypeFlag';
-import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isArrayType, isBinaryOperatorReferenceType, isComponentType, isDynamicType, isParamTypeFromValueReferenceType, isReferenceType, isTypePropertyReferenceType } from '../astUtils/reflection';
+import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isBinaryOperatorReferenceType, isComponentType, isDynamicType, isParamTypeFromValueReferenceType, isReferenceType, isTypePropertyReferenceType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 import { BscTypeKind } from './BscTypeKind';
@@ -564,11 +564,7 @@ export class ArrayDefaultTypeReferenceType extends BscType {
                         return () => undefined;
                     }
                 } else {
-                    if (isArrayType(this.objType)) {
-                        resultType = this.objType.defaultType;
-                    } else {
-                        resultType = DynamicType.instance;
-                    }
+                    resultType = util.getIteratorDefaultType(this.objType);
                 }
 
                 if (resultType) {

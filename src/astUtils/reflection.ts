@@ -532,6 +532,10 @@ export function isAssociativeArrayTypeLike(value: any): value is AssociativeArra
     return value?.kind === BscTypeKind.AssociativeArrayType || isBuiltInType(value, 'roAssociativeArray') || isCompoundTypeOf(value, isAssociativeArrayTypeLike);
 }
 
+export function isArrayTypeLike(value: any): value is ArrayType | InterfaceType {
+    return value?.kind === BscTypeKind.ArrayType || isBuiltInType(value, 'roArray') || isCompoundTypeOf(value, isArrayTypeLike);
+}
+
 export function isCallFuncableTypeLike(target): target is BscType & { callFuncMemberTable: SymbolTable } {
     return isCallFuncableType(target) || isCompoundTypeOf(target, isCallFuncableTypeLike);
 }
@@ -570,6 +574,19 @@ export function isCompoundTypeOf(value: any, typeGuard: (val: any) => boolean) {
 
 export function isCompoundType(value: any): value is UnionType | IntersectionType {
     return isUnionType(value) || isIntersectionType(value);
+}
+
+export function isIterableType(value: any): boolean {
+    if (isDynamicType(value) || isObjectType(value)) {
+        return true;
+    }
+    if (isArrayTypeLike(value) || isAssociativeArrayTypeLike(value)) {
+        return true;
+    }
+    if (isBuiltInType(value, 'roByteArray') || isBuiltInType(value, 'roList') || isBuiltInType(value, 'roXMLList') || isBuiltInType(value, 'roMessagePort')) {
+        return true;
+    }
+    return false;
 }
 
 // Literal reflection

@@ -2104,6 +2104,104 @@ describe('ScopeValidator', () => {
                 ]);
             });
         });
+
+        describe('for loops', () => {
+            it('allows using the loop variable inside the loop', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        for each item in [1, 2, 3]
+                            x as integer = item + 2
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates the loop variable usage', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        for each item in ["test"]
+                            x as integer = item
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
+            });
+
+            it('validates assignment of for loop variable to non-number', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        for i = "test" to 8 ' can't set loop var to string
+                            print i
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
+            });
+
+            it('validates assignment of for each loop variable for array literal', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        for each item as integer in ["test"] 'can't set loop var to integer, if given string
+                            print item
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
+            });
+
+            it('validates assignment of for each loop variable for typed array', () => {
+                program.setFile('source/main.bs', `
+                    sub main(data as string[])
+                        for each item as integer in data 'can't set loop var to integer, if given string
+                            print item
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
+            });
+
+            it('validates assignment of for each loop variable for roByteArray', () => {
+                program.setFile('source/main.bs', `
+                    sub main(data as roByteArray)
+                        for each item as string in data 'can't set loop var to string, byte arrays are integers
+                            print item
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('integer', 'string').message
+                ]);
+            });
+
+            it('validates assignment of for each loop variable for AAs', () => {
+                program.setFile('source/main.bs', `
+                    sub main(data as roAssociativeArray)
+                        for each item as integer in data 'can't set loop var to integer, associative arrays give keys
+                            print item
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
+            });
+        });
     });
 
     describe('cannotFindName', () => {
@@ -2224,7 +2322,7 @@ describe('ScopeValidator', () => {
                 sub makeAA()
                     myAA = {}
                     addItemsToAA(myAA)
-                    for each item in myAA.items
+                    for each item in myAA.items 'bs:disable-line not-iterable
                         print item
                     end for
                 end sub
@@ -6409,6 +6507,98 @@ describe('ScopeValidator', () => {
             program.validate();
             expectDiagnostics(program, [
                 DiagnosticMessages.notCallable('node@.getName').message
+            ]);
+        });
+    });
+
+    describe('notIterable', () => {
+        it('allows iteration over array', () => {
+            program.setFile('source/test.bs', `
+                sub doStuff()
+                    arr = [1, 2, 3]
+                    for each item in arr
+                        print item
+                    end for
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows iteration over roArray', () => {
+            program.setFile('source/test.bs', `
+                sub doStuff()
+                    arr = createObject("roArray", 10, true)
+                    for each item in arr
+                        print item
+                    end for
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows iteration over roList', () => {
+            program.setFile('source/test.bs', `
+                sub doStuff()
+                    list = createObject("roList")
+                    for each item in list
+                        print item
+                    end for
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows iteration over AA', () => {
+            program.setFile('source/test.bs', `
+                sub doStuff()
+                    aa = { a: 1, b: 2, c: 3 }
+                    for each item in aa
+                        print item
+                    end for
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows iteration over byteArray', () => {
+            program.setFile('source/test.bs', `
+                sub doStuff(bytes as roByteArray)
+                    for each item in bytes
+                        print item
+                    end for
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows iteration over roXMLList', () => {
+            program.setFile('source/test.bs', `
+                sub doStuff(list as roXMLList)
+                    for each item in list
+                        print item
+                    end for
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('reports error when using for each on non-iterable type', () => {
+            program.setFile('source/test.bs', `
+                sub doStuff()
+                    for each item in 123
+                        print item
+                    end for
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program.diagnostics, [
+                DiagnosticMessages.notIterable('integer').message
             ]);
         });
     });

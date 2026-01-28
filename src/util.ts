@@ -25,7 +25,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -2746,6 +2746,21 @@ export class Util {
             resultType = getUniqueType(moddedTypes, unionTypeFactory);
         }
         return resultType;
+    }
+
+    /**
+     * Get the default type for an iterator of the given type
+     * Used for `for each` loops
+     */
+    public getIteratorDefaultType(iteratorType: BscType): BscType {
+        if (isArrayType(iteratorType)) {
+            return iteratorType.defaultType;
+        } else if (isAssociativeArrayTypeLike(iteratorType)) {
+            return StringType.instance;
+        } else if (isBuiltInType(iteratorType, 'roByteArray')) {
+            return IntegerType.instance;
+        }
+        return DynamicType.instance;
     }
 
     /**

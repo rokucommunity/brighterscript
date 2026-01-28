@@ -3774,6 +3774,55 @@ describe('Scope', () => {
                 expectTypeToBe(symbolTable.getSymbolType('str', opts), StringType);
             });
 
+            it('should set the type of the loop item based on the inferred type for ByteArray', () => {
+                let mainFile = program.setFile<BrsFile>('source/main.bs', `
+                    sub process(bytes as roByteArray)
+                        for each byte in bytes
+                            print byte
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const forEachStmt = mainFile.ast.findChild<ForEachStatement>(isForEachStatement);
+                const symbolTable = forEachStmt.body.getSymbolTable();
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('byte', opts), IntegerType);
+            });
+
+
+            it('should set the type of the loop item based on the inferred type for AAs', () => {
+                let mainFile = program.setFile<BrsFile>('source/main.bs', `
+                    sub process(data as roAssociativeArray)
+                        for each key in data
+                            print key
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const forEachStmt = mainFile.ast.findChild<ForEachStatement>(isForEachStatement);
+                const symbolTable = forEachStmt.body.getSymbolTable();
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('key', opts), StringType);
+            });
+
+            it('should use dynamic type for loop item when type cannot be inferred', () => {
+                let mainFile = program.setFile<BrsFile>('source/main.bs', `
+                    sub process(data as roList)
+                        for each item in data
+                            print item
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const forEachStmt = mainFile.ast.findChild<ForEachStatement>(isForEachStatement);
+                const symbolTable = forEachStmt.body.getSymbolTable();
+                const opts = { flags: SymbolTypeFlag.runtime };
+                expectTypeToBe(symbolTable.getSymbolType('item', opts), DynamicType);
+            });
+
             it('should set correct type on array literals', () => {
                 let mainFile = program.setFile<BrsFile>('source/main.bs', `
                     sub process()
