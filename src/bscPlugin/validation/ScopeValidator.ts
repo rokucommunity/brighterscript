@@ -1,11 +1,11 @@
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
-import { isAliasStatement, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallFuncableTypeLike, isCallableType, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isArrayType, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallFuncableTypeLike, isCallableType, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isIterableType, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BsDiagnostic, CallableContainer, ExtraSymbolData, FileReference, GetTypeOptions, ValidateScopeEvent, TypeChainEntry, TypeChainProcessResult, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
-import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, DottedSetStatement, IncrementStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
+import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, DottedSetStatement, ForEachStatement, ForStatement, IncrementStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
 import { util } from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
@@ -36,6 +36,7 @@ import { VoidType } from '../../types/VoidType';
 import { LogLevel } from '../../Logger';
 import { Stopwatch } from '../../Stopwatch';
 import chalk from 'chalk';
+import { IntegerType } from '../../types/IntegerType';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -255,6 +256,7 @@ export class ScopeValidator {
                                 type: this.getNodeTypeWrapper(file, forEachStmt, { flags: SymbolTypeFlag.runtime }),
                                 nameRange: forEachStmt.tokens.item.location?.range
                             });
+                            this.validateForEachStatement(file, forEachStmt);
                         });
                     },
                     FunctionParameterExpression: (funcParam) => {
@@ -273,6 +275,11 @@ export class ScopeValidator {
                         }
                         this.addValidationKindMetric('FunctionExpression', () => {
                             this.validateFunctionExpressionForReturn(func);
+                        });
+                    },
+                    ForStatement: (forStmt) => {
+                        this.addValidationKindMetric('ForStatement', () => {
+                            this.validateForStatement(file, forStmt);
                         });
                     },
                     AstNode: (node) => {
@@ -1385,6 +1392,71 @@ export class ScopeValidator {
                             classStmtLink?.item.tokens.name.location?.range
                         )
                     }]
+                });
+            }
+        }
+    }
+
+    private validateForStatement(file: BrsFile, forStmt: ForStatement) {
+        const assignStmt = forStmt.counterDeclaration;
+        const assignValueType = this.getNodeTypeWrapper(file, assignStmt.value, { flags: SymbolTypeFlag.runtime, statementIndex: forStmt.statementIndex });
+        if (!IntegerType.instance.isTypeCompatible(assignValueType)) {
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.assignmentTypeMismatch(assignValueType.toString(), 'integer'),
+                location: assignStmt.location
+            });
+        }
+        if (forStmt.increment) {
+            const incrementValueType = this.getNodeTypeWrapper(file, forStmt.increment, { flags: SymbolTypeFlag.runtime, statementIndex: forStmt.statementIndex });
+            if (!IntegerType.instance.isTypeCompatible(incrementValueType)) {
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.assignmentTypeMismatch(incrementValueType.toString(), 'integer'),
+                    location: forStmt.increment.location
+                });
+            }
+        }
+        const finalValueType = this.getNodeTypeWrapper(file, forStmt.finalValue, { flags: SymbolTypeFlag.runtime, statementIndex: forStmt.statementIndex });
+        if (!IntegerType.instance.isTypeCompatible(finalValueType)) {
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.assignmentTypeMismatch(finalValueType.toString(), 'integer'),
+                location: forStmt.finalValue.location
+            });
+        }
+    }
+
+    private validateForEachStatement(file: BrsFile, forEachStmt: ForEachStatement) {
+        const targetType = this.getNodeTypeWrapper(file, forEachStmt.target, { flags: SymbolTypeFlag.runtime, statementIndex: forEachStmt.statementIndex });
+        if (isDynamicType(targetType) || isObjectType(targetType)) {
+            // unable to determine type, skip further validation
+            return;
+        }
+
+        let targetItemType: BscType;
+
+        if (!isArrayType(targetType)) {
+            if (isIterableType(targetType)) {
+                // this is enumerable
+                targetItemType = util.getIteratorDefaultType(targetType);
+            } else {
+                // target is not an array nor enumerable
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.notIterable(targetType.toString()),
+                    location: forEachStmt.target.location
+                });
+                return;
+            }
+        } else {
+            targetItemType = targetType.defaultType;
+        }
+
+        const loopType = forEachStmt.getLoopVariableType({ flags: SymbolTypeFlag.runtime, statementIndex: forEachStmt.statementIndex });
+        if (loopType?.isResolvable()) {
+
+            const data: TypeCompatibilityData = {};
+            if (!loopType.isTypeCompatible(targetItemType, data)) {
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.assignmentTypeMismatch(targetItemType.toString(), loopType.toString(), data),
+                    location: forEachStmt.typeExpression.location
                 });
             }
         }

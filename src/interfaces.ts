@@ -1093,11 +1093,6 @@ export interface ExtraSymbolData {
      */
     isFromCallFunc?: boolean;
     /**
-     * Some symbols can be used in the same node they are defined in
-     * For example, loop variables in for loops
-     */
-    canUseInDefinedAstNode?: boolean;
-    /**
      * Is this type created from a type statement - eg. is it a nickname for another type?
      */
     isFromTypeStatement?: boolean;

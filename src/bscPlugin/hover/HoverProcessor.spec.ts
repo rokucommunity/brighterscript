@@ -745,6 +745,23 @@ describe('HoverProcessor', () => {
             expect(hover?.contents).to.be.undefined;
         });
 
+        it('should have correct hovers for loop-items of for-each-loops', () => {
+            let file = program.setFile('source/main.bs', `
+                sub test(strArray)
+                    for each thing as string in strArray
+                        print thing
+                    end for
+                end sub
+            `);
+            program.validate();
+            //    for each thing as string in str|Array
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 52))[0];
+            expect(hover?.contents).to.eql([fence('strArray as dynamic')]);
+            //    print th|ing
+            hover = program.getHover(file.srcPath, util.createPosition(3, 33))[0];
+            expect(hover?.contents).to.eql([fence('thing as string')]);
+        });
+
         it('should show unresolved members as invalid', () => {
             const file = program.setFile('source/main.bs', `
                     interface MyIFace

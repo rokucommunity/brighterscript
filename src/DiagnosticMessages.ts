@@ -1073,6 +1073,11 @@ export let DiagnosticMessages = {
         message: `'${name}' is not callable'`,
         severity: DiagnosticSeverity.Error,
         code: 'not-callable'
+    }),
+    notIterable: (typeName: string) => ({
+        message: `Type '${typeName}' is not iterable`,
+        severity: DiagnosticSeverity.Error,
+        code: 'not-iterable'
     })
 };
 export const defaultMaximumTruncationLength = 160;
