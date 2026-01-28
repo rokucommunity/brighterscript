@@ -1411,7 +1411,7 @@ export class ScopeValidator {
             if (!IntegerType.instance.isTypeCompatible(incrementValueType)) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.assignmentTypeMismatch(incrementValueType.toString(), 'integer'),
-                    location: assignStmt.location
+                    location: forStmt.increment.location
                 });
             }
         }
@@ -1419,7 +1419,7 @@ export class ScopeValidator {
         if (!IntegerType.instance.isTypeCompatible(finalValueType)) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.assignmentTypeMismatch(finalValueType.toString(), 'integer'),
-                location: assignStmt.location
+                location: forStmt.finalValue.location
             });
         }
     }
