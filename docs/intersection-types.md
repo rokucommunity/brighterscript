@@ -37,8 +37,8 @@ interface HasSize
 end interface
 
 
-function getUrlWithQuerySize(response as HasId and HasUrl and HasSize) as string
-    return value.url + "?id=" + value.id + "&w=" + value.width.toStr().trim() + "&h=" + value.height.toStr().trim()
+function getUrlWithQuerySize(value as HasUrl and HasId and HasSize) as string
+    return value.url + `?id=${value.id}&w=${value.width}&h=${value.height}`
 end function
 ```
 
