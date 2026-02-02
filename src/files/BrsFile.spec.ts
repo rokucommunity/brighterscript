@@ -4468,6 +4468,24 @@ describe('BrsFile', () => {
                 `);
             });
         });
+
+        describe('for each loop with types', () => {
+            it('transpiles to untyped for each', () => {
+                testTranspile(`
+                    sub foo(items as string[])
+                        for each item as string in items
+                            print item
+                        end for
+                    end sub
+                `, `
+                    sub foo(items as dynamic)
+                        for each item in items
+                            print item
+                        end for
+                    end sub
+                `);
+            });
+        });
     });
 
     it('allows up to 63 function params', () => {

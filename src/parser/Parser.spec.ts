@@ -1613,6 +1613,30 @@ describe('parser', () => {
             expectZeroDiagnostics(diagnostics);
         });
     });
+
+    describe('for each with types', () => {
+        it('parses without errors', () => {
+            let { diagnostics } = parse(`
+                function main()
+                    for each item as string in ["a", "b", "c"]
+                        print item
+                    end for
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows complicated expressions', () => {
+            let { diagnostics } = parse(`
+                function main(data)
+                    for each item as {a as integer or boolean, b as SomeInterface[], c as {id as string} } or string in data
+                        print item
+                    end for
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+    });
 });
 
 function parse(text: string, mode?: ParseMode) {

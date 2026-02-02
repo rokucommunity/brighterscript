@@ -1369,6 +1369,13 @@ export class Parser {
         let forEach = this.advance();
         let name = this.advance();
 
+        if (this.check(TokenKind.As)) {
+            this.warnIfNotBrighterScriptMode('typed for each item');
+
+            this.advance(); // get 'as'
+            this.typeToken(); // get type
+        }
+
         let maybeIn = this.peek();
         if (this.check(TokenKind.Identifier) && maybeIn.text.toLowerCase() === 'in') {
             this.advance();
