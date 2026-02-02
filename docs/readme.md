@@ -7,17 +7,30 @@ See the following pages for more information:
 ## [Annotations](annotations.md)
 
 ```brighterscript
-'mostly useful for plugins that change code based on annotations
+' mostly useful for plugins that change code based on annotations
 @logOnException()
 sub doSomething()
     '...
-end
+end sub
+```
+
+## [Assignments](assigments.md)
+
+```brighterscript
+' declare the type of variables
+sub showTypedAssignments()
+    name as string = getData()
+
+    for each item as integer in getDurationSeconds(name)
+        print "Time in MS:"; item / 1000
+    end for
+end sub
 ```
 
 ## [Callfunc Operator](callfunc-operator.md)
 
 ```brighterscript
-'instead of `node.callfunc("someMethod", 1, 2, 3)`, you can do this:
+' instead of `node.callfunc("someMethod", 1, 2, 3)`, you can do this:
 node@.someMethod(1, 2, 3)
 ```
 
@@ -61,7 +74,7 @@ end enum
 ```brighterscript
 try
     somethingDangerous()
-catch 'look, no exception variable!
+catch ' look, no exception variable!
     print "Living on the edge!"
 end try
 ```
