@@ -2807,11 +2807,11 @@ export class Parser {
      */
     private typeToken(ignoreDiagnostics = false): Token {
         let typeToken: Token;
-        let lookForUnions = true;
-        let isAUnion = false;
+        let lookForCompounds = true;
+        let isACompound = false;
         let resultToken;
-        while (lookForUnions) {
-            lookForUnions = false;
+        while (lookForCompounds) {
+            lookForCompounds = false;
 
             if (this.checkAny(...DeclarableTypes)) {
                 // Token is a built in type
@@ -2821,6 +2821,9 @@ export class Parser {
                     if (this.check(TokenKind.LeftCurlyBrace)) {
                         // could be an inline interface
                         typeToken = this.inlineInterface();
+                    } else if (this.check(TokenKind.LeftParen)) {
+                        // could be an inline interface
+                        typeToken = this.groupedTypeExpression();
                     } else {
                         // see if we can get a namespaced identifer
                         const qualifiedType = this.getNamespacedVariableNameExpression(ignoreDiagnostics);
@@ -2844,15 +2847,15 @@ export class Parser {
                     resultToken = createToken(TokenKind.Dynamic, null, typeToken.range);
                 }
 
-                if (this.check(TokenKind.Or)) {
-                    lookForUnions = true;
+                if (this.checkAny(TokenKind.Or, TokenKind.And)) {
+                    lookForCompounds = true;
                     let orToken = this.advance();
                     resultToken = createToken(TokenKind.Dynamic, null, util.createBoundingRange(resultToken, typeToken, orToken));
-                    isAUnion = true;
+                    isACompound = true;
                 }
             }
         }
-        if (isAUnion) {
+        if (isACompound) {
             resultToken = createToken(TokenKind.Dynamic, null, util.createBoundingRange(resultToken, typeToken));
         }
         return resultToken;
@@ -2926,6 +2929,16 @@ export class Parser {
         const completeInlineInterfaceToken = createToken(TokenKind.Dynamic, null, util.createBoundingRange(...memberTokens));
 
         return completeInlineInterfaceToken;
+    }
+
+    private groupedTypeExpression() {
+        const leftParen = this.advance();
+        const typeToken = this.typeToken();
+        const rightParen = this.consume(
+            DiagnosticMessages.expectedToken(TokenKind.RightParen),
+            TokenKind.RightParen
+        );
+        return createToken(TokenKind.Dynamic, null, util.createBoundingRange(leftParen, typeToken, rightParen));
     }
 
     private primary(): Expression {

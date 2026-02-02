@@ -4313,6 +4313,103 @@ describe('BrsFile', () => {
             `);
         });
 
+
+        it('allows intersection types for primitives', () => {
+            testTranspile(`
+                sub main(x as string and float, y as object and float or string)
+                end sub
+            `, `
+                sub main(x as dynamic, y as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows intersection types for classes, interfaces', () => {
+            testTranspile(`
+                interface IFaceA
+                    name as string
+                    data as integer
+                end interface
+
+                interface IFaceB
+                    name as string
+                    value as float
+                end interface
+
+                sub main(x as IFaceA and IFaceB)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows intersection types for classes, interfaces', () => {
+            testTranspile(`
+                namespace alpha.beta
+                    interface IFaceA
+                        name as string
+                        data as integer
+                    end interface
+
+                    interface IFaceB
+                        name as string
+                        value as float
+                    end interface
+                end namespace
+
+                sub main(x as alpha.beta.IFaceA and alpha.beta.IFaceB)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows intersection types of arrays', () => {
+            testTranspile(`
+                namespace alpha.beta
+                    interface IFaceA
+                        name as string
+                        data as integer
+                    end interface
+
+                    interface IFaceB
+                        name as string
+                        value as float
+                    end interface
+                end namespace
+
+                sub main(x as alpha.beta.IFaceA[][] and alpha.beta.IFaceB[] and ifStringOps)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows grouped expression in types types', () => {
+            testTranspile(`
+                namespace alpha.beta
+                    interface IFaceA
+                        name as string
+                        data as integer
+                    end interface
+
+                    interface IFaceB
+                        name as string
+                        value as float
+                    end interface
+                end namespace
+
+                sub main(x as (alpha.beta.IFace and alpha.beta.IFaceB)[] or ifStringOps)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
         it('allows built-in types for return values', () => {
             testTranspile(`
                 function makeLabel(text as string) as roSGNodeLabel
