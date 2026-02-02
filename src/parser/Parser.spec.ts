@@ -1306,6 +1306,154 @@ describe('parser', () => {
         });
     });
 
+    describe('grouped type expressions', () => {
+        it('is not allowed in brightscript mode', () => {
+            let parser = parse(`
+                sub main(param as (string or integer))
+                    print param
+                end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.functionParameterTypeIsInvalid('param', '(')]);
+        });
+
+        it('allows group type expressions in parameters', () => {
+            let { diagnostics } = parse(`
+                sub main(param as (string or integer))
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows group type expressions in type casts', () => {
+            let { diagnostics } = parse(`
+                sub main(val)
+                    printThing(val as (string or integer))
+                end sub
+                sub printThing(thing as (string or integer))
+                    print thing
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows union of grouped type expressions', () => {
+            let { diagnostics } = parse(`
+                sub main(param as (string or integer) or (float or dynamic))
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows nested grouped type expressions', () => {
+            let { diagnostics } = parse(`
+                sub main(param as ((string or integer) or (float or dynamic)))
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+
+        it('allows complicated grouped type expression', () => {
+            let { diagnostics } = parse(`
+                sub main(param as (({name as string} and {age as integer}) or (string and SomeInterface) or Klass and roAssociativeArray) )
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+    });
+
+    describe('union types', () => {
+
+        it('is not allowed in brightscript mode', () => {
+            let parser = parse(`
+                sub main(param as string or integer)
+                    print param
+                end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()]);
+        });
+
+        it('allows union types in parameters', () => {
+            let { diagnostics } = parse(`
+                sub main(param as string or integer)
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows union types in type casts', () => {
+            let { diagnostics } = parse(`
+                sub main(val)
+                    printThing(val as string or integer)
+                end sub
+                sub printThing(thing as string or integer)
+                    print thing
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+    });
+
+
+    describe('intersection types', () => {
+
+        it('is not allowed in brightscript mode', () => {
+            let parser = parse(`
+                sub main(param as string and integer)
+                    print param
+                end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()]);
+        });
+
+        it('allows intersection types in parameters', () => {
+            let { diagnostics } = parse(`
+                sub main(param as string and integer)
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows intersection types in type casts', () => {
+            let { diagnostics } = parse(`
+                sub main(val)
+                    printThing(val as string and integer)
+                end sub
+                sub printThing(thing as string and integer)
+                    print thing
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        describe('invalid syntax', () => {
+
+            it('flags union type with missing sides', () => {
+                let { diagnostics } = parse(`
+                    sub main(param as Thing or )
+                        print param
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.expectedIdentifierAfterKeyword('or').message]);
+            });
+
+            it('flags missing type inside binary type', () => {
+                let { diagnostics } = parse(`
+                    sub main(param as string or and float)
+                        print param
+                    end sub
+                `, ParseMode.BrighterScript);
+                expect(diagnostics[0]?.message).to.exist;
+            });
+        });
+    });
+
     describe('typecast statement', () => {
         it('allows typecast statement ', () => {
             let { ast, diagnostics } = parse(`
