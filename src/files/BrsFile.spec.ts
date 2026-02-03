@@ -4314,7 +4314,7 @@ describe('BrsFile', () => {
         });
 
 
-        it('allows intersectiion types for primitives', () => {
+        it('allows intersection types for primitives', () => {
             testTranspile(`
                 sub main(x as string and float, y as object and float or string)
                 end sub
@@ -4566,6 +4566,23 @@ describe('BrsFile', () => {
             });
         });
 
+        describe('for each loop with types', () => {
+            it('transpiles to untyped for each', () => {
+                testTranspile(`
+                    sub foo(items as string[])
+                        for each item as string in items
+                            print item
+                        end for
+                    end sub
+                `, `
+                    sub foo(items as dynamic)
+                        for each item in items
+                            print item
+                        end for
+                    end sub
+                `);
+            });
+        });
     });
 
     it('allows up to 63 function params', () => {
