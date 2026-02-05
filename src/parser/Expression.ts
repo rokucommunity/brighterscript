@@ -1513,8 +1513,11 @@ export class TemplateStringExpression extends Expression {
 
                     //wrap all other expressions with a bslib_toString call to prevent runtime type mismatch errors
                 } else {
+                    if (state.bslibSuffix) {
+                        state.usedBslibFunctions.add('toString');
+                    }
                     add(
-                        state.bslibPrefix + '_toString(',
+                        state.bslibPrefix + '_toString' + state.bslibSuffix + '(',
                         ...expression.transpile(state),
                         ')'
                     );
@@ -1773,8 +1776,11 @@ export class TernaryExpression extends Expression {
             );
             state.blockDepth--;
         } else {
+            if (state.bslibSuffix) {
+                state.usedBslibFunctions.add('ternary');
+            }
             result.push(
-                state.sourceNode(this.test, state.bslibPrefix + `_ternary(`),
+                state.sourceNode(this.test, state.bslibPrefix + `_ternary` + state.bslibSuffix + `(`),
                 ...this.test.transpile(state),
                 state.sourceNode(this.test, `, `),
                 ...this.consequent?.transpile(state) ?? ['invalid'],
@@ -1877,8 +1883,11 @@ export class NullCoalescingExpression extends Expression {
             );
             state.blockDepth--;
         } else {
+            if (state.bslibSuffix) {
+                state.usedBslibFunctions.add('coalesce');
+            }
             result.push(
-                state.bslibPrefix + `_coalesce(`,
+                state.bslibPrefix + `_coalesce` + state.bslibSuffix + `(`,
                 ...this.consequent.transpile(state),
                 ', ',
                 ...this.alternate.transpile(state),
