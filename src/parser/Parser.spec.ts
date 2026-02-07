@@ -3005,6 +3005,96 @@ describe('parser', () => {
             expectZeroDiagnostics(diagnostics);
         });
     });
+
+    describe.only('typed functions as types', () => {
+        it('disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                function test(func as function())
+                    return func()
+                end function
+             `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('typed function types')
+            ]);
+        });
+
+        it('can be passed as param types', () => {
+            let { diagnostics } = parse(`
+                function test(func as function())
+                    return func()
+                end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have a return type', () => {
+            let { diagnostics } = parse(`
+                function test(func as sub() as integer) as integer
+                    return func()
+                end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can use sub or function', () => {
+            let { diagnostics } = parse(`
+                function test(func as sub() as integer) as integer
+                    return func()
+                end function
+
+                function test2(func as function() as integer) as integer
+                    return func()
+                 end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have primitive parameters', () => {
+            let { diagnostics } = parse(`
+                function test(func as function(string, integer) as integer) as integer
+                    return func("hello", 123)
+                end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have complex parameters', () => {
+            let { diagnostics } = parse(`
+                interface IFace
+                    name as string
+                end interface
+
+                function test(func as function(IFace) as integer) as integer
+                    return func({name: "hello"})
+                end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have compound parameters', () => {
+            let { diagnostics } = parse(`
+                interface IFace
+                    name as string
+                end interface
+
+                function test(func as function(string or integer, IFace) as integer) as integer
+                    return func("hello", {name: "hello"})
+                end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can be used as return types', () => {
+            let { diagnostics } = parse(`
+                function test() as function() as integer
+                    return function() as integer
+                        return 123
+                    end function
+                end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+    });
 });
 
 export function parse(text: string, mode?: ParseMode, bsConsts: Record<string, boolean> = {}) {

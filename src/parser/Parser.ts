@@ -96,7 +96,8 @@ import {
     XmlAttributeGetExpression,
     PrintSeparatorExpression,
     InlineInterfaceExpression,
-    InlineInterfaceMemberExpression
+    InlineInterfaceMemberExpression,
+    TypedFunctionTypeExpression
 } from './Expression';
 import type { Range } from 'vscode-languageserver';
 import type { Logger } from '../logging';
@@ -3108,9 +3109,13 @@ export class Parser {
      * @returns an expression that was successfully parsed
      */
     private getTypeExpressionPart(changedTokens: { token: Token; oldKind: TokenKind }[]) {
-        let expr: VariableExpression | DottedGetExpression | TypedArrayExpression | InlineInterfaceExpression | GroupingExpression;
+        let expr: VariableExpression | DottedGetExpression | TypedArrayExpression | InlineInterfaceExpression | GroupingExpression | TypedFunctionTypeExpression;
 
-        if (this.checkAny(...DeclarableTypes)) {
+        if (this.checkAny(TokenKind.Sub, TokenKind.Function) && this.checkNext(TokenKind.LeftParen)) {
+            // this is a tyyed function type expression, eg. "function(type1, type2) as type3"
+            this.warnIfNotBrighterScriptMode('typed function types');
+            expr = this.typedFunctionTypeExpression();
+        } else if (this.checkAny(...DeclarableTypes)) {
             // if this is just a type, just use directly
             expr = new VariableExpression({ name: this.advance() as Identifier });
         } else {
@@ -3164,6 +3169,41 @@ export class Parser {
         }
 
         return expr;
+    }
+
+    private typedFunctionTypeExpression() {
+        const funcOrSub = this.advance();
+        const openParen = this.consume(DiagnosticMessages.expectedToken(TokenKind.LeftParen), TokenKind.LeftParen);
+        const parameterTypes: TypeExpression[] = [];
+
+        while (!this.check(TokenKind.RightParen)) {
+            parameterTypes.push(this.typeExpression());
+            if (!this.check(TokenKind.Comma)) {
+                break;
+            } else {
+                this.advance(); //consume comma
+            }
+        }
+        const closeParen = this.consume(
+            DiagnosticMessages.unmatchedLeftToken(openParen.text, 'function type expression'),
+            TokenKind.RightParen
+        );
+
+        let asToken: Token;
+        let returnType: TypeExpression;
+
+        if (this.check(TokenKind.As)) {
+            [asToken, returnType] = this.consumeAsTokenAndTypeExpression();
+        }
+        return new TypedFunctionTypeExpression({
+            functionType: funcOrSub,
+            rightParen: openParen,
+            parameterTypes: parameterTypes,
+            leftParen: closeParen,
+            as: asToken,
+            returnType: returnType
+        });
+
     }
 
 

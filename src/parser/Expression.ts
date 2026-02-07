@@ -2902,6 +2902,87 @@ export class InlineInterfaceMemberExpression extends Expression {
     }
 }
 
+export class TypedFunctionTypeExpression extends Expression {
+    constructor(options: {
+        functionType?: Token;
+        leftParen?: Token;
+        parameterTypes: TypeExpression[];
+        rightParen?: Token;
+        as?: Token;
+        returnType?: TypeExpression;
+
+    }) {
+        super();
+        this.tokens = {
+            functionType: options.functionType,
+            leftParen: options.leftParen,
+            rightParen: options.rightParen,
+            as: options.as
+        };
+        this.parameterTypes = options.parameterTypes;
+        this.returnType = options.returnType;
+        this.location = util.createBoundingLocation(
+            this.tokens.functionType,
+            this.tokens.leftParen,
+            ...this.parameterTypes,
+            this.tokens.rightParen,
+            this.tokens.as,
+            this.returnType
+        );
+    }
+
+    public readonly kind = AstNodeKind.TypedFunctionTypeExpression;
+
+    public readonly tokens: {
+        readonly functionType?: Token;
+        readonly leftParen?: Token;
+        readonly rightParen?: Token;
+        readonly as?: Token;
+    };
+
+    public readonly parameterTypes: TypeExpression[];
+    public readonly returnType?: TypeExpression;
+
+    public readonly location: Location;
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return [this.getType({ flags: SymbolTypeFlag.typetime }).toTypeString()];
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walkArray(this.parameterTypes, visitor, options, this);
+            walk(this, 'returnType', visitor, options);
+        }
+    }
+
+    public getType(options: GetTypeOptions): BscType {
+        const paramTypes = this.parameterTypes.map(p => p.getType(options));
+        const returnType = this.returnType?.getType(options) ?? DynamicType.instance;
+        const functionType = new TypedFunctionType(returnType);
+        for (let i = 0; i < paramTypes.length; i++) {
+            functionType.addParameter(`arg${i + 1}`, paramTypes[i], false);
+        }
+        functionType.setSub(this.tokens.functionType?.kind === TokenKind.Sub);
+        return functionType;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new TypedFunctionTypeExpression({
+                functionType: util.cloneToken(this.tokens.functionType),
+                leftParen: util.cloneToken(this.tokens.leftParen),
+                parameterTypes: this.parameterTypes?.map(x => x?.clone()),
+                rightParen: util.cloneToken(this.tokens.rightParen),
+                as: util.cloneToken(this.tokens.as),
+                returnType: this.returnType?.clone()
+            }),
+            ['parameterTypes', 'returnType']
+        );
+    }
+}
+
+
 /**
  * A list of names of functions that are restricted from being stored to a
  * variable, property, or passed as an argument. (i.e. `type` or `createobject`).
