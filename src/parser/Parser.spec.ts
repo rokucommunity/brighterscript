@@ -3006,7 +3006,7 @@ describe('parser', () => {
         });
     });
 
-    describe.only('typed functions as types', () => {
+    describe('typed functions as types', () => {
         it('disallowed in brightscript mode', () => {
             let { diagnostics } = parse(`
                 function test(func as function())

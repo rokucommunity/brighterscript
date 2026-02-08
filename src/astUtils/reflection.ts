@@ -349,6 +349,10 @@ export function isTypedFunctionType(value: any): value is TypedFunctionType {
     return value?.kind === BscTypeKind.TypedFunctionType;
 }
 
+export function isTypedFunctionTypeLike(value: any): value is TypedFunctionType {
+    return isTypedFunctionType(value) || isTypeStatementTypeOf(value, isTypedFunctionTypeLike) || isUnionTypeOf(value, isTypedFunctionTypeLike);
+}
+
 export function isFunctionType(value: any): value is FunctionType {
     return value?.kind === BscTypeKind.FunctionType;
 }
@@ -492,7 +496,12 @@ export function isCallFuncableType(target): target is CallFuncableType {
 }
 
 export function isCallableType(target): target is BaseFunctionType {
-    return isFunctionTypeLike(target) || isTypedFunctionType(target) || isObjectType(target) || (isDynamicType(target) && !isAnyReferenceType(target));
+    return isFunctionTypeLike(target) ||
+        isTypedFunctionTypeLike(target) ||
+        isTypeStatementTypeOf(target, isCallableType) ||
+        isUnionTypeOf(target, isCallableType) ||
+        isObjectType(target) ||
+        (isDynamicType(target) && !isAnyReferenceType(target));
 }
 
 export function isAnyReferenceType(target): target is AnyReferenceType {

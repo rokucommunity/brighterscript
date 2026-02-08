@@ -1,6 +1,6 @@
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { SymbolTable } from '../SymbolTable';
-import { isComponentType, isDynamicType, isInvalidType, isObjectType, isReferenceType } from '../astUtils/reflection';
+import { isComponentType, isDynamicType, isInvalidType, isObjectType, isReferenceType, isTypeStatementType } from '../astUtils/reflection';
 import type { TypeCompatibilityData } from '../interfaces';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
@@ -22,6 +22,9 @@ export class ComponentType extends CallFuncableType {
     }
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
+        while (isTypeStatementType(targetType)) {
+            targetType = targetType.wrappedType;
+        }
         if (this.isEqual(targetType)) {
             return true;
         } else if (isInvalidType(targetType) ||

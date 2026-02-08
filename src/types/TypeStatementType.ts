@@ -1,6 +1,7 @@
 import { BscType } from './BscType';
 import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { BscTypeKind } from './BscTypeKind';
+import { isCallableType } from '../astUtils/reflection';
 
 export class TypeStatementType extends BscType {
 
@@ -50,6 +51,13 @@ export class TypeStatementType extends BscType {
 
     getCallFuncTable() {
         return this.wrappedType.getCallFuncTable();
+    }
+
+    get returnType() {
+        if (isCallableType(this.wrappedType)) {
+            return this.wrappedType.returnType;
+        }
+        return undefined;
     }
 
 }

@@ -1,5 +1,5 @@
 import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
-import { isDynamicType, isObjectType, isTypedFunctionType, isUnionType } from '../astUtils/reflection';
+import { isDynamicType, isObjectType, isTypedFunctionType, isTypeStatementType, isUnionType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { ReferenceType } from './ReferenceType';
 import { addAssociatedTypesTableAsSiblingToMemberTable, findTypeUnion, findTypeUnionDeepCheck, getAllTypesFromCompoundType, getUniqueType, isEnumTypeCompatible, joinTypesString } from './helpers';
@@ -117,6 +117,9 @@ export class UnionType extends BscType {
 
 
     isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData): boolean {
+        while (isTypeStatementType(targetType)) {
+            targetType = targetType.wrappedType;
+        }
         if (isDynamicType(targetType) || isObjectType(targetType) || this === targetType) {
             return true;
         }
