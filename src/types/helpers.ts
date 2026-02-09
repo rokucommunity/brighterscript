@@ -1,5 +1,5 @@
 import type { TypeCompatibilityData } from '../interfaces';
-import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isAssociativeArrayTypeLike, isCompoundType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isIntersectionType, isObjectType, isReferenceType, isTypePropertyReferenceType, isTypeStatement, isTypeStatementType, isUnionType, isUnionTypeOf, isVoidType } from '../astUtils/reflection';
+import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isAssociativeArrayTypeLike, isCompoundType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isIntersectionType, isObjectType, isReferenceType, isTypePropertyReferenceType, isTypeStatementType, isUnionType, isUnionTypeOf, isVoidType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import type { UnionType } from './UnionType';
 import type { SymbolTable } from '../SymbolTable';

@@ -1,4 +1,4 @@
-import { isDynamicType, isObjectType, isTypedFunctionType } from '../astUtils/reflection';
+import { isDynamicType, isObjectType, isTypedFunctionType, isTypeStatementType } from '../astUtils/reflection';
 import { BaseFunctionType } from './BaseFunctionType';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
@@ -52,6 +52,9 @@ export class TypedFunctionType extends BaseFunctionType {
     }
 
     public isTypeCompatible(targetType: BscType, data: TypeCompatibilityData = {}) {
+        while (isTypeStatementType(targetType)) {
+            targetType = targetType.wrappedType;
+        }
         if (
             isDynamicType(targetType) ||
             isObjectType(targetType) ||

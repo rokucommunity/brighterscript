@@ -7,7 +7,7 @@ import type { TypeCompatibilityData } from '../../interfaces';
 import { IntegerType } from '../../types/IntegerType';
 import { StringType } from '../../types/StringType';
 import type { BrsFile } from '../../files/BrsFile';
-import { FloatType, InterfaceType, TypedFunctionType, VoidType, BooleanType } from '../../types';
+import { FloatType, InterfaceType, TypedFunctionType, VoidType, BooleanType, ArrayType } from '../../types';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import undent from 'undent';
@@ -290,6 +290,31 @@ describe('ScopeValidator', () => {
 
                 sub main(thing as IFirst and ISecond)
                     thing.doThing2(thing.num)
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(2, 1).message
+            ]);
+        });
+
+        it('validates against typed functions types', () => {
+            program.setFile('source/main.bs', `
+                sub main(cb as function(integer, string) as void)
+                    cb(1)
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.mismatchArgumentCount(2, 1).message
+            ]);
+        });
+
+        it('validates against typed functions types from type statements', () => {
+            program.setFile('source/main.bs', `
+                type Callback = function(integer, string) as void
+                sub main(cb as Callback)
+                    cb(1)
                 end sub
             `);
             program.validate();
@@ -2249,6 +2274,130 @@ describe('ScopeValidator', () => {
                 program.validate();
                 expectDiagnostics(program, [
                     DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
+            });
+        });
+
+        describe('typed function type expressions', () => {
+            it('allows using typed function type expressions correctly', () => {
+                program.setFile('source/main.bs', `
+                    sub main(myFunc as function(integer) as string)
+                        print myFunc(123)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates using typed function type expressions incorrectly', () => {
+                program.setFile('source/main.bs', `
+                    sub main(myFunc as function(integer) as string)
+                        print myFunc("123")
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+                ]);
+            });
+
+            it('validates using typed function type expressions from type statements', () => {
+                program.setFile('source/main.bs', `
+                    type MyFuncType = function(integer) as string
+
+                    sub main(myFunc as MyFuncType)
+                        print myFunc("123")
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+                ]);
+            });
+
+            it('validates using typed function type expressions from type statements', () => {
+                program.setFile('source/main.bs', `
+                    type MyFuncType = function(integer) as string
+
+                    sub main(myFunc as MyFuncType)
+                        print myFunc("123")
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+                ]);
+            });
+
+            it('validates using typed function type expressions returned from other functions', () => {
+                program.setFile('source/main.bs', `
+                    function getFunc() as function(integer) as string
+                        return function(x as integer) as string
+                            return "hello " + x.toStr()
+                        end function
+                    end function
+
+                    sub main()
+                        myFunc = getFunc()
+                        print myFunc("123")
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+                ]);
+            });
+
+            it('validates using typed function type expressions with complex arguments', () => {
+                program.setFile('source/main.bs', `
+                    type MyFuncType = function({id as integer}, IFace) as string
+
+                    interface IFace
+                        name as string
+                        data as float[]
+                    end interface
+
+                    sub main(myFunc as MyFuncType)
+                        print myFunc({id: "123"}, {name: false})
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('roAssociativeArray', '{id as integer}', {
+                        fieldMismatches: [
+                            { name: 'id', expectedType: IntegerType.instance, actualType: StringType.instance }
+                        ]
+                    }).message,
+                    DiagnosticMessages.argumentTypeMismatch('roAssociativeArray', 'IFace', {
+                        fieldMismatches: [
+                            { name: 'name', expectedType: StringType.instance, actualType: BooleanType.instance }
+                        ],
+                        missingFields: [
+                            { name: 'data', expectedType: new ArrayType(FloatType.instance) }
+                        ]
+                    }).message
+                ]);
+            });
+
+            it('validates passing an incompatible typed function type expression as an argument', () => {
+                program.setFile('source/main.bs', `
+                    sub useFunc(myFunc as function(integer) as string)
+                        print myFunc(123)
+                    end sub
+
+                    sub otherFunc()
+                        useFunc(function(a, b) as void
+                                print a
+                                print b
+                            end function)
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('function (a as dynamic, b as dynamic) as void', 'function (arg1 as integer) as string', {
+                        expectedParamCount: 1,
+                        actualParamCount: 2
+                    }).message
                 ]);
             });
         });

@@ -1,5 +1,5 @@
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
-import { isAliasStatement, isArrayType, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallFuncableTypeLike, isCallableType, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isIterableType, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isArrayType, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallFuncableTypeLike, isCallableType, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isIterableType, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypeStatementType, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -558,6 +558,9 @@ export class ScopeValidator {
      * Detect calls to functions with the incorrect number of parameters, or wrong types of arguments
      */
     private validateFunctionCall(file: BrsFile, callee: Expression, funcType: BscType, callErrorLocation: Location, args: Expression[], argOffset = 0) {
+        while (isTypeStatementType(funcType)) {
+            funcType = funcType.wrappedType;
+        }
         if (!funcType?.isResolvable() || !isCallableType(funcType) || isCompoundType(funcType)) {
             const funcName = util.getAllDottedGetPartsAsString(callee, ParseMode.BrighterScript, isCallfuncExpression(callee) ? '@.' : '.');
             if (isUnionType(funcType)) {
