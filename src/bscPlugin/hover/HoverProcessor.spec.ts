@@ -818,6 +818,101 @@ describe('HoverProcessor', () => {
             hover = program.getHover(file.srcPath, util.createPosition(6, 29))[0];
             expect(hover?.contents).to.eql([`${fence('input as {name as string}')}${commentSep}from doc comment`]);
         });
+
+        it('should show the expansion of a type statement type', () => {
+            const file = program.setFile('source/main.bs', `
+                type MyType = {
+                    name as string
+                    age as integer
+                }
+
+                sub fooFunc(input as MyType)
+                    print input.name
+                end sub
+            `);
+            program.validate();
+
+            // print input.na|me
+            let hover = program.getHover(file.srcPath, util.createPosition(7, 35))[0];
+            expect(hover?.contents).to.eql([fence('MyType.name as string')]);
+            // print in|put.name
+            hover = program.getHover(file.srcPath, util.createPosition(7, 29))[0];
+            expect(hover?.contents).to.eql([fence('input as MyType')]);
+        });
+
+        it('should show type statement type when hovering on the type name in the parameter list', () => {
+            const file = program.setFile('source/main.bs', `
+                type MyType = {
+                    name as string
+                    age as integer
+                }
+
+                sub fooFunc(input as MyType)
+                    print input.name
+                end sub
+            `);
+            program.validate();
+
+            // sub fooFunc(input as MyT|ype)
+            let hover = program.getHover(file.srcPath, util.createPosition(6, 41))[0];
+            expect(hover?.contents).to.eql([fence('type MyType')]);
+        });
+
+        it('should show a hover on a typed function type parameter', () => {
+            const file = program.setFile('source/main.bs', `
+                sub fooFunc(callback as function(string) as integer)
+                    callback("hello")
+                end sub
+            `);
+            program.validate();
+
+            // callback as func|tion(string) as integer
+            let hover = program.getHover(file.srcPath, util.createPosition(1, 45))[0];
+            expect(hover?.contents).to.eql([fence('function (arg1 as string) as integer')]);
+            // call|back as function(string) as integer
+            hover = program.getHover(file.srcPath, util.createPosition(1, 33))[0];
+            expect(hover?.contents).to.eql([fence('function callback(arg1 as string) as integer')]);
+        });
+
+        it('should show a proper hover on inline anon functions', () => {
+            const file = program.setFile('source/main.bs', `
+                sub fooFunc()
+                    callback = function(arg as string) as integer
+                        return arg.len()
+                    end function
+                    print callback("hello")
+                end sub
+            `);
+            program.validate();
+
+            // callback = fun|ction(arg as string) as integer
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 34))[0];
+            expect(hover?.contents).to.eql([fence('function (arg as string) as integer')]);
+            // print call|back("hello")
+            hover = program.getHover(file.srcPath, util.createPosition(5, 30))[0];
+            expect(hover?.contents).to.eql([fence('function callback(arg as string) as integer')]);
+        });
+
+        it('should show a proper hover on inline anon functions', () => {
+            const file = program.setFile('source/main.bs', `
+                sub useFunc(myFunc as function(integer) as string)
+                    print myFunc(123)
+                end sub
+
+                sub otherFunc()
+                    useFunc(function(a, b = invalid) as string
+                        print a
+                        print b
+                        return ""
+                    end function)
+                end sub
+            `);
+            program.validate();
+
+            //  useFunc(fun|ction(a, b = invalid) as string
+            let hover = program.getHover(file.srcPath, util.createPosition(6, 34))[0];
+            expect(hover?.contents).to.eql([fence('function (a as dynamic, b? as dynamic) as string')]);
+        });
     });
 
     describe('callFunc', () => {
