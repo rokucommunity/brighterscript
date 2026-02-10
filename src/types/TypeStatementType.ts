@@ -12,9 +12,12 @@ export class TypeStatementType extends BscType {
     }
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
-        return (
-            this.wrappedType.isTypeCompatible(targetType, data)
-        );
+        data = data || {};
+        if (!data.expectedType) {
+            data.expectedType = this;
+        }
+
+        return this.wrappedType.isTypeCompatible(targetType, data);
     }
 
     public toString() {

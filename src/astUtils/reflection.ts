@@ -349,7 +349,7 @@ export function isTypedFunctionType(value: any): value is TypedFunctionType {
     return value?.kind === BscTypeKind.TypedFunctionType;
 }
 
-export function isTypedFunctionTypeLike(value: any): value is TypedFunctionType {
+export function isTypedFunctionTypeLike(value: any): value is TypedFunctionType | TypeStatementType | UnionType {
     return isTypedFunctionType(value) || isTypeStatementTypeOf(value, isTypedFunctionTypeLike) || isUnionTypeOf(value, isTypedFunctionTypeLike);
 }
 

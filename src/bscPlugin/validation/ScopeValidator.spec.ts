@@ -2400,6 +2400,24 @@ describe('ScopeValidator', () => {
                     }).message
                 ]);
             });
+
+            it('allows passing a function with additional optional parameters', () => {
+                program.setFile('source/main.bs', `
+                    type MyFuncType1 = function(integer) as string
+                    sub useFunc(myFunc as MyFuncType1)
+                        print myFunc(123)
+                    end sub
+                    sub otherFunc()
+                        useFunc(function(a as integer,  b = "" as string) as string
+                                print a
+                                print b
+                                return "hello"
+                            end function)
+                    end sub
+               `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
         });
     });
 

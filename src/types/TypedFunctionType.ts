@@ -52,6 +52,10 @@ export class TypedFunctionType extends BaseFunctionType {
     }
 
     public isTypeCompatible(targetType: BscType, data: TypeCompatibilityData = {}) {
+        data = data || {};
+        if (!data.actualType) {
+            data.actualType = targetType;
+        }
         while (isTypeStatementType(targetType)) {
             targetType = targetType.wrappedType;
         }
@@ -123,8 +127,8 @@ export class TypedFunctionType extends BaseFunctionType {
                     data.actualParamCount = targetType.params.filter(p => !p.isOptional).length;
                 }
                 data.parameterMismatches.push({ index: i, data: paramTypeData });
-                data.expectedType = this;
-                data.actualType = targetType;
+                data.expectedType = data.expectedType ?? this;
+                data.actualType = data.actualType ?? targetType;
                 return false;
             }
             if ((!allowOptionalParamDifferences && myParam.isOptional !== targetParam.isOptional) ||
@@ -153,8 +157,8 @@ export class TypedFunctionType extends BaseFunctionType {
             data = data ?? {};
             data.expectedVariadic = this.isVariadic;
             data.actualVariadic = targetType.isVariadic;
-            data.expectedType = this;
-            data.actualType = targetType;
+            data.expectedType = data.expectedType ?? this;
+            data.actualType = data.actualType ?? targetType;
             return false;
         }
         //made it here, all params and return type pass predicate
