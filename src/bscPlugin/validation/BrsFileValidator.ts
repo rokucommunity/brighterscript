@@ -1,4 +1,4 @@
-import { isAliasStatement, isBlock, isBody, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypecastExpression, isTypecastStatement, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isBlock, isBody, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypecastExpression, isTypecastStatement, isTypedFunctionType, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -195,6 +195,9 @@ export class BrsFileValidator {
                 this.validateFunctionParameterCount(node);
             },
             FunctionParameterExpression: (node) => {
+                if (isTypedFunctionType(node.parent)) {
+                    return;
+                }
                 const paramName = node.tokens?.name?.text;
                 if (!paramName) {
                     return;

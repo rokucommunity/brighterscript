@@ -3174,15 +3174,19 @@ export class Parser {
     private typedFunctionTypeExpression() {
         const funcOrSub = this.advance();
         const openParen = this.consume(DiagnosticMessages.expectedToken(TokenKind.LeftParen), TokenKind.LeftParen);
-        const parameterTypes: TypeExpression[] = [];
+        const params: FunctionParameterExpression[] = [];
 
         while (!this.check(TokenKind.RightParen)) {
-            parameterTypes.push(this.typeExpression());
-            if (!this.check(TokenKind.Comma)) {
-                break;
-            } else {
-                this.advance(); //consume comma
-            }
+            do {
+                if (params.length >= CallExpression.MaximumArguments) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.tooManyCallableParameters(params.length, CallExpression.MaximumArguments),
+                        location: this.peek().location
+                    });
+                }
+
+                params.push(this.functionParameter());
+            } while (this.match(TokenKind.Comma));
         }
         const closeParen = this.consume(
             DiagnosticMessages.unmatchedLeftToken(openParen.text, 'function type expression'),
@@ -3198,7 +3202,7 @@ export class Parser {
         return new TypedFunctionTypeExpression({
             functionType: funcOrSub,
             rightParen: openParen,
-            parameterTypes: parameterTypes,
+            params: params,
             leftParen: closeParen,
             as: asToken,
             returnType: returnType

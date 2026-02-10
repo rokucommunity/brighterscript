@@ -2909,7 +2909,7 @@ export class TypedFunctionTypeExpression extends Expression {
     constructor(options: {
         functionType?: Token;
         leftParen?: Token;
-        parameterTypes: TypeExpression[];
+        params?: FunctionParameterExpression[];
         rightParen?: Token;
         as?: Token;
         returnType?: TypeExpression;
@@ -2922,12 +2922,12 @@ export class TypedFunctionTypeExpression extends Expression {
             rightParen: options.rightParen,
             as: options.as
         };
-        this.parameterTypes = options.parameterTypes;
+        this.params = options.params;
         this.returnType = options.returnType;
         this.location = util.createBoundingLocation(
             this.tokens.functionType,
             this.tokens.leftParen,
-            ...this.parameterTypes,
+            ...this.params,
             this.tokens.rightParen,
             this.tokens.as,
             this.returnType
@@ -2943,7 +2943,7 @@ export class TypedFunctionTypeExpression extends Expression {
         readonly as?: Token;
     };
 
-    public readonly parameterTypes: TypeExpression[];
+    public readonly params: FunctionParameterExpression[];
     public readonly returnType?: TypeExpression;
 
     public readonly location: Location;
@@ -2954,13 +2954,13 @@ export class TypedFunctionTypeExpression extends Expression {
 
     public walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
-            walkArray(this.parameterTypes, visitor, options, this);
+            walkArray(this.params, visitor, options, this);
             walk(this, 'returnType', visitor, options);
         }
     }
 
     public getType(options: GetTypeOptions): BscType {
-        const paramTypes = this.parameterTypes.map(p => p.getType({ ...options, typeChain: undefined })); // no typechain info needed for parameters}));
+        const paramTypes = this.params.map(p => p.getType({ ...options, typeChain: undefined })); // no typechain info needed for parameters}));
         const returnType = this.returnType?.getType({ ...options, typeChain: undefined }) ?? DynamicType.instance;
         const functionType = new TypedFunctionType(returnType);
         for (let i = 0; i < paramTypes.length; i++) {
@@ -2983,12 +2983,12 @@ export class TypedFunctionTypeExpression extends Expression {
             new TypedFunctionTypeExpression({
                 functionType: util.cloneToken(this.tokens.functionType),
                 leftParen: util.cloneToken(this.tokens.leftParen),
-                parameterTypes: this.parameterTypes?.map(x => x?.clone()),
+                params: this.params?.map(x => x?.clone()),
                 rightParen: util.cloneToken(this.tokens.rightParen),
                 as: util.cloneToken(this.tokens.as),
                 returnType: this.returnType?.clone()
             }),
-            ['parameterTypes', 'returnType']
+            ['params', 'returnType']
         );
     }
 }

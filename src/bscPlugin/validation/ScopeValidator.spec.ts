@@ -300,7 +300,7 @@ describe('ScopeValidator', () => {
 
         it('validates against typed functions types', () => {
             program.setFile('source/main.bs', `
-                sub main(cb as function(integer, string) as void)
+                sub main(cb as function(num as integer, name as string) as void)
                     cb(1)
                 end sub
             `);
@@ -312,7 +312,7 @@ describe('ScopeValidator', () => {
 
         it('validates against typed functions types from type statements', () => {
             program.setFile('source/main.bs', `
-                type Callback = function(integer, string) as void
+                type Callback = function(num as integer, name as string) as void
                 sub main(cb as Callback)
                     cb(1)
                 end sub
@@ -2281,7 +2281,7 @@ describe('ScopeValidator', () => {
         describe('typed function type expressions', () => {
             it('allows using typed function type expressions correctly', () => {
                 program.setFile('source/main.bs', `
-                    sub main(myFunc as function(integer) as string)
+                    sub main(myFunc as function(num as integer) as string)
                         print myFunc(123)
                     end sub
                 `);
@@ -2291,7 +2291,7 @@ describe('ScopeValidator', () => {
 
             it('validates using typed function type expressions incorrectly', () => {
                 program.setFile('source/main.bs', `
-                    sub main(myFunc as function(integer) as string)
+                    sub main(myFunc as function(num as integer) as string)
                         print myFunc("123")
                     end sub
                 `);
@@ -2303,7 +2303,7 @@ describe('ScopeValidator', () => {
 
             it('validates using typed function type expressions from type statements', () => {
                 program.setFile('source/main.bs', `
-                    type MyFuncType = function(integer) as string
+                    type MyFuncType = function(num as integer) as string
 
                     sub main(myFunc as MyFuncType)
                         print myFunc("123")
@@ -2317,7 +2317,7 @@ describe('ScopeValidator', () => {
 
             it('validates using typed function type expressions from type statements', () => {
                 program.setFile('source/main.bs', `
-                    type MyFuncType = function(integer) as string
+                    type MyFuncType = function(num as integer) as string
 
                     sub main(myFunc as MyFuncType)
                         print myFunc("123")
@@ -2331,7 +2331,7 @@ describe('ScopeValidator', () => {
 
             it('validates using typed function type expressions returned from other functions', () => {
                 program.setFile('source/main.bs', `
-                    function getFunc() as function(integer) as string
+                    function getFunc() as function(num as integer) as string
                         return function(x as integer) as string
                             return "hello " + x.toStr()
                         end function
@@ -2350,7 +2350,7 @@ describe('ScopeValidator', () => {
 
             it('validates using typed function type expressions with complex arguments', () => {
                 program.setFile('source/main.bs', `
-                    type MyFuncType = function({id as integer}, IFace) as string
+                    type MyFuncType = function(arg1 as {id as integer}, arg2 as IFace) as string
 
                     interface IFace
                         name as string
@@ -2381,7 +2381,7 @@ describe('ScopeValidator', () => {
 
             it('validates passing an incompatible typed function type expression as an argument', () => {
                 program.setFile('source/main.bs', `
-                    sub useFunc(myFunc as function(integer) as string)
+                    sub useFunc(myFunc as function(num as integer) as string)
                         print myFunc(123)
                     end sub
 
@@ -2403,7 +2403,7 @@ describe('ScopeValidator', () => {
 
             it('allows passing a function with additional optional parameters', () => {
                 program.setFile('source/main.bs', `
-                    type MyFuncType1 = function(integer) as string
+                    type MyFuncType1 = function(num as integer) as string
                     sub useFunc(myFunc as MyFuncType1)
                         print myFunc(123)
                     end sub

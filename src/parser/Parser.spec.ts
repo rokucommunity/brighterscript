@@ -3051,7 +3051,7 @@ describe('parser', () => {
 
         it('can have primitive parameters', () => {
             let { diagnostics } = parse(`
-                function test(func as function(string, integer) as integer) as integer
+                function test(func as function(name as string, num as integer) as integer) as integer
                     return func("hello", 123)
                 end function
              `, ParseMode.BrighterScript);
@@ -3064,7 +3064,7 @@ describe('parser', () => {
                     name as string
                 end interface
 
-                function test(func as function(IFace) as integer) as integer
+                function test(func as function(thing as IFace) as integer) as integer
                     return func({name: "hello"})
                 end function
              `, ParseMode.BrighterScript);
@@ -3077,7 +3077,7 @@ describe('parser', () => {
                     name as string
                 end interface
 
-                function test(func as function(string or integer, IFace) as integer) as integer
+                function test(func as function(arg1 as string or integer, arg2 asIFace) as integer) as integer
                     return func("hello", {name: "hello"})
                 end function
              `, ParseMode.BrighterScript);
@@ -3087,6 +3087,18 @@ describe('parser', () => {
         it('can be used as return types', () => {
             let { diagnostics } = parse(`
                 function test() as function() as integer
+                    return function() as integer
+                        return 123
+                    end function
+                end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have a union as return type', () => {
+            let { diagnostics } = parse(`
+                type foo = function() as integer or string
+                function test() as foo
                     return function() as integer
                         return 123
                     end function

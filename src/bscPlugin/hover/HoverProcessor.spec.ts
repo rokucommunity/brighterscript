@@ -860,18 +860,18 @@ describe('HoverProcessor', () => {
 
         it('should show a hover on a typed function type parameter', () => {
             const file = program.setFile('source/main.bs', `
-                sub fooFunc(callback as function(string) as integer)
+                sub fooFunc(callback as function(name as string) as integer)
                     callback("hello")
                 end sub
             `);
             program.validate();
 
-            // callback as func|tion(string) as integer
+            // callback as func|tion(name as string) as integer
             let hover = program.getHover(file.srcPath, util.createPosition(1, 45))[0];
-            expect(hover?.contents).to.eql([fence('function (arg1 as string) as integer')]);
-            // call|back as function(string) as integer
+            expect(hover?.contents).to.eql([fence('function (name as string) as integer')]);
+            // call|back as function(name as string) as integer
             hover = program.getHover(file.srcPath, util.createPosition(1, 33))[0];
-            expect(hover?.contents).to.eql([fence('function callback(arg1 as string) as integer')]);
+            expect(hover?.contents).to.eql([fence('function callback(name as string) as integer')]);
         });
 
         it('should show a proper hover on inline anon functions', () => {
@@ -895,7 +895,7 @@ describe('HoverProcessor', () => {
 
         it('should show a proper hover on inline anon functions', () => {
             const file = program.setFile('source/main.bs', `
-                sub useFunc(myFunc as function(integer) as string)
+                sub useFunc(myFunc as function(num as integer) as string)
                     print myFunc(123)
                 end sub
 

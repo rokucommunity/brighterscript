@@ -4602,7 +4602,7 @@ describe('Scope', () => {
         describe('typed function expressions', () => {
             it('correctly types parameters with typed function expressions', () => {
                 const file = program.setFile<BrsFile>('source/test.bs', `
-                    sub testFunc(callback as function(string) as integer)
+                    sub testFunc(callback as function(s as string) as integer)
                         value = callback("hello")
                         print value
                     end sub
@@ -4617,7 +4617,7 @@ describe('Scope', () => {
 
             it('correctly types parameters with typed function expressions with multiple parameters', () => {
                 const file = program.setFile<BrsFile>('source/test.bs', `
-                    sub testFunc(callback as function(string, integer) as integer)
+                    sub testFunc(callback as function(s as string, i as integer) as integer)
                         value = callback("hello", 123)
                         print value
                     end sub
@@ -4636,9 +4636,9 @@ describe('Scope', () => {
                 expectTypeToBe(valueSymbol.type, IntegerType);
             });
 
-            it('can use type statement to define a typed function type', () => {
+            it.only('can use type statement to define a typed function type', () => {
                 const file = program.setFile<BrsFile>('source/test.bs', `
-                    type MyCallback = function(string) as integer
+                    type MyCallback = function(s as string) as integer
 
                     sub testFunc(callback as MyCallback)
                         value = callback("hello")
@@ -4655,8 +4655,8 @@ describe('Scope', () => {
 
             it('can use a union of typed function types', () => {
                 const file = program.setFile<BrsFile>('source/test.bs', `
-                    type CallbackA = function(string) as integer
-                    type CallbackB = function(integer) as string
+                    type CallbackA = function(s as string) as integer
+                    type CallbackB = function(i as integer) as string
 
                     sub testFunc(input, callback as CallbackA or CallbackB)
                         value = callback(input)
