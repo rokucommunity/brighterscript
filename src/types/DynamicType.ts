@@ -1,5 +1,5 @@
 import type { TypeCompatibilityData } from '../interfaces';
-import { isDynamicType, isTypeStatementType, isUninitializedType, isVoidType } from '../astUtils/reflection';
+import { isDynamicType, isUninitializedType, isVoidType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
@@ -42,9 +42,6 @@ export class DynamicType extends BscType {
     }
 
     public isEqual(targetType: BscType) {
-        while (isTypeStatementType(targetType)) {
-            targetType = targetType.wrappedType;
-        }
         return isDynamicType(targetType);
     }
 
