@@ -2960,11 +2960,10 @@ export class TypedFunctionTypeExpression extends Expression {
     }
 
     public getType(options: GetTypeOptions): BscType {
-        const paramTypes = this.params.map(p => p.getType({ ...options, typeChain: undefined })); // no typechain info needed for parameters}));
         const returnType = this.returnType?.getType({ ...options, typeChain: undefined }) ?? DynamicType.instance;
         const functionType = new TypedFunctionType(returnType);
-        for (let i = 0; i < paramTypes.length; i++) {
-            functionType.addParameter(`arg${i + 1}`, paramTypes[i], false);
+        for (const param of this.params) {
+            functionType.addParameter(param.tokens.name.text, param.getType({ ...options, typeChain: undefined }), !!param.defaultValue);
         }
         functionType.setSub(this.tokens.functionType?.kind === TokenKind.Sub);
 

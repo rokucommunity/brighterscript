@@ -4636,7 +4636,7 @@ describe('Scope', () => {
                 expectTypeToBe(valueSymbol.type, IntegerType);
             });
 
-            it.only('can use type statement to define a typed function type', () => {
+            it('can use type statement to define a typed function type', () => {
                 const file = program.setFile<BrsFile>('source/test.bs', `
                     type MyCallback = function(s as string) as integer
 

@@ -2394,7 +2394,7 @@ describe('ScopeValidator', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.argumentTypeMismatch('function (a as dynamic, b as dynamic) as void', 'function (arg1 as integer) as string', {
+                    DiagnosticMessages.argumentTypeMismatch('function (a as dynamic, b as dynamic) as void', 'function (num as integer) as string', {
                         expectedParamCount: 1,
                         actualParamCount: 2
                     }).message
