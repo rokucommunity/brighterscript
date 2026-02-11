@@ -79,6 +79,14 @@ catch ' look, no exception variable!
 end try
 ```
 
+## [Function Types](function-types.md)
+
+```brighterscript
+function useCallback(callback as function(string) as integer) as integer
+    return callback("test")
+end function
+```
+
 ## [Imports](imports.md)
 
 ```brighterscript
