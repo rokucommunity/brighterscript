@@ -189,6 +189,7 @@ export class BrsFileValidator {
                 }
                 if (!funcSymbolTable?.hasSymbol('m', SymbolTypeFlag.runtime) || isInlineFunc) {
                     if (!isTypecastStatement(node.body?.statements?.[0])) {
+                        // if this is an inline function, or if the function body does not start with a typecast statement, add the `m` symbol to the function scope. If the function body starts with a typecast statement, the `m` symbol will be added in the visitor for TypecastStatement, and it will be typed as the type from the typecast statement
                         funcSymbolTable?.addSymbol('m', { isInstance: true }, new AssociativeArrayType(), SymbolTypeFlag.runtime);
                     }
                 }
@@ -300,7 +301,10 @@ export class BrsFileValidator {
                 this.validateContinueStatement(node);
             },
             TypecastStatement: (node) => {
-                node.parent.getSymbolTable().addSymbol('m', { definingNode: node, doNotMerge: true, isInstance: true }, node.getType({ flags: SymbolTypeFlag.typetime }), SymbolTypeFlag.runtime);
+                const obj = node.typecastExpression.obj;
+                if (isVariableExpression(obj)) {
+                    node.parent.getSymbolTable().addSymbol(obj.tokens.name.text, { definingNode: node, doNotMerge: true, isInstance: true }, node.getType({ flags: SymbolTypeFlag.typetime }), SymbolTypeFlag.runtime);
+                }
             },
             ConditionalCompileConstStatement: (node) => {
                 const assign = node.assignment;
@@ -589,11 +593,15 @@ export class BrsFileValidator {
         }
     }
 
+    private isAllowedAtTopOfFile(statement: Statement): statement is LibraryStatement | ImportStatement | TypecastStatement | AliasStatement {
+        return isLibraryStatement(statement) || isImportStatement(statement) || isTypecastStatement(statement) || isAliasStatement(statement);
+    }
+
     private getTopOfFileStatements() {
         let topOfFileIncludeStatements = [] as Array<LibraryStatement | ImportStatement | TypecastStatement | AliasStatement>;
         for (let stmt of this.event.file.parser.ast.statements) {
             //if we found a non-library statement, this statement is not at the top of the file
-            if (isLibraryStatement(stmt) || isImportStatement(stmt) || isTypecastStatement(stmt) || isAliasStatement(stmt)) {
+            if (this.isAllowedAtTopOfFile(stmt)) {
                 topOfFileIncludeStatements.push(stmt);
             } else {
                 //break out of the loop, we found all of our library statements
@@ -639,45 +647,51 @@ export class BrsFileValidator {
     }
 
     private validateTypecastStatements() {
-        let topOfFileTypecastStatements = this.getTopOfFileStatements().filter(stmt => isTypecastStatement(stmt));
-
-        //check only one `typecast` statement at "top" of file (eg. before non import/library statements)
-        for (let i = 1; i < topOfFileTypecastStatements.length; i++) {
-            const typecastStmt = topOfFileTypecastStatements[i];
-            this.event.program.diagnostics.register({
-                ...DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of function or namespace'),
-                location: typecastStmt.location
-            });
-        }
-
         // eslint-disable-next-line @typescript-eslint/dot-notation
-        for (let result of this.event.file['_cachedLookups'].typecastStatements) {
+        for (let typecastStmt of this.event.file['_cachedLookups'].typecastStatements) {
             let isBadTypecastObj = false;
-            if (!isVariableExpression(result.typecastExpression.obj)) {
+
+            const block = typecastStmt.findAncestor<Body | Block>(node => (isBody(node) || isBlock(node)));
+            const resultVarStr = util.getAllDottedGetPartsAsString(typecastStmt.typecastExpression.obj);
+            const hasFunctionAncestor = !!typecastStmt.findAncestor(isFunctionExpression);
+            if (!isVariableExpression(typecastStmt.typecastExpression.obj)) {
                 isBadTypecastObj = true;
-            } else if (result.typecastExpression.obj.tokens.name.text.toLowerCase() !== 'm') {
+            } else if (!hasFunctionAncestor && resultVarStr.toLowerCase() !== 'm') {
+                // only 'm' can be typecast outside of a function body
+                isBadTypecastObj = true;
+            } else if (block.getSymbolTable().hasSymbol(resultVarStr, SymbolTypeFlag.typetime)) {
+                // can only typecast runtime symbols
                 isBadTypecastObj = true;
             }
+
             if (isBadTypecastObj) {
                 this.event.program.diagnostics.register({
-                    ...DiagnosticMessages.invalidTypecastStatementApplication(util.getAllDottedGetPartsAsString(result.typecastExpression.obj)),
-                    location: result.typecastExpression.obj.location
+                    ...DiagnosticMessages.invalidTypecastStatementApplication(resultVarStr, hasFunctionAncestor),
+                    location: typecastStmt.typecastExpression.obj.location
                 });
             }
 
-            if (topOfFileTypecastStatements.includes(result)) {
-                // already validated
-                continue;
+            let isFirst = true;
+            for (let i = 0; i < typecastStmt.statementIndex; i++) {
+                const targetStatement = block.statements[i];
+                // allow multiple typecast statements at the top of a block or namespace, but no other statements before them
+                isFirst = isFirst && this.isAllowedAtTopOfFile(targetStatement);
+                if (isTypecastStatement(targetStatement) && targetStatement !== typecastStmt) {
+                    // do not allow multiple typecast statements that typecast the same variable, even if they are at the top of the block/namespace
+                    const otherResultVarStr = util.getAllDottedGetPartsAsString(targetStatement.typecastExpression.obj);
+                    if (otherResultVarStr.toLowerCase() === resultVarStr.toLowerCase()) {
+                        isFirst = false;
+                    }
+                }
+                if (!isFirst) {
+                    break;
+                }
             }
 
-            const block = result.findAncestor<Body | Block>(node => (isBody(node) || isBlock(node)));
-            const isFirst = block?.statements[0] === result;
-            const isAllowedBlock = (isBody(block) || isFunctionExpression(block.parent) || isNamespaceStatement(block.parent));
-
-            if (!isFirst || !isAllowedBlock) {
+            if (!isFirst) {
                 this.event.program.diagnostics.register({
-                    ...DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of function or namespace'),
-                    location: result.location
+                    ...DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of block or namespace'),
+                    location: typecastStmt.location
                 });
             }
         }
