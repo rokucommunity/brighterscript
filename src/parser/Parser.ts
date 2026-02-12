@@ -2813,7 +2813,9 @@ export class Parser {
         while (lookForCompounds) {
             lookForCompounds = false;
 
-            if (this.checkAny(...DeclarableTypes)) {
+            const isTypedFunction = this.checkAny(TokenKind.Function, TokenKind.Sub) && this.checkNext(TokenKind.LeftParen);
+
+            if (this.checkAny(...DeclarableTypes) && !isTypedFunction) {
                 // Token is a built in type
                 typeToken = this.advance();
             } else if (this.options.mode === ParseMode.BrighterScript) {
@@ -2824,6 +2826,9 @@ export class Parser {
                     } else if (this.check(TokenKind.LeftParen)) {
                         // could be an inline interface
                         typeToken = this.groupedTypeExpression();
+                    } else if (isTypedFunction) {
+                        //typed function type
+                        typeToken = this.typedFunctionType();
                     } else {
                         // see if we can get a namespaced identifer
                         const qualifiedType = this.getNamespacedVariableNameExpression(ignoreDiagnostics);
@@ -2939,6 +2944,28 @@ export class Parser {
             TokenKind.RightParen
         );
         return createToken(TokenKind.Dynamic, null, util.createBoundingRange(leftParen, typeToken, rightParen));
+    }
+
+    private typedFunctionType() {
+        const funcOrSub = this.advance();
+        const leftParen = this.advance();
+
+        let params = [] as FunctionParameterExpression[];
+        if (!this.check(TokenKind.RightParen)) {
+            do {
+                params.push(this.functionParameter());
+            } while (this.match(TokenKind.Comma));
+        }
+        const rightParen = this.advance();
+        let asToken: Token;
+        let returnType: Token;
+        if ((this.check(TokenKind.As))) {
+            // this is a function type with a return type, e.g. `function(string) as void`
+            asToken = this.advance();
+            returnType = this.typeToken();
+        }
+
+        return createToken(TokenKind.Function, null, util.createBoundingRange(funcOrSub, leftParen, rightParen, asToken, returnType));
     }
 
     private primary(): Expression {
