@@ -4583,6 +4583,20 @@ describe('BrsFile', () => {
                 `);
             });
         });
+
+        describe('typed functions in type expressions', () => {
+            it('transpiles to function', () => {
+                testTranspile(`
+                    function test(func as function(name as string, num as integer) as integer) as integer
+                        return func("hello", 123)
+                    end function
+                `, `
+                    function test(func as Function) as integer
+                        return func("hello", 123)
+                    end function
+                `);
+            });
+        });
     });
 
     it('allows up to 63 function params', () => {
