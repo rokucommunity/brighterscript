@@ -426,7 +426,7 @@ describe('BrsFileValidator', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('has diagnostic if more than one usage per block', () => {
+        it('has diagnostic if more than one usage per block for the same variable', () => {
             program.setFile('source/main.bs', `
                 typecast m as object
                 typecast m as integer
@@ -438,19 +438,20 @@ describe('BrsFileValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of function or namespace').message,
-                DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of function or namespace').message
+                DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of block or namespace').message,
+                DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of block or namespace').message
             ]);
         });
 
-        it('has diagnostic if not typecasting m', () => {
+        it('has diagnostic if typecasting variables other than m outside a block', () => {
             program.setFile('source/main.bs', `
                 typecast alpha.beta.notM as object ' error
+                typecast alsoNotM as object ' error
 
                 const notM = "also not m"
 
-                sub noop()
-                    typecast notM as object ' error
+                sub noop(notM)
+                    typecast notM as object ' no error
                 end sub
 
                 sub foo()
@@ -463,8 +464,24 @@ describe('BrsFileValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.invalidTypecastStatementApplication('alpha.beta.notM').message,
-                DiagnosticMessages.invalidTypecastStatementApplication('notM').message
+                DiagnosticMessages.invalidTypecastStatementApplication('alpha.beta.notM', false).message,
+                DiagnosticMessages.invalidTypecastStatementApplication('alsoNotM', false).message
+            ]);
+        });
+
+        it('has diagnostic if typecasting non-variables inside a block', () => {
+            program.setFile('source/main.bs', `
+                sub noop(notM)
+                    typecast alpha.beta.notM as object ' error
+                end sub
+
+                namespace alpha.beta
+                    const notM = "namespaced not m"
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.invalidTypecastStatementApplication('alpha.beta.notM', true).message
             ]);
         });
 
@@ -477,7 +494,7 @@ describe('BrsFileValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of function or namespace').message
+                DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of block or namespace').message
             ]);
         });
 
@@ -496,7 +513,7 @@ describe('BrsFileValidator', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('has diagnostic when not at start of function', () => {
+        it('has diagnostic when not at start of block', () => {
             program.setFile('source/main.bs', `
                 interface Thing
                     value as integer
@@ -509,7 +526,7 @@ describe('BrsFileValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of function or namespace').message
+                DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of block or namespace').message
             ]);
         });
 
@@ -681,6 +698,40 @@ describe('BrsFileValidator', () => {
             expectTypeToBe(assigns[0].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }), InterfaceType);
             expect(assigns[0].getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime }).toString()).to.eq('Thing1');
             expectTypeToBe(assigns[0].getSymbolTable().getSymbolType('x', { flags: SymbolTypeFlag.runtime }), IntegerType);
+        });
+
+        it('sets the the type of a variable in an if block', () => {
+            program.setFile('source/types.bs', `
+                function isInt(x as dynamic) as boolean
+                    return x <> invalid and GetInterface(x, "ifInt") <> invalid
+                end function
+            `);
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                import "types.bs"
+
+                sub addOne(input)
+                    if isInt(input)
+                        typecast input as integer
+                        inside =  input + 1
+                        print inside
+                    end if
+
+                    outside = input
+                    print outside
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const assigns = file.ast.findChildren(isAssignmentStatement);
+            // inside IF
+            const insideType = assigns[0].getSymbolTable().getSymbolType('inside', { flags: SymbolTypeFlag.runtime });
+            const inputType = assigns[0].getSymbolTable().getSymbolType('input', { flags: SymbolTypeFlag.runtime });
+            expectTypeToBe(inputType, IntegerType);
+            expectTypeToBe(insideType, IntegerType);
+
+            // outside IF - should not be affected by typecast
+            const outsideType = assigns[1].getSymbolTable().getSymbolType('outside', { flags: SymbolTypeFlag.runtime });
+            expectTypeToBe(outsideType, DynamicType);
         });
     });
 
