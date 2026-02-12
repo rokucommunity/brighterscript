@@ -650,15 +650,17 @@ export class BrsFileValidator {
         // eslint-disable-next-line @typescript-eslint/dot-notation
         for (let typecastStmt of this.event.file['_cachedLookups'].typecastStatements) {
             let isBadTypecastObj = false;
-            if (!isVariableExpression(typecastStmt.typecastExpression.obj)) {
-                isBadTypecastObj = true;
-            }
+
             const block = typecastStmt.findAncestor<Body | Block>(node => (isBody(node) || isBlock(node)));
             const resultVarStr = util.getAllDottedGetPartsAsString(typecastStmt.typecastExpression.obj);
             const hasFunctionAncestor = !!typecastStmt.findAncestor(isFunctionExpression);
-
-            if (!hasFunctionAncestor && resultVarStr.toLowerCase() !== 'm') {
+            if (!isVariableExpression(typecastStmt.typecastExpression.obj)) {
+                isBadTypecastObj = true;
+            } else if (!hasFunctionAncestor && resultVarStr.toLowerCase() !== 'm') {
                 // only 'm' can be typecast outside of a function body
+                isBadTypecastObj = true;
+            } else if (block.getSymbolTable().hasSymbol(resultVarStr, SymbolTypeFlag.typetime)) {
+                // can only typecast runtime symbols
                 isBadTypecastObj = true;
             }
 

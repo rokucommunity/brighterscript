@@ -733,6 +733,33 @@ describe('BrsFileValidator', () => {
             const outsideType = assigns[1].getSymbolTable().getSymbolType('outside', { flags: SymbolTypeFlag.runtime });
             expectTypeToBe(outsideType, DynamicType);
         });
+
+        it('dissalows typecasting the same variable more than once in the same block', () => {
+            program.setFile('source/main.bs', `
+                sub addOne(input)
+                    if true
+                        typecast input as integer
+                        typecast input as string
+                    end if
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of block or namespace').message
+            ]);
+        });
+
+        it('disallows typecasting types', () => {
+            program.setFile('source/main.bs', `
+                sub addOne(input)
+                    typecast string as integer
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.invalidTypecastStatementApplication('string', true).message
+            ]);
+        });
     });
 
 
