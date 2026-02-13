@@ -3176,7 +3176,7 @@ export class Parser {
         const openParen = this.consume(DiagnosticMessages.expectedToken(TokenKind.LeftParen), TokenKind.LeftParen);
         const params: FunctionParameterExpression[] = [];
 
-        while (!this.check(TokenKind.RightParen)) {
+        if (!this.check(TokenKind.RightParen)) {
             do {
                 if (params.length >= CallExpression.MaximumArguments) {
                     this.diagnostics.push({
@@ -3188,6 +3188,7 @@ export class Parser {
                 params.push(this.functionParameter());
             } while (this.match(TokenKind.Comma));
         }
+
         const closeParen = this.consume(
             DiagnosticMessages.unmatchedLeftToken(openParen.text, 'function type expression'),
             TokenKind.RightParen

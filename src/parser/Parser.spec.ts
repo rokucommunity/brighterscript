@@ -3077,11 +3077,22 @@ describe('parser', () => {
                     name as string
                 end interface
 
-                function test(func as function(arg1 as string or integer, arg2 asIFace) as integer) as integer
+                function test(func as function(arg1 as string or integer, arg2 as IFace) as integer) as integer
                     return func("hello", {name: "hello"})
                 end function
              `, ParseMode.BrighterScript);
             expectZeroDiagnostics(diagnostics);
+        });
+
+        it('invalid syntax inside the function type causes errors', () => {
+            let { diagnostics } = parse(`
+                function test(func as function(arg2 noAsBeforeType) as integer) as integer
+                    return func({name: "hello"})
+                end function
+             `, ParseMode.BrighterScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.unmatchedLeftToken('(', 'function type expression').message
+            ]);
         });
 
         it('can be used as return types', () => {
@@ -3102,6 +3113,15 @@ describe('parser', () => {
                     return function() as integer
                         return 123
                     end function
+                end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have optional parameters', () => {
+            let { diagnostics } = parse(`
+                function test(func as function(arg1 as string,  arg2 = 0 as integer) as integer) as integer
+                    return func("hello")
                 end function
              `, ParseMode.BrighterScript);
             expectZeroDiagnostics(diagnostics);

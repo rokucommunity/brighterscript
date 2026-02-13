@@ -2418,6 +2418,51 @@ describe('ScopeValidator', () => {
                 program.validate();
                 expectZeroDiagnostics(program);
             });
+
+            it('check if a passed in function has the right number and type of optional parameters', () => {
+                program.setFile('source/main.bs', `
+                    type MyFuncType1 = function(num as integer, s = "" as string) as string
+
+                    sub useFunc(myFunc as MyFuncType1)
+                        print myFunc(123)
+                        print myFunc(123, "test")
+                    end sub
+
+                    sub otherFunc()
+                        useFunc(function(a as integer) as string
+                                print a
+                                return "hello"
+                            end function)
+                    end sub
+                 `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.argumentTypeMismatch('function (a as integer) as string', 'MyFuncType1', {
+                        expectedParamCount: 2,
+                        actualParamCount: 1
+                    }).message
+                ]);
+            });
+
+            it('allows a passed in function that has the right number and type of optional parameters', () => {
+                program.setFile('source/main.bs', `
+                    type MyFuncType1 = function(num as integer, s = "" as string) as string
+
+                    sub useFunc(myFunc as MyFuncType1)
+                        print myFunc(123)
+                        print myFunc(123, "test")
+                    end sub
+
+                    sub otherFunc()
+                        useFunc(function(a as integer, s = "hello" as string) as string
+                                print a
+                                return "hello"
+                            end function)
+                    end sub
+                 `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
         });
     });
 

@@ -123,8 +123,8 @@ export class TypedFunctionType extends BaseFunctionType {
                 paramTypeData.expectedType = paramTypeData.expectedType ?? myParam?.type;
                 paramTypeData.actualType = paramTypeData.actualType ?? targetParam?.type;
                 if (!targetParam || !myParam) {
-                    data.expectedParamCount = this.params.filter(p => !p.isOptional).length;
-                    data.actualParamCount = targetType.params.filter(p => !p.isOptional).length;
+                    data.expectedParamCount = this.params.length;
+                    data.actualParamCount = targetType.params.length;
                 }
                 data.parameterMismatches.push({ index: i, data: paramTypeData });
                 data.expectedType = data.expectedType ?? this;
