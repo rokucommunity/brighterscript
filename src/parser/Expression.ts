@@ -11,7 +11,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallableType, isCallExpression, isCallfuncExpression, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallableType, isCallExpression, isCallfuncExpression, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -197,7 +197,10 @@ export class CallExpression extends Expression {
     }
 
     getType(options: GetTypeOptions) {
-        const calleeType = this.callee.getType(options);
+        let calleeType = this.callee.getType(options);
+        while (isTypeStatementType(calleeType)) {
+            calleeType = calleeType.wrappedType;
+        }
         if (options.ignoreCall) {
             return calleeType;
         }
@@ -2901,6 +2904,94 @@ export class InlineInterfaceMemberExpression extends Expression {
         );
     }
 }
+
+export class TypedFunctionTypeExpression extends Expression {
+    constructor(options: {
+        functionType?: Token;
+        leftParen?: Token;
+        params?: FunctionParameterExpression[];
+        rightParen?: Token;
+        as?: Token;
+        returnType?: TypeExpression;
+
+    }) {
+        super();
+        this.tokens = {
+            functionType: options.functionType,
+            leftParen: options.leftParen,
+            rightParen: options.rightParen,
+            as: options.as
+        };
+        this.params = options.params;
+        this.returnType = options.returnType;
+        this.location = util.createBoundingLocation(
+            this.tokens.functionType,
+            this.tokens.leftParen,
+            ...this.params,
+            this.tokens.rightParen,
+            this.tokens.as,
+            this.returnType
+        );
+    }
+
+    public readonly kind = AstNodeKind.TypedFunctionTypeExpression;
+
+    public readonly tokens: {
+        readonly functionType?: Token;
+        readonly leftParen?: Token;
+        readonly rightParen?: Token;
+        readonly as?: Token;
+    };
+
+    public readonly params: FunctionParameterExpression[];
+    public readonly returnType?: TypeExpression;
+
+    public readonly location: Location;
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return [this.getType({ flags: SymbolTypeFlag.typetime }).toTypeString()];
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walkArray(this.params, visitor, options, this);
+            walk(this, 'returnType', visitor, options);
+        }
+    }
+
+    public getType(options: GetTypeOptions): BscType {
+        const returnType = this.returnType?.getType({ ...options, typeChain: undefined }) ?? DynamicType.instance;
+        const functionType = new TypedFunctionType(returnType);
+        for (const param of this.params) {
+            functionType.addParameter(param.tokens.name.text, param.getType({ ...options, typeChain: undefined }), !!param.defaultValue);
+        }
+        functionType.setSub(this.tokens.functionType?.kind === TokenKind.Sub);
+
+        options.typeChain?.push(new TypeChainEntry({
+            name: '',
+            type: functionType,
+            astNode: this,
+            data: options.data
+        }));
+
+        return functionType;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new TypedFunctionTypeExpression({
+                functionType: util.cloneToken(this.tokens.functionType),
+                leftParen: util.cloneToken(this.tokens.leftParen),
+                params: this.params?.map(x => x?.clone()),
+                rightParen: util.cloneToken(this.tokens.rightParen),
+                as: util.cloneToken(this.tokens.as),
+                returnType: this.returnType?.clone()
+            }),
+            ['params', 'returnType']
+        );
+    }
+}
+
 
 /**
  * A list of names of functions that are restricted from being stored to a

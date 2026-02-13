@@ -1,4 +1,4 @@
-import { isDynamicType, isObjectType, isTypedFunctionType } from '../astUtils/reflection';
+import { isDynamicType, isObjectType, isTypedFunctionType, isTypeStatementType } from '../astUtils/reflection';
 import { BaseFunctionType } from './BaseFunctionType';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
@@ -52,6 +52,13 @@ export class TypedFunctionType extends BaseFunctionType {
     }
 
     public isTypeCompatible(targetType: BscType, data: TypeCompatibilityData = {}) {
+        data = data || {};
+        if (!data.actualType) {
+            data.actualType = targetType;
+        }
+        while (isTypeStatementType(targetType)) {
+            targetType = targetType.wrappedType;
+        }
         if (
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
@@ -116,12 +123,12 @@ export class TypedFunctionType extends BaseFunctionType {
                 paramTypeData.expectedType = paramTypeData.expectedType ?? myParam?.type;
                 paramTypeData.actualType = paramTypeData.actualType ?? targetParam?.type;
                 if (!targetParam || !myParam) {
-                    data.expectedParamCount = this.params.filter(p => !p.isOptional).length;
-                    data.actualParamCount = targetType.params.filter(p => !p.isOptional).length;
+                    data.expectedParamCount = this.params.length;
+                    data.actualParamCount = targetType.params.length;
                 }
                 data.parameterMismatches.push({ index: i, data: paramTypeData });
-                data.expectedType = this;
-                data.actualType = targetType;
+                data.expectedType = data.expectedType ?? this;
+                data.actualType = data.actualType ?? targetType;
                 return false;
             }
             if ((!allowOptionalParamDifferences && myParam.isOptional !== targetParam.isOptional) ||
@@ -150,8 +157,8 @@ export class TypedFunctionType extends BaseFunctionType {
             data = data ?? {};
             data.expectedVariadic = this.isVariadic;
             data.actualVariadic = targetType.isVariadic;
-            data.expectedType = this;
-            data.actualType = targetType;
+            data.expectedType = data.expectedType ?? this;
+            data.actualType = data.actualType ?? targetType;
             return false;
         }
         //made it here, all params and return type pass predicate

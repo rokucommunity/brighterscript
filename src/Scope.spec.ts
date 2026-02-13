@@ -27,7 +27,7 @@ import { InterfaceType } from './types/InterfaceType';
 import { ComponentType } from './types/ComponentType';
 import { WalkMode, createVisitor } from './astUtils/visitors';
 import type { BinaryExpression, CallExpression, DottedGetExpression, FunctionExpression } from './parser/Expression';
-import { ObjectType, UninitializedType } from './types';
+import { ObjectType, TypedFunctionType, UninitializedType } from './types';
 import undent from 'undent';
 import * as fsExtra from 'fs-extra';
 import { InlineInterfaceType } from './types/InlineInterfaceType';
@@ -4596,6 +4596,159 @@ describe('Scope', () => {
                 expectTypeToBe(inputSymbol.type, InlineInterfaceType);
                 const memberType = inputSymbol.type.getMemberType('my string literal', { flags: SymbolTypeFlag.runtime });
                 expectTypeToBe(memberType, StringType);
+            });
+        });
+
+        describe('typed function expressions', () => {
+            it('correctly types parameters with typed function expressions', () => {
+                const file = program.setFile<BrsFile>('source/test.bs', `
+                    sub testFunc(callback as function(s as string) as integer)
+                        value = callback("hello")
+                        print value
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const funcExprBody = file.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const table = funcExprBody.getSymbolTable();
+                const valueSymbol = table.getSymbol('value', SymbolTypeFlag.runtime)[0];
+                expectTypeToBe(valueSymbol.type, IntegerType);
+            });
+
+            it('correctly types parameters with typed function expressions with multiple parameters', () => {
+                const file = program.setFile<BrsFile>('source/test.bs', `
+                    sub testFunc(callback as function(s as string, i as integer) as integer)
+                        value = callback("hello", 123)
+                        print value
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const funcExprBody = file.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const table = funcExprBody.getSymbolTable();
+                const callbackSymbol = table.getSymbol('callback', SymbolTypeFlag.runtime)[0];
+                expectTypeToBe(callbackSymbol.type, TypedFunctionType);
+                const callbackType = callbackSymbol.type as TypedFunctionType;
+                expect(callbackType.params.length).to.equal(2);
+                expectTypeToBe(callbackType.params[0].type, StringType);
+                expectTypeToBe(callbackType.params[1].type, IntegerType);
+                const valueSymbol = table.getSymbol('value', SymbolTypeFlag.runtime)[0];
+                expectTypeToBe(valueSymbol.type, IntegerType);
+            });
+
+            it('can use type statement to define a typed function type', () => {
+                const file = program.setFile<BrsFile>('source/test.bs', `
+                    type MyCallback = function(s as string) as integer
+
+                    sub testFunc(callback as MyCallback)
+                        value = callback("hello")
+                        print value
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const funcExprBody = file.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const table = funcExprBody.getSymbolTable();
+                const valueSymbol = table.getSymbol('value', SymbolTypeFlag.runtime)[0];
+                expectTypeToBe(valueSymbol.type, IntegerType);
+            });
+
+            it('can use a union of typed function types', () => {
+                const file = program.setFile<BrsFile>('source/test.bs', `
+                    type CallbackA = function(s as string) as integer
+                    type CallbackB = function(i as integer) as string
+
+                    sub testFunc(input, callback as CallbackA or CallbackB)
+                        value = callback(input)
+                        print value
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const funcExprBody = file.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const table = funcExprBody.getSymbolTable();
+                const valueSymbol = table.getSymbol('value', SymbolTypeFlag.runtime)[0];
+                expectTypeToBe(valueSymbol.type, UnionType);
+                const valueType = valueSymbol.type as UnionType;
+                expect(valueType.types).to.include(IntegerType.instance);
+                expect(valueType.types).to.include(StringType.instance);
+            });
+
+            it('function return types are greedy in the parser', () => {
+                const file = program.setFile<BrsFile>('source/test.bs', `
+                    sub testFunc(callback as function() as integer  or string)
+                        value = callback()
+                        print value
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const funcExprBody = file.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const table = funcExprBody.getSymbolTable();
+                const valueSymbol = table.getSymbol('value', SymbolTypeFlag.runtime)[0];
+                expectTypeToBe(valueSymbol.type, UnionType);
+                const valueType = valueSymbol.type as UnionType;
+                expect(valueType.types).to.include(IntegerType.instance);
+                expect(valueType.types).to.include(StringType.instance);
+            });
+
+            it('brackets in function types do not cause issues', () => {
+                const file = program.setFile<BrsFile>('source/test.bs', `
+                    sub testFunc(callback as function(s as string) as (integer or string))
+                        value = callback("hello")
+                        print value
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const funcExprBody = file.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const table = funcExprBody.getSymbolTable();
+                const valueSymbol = table.getSymbol('value', SymbolTypeFlag.runtime)[0];
+                expectTypeToBe(valueSymbol.type, UnionType);
+                const valueType = valueSymbol.type as UnionType;
+                expect(valueType.types).to.include(IntegerType.instance);
+                expect(valueType.types).to.include(StringType.instance);
+            });
+
+            it('function types with unions in parameters work', () => {
+                const file = program.setFile<BrsFile>('source/test.bs', `
+                    sub testFunc(callback as function(s as string or integer) as integer)
+                        value = callback("hello")
+                        print value
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const funcExprBody = file.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const table = funcExprBody.getSymbolTable();
+                const callbackSymbol = table.getSymbol('callback', SymbolTypeFlag.runtime)[0];
+                expectTypeToBe(callbackSymbol.type, TypedFunctionType);
+                const callbackType = callbackSymbol.type as TypedFunctionType;
+                expect(callbackType.params.length).to.equal(1);
+                expectTypeToBe(callbackType.params[0].type, UnionType);
+                const paramType = callbackType.params[0].type as UnionType;
+                expect(paramType.types).to.include(StringType.instance);
+                expect(paramType.types).to.include(IntegerType.instance);
+                const valueSymbol = table.getSymbol('value', SymbolTypeFlag.runtime)[0];
+                expectTypeToBe(valueSymbol.type, IntegerType);
+            });
+
+            it('args can be union of function types', () => {
+                const file = program.setFile<BrsFile>('source/test.bs', `
+                    sub testFunc(callback as (function(s as string) as string) or (function(s as string) as integer))
+                        value = callback("hello")
+                        print value
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const funcExprBody = file.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const table = funcExprBody.getSymbolTable();
+                const valueSymbol = table.getSymbol('value', SymbolTypeFlag.runtime)[0];
+                expectTypeToBe(valueSymbol.type, UnionType);
+                const valueType = valueSymbol.type as UnionType;
+                expect(valueType.types).to.include(IntegerType.instance);
+                expect(valueType.types).to.include(StringType.instance);
             });
         });
     });

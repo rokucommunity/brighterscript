@@ -361,5 +361,6 @@ export enum AstNodeKind {
     PrintSeparatorExpression = 'PrintSeparatorExpression',
     InlineInterfaceExpression = 'InlineInterfaceExpression',
     InlineInterfaceMemberExpression = 'InlineInterfaceMemberExpression',
-    TypeStatement = 'TypeStatement'
+    TypeStatement = 'TypeStatement',
+    TypedFunctionTypeExpression = 'TypedFunctionTypeExpression'
 }

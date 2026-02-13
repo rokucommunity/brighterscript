@@ -1,5 +1,5 @@
 import type { TypeCompatibilityData } from '../interfaces';
-import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isAssociativeArrayTypeLike, isCompoundType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isIntersectionType, isObjectType, isReferenceType, isTypePropertyReferenceType, isUnionType, isUnionTypeOf, isVoidType } from '../astUtils/reflection';
+import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isAssociativeArrayTypeLike, isCompoundType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isIntersectionType, isObjectType, isReferenceType, isTypePropertyReferenceType, isTypeStatementType, isUnionType, isUnionTypeOf, isVoidType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import type { UnionType } from './UnionType';
 import type { SymbolTable } from '../SymbolTable';
@@ -42,10 +42,16 @@ export function getUniqueTypesFromArray(types: BscType[], allowNameEquality = tr
         if (!currentType) {
             return false;
         }
+        while (isTypeStatementType(currentType)) {
+            currentType = currentType.wrappedType;
+        }
         if ((isTypePropertyReferenceType(currentType) || isArrayDefaultTypeReferenceType(currentType)) && !currentType.isResolvable()) {
             return true;
         }
         const latestIndex = types.findIndex((checkType) => {
+            while (isTypeStatementType(checkType)) {
+                checkType = checkType.wrappedType;
+            }
             return currentType.isEqual(checkType, { allowNameEquality: allowNameEquality });
         });
         // the index that was found is the index we're checking --- there are no equal types after this
