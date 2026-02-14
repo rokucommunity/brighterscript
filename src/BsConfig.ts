@@ -192,6 +192,12 @@ export interface BsConfig {
      */
     sourceMap?: boolean;
     /**
+     * If true, file paths in sourcemap `sources` will be relative to the map file location
+     * instead of absolute. This makes source maps portable across different machines and environments.
+     * @default false
+     */
+    sourceMapRelativePaths?: boolean;
+    /**
      * Excludes empty files from being included in the output. Some Brighterscript files
      * are left empty or with only comments after transpilation to Brightscript.
      * The default behavior is to write these to disk after transpilation.

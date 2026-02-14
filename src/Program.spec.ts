@@ -1,4 +1,5 @@
 import { assert, expect } from './chai-config.spec';
+import * as path from 'path';
 import * as pick from 'object.pick';
 import * as sinonImport from 'sinon';
 import { CancellationTokenSource, CompletionItemKind, Position, Range } from 'vscode-languageserver';
@@ -2036,6 +2037,69 @@ describe('Program', () => {
 
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs.map`)).is.true;
         expect(fsExtra.pathExistsSync(s`${stagingDir}/components/comp1.xml.map`)).is.true;
+    });
+
+    it('sourcemap contains absolute source paths by default', async () => {
+        fsExtra.ensureDirSync(program.options.stagingDir!);
+        program.setFile('source/main.bs', `
+            sub main()
+            end sub
+        `);
+        program.validate();
+
+        program.options.sourceMap = true;
+        await program.transpile([{
+            src: s`${rootDir}/source/main.bs`,
+            dest: 'source/main.brs'
+        }], program.options.stagingDir!);
+
+        const mapContent = JSON.parse(fsExtra.readFileSync(s`${stagingDir}/source/main.brs.map`, 'utf8'));
+        expect(mapContent.sources).to.have.lengthOf(1);
+        expect(path.isAbsolute(mapContent.sources[0])).to.be.true;
+    });
+
+    it('sourcemap contains relative source paths when sourceMapRelativePaths is true', async () => {
+        fsExtra.ensureDirSync(program.options.stagingDir!);
+        program.setFile('source/main.bs', `
+            sub main()
+            end sub
+        `);
+        program.validate();
+
+        program.options.sourceMap = true;
+        program.options.sourceMapRelativePaths = true;
+        await program.transpile([{
+            src: s`${rootDir}/source/main.bs`,
+            dest: 'source/main.brs'
+        }], program.options.stagingDir!);
+
+        const mapContent = JSON.parse(fsExtra.readFileSync(s`${stagingDir}/source/main.brs.map`, 'utf8'));
+        expect(mapContent.sources).to.have.lengthOf(1);
+        expect(path.isAbsolute(mapContent.sources[0])).to.be.false;
+        //the relative path should resolve back to the original source
+        const resolvedPath = s`${path.resolve(s`${stagingDir}/source`, mapContent.sources[0])}`;
+        expect(resolvedPath).to.eql(s`${rootDir}/source/main.bs`);
+    });
+
+    it('sourcemap relative paths work with sourceRoot', async () => {
+        fsExtra.ensureDirSync(program.options.stagingDir!);
+        program.setFile('source/main.bs', `
+            sub main()
+            end sub
+        `);
+        program.validate();
+
+        program.options.sourceMap = true;
+        program.options.sourceMapRelativePaths = true;
+        program.options.sourceRoot = s`${rootDir}/../customRoot`;
+        await program.transpile([{
+            src: s`${rootDir}/source/main.bs`,
+            dest: 'source/main.brs'
+        }], program.options.stagingDir!);
+
+        const mapContent = JSON.parse(fsExtra.readFileSync(s`${stagingDir}/source/main.brs.map`, 'utf8'));
+        expect(mapContent.sources).to.have.lengthOf(1);
+        expect(path.isAbsolute(mapContent.sources[0])).to.be.false;
     });
 
     it('copies the bslib.brs file', async () => {
