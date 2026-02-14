@@ -1,4 +1,5 @@
 import { assert, expect } from './chai-config.spec';
+import * as path from 'path';
 import * as pick from 'object.pick';
 import * as sinonImport from 'sinon';
 import { CancellationTokenSource, CompletionItemKind, Position, Range } from 'vscode-languageserver';
@@ -2054,7 +2055,7 @@ describe('Program', () => {
 
         const mapContent = JSON.parse(fsExtra.readFileSync(s`${stagingDir}/source/main.brs.map`, 'utf8'));
         expect(mapContent.sources).to.have.lengthOf(1);
-        expect(require('path').isAbsolute(mapContent.sources[0])).to.be.true;
+        expect(path.isAbsolute(mapContent.sources[0])).to.be.true;
     });
 
     it('sourcemap contains relative source paths when sourceMapRelativePaths is true', async () => {
@@ -2074,9 +2075,9 @@ describe('Program', () => {
 
         const mapContent = JSON.parse(fsExtra.readFileSync(s`${stagingDir}/source/main.brs.map`, 'utf8'));
         expect(mapContent.sources).to.have.lengthOf(1);
-        expect(require('path').isAbsolute(mapContent.sources[0])).to.be.false;
+        expect(path.isAbsolute(mapContent.sources[0])).to.be.false;
         //the relative path should resolve back to the original source
-        const resolvedPath = s`${require('path').resolve(s`${stagingDir}/source`, mapContent.sources[0])}`;
+        const resolvedPath = s`${path.resolve(s`${stagingDir}/source`, mapContent.sources[0])}`;
         expect(resolvedPath).to.eql(s`${rootDir}/source/main.bs`);
     });
 
@@ -2098,7 +2099,7 @@ describe('Program', () => {
 
         const mapContent = JSON.parse(fsExtra.readFileSync(s`${stagingDir}/source/main.brs.map`, 'utf8'));
         expect(mapContent.sources).to.have.lengthOf(1);
-        expect(require('path').isAbsolute(mapContent.sources[0])).to.be.false;
+        expect(path.isAbsolute(mapContent.sources[0])).to.be.false;
     });
 
     it('copies the bslib.brs file', async () => {

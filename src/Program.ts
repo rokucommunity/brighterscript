@@ -1403,11 +1403,11 @@ export class Program {
         }
         const mapJson = sourceMap.toJSON();
         const mapDir = path.dirname(outputPath);
-        mapJson.sources = mapJson.sources.map((source: string) =>
-            path.isAbsolute(source)
+        mapJson.sources = mapJson.sources.map((source: string) => {
+            return path.isAbsolute(source)
                 ? s`${path.relative(mapDir, source)}`
-                : source
-        );
+                : source;
+        });
         return JSON.stringify(mapJson);
     }
 
