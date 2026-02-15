@@ -73,6 +73,28 @@ export class ProjectManager {
     public busyStatusTracker = new BusyStatusTracker<LspProject>();
 
     /**
+     * Cache for PathCollection instances per project. Avoids recreating PathCollection
+     * on every document flush, which is wasteful since file patterns only change when a project is reloaded.
+     */
+    private projectFiltererCache = new WeakMap<LspProject, PathCollection>();
+
+    /**
+     * Get or create a cached PathCollection for the given project.
+     * The filterer is invalidated when the project is removed and garbage collected.
+     */
+    private getProjectFilterer(project: LspProject): PathCollection {
+        let filterer = this.projectFiltererCache.get(project);
+        if (!filterer) {
+            filterer = new PathCollection({
+                rootDir: project.rootDir,
+                globs: project.filePatterns
+            });
+            this.projectFiltererCache.set(project, filterer);
+        }
+        return filterer;
+    }
+
+    /**
      * Apply all of the queued document changes. This should only be called as a result of the documentManager flushing changes, and never called manually
      * @param event the document changes that have occurred since the last time we applied
      */
@@ -101,10 +123,7 @@ export class ProjectManager {
             //wait for this project to finish activating
             await project.whenActivated();
 
-            const filterer = new PathCollection({
-                rootDir: project.rootDir,
-                globs: project.filePatterns
-            });
+            const filterer = this.getProjectFilterer(project);
             // only include files that are applicable to this specific project (still allow deletes to flow through since they're cheap)
             const projectActions = actions.filter(action => {
                 return (
