@@ -2074,7 +2074,9 @@ describe('BrsFile', () => {
             ).to.equal([
                 '```brightscript',
                 'function UCase(s as string) as string',
-                '```'
+                '```',
+                '***',
+                'Converts the string to all upper case.'
             ].join('\n'));
         });
 
@@ -2091,7 +2093,9 @@ describe('BrsFile', () => {
                 '```brightscript',
                 //TODO this really shouldn't be returning the global function, but it does...so make sure it doesn't crash right now.
                 'function Instr(startOrText as dynamic, textOrSubstring as string, substring? as string) as integer',
-                '```'
+                '```',
+                '***',
+                'Returns the position of the first instances of substring within text, starting at the specified start position.\nReturns 0 if the substring is not found. Unlike the ifString.Instr() method, the first position is 1.'
             ].join('\n'));
         });
 
