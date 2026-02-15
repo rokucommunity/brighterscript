@@ -51,7 +51,8 @@ import { PathFilterer } from './lsp/PathFilterer';
 import type { WorkspaceConfig } from './lsp/ProjectManager';
 import { ProjectManager } from './lsp/ProjectManager';
 import * as fsExtra from 'fs-extra';
-import type { MaybePromise } from './interfaces';
+import type { FileChange, MaybePromise } from './interfaces';
+import { Deferred } from './deferred';
 import { workerPool } from './lsp/worker/WorkerThreadProject';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import isEqual = require('lodash.isequal');
@@ -354,16 +355,35 @@ export class LanguageServer {
     }
 
     /**
+     * Pending file changes waiting to be flushed after the debounce period
+     */
+    private pendingFileChanges: FileChange[] = [];
+
+    /**
+     * Timer handle for the file change debounce
+     */
+    private fileChangeDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+    /**
+     * How long to wait (in ms) after the last file change event before processing the batch.
+     * This prevents excessive revalidation during bulk operations like `git checkout` or package installs.
+     */
+    public fileChangeDebounceDelay = 300;
+
+    /**
      * Called when watched files changed (add/change/delete).
      * The CLIENT is in charge of what files to watch, so all client
      * implementations should ensure that all valid project
      * file types are watched (.brs,.bs,.xml,manifest, and any json/text/image files)
+     *
+     * File changes are debounced to batch rapid successive events (e.g. during builds or VCS operations)
+     * into a single processing pass, reducing redundant work across projects.
      */
     @AddStackToErrorMessage
     public async onDidChangeWatchedFiles(params: DidChangeWatchedFilesParams) {
         const workspacePaths = (await this.connection.workspace.getWorkspaceFolders()).map(x => util.uriToPath(x.uri));
 
-        let changes = params.changes
+        const changes = params.changes
             .map(x => ({
                 srcPath: util.uriToPath(x.uri),
                 type: x.type,
@@ -374,6 +394,41 @@ export class LanguageServer {
             .filter(x => !workspacePaths.includes(x.srcPath));
 
         this.logger.debug('onDidChangeWatchedFiles', changes);
+
+        //accumulate changes into the pending buffer
+        this.pendingFileChanges.push(...changes);
+
+        //reset the debounce timer so we batch rapid successive events
+        clearTimeout(this.fileChangeDebounceTimer);
+
+        //use a deferred so callers can await the completion of the flush
+        if (!this.pendingFileChangesDeferred) {
+            this.pendingFileChangesDeferred = new Deferred();
+        }
+        const deferred = this.pendingFileChangesDeferred;
+
+        this.fileChangeDebounceTimer = setTimeout(() => {
+            void this.flushFileChanges().then(
+                () => deferred.resolve(),
+                (err) => deferred.reject(err)
+            );
+        }, this.fileChangeDebounceDelay);
+
+        return deferred.promise;
+    }
+
+    /**
+     * Deferred for the current pending file changes batch
+     */
+    private pendingFileChangesDeferred: Deferred | undefined;
+
+    /**
+     * Flush all pending file changes accumulated during the debounce window
+     */
+    private async flushFileChanges() {
+        //grab all pending changes and clear the buffer
+        const changes = this.pendingFileChanges.splice(0, this.pendingFileChanges.length);
+        this.pendingFileChangesDeferred = undefined;
 
         //if the client changed any files containing include/exclude patterns, rebuild the path filterer before processing these changes
         if (
@@ -772,6 +827,7 @@ export class LanguageServer {
     private diagnosticCollection = new DiagnosticCollection();
 
     protected dispose() {
+        clearTimeout(this.fileChangeDebounceTimer);
         this.loggerSubscription?.();
         this.projectManager?.dispose?.();
     }
