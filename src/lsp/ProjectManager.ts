@@ -70,6 +70,12 @@ export class ProjectManager {
     private documentManager: DocumentManager;
     public static documentManagerDelay = 150;
 
+    /**
+     * Maximum number of projects to activate concurrently during syncProjects.
+     * Limits CPU spikes when many projects are discovered (e.g. in large monorepos).
+     */
+    public static projectActivationConcurrencyLimit = 3;
+
     public busyStatusTracker = new BusyStatusTracker<LspProject>();
 
     /**
@@ -321,12 +327,8 @@ export class ProjectManager {
                 ).values()
             ];
 
-            //create missing projects
-            await Promise.all(
-                projectConfigs.map(async (config) => {
-                    await this.createAndActivateProject(config);
-                })
-            );
+            //create missing projects with limited concurrency to avoid CPU spikes when many projects are discovered
+            await this.activateProjectsWithConcurrencyLimit(projectConfigs, ProjectManager.projectActivationConcurrencyLimit);
 
             //mark that we've completed our first sync
             this.firstSync.tryResolve();
@@ -334,6 +336,25 @@ export class ProjectManager {
 
         //return the sync promise
         return this.syncPromise;
+    }
+
+    /**
+     * Activate projects with a concurrency limit to prevent CPU spikes.
+     * Instead of activating all projects in parallel (which can overwhelm the system when dozens
+     * of projects are discovered), this limits how many projects activate simultaneously.
+     */
+    private async activateProjectsWithConcurrencyLimit(projectConfigs: ProjectConfig[], concurrencyLimit: number) {
+        const queue = [...projectConfigs];
+        const limit = Math.max(1, Math.min(concurrencyLimit, queue.length));
+        const workers = Array.from({ length: limit }, async () => {
+            while (queue.length > 0) {
+                const config = queue.shift();
+                if (config) {
+                    await this.createAndActivateProject(config);
+                }
+            }
+        });
+        await Promise.all(workers);
     }
 
     private fileChangesQueue = new ActionQueue({
