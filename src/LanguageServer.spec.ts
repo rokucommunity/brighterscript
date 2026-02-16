@@ -1255,6 +1255,54 @@ describe('LanguageServer', () => {
                 //rebuildPathFilterer should have been called exactly once for the entire batch
                 expect(pathFiltererStub.callCount).to.eql(1);
             });
+
+            it('deduplicates multiple events for the same file within a batch', async () => {
+                const stub = sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => Promise.resolve());
+
+                //fire 3 Changed events for the same file
+                for (let i = 0; i < 3; i++) {
+                    void server['onDidChangeWatchedFiles']({
+                        changes: [{
+                            type: FileChangeType.Changed,
+                            uri: util.pathToUri(s`${rootDir}/source/file1.brs`)
+                        }]
+                    } as DidChangeWatchedFilesParams);
+                }
+
+                await clock.tickAsync(200);
+
+                //should have been called once with only 1 unique change (not 3)
+                expect(stub.callCount).to.eql(1);
+                expect(stub.getCalls()[0].args[0]).to.have.lengthOf(1);
+            });
+
+            it('keeps the last event type when deduplicating (last event wins)', async () => {
+                const stub = sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => Promise.resolve());
+                const fileUri = util.pathToUri(s`${rootDir}/source/file1.brs`);
+
+                //fire Created then Deleted for the same file
+                void server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Created,
+                        uri: fileUri
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                void server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Deleted,
+                        uri: fileUri
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                await clock.tickAsync(200);
+
+                expect(stub.callCount).to.eql(1);
+                const changes = stub.getCalls()[0].args[0];
+                expect(changes).to.have.lengthOf(1);
+                //the Deleted event should win because it came last
+                expect(changes[0].type).to.eql(FileChangeType.Deleted);
+            });
         });
     });
 
