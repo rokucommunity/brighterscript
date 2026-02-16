@@ -347,6 +347,7 @@ export class ProjectManager {
         const queue = [...projectConfigs];
         // Keep at least 1 worker, and no more than requested or available projects.
         const limit = Math.max(1, Math.min(concurrencyLimit, queue.length));
+        // Start `limit` async workers; each worker pulls from `queue` until empty.
         const workers = Array.from({ length: limit }, async () => {
             while (queue.length > 0) {
                 const config = queue.shift();
