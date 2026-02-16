@@ -345,6 +345,7 @@ export class ProjectManager {
      */
     private async activateProjectsWithConcurrencyLimit(projectConfigs: ProjectConfig[], concurrencyLimit: number) {
         const queue = [...projectConfigs];
+        // Keep at least 1 worker, and no more than requested or available projects.
         const limit = Math.max(1, Math.min(concurrencyLimit, queue.length));
         const workers = Array.from({ length: limit }, async () => {
             while (queue.length > 0) {
