@@ -426,8 +426,12 @@ export class LanguageServer {
      * Flush all pending file changes accumulated during the debounce window
      */
     private async flushFileChanges() {
-        //grab all pending changes and clear the buffer
-        const changes = this.pendingFileChanges.splice(0, this.pendingFileChanges.length);
+        //grab all pending changes and clear the buffer, deduping by srcPath (last event wins)
+        const deduped = new Map<string, FileChange>();
+        for (const change of this.pendingFileChanges.splice(0, this.pendingFileChanges.length)) {
+            deduped.set(change.srcPath, change);
+        }
+        const changes = [...deduped.values()];
         this.pendingFileChangesDeferred = undefined;
 
         //if the client changed any files containing include/exclude patterns, rebuild the path filterer before processing these changes
