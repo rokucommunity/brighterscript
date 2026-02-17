@@ -3807,6 +3807,25 @@ describe('Scope', () => {
                 expectTypeToBe(symbolTable.getSymbolType('key', opts), StringType);
             });
 
+            it('should set the type of the for loop item whn the target is a union of typed arrays', () => {
+                let mainFile = program.setFile<BrsFile>('source/main.bs', `
+                    sub process(data as integer[] or string[])
+                        for each item in data
+                            print item
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const forEachStmt = mainFile.ast.findChild<ForEachStatement>(isForEachStatement);
+                const symbolTable = forEachStmt.body.getSymbolTable();
+                const opts = { flags: SymbolTypeFlag.runtime };
+                const itemType = symbolTable.getSymbolType('item', opts) as UnionType;
+                expectTypeToBe(itemType, UnionType);
+                expect(itemType.types).to.include(IntegerType.instance);
+                expect(itemType.types).to.include(StringType.instance);
+            });
+
             it('should use dynamic type for loop item when type cannot be inferred', () => {
                 let mainFile = program.setFile<BrsFile>('source/main.bs', `
                     sub process(data as roList)

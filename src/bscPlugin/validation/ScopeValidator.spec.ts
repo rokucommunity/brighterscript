@@ -6651,5 +6651,29 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.notIterable('integer').message
             ]);
         });
+
+        it('allows a union of iterable types to be iterated over', () => {
+            program.setFile('source/test.bs', `
+                sub doStuff(items as roList or roArray)
+                    for each item in items
+                        print item
+                    end for
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows a union of typed arrays to be iterated over', () => {
+            program.setFile('source/test.bs', `
+                sub setAllText(text as string, labels as roSGNodeLabel[] or roSGNodeMultiStyleLabel[])
+                    for each label in labels
+                        label.text = text
+                    end for
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 });
