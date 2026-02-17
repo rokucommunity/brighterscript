@@ -6675,5 +6675,35 @@ describe('ScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('allows a type statement of a typed array to be iterated over', () => {
+            program.setFile('source/test.bs', `
+
+                type StringArray = string[]
+
+                sub printAllText(text as StringArray)
+                    for each t in text
+                        print t
+                    end for
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows a type statement of a typed array to be iterated over', () => {
+            program.setFile('source/test.bs', `
+
+                type StringArray = string[]
+
+                sub printAllText(text as StringArray)
+                    for each t in text
+                        print t
+                    end for
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 });
