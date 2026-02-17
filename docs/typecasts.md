@@ -24,9 +24,9 @@ function getPrefixedId(node, prefix as string) as string
 end function
 ```
 
-## Typecast Statments
+## Typecast Statements
 
-In order to specify all usages of an expression are explicity set to a certian type, you can use a `typecast` statement.
+In order to specify all usages of an expression are explicitly set to a certain type, you can use a `typecast` statement.
 
 Syntax:
 
@@ -34,13 +34,13 @@ Syntax:
 
 Rules:
 
-- `Typecast` statements are only allowed at the top of files (along with `import` and `library` statements), and as the first statement in a function or namespace.
-- There can be a maximum of one `typecast` statement per block
-- Only runtime symbols can be typecast
-- Currently only `m` is supported
-- When used in a namespace, only the current namespace statement is affected - other namespace statements that contibute to the same namespaces do not have the typecast applied
+- `Typecast` statements are only allowed at the top of files (along with `import` and `library` statements), and as the first statement in a block (eg. function or if statement "then" block) or namespace.
+- There can be a maximum of one `typecast` statement per variable per block
+- Only runtime variables can be typecast
+- Outside a function, only typecasting `m` is supported
+- When used in a namespace, only the current namespace statement is affected - other namespace statements that contribute to the same namespaces do not have the typecast applied
 
-This is very usefuly for components, so that the actual type of Associative Array `m` can narrowed to provide better validation.
+This is very useful for components, so that the actual type of Associative Array `m` can narrowed to provide better validation.
 
 **pkg:/components/Widget.xml**
 
@@ -89,14 +89,14 @@ sub printDetails()
 end sub
 ```
 
-`Typecast` statements are also useful in inline functions to explicity set the type of `m`:
+`Typecast` statements are also useful in inline functions to explicitly set the type of `m`:
 
 ```BrighterScript
 interface Greeter
     greeting as string
     name as string
     function doGreeting() as string
-end iterface
+end interface
 
 function createGreater(name as string) as Greeter
     myGreeter = {
@@ -107,6 +107,21 @@ function createGreater(name as string) as Greeter
             return `${m.greeting} ${m.name} ' m is explicity set to be of type Greeter
         end function
     }
-    retrun myGreeter
+    return myGreeter
+end function
+```
+
+`Typecast` statements can be used for type narrowing as well:
+
+```brighterscript
+function addOne(x) as integer
+    if isString(x)
+        typecast x as string
+        return x.toInt() + 1
+    else if isInteger(x)
+        typecast x as integer
+        return x + 1
+    end if
+    return 0
 end function
 ```
