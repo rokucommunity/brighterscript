@@ -134,7 +134,7 @@ export class BrsFileValidator {
                 this.validateNoOptionalChainingInVarSet(node, [node.obj]);
             },
             ForEachStatement: (node) => {
-                //register the for loop variable
+                //registering the for loop variable happens in the visitor for Block, since the loop variable is scoped to the loop body
             },
             NamespaceStatement: (node) => {
                 if (!node?.nameExpression) {
