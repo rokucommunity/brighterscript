@@ -1,5 +1,5 @@
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
-import { isDynamicType, isEnumMemberType, isEnumType, isObjectType } from '../astUtils/reflection';
+import { isDynamicType, isEnumMemberType, isEnumType, isObjectType, isTypeStatementType } from '../astUtils/reflection';
 import type { TypeCompatibilityData } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
@@ -20,6 +20,9 @@ export class EnumType extends BscType {
     public readonly kind = BscTypeKind.EnumType;
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
+        while (isTypeStatementType(targetType)) {
+            targetType = targetType.wrappedType;
+        }
         return (
             isDynamicType(targetType) ||
             isObjectType(targetType) ||

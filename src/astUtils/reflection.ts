@@ -1,5 +1,5 @@
 import type { Body, AssignmentStatement, Block, ExpressionStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement, EnumStatement, EnumMemberStatement, TryCatchStatement, CatchStatement, ThrowStatement, MethodStatement, FieldStatement, ConstStatement, ContinueStatement, DimStatement, TypecastStatement, AliasStatement, AugmentedAssignmentStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ConditionalCompileStatement, ExitStatement, TypeStatement } from '../parser/Statement';
-import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, TernaryExpression, NullCoalescingExpression, PrintSeparatorExpression, TypecastExpression, TypedArrayExpression, TypeExpression, InlineInterfaceMemberExpression, InlineInterfaceExpression } from '../parser/Expression';
+import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, TernaryExpression, NullCoalescingExpression, PrintSeparatorExpression, TypecastExpression, TypedArrayExpression, TypeExpression, InlineInterfaceMemberExpression, InlineInterfaceExpression, TypedFunctionTypeExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
 import type { BsDiagnostic, TypedefProvider } from '../interfaces';
@@ -333,6 +333,9 @@ export function isInlineInterfaceExpression(element: any): element is InlineInte
 export function isInlineInterfaceMemberExpression(element: any): element is InlineInterfaceMemberExpression {
     return element?.kind === AstNodeKind.InlineInterfaceMemberExpression;
 }
+export function isTypedFunctionTypeExpression(element: any): element is TypedFunctionTypeExpression {
+    return element?.kind === AstNodeKind.TypedFunctionTypeExpression;
+}
 
 // BscType reflection
 export function isStringType(value: any): value is StringType {
@@ -347,6 +350,10 @@ export function isStringTypeLike(value: any): value is StringType | InterfaceTyp
 
 export function isTypedFunctionType(value: any): value is TypedFunctionType {
     return value?.kind === BscTypeKind.TypedFunctionType;
+}
+
+export function isTypedFunctionTypeLike(value: any): value is TypedFunctionType | TypeStatementType | UnionType {
+    return isTypedFunctionType(value) || isTypeStatementTypeOf(value, isTypedFunctionTypeLike) || isUnionTypeOf(value, isTypedFunctionTypeLike);
 }
 
 export function isFunctionType(value: any): value is FunctionType {
@@ -492,7 +499,12 @@ export function isCallFuncableType(target): target is CallFuncableType {
 }
 
 export function isCallableType(target): target is BaseFunctionType {
-    return isFunctionTypeLike(target) || isTypedFunctionType(target) || isObjectType(target) || (isDynamicType(target) && !isAnyReferenceType(target));
+    return isFunctionTypeLike(target) ||
+        isTypedFunctionTypeLike(target) ||
+        isTypeStatementTypeOf(target, isCallableType) ||
+        isUnionTypeOf(target, isCallableType) ||
+        isObjectType(target) ||
+        (isDynamicType(target) && !isAnyReferenceType(target));
 }
 
 export function isAnyReferenceType(target): target is AnyReferenceType {

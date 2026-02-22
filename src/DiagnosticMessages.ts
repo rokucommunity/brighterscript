@@ -1084,6 +1084,9 @@ export const defaultMaximumTruncationLength = 160;
 
 export function typeCompatibilityMessage(actualTypeString: string, expectedTypeString: string, data: TypeCompatibilityData) {
     let message = '';
+    if (!data) {
+        return message;
+    }
     actualTypeString = data?.actualType?.toString() ?? actualTypeString;
     expectedTypeString = data?.expectedType?.toString() ?? expectedTypeString;
 
@@ -1104,14 +1107,16 @@ export function typeCompatibilityMessage(actualTypeString: string, expectedTypeS
             partBuilder: (x) => `\n    member "${x.name}" should be '${x.expectedType}' but is '${x.actualType}'`,
             maxLength: defaultMaximumTruncationLength
         });
+    } else if (data?.actualParamCount !== data?.expectedParamCount) {
+        message = `. Type '${expectedTypeString}' requires ${data.expectedParamCount} parameter${data.expectedParamCount === 1 ? '' : 's'} but '${actualTypeString}' has ${data.actualParamCount}`;
     } else if (data?.parameterMismatches?.length > 0) {
         message = '. ' + util.truncate({
             leadingText: `Type '${actualTypeString}' has incompatible parameters:`,
             items: data.parameterMismatches,
             itemSeparator: '',
             partBuilder: (x) => {
-                let pExpected = x.data?.expectedType.toString() ?? 'dynamic';
-                let pActual = x.data?.actualType.toString() ?? 'dynamic';
+                let pExpected = x.data?.expectedType?.toString() ?? 'dynamic';
+                let pActual = x.data?.actualType?.toString() ?? 'dynamic';
 
                 if (x.expectedOptional !== x.actualOptional) {
                     pExpected += x.expectedOptional ? '?' : '';

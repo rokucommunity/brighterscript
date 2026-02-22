@@ -1,4 +1,4 @@
-import { isAssignmentStatement, isBrsFile, isCallfuncExpression, isClassStatement, isDottedGetExpression, isEnumMemberStatement, isEnumStatement, isEnumType, isForStatement, isInheritableType, isInterfaceStatement, isMemberField, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isXmlFile } from '../../astUtils/reflection';
+import { isAssignmentStatement, isBrsFile, isCallfuncExpression, isClassStatement, isDottedGetExpression, isEnumMemberStatement, isEnumStatement, isEnumType, isForStatement, isInheritableType, isInterfaceStatement, isMemberField, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isTypeStatement, isTypeStatementType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { ExtraSymbolData, Hover, ProvideHoverEvent, TypeChainEntry } from '../../interfaces';
@@ -110,6 +110,10 @@ export class HoverProcessor {
                 firstToken = extraData.definingNode.tokens.enum;
                 exprTypeString = extraData.definingNode.fullName;
                 declarationText = firstToken?.text ?? TokenKind.Enum;
+            } else if (isTypeStatementType(expressionType) && isTypeStatement(extraData.definingNode)) {
+                firstToken = extraData.definingNode.tokens.type;
+                declarationText = (firstToken?.text ?? 'type');
+                exprTypeString = expressionType.toString();
             }
         }
         const innerText = `${declarationText} ${exprTypeString}`.trim();
@@ -175,11 +179,14 @@ export class HoverProcessor {
                 const processedTypeChain = util.processTypeChain(typeChain);
                 const fullName = processedTypeChain.fullNameOfItem || token.text;
                 // if the type chain has dynamic in it, then just say the token text
-                const exprNameString = !processedTypeChain.containsDynamic ? fullName : token.text;
+                let exprNameString = !processedTypeChain.containsDynamic ? fullName : token.text;
+                if (isTypedFunctionType(exprType)) {
+                    exprNameString = processedTypeChain.fullNameOfItem;
+                }
                 const useCustomTypeHover = isInTypeExpression || expression?.findAncestor(isNewExpression);
                 let hoverContent = '';
                 let descriptionNode;
-                if (useCustomTypeHover && isInheritableType(exprType)) {
+                if (useCustomTypeHover && (isInheritableType(exprType) || isTypeStatementType(exprType))) {
                     hoverContent = this.getCustomTypeHover(exprType, extraData);
                 } else if (isMemberField(expression)) {
                     hoverContent = this.getMemberHover(expression, exprType);
