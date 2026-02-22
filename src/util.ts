@@ -2759,6 +2759,9 @@ export class Util {
             return StringType.instance;
         } else if (isBuiltInType(iteratorType, 'roByteArray')) {
             return IntegerType.instance;
+        } else if (isUnionType(iteratorType)) {
+            const iteratorDefaultTypes = iteratorType.types.map(t => this.getIteratorDefaultType(t));
+            return getUniqueType(iteratorDefaultTypes, unionTypeFactory);
         }
         return DynamicType.instance;
     }

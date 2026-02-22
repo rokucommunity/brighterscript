@@ -1019,8 +1019,8 @@ export let DiagnosticMessages = {
             code: 'member-access-violation'
         };
     },
-    invalidTypecastStatementApplication: (foundApplication: string) => ({
-        message: `'typecast' statement can only be applied to 'm', but was applied to '${foundApplication}'`,
+    invalidTypecastStatementApplication: (foundApplication: string, isInFunctionBlock: boolean) => ({
+        message: `'typecast' statement can only be applied to ${!isInFunctionBlock ? '\'m\'' : 'variables'}, but was applied to '${foundApplication}'`,
         legacyCode: 1148,
         severity: DiagnosticSeverity.Error,
         code: 'invalid-typecast-target'

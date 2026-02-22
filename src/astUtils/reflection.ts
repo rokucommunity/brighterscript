@@ -595,6 +595,9 @@ export function isIterableType(value: any): boolean {
     if (isArrayTypeLike(value) || isAssociativeArrayTypeLike(value)) {
         return true;
     }
+    if (isCompoundTypeOf(value, isIterableType)) {
+        return true;
+    }
     if (isBuiltInType(value, 'roByteArray') || isBuiltInType(value, 'roList') || isBuiltInType(value, 'roXMLList') || isBuiltInType(value, 'roMessagePort')) {
         return true;
     }
