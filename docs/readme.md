@@ -82,7 +82,7 @@ end try
 ## [Function Types](function-types.md)
 
 ```brighterscript
-function useCallback(callback as function(string) as integer) as integer
+function useCallback(callback as function(input as string) as integer) as integer
     return callback("test")
 end function
 ```
