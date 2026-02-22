@@ -2463,6 +2463,36 @@ describe('ScopeValidator', () => {
                 program.validate();
                 expectZeroDiagnostics(program);
             });
+
+            it('allows passing a function that itself has function-typed parameters', () => {
+                program.setFile('source/main.bs', `
+                    type CallbackType = function(x as integer) as void
+
+                    function main(fnWrap as function(callback as CallbackType) as void)
+                        myCallback = function(x as integer) as void
+                            print x
+                        end function
+                        fnWrap(myCallback)
+                    end function
+                    `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+
+            it('handles recursive function type expressions', () => {
+                program.setFile('source/main.bs', `
+                    type RecursiveFuncType = function(x as integer) as RecursiveFuncType
+                    function main(fn as RecursiveFuncType)
+                        if m.x > 0
+                            nextFn = fn(m.x - 1)
+                            main(nextFn)
+                        end if
+                    end function
+                 `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
         });
     });
 
@@ -3853,6 +3883,53 @@ describe('ScopeValidator', () => {
                         }).message
                     ]);
             });
+        });
+
+        describe('function return types', () => {
+            it('should allow returning a function that matches the return type', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    function getFunc() as function() as string
+                        return function() as string
+                            return "hello"
+                        end function
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+
+            it('should not allow returning a function that does not match the return type', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    function getFunc() as function() as string
+                        return function() as integer
+                            return 123
+                        end function
+                    end function
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.returnTypeMismatch('function () as integer', 'function () as string', {
+                        returnTypeMismatch: {
+                            expectedType: StringType.instance,
+                            actualType: IntegerType.instance
+                        }
+                    }).message
+                ]);
+            });
+
+            it('can have a function type as a parameter to a function type', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    function test(func as function(arg1 as function() as integer) as integer) as integer
+                        return func(function() as integer
+                            return 123
+                        end function)
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
         });
     });
 

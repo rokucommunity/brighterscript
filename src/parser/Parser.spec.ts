@@ -3126,6 +3126,17 @@ describe('parser', () => {
              `, ParseMode.BrighterScript);
             expectZeroDiagnostics(diagnostics);
         });
+
+        it('can have a function type as a parameter to a function type', () => {
+            let { diagnostics } = parse(`
+                function test(func as function(arg1 as function() as integer) as integer) as integer
+                    return func(function() as integer
+                        return 123
+                    end function)
+                end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
     });
 });
 

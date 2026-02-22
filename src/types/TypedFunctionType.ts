@@ -67,6 +67,9 @@ export class TypedFunctionType extends BaseFunctionType {
             return true;
         }
         if (isTypedFunctionType(targetType)) {
+            if (this === targetType) {
+                return true;
+            }
             return this.checkParamsAndReturnValue(targetType, true, (t1, t2, d) => t1.isTypeCompatible(t2, d), data);
         }
         return false;
