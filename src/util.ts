@@ -1248,7 +1248,7 @@ export class Util {
      * @param typeDescriptor the type descriptor from the docs
      * @returns {BscType} the known type, or dynamic
      */
-    public getNodeFieldType(typeDescriptor: string, lookupTable?: SymbolTable): BscType {
+    public getNodeFieldType(typeDescriptor: string, lookupTable?: SymbolTable, dynamicIfNotFound = true): BscType {
         let typeDescriptorLower = typeDescriptor.toLowerCase().trim().replace(/\*/g, '');
 
         if (typeDescriptorLower.startsWith('as ')) {
@@ -1371,6 +1371,10 @@ export class Util {
                 fullName: typeDescriptor,
                 tableProvider: () => lookupTable
             });
+        }
+
+        if (!dynamicIfNotFound) {
+            return undefined;
         }
 
         return DynamicType.instance;

@@ -8,6 +8,8 @@ import { DynamicType } from './types/DynamicType';
 import type { BaseFunctionType } from './types/BaseFunctionType';
 import { ComponentType } from './types/ComponentType';
 import type { ExtraSymbolData } from './interfaces';
+import { Parser } from './parser/Parser';
+import { isTypeExpression } from './astUtils/reflection';
 
 export class XmlScope extends Scope {
     constructor(
@@ -16,6 +18,8 @@ export class XmlScope extends Scope {
     ) {
         super(xmlFile.destPath, program);
     }
+
+    private typeParser = new Parser();
 
     public get dependencyGraphKey() {
         return this.xmlFile.dependencyGraphKey;
@@ -65,7 +69,22 @@ export class XmlScope extends Scope {
         //add fields
         for (const field of iface.fields ?? []) {
             if (field.id) {
-                const actualFieldType = field.type ? util.getNodeFieldType(field.type, this.symbolTable) : DynamicType.instance;
+                let actualFieldType = field.type ? util.getNodeFieldType(field.type, this.symbolTable, false) : undefined;
+
+                if (!actualFieldType) {
+                    //try to parse the type as an expression, this allows for more complex types like arrays  or interfaces
+                    try {
+                        const typeAst = this.typeParser.parse(field.type ?? '');
+                        if (isTypeExpression(typeAst)) {
+                            //  actualFieldType = typeAst.getType({flags: SymbolTypeFlag.typetime});
+                        }
+                    } catch (e) {
+                        //ignore
+                        actualFieldType = DynamicType.instance;
+                    }
+
+                }
+                field.bscType = actualFieldType;
                 //TODO: add documentation - need to get previous comment from XML
                 result.addMember(field.id, {}, actualFieldType, SymbolTypeFlag.runtime);
             }

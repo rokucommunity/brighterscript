@@ -4,6 +4,7 @@ import { createSGAttribute, createSGInterface, createSGInterfaceField, createSGI
 import type { FileReference, TranspileResult } from '../interfaces';
 import util from '../util';
 import type { TranspileState } from './TranspileState';
+import type { BscType } from '../types';
 
 export interface SGToken {
     text: string;
@@ -451,6 +452,8 @@ export class SGInterfaceField extends SGElement {
     set alwaysNotify(value: string) {
         this.setAttributeValue('alwaysNotify', value);
     }
+
+    bscType: BscType;
 }
 
 export enum SGFieldType {

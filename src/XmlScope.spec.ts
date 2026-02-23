@@ -10,7 +10,7 @@ import { createSandbox } from 'sinon';
 import { ComponentType } from './types/ComponentType';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
-import { ArrayType, BooleanType, DoubleType, DynamicType, FloatType, IntegerType, StringType, TypedFunctionType, UnionType } from './types';
+import { ArrayType, BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InterfaceType, StringType, TypedFunctionType, UnionType } from './types';
 const sinon = createSandbox();
 
 describe('XmlScope', () => {
@@ -315,5 +315,80 @@ describe('XmlScope', () => {
             expectZeroDiagnostics(program);
         });
 
+        describe.only('custom types', () => {
+            it('allows built-in node types as field types', () => {
+                program.setFile('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <interface>
+                            <field id="labelNode" type="roSGNodeLabel" />
+                        </interface>
+                    </component>
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const widgetTypeResult = program.globalScope.symbolTable.getSymbolType('roSGNodeWidget', { flags: SymbolTypeFlag.typetime });
+                expectTypeToBe(widgetTypeResult, ComponentType);
+                const widgetType = widgetTypeResult as ComponentType;
+                const labelNodeType = widgetType.getMemberType('labelNode', { flags: SymbolTypeFlag.runtime });
+                expectTypeToBe(labelNodeType, ComponentType);
+                expectTypeToBe(labelNodeType.getMemberType('text', { flags: SymbolTypeFlag.runtime }), StringType);
+            });
+
+            it('allows unions of primitive types as field types', () => {
+                program.setFile('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <interface>
+                            <field id="publicId" type="integer or string" />
+                        </interface>
+                    </component>
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const widgetTypeResult = program.globalScope.symbolTable.getSymbolType('roSGNodeWidget', { flags: SymbolTypeFlag.typetime });
+                expectTypeToBe(widgetTypeResult, ComponentType);
+                const widgetType = widgetTypeResult as ComponentType;
+                const publicIdType = widgetType.getMemberType('publicId', { flags: SymbolTypeFlag.runtime }) as UnionType;
+                expectTypeToBe(publicIdType, UnionType);
+                expect(publicIdType.types).to.include(IntegerType.instance);
+                expect(publicIdType.types).to.include(StringType.instance);
+            });
+
+            it('disallows unknown types', () => {
+                program.setFile('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <interface>
+                            <field id="labelNode" type="UnknownType" />
+                        </interface>
+                    </component>
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.xmlInvalidFieldType('UnknownType'),
+                    location: { range: Range.create(3, 36, 3, 47) }
+                }]);
+            });
+
+            it('allows types defined in bs files in the scope', () => {
+                program.setFile('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script uri="Widget.bs"/>
+                        <interface>
+                            <field id="labelNode" type="DefinedType" />
+                        </interface>
+                    </component>
+                `);
+                program.setFile('components/Widget.bs', trim`
+                    interface DefinedType
+                        name as string
+                    end interface
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+        });
     });
 });
