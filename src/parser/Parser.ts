@@ -99,7 +99,7 @@ import {
     InlineInterfaceMemberExpression,
     TypedFunctionTypeExpression
 } from './Expression';
-import type { Range } from 'vscode-languageserver';
+import type { Position, Range } from 'vscode-languageserver';
 import type { Logger } from '../logging';
 import { createLogger } from '../logging';
 import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression, isConditionalCompileStatement, isLiteralBoolean, isTypecastExpression } from '../astUtils/reflection';
@@ -196,7 +196,8 @@ export class Parser {
         if (typeof toParse === 'string') {
             tokens = Lexer.scan(toParse, {
                 trackLocations: options.trackLocations,
-                srcPath: options?.srcPath
+                srcPath: options?.srcPath,
+                rangeOffset: options?.rangeOffset
             }).tokens;
         } else {
             tokens = toParse;
@@ -212,7 +213,17 @@ export class Parser {
         this.namespaceAndFunctionDepth = 0;
         this.pendingAnnotations = [];
 
-        this.ast = this.body();
+        if (options.typeOnly) {
+            this.ast.statements.push(this.typeExpression());
+            if (!this.isAtEnd()) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.unexpectedToken(this.peek().text),
+                    location: this.peek().location
+                });
+            }
+        } else {
+            this.ast = this.body();
+        }
         this.ast.bsConsts = options.bsConsts;
         //now that we've built the AST, link every node to its parent
         this.ast.link();
@@ -1460,7 +1471,7 @@ export class Parser {
     private identifyingExpression(allowedTokenKinds?: TokenKind[]): DottedGetExpression | VariableExpression {
         allowedTokenKinds = allowedTokenKinds ?? this.allowedLocalIdentifiers;
         let firstIdentifier = this.consume(
-            DiagnosticMessages.expectedIdentifier(this.previous().text),
+            DiagnosticMessages.expectedIdentifier(this.previous()?.text),
             TokenKind.Identifier,
             ...allowedTokenKinds
         ) as Identifier;
@@ -3757,6 +3768,16 @@ export interface ParseOptions {
      *
      */
     bsConsts?: Map<string, boolean>;
+    /**
+     * When true, the parser will only parse types, and will not attempt to parse expressions or statements.
+     * This is used when parsing the type of field in XML.
+     * In this case, there will be one TypeExpression in the Ast.statements array
+     */
+    typeOnly?: boolean;
+    /**
+     * When parsing sections of a document, offset the range to the beginning of the text
+     */
+    rangeOffset?: Position;
 }
 
 

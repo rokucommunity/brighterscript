@@ -37,7 +37,6 @@ import { LogLevel } from '../../Logger';
 import { Stopwatch } from '../../Stopwatch';
 import chalk from 'chalk';
 import { IntegerType } from '../../types/IntegerType';
-import { ComponentType } from '../../types/ComponentType';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes

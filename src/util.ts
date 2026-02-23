@@ -1364,7 +1364,7 @@ export class Util {
             return this.getNodeFieldType('roSGNodeContentNode', lookupTable);
         } else if (typeDescriptorLower.endsWith(' node')) {
             return this.getNodeFieldType('roSgNode' + typeDescriptorLower.substring(0, typeDescriptorLower.length - 5), lookupTable);
-        } else if (lookupTable) {
+        } else if (lookupTable && !typeDescriptorLower.includes(' ')) {
             //try doing a lookup
             return lookupTable.getSymbolType(typeDescriptorLower, {
                 flags: SymbolTypeFlag.typetime,

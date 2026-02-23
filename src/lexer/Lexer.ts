@@ -2,7 +2,7 @@
 import { TokenKind, ReservedWords, Keywords, PreceedingRegexTypes, AllowedTriviaTokens } from './TokenKind';
 import type { Token } from './Token';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
-import type { Location } from 'vscode-languageserver';
+import type { Location, Position } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util from '../util';
 import type { BsDiagnostic } from '../interfaces';
@@ -104,10 +104,10 @@ export class Lexer {
         this.options = this.sanitizeOptions(options);
         this.start = 0;
         this.current = 0;
-        this.lineBegin = 0;
-        this.lineEnd = 0;
-        this.columnBegin = 0;
-        this.columnEnd = 0;
+        this.lineBegin = options?.rangeOffset?.line ?? 0;
+        this.lineEnd = options?.rangeOffset?.line ?? 0;
+        this.columnBegin = options?.rangeOffset?.character ?? 0;
+        this.columnEnd = options?.rangeOffset?.character ?? 0;
         this.tokens = [];
         this.diagnostics = [];
         this.uri = util.pathToUri(options?.srcPath);
@@ -1133,4 +1133,9 @@ export interface ScanOptions {
      * Path to the file where this source code originated
      */
     srcPath?: string;
+    /**
+     * When parsing sections of a document, offset the range to the beginning of the text
+     */
+    rangeOffset?: Position;
+
 }

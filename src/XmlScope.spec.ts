@@ -10,7 +10,7 @@ import { createSandbox } from 'sinon';
 import { ComponentType } from './types/ComponentType';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
-import { ArrayType, BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InterfaceType, StringType, TypedFunctionType, UnionType } from './types';
+import { ArrayType, BooleanType, DoubleType, DynamicType, FloatType, IntegerType, StringType, TypedFunctionType, UnionType } from './types';
 const sinon = createSandbox();
 
 describe('XmlScope', () => {
@@ -315,7 +315,7 @@ describe('XmlScope', () => {
             expectZeroDiagnostics(program);
         });
 
-        describe.only('custom types', () => {
+        describe('custom types', () => {
             it('allows built-in node types as field types', () => {
                 program.setFile('components/Widget.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
@@ -388,6 +388,37 @@ describe('XmlScope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
+            });
+
+            it('allows inline interface types', () => {
+                program.setFile('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <interface>
+                            <field id="data" type="{id as string, num as integer}" />
+                        </interface>
+                    </component>
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('has an error on malformed types', () => {
+                program.setFile('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <interface>
+                            <field id="data" type="just a bunch of random text" />
+                        </interface>
+                    </component>
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    // <field id="data" type="just *a* bunch of random text" />
+                    { ...DiagnosticMessages.unexpectedToken('a'), location: { range: Range.create(3, 36, 3, 37) } },
+                    // <field id="data" type="*just a bunch of random text*" />
+                    { ...DiagnosticMessages.xmlInvalidFieldType('just a bunch of random text'), location: { range: Range.create(3, 31, 3, 58) } }
+                ]);
             });
         });
     });

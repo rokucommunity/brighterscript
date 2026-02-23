@@ -4,12 +4,12 @@ import type { Program } from './Program';
 import util from './util';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscFile } from './files/BscFile';
-import { DynamicType } from './types/DynamicType';
 import type { BaseFunctionType } from './types/BaseFunctionType';
 import { ComponentType } from './types/ComponentType';
 import type { ExtraSymbolData } from './interfaces';
-import { Parser } from './parser/Parser';
+import { ParseMode, Parser } from './parser/Parser';
 import { isTypeExpression } from './astUtils/reflection';
+import { DynamicType } from './types';
 
 export class XmlScope extends Scope {
     constructor(
@@ -69,18 +69,30 @@ export class XmlScope extends Scope {
         //add fields
         for (const field of iface.fields ?? []) {
             if (field.id) {
-                let actualFieldType = field.type ? util.getNodeFieldType(field.type, this.symbolTable, false) : undefined;
 
-                if (!actualFieldType) {
-                    //try to parse the type as an expression, this allows for more complex types like arrays  or interfaces
+                let actualFieldType = field.type ? util.getNodeFieldType(field.type, this.symbolTable, false) : DynamicType.instance;
+
+                if (!actualFieldType && field.type) {
+                    //try to parse the type as an expression, this allows for more complex types like arrays or interfaces
                     try {
-                        const typeAst = this.typeParser.parse(field.type ?? '');
-                        if (isTypeExpression(typeAst)) {
-                            //  actualFieldType = typeAst.getType({flags: SymbolTypeFlag.typetime});
+
+                        const typeAttrValue = field.attributes.find(attr => attr.key === 'type')?.tokens?.value;
+                        const parsed = this.typeParser.parse(field.type ?? '', {
+                            mode: ParseMode.BrighterScript,
+                            srcPath: this.xmlFile.srcPath,
+                            typeOnly: true,
+                            rangeOffset: typeAttrValue?.location?.range.start
+                        });
+                        const ast = parsed?.ast;
+                        const typeExpression = ast?.statements[0];
+                        if (isTypeExpression(typeExpression)) {
+                            actualFieldType = typeExpression.getType({ flags: SymbolTypeFlag.typetime });
                         }
+                        if (parsed?.diagnostics.length) {
+                            this.program?.diagnostics.register(parsed.diagnostics);
+                        }
+
                     } catch (e) {
-                        //ignore
-                        actualFieldType = DynamicType.instance;
                     }
 
                 }
