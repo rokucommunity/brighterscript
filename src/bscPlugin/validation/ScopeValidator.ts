@@ -1505,10 +1505,15 @@ export class ScopeValidator {
                     }, ScopeValidatorDiagnosticTag.XMLInterface);
                 }
             } else if (!SGFieldTypes.includes(type.toLowerCase())) {
-                this.addDiagnostic({
-                    ...DiagnosticMessages.xmlInvalidFieldType(type),
-                    location: field.getAttribute('type')?.tokens.value.location
-                }, ScopeValidatorDiagnosticTag.XMLInterface);
+                // type might be a custom type
+                const memberType = field.bscType;
+                if (memberType && !memberType.isResolvable()) {
+                    // there is a type defined, but could not resolve this field type
+                    this.addDiagnostic({
+                        ...DiagnosticMessages.xmlInvalidFieldType(type),
+                        location: field.getAttribute('type')?.tokens.value.location
+                    }, ScopeValidatorDiagnosticTag.XMLInterface);
+                }
             }
             if (onChange) {
                 if (!callableContainerMap.has(onChange.toLowerCase())) {

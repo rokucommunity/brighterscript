@@ -227,11 +227,11 @@ export class XmlFile implements BscFile {
                     });
                 }
                 // TODO: when we can specify proper types in fields, add those types too:
-                //if (node.type && isCustomXmlType(node.type)) {
+                //if (node.bscType && isCustomXmlType(node.bscType)) {
                 //    requiredSymbols.push({
                 //        flags: SymbolTypeFlag.typetime,
                 //        file: this,
-                //        name: node.type.toLowerCase()
+                //        name: node.bscType.toLowerCase()
                 //    });
                 //}
             }
