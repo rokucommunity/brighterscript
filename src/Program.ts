@@ -1343,7 +1343,7 @@ export class Program {
                 if (await fsExtra.pathExists(outputPath)) {
                     throw new Error(`Error while transpiling "${file.srcPath}". A file already exists at "${outputPath}" and will not be overwritten.`);
                 }
-                const writeMapPromise = fileTranspileResult.map ? fsExtra.writeFile(`${outputPath}.map`, fileTranspileResult.map.toString()) : null;
+                const writeMapPromise = fileTranspileResult.map ? fsExtra.writeFile(`${outputPath}.map`, this.serializeSourceMap(fileTranspileResult.map, outputPath)) : null;
                 await Promise.all([
                     fsExtra.writeFile(outputPath, fileTranspileResult.code),
                     writeMapPromise
@@ -1391,6 +1391,24 @@ export class Program {
     private afterProgramTranspile(entries: TranspileObj[], astEditor: AstEditor) {
         this.plugins.emit('afterProgramTranspile', this, entries, astEditor);
         astEditor.undoAll();
+    }
+
+    /**
+     * Serialize a source map to a JSON string, optionally converting absolute
+     * source paths to paths relative to the map file location.
+     */
+    private serializeSourceMap(sourceMap: SourceMapGenerator, outputPath: string): string {
+        if (!this.options.sourceMapRelativePaths) {
+            return sourceMap.toString();
+        }
+        const mapJson = sourceMap.toJSON();
+        const mapDir = path.dirname(outputPath);
+        mapJson.sources = mapJson.sources.map((source: string) => {
+            return path.isAbsolute(source)
+                ? s`${path.relative(mapDir, source)}`
+                : source;
+        });
+        return JSON.stringify(mapJson);
     }
 
     /**
