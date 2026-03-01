@@ -425,7 +425,10 @@ export class XmlFile {
     private getMissingImportsForTranspile() {
         let ownImports = this.getAvailableScriptImports();
         //add the bslib path to ownImports, it'll get filtered down below
-        ownImports.push(this.program.bslibPkgPath);
+        //skip adding bslib import when using unique-per-file mode since functions are inlined
+        if (this.program.options.bslibHandling?.mode !== 'unique-per-file') {
+            ownImports.push(this.program.bslibPkgPath);
+        }
 
         let parentImports = this.parentComponent?.getAvailableScriptImports() ?? [];
 
