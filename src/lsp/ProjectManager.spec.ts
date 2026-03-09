@@ -339,6 +339,58 @@ describe('ProjectManager', () => {
                 s`${rootDir}/project1/bsconfig.json`
             ]);
         });
+
+        describe('concurrency limiting', () => {
+            it('limits the number of projects activating concurrently', async () => {
+                //create multiple bsconfig.json files
+                for (let i = 0; i < 6; i++) {
+                    fsExtra.outputFileSync(`${rootDir}/project${i}/bsconfig.json`, '');
+                }
+
+                //track concurrent activation count by stubbing the private activateProject method
+                let maxConcurrent = 0;
+                let currentConcurrent = 0;
+                const activateStub = sinon.stub(manager as any, 'activateProject').callsFake(async () => {
+                    currentConcurrent++;
+                    maxConcurrent = Math.max(maxConcurrent, currentConcurrent);
+                    //simulate async activation work
+                    await util.sleep(10);
+                    currentConcurrent--;
+                });
+
+                //set a low concurrency limit for testing
+                const originalLimit = ProjectManager.projectActivationConcurrencyLimit;
+                ProjectManager.projectActivationConcurrencyLimit = 2;
+
+                try {
+                    await manager.syncProjects([workspaceSettings]);
+                    //should have activated all 6 projects
+                    expect(activateStub.callCount).to.eql(6);
+                    //but never more than 2 at a time
+                    expect(maxConcurrent).to.be.at.most(2);
+                } finally {
+                    ProjectManager.projectActivationConcurrencyLimit = originalLimit;
+                }
+            });
+
+            it('activates all projects even with concurrency limit', async () => {
+                //create 5 bsconfig.json files
+                for (let i = 0; i < 5; i++) {
+                    fsExtra.outputFileSync(`${rootDir}/project${i}/bsconfig.json`, '');
+                }
+
+                const originalLimit = ProjectManager.projectActivationConcurrencyLimit;
+                ProjectManager.projectActivationConcurrencyLimit = 2;
+
+                try {
+                    await manager.syncProjects([workspaceSettings]);
+                    //all projects should be created
+                    expect(manager.projects.length).to.eql(5);
+                } finally {
+                    ProjectManager.projectActivationConcurrencyLimit = originalLimit;
+                }
+            });
+        });
     });
 
     describe('maxDepth configuration', () => {
