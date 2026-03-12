@@ -1913,9 +1913,27 @@ export class AnnotationExpression extends Expression {
     }
 
     public toSourceNode(state: TranspileState): SourceNode {
+        // Handle annotation with or without arguments
+        // If call exists, we need to output @name(args)
+        // But we can't call this.call.toSourceNode() because that creates circular reference
+        // (call.callee points back to this annotation)
+        // So we manually build the call portion
+        if (this.call) {
+            return state.toSourceNode(
+                state.tokenToSourceNodeWithTrivia(this.atToken),
+                state.tokenToSourceNodeWithTrivia(this.nameToken),
+                state.tokenToSourceNodeWithTrivia(this.call.openingParen),
+                ...this.call.args.map((x, i) => ([
+                    x.toSourceNode(state),
+                    state.tokenToSourceNodeWithTrivia(this.call.argCommas[i])
+                ])).flat(),
+                state.tokenToSourceNodeWithTrivia(this.call.closingParen)
+            );
+        }
+        // No arguments, just output @name
         return state.toSourceNode(
             state.tokenToSourceNodeWithTrivia(this.atToken),
-            this.call?.toSourceNode(state)
+            state.tokenToSourceNodeWithTrivia(this.nameToken)
         );
     }
 
