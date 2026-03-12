@@ -103,7 +103,7 @@
     "benchmark": "^2.1.4",
     "chai": "^4.2.0",
     "chai-files": "^1.4.0",
-    "check-eol": "file:../../check-eol",
+    "check-eol": "^0.2.0",
     "clipboardy": "^2.3.0",
     "coveralls-next": "^4.2.0",
     "deepmerge": "^4.2.2",
