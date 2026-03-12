@@ -1475,6 +1475,69 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
 
             });
+
+            it('finds type statement types', () => {
+                program.setFile(`source/main.bs`, `
+                    type MyType = integer or string
+
+                    function foo(param as MyType) as MyType
+                        return param
+                    end function
+
+                `);
+                program.validate();
+
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds type statement types from other namespaces', () => {
+                program.setFile(`source/main.bs`, `
+                    namespace MyNamespace
+                        type MyType = integer or string
+                    end namespace
+
+                    function foo(param as MyNamespace.MyType) as MyNamespace.MyType
+                        return param
+                    end function
+                `);
+                program.validate();
+
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds type statement types from other namespaces', () => {
+                program.setFile(`source/main.bs`, `
+                    namespace MyNamespace
+                        type MyType = integer or string
+                    end namespace
+
+                    function foo(param as MyNamespace.MyType) as MyNamespace.MyType
+                        return param
+                    end function
+                `);
+                program.validate();
+
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows type statement types as class member properties', () => {
+                program.setFile(`source/main.bs`, `
+                    namespace MyNamespace
+                        type MyType = integer or string
+                    end namespace
+
+
+                    namespace AnotherNamespace
+                        class MyClass
+                            prop as MyNamespace.MyType
+                        end class
+                    end namespace
+                `);
+                program.validate();
+
+                expectZeroDiagnostics(program);
+            });
+
         });
     });
 

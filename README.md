@@ -101,6 +101,9 @@ BrighterScript adds several new features to the BrightScript language such as na
     <a href="https://www.haystack.tv/">
       <img height="38" src="https://user-images.githubusercontent.com/2544493/192610056-d1b5a382-edf4-47b9-a6a5-d2d3ee9094cb.png">
     </a>&nbsp;&nbsp;&nbsp;
+    <a href="https://www.tksssoftware.com/">
+      <img height="38" alt="TKSS Software Inc" src="https://github.com/user-attachments/assets/332d692f-7386-495d-b29d-c2ed7d3d2e2f" />
+    </a>&nbsp;&nbsp;&nbsp;
 </p>
 <br/>
 

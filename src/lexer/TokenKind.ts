@@ -330,7 +330,8 @@ export const Keywords: Record<string, TokenKind> = {
     endinterface: TokenKind.EndInterface,
     const: TokenKind.Const,
     typecast: TokenKind.Typecast,
-    alias: TokenKind.Alias
+    alias: TokenKind.Alias,
+    type: TokenKind.Type
 };
 //hide the constructor prototype method because it causes issues
 Keywords.constructor = undefined;
@@ -496,7 +497,8 @@ export const AllowedLocalIdentifiers = [
     TokenKind.Const,
     TokenKind.Continue,
     TokenKind.Typecast,
-    TokenKind.Alias
+    TokenKind.Alias,
+    TokenKind.Type
 ];
 
 export const BrighterScriptSourceLiterals = [

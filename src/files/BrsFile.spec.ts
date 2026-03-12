@@ -80,6 +80,73 @@ describe('BrsFile', () => {
         });
     });
 
+    it('does not show "missing function" diagnostic for `call().dottedGet` as a statement', () => {
+        program.setFile(`source/main.brs`, `
+            sub main()
+                test().disabled
+            end sub
+            sub test()
+            end sub
+        `);
+        program.validate();
+        expectDiagnostics(program, [
+            {
+                range: util.createRange(2, 22, 2, 31),
+                message: DiagnosticMessages.propAccessNotPermittedAfterFunctionCallInExpressionStatement('Property').message
+            }
+        ]);
+    });
+
+    it('does not show "missing function" diagnostic for `call()["indexedGet"]` as a statement', () => {
+        program.setFile(`source/main.brs`, `
+            sub main()
+                test()["disabled"]
+            end sub
+            sub test()
+            end sub
+        `);
+        program.validate();
+        expectDiagnostics(program, [
+            {
+                range: util.createRange(2, 22, 2, 34),
+                message: DiagnosticMessages.propAccessNotPermittedAfterFunctionCallInExpressionStatement('Index').message
+            }
+        ]);
+    });
+
+    it('does not show "missing function" diagnostic for `call()@xmlAttr` as a statement', () => {
+        program.setFile(`source/main.brs`, `
+            sub main()
+                test()@disabled
+            end sub
+            sub test()
+            end sub
+        `);
+        program.validate();
+        expectDiagnostics(program, [
+            {
+                range: util.createRange(2, 22, 2, 31),
+                message: DiagnosticMessages.propAccessNotPermittedAfterFunctionCallInExpressionStatement('XML attribute').message
+            }
+        ]);
+    });
+
+    it('does not flag two chained calls together', () => {
+        program.setFile(`source/main.brs`, `
+            sub main()
+                test().test()
+            end sub
+            function test()
+                print "test"
+                return {
+                    test: test
+                }
+            end function
+        `);
+        program.validate();
+        expectDiagnostics(program, []);
+    });
+
     it('flags namespaces used as variables', () => {
         program.setFile('source/main.bs', `
             sub main()
@@ -4270,6 +4337,103 @@ describe('BrsFile', () => {
             `);
         });
 
+
+        it('allows intersection types for primitives', () => {
+            testTranspile(`
+                sub main(x as string and float, y as object and float or string)
+                end sub
+            `, `
+                sub main(x as dynamic, y as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows intersection types for classes, interfaces', () => {
+            testTranspile(`
+                interface IFaceA
+                    name as string
+                    data as integer
+                end interface
+
+                interface IFaceB
+                    name as string
+                    value as float
+                end interface
+
+                sub main(x as IFaceA and IFaceB)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows intersection types for classes, interfaces', () => {
+            testTranspile(`
+                namespace alpha.beta
+                    interface IFaceA
+                        name as string
+                        data as integer
+                    end interface
+
+                    interface IFaceB
+                        name as string
+                        value as float
+                    end interface
+                end namespace
+
+                sub main(x as alpha.beta.IFaceA and alpha.beta.IFaceB)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows intersection types of arrays', () => {
+            testTranspile(`
+                namespace alpha.beta
+                    interface IFaceA
+                        name as string
+                        data as integer
+                    end interface
+
+                    interface IFaceB
+                        name as string
+                        value as float
+                    end interface
+                end namespace
+
+                sub main(x as alpha.beta.IFaceA[][] and alpha.beta.IFaceB[] and ifStringOps)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows grouped expression in types types', () => {
+            testTranspile(`
+                namespace alpha.beta
+                    interface IFaceA
+                        name as string
+                        data as integer
+                    end interface
+
+                    interface IFaceB
+                        name as string
+                        value as float
+                    end interface
+                end namespace
+
+                sub main(x as (alpha.beta.IFace and alpha.beta.IFaceB)[] or ifStringOps)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
         it('allows built-in types for return values', () => {
             testTranspile(`
                 function makeLabel(text as string) as roSGNodeLabel
@@ -4376,6 +4540,86 @@ describe('BrsFile', () => {
                     print node[m.keyProp]
                 end sub
             `);
+        });
+
+        describe('inline interfaces', () => {
+            it('transpiles to "dynamic"', () => {
+                testTranspile(`
+                    function foo(input as {name as string}) as {id as string}
+                        output as {id as string} = {id: input.name}
+                        return output
+                    end function
+                    `, `
+                    function foo(input as dynamic) as dynamic
+                        output = {
+                            id: input.name
+                        }
+                        return output
+                    end function
+                `);
+            });
+        });
+
+        describe('type statements interfaces', () => {
+            it('transpiles statement to nothing', () => {
+                testTranspile(`
+                     type number = integer or float
+
+                    sub foo()
+                        print "hello"
+                    end sub
+                `, `
+                    sub foo()
+                        print "hello"
+                    end sub
+                `);
+            });
+
+            it('transpiles type statement to object', () => {
+                testTranspile(`
+                     type number = integer or float
+
+                    sub foo(node as number)
+                        print node[m.keyProp]
+                    end sub
+                `, `
+                    sub foo(node as object)
+                        print node[m.keyProp]
+                    end sub
+                `);
+            });
+        });
+
+        describe('for each loop with types', () => {
+            it('transpiles to untyped for each', () => {
+                testTranspile(`
+                    sub foo(items as string[])
+                        for each item as string in items
+                            print item
+                        end for
+                    end sub
+                `, `
+                    sub foo(items as dynamic)
+                        for each item in items
+                            print item
+                        end for
+                    end sub
+                `);
+            });
+        });
+
+        describe('typed functions in type expressions', () => {
+            it('transpiles to function', () => {
+                testTranspile(`
+                    function test(func as function(name as string, num as integer) as integer) as integer
+                        return func("hello", 123)
+                    end function
+                `, `
+                    function test(func as Function) as integer
+                        return func("hello", 123)
+                    end function
+                `);
+            });
         });
     });
 
