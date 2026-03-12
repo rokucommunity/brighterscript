@@ -260,6 +260,12 @@ export class ExpressionStatement extends Statement {
         return this.expression.transpile(state);
     }
 
+    getTypedef(state: BrsTranspileState): TranspileResult {
+        //ExpressionStatements should not be included in typedefs
+        //as they represent code execution which is not part of the type definition
+        return [];
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'expression', visitor, options);
@@ -3374,4 +3380,3 @@ export class AliasStatement extends Statement {
         );
     }
 }
-

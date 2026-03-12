@@ -510,6 +510,12 @@ export class NamespacedVariableNameExpression extends Expression {
         ];
     }
 
+    getTypedef(state) {
+        return [
+            state.sourceNode(this, this.getName(ParseMode.BrighterScript))
+        ];
+    }
+
     public getNameParts() {
         let parts = [] as string[];
         if (isVariableExpression(this.expression)) {
@@ -582,7 +588,7 @@ export class DottedGetExpression extends Expression {
     getTypedef(state: BrsTranspileState) {
         //always transpile the dots for typedefs
         return [
-            ...this.obj.transpile(state),
+            ...(this.obj.getTypedef ? this.obj.getTypedef(state) : this.obj.transpile(state)),
             state.transpileToken(this.dot),
             state.transpileToken(this.name)
         ];
