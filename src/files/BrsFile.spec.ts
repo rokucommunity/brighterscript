@@ -2292,6 +2292,30 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+
+        it('namespaced functions default param values in d.bs files are transpiled correctly', () => {
+            testGetTypedef(`
+               namespace promises
+                    function onThen(promise as dynamic, callback = promises.internal.defaultThenCallback as function, context = "__INVALID__" as object) as dynamic
+                        return true
+                    end function
+                end namespace
+                namespace promises.internal
+                    function defaultThenCallback(value = invalid as dynamic, _ = invalid as dynamic) as dynamic
+                    end function
+                end namespace
+            `, `
+               namespace promises
+                   function onThen(promise as dynamic, callback = promises.internal.defaultThenCallback as function, context = "__INVALID__" as object) as dynamic
+                   end function
+               end namespace
+               namespace promises.internal
+                   function defaultThenCallback(value = invalid as dynamic, _ = invalid as dynamic) as dynamic
+                   end function
+               end namespace
+            `);
+        });
+
         it('namespaced functions default param values in d.bs files are transpiled correctly', () => {
             testGetTypedef(`
                 namespace alpha
