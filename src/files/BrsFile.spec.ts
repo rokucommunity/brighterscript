@@ -2292,6 +2292,30 @@ describe('BrsFile', () => {
     });
 
     describe('transpile', () => {
+
+        it('namespaced functions default param values in d.bs files are transpiled correctly', () => {
+            testGetTypedef(`
+               namespace promises
+                    function onThen(promise as dynamic, callback = promises.internal.defaultThenCallback as function, context = "__INVALID__" as object) as dynamic
+                        return true
+                    end function
+                end namespace
+                namespace promises.internal
+                    function defaultThenCallback(value = invalid as dynamic, _ = invalid as dynamic) as dynamic
+                    end function
+                end namespace
+            `, `
+               namespace promises
+                   function onThen(promise as dynamic, callback = promises.internal.defaultThenCallback as function, context = "__INVALID__" as object) as dynamic
+                   end function
+               end namespace
+               namespace promises.internal
+                   function defaultThenCallback(value = invalid as dynamic, _ = invalid as dynamic) as dynamic
+                   end function
+               end namespace
+            `);
+        });
+
         it('namespaced functions default param values in d.bs files are transpiled correctly', () => {
             testGetTypedef(`
                 namespace alpha
@@ -4580,6 +4604,20 @@ describe('BrsFile', () => {
                             print item
                         end for
                     end sub
+                `);
+            });
+        });
+
+        describe('typed functions in type expressions', () => {
+            it('transpiles to function', () => {
+                testTranspile(`
+                    function test(func as function(name as string, num as integer) as integer) as integer
+                        return func("hello", 123)
+                    end function
+                `, `
+                    function test(func as Function) as integer
+                        return func("hello", 123)
+                    end function
                 `);
             });
         });
