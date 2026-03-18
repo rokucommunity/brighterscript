@@ -240,7 +240,7 @@ export class TreeShaker {
                 if (bsName && brsName) {
                     this.allFunctions.set(bsName, brsName);
                     this.allSimpleNames.add(bsName.split('.').pop()!);
-                    this.allStatements.push({ bsName, brsName, stmt, file });
+                    this.allStatements.push({ bsName: bsName, brsName: brsName, stmt: stmt, file: file });
                     collected.push({ bsName: bsName, brsName: brsName, stmt: stmt });
                 }
             }
