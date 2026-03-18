@@ -4,7 +4,7 @@ import { standardizePath as s } from '../../util';
 import * as fsExtra from 'fs-extra';
 import undent from 'undent';
 
-describe.only('TreeShakerValidator', () => {
+describe('TreeShakerValidator', () => {
     let program: Program;
     const tempDir = s`${__dirname}/../.tmp`;
     const rootDir = s`${tempDir}/rootDir`;
@@ -97,24 +97,83 @@ describe.only('TreeShakerValidator', () => {
             expect(code).not.to.include('sub removable()');
         });
 
-        it('preserves @keep annotated functions regardless of call sites', async () => {
+        it('preserves functions with a bs:keep comment on the same line', async () => {
             program.setFile('source/main.bs', `
                 sub main()
                 end sub
 
-                @keep
-                sub mustStay()
-                    print "annotated with keep"
+                sub mustStay() ' bs:keep
+                    print "inline keep comment"
                 end sub
 
                 sub canGo()
-                    print "no annotation"
+                    print "no keep comment"
                 end sub
             `);
 
             const code = await getTranspiled('source/main.bs');
             expect(code).to.include('sub mustStay()');
             expect(code).not.to.include('sub canGo()');
+        });
+
+        it('preserves functions with a bs:keep comment on the line above', async () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                end sub
+
+                ' bs:keep
+                sub mustStay()
+                    print "keep comment above"
+                end sub
+
+                sub canGo()
+                    print "no keep comment"
+                end sub
+            `);
+
+            const code = await getTranspiled('source/main.bs');
+            expect(code).to.include('sub mustStay()');
+            expect(code).not.to.include('sub canGo()');
+        });
+
+        it('preserves functions with a bs:keep comment anywhere between the previous function and this one', async () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                end sub
+
+                ' some description
+                ' bs:keep
+                ' another comment
+                sub mustStay()
+                    print "keep comment in header region"
+                end sub
+
+                sub canGo()
+                end sub
+            `);
+
+            const code = await getTranspiled('source/main.bs');
+            expect(code).to.include('sub mustStay()');
+            expect(code).not.to.include('sub canGo()');
+        });
+
+        it('does not apply a bs:keep comment to the function before it', async () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                end sub
+
+                sub shouldBeRemoved()
+                    print "no keep"
+                end sub
+
+                ' bs:keep
+                sub mustStay()
+                end sub
+            `);
+
+            const code = await getTranspiled('source/main.bs');
+            expect(code).not.to.include('sub shouldBeRemoved()');
+            expect(code).to.include('sub mustStay()');
         });
 
         it('preserves functions referenced as string literals (observeField pattern)', async () => {

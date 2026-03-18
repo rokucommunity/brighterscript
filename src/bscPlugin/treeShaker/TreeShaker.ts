@@ -40,8 +40,8 @@ export class TreeShaker {
     // Functions declared in XML <interface><function name="..."/> elements
     private xmlInterfaceFunctions = new Set<string>();
 
-    // Functions explicitly annotated with @keep — never removed regardless of references
-    private keepAnnotated = new Set<string>();
+    // Functions marked with a `bs:keep` comment — never removed regardless of references
+    private keepCommented = new Set<string>();
 
     // Normalized keep rules from config
     private keepRules: NormalizedKeepRule[] = [];
@@ -54,7 +54,7 @@ export class TreeShaker {
         this.calledNames.clear();
         this.stringRefs.clear();
         this.xmlInterfaceFunctions.clear();
-        this.keepAnnotated.clear();
+        this.keepCommented.clear();
         this.keepRules = [];
         this.rootDir = '';
     }
@@ -99,18 +99,48 @@ export class TreeShaker {
     // -------------------------------------------------------------------------
 
     private collectDefinitions(file: BrsFile) {
+        // Collect all function statements first so we can sort by source order.
+        // Sorting is required for the prev-end-line region check used by `bs:keep`.
+        const collected: Array<{ bsName: string; brsName: string; stmt: FunctionStatement }> = [];
+
         file.ast.walk(createVisitor({
             FunctionStatement: (stmt) => {
                 const bsName = stmt.getName(ParseMode.BrighterScript)?.toLowerCase();
                 const brsName = stmt.getName(ParseMode.BrightScript)?.toLowerCase();
                 if (bsName && brsName) {
                     this.allFunctions.set(bsName, { statement: stmt, file: file, brsName: brsName });
-                    if (stmt.annotations?.find(a => a.name.toLowerCase() === 'keep')) {
-                        this.keepAnnotated.add(bsName);
-                    }
+                    collected.push({ bsName: bsName, brsName: brsName, stmt: stmt });
                 }
             }
         }), { walkMode: WalkMode.visitStatements });
+
+        // Walk functions in source order to detect `bs:keep` comments.
+        // A `bs:keep` on line N applies to a function F when:
+        //   • N == F.startLine  (same-line inline comment), OR
+        //   • prevFunctionEndLine < N <= F.startLine  (comment in the header region above F)
+        collected.sort((a, b) => a.stmt.range.start.line - b.stmt.range.start.line);
+
+        let prevEndLine = -1;
+        for (const { bsName, stmt } of collected) {
+            const startLine = stmt.range.start.line;
+            if (this.hasBsKeepInRegion(file, prevEndLine, startLine)) {
+                this.keepCommented.add(bsName);
+            }
+            prevEndLine = stmt.range.end.line;
+        }
+    }
+
+    /**
+     * Returns true if any `bs:keep` comment line falls in the half-open interval
+     * (prevEndLine, functionStartLine] — i.e., in the "header region" above a function.
+     */
+    private hasBsKeepInRegion(file: BrsFile, prevEndLine: number, functionStartLine: number): boolean {
+        for (const line of file.keepFlagLines) {
+            if (line > prevEndLine && line <= functionStartLine) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private collectXmlFile(file: XmlFile) {
@@ -250,8 +280,8 @@ export class TreeShaker {
     isUnused(bsName: string): boolean {
         const simpleName = bsName.split('.').pop() ?? bsName;
         return (
-            !this.keepAnnotated.has(bsName) &&
-            !this.keepAnnotated.has(simpleName) &&
+            !this.keepCommented.has(bsName) &&
+            !this.keepCommented.has(simpleName) &&
             !TreeShaker.ENTRY_POINTS.has(simpleName) &&
             !TreeShaker.ENTRY_POINTS.has(bsName) &&
             !this.calledNames.has(bsName) &&
