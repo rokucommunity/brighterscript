@@ -325,12 +325,13 @@ export class TreeShaker {
 
         // src: glob against source file path (relative patterns resolved from rootDir)
         if (rule.src) {
-            const srcPath = file.srcPath;
+            const srcPath = util.standardizePath(file.srcPath);
             const matched = rule.src.some(pattern => {
                 const resolved = path.isAbsolute(pattern)
                     ? pattern
-                    : `${this.rootDir}/${pattern}`;
-                return minimatch(srcPath, resolved, { nocase: true });
+                    : path.resolve(this.rootDir, pattern);
+                const normalizedResolved = util.standardizePath(resolved);
+                return minimatch(srcPath, normalizedResolved, { nocase: true });
             });
             if (!matched) {
                 return false;
