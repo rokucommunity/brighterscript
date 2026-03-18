@@ -248,7 +248,9 @@ export interface TreeShakingConfig {
     enabled?: boolean;
     /**
      * Declarations matching any rule in this list are always retained,
-     * along with their full dependency closure.
+     * along with their statically detectable dependencies (as determined by static analysis).
+     * Dynamic dependencies may not be detected, and statically referenced callees may be kept
+     * even when referenced only from otherwise dead code.
      */
     keep?: TreeShakingKeepEntry[];
 }
