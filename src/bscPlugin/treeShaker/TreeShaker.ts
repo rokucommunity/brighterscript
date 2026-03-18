@@ -331,11 +331,21 @@ export class TreeShaker {
             CallExpression: (call) => {
                 const parts = util.getAllDottedGetParts(call.callee);
                 if (parts?.length) {
-                    // Keep both the fully-qualified name and just the final segment
-                    const full = parts.map(p => p.text).join('.').toLowerCase();
-                    const simple = parts[parts.length - 1].text.toLowerCase();
-                    this.calledNames.add(full);
-                    this.calledNames.add(simple);
+                    if (parts.length === 1) {
+                        // Simple/unqualified call, e.g. `foo()`
+                        const simple = parts[0].text.toLowerCase();
+                        if (this.allFunctions.has(simple) || this.allSimpleNames.has(simple)) {
+                            this.calledNames.add(simple);
+                        }
+                    } else {
+                        // Namespaced/dotted call, e.g. `ns.helper()` or `m.top.observeField()`
+                        const full = parts.map(p => p.text).join('.').toLowerCase();
+                        const simple = parts[parts.length - 1].text.toLowerCase();
+                        if (this.allFunctions.has(full) || this.allSimpleNames.has(simple)) {
+                            this.calledNames.add(full);
+                            this.calledNames.add(simple);
+                        }
+                    }
                 }
             },
 
