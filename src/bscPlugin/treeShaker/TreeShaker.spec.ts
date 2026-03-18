@@ -277,6 +277,49 @@ describe('TreeShaker', () => {
             expect(code).to.include('sub mustStay()');
         });
 
+        it('preserves a namespaced function passed by reference using its relative name from within the same namespace', async () => {
+            // Inside namespace ns, `helper` is a relative reference to `ns.helper`.
+            // allFunctions only stores 'ns.helper', so the VariableExpression gate must
+            // also check allSimpleNames or it would miss the reference and remove ns.helper.
+            program.setFile('source/main.bs', `
+                namespace ns
+                    sub init()
+                        m.top.observeField("data", helper)
+                    end sub
+
+                    sub helper()
+                        print "referenced relatively by name"
+                    end sub
+                end namespace
+
+                sub main()
+                    ns.init()
+                end sub
+            `);
+
+            const code = await getTranspiled('source/main.bs');
+            expect(code).to.include('ns_helper');
+        });
+
+        it('preserves a namespaced function passed by dotted reference from outside the namespace', async () => {
+            // ns.helper appears as a DottedGetExpression, not a CallExpression.
+            // The DottedGetExpression gate must check allFunctions.has(full) correctly.
+            program.setFile('source/main.bs', `
+                namespace ns
+                    sub helper()
+                        print "referenced by dotted get"
+                    end sub
+                end namespace
+
+                sub main()
+                    m.top.observeField("data", ns.helper)
+                end sub
+            `);
+
+            const code = await getTranspiled('source/main.bs');
+            expect(code).to.include('ns_helper');
+        });
+
         it('preserves functions referenced as string literals (observeField pattern)', async () => {
             program.setFile('source/main.bs', `
                 sub init()
@@ -332,6 +375,28 @@ describe('TreeShaker', () => {
             const code = await getTranspiled('source/main.bs');
             expect(code).to.include('sub renderBlocks()');
             expect(code).not.to.include('sub unused()');
+        });
+
+        it('preserves a namespaced function called by its transpiled underscore name from a .brs file', async () => {
+            // A plain .brs file has no namespaces — it calls utils_helper() directly.
+            // calledNames receives "utils_helper" (underscore form), which matches neither
+            // the bsName "utils.helper" nor the simpleName "helper". isUnused must also
+            // check brsName or the function is incorrectly removed.
+            program.setFile('source/utils.bs', `
+                namespace utils
+                    sub helper()
+                        print "called from brs"
+                    end sub
+                end namespace
+            `);
+            program.setFile('source/main.brs', `
+                sub main()
+                    utils_helper()
+                end sub
+            `);
+
+            const code = await getTranspiled('source/utils.bs');
+            expect(code).to.include('utils_helper');
         });
 
         it('preserves a namespaced function called relatively (without namespace prefix) from within the same namespace', async () => {
@@ -775,10 +840,37 @@ describe('TreeShaker', () => {
         });
 
         describe('dest rule', () => {
-            it('keeps all functions in files matching the dest pkg path', async () => {
+            it('keeps all functions in files matching the dest glob using the transpiled .brs extension', async () => {
+                // .bs source files deploy as .brs — dest patterns must use .brs to match
                 program = new Program({
                     rootDir: rootDir, stagingDir: stagingDir,
-                    treeShaking: { enabled: true, keep: [{ dest: 'source/vendor/**/*' }] }
+                    treeShaking: { enabled: true, keep: [{ dest: 'source/vendor/**/*.brs' }] }
+                });
+                program.setFile('source/vendor/lib.bs', `
+                    sub vendorHelper()
+                        print "from vendor"
+                    end sub
+                `);
+                program.setFile('source/main.bs', `
+                    sub main()
+                    end sub
+
+                    sub appHelper()
+                        print "app code - removed"
+                    end sub
+                `);
+
+                const vendorCode = await getTranspiled('source/vendor/lib.bs');
+                const mainCode = await getTranspiled('source/main.bs');
+
+                expect(vendorCode).to.include('sub vendorHelper()');
+                expect(mainCode).not.to.include('sub appHelper()');
+            });
+
+            it('accepts a pkg:/ prefix in dest patterns and strips it before matching', async () => {
+                program = new Program({
+                    rootDir: rootDir, stagingDir: stagingDir,
+                    treeShaking: { enabled: true, keep: [{ dest: 'pkg:/source/vendor/**/*.brs' }] }
                 });
                 program.setFile('source/vendor/lib.bs', `
                     sub vendorHelper()

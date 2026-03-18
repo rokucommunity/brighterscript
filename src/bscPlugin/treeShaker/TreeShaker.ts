@@ -45,8 +45,15 @@ export class TreeShaker {
     ]);
 
     // Fully-qualified lowercased function names (BrighterScript style, dots) → brsName
-    // Used by isUnused() to resolve the BrightScript name and by the reference pass gating.
     private allFunctions = new Map<string, string>();
+
+    // Simple (unqualified) names of every known function — the last dot-segment of each bsName.
+    // A separate set is needed because allFunctions is keyed by fully-qualified names, so
+    // allFunctions.has('helper') returns false for 'ns.helper'. Without this, a namespaced
+    // function passed by reference using its relative name (e.g. observeField("x", helper)
+    // from inside namespace ns) would not be detected by the VariableExpression/
+    // DottedGetExpression gates and could be incorrectly removed.
+    private allSimpleNames = new Set<string>();
 
     // Every function statement across all files, in collection order.
     // allFunctions stores only one entry per bsName (last write wins for name-only checks),
@@ -82,6 +89,7 @@ export class TreeShaker {
 
     reset() {
         this.allFunctions.clear();
+        this.allSimpleNames.clear();
         this.allStatements = [];
         this.calledNames.clear();
         this.stringRefs.clear();
@@ -166,9 +174,12 @@ export class TreeShaker {
             }
 
             if (rule.dest) {
-                compiled.destMatchers = rule.dest.map(
-                    p => new minimatch.Minimatch(p.replace(/\\/g, '/'), { nocase: true })
-                );
+                compiled.destMatchers = rule.dest.map(p => {
+                    // Normalize backslashes and strip optional pkg:/ scheme prefix so
+                    // patterns like "pkg:/source/**/*.brs" and "source/**/*.brs" both work.
+                    const normalized = p.replace(/\\/g, '/').replace(/^pkg:\//i, '');
+                    return new minimatch.Minimatch(normalized, { nocase: true });
+                });
             }
 
             return compiled;
@@ -176,15 +187,21 @@ export class TreeShaker {
     }
 
     /**
-     * Returns the normalized srcPath and pkgPath for a file, computing and caching
-     * them on first access so repeated rule checks for the same file pay no extra cost.
+     * Returns the normalized srcPath and deployedPkgPath for a file, computing and
+     * caching them on first access so repeated rule checks for the same file pay no
+     * extra cost.
+     *
+     * pkgPath uses the *deployed* extension: .bs files transpile to .brs, so
+     * `source/foo.bs` becomes `source/foo.brs`.  This matches what users naturally
+     * write in dest glob patterns (e.g. `source/vendor/**\/*.brs`).
      */
     private getFilePaths(file: BrsFile): { srcPath: string; pkgPath: string } {
         let cached = this.filePathCache.get(file);
         if (!cached) {
+            const rawPkg = file.pkgPath.replace(/\\/g, '/');
             cached = {
                 srcPath: util.standardizePath(file.srcPath),
-                pkgPath: file.pkgPath.replace(/\\/g, '/')
+                pkgPath: rawPkg.replace(/\.bs$/i, '.brs')
             };
             this.filePathCache.set(file, cached);
         }
@@ -201,7 +218,7 @@ export class TreeShaker {
      */
     private computeRemovals() {
         for (const { bsName, brsName, stmt, file } of this.allStatements) {
-            if (this.isUnused(bsName) && !this.isKept(brsName, file)) {
+            if (this.isUnused(bsName, brsName) && !this.isKept(brsName, file)) {
                 this.toRemove.add(stmt);
             }
         }
@@ -222,6 +239,7 @@ export class TreeShaker {
                 const brsName = stmt.getName(ParseMode.BrightScript)?.toLowerCase();
                 if (bsName && brsName) {
                     this.allFunctions.set(bsName, brsName);
+                    this.allSimpleNames.add(bsName.split('.').pop()!);
                     this.allStatements.push({ bsName, brsName, stmt, file });
                     collected.push({ bsName: bsName, brsName: brsName, stmt: stmt });
                 }
@@ -339,10 +357,13 @@ export class TreeShaker {
                 //   sgnode.observe(node, "field", onContentChanged)
                 //   callbacks = [onFoo, onBar]
                 // where the function is passed by reference rather than called or
-                // named as a string.  We only check names that are actually defined
-                // functions to avoid bloating calledNames with every local variable.
+                // named as a string.  Gate on allSimpleNames (not allFunctions) so that
+                // namespaced functions referenced by their relative/simple name from
+                // within the same namespace are correctly detected — allFunctions only
+                // stores fully-qualified names so allFunctions.has('helper') would miss
+                // a function defined as 'ns.helper'.
                 const name = (expr as any).name?.text?.toLowerCase();
-                if (name && this.allFunctions.has(name)) {
+                if (name && (this.allFunctions.has(name) || this.allSimpleNames.has(name))) {
                     this.calledNames.add(name);
                 }
             },
@@ -359,7 +380,7 @@ export class TreeShaker {
                 if (parts?.length) {
                     const full = parts.map(p => p.text).join('.').toLowerCase();
                     const simple = parts[parts.length - 1].text.toLowerCase();
-                    if (this.allFunctions.has(full) || this.allFunctions.has(simple)) {
+                    if (this.allFunctions.has(full) || this.allSimpleNames.has(simple)) {
                         this.calledNames.add(full);
                         this.calledNames.add(simple);
                     }
@@ -384,10 +405,18 @@ export class TreeShaker {
     // -------------------------------------------------------------------------
 
     /**
-     * Returns true when the function with the given fully-qualified lowercased name
-     * has no known callers and is not a recognized entry point.
+     * Returns true when the function has no known callers and is not a recognized entry point.
+     *
+     * Three name forms are checked against each relevant set:
+     *   bsName     — fully-qualified BrighterScript name (e.g. "utils.helper")
+     *   simpleName — final dot-segment (e.g. "helper")
+     *   brsName    — transpiled BrightScript name (e.g. "utils_helper")
+     *
+     * The brsName check is required because .brs files call functions by their transpiled
+     * underscore name (e.g. utils_helper()), which lands in calledNames/stringRefs as
+     * "utils_helper" — a form that neither bsName nor simpleName would match.
      */
-    isUnused(bsName: string): boolean {
+    isUnused(bsName: string, brsName: string): boolean {
         const simpleName = bsName.split('.').pop() ?? bsName;
         return (
             !this.keepCommented.has(bsName) &&
@@ -396,10 +425,13 @@ export class TreeShaker {
             !TreeShaker.ENTRY_POINTS.has(bsName) &&
             !this.calledNames.has(bsName) &&
             !this.calledNames.has(simpleName) &&
+            !this.calledNames.has(brsName) &&
             !this.stringRefs.has(bsName) &&
             !this.stringRefs.has(simpleName) &&
+            !this.stringRefs.has(brsName) &&
             !this.xmlInterfaceFunctions.has(bsName) &&
-            !this.xmlInterfaceFunctions.has(simpleName)
+            !this.xmlInterfaceFunctions.has(simpleName) &&
+            !this.xmlInterfaceFunctions.has(brsName)
         );
     }
 

@@ -168,12 +168,13 @@ The pattern is resolved relative to `rootDir` unless it is an absolute path.
 
 #### `dest` — glob against the package-relative destination path
 
-This matches the path the file will have inside the deployed zip (e.g. `pkg:/source/utils.brs`).
+Matches the path the file will have inside the deployed zip. BrighterScript source files (`.bs`) are matched using their transpiled extension (`.brs`), so always write `.brs` in dest patterns. An optional `pkg:/` prefix is accepted and stripped before matching.
 
 ```json
 {
     "keep": [
-        { "dest": "source/public/**/*.brs" }
+        { "dest": "source/public/**/*.brs" },
+        { "dest": "pkg:/source/vendor/**/*.brs" }
     ]
 }
 ```
