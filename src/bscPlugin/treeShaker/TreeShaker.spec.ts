@@ -4,7 +4,7 @@ import { standardizePath as s } from '../../util';
 import * as fsExtra from 'fs-extra';
 import undent from 'undent';
 
-describe.only('TreeShakerValidator', () => {
+describe('TreeShakerValidator', () => {
     let program: Program;
     const tempDir = s`${__dirname}/../.tmp`;
     const rootDir = s`${tempDir}/rootDir`;
