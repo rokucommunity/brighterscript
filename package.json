@@ -25,16 +25,7 @@
     "package": "npm run build && npm pack"
   },
   "mocha": {
-    "spec": "src/**/*.spec.ts",
-    "require": [
-      "source-map-support/register",
-      "ts-node/register"
-    ],
-    "fullTrace": true,
-    "timeout": 2000,
-    "watchExtensions": [
-      "ts"
-    ]
+    "config": ".mocharc.cjs"
   },
   "files": [
     "dist/**/!(*.spec.*)*",
