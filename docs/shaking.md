@@ -1,6 +1,6 @@
 # Tree Shaking
 
-Tree shaking is BrighterScript's dead code elimination feature. When enabled, any function that is never called — directly or indirectly — is removed from the transpiled output, reducing the size of your deployed channel.
+Tree shaking is BrighterScript's dead code elimination feature. When enabled, it can remove functions that have no detectable references and aren't protected entry points, reducing the size of your deployed channel.
 
 Tree shaking is **disabled by default**. You must explicitly opt in.
 
@@ -16,7 +16,7 @@ Add a `treeShaking` section to your `bsconfig.json`:
 }
 ```
 
-That's the minimal configuration. With only `enabled: true`, any function that cannot be reached from a known entry point will be removed.
+That's the minimal configuration. With only `enabled: true`, the tree shaker removes functions that have no detectable references and are not protected entry points.
 
 ## How It Works
 
