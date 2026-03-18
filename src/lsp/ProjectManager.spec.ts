@@ -585,6 +585,41 @@ describe('ProjectManager', () => {
     });
 
     describe('flushDocumentChanges', () => {
+        it('reuses cached PathCollection across multiple flushes', async () => {
+            fsExtra.outputFileSync(`${rootDir}/source/main.brs`, ``);
+            fsExtra.outputJsonSync(`${rootDir}/bsconfig.json`, {});
+            await manager.syncProjects([workspaceSettings]);
+
+            //spy on PathCollection constructor to count how many are created
+            const project = manager.projects[0];
+            //first flush to warm the cache
+            await manager['flushDocumentChanges']({
+                actions: [{
+                    srcPath: s`${rootDir}/source/main.brs`,
+                    type: 'set',
+                    fileContents: 'sub main():end sub',
+                    allowStandaloneProject: true
+                }]
+            });
+
+            //grab the cached filterer
+            const cachedFilterer = manager['projectFiltererCache'].get(project);
+            expect(cachedFilterer).to.exist;
+
+            //second flush should reuse the same filterer instance
+            await manager['flushDocumentChanges']({
+                actions: [{
+                    srcPath: s`${rootDir}/source/main.brs`,
+                    type: 'set',
+                    fileContents: 'sub main2():end sub',
+                    allowStandaloneProject: true
+                }]
+            });
+
+            const cachedFilterer2 = manager['projectFiltererCache'].get(project);
+            expect(cachedFilterer2).to.equal(cachedFilterer);
+        });
+
         it('does not crash when getting undefined back from projects', async () => {
             fsExtra.outputFileSync(`${rootDir}/source/main.brs`, ``);
             fsExtra.outputJsonSync(`${rootDir}/project1/bsconfig.json`, {
