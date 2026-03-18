@@ -157,6 +157,77 @@ describe('TreeShakerValidator', () => {
             expect(code).not.to.include('sub canGo()');
         });
 
+        it('preserves the first function in a file with bs:keep (no previous function)', async () => {
+            program.setFile('source/main.bs', `
+                ' bs:keep
+                sub firstFunction()
+                    print "first function, no prev end line"
+                end sub
+
+                sub main()
+                end sub
+            `);
+
+            const code = await getTranspiled('source/main.bs');
+            expect(code).to.include('sub firstFunction()');
+        });
+
+        it('does not treat a bs:keep inside a function body as a header comment', async () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    ' bs:keep
+                    print "comment inside body"
+                end sub
+
+                sub shouldBeRemoved()
+                end sub
+            `);
+
+            const code = await getTranspiled('source/main.bs');
+            expect(code).not.to.include('sub shouldBeRemoved()');
+        });
+
+        it('preserves a namespaced function with a bs:keep comment', async () => {
+            program.setFile('source/main.bs', `
+                namespace utils
+                    ' bs:keep
+                    sub keepMe()
+                        print "namespaced, kept by comment"
+                    end sub
+
+                    sub removeMe()
+                        print "namespaced, no keep"
+                    end sub
+                end namespace
+
+                sub main()
+                end sub
+            `);
+
+            const code = await getTranspiled('source/main.bs');
+            expect(code).to.include('utils_keepMe');
+            expect(code).not.to.include('utils_removeMe');
+        });
+
+        it('supports bs:keep with rem comment syntax', async () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                end sub
+
+                rem bs:keep
+                sub mustStay()
+                    print "kept via rem"
+                end sub
+
+                sub canGo()
+                end sub
+            `);
+
+            const code = await getTranspiled('source/main.bs');
+            expect(code).to.include('sub mustStay()');
+            expect(code).not.to.include('sub canGo()');
+        });
+
         it('does not apply a bs:keep comment to the function before it', async () => {
             program.setFile('source/main.bs', `
                 sub main()
@@ -275,6 +346,94 @@ describe('TreeShakerValidator', () => {
             expect(code).not.to.include('sub unusedA()');
             expect(code).not.to.include('sub unusedB()');
             expect(code).not.to.include('sub unusedC()');
+        });
+
+        it('preserves functions across files when called from another file', async () => {
+            program.setFile('source/utils.bs', `
+                sub utilHelper()
+                    print "used from main"
+                end sub
+
+                sub unusedUtil()
+                    print "never called"
+                end sub
+            `);
+            program.setFile('source/main.bs', `
+                sub main()
+                    utilHelper()
+                end sub
+            `);
+
+            const utilCode = await getTranspiled('source/utils.bs');
+            expect(utilCode).to.include('sub utilHelper()');
+            expect(utilCode).not.to.include('sub unusedUtil()');
+        });
+
+        it('preserves function keyword declarations (not just sub)', async () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    print compute()
+                end sub
+
+                function compute() as integer
+                    return 42
+                end function
+
+                function unused() as integer
+                    return 0
+                end function
+            `);
+
+            const code = await getTranspiled('source/main.bs');
+            expect(code).to.include('function compute()');
+            expect(code).not.to.include('function unused()');
+        });
+
+        it('preserves indirect callees via a call chain (main → A → B)', async () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    stepA()
+                end sub
+
+                sub stepA()
+                    stepB()
+                end sub
+
+                sub stepB()
+                    print "end of chain"
+                end sub
+
+                sub unused()
+                end sub
+            `);
+
+            const code = await getTranspiled('source/main.bs');
+            expect(code).to.include('sub stepA()');
+            expect(code).to.include('sub stepB()');
+            expect(code).not.to.include('sub unused()');
+        });
+
+        it('conservatively preserves a function called only from dead code', async () => {
+            // The reference pass walks ALL bodies including dead ones, so callee of
+            // a dead function ends up in calledNames and is kept. This is intentional
+            // conservative behaviour — it avoids false removals at the cost of a
+            // slightly larger output.
+            program.setFile('source/main.bs', `
+                sub main()
+                end sub
+
+                sub deadCaller()
+                    calledFromDead()
+                end sub
+
+                sub calledFromDead()
+                    print "kept because reference pass sees the call in deadCaller"
+                end sub
+            `);
+
+            const code = await getTranspiled('source/main.bs');
+            expect(code).not.to.include('sub deadCaller()');
+            expect(code).to.include('sub calledFromDead()');
         });
 
         it('can be disabled via treeShaking.enabled = false', async () => {
@@ -670,6 +829,88 @@ describe('TreeShakerValidator', () => {
                 expect(code).to.include('sub topLevel()');
                 expect(code).to.include('sub innerHelper()');
                 expect(code).not.to.include('sub unrelated()');
+            });
+        });
+
+        describe('matches with multiple patterns', () => {
+            it('keeps functions matching any pattern in the matches array', async () => {
+                program = new Program({
+                    rootDir: rootDir, stagingDir: stagingDir,
+                    treeShaking: { keep: [{ matches: ['foo_*', 'bar_*'] }] }
+                });
+                program.setFile('source/main.bs', `
+                    sub main()
+                    end sub
+
+                    sub foo_helper()
+                        print "matches foo_*"
+                    end sub
+
+                    sub bar_helper()
+                        print "matches bar_*"
+                    end sub
+
+                    sub baz_helper()
+                        print "matches neither"
+                    end sub
+                `);
+
+                const code = await getTranspiled('source/main.bs');
+                expect(code).to.include('sub foo_helper()');
+                expect(code).to.include('sub bar_helper()');
+                expect(code).not.to.include('sub baz_helper()');
+            });
+        });
+
+        describe('src with array of globs', () => {
+            it('keeps functions from any matching source path', async () => {
+                program = new Program({
+                    rootDir: rootDir, stagingDir: stagingDir,
+                    treeShaking: { keep: [{ src: ['source/libA.bs', 'source/libB.bs'] }] }
+                });
+                program.setFile('source/libA.bs', `
+                    sub fromA()
+                    end sub
+                `);
+                program.setFile('source/libB.bs', `
+                    sub fromB()
+                    end sub
+                `);
+                program.setFile('source/main.bs', `
+                    sub main()
+                    end sub
+
+                    sub appOnly()
+                    end sub
+                `);
+
+                const codeA = await getTranspiled('source/libA.bs');
+                const codeB = await getTranspiled('source/libB.bs');
+                const mainCode = await getTranspiled('source/main.bs');
+
+                expect(codeA).to.include('sub fromA()');
+                expect(codeB).to.include('sub fromB()');
+                expect(mainCode).not.to.include('sub appOnly()');
+            });
+        });
+
+        describe('empty keep list', () => {
+            it('still tree shakes normally when keep is an empty array', async () => {
+                program = new Program({
+                    rootDir: rootDir, stagingDir: stagingDir,
+                    treeShaking: { keep: [] }
+                });
+                program.setFile('source/main.bs', `
+                    sub main()
+                    end sub
+
+                    sub unused()
+                        print "should still be removed"
+                    end sub
+                `);
+
+                const code = await getTranspiled('source/main.bs');
+                expect(code).not.to.include('sub unused()');
             });
         });
 
