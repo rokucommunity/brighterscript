@@ -65,7 +65,10 @@ export class BscPlugin implements Plugin {
     private treeShaker = new TreeShaker();
 
     public beforeProgramTranspile(program: Program, entries: TranspileObj[], editor: AstEditor) {
-        this.treeShaker.analyze(program);
+        if (!program.options.treeShaking.enabled) {
+            return;
+        }
+        this.treeShaker.analyze(program, program.options.treeShaking.keep);
         for (const entry of entries) {
             this.treeShaker.shake(entry.file, editor);
         }
