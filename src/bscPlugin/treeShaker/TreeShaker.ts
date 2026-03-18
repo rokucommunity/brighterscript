@@ -120,27 +120,23 @@ export class TreeShaker {
         //   • prevFunctionEndLine < N <= F.startLine  (comment in the header region above F)
         collected.sort((a, b) => a.stmt.range.start.line - b.stmt.range.start.line);
 
+        // Sort keep-flag lines once so we can advance a pointer linearly O(functions + keepLines).
+        const keepLines = [...file.keepFlagLines].sort((a, b) => a - b);
+        let keepIdx = 0;
+
         let prevEndLine = -1;
         for (const { bsName, stmt } of collected) {
             const startLine = stmt.range.start.line;
-            if (this.hasBsKeepInRegion(file, prevEndLine, startLine)) {
+            // Skip any keep lines that fall before or inside the previous function.
+            while (keepIdx < keepLines.length && keepLines[keepIdx] <= prevEndLine) {
+                keepIdx++;
+            }
+            // If the next keep line is within (prevEndLine, startLine], this function is kept.
+            if (keepIdx < keepLines.length && keepLines[keepIdx] <= startLine) {
                 this.keepCommented.add(bsName);
             }
             prevEndLine = stmt.range.end.line;
         }
-    }
-
-    /**
-     * Returns true if any `bs:keep` comment line falls in the half-open interval
-     * (prevEndLine, functionStartLine] — i.e., in the "header region" above a function.
-     */
-    private hasBsKeepInRegion(file: BrsFile, prevEndLine: number, functionStartLine: number): boolean {
-        for (const line of file.keepFlagLines) {
-            if (line > prevEndLine && line <= functionStartLine) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private collectXmlFile(file: XmlFile) {
@@ -338,11 +334,11 @@ export class TreeShaker {
             }
         }
 
-        // dest: glob against package-relative destination path (pkgPath)
+        // dest: glob against package-relative destination path (pkgPath).
+        // Normalize to forward slashes so patterns written with `/` work on Windows.
         if (rule.dest) {
-            const pkgPath = file.pkgPath;
-            const matched = rule.dest.some(pattern => minimatch(pkgPath, pattern, { nocase: true })
-            );
+            const pkgPath = file.pkgPath.replace(/\\/g, '/');
+            const matched = rule.dest.some(pattern => minimatch(pkgPath, pattern.replace(/\\/g, '/'), { nocase: true }));
             if (!matched) {
                 return false;
             }

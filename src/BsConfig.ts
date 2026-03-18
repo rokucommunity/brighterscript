@@ -243,7 +243,7 @@ export interface TreeShakingKeepRule {
 
 export interface TreeShakingConfig {
     /**
-     * Enable or disable tree shaking. Defaults to `true`.
+     * Enable or disable tree shaking. Defaults to `false` (opt-in).
      */
     enabled?: boolean;
     /**

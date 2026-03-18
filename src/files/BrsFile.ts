@@ -1471,7 +1471,7 @@ export const KeywordCompletions = Object.keys(Keywords)
  * Handles both `'` and `rem` starters, with optional leading whitespace.
  */
 function isBsKeepComment(text: string): boolean {
-    // Strip the comment starter (`'` or `rem`) then check for `bs:keep`
-    const lower = text.toLowerCase().replace(/^(?:rem|')/, '').trimLeft();
+    // Strip optional leading whitespace and the comment starter (`'` or `rem`), then check for `bs:keep`
+    const lower = text.toLowerCase().trimLeft().replace(/^(?:rem|')/, '').trimLeft();
     return lower.startsWith('bs:keep');
 }

@@ -423,7 +423,8 @@ export class Util {
         const enabled = config?.enabled === true;
         const keep: NormalizedKeepRule[] = [];
 
-        for (const entry of (config?.keep ?? []) as TreeShakingKeepEntry[]) {
+        const keepEntries = Array.isArray(config?.keep) ? config.keep : [];
+        for (const entry of keepEntries as TreeShakingKeepEntry[]) {
             if (typeof entry === 'string') {
                 keep.push({ functions: [entry.toLowerCase()] });
             } else if (entry && typeof entry === 'object') {
