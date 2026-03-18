@@ -44,6 +44,7 @@ The following Roku framework callbacks are **always kept** regardless of whether
 | `onMessage` | Task/port message handling |
 | `runUserInterface` | UI task entry point |
 | `runTask` | Background task entry point |
+| `runScreenSaver` | Screensaver entry point |
 
 ## `bs:keep` Comments
 
