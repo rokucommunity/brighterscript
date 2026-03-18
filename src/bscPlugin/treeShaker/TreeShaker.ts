@@ -418,11 +418,17 @@ export class TreeShaker {
      */
     isUnused(bsName: string, brsName: string): boolean {
         const simpleName = bsName.split('.').pop() ?? bsName;
+        const isGlobalName = !bsName.includes('.');
+        const isEntryPoint =
+            (isGlobalName && TreeShaker.ENTRY_POINTS.has(simpleName)) ||
+            TreeShaker.ENTRY_POINTS.has(brsName);
+        if (isEntryPoint) {
+            // Lifecycle entry points are always considered used.
+            return false;
+        }
         return (
             !this.keepCommented.has(bsName) &&
             !this.keepCommented.has(simpleName) &&
-            !TreeShaker.ENTRY_POINTS.has(simpleName) &&
-            !TreeShaker.ENTRY_POINTS.has(bsName) &&
             !this.calledNames.has(bsName) &&
             !this.calledNames.has(simpleName) &&
             !this.calledNames.has(brsName) &&
