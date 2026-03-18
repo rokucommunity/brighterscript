@@ -420,7 +420,7 @@ export class Util {
      * - Object rules that contain none of the known fields are silently skipped.
      */
     private normalizeTreeShakingConfig(config?: TreeShakingConfig): NormalizedTreeShakingConfig {
-        const enabled = config?.enabled !== false;
+        const enabled = config?.enabled === true;
         const keep: NormalizedKeepRule[] = [];
 
         for (const entry of (config?.keep ?? []) as TreeShakingKeepEntry[]) {
