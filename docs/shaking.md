@@ -100,7 +100,10 @@ end sub
 ### What `bs:keep` Does NOT Do
 
 - A `bs:keep` comment placed **inside** a function body does not protect that function.
-- A `bs:keep` comment does not automatically keep the functions that the annotated function calls — only the annotated function itself. If those callees are also unused by the rest of the program, they will still be removed. Use [`treeShaking.keep`](#treeshakingkeep-rules) rules with dependency closure, or annotate each callee individually, if you need to retain an entire call graph.
+
+### Dependency Closure
+
+A `bs:keep` annotation preserves the full call chain of the annotated function. BrighterScript's reference pass walks every function body — including those of kept functions — so anything called directly or transitively from a `bs:keep` function is automatically retained.
 
 ## `treeShaking.keep` Rules
 
@@ -192,11 +195,7 @@ Keep only functions whose name starts with `api_` **and** that live in a specifi
 
 ### Dependency Closure
 
-Keep rules do not automatically pull in the transitive dependencies of a matched function. If `api_login` calls `crypto_hash` and only `api_login` is matched by a keep rule, `crypto_hash` will still be removed if nothing else calls it.
-
-To retain the entire reachable graph of a kept function, either:
-- Add a `bs:keep` comment to each function you want to preserve, or
-- Add additional keep rules (e.g. a `src` rule that covers the whole file containing the helpers)
+Keep rules preserve the full call chain of every matched function. BrighterScript's reference pass walks every function body, so anything called directly or transitively from a kept function is automatically retained.
 
 ## Configuration Reference
 

@@ -228,6 +228,36 @@ describe('TreeShaker', () => {
             expect(code).not.to.include('sub canGo()');
         });
 
+        it('preserves the full call chain of a bs:keep function', async () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                end sub
+
+                ' bs:keep
+                sub topLevel()
+                    middle()
+                end sub
+
+                sub middle()
+                    leaf()
+                end sub
+
+                sub leaf()
+                    print "end of chain"
+                end sub
+
+                sub unrelated()
+                    print "no connection to topLevel"
+                end sub
+            `);
+
+            const code = await getTranspiled('source/main.bs');
+            expect(code).to.include('sub topLevel()');
+            expect(code).to.include('sub middle()');
+            expect(code).to.include('sub leaf()');
+            expect(code).not.to.include('sub unrelated()');
+        });
+
         it('does not apply a bs:keep comment to the function before it', async () => {
             program.setFile('source/main.bs', `
                 sub main()
@@ -302,6 +332,63 @@ describe('TreeShaker', () => {
             const code = await getTranspiled('source/main.bs');
             expect(code).to.include('sub renderBlocks()');
             expect(code).not.to.include('sub unused()');
+        });
+
+        it('preserves a namespaced function called relatively (without namespace prefix) from within the same namespace', async () => {
+            program.setFile('source/main.bs', `
+                namespace utils
+                    sub caller()
+                        helper() ' relative call — no "utils." prefix
+                    end sub
+
+                    sub helper()
+                        print "called relatively from within the namespace"
+                    end sub
+                end namespace
+
+                sub main()
+                    utils.caller()
+                end sub
+            `);
+
+            const code = await getTranspiled('source/main.bs');
+            expect(code).to.include('utils_caller');
+            expect(code).to.include('utils_helper');
+        });
+
+        it('conservatively preserves all same-named functions across namespaces when one is called relatively', async () => {
+            // When `helper()` is called relatively inside `ns1`, the AST contains only
+            // the simple name "helper". The shaker adds "helper" to calledNames, which
+            // causes ns2_helper to survive even though it was never actually called.
+            // This is safe (no false removals) but not maximally precise.
+            program.setFile('source/main.bs', `
+                namespace ns1
+                    sub caller()
+                        helper() ' relative call — resolves to ns1_helper at runtime
+                    end sub
+
+                    sub helper()
+                        print "ns1 helper"
+                    end sub
+                end namespace
+
+                namespace ns2
+                    sub helper()
+                        print "ns2 helper — conservatively kept due to simple name match"
+                    end sub
+                end namespace
+
+                sub main()
+                    ns1.caller()
+                end sub
+            `);
+
+            const code = await getTranspiled('source/main.bs');
+            expect(code).to.include('ns1_caller');
+            expect(code).to.include('ns1_helper');
+            // ns2_helper is kept as a conservative side-effect of the simple name "helper"
+            // being in calledNames — not a bug, just imprecision in the static analysis.
+            expect(code).to.include('ns2_helper');
         });
 
         it('preserves namespaced functions that are called', async () => {
