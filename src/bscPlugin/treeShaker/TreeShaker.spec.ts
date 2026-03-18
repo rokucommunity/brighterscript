@@ -4,7 +4,7 @@ import { standardizePath as s } from '../../util';
 import * as fsExtra from 'fs-extra';
 import undent from 'undent';
 
-describe('TreeShakerValidator', () => {
+describe.only('TreeShakerValidator', () => {
     let program: Program;
     const tempDir = s`${__dirname}/../.tmp`;
     const rootDir = s`${tempDir}/rootDir`;
@@ -14,7 +14,7 @@ describe('TreeShakerValidator', () => {
         fsExtra.emptyDirSync(rootDir);
         fsExtra.emptyDirSync(stagingDir);
 
-        program = new Program({ rootDir: rootDir, stagingDir: stagingDir });
+        program = new Program({ rootDir: rootDir, stagingDir: stagingDir, treeShaking: { enabled: true } });
     });
 
     afterEach(() => {
@@ -436,20 +436,36 @@ describe('TreeShakerValidator', () => {
             expect(code).to.include('sub calledFromDead()');
         });
 
-        it('can be disabled via treeShaking.enabled = false', async () => {
-            program = new Program({ rootDir: rootDir, stagingDir: stagingDir, treeShaking: { enabled: false } });
+        it('is disabled by default — unused functions are preserved when treeShaking is not configured', async () => {
+            program = new Program({ rootDir: rootDir, stagingDir: stagingDir });
             program.setFile('source/main.bs', `
                 sub main()
                 end sub
 
                 sub unused()
-                    print "I should survive"
+                    print "I should survive when tree shaking is off"
                 end sub
             `);
 
             const code = await getTranspiled('source/main.bs');
             expect(code).to.include('sub main()');
             expect(code).to.include('sub unused()');
+        });
+
+        it('must be explicitly enabled via treeShaking.enabled = true', async () => {
+            program = new Program({ rootDir: rootDir, stagingDir: stagingDir, treeShaking: { enabled: true } });
+            program.setFile('source/main.bs', `
+                sub main()
+                end sub
+
+                sub unused()
+                    print "I should be removed when tree shaking is on"
+                end sub
+            `);
+
+            const code = await getTranspiled('source/main.bs');
+            expect(code).to.include('sub main()');
+            expect(code).not.to.include('sub unused()');
         });
     });
 
@@ -514,7 +530,7 @@ describe('TreeShakerValidator', () => {
             it('keeps a function matched by exact BrightScript name', async () => {
                 program = new Program({
                     rootDir: rootDir, stagingDir: stagingDir,
-                    treeShaking: { keep: ['unusedHelper'] }
+                    treeShaking: { enabled: true, keep: ['unusedHelper'] }
                 });
                 program.setFile('source/main.bs', `
                     sub main()
@@ -537,7 +553,7 @@ describe('TreeShakerValidator', () => {
             it('keeps a namespaced function matched by BrightScript transpiled name', async () => {
                 program = new Program({
                     rootDir: rootDir, stagingDir: stagingDir,
-                    treeShaking: { keep: ['utils_helper'] }
+                    treeShaking: { enabled: true, keep: ['utils_helper'] }
                 });
                 program.setFile('source/main.bs', `
                     namespace utils
@@ -564,7 +580,7 @@ describe('TreeShakerValidator', () => {
             it('keeps functions matched by exact name in functions array', async () => {
                 program = new Program({
                     rootDir: rootDir, stagingDir: stagingDir,
-                    treeShaking: { keep: [{ functions: ['keepMe', 'alsoKeepMe'] }] }
+                    treeShaking: { enabled: true, keep: [{ functions: ['keepMe', 'alsoKeepMe'] }] }
                 });
                 program.setFile('source/main.bs', `
                     sub main()
@@ -592,7 +608,7 @@ describe('TreeShakerValidator', () => {
             it('is case-insensitive for function names', async () => {
                 program = new Program({
                     rootDir: rootDir, stagingDir: stagingDir,
-                    treeShaking: { keep: [{ functions: ['UnusedHelper'] }] }
+                    treeShaking: { enabled: true, keep: [{ functions: ['UnusedHelper'] }] }
                 });
                 program.setFile('source/main.bs', `
                     sub main()
@@ -612,7 +628,7 @@ describe('TreeShakerValidator', () => {
             it('keeps functions matching a wildcard pattern', async () => {
                 program = new Program({
                     rootDir: rootDir, stagingDir: stagingDir,
-                    treeShaking: { keep: [{ matches: ['rodash_*'] }] }
+                    treeShaking: { enabled: true, keep: [{ matches: ['rodash_*'] }] }
                 });
                 program.setFile('source/main.bs', `
                     sub main()
@@ -642,7 +658,7 @@ describe('TreeShakerValidator', () => {
             it('keeps all functions in files matching the src glob', async () => {
                 program = new Program({
                     rootDir: rootDir, stagingDir: stagingDir,
-                    treeShaking: { keep: [{ src: 'source/vendor/**/*' }] }
+                    treeShaking: { enabled: true, keep: [{ src: 'source/vendor/**/*' }] }
                 });
                 program.setFile('source/vendor/lib.bs', `
                     sub vendorHelper()
@@ -675,7 +691,7 @@ describe('TreeShakerValidator', () => {
             it('keeps all functions in files matching the dest pkg path', async () => {
                 program = new Program({
                     rootDir: rootDir, stagingDir: stagingDir,
-                    treeShaking: { keep: [{ dest: 'source/vendor/**/*' }] }
+                    treeShaking: { enabled: true, keep: [{ dest: 'source/vendor/**/*' }] }
                 });
                 program.setFile('source/vendor/lib.bs', `
                     sub vendorHelper()
@@ -704,6 +720,7 @@ describe('TreeShakerValidator', () => {
                 program = new Program({
                     rootDir: rootDir, stagingDir: stagingDir,
                     treeShaking: {
+                        enabled: true,
                         keep: [{ src: 'source/lib.bs', functions: ['specialFn'] }]
                     }
                 });
@@ -741,6 +758,7 @@ describe('TreeShakerValidator', () => {
                 program = new Program({
                     rootDir: rootDir, stagingDir: stagingDir,
                     treeShaking: {
+                        enabled: true,
                         keep: [
                             { functions: ['keepByName'] },
                             { matches: ['keepBy*'] }
@@ -776,6 +794,7 @@ describe('TreeShakerValidator', () => {
                 program = new Program({
                     rootDir: rootDir, stagingDir: stagingDir,
                     treeShaking: {
+                        enabled: true,
                         keep: [{ src: 'source/lib.bs', functions: ['sharedName'] }]
                     }
                 });
@@ -806,7 +825,7 @@ describe('TreeShakerValidator', () => {
             it('preserves transitive callees of a kept function', async () => {
                 program = new Program({
                     rootDir: rootDir, stagingDir: stagingDir,
-                    treeShaking: { keep: ['topLevel'] }
+                    treeShaking: { enabled: true, keep: ['topLevel'] }
                 });
                 program.setFile('source/main.bs', `
                     sub main()
@@ -836,7 +855,7 @@ describe('TreeShakerValidator', () => {
             it('keeps functions matching any pattern in the matches array', async () => {
                 program = new Program({
                     rootDir: rootDir, stagingDir: stagingDir,
-                    treeShaking: { keep: [{ matches: ['foo_*', 'bar_*'] }] }
+                    treeShaking: { enabled: true, keep: [{ matches: ['foo_*', 'bar_*'] }] }
                 });
                 program.setFile('source/main.bs', `
                     sub main()
@@ -866,7 +885,7 @@ describe('TreeShakerValidator', () => {
             it('keeps functions from any matching source path', async () => {
                 program = new Program({
                     rootDir: rootDir, stagingDir: stagingDir,
-                    treeShaking: { keep: [{ src: ['source/libA.bs', 'source/libB.bs'] }] }
+                    treeShaking: { enabled: true, keep: [{ src: ['source/libA.bs', 'source/libB.bs'] }] }
                 });
                 program.setFile('source/libA.bs', `
                     sub fromA()
@@ -898,7 +917,7 @@ describe('TreeShakerValidator', () => {
             it('still tree shakes normally when keep is an empty array', async () => {
                 program = new Program({
                     rootDir: rootDir, stagingDir: stagingDir,
-                    treeShaking: { keep: [] }
+                    treeShaking: { enabled: true, keep: [] }
                 });
                 program.setFile('source/main.bs', `
                     sub main()
@@ -919,7 +938,7 @@ describe('TreeShakerValidator', () => {
                 // An empty object has no src/dest/functions/matches — should be skipped
                 program = new Program({
                     rootDir: rootDir, stagingDir: stagingDir,
-                    treeShaking: { keep: [{} as any] }
+                    treeShaking: { enabled: true, keep: [{} as any] }
                 });
                 program.setFile('source/main.bs', `
                     sub main()
