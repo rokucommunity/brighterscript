@@ -25,6 +25,7 @@ export class TreeShaker {
         'onkeyevent',
         'onmessage',
         'runuserinterface',
+        'runscreensaver',
         'runtask'
     ]);
 
