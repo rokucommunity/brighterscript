@@ -376,6 +376,9 @@ export class Util {
             bslibDestinationDir = bslibDestinationDir.replace(/^(\/*)(.*?)(\/*)$/, '$2');
         }
 
+        // compute an initial normalized treeShaking config; this will be kept normalized
+        let normalizedTreeShaking = this.normalizeTreeShakingConfig(config.treeShaking);
+
         const configWithDefaults: Omit<FinalizedBsConfig, 'rootDir'> = {
             cwd: cwd,
             deploy: config.deploy === true ? true : false,
@@ -404,11 +407,21 @@ export class Util {
             removeParameterTypes: config.removeParameterTypes === true ? true : false,
             logLevel: logLevel,
             bslibDestinationDir: bslibDestinationDir,
-            treeShaking: this.normalizeTreeShakingConfig(config.treeShaking)
+            treeShaking: normalizedTreeShaking
         };
 
         //mutate `config` in case anyone is holding a reference to the incomplete one
         const merged: FinalizedBsConfig = Object.assign(config, configWithDefaults);
+
+        // ensure treeShaking remains normalized even if overwritten later (e.g. by merges)
+        Object.defineProperty(merged, 'treeShaking', {
+            get: () => normalizedTreeShaking,
+            set: (value: TreeShakingConfig | NormalizedTreeShakingConfig | undefined) => {
+                normalizedTreeShaking = this.normalizeTreeShakingConfig(value as any);
+            },
+            enumerable: true,
+            configurable: true
+        });
 
         return merged;
     }
@@ -419,7 +432,7 @@ export class Util {
      * - Scalar `src`/`dest`/`functions`/`matches` values are wrapped in arrays.
      * - Object rules that contain none of the known fields are silently skipped.
      */
-    private normalizeTreeShakingConfig(config?: TreeShakingConfig): NormalizedTreeShakingConfig {
+    private normalizeTreeShakingConfig(config?: TreeShakingConfig | NormalizedTreeShakingConfig): NormalizedTreeShakingConfig {
         const enabled = config?.enabled === true;
         const keep: NormalizedKeepRule[] = [];
 
