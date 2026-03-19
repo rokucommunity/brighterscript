@@ -503,9 +503,16 @@ export class TreeShaker {
             return;
         }
 
+        let removedAny = false;
+
         file.ast.walk(createVisitor({
             FunctionStatement: (stmt) => {
                 if (this.toRemove.has(stmt)) {
+                    if (!removedAny) {
+                        // ensure modified AST is emitted for .brs files
+                        editor.setProperty(file, 'needsTranspiled', true);
+                        removedAny = true;
+                    }
                     return new EmptyStatement();
                 }
             }
