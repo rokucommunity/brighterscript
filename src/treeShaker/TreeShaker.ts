@@ -1,18 +1,18 @@
 import * as minimatch from 'minimatch';
 import * as path from 'path';
-import type { AstEditor } from '../../astUtils/AstEditor';
-import { isBrsFile, isDottedGetExpression, isLiteralString, isXmlFile } from '../../astUtils/reflection';
-import { WalkMode, createVisitor } from '../../astUtils/visitors';
-import type { BrsFile } from '../../files/BrsFile';
-import type { XmlFile } from '../../files/XmlFile';
-import type { NormalizedKeepRule } from '../../BsConfig';
-import type { BscFile } from '../../interfaces';
-import type { CallfuncExpression } from '../../parser/Expression';
-import { ParseMode } from '../../parser/Parser';
-import { EmptyStatement } from '../../parser/Statement';
-import type { FunctionStatement } from '../../parser/Statement';
-import type { Program } from '../../Program';
-import util from '../../util';
+import type { AstEditor } from '../astUtils/AstEditor';
+import { isBrsFile, isDottedGetExpression, isLiteralString, isXmlFile } from '../astUtils/reflection';
+import { WalkMode, createVisitor } from '../astUtils/visitors';
+import type { BrsFile } from '../files/BrsFile';
+import type { XmlFile } from '../files/XmlFile';
+import type { NormalizedKeepRule } from '../BsConfig';
+import type { BscFile } from '../interfaces';
+import type { CallfuncExpression } from '../parser/Expression';
+import { ParseMode } from '../parser/Parser';
+import { EmptyStatement } from '../parser/Statement';
+import type { FunctionStatement } from '../parser/Statement';
+import type { Program } from '../Program';
+import util from '../util';
 
 /**
  * Keep rule with patterns pre-compiled and src paths pre-resolved.

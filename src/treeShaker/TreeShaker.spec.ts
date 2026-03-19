@@ -1,6 +1,6 @@
-import { expect } from '../../chai-config.spec';
-import { Program } from '../../Program';
-import { standardizePath as s } from '../../util';
+import { expect } from '../chai-config.spec';
+import { Program } from '../Program';
+import { standardizePath as s } from '../util';
 import * as fsExtra from 'fs-extra';
 import undent from 'undent';
 
@@ -80,6 +80,9 @@ describe('TreeShaker', () => {
                 sub runTask()
                 end sub
 
+                sub runScreenSaver()
+                end sub
+
                 sub onMessage()
                 end sub
 
@@ -93,6 +96,7 @@ describe('TreeShaker', () => {
             expect(code).to.include('sub onKeyEvent(');
             expect(code).to.include('sub runUserInterface()');
             expect(code).to.include('sub runTask()');
+            expect(code).to.include('sub runScreenSaver()');
             expect(code).to.include('sub onMessage()');
             expect(code).not.to.include('sub removable()');
         });
@@ -337,6 +341,64 @@ describe('TreeShaker', () => {
             const code = await getTranspiled('source/main.bs');
             expect(code).to.include('sub onContentChanged()');
             expect(code).not.to.include('sub unused()');
+        });
+
+        it('preserves a namespaced function referenced as a string literal using its transpiled brs name', async () => {
+            // observeField("x", "utils_helper") — the string value is the transpiled brsName,
+            // not the BrighterScript dotted name. stringRefs must match against brsName.
+            program.setFile('source/utils.bs', `
+                namespace utils
+                    sub helper()
+                        print "referenced by transpiled name in string"
+                    end sub
+
+                    sub unused()
+                    end sub
+                end namespace
+            `);
+            program.setFile('source/main.bs', `
+                sub init()
+                    m.top.observeField("data", "utils_helper")
+                end sub
+
+                sub main()
+                end sub
+            `);
+
+            const code = await getTranspiled('source/utils.bs');
+            expect(code).to.include('utils_helper');
+            expect(code).not.to.include('utils_unused');
+        });
+
+        it('preserves the full bs:keep call chain across multiple files', async () => {
+            program.setFile('source/helpers.bs', `
+                sub middle()
+                    leaf()
+                end sub
+
+                sub leaf()
+                    print "end of cross-file chain"
+                end sub
+            `);
+            program.setFile('source/main.bs', `
+                sub main()
+                end sub
+
+                ' bs:keep
+                sub topLevel()
+                    middle()
+                end sub
+
+                sub unrelated()
+                end sub
+            `);
+
+            const helpersCode = await getTranspiled('source/helpers.bs');
+            const mainCode = await getTranspiled('source/main.bs');
+            expect(mainCode).to.include('sub topLevel()');
+            expect(helpersCode).to.include('sub middle()');
+            expect(helpersCode).to.include('sub leaf()');
+            expect(mainCode).not.to.include('sub unrelated()');
         });
 
         it('preserves functions passed by reference as variables', async () => {
@@ -757,6 +819,31 @@ describe('TreeShaker', () => {
                 expect(code).not.to.include('sub removeMe()');
             });
 
+            it('keeps a namespaced function matched by its transpiled brs name in the functions array', async () => {
+                program = new Program({
+                    rootDir: rootDir, stagingDir: stagingDir,
+                    treeShaking: { enabled: true, keep: [{ functions: ['utils_helper'] }] }
+                });
+                program.setFile('source/main.bs', `
+                    namespace utils
+                        sub helper()
+                            print "kept by brs name in functions rule"
+                        end sub
+
+                        sub gone()
+                            print "removed"
+                        end sub
+                    end namespace
+
+                    sub main()
+                    end sub
+                `);
+
+                const code = await getTranspiled('source/main.bs');
+                expect(code).to.include('utils_helper');
+                expect(code).not.to.include('utils_gone');
+            });
+
             it('is case-insensitive for function names', async () => {
                 program = new Program({
                     rootDir: rootDir, stagingDir: stagingDir,
@@ -865,6 +952,36 @@ describe('TreeShaker', () => {
 
                 expect(vendorCode).to.include('sub vendorHelper()');
                 expect(mainCode).not.to.include('sub appHelper()');
+            });
+
+            it('keeps functions from any path when dest is an array of globs', async () => {
+                program = new Program({
+                    rootDir: rootDir, stagingDir: stagingDir,
+                    treeShaking: { enabled: true, keep: [{ dest: ['source/libA.brs', 'source/libB.brs'] }] }
+                });
+                program.setFile('source/libA.bs', `
+                    sub fromA()
+                    end sub
+                `);
+                program.setFile('source/libB.bs', `
+                    sub fromB()
+                    end sub
+                `);
+                program.setFile('source/main.bs', `
+                    sub main()
+                    end sub
+
+                    sub appOnly()
+                    end sub
+                `);
+
+                const codeA = await getTranspiled('source/libA.bs');
+                const codeB = await getTranspiled('source/libB.bs');
+                const mainCode = await getTranspiled('source/main.bs');
+
+                expect(codeA).to.include('sub fromA()');
+                expect(codeB).to.include('sub fromB()');
+                expect(mainCode).not.to.include('sub appOnly()');
             });
 
             it('accepts a pkg:/ prefix in dest patterns and strips it before matching', async () => {
@@ -1027,6 +1144,36 @@ describe('TreeShaker', () => {
                 expect(code).to.include('sub topLevel()');
                 expect(code).to.include('sub innerHelper()');
                 expect(code).not.to.include('sub unrelated()');
+            });
+
+            it('preserves transitive callees of a kept function across files', async () => {
+                program = new Program({
+                    rootDir: rootDir, stagingDir: stagingDir,
+                    treeShaking: { enabled: true, keep: ['entryPoint'] }
+                });
+                program.setFile('source/helpers.bs', `
+                    sub crossFileHelper()
+                        print "required by entryPoint"
+                    end sub
+
+                    sub unreachable()
+                        print "no connection to entryPoint"
+                    end sub
+                `);
+                program.setFile('source/main.bs', `
+                    sub main()
+                    end sub
+
+                    sub entryPoint()
+                        crossFileHelper()
+                    end sub
+                `);
+
+                const helpersCode = await getTranspiled('source/helpers.bs');
+                const mainCode = await getTranspiled('source/main.bs');
+                expect(mainCode).to.include('sub entryPoint()');
+                expect(helpersCode).to.include('sub crossFileHelper()');
+                expect(helpersCode).not.to.include('sub unreachable()');
             });
         });
 

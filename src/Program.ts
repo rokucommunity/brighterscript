@@ -24,7 +24,7 @@ import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement } from './astUti
 import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { AstEditor } from './astUtils/AstEditor';
-import { TreeShaker } from './bscPlugin/treeShaker/TreeShaker';
+import { TreeShaker } from './treeShaker/TreeShaker';
 import type { SourceMapGenerator } from 'source-map';
 import type { Statement } from './parser/AstNode';
 import { CallExpressionInfo } from './bscPlugin/CallExpressionInfo';
