@@ -432,6 +432,13 @@ export class Project implements LspProject {
         }
     }
 
+    public async getDocumentLinks(options: { srcPath: string }) {
+        await this.onIdle();
+        if (this.builder.program.hasFile(options.srcPath)) {
+            return this.builder.program.getDocumentLinks(options.srcPath);
+        }
+    }
+
     public async getCompletions(options: { srcPath: string; position: Position }): Promise<CompletionList> {
         await this.onIdle();
 

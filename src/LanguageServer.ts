@@ -26,7 +26,9 @@ import type {
     CompletionList,
     CancellationToken,
     DidChangeConfigurationParams,
-    DidChangeConfigurationRegistrationOptions
+    DidChangeConfigurationRegistrationOptions,
+    DocumentLinkParams,
+    DocumentLink
 } from 'vscode-languageserver/node';
 import {
     SemanticTokensRequest,
@@ -221,6 +223,9 @@ export class LanguageServer {
                 },
                 definitionProvider: true,
                 hoverProvider: true,
+                documentLinkProvider: {
+                    resolveProvider: false
+                },
                 executeCommandProvider: {
                     commands: [
                         CustomCommands.TranspileFile
@@ -580,6 +585,14 @@ export class LanguageServer {
 
         const result = this.projectManager.getDefinition({ srcPath: srcPath, position: params.position });
         return result;
+    }
+
+    @AddStackToErrorMessage
+    public async onDocumentLinks(params: DocumentLinkParams): Promise<DocumentLink[]> {
+        this.logger.debug('onDocumentLinks', params);
+
+        const srcPath = util.uriToPath(params.textDocument.uri);
+        return this.projectManager.getDocumentLinks({ srcPath: srcPath });
     }
 
     @AddStackToErrorMessage

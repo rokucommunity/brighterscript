@@ -1,4 +1,4 @@
-import type { Diagnostic, Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList } from 'vscode-languageserver-protocol';
+import type { Diagnostic, Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList, DocumentLink } from 'vscode-languageserver-protocol';
 import type { Hover, MaybePromise, SemanticToken } from '../interfaces';
 import type { DocumentAction, DocumentActionWithStatus } from './DocumentManager';
 import type { FileTranspileResult, SignatureInfoObj } from '../Program';
@@ -141,6 +141,11 @@ export interface LspProject {
      * Get all of the code actions for the specified file and range
      */
     getCodeActions(options: { srcPath: string; range: Range }): Promise<CodeAction[]>;
+
+    /**
+     * Get document links (clickable URI ranges) for the specified file
+     */
+    getDocumentLinks(options: { srcPath: string }): MaybePromise<DocumentLink[]>;
 
     /**
      * Get the completions for the specified file and position
