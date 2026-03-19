@@ -1,7 +1,7 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
-import type { AstEditor } from '../astUtils/AstEditor';
+
 import type { BeforeFileTranspileEvent, Plugin, OnFileValidateEvent, OnGetCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent } from '../interfaces';
-import type { Program, TranspileObj } from '../Program';
+import type { Program } from '../Program';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
 import { DefinitionProvider } from './definition/DefinitionProvider';
@@ -15,7 +15,6 @@ import { ProgramValidator } from './validation/ProgramValidator';
 import { ScopeValidator } from './validation/ScopeValidator';
 import { XmlFileValidator } from './validation/XmlFileValidator';
 import { WorkspaceSymbolProcessor } from './symbols/WorkspaceSymbolProcessor';
-import { TreeShaker } from './treeShaker/TreeShaker';
 
 export class BscPlugin implements Plugin {
     public name = 'BscPlugin';
@@ -59,18 +58,6 @@ export class BscPlugin implements Plugin {
             return new BrsFileValidator(event as any).process();
         } else if (isXmlFile(event.file)) {
             return new XmlFileValidator(event as any).process();
-        }
-    }
-
-    private treeShaker = new TreeShaker();
-
-    public beforeProgramTranspile(program: Program, entries: TranspileObj[], editor: AstEditor) {
-        if (!program.options.treeShaking.enabled) {
-            return;
-        }
-        this.treeShaker.analyze(program, program.options.treeShaking.keep);
-        for (const entry of entries) {
-            this.treeShaker.shake(entry.file, editor);
         }
     }
 
