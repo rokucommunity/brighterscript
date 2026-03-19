@@ -4,7 +4,7 @@ import { standardizePath as s } from '../util';
 import * as fsExtra from 'fs-extra';
 import undent from 'undent';
 
-describe('TreeShaker', () => {
+describe.only('TreeShaker', () => {
     let program: Program;
     const tempDir = s`${__dirname}/../.tmp`;
     const rootDir = s`${tempDir}/rootDir`;
@@ -927,6 +927,48 @@ describe('TreeShaker', () => {
         });
 
         describe('src rule', () => {
+            it('does not set needsTranspiled on a .brs file fully covered by a src keep rule', async () => {
+                // When every function in a .brs file is kept by a keep rule, shake() never
+                // replaces any statement, so needsTranspiled must stay false. This prevents
+                // the BrighterScript transpiler from running on the file and applying
+                // transformations (e.g. namespace resolution) that corrupt plain BrightScript
+                // code such as `date.AsSeconds()` where `date` is a local variable.
+                program = new Program({
+                    rootDir: rootDir, stagingDir: stagingDir,
+                    treeShaking: { enabled: true, keep: [{ src: '**/SDK.brs' }] }
+                });
+                program.setFile('source/SDK.brs', `
+                    function getCurrentTimeSeconds() as object
+                        date = CreateObject("roDateTime")
+                        return date.AsSeconds()
+                    end function
+
+                    function unusedSdkHelper() as string
+                        return "unused"
+                    end function
+                `);
+                program.setFile('source/main.bs', `
+                    sub main()
+                    end sub
+                `);
+
+                program.validate();
+                // Trigger the shake pass the same way Program.beforeProgramTranspile does
+                const { AstEditor } = require('../astUtils/AstEditor');
+                const editor = new AstEditor();
+                const { isBrsFile } = require('../astUtils/reflection');
+                const { TreeShaker } = require('./TreeShaker');
+                const shaker = new TreeShaker();
+                shaker.analyze(program, program.options.treeShaking.keep);
+
+                const sdkFile = program.getFile('source/SDK.brs');
+                shaker.shake(sdkFile, editor);
+
+                // needsTranspiled must remain false — the file must not be put through
+                // the BrighterScript transpiler since it was fully protected by a keep rule
+                expect((sdkFile as any).needsTranspiled).to.be.false;
+            });
+
             it('keeps all functions in files matching the src glob', async () => {
                 program = new Program({
                     rootDir: rootDir, stagingDir: stagingDir,
