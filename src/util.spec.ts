@@ -431,6 +431,97 @@ describe('util', () => {
                 expect(util.normalizeConfig(<any>{ bslibDestinationDir: input }).bslibDestinationDir).to.equal('source/opt');
             });
         });
+
+        describe('treeShaking normalization', () => {
+            it('defaults to disabled with empty keep list when treeShaking is omitted', () => {
+                const result = util.normalizeConfig({}).treeShaking;
+                expect(result.enabled).to.be.false;
+                expect(result.keep).to.eql([]);
+            });
+
+            it('sets enabled to true when specified', () => {
+                const result = util.normalizeConfig({ treeShaking: { enabled: true } }).treeShaking;
+                expect(result.enabled).to.be.true;
+            });
+
+            it('expands a plain string entry to a functions rule', () => {
+                const result = util.normalizeConfig({
+                    treeShaking: { enabled: true, keep: ['MyHelper'] }
+                }).treeShaking;
+                expect(result.keep).to.eql([{ functions: ['myhelper'] }]);
+            });
+
+            it('lowercases function names from plain string entries', () => {
+                const result = util.normalizeConfig({
+                    treeShaking: { enabled: true, keep: ['MyNamespace_MyFunc'] }
+                }).treeShaking;
+                expect(result.keep[0].functions).to.eql(['mynamespace_myfunc']);
+            });
+
+            it('wraps a scalar src value in an array', () => {
+                const result = util.normalizeConfig({
+                    treeShaking: { enabled: true, keep: [{ src: 'source/lib.bs' }] }
+                }).treeShaking;
+                expect(result.keep[0].src).to.eql(['source/lib.bs']);
+            });
+
+            it('wraps a scalar dest value in an array', () => {
+                const result = util.normalizeConfig({
+                    treeShaking: { enabled: true, keep: [{ dest: 'source/lib.brs' }] }
+                }).treeShaking;
+                expect(result.keep[0].dest).to.eql(['source/lib.brs']);
+            });
+
+            it('wraps a scalar functions value in an array and lowercases it', () => {
+                const result = util.normalizeConfig({
+                    treeShaking: { enabled: true, keep: [{ functions: 'MyFunc' }] }
+                }).treeShaking;
+                expect(result.keep[0].functions).to.eql(['myfunc']);
+            });
+
+            it('wraps a scalar matches value in an array', () => {
+                const result = util.normalizeConfig({
+                    treeShaking: { enabled: true, keep: [{ matches: 'rodash_*' }] }
+                }).treeShaking;
+                expect(result.keep[0].matches).to.eql(['rodash_*']);
+            });
+
+            it('passes through already-array values unchanged', () => {
+                const result = util.normalizeConfig({
+                    treeShaking: { enabled: true, keep: [{ src: ['a.bs', 'b.bs'], functions: ['foo', 'bar'] }] }
+                }).treeShaking;
+                expect(result.keep[0].src).to.eql(['a.bs', 'b.bs']);
+                expect(result.keep[0].functions).to.eql(['foo', 'bar']);
+            });
+
+            it('silently skips object rules with no recognized fields', () => {
+                const result = util.normalizeConfig({
+                    treeShaking: { enabled: true, keep: [{} as any] }
+                }).treeShaking;
+                expect(result.keep).to.eql([]);
+            });
+
+            it('silently skips null and undefined entries in keep array', () => {
+                const result = util.normalizeConfig({
+                    treeShaking: { enabled: true, keep: [null as any, undefined as any] }
+                }).treeShaking;
+                expect(result.keep).to.eql([]);
+            });
+
+            it('handles a non-array keep value gracefully', () => {
+                const result = util.normalizeConfig({
+                    treeShaking: { enabled: true, keep: 'notAnArray' as any }
+                }).treeShaking;
+                expect(result.keep).to.eql([]);
+            });
+
+            it('re-normalizes treeShaking when the property is overwritten via assignment', () => {
+                const config = util.normalizeConfig({ treeShaking: { enabled: false } });
+                config.treeShaking = { enabled: true, keep: ['MyFunc'] } as any;
+                expect(config.treeShaking.enabled).to.be.true;
+                expect(config.treeShaking.keep).to.eql([{ functions: ['myfunc'] }]);
+            });
+        });
     });
 
     describe('areArraysEqual', () => {
