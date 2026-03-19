@@ -1325,6 +1325,7 @@ export class Program {
             for (const entry of entries) {
                 this.treeShaker.shake(entry.file, astEditor);
             }
+            this.treeShaker.logSummary();
         }
 
         return {

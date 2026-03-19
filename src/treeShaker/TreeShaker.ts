@@ -91,6 +91,9 @@ export class TreeShaker {
     // Logger sourced from the Program — set at the start of analyze()
     private logger: Logger | undefined;
 
+    // Removals accumulated across shake() calls — keyed by pkgPath for the summary log
+    private removalLog = new Map<string, string[]>();
+
     reset() {
         this.allFunctions.clear();
         this.allSimpleNames.clear();
@@ -103,6 +106,7 @@ export class TreeShaker {
         this.filePathCache.clear();
         this.toRemove.clear();
         this.rootDir = '';
+        this.removalLog.clear();
     }
 
     /**
@@ -531,7 +535,22 @@ export class TreeShaker {
         }), { walkMode: WalkMode.visitStatements, editor: editor });
 
         if (removed.length > 0) {
-            this.logger?.debug(`tree shaker removed ${removed.length} function(s) from ${file.pkgPath}: ${removed.join(', ')}`);
+            this.removalLog.set(file.pkgPath, removed);
+        }
+    }
+
+    /**
+     * Log a single consolidated summary of every function removed across all files.
+     * Call this after the shake() loop in Program.beforeProgramTranspile.
+     */
+    logSummary() {
+        if (this.removalLog.size === 0 || !this.logger) {
+            return;
+        }
+        const totalRemoved = [...this.removalLog.values()].reduce((sum, fns) => sum + fns.length, 0);
+        this.logger.log(`tree shaker removed ${totalRemoved} function(s) across ${this.removalLog.size} file(s):`);
+        for (const [pkgPath, fns] of this.removalLog) {
+            this.logger.log(`  ${pkgPath}: ${fns.join(', ')}`);
         }
     }
 }
