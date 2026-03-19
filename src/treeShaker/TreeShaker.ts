@@ -13,6 +13,7 @@ import { EmptyStatement } from '../parser/Statement';
 import type { FunctionStatement } from '../parser/Statement';
 import type { Program } from '../Program';
 import util from '../util';
+import type { Logger } from '../logging';
 
 /**
  * Keep rule with patterns pre-compiled and src paths pre-resolved.
@@ -87,6 +88,9 @@ export class TreeShaker {
     // Resolved rootDir for src-path matching
     private rootDir = '';
 
+    // Logger sourced from the Program — set at the start of analyze()
+    private logger: Logger | undefined;
+
     reset() {
         this.allFunctions.clear();
         this.allSimpleNames.clear();
@@ -119,6 +123,7 @@ export class TreeShaker {
      */
     analyze(program: Program, keepRules: NormalizedKeepRule[]) {
         this.reset();
+        this.logger = program.logger;
         this.rootDir = program.options.rootDir ?? process.cwd();
 
         // Compile patterns and resolve src paths once — before any per-function work
@@ -503,19 +508,23 @@ export class TreeShaker {
             return;
         }
 
-        let removedAny = false;
+        const removed: string[] = [];
 
         file.ast.walk(createVisitor({
             FunctionStatement: (stmt) => {
                 if (this.toRemove.has(stmt)) {
-                    if (!removedAny) {
+                    if (removed.length === 0) {
                         // ensure modified AST is emitted for .brs files
                         editor.setProperty(file, 'needsTranspiled', true);
-                        removedAny = true;
                     }
+                    removed.push(stmt.getName(ParseMode.BrightScript) ?? '?');
                     return new EmptyStatement();
                 }
             }
         }), { walkMode: WalkMode.visitStatements, editor: editor });
+
+        if (removed.length > 0) {
+            this.logger?.debug(`tree shaker removed ${removed.length} function(s) from ${file.pkgPath}: ${removed.join(', ')}`);
+        }
     }
 }
