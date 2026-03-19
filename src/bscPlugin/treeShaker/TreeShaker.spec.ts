@@ -1416,6 +1416,37 @@ describe('TreeShaker', () => {
                 const code = await getTranspiled('source/main.bs');
                 expect(code).not.to.include('sub unused()');
             });
+
+            it('does not keep everything when a NormalizedKeepRule with no fields reaches compileRules', async () => {
+                // If an empty CompiledRule were allowed through, ruleMatches would return true
+                // for every function (all field checks short-circuit to pass when undefined),
+                // effectively disabling tree shaking entirely. compileRules must drop it.
+                const shaker = new TreeShaker();
+                // Bypass normalizeTreeShakingConfig by calling analyze with a pre-built
+                // NormalizedKeepRule that has no fields — simulates a caller that bypasses
+                // the normalizer or a future code path that produces an empty rule.
+                program = new Program({ rootDir: rootDir, stagingDir: stagingDir, treeShaking: { enabled: true } });
+                program.setFile('source/main.bs', `
+                    sub main()
+                    end sub
+
+                    sub unused()
+                        print "must still be removed"
+                    end sub
+                `);
+                program.validate();
+
+                // Pass an empty NormalizedKeepRule directly to analyze()
+                shaker.analyze(program, [{}] as any);
+
+                const editor = new AstEditor();
+                const mainFile = program.getFile('source/main.bs');
+                shaker.shake(mainFile, editor);
+
+                // The empty rule must have been dropped — unused() should be in toRemove
+                const code = await getTranspiled('source/main.bs');
+                expect(code).not.to.include('sub unused()');
+            });
         });
     });
 });

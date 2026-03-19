@@ -166,7 +166,7 @@ export class TreeShaker {
      * - `src` patterns are resolved to absolute paths against rootDir up front.
      */
     private compileRules(rules: NormalizedKeepRule[]): CompiledRule[] {
-        return rules.map(rule => {
+        return rules.flatMap(rule => {
             const compiled: CompiledRule = {};
 
             if (rule.functions) {
@@ -213,7 +213,16 @@ export class TreeShaker {
                 });
             }
 
-            return compiled;
+            // Defensively skip rules with no criteria — an empty CompiledRule would cause
+            // ruleMatches to return true for every function (all field checks are skipped
+            // when undefined), effectively keeping everything and disabling tree shaking.
+            const hasAnyCriteria =
+                compiled.functionsSet !== undefined ||
+                compiled.matchesMatchers !== undefined ||
+                compiled.srcMatchers !== undefined ||
+                compiled.destMatchers !== undefined;
+
+            return hasAnyCriteria ? [compiled] : [];
         });
     }
 
