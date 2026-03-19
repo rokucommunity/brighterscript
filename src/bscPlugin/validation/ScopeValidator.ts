@@ -1453,10 +1453,10 @@ export class ScopeValidator {
         }
 
         const loopType = forEachStmt.getLoopVariableType({ flags: SymbolTypeFlag.runtime, statementIndex: forEachStmt.statementIndex });
-        if (loopType?.isResolvable()) {
+        if (forEachStmt.typeExpression && loopType?.isResolvable()) {
 
             const data: TypeCompatibilityData = {};
-            if (!loopType.isTypeCompatible(targetItemType, data)) {
+            if (!loopType.isTypeCompatible(targetItemType, data)) { //{) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.assignmentTypeMismatch(targetItemType.toString(), loopType.toString(), data),
                     location: forEachStmt.typeExpression.location

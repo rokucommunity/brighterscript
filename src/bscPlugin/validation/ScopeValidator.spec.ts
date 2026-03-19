@@ -4442,6 +4442,53 @@ describe('ScopeValidator', () => {
                     DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
                 ]);
             });
+
+            it('allows assignment of for each loop variable as string for union of AAs and string array', () => {
+                program.setFile('source/main.bs', `
+                    sub main(data as roAssociativeArray or string[])
+                        for each item as string in data
+                            print item
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows assignment of for each loop variable from array of type statement types of union of custom components', () => {
+
+                program.setFile('components/widget1.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget1" extends="Group">
+                        <interface>
+                            <field id="someField" type="string" />
+                        </interface>
+                    </component>
+                `);
+
+                program.setFile('components/widget2.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget2" extends="Group">
+                        <interface>
+                            <field id="someField" type="integer" />
+                        </interface>
+                    </component>
+                `);
+
+
+                program.setFile('source/main.bs', `
+                    sub main(data as thing[])
+                        for each item in data
+                            print item.someField
+                        end for
+                    end sub
+
+
+                    type thing = roSGNodeWidget1 or roSGNodeWidget2
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
         });
     });
 
