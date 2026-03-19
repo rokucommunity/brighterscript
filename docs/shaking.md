@@ -167,6 +167,8 @@ The pattern is resolved relative to `rootDir` unless it is an absolute path.
 }
 ```
 
+When a `src` rule covers every function in a `.brs` file, the file is never put through the BrighterScript transpiler — it is copied verbatim to staging. This is important for third-party SDK files where transpilation could corrupt valid BrightScript (for example, a local variable that shares a name with a project namespace).
+
 #### `dest` — glob against the package-relative destination path
 
 Matches the path the file will have inside the deployed zip. BrighterScript source files (`.bs`) are matched using their transpiled extension (`.brs`), so always write `.brs` in dest patterns. An optional `pkg:/` prefix is accepted and stripped before matching.
