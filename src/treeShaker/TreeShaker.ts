@@ -347,6 +347,13 @@ export class TreeShaker {
                     const simple = parts[parts.length - 1].text.toLowerCase();
                     this.calledNames.add(full);
                     this.calledNames.add(simple);
+                    // Also record the underscore-joined form so that namespace calls like
+                    // promises.chain() correctly retain a pre-compiled .brs library function
+                    // named promises_chain. Without this, bsName='promises_chain' would not
+                    // match calledNames={'promises.chain','chain'} and would be removed.
+                    if (parts.length > 1) {
+                        this.calledNames.add(parts.map(p => p.text).join('_').toLowerCase());
+                    }
                 }
             },
 

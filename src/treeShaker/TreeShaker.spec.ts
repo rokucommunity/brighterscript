@@ -401,6 +401,39 @@ describe('TreeShaker', () => {
             expect(mainCode).not.to.include('sub unrelated()');
         });
 
+        it('preserves a pre-compiled .brs library function called via namespace syntax from a .bs file', async () => {
+            // The .brs file defines sub promises_chain(...) — no namespace statement.
+            // The .bs file calls it as promises.chain(...) which BrighterScript transpiles
+            // to promises_chain(...). calledNames receives 'promises.chain' and 'chain',
+            // but bsName for the .brs function is 'promises_chain' (no dots). Without also
+            // recording the underscore-joined form, isUnused would incorrectly remove it.
+            program.setFile('source/promises.brs', `
+                function promises_chain(task as object) as object
+                    return { then: promises_then }
+                end function
+
+                function promises_then(callback as object) as object
+                    return invalid
+                end function
+            `);
+            program.setFile('source/main.bs', `
+                namespace promises
+                    function chain(task as object) as object
+                    end function
+                end namespace
+
+                sub main()
+                    promises.chain(doWork())
+                end sub
+
+                sub doWork()
+                end sub
+            `);
+
+            const code = await getTranspiled('source/promises.brs');
+            expect(code).to.include('promises_chain');
+        });
+
         it('preserves functions passed by reference as variables', async () => {
             program.setFile('source/main.bs', `
                 sub init()
