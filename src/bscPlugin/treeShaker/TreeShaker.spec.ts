@@ -3,6 +3,8 @@ import { Program } from '../../Program';
 import { standardizePath as s } from '../../util';
 import * as fsExtra from 'fs-extra';
 import undent from 'undent';
+import { AstEditor } from '../../astUtils/AstEditor';
+import { TreeShaker } from './TreeShaker';
 
 describe('TreeShaker', () => {
     let program: Program;
@@ -927,7 +929,7 @@ describe('TreeShaker', () => {
         });
 
         describe('src rule', () => {
-            it('does not set needsTranspiled on a .brs file fully covered by a src keep rule', async () => {
+            it('does not set needsTranspiled on a .brs file fully covered by a src keep rule', () => {
                 // When every function in a .brs file is kept by a keep rule, shake() never
                 // replaces any statement, so needsTranspiled must stay false. This prevents
                 // the BrighterScript transpiler from running on the file and applying
@@ -953,10 +955,7 @@ describe('TreeShaker', () => {
                 `);
 
                 program.validate();
-                // Trigger the shake pass the same way Program.beforeProgramTranspile does
-                const { AstEditor } = require('../../astUtils/AstEditor');
                 const editor = new AstEditor();
-                const { TreeShaker } = require('./TreeShaker');
                 const shaker = new TreeShaker();
                 shaker.analyze(program, program.options.treeShaking.keep);
 
