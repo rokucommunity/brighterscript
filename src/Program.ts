@@ -1311,7 +1311,6 @@ export class Program {
         const astEditor = new AstEditor();
 
         this.plugins.emit('beforeProgramTranspile', this, entries, astEditor);
-
         return {
             entries: entries,
             getOutputPath: getOutputPath,
