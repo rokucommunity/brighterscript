@@ -24,7 +24,6 @@ import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement } from './astUti
 import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { AstEditor } from './astUtils/AstEditor';
-import { TreeShaker } from './treeShaker/TreeShaker';
 import type { SourceMapGenerator } from 'source-map';
 import type { Statement } from './parser/AstNode';
 import { CallExpressionInfo } from './bscPlugin/CallExpressionInfo';
@@ -74,8 +73,6 @@ export class Program {
         //inject the bsc plugin as the first plugin in the stack.
         this.plugins.addFirst(new BscPlugin());
 
-        this.treeShaker = new TreeShaker();
-
         //normalize the root dir path
         this.options.rootDir = util.getRootDir(this.options);
 
@@ -121,8 +118,6 @@ export class Program {
      * Plugins which can provide extra diagnostics or transform AST
      */
     public plugins: PluginInterface;
-
-    private treeShaker: TreeShaker;
 
     /**
      * A set of diagnostics. This does not include any of the scope diagnostics.
@@ -1316,17 +1311,6 @@ export class Program {
         const astEditor = new AstEditor();
 
         this.plugins.emit('beforeProgramTranspile', this, entries, astEditor);
-
-        // Tree shaking runs after all plugins' beforeProgramTranspile hooks so it sees
-        // any functions added or referenced by user plugins. Note: beforeFileTranspile
-        // hooks still run later per-file and are not visible to the shaker.
-        if (this.options.treeShaking.enabled) {
-            this.treeShaker.analyze(this, this.options.treeShaking.keep);
-            for (const entry of entries) {
-                this.treeShaker.shake(entry.file, astEditor);
-            }
-            this.treeShaker.logSummary();
-        }
 
         return {
             entries: entries,

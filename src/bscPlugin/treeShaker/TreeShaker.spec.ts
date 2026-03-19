@@ -1,6 +1,6 @@
-import { expect } from '../chai-config.spec';
-import { Program } from '../Program';
-import { standardizePath as s } from '../util';
+import { expect } from '../../chai-config.spec';
+import { Program } from '../../Program';
+import { standardizePath as s } from '../../util';
 import * as fsExtra from 'fs-extra';
 import undent from 'undent';
 
@@ -954,9 +954,8 @@ describe.only('TreeShaker', () => {
 
                 program.validate();
                 // Trigger the shake pass the same way Program.beforeProgramTranspile does
-                const { AstEditor } = require('../astUtils/AstEditor');
+                const { AstEditor } = require('../../astUtils/AstEditor');
                 const editor = new AstEditor();
-                const { isBrsFile } = require('../astUtils/reflection');
                 const { TreeShaker } = require('./TreeShaker');
                 const shaker = new TreeShaker();
                 shaker.analyze(program, program.options.treeShaking.keep);
