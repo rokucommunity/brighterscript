@@ -929,6 +929,40 @@ describe('TreeShaker', () => {
         });
 
         describe('src rule', () => {
+            it('matches a **/filename.brs pattern against a file whose srcPath is outside rootDir', () => {
+                // SomeSDK.brs lives in an sdks/ directory that is NOT under rootDir.
+                // The resolved pattern would be /rootDir/**/SomeSDK.brs which would NOT
+                // match /sdks/SomeVendor/source/SomeSDK.brs. The raw pattern **/SomeSDK.brs
+                // must be tried against the absolute srcPath directly.
+                const externalDir = s`${tempDir}/sdks/SomeVendor/source`;
+                fsExtra.ensureDirSync(externalDir);
+                const externalFile = s`${externalDir}/SomeSDK.brs`;
+                fsExtra.writeFileSync(externalFile, `
+                    function sdkTrack() as void
+                    end function
+                `);
+
+                program = new Program({
+                    rootDir: rootDir, stagingDir: stagingDir,
+                    treeShaking: { enabled: true, keep: [{ src: '**/SomeSDK.brs' }] }
+                });
+                program.setFile({ src: externalFile, dest: 'source/SomeSDK.brs' }, undefined);
+                program.setFile('source/main.bs', `
+                    sub main()
+                    end sub
+                `);
+
+                program.validate();
+                const editor = new AstEditor();
+                const shaker = new TreeShaker();
+                shaker.analyze(program, program.options.treeShaking.keep);
+
+                const sdkFile = program.getFile('source/SomeSDK.brs');
+                shaker.shake(sdkFile, editor);
+
+                expect((sdkFile as any).needsTranspiled).to.be.false;
+            });
+
             it('does not set needsTranspiled on a .brs file fully covered by a src keep rule', () => {
                 // When every function in a .brs file is kept by a keep rule, shake() never
                 // replaces any statement, so needsTranspiled must stay false. This prevents
@@ -999,7 +1033,7 @@ describe('TreeShaker', () => {
             });
 
             it('calls from within a src-kept .brs file still count towards keeping functions in other files', async () => {
-                // Even though BrazeSDK.brs is fully protected, its reference pass still runs.
+                // Even though SomeSDK.brs is fully protected, its reference pass still runs.
                 // Calls it makes into other files must keep those callees alive.
                 program = new Program({
                     rootDir: rootDir, stagingDir: stagingDir,

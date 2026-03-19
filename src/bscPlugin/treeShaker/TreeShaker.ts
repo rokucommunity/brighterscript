@@ -180,14 +180,27 @@ export class TreeShaker {
             }
 
             if (rule.src) {
-                compiled.srcMatchers = rule.src.map(pattern => {
-                    const resolved = path.isAbsolute(pattern)
-                        ? pattern
-                        : path.resolve(this.rootDir, pattern);
-                    // Normalize to forward slashes: util.standardizePath uses path.win32.normalize
-                    // which produces backslashes on Windows, and minimatch treats \ as an escape
-                    // character rather than a path separator unless paths are normalized first.
-                    return new minimatch.Minimatch(util.standardizePath(resolved).replace(/\\/g, '/'), { nocase: true });
+                // Each pattern is compiled into two matchers so both use-cases work:
+                //
+                //  1. Raw — pattern used as-is against the absolute srcPath.
+                //     e.g. "**/SDK.brs" stays "**/SDK.brs"
+                //     Matches files anywhere, including outside rootDir (vendored SDKs).
+                //
+                //  2. Resolved (absolute) — pattern resolved against rootDir.
+                //     e.g. "source/vendor/**" → "/rootDir/source/vendor/**"
+                //     Matches files that live inside rootDir using rootDir-relative paths.
+                //
+                // ruleMatches passes if either matcher hits, so both styles work correctly.
+                compiled.srcMatchers = rule.src.flatMap(pattern => {
+                    const normalized = pattern.replace(/\\/g, '/');
+                    const matchers: minimatch.Minimatch[] = [
+                        new minimatch.Minimatch(normalized, { nocase: true })
+                    ];
+                    if (!path.isAbsolute(pattern)) {
+                        const resolved = util.standardizePath(path.resolve(this.rootDir, pattern)).replace(/\\/g, '/');
+                        matchers.push(new minimatch.Minimatch(resolved, { nocase: true }));
+                    }
+                    return matchers;
                 });
             }
 
