@@ -194,4 +194,56 @@ describe('DefinitionProvider', () => {
             range: util.createRange(1, 0, 1, 0)
         }]);
     });
+
+    it('handles script tag uri go-to-definition', () => {
+        const brsFile = program.setFile('components/MainScene.brs', `
+            sub main()
+            end sub
+        `);
+        const xmlFile = program.setFile('components/MainScene.xml', `
+            <component name="MainScene" extends="Scene">
+                <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />
+            </component>
+        `);
+        // Line 2 (0-indexed): `                <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />`
+        // The uri value range starts at the opening `"` for `pkg:/components/MainScene.brs`
+        expect(
+            program.getDefinition(xmlFile.srcPath, util.createPosition(2, 60))
+        ).to.eql([{
+            uri: URI.file(brsFile.srcPath).toString(),
+            range: util.createRange(0, 0, 0, 0)
+        }]);
+    });
+
+    it('handles script tag uri go-to-definition with relative path', () => {
+        const brsFile = program.setFile('components/MainScene.brs', `
+            sub main()
+            end sub
+        `);
+        const xmlFile = program.setFile('components/MainScene.xml', `
+            <component name="MainScene" extends="Scene">
+                <script type="text/brightscript" uri="MainScene.brs" />
+            </component>
+        `);
+        // Line 2 (0-indexed): `                <script type="text/brightscript" uri="MainScene.brs" />`
+        // The uri value range starts at the opening `"` for `MainScene.brs`
+        expect(
+            program.getDefinition(xmlFile.srcPath, util.createPosition(2, 54))
+        ).to.eql([{
+            uri: URI.file(brsFile.srcPath).toString(),
+            range: util.createRange(0, 0, 0, 0)
+        }]);
+    });
+
+    it('returns empty array when script tag uri file is not found', () => {
+        const xmlFile = program.setFile('components/MainScene.xml', `
+            <component name="MainScene" extends="Scene">
+                <script type="text/brightscript" uri="pkg:/components/NotFound.brs" />
+            </component>
+        `);
+        // click within "pkg:/components/NotFound.brs" uri value
+        expect(
+            program.getDefinition(xmlFile.srcPath, util.createPosition(2, 60))
+        ).to.eql([]);
+    });
 });

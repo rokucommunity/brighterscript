@@ -258,5 +258,19 @@ export class DefinitionProvider {
                 uri: util.pathToUri(file.parentComponent.srcPath)
             });
         }
+
+        //if the position is within a script tag's uri attribute
+        for (const scriptImport of file.scriptTagImports) {
+            if (scriptImport.filePathRange && util.rangeContains(scriptImport.filePathRange, this.event.position)) {
+                const scriptFile = this.event.program.getFile(scriptImport.pkgPath);
+                if (scriptFile) {
+                    this.event.definitions.push({
+                        range: util.createRange(0, 0, 0, 0),
+                        uri: util.pathToUri(scriptFile.srcPath)
+                    });
+                }
+                break;
+            }
+        }
     }
 }
