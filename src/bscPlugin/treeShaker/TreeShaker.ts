@@ -85,6 +85,11 @@ export class TreeShaker {
     // in different files are tracked independently; shake() is a single Set lookup per statement
     private toRemove = new Set<FunctionStatement>();
 
+    // Files that have at least one function to remove — shake() skips files not in this set,
+    // guaranteeing needsTranspiled is never touched on fully-protected files (e.g. a .brs SDK
+    // covered entirely by a src keep rule)
+    private filesToShake = new Set<BrsFile>();
+
     // Resolved rootDir for src-path matching
     private rootDir = '';
 
@@ -105,6 +110,7 @@ export class TreeShaker {
         this.compiledRules = [];
         this.filePathCache.clear();
         this.toRemove.clear();
+        this.filesToShake.clear();
         this.rootDir = '';
         this.removalLog.clear();
     }
@@ -232,6 +238,7 @@ export class TreeShaker {
         for (const { bsName, brsName, stmt, file } of this.allStatements) {
             if (this.isUnused(bsName, brsName) && !this.isKept(brsName, file)) {
                 this.toRemove.add(stmt);
+                this.filesToShake.add(file);
             }
         }
     }
@@ -516,6 +523,13 @@ export class TreeShaker {
      */
     shake(file: BscFile, editor: AstEditor) {
         if (!isBrsFile(file)) {
+            return;
+        }
+
+        // Skip files with nothing to remove — this guarantees needsTranspiled is never
+        // set on fully-protected files (e.g. a .brs SDK covered by a src keep rule),
+        // preventing the BrighterScript transpiler from running on them.
+        if (!this.filesToShake.has(file)) {
             return;
         }
 

@@ -4,7 +4,7 @@ import { standardizePath as s } from '../../util';
 import * as fsExtra from 'fs-extra';
 import undent from 'undent';
 
-describe.only('TreeShaker', () => {
+describe('TreeShaker', () => {
     let program: Program;
     const tempDir = s`${__dirname}/../.tmp`;
     const rootDir = s`${tempDir}/rootDir`;
@@ -997,6 +997,37 @@ describe.only('TreeShaker', () => {
                 expect(vendorCode).to.include('sub vendorHelper()');
                 expect(vendorCode).to.include('sub anotherVendorFn()');
                 expect(mainCode).not.to.include('sub appHelper()');
+            });
+
+            it('calls from within a src-kept .brs file still count towards keeping functions in other files', async () => {
+                // Even though BrazeSDK.brs is fully protected, its reference pass still runs.
+                // Calls it makes into other files must keep those callees alive.
+                program = new Program({
+                    rootDir: rootDir, stagingDir: stagingDir,
+                    treeShaking: { enabled: true, keep: [{ src: '**/SDK.brs' }] }
+                });
+                program.setFile('source/SDK.brs', `
+                    function Track() as void
+                        InternalHelper()
+                    end function
+                `);
+                program.setFile('source/helpers.bs', `
+                    sub internalHelper()
+                        print "called from SDK.brs"
+                    end sub
+
+                    sub unreachable()
+                        print "never called"
+                    end sub
+                `);
+                program.setFile('source/main.bs', `
+                    sub main()
+                    end sub
+                `);
+
+                const helpersCode = await getTranspiled('source/helpers.bs');
+                expect(helpersCode).to.include('sub internalHelper()');
+                expect(helpersCode).not.to.include('sub unreachable()');
             });
         });
 
