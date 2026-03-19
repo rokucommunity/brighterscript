@@ -169,7 +169,10 @@ export class TreeShaker {
                     const resolved = path.isAbsolute(pattern)
                         ? pattern
                         : path.resolve(this.rootDir, pattern);
-                    return new minimatch.Minimatch(util.standardizePath(resolved), { nocase: true });
+                    // Normalize to forward slashes: util.standardizePath uses path.win32.normalize
+                    // which produces backslashes on Windows, and minimatch treats \ as an escape
+                    // character rather than a path separator unless paths are normalized first.
+                    return new minimatch.Minimatch(util.standardizePath(resolved).replace(/\\/g, '/'), { nocase: true });
                 });
             }
 
@@ -200,7 +203,7 @@ export class TreeShaker {
         if (!cached) {
             const rawPkg = file.pkgPath.replace(/\\/g, '/');
             cached = {
-                srcPath: util.standardizePath(file.srcPath),
+                srcPath: util.standardizePath(file.srcPath).replace(/\\/g, '/'),
                 pkgPath: rawPkg.replace(/\.bs$/i, '.brs')
             };
             this.filePathCache.set(file, cached);
