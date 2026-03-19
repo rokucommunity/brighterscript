@@ -2,7 +2,7 @@ import { isBrsFile, isClassStatement, isDottedGetExpression, isImportStatement, 
 import type { BrsFile } from '../../files/BrsFile';
 import type { ProvideDefinitionEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
-import type { Location } from 'vscode-languageserver-protocol';
+import type { Location, LocationLink } from 'vscode-languageserver-protocol';
 import type { ClassStatement, FunctionStatement, NamespaceStatement } from '../../parser/Statement';
 import { ParseMode } from '../../parser/Parser';
 import util from '../../util';
@@ -16,7 +16,7 @@ export class DefinitionProvider {
         private event: ProvideDefinitionEvent
     ) { }
 
-    public process(): Location[] {
+    public process(): Array<Location | LocationLink> {
         if (isBrsFile(this.event.file)) {
             this.brsFileGetDefinition(this.event.file);
         } else if (isXmlFile(this.event.file)) {

@@ -9,7 +9,7 @@ import { URI } from 'vscode-uri';
 import { Deferred } from '../deferred';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import { rokuDeploy } from 'roku-deploy';
-import type { DocumentSymbol, Position, Range, Location, WorkspaceSymbol } from 'vscode-languageserver-protocol';
+import type { DocumentSymbol, Position, Range, Location, LocationLink, WorkspaceSymbol } from 'vscode-languageserver-protocol';
 import { CompletionList } from 'vscode-languageserver-protocol';
 import { CancellationTokenSource } from 'vscode-languageserver-protocol';
 import type { DocumentAction, DocumentActionWithStatus } from './DocumentManager';
@@ -383,7 +383,7 @@ export class Project implements LspProject {
         }
     }
 
-    public async getDefinition(options: { srcPath: string; position: Position }): Promise<Location[]> {
+    public async getDefinition(options: { srcPath: string; position: Position }): Promise<Array<Location | LocationLink>> {
         await this.onIdle();
         if (this.builder.program.hasFile(options.srcPath)) {
             return this.builder.program.getDefinition(options.srcPath, options.position);
@@ -429,13 +429,6 @@ export class Project implements LspProject {
                 }
             }
             return codeActions;
-        }
-    }
-
-    public async getDocumentLinks(options: { srcPath: string }) {
-        await this.onIdle();
-        if (this.builder.program.hasFile(options.srcPath)) {
-            return this.builder.program.getDocumentLinks(options.srcPath);
         }
     }
 

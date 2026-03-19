@@ -1,6 +1,6 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Position, Location, Diagnostic } from 'vscode-languageserver';
+import type { CompletionItem, Position, Location, LocationLink, Diagnostic } from 'vscode-languageserver';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { CompletionItemKind, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
@@ -1309,7 +1309,7 @@ export class BrsFile {
      * go to the definition of that identifier (where this thing was first defined)
      * @deprecated use `DefinitionProvider.process()` instead
      */
-    public getDefinition(position: Position): Location[] {
+    public getDefinition(position: Position): Array<Location | LocationLink> {
         return new DefinitionProvider({
             program: this.program,
             file: this,

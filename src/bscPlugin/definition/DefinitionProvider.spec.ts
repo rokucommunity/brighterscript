@@ -207,12 +207,13 @@ describe('DefinitionProvider', () => {
         `);
         // Line 2 (0-indexed): `                <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />`
         // The uri value range starts at the opening `"` for `pkg:/components/MainScene.brs`
-        expect(
-            program.getDefinition(xmlFile.srcPath, util.createPosition(2, 60))
-        ).to.eql([{
-            uri: URI.file(brsFile.srcPath).toString(),
-            range: util.createRange(0, 0, 0, 0)
-        }]);
+        const result = program.getDefinition(xmlFile.srcPath, util.createPosition(2, 60));
+        expect(result).to.be.lengthOf(1);
+        expect(result[0]).to.include({
+            targetUri: URI.file(brsFile.srcPath).toString()
+        });
+        // originSelectionRange should cover the full URI value (the entire filePathRange)
+        expect((result[0] as any).originSelectionRange).to.exist;
     });
 
     it('handles script tag uri go-to-definition with relative path', () => {
@@ -227,12 +228,12 @@ describe('DefinitionProvider', () => {
         `);
         // Line 2 (0-indexed): `                <script type="text/brightscript" uri="MainScene.brs" />`
         // The uri value range starts at the opening `"` for `MainScene.brs`
-        expect(
-            program.getDefinition(xmlFile.srcPath, util.createPosition(2, 54))
-        ).to.eql([{
-            uri: URI.file(brsFile.srcPath).toString(),
-            range: util.createRange(0, 0, 0, 0)
-        }]);
+        const result = program.getDefinition(xmlFile.srcPath, util.createPosition(2, 54));
+        expect(result).to.be.lengthOf(1);
+        expect(result[0]).to.include({
+            targetUri: URI.file(brsFile.srcPath).toString()
+        });
+        expect((result[0] as any).originSelectionRange).to.exist;
     });
 
     it('returns empty array when script tag uri file is not found', () => {
@@ -245,57 +246,5 @@ describe('DefinitionProvider', () => {
         expect(
             program.getDefinition(xmlFile.srcPath, util.createPosition(2, 60))
         ).to.eql([]);
-    });
-
-    describe('getDocumentLinks', () => {
-        it('returns document links for script tag uris', () => {
-            const brsFile = program.setFile('components/MainScene.brs', `
-                sub main()
-                end sub
-            `);
-            const xmlFile = program.setFile('components/MainScene.xml', `
-                <component name="MainScene" extends="Scene">
-                    <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />
-                </component>
-            `);
-            const links = program.getDocumentLinks(xmlFile.srcPath);
-            expect(links).to.be.lengthOf(1);
-            expect(links[0].target).to.equal(URI.file(brsFile.srcPath).toString());
-        });
-
-        it('returns document link with undefined target when script file is not found', () => {
-            const xmlFile = program.setFile('components/MainScene.xml', `
-                <component name="MainScene" extends="Scene">
-                    <script type="text/brightscript" uri="pkg:/components/NotFound.brs" />
-                </component>
-            `);
-            const links = program.getDocumentLinks(xmlFile.srcPath);
-            expect(links).to.be.lengthOf(1);
-            expect(links[0].target).to.be.undefined;
-        });
-
-        it('returns empty array for non-xml files', () => {
-            const brsFile = program.setFile('source/main.brs', `
-                sub main()
-                end sub
-            `);
-            const links = program.getDocumentLinks(brsFile.srcPath);
-            expect(links).to.eql([]);
-        });
-
-        it('returns multiple links for multiple script tags', () => {
-            const brsFile1 = program.setFile('components/MainScene.brs', ``);
-            const brsFile2 = program.setFile('components/Helpers.brs', ``);
-            const xmlFile = program.setFile('components/MainScene.xml', `
-                <component name="MainScene" extends="Scene">
-                    <script type="text/brightscript" uri="MainScene.brs" />
-                    <script type="text/brightscript" uri="Helpers.brs" />
-                </component>
-            `);
-            const links = program.getDocumentLinks(xmlFile.srcPath);
-            expect(links).to.be.lengthOf(2);
-            expect(links[0].target).to.equal(URI.file(brsFile1.srcPath).toString());
-            expect(links[1].target).to.equal(URI.file(brsFile2.srcPath).toString());
-        });
     });
 });

@@ -1554,7 +1554,7 @@ describe('LanguageServer', () => {
             });
 
             expect(locations.length).to.equal(1);
-            const location: Location = locations[0];
+            const location: Location = locations[0] as Location;
             expect(location.uri).to.equal(functionDocument.uri);
             expect(location.range.start.line).to.equal(5);
             expect(location.range.start.character).to.equal(16);
@@ -1569,7 +1569,7 @@ describe('LanguageServer', () => {
             });
 
             expect(locations.length).to.equal(1);
-            const location: Location = locations[0];
+            const location: Location = locations[0] as Location;
             expect(location.uri).to.equal(functionDocument.uri);
             expect(location.range.start.line).to.equal(5);
             expect(location.range.start.character).to.equal(16);
@@ -1594,7 +1594,7 @@ describe('LanguageServer', () => {
                 position: util.createPosition(3, 36)
             });
             expect(locations.length).to.equal(1);
-            const location: Location = locations[0];
+            const location: Location = locations[0] as Location;
             expect(location.uri).to.equal(referenceDocument.uri);
             expect(location.range.start.line).to.equal(2);
             expect(location.range.start.character).to.equal(20);
@@ -1629,7 +1629,7 @@ describe('LanguageServer', () => {
                 position: util.createPosition(3, 30)
             });
             expect(locations.length).to.equal(1);
-            const location: Location = locations[0];
+            const location: Location = locations[0] as Location;
             expect(location.uri).to.equal(functionDocument.uri);
             expect(location.range.start.line).to.equal(2);
             expect(location.range.start.character).to.equal(20);
