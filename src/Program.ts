@@ -1317,10 +1317,9 @@ export class Program {
 
         this.plugins.emit('beforeProgramTranspile', this, entries, astEditor);
 
-        // Tree shaking runs after all plugins so it sees the fully-transformed AST.
-        // Running it inside BscPlugin (which is addFirst) would mean it executes before
-        // user plugins' beforeProgramTranspile hooks, causing functions added or referenced
-        // by those plugins to be incorrectly removed.
+        // Tree shaking runs after all plugins' beforeProgramTranspile hooks so it sees
+        // any functions added or referenced by user plugins. Note: beforeFileTranspile
+        // hooks still run later per-file and are not visible to the shaker.
         if (this.options.treeShaking.enabled) {
             this.treeShaker.analyze(this, this.options.treeShaking.keep);
             for (const entry of entries) {
