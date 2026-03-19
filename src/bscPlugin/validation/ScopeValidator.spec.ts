@@ -2130,154 +2130,6 @@ describe('ScopeValidator', () => {
             });
         });
 
-        describe('for loops', () => {
-            it('allows using the loop variable inside the loop', () => {
-                program.setFile('source/main.bs', `
-                    sub main()
-                        for each item in [1, 2, 3]
-                            x as integer = item + 2
-                        end for
-                    end sub
-                `);
-                program.validate();
-                expectZeroDiagnostics(program);
-            });
-
-            it('validates the loop variable usage', () => {
-                program.setFile('source/main.bs', `
-                    sub main()
-                        for each item in ["test"]
-                            x as integer = item
-                        end for
-                    end sub
-                `);
-                program.validate();
-                expectDiagnostics(program, [
-                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
-                ]);
-            });
-
-            it('validates assignment of for loop variable to non-number', () => {
-                program.setFile('source/main.bs', `
-                    sub main()
-                        for i = "test" to 8 ' can't set loop var to string
-                            print i
-                        end for
-                    end sub
-                `);
-                program.validate();
-                expectDiagnostics(program, [
-                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
-                ]);
-            });
-
-            it('validates for loop step of non-number', () => {
-                program.setFile('source/main.bs', `
-                    sub main()
-                        for i = 1 to 8 step "two"' can't set step to string
-                            print i
-                        end for
-                    end sub
-                `);
-                program.validate();
-                expectDiagnostics(program, [
-                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
-                ]);
-            });
-
-            it('validates for loop final value of non-number', () => {
-                program.setFile('source/main.bs', `
-                    sub main()
-                        for i = 1 to "eight" step 2 ' can't set final value to string
-                            print i
-                        end for
-                    end sub
-                `);
-                program.validate();
-                expectDiagnostics(program, [
-                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
-                ]);
-            });
-
-            it('validates for loop with types from different places', () => {
-                program.setFile('source/main.bs', `
-
-                    function getInt() as integer
-                        return 2
-                    end function
-
-                    namespace TestNamespace
-                        const ONE = 1
-                    end namespace
-
-                    sub main(data as string[])
-                        for i = TestNamespace.ONE to data.count() step getInt()
-                            print i
-                        end for
-                    end sub
-                `);
-                program.validate();
-                expectZeroDiagnostics(program);
-            });
-
-
-            it('validates assignment of for each loop variable for array literal', () => {
-                program.setFile('source/main.bs', `
-                    sub main()
-                        for each item as integer in ["test"] 'can't set loop var to integer, if given string
-                            print item
-                        end for
-                    end sub
-                `);
-                program.validate();
-                expectDiagnostics(program, [
-                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
-                ]);
-            });
-
-            it('validates assignment of for each loop variable for typed array', () => {
-                program.setFile('source/main.bs', `
-                    sub main(data as string[])
-                        for each item as integer in data 'can't set loop var to integer, if given string
-                            print item
-                        end for
-                    end sub
-                `);
-                program.validate();
-                expectDiagnostics(program, [
-                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
-                ]);
-            });
-
-            it('validates assignment of for each loop variable for roByteArray', () => {
-                program.setFile('source/main.bs', `
-                    sub main(data as roByteArray)
-                        for each item as string in data 'can't set loop var to string, byte arrays are integers
-                            print item
-                        end for
-                    end sub
-                `);
-                program.validate();
-                expectDiagnostics(program, [
-                    DiagnosticMessages.assignmentTypeMismatch('integer', 'string').message
-                ]);
-            });
-
-            it('validates assignment of for each loop variable for AAs', () => {
-                program.setFile('source/main.bs', `
-                    sub main(data as roAssociativeArray)
-                        for each item as integer in data 'can't set loop var to integer, associative arrays give keys
-                            print item
-                        end for
-                    end sub
-                `);
-                program.validate();
-                expectDiagnostics(program, [
-                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
-                ]);
-            });
-        });
-
         describe('typed function type expressions', () => {
             it('allows using typed function type expressions correctly', () => {
                 program.setFile('source/main.bs', `
@@ -4441,6 +4293,154 @@ describe('ScopeValidator', () => {
             `);
                 program.validate();
                 expectZeroDiagnostics(program);
+            });
+        });
+
+        describe('for loops', () => {
+            it('allows using the loop variable inside the loop', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        for each item in [1, 2, 3]
+                            x as integer = item + 2
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates the loop variable usage', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        for each item in ["test"]
+                            x as integer = item
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
+            });
+
+            it('validates assignment of for loop variable to non-number', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        for i = "test" to 8 ' can't set loop var to string
+                            print i
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
+            });
+
+            it('validates for loop step of non-number', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        for i = 1 to 8 step "two"' can't set step to string
+                            print i
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
+            });
+
+            it('validates for loop final value of non-number', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        for i = 1 to "eight" step 2 ' can't set final value to string
+                            print i
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
+            });
+
+            it('validates for loop with types from different places', () => {
+                program.setFile('source/main.bs', `
+
+                    function getInt() as integer
+                        return 2
+                    end function
+
+                    namespace TestNamespace
+                        const ONE = 1
+                    end namespace
+
+                    sub main(data as string[])
+                        for i = TestNamespace.ONE to data.count() step getInt()
+                            print i
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+
+            it('validates assignment of for each loop variable for array literal', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        for each item as integer in ["test"] 'can't set loop var to integer, if given string
+                            print item
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
+            });
+
+            it('validates assignment of for each loop variable for typed array', () => {
+                program.setFile('source/main.bs', `
+                    sub main(data as string[])
+                        for each item as integer in data 'can't set loop var to integer, if given string
+                            print item
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
+            });
+
+            it('validates assignment of for each loop variable for roByteArray', () => {
+                program.setFile('source/main.bs', `
+                    sub main(data as roByteArray)
+                        for each item as string in data 'can't set loop var to string, byte arrays are integers
+                            print item
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('integer', 'string').message
+                ]);
+            });
+
+            it('validates assignment of for each loop variable for AAs', () => {
+                program.setFile('source/main.bs', `
+                    sub main(data as roAssociativeArray)
+                        for each item as integer in data 'can't set loop var to integer, associative arrays give keys
+                            print item
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
             });
         });
     });
