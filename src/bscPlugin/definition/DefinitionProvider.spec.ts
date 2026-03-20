@@ -6,6 +6,8 @@ import { createSandbox } from 'sinon';
 import { DefinitionProvider } from './DefinitionProvider';
 import { URI } from 'vscode-uri';
 import { tempDir } from '../../testHelpers.spec';
+import * as fsExtra from 'fs-extra';
+import * as path from 'path';
 const sinon = createSandbox();
 
 describe('DefinitionProvider', () => {
@@ -475,5 +477,89 @@ describe('DefinitionProvider', () => {
         if (parserRef) {
             parserRef.ast = originalAst;
         }
+    });
+
+    describe('disk-based file lookup for non-program files', () => {
+        let diskProgram: Program;
+        const diskRootDir = s`${tempDir}/definitionProviderDiskTest`;
+
+        beforeEach(() => {
+            fsExtra.emptyDirSync(diskRootDir);
+            diskProgram = new Program({
+                rootDir: diskRootDir,
+                // Use default files array so images match
+                files: ['**/*']
+            });
+        });
+
+        afterEach(() => {
+            diskProgram.dispose();
+            fsExtra.removeSync(diskRootDir);
+        });
+
+        it('navigates to an image asset that exists on disk and matches the files array', () => {
+            // Create a real image file on disk
+            const imgRelPath = path.join('images', 'hero.png');
+            const imgSrcPath = s`${diskRootDir}/${imgRelPath}`;
+            fsExtra.outputFileSync(imgSrcPath, 'PNG_DUMMY');
+
+            const main = diskProgram.setFile('source/main.brs', `
+                sub main()
+                    m.uri = "pkg:/images/hero.png"
+                end sub
+            `);
+            // Line 2 (0-indexed): `                    m.uri = "pkg:/images/hero.png"`
+            const result = diskProgram.getDefinition(main.srcPath, util.createPosition(2, 32));
+            expect(result).to.be.lengthOf(1);
+            expect(result[0]).to.include({
+                targetUri: URI.file(imgSrcPath).toString()
+            });
+            expect((result[0] as any).originSelectionRange).to.exist;
+        });
+
+        it('does not navigate to an image asset that does not exist on disk', () => {
+            const main = diskProgram.setFile('source/main.brs', `
+                sub main()
+                    m.uri = "pkg:/images/missing.png"
+                end sub
+            `);
+            const result = diskProgram.getDefinition(main.srcPath, util.createPosition(2, 32));
+            expect(result).to.eql([]);
+        });
+
+        it('navigates to an image asset via XML attribute that exists on disk', () => {
+            // Create a real image file on disk
+            const imgRelPath = path.join('images', 'poster.png');
+            const imgSrcPath = s`${diskRootDir}/${imgRelPath}`;
+            fsExtra.outputFileSync(imgSrcPath, 'PNG_DUMMY');
+
+            const xmlFile = diskProgram.setFile('components/MainScene.xml', `
+                <component name="MainScene" extends="Scene">
+                    <children>
+                        <Poster uri="pkg:/images/poster.png" />
+                    </children>
+                </component>
+            `);
+            // Line 3 (0-indexed): `                        <Poster uri="pkg:/images/poster.png" />`
+            // uri value starts after opening " at col ~37
+            const result = diskProgram.getDefinition(xmlFile.srcPath, util.createPosition(3, 40));
+            expect(result).to.be.lengthOf(1);
+            expect(result[0]).to.include({
+                targetUri: URI.file(imgSrcPath).toString()
+            });
+            expect((result[0] as any).originSelectionRange).to.exist;
+        });
+
+        it('does not navigate to an image asset via XML attribute when file is not on disk', () => {
+            const xmlFile = diskProgram.setFile('components/MainScene.xml', `
+                <component name="MainScene" extends="Scene">
+                    <children>
+                        <Poster uri="pkg:/images/nonexistent.png" />
+                    </children>
+                </component>
+            `);
+            const result = diskProgram.getDefinition(xmlFile.srcPath, util.createPosition(3, 40));
+            expect(result).to.eql([]);
+        });
     });
 });

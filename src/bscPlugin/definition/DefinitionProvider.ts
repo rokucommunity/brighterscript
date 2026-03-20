@@ -1,3 +1,6 @@
+import * as path from 'path';
+import * as fsExtra from 'fs-extra';
+import { rokuDeploy } from 'roku-deploy';
 import { isBrsFile, isClassStatement, isDottedGetExpression, isImportStatement, isNamespaceStatement, isXmlFile, isXmlScope } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ProvideDefinitionEvent } from '../../interfaces';
@@ -35,8 +38,13 @@ export class DefinitionProvider {
      * Given a string that may be a file path and an origin range, try to resolve the path to a
      * file in the program. Returns a LocationLink (with originSelectionRange set so VS Code
      * underlines the whole path as one unit on Ctrl+hover) when the file is found, or null.
-     * Any non-empty string is tried — a pkg:/ or relative prefix is not required, so bare names
-     * like `uri="MyImage.jpg"` or extension-free names like `uri="MyAsset"` are also supported.
+     * Any non-empty string is tried:
+     *   1. First checks the program's loaded files (covers .brs/.bs/.xml).
+     *   2. If not found in the program (e.g. image assets), checks whether the resolved
+     *      srcPath matches the project's `files` deploy patterns AND exists on disk. If both
+     *      conditions hold, a LocationLink pointing to the physical file is returned.
+     *   3. If neither condition holds, returns null so no link is contributed and VS Code
+     *      does not show a (segmented) hover for the path.
      */
     private tryGetFilePathLocationLink(pathStr: string, containingFilePkgPath: string, originRange: Range): LocationLink | null {
         if (!pathStr) {
@@ -46,16 +54,33 @@ export class DefinitionProvider {
         if (!pkgPath) {
             return null;
         }
+        // 1. Check if the file is loaded in the program (covers .brs/.bs/.xml)
         const targetFile = this.event.program.getFile(pkgPath);
-        if (!targetFile) {
-            return null;
+        if (targetFile) {
+            return {
+                originSelectionRange: originRange,
+                targetUri: util.pathToUri(targetFile.srcPath),
+                targetRange: util.createRange(0, 0, 0, 0),
+                targetSelectionRange: util.createRange(0, 0, 0, 0)
+            };
         }
-        return {
-            originSelectionRange: originRange,
-            targetUri: util.pathToUri(targetFile.srcPath),
-            targetRange: util.createRange(0, 0, 0, 0),
-            targetSelectionRange: util.createRange(0, 0, 0, 0)
-        };
+        // 2. File is not in the program (e.g. image assets). Check disk via deploy patterns.
+        const { rootDir, files } = this.event.program.options;
+        if (rootDir && files?.length) {
+            const srcPath = path.join(rootDir, pkgPath);
+            if (
+                rokuDeploy.getDestPath(srcPath, files, rootDir) !== undefined &&
+                fsExtra.existsSync(srcPath)
+            ) {
+                return {
+                    originSelectionRange: originRange,
+                    targetUri: util.pathToUri(srcPath),
+                    targetRange: util.createRange(0, 0, 0, 0),
+                    targetSelectionRange: util.createRange(0, 0, 0, 0)
+                };
+            }
+        }
+        return null;
     }
 
     /**
@@ -356,18 +381,10 @@ export class DefinitionProvider {
                 if (!attrValue) {
                     continue;
                 }
-                const resolvedPkgPath = util.getPkgPathFromTarget(pkgPath, attrValue);
-                if (resolvedPkgPath) {
-                    const targetFile = this.event.program.getFile(resolvedPkgPath);
-                    if (targetFile) {
-                        this.event.definitions.push({
-                            originSelectionRange: attr.value.range,
-                            targetUri: util.pathToUri(targetFile.srcPath),
-                            targetRange: util.createRange(0, 0, 0, 0),
-                            targetSelectionRange: util.createRange(0, 0, 0, 0)
-                        });
-                        return true;
-                    }
+                const link = this.tryGetFilePathLocationLink(attrValue, pkgPath, attr.value.range);
+                if (link) {
+                    this.event.definitions.push(link);
+                    return true;
                 }
             }
         }
