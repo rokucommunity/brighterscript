@@ -18,10 +18,15 @@ export class DefinitionProvider {
     ) { }
 
     public process(): Array<Location | LocationLink> {
-        if (isBrsFile(this.event.file)) {
-            this.brsFileGetDefinition(this.event.file);
-        } else if (isXmlFile(this.event.file)) {
-            this.xmlFileGetDefinition(this.event.file);
+        try {
+            if (isBrsFile(this.event.file)) {
+                this.brsFileGetDefinition(this.event.file);
+            } else if (isXmlFile(this.event.file)) {
+                this.xmlFileGetDefinition(this.event.file);
+            }
+        } catch (e) {
+            // swallow errors caused by mangled/partially-parsed ASTs so the LSP request
+            // never surfaces an unhandled exception to the client
         }
         return this.event.definitions;
     }
@@ -30,13 +35,11 @@ export class DefinitionProvider {
      * Given a string that may be a file path and an origin range, try to resolve the path to a
      * file in the program. Returns a LocationLink (with originSelectionRange set so VS Code
      * underlines the whole path as one unit on Ctrl+hover) when the file is found, or null.
-     * Only considers strings that start with a recognised path prefix:
-     *   pkg:/, libpkg:/, ./, ../
+     * Any non-empty string is tried — a pkg:/ or relative prefix is not required, so bare names
+     * like `uri="MyImage.jpg"` or extension-free names like `uri="MyAsset"` are also supported.
      */
     private tryGetFilePathLocationLink(pathStr: string, containingFilePkgPath: string, originRange: Range): LocationLink | null {
-        // Require a recognised path prefix so we don't accidentally match arbitrary strings
-        // (e.g. component names in createObject calls).
-        if (!/^(?:pkg:|libpkg:|\.\/|\.\.\/)/i.test(pathStr)) {
+        if (!pathStr) {
             return null;
         }
         const pkgPath = util.getPkgPathFromTarget(containingFilePkgPath, pathStr);

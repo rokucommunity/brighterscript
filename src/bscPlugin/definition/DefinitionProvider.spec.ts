@@ -309,13 +309,13 @@ describe('DefinitionProvider', () => {
         expect((result[0] as any).originSelectionRange).to.exist;
     });
 
-    it('does not treat arbitrary brs string literals as file paths', () => {
+    it('does not navigate to non-existent files for arbitrary brs string literals', () => {
         const main = program.setFile('source/main.brs', `
             sub main()
                 print "hello world"
             end sub
         `);
-        // "hello world" does not start with a path prefix — must not resolve as a file
+        // "hello world" does not match any file in the program
         // Line 2: `                print "hello world"`
         // "hello world" starts at col 22 (opening ") + content at col 23
         const result = program.getDefinition(main.srcPath, util.createPosition(2, 25));
@@ -386,5 +386,94 @@ describe('DefinitionProvider', () => {
             targetUri: URI.file(targetFile.srcPath).toString()
         });
         expect((result[0] as any).originSelectionRange).to.exist;
+    });
+
+    it('handles bare filename (no prefix) string literal in brs assignment', () => {
+        const targetFile = program.setFile('source/utils.brs', `
+            function helper()
+            end function
+        `);
+        const main = program.setFile('source/main.brs', `
+            sub main()
+                m.uri = "utils.brs"
+            end sub
+        `);
+        // "utils.brs" is a bare name that resolves relative to current file's directory
+        // Line 2 (0-indexed): `                m.uri = "utils.brs"`
+        // "utils.brs" starts at col 24 (opening ") + content at col 25
+        const result = program.getDefinition(main.srcPath, util.createPosition(2, 27));
+        expect(result).to.be.lengthOf(1);
+        expect(result[0]).to.include({
+            targetUri: URI.file(targetFile.srcPath).toString()
+        });
+        expect((result[0] as any).originSelectionRange).to.exist;
+    });
+
+    it('handles bare filename with extension in brs assignment', () => {
+        const targetFile = program.setFile('source/myAsset.brs', `
+            function helper()
+            end function
+        `);
+        const main = program.setFile('source/main.brs', `
+            sub main()
+                m.uri = "myAsset.brs"
+            end sub
+        `);
+        // "myAsset.brs" is a bare name that resolves relative to current file's directory
+        // Line 2 (0-indexed): `                m.uri = "myAsset.brs"`
+        // "myAsset.brs" starts at col 24 (opening ") + content at col 25
+        const result = program.getDefinition(main.srcPath, util.createPosition(2, 27));
+        expect(result).to.be.lengthOf(1);
+        expect(result[0]).to.include({
+            targetUri: URI.file(targetFile.srcPath).toString()
+        });
+        expect((result[0] as any).originSelectionRange).to.exist;
+    });
+
+    it('handles mangled AST without throwing', () => {
+        // Set up a file and corrupt its parser's AST to simulate a mangled parse result
+        const main = program.setFile('source/main.brs', `
+            sub main()
+                print "hello"
+            end sub
+        `);
+        const parserRef = (main as any)._parser;
+        const originalAst = parserRef?.ast;
+        // Corrupt the parser's AST so AST walks throw
+        if (parserRef) {
+            parserRef.ast = null;
+        }
+        let result: any[];
+        expect(() => {
+            result = program.getDefinition(main.srcPath, util.createPosition(2, 25));
+        }).not.to.throw();
+        expect(result).to.eql([]);
+        // Restore
+        if (parserRef) {
+            parserRef.ast = originalAst;
+        }
+    });
+
+    it('handles mangled XML AST without throwing', () => {
+        const xmlFile = program.setFile('components/MainScene.xml', `
+            <component name="MainScene" extends="Scene">
+                <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />
+            </component>
+        `);
+        // Corrupt the XML parser's AST to simulate a mangled parse result
+        const parserRef = (xmlFile as any).parser;
+        const originalAst = parserRef?.ast;
+        if (parserRef) {
+            parserRef.ast = null;
+        }
+        let result: any[];
+        expect(() => {
+            result = program.getDefinition(xmlFile.srcPath, util.createPosition(2, 60));
+        }).not.to.throw();
+        expect(result).to.eql([]);
+        // Restore
+        if (parserRef) {
+            parserRef.ast = originalAst;
+        }
     });
 });
