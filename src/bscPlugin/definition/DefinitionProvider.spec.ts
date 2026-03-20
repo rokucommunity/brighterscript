@@ -247,4 +247,144 @@ describe('DefinitionProvider', () => {
             program.getDefinition(xmlFile.srcPath, util.createPosition(2, 60))
         ).to.eql([]);
     });
+
+    it('handles pkg:/ string literal in brs assignment (e.g. poster.uri)', () => {
+        const targetFile = program.setFile('source/assets.brs', `
+            function getAsset()
+            end function
+        `);
+        const main = program.setFile('source/main.brs', `
+            sub main()
+                poster = CreateObject("roSGNode", "Poster")
+                poster.uri = "pkg:/source/assets.brs"
+            end sub
+        `);
+        // Line 3 (0-indexed): `                poster.uri = "pkg:/source/assets.brs"`
+        // "pkg:/source/assets.brs" starts at col 29 (opening ") + content at col 30
+        const result = program.getDefinition(main.srcPath, util.createPosition(3, 35));
+        expect(result).to.be.lengthOf(1);
+        expect(result[0]).to.include({
+            targetUri: URI.file(targetFile.srcPath).toString()
+        });
+        expect((result[0] as any).originSelectionRange).to.exist;
+    });
+
+    it('handles relative (./) string literal in brs assignment', () => {
+        const targetFile = program.setFile('source/utils.brs', `
+            function helper()
+            end function
+        `);
+        const main = program.setFile('source/main.brs', `
+            sub main()
+                m.uri = "./utils.brs"
+            end sub
+        `);
+        // Line 2 (0-indexed): `                m.uri = "./utils.brs"`
+        // "./utils.brs" starts at col 24 (opening ") + content at col 25
+        const result = program.getDefinition(main.srcPath, util.createPosition(2, 27));
+        expect(result).to.be.lengthOf(1);
+        expect(result[0]).to.include({
+            targetUri: URI.file(targetFile.srcPath).toString()
+        });
+        expect((result[0] as any).originSelectionRange).to.exist;
+    });
+
+    it('handles relative (../) string literal in brs assignment', () => {
+        const targetFile = program.setFile('source/shared.brs', `
+            function shared()
+            end function
+        `);
+        const main = program.setFile('source/sub/main.brs', `
+            sub main()
+                m.uri = "../shared.brs"
+            end sub
+        `);
+        // Line 2 (0-indexed): `                m.uri = "../shared.brs"`
+        // "../shared.brs" starts at col 24 (opening ") + content at col 25
+        const result = program.getDefinition(main.srcPath, util.createPosition(2, 27));
+        expect(result).to.be.lengthOf(1);
+        expect(result[0]).to.include({
+            targetUri: URI.file(targetFile.srcPath).toString()
+        });
+        expect((result[0] as any).originSelectionRange).to.exist;
+    });
+
+    it('does not treat arbitrary brs string literals as file paths', () => {
+        const main = program.setFile('source/main.brs', `
+            sub main()
+                print "hello world"
+            end sub
+        `);
+        // "hello world" does not start with a path prefix — must not resolve as a file
+        // Line 2: `                print "hello world"`
+        // "hello world" starts at col 22 (opening ") + content at col 23
+        const result = program.getDefinition(main.srcPath, util.createPosition(2, 25));
+        expect(result).to.eql([]);
+    });
+
+    it('handles xml child node uri attribute go-to-definition', () => {
+        const targetFile = program.setFile('components/utils.brs', `
+            function helper()
+            end function
+        `);
+        const xmlFile = program.setFile('components/MainScene.xml', `
+            <component name="MainScene" extends="Scene">
+                <children>
+                    <Poster uri="pkg:/components/utils.brs" />
+                </children>
+            </component>
+        `);
+        // Line 3 (0-indexed): `                    <Poster uri="pkg:/components/utils.brs" />`
+        // Attribute value "pkg:/components/utils.brs" starts (after opening ") at col 33
+        const result = program.getDefinition(xmlFile.srcPath, util.createPosition(3, 36));
+        expect(result).to.be.lengthOf(1);
+        expect(result[0]).to.include({
+            targetUri: URI.file(targetFile.srcPath).toString()
+        });
+        expect((result[0] as any).originSelectionRange).to.exist;
+    });
+
+    it('handles xml child node backgroundURI attribute go-to-definition', () => {
+        const targetFile = program.setFile('components/bg.brs', `
+            function getBg()
+            end function
+        `);
+        const xmlFile = program.setFile('components/MainScene.xml', `
+            <component name="MainScene" extends="Scene">
+                <children>
+                    <Scene backgroundURI="pkg:/components/bg.brs" />
+                </children>
+            </component>
+        `);
+        // Line 3 (0-indexed): `                    <Scene backgroundURI="pkg:/components/bg.brs" />`
+        // backgroundURI value starts (after opening ") at col 42
+        const result = program.getDefinition(xmlFile.srcPath, util.createPosition(3, 45));
+        expect(result).to.be.lengthOf(1);
+        expect(result[0]).to.include({
+            targetUri: URI.file(targetFile.srcPath).toString()
+        });
+        expect((result[0] as any).originSelectionRange).to.exist;
+    });
+
+    it('handles xml child node relative uri attribute go-to-definition', () => {
+        const targetFile = program.setFile('components/utils.brs', `
+            function helper()
+            end function
+        `);
+        const xmlFile = program.setFile('components/MainScene.xml', `
+            <component name="MainScene" extends="Scene">
+                <children>
+                    <Poster uri="./utils.brs" />
+                </children>
+            </component>
+        `);
+        // Line 3 (0-indexed): `                    <Poster uri="./utils.brs" />`
+        // Attribute value "./utils.brs" starts (after opening ") at col 33
+        const result = program.getDefinition(xmlFile.srcPath, util.createPosition(3, 35));
+        expect(result).to.be.lengthOf(1);
+        expect(result[0]).to.include({
+            targetUri: URI.file(targetFile.srcPath).toString()
+        });
+        expect((result[0] as any).originSelectionRange).to.exist;
+    });
 });

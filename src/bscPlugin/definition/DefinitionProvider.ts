@@ -2,7 +2,7 @@ import { isBrsFile, isClassStatement, isDottedGetExpression, isImportStatement, 
 import type { BrsFile } from '../../files/BrsFile';
 import type { ProvideDefinitionEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
-import type { Location, LocationLink } from 'vscode-languageserver-protocol';
+import type { Location, LocationLink, Range } from 'vscode-languageserver-protocol';
 import type { ClassStatement, FunctionStatement, NamespaceStatement } from '../../parser/Statement';
 import { ParseMode } from '../../parser/Parser';
 import util from '../../util';
@@ -10,6 +10,7 @@ import { URI } from 'vscode-uri';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
 import type { Token } from '../../lexer/Token';
 import type { XmlFile } from '../../files/XmlFile';
+import type { SGAttribute, SGNode } from '../../parser/SGTypes';
 
 export class DefinitionProvider {
     constructor(
@@ -23,6 +24,38 @@ export class DefinitionProvider {
             this.xmlFileGetDefinition(this.event.file);
         }
         return this.event.definitions;
+    }
+
+    /**
+     * Given a string that may be a file path and an origin range, try to resolve the path to a
+     * file in the program. Returns a LocationLink (with originSelectionRange set so VS Code
+     * underlines the whole path as one unit on Ctrl+hover) when the file is found, or null.
+     * Only considers strings that start with a recognised path prefix:
+     *   pkg:/, libpkg:/, ./, ../
+     */
+    private tryGetFilePathLocationLink(pathStr: string, containingFilePkgPath: string, originRange: Range): LocationLink | null {
+        if (!pathStr) {
+            return null;
+        }
+        // Require a recognised path prefix so we don't accidentally match arbitrary strings
+        // (e.g. component names in createObject calls).
+        if (!/^(?:pkg:|libpkg:|\.\/|\.\.\/)/i.test(pathStr)) {
+            return null;
+        }
+        const pkgPath = util.getPkgPathFromTarget(containingFilePkgPath, pathStr);
+        if (!pkgPath) {
+            return null;
+        }
+        const targetFile = this.event.program.getFile(pkgPath);
+        if (!targetFile) {
+            return null;
+        }
+        return {
+            originSelectionRange: originRange,
+            targetUri: util.pathToUri(targetFile.srcPath),
+            targetRange: util.createRange(0, 0, 0, 0),
+            targetSelectionRange: util.createRange(0, 0, 0, 0)
+        };
     }
 
     /**
@@ -142,6 +175,24 @@ export class DefinitionProvider {
                 }
             }
 
+            // Generic file path detection: if the string literal looks like a file path
+            // (pkg:/, libpkg:/, ./, ../) resolve it and navigate to that file.
+            const pathStr = token.text.replace(/^"|"$/g, '');
+            const link = this.tryGetFilePathLocationLink(
+                pathStr,
+                file.pkgPath,
+                util.createRange(
+                    token.range.start.line,
+                    token.range.start.character + 1,
+                    token.range.end.line,
+                    token.range.end.character - 1
+                )
+            );
+            if (link) {
+                this.event.definitions.push(link);
+                return;
+            }
+
             // We need to strip off the quotes but only if present
             const startIndex = textToSearchFor.startsWith('"') ? 1 : 0;
 
@@ -257,24 +308,85 @@ export class DefinitionProvider {
                 range: util.createRange(0, 0, 0, 0),
                 uri: util.pathToUri(file.parentComponent.srcPath)
             });
+            return;
         }
 
-        //if the position is within a script tag's uri attribute
-        for (const scriptImport of file.scriptTagImports) {
-            if (scriptImport.filePathRange && util.rangeContains(scriptImport.filePathRange, this.event.position)) {
-                const scriptFile = this.event.program.getFile(scriptImport.pkgPath);
-                if (scriptFile) {
-                    // Return a LocationLink so VS Code uses `originSelectionRange` to underline the
-                    // entire URI path as a single unit on Ctrl+hover (rather than per path-segment).
-                    this.event.definitions.push({
-                        originSelectionRange: scriptImport.filePathRange,
-                        targetUri: util.pathToUri(scriptFile.srcPath),
-                        targetRange: util.createRange(0, 0, 0, 0),
-                        targetSelectionRange: util.createRange(0, 0, 0, 0)
-                    });
-                }
-                break;
+        // Generic XML attribute value path resolution.
+        // Walk the entire component tree (component attributes, script tags, children nodes,
+        // customization nodes) and return a definition for the first attribute value that
+        // looks like a file path and resolves to a known file.
+        const component = file.ast?.component;
+        if (!component) {
+            return;
+        }
+
+        // Component-level attributes (e.g. extends="...")
+        if (this.xmlGetFilePathDefinitionFromAttributes(component.attributes, file.pkgPath)) {
+            return;
+        }
+        // <script> tags (uri="...")
+        for (const script of component.scripts ?? []) {
+            if (this.xmlGetFilePathDefinitionFromAttributes(script.attributes, file.pkgPath)) {
+                return;
             }
         }
+        // Nodes inside <children>
+        if (component.children && this.xmlWalkNodeForFilePath(component.children, file.pkgPath)) {
+            return;
+        }
+        // <Customization> nodes
+        for (const custom of component.customizations ?? []) {
+            if (this.xmlWalkNodeForFilePath(custom, file.pkgPath)) {
+                return;
+            }
+        }
+    }
+
+    /**
+     * Check all attributes on an XML element for an attribute value that looks like a file path
+     * and whose range contains the cursor position.  Returns true and pushes a definition when a
+     * match is found.
+     * For XML, we attempt to resolve every attribute value (no prefix requirement) since most
+     * non-path values (e.g. name="MainScene") will simply not resolve to a known file.
+     */
+    private xmlGetFilePathDefinitionFromAttributes(attributes: SGAttribute[], pkgPath: string): boolean {
+        for (const attr of attributes ?? []) {
+            if (attr.value?.range && util.rangeContains(attr.value.range, this.event.position)) {
+                const attrValue = attr.value.text;
+                if (!attrValue) {
+                    continue;
+                }
+                const resolvedPkgPath = util.getPkgPathFromTarget(pkgPath, attrValue);
+                if (resolvedPkgPath) {
+                    const targetFile = this.event.program.getFile(resolvedPkgPath);
+                    if (targetFile) {
+                        this.event.definitions.push({
+                            originSelectionRange: attr.value.range,
+                            targetUri: util.pathToUri(targetFile.srcPath),
+                            targetRange: util.createRange(0, 0, 0, 0),
+                            targetSelectionRange: util.createRange(0, 0, 0, 0)
+                        });
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Recursively walk an SGNode and its children looking for an attribute value that looks like a
+     * file path at the cursor position.  Returns true and pushes a definition on first match.
+     */
+    private xmlWalkNodeForFilePath(node: SGNode, pkgPath: string): boolean {
+        if (this.xmlGetFilePathDefinitionFromAttributes(node.attributes, pkgPath)) {
+            return true;
+        }
+        for (const child of node.children ?? []) {
+            if (this.xmlWalkNodeForFilePath(child, pkgPath)) {
+                return true;
+            }
+        }
+        return false;
     }
 }
