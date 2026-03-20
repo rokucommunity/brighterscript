@@ -34,9 +34,6 @@ export class DefinitionProvider {
      *   pkg:/, libpkg:/, ./, ../
      */
     private tryGetFilePathLocationLink(pathStr: string, containingFilePkgPath: string, originRange: Range): LocationLink | null {
-        if (!pathStr) {
-            return null;
-        }
         // Require a recognised path prefix so we don't accidentally match arbitrary strings
         // (e.g. component names in createObject calls).
         if (!/^(?:pkg:|libpkg:|\.\/|\.\.\/)/i.test(pathStr)) {
@@ -177,9 +174,9 @@ export class DefinitionProvider {
 
             // Generic file path detection: if the string literal looks like a file path
             // (pkg:/, libpkg:/, ./, ../) resolve it and navigate to that file.
-            const pathStr = token.text.replace(/^"|"$/g, '');
+            const pathValue = token.text.replace(/^"|"$/g, '');
             const link = this.tryGetFilePathLocationLink(
-                pathStr,
+                pathValue,
                 file.pkgPath,
                 util.createRange(
                     token.range.start.line,
@@ -349,7 +346,7 @@ export class DefinitionProvider {
      * For XML, we attempt to resolve every attribute value (no prefix requirement) since most
      * non-path values (e.g. name="MainScene") will simply not resolve to a known file.
      */
-    private xmlGetFilePathDefinitionFromAttributes(attributes: SGAttribute[], pkgPath: string): boolean {
+    private xmlGetFilePathDefinitionFromAttributes(attributes: SGAttribute[] | undefined, pkgPath: string): boolean {
         for (const attr of attributes ?? []) {
             if (attr.value?.range && util.rangeContains(attr.value.range, this.event.position)) {
                 const attrValue = attr.value.text;
