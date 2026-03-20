@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as fsExtra from 'fs-extra';
 import { rokuDeploy } from 'roku-deploy';
+import type { StandardizedFileEntry, FileEntry } from 'roku-deploy';
 import { isBrsFile, isClassStatement, isDottedGetExpression, isImportStatement, isNamespaceStatement, isXmlFile, isXmlScope } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ProvideDefinitionEvent } from '../../interfaces';
@@ -40,9 +41,10 @@ export class DefinitionProvider {
      * underlines the whole path as one unit on Ctrl+hover) when the file is found, or null.
      * Any non-empty string is tried:
      *   1. First checks the program's loaded files (covers .brs/.bs/.xml).
-     *   2. If not found in the program (e.g. image assets), checks whether the resolved
-     *      srcPath matches the project's `files` deploy patterns AND exists on disk. If both
-     *      conditions hold, a LocationLink pointing to the physical file is returned.
+     *   2. If not found in the program (e.g. image assets), reverse-maps the dest path back to
+     *      candidate src paths via the project's `files` deploy entries, verifies each candidate
+     *      via `rokuDeploy.getDestPath` (no disk I/O), and only then checks disk with `existsSync`.
+     *      Returns a LocationLink pointing to the physical file if found.
      *   3. If neither condition holds, returns null so no link is contributed and VS Code
      *      does not show a (segmented) hover for the path.
      */
@@ -64,23 +66,99 @@ export class DefinitionProvider {
                 targetSelectionRange: util.createRange(0, 0, 0, 0)
             };
         }
-        // 2. File is not in the program (e.g. image assets). Check disk via deploy patterns.
+        // 2. File is not in the program (e.g. image assets).
+        //    Reverse-map pkgPath (destPath) → candidate srcPath, verify mapping, then check disk.
+        const srcPath = this.findSrcPathForPkgPath(pkgPath);
+        if (srcPath) {
+            return {
+                originSelectionRange: originRange,
+                targetUri: util.pathToUri(srcPath),
+                targetRange: util.createRange(0, 0, 0, 0),
+                targetSelectionRange: util.createRange(0, 0, 0, 0)
+            };
+        }
+        return null;
+    }
+
+    /**
+     * Given a pkgPath (the dest-relative path inside the Roku package, e.g. `images/hero.png`),
+     * find the absolute srcPath of the file on disk by reverse-mapping through every entry in the
+     * project's `files` deploy array.
+     *
+     * For each entry we compute a *candidate* srcPath without touching the disk, then:
+     *   1. Verify the candidate with `rokuDeploy.getDestPath` (cheap — pure path computation).
+     *   2. Only call `fsExtra.existsSync` (expensive — disk I/O) when verification passes.
+     *
+     * Returns the first matching absolute srcPath, or null.
+     */
+    private findSrcPathForPkgPath(pkgPath: string): string | null {
         const { rootDir, files } = this.event.program.options;
-        if (rootDir && files?.length) {
-            const srcPath = path.join(rootDir, pkgPath);
-            if (
-                rokuDeploy.getDestPath(srcPath, files, rootDir) !== undefined &&
-                fsExtra.existsSync(srcPath)
-            ) {
-                return {
-                    originSelectionRange: originRange,
-                    targetUri: util.pathToUri(srcPath),
-                    targetRange: util.createRange(0, 0, 0, 0),
-                    targetSelectionRange: util.createRange(0, 0, 0, 0)
-                };
+        if (!rootDir || !files?.length) {
+            return null;
+        }
+        const normalizedPkgPath = path.normalize(pkgPath).replace(/\\/g, '/');
+        const entries = rokuDeploy.normalizeFilesArray(files as FileEntry[]);
+
+        for (const entry of entries) {
+            const candidateSrcPath = this.reverseLookupSrcPath(normalizedPkgPath, entry, rootDir);
+            if (!candidateSrcPath) {
+                continue;
+            }
+            // Verify: the candidate srcPath must deploy to exactly our pkgPath (no disk I/O)
+            const destPath = rokuDeploy.getDestPath(candidateSrcPath, files as FileEntry[], rootDir);
+            if (!destPath) {
+                continue;
+            }
+            if (path.normalize(destPath).replace(/\\/g, '/') !== normalizedPkgPath) {
+                continue;
+            }
+            // Only after pattern verification do we access the disk
+            if (fsExtra.existsSync(candidateSrcPath)) {
+                return candidateSrcPath;
             }
         }
         return null;
+    }
+
+    /**
+     * For a single normalized files entry, compute the candidate srcPath that would produce
+     * `pkgPath` as its deploy dest path.  Returns null when the entry could not produce that dest.
+     *
+     * `pkgPath` is already normalized (forward slashes, no leading slash).
+     */
+    private reverseLookupSrcPath(
+        pkgPath: string,
+        entry: string | StandardizedFileEntry,
+        rootDir: string
+    ): string | null {
+        if (typeof entry === 'string') {
+            // String entry: files are relative to rootDir, dest mirrors src structure under rootDir
+            return path.join(rootDir, pkgPath);
+        }
+
+        // Object entry: check whether pkgPath is under this entry's dest subtree
+        const dest = entry.dest ? path.normalize(entry.dest).replace(/\\/g, '/') : '';
+        let pathWithinDest: string;
+        if (!dest) {
+            // No dest remap — dest path mirrors the src structure relative to the glob base
+            pathWithinDest = pkgPath;
+        } else if (pkgPath === dest) {
+            pathWithinDest = '';
+        } else if (pkgPath.startsWith(dest + '/')) {
+            pathWithinDest = pkgPath.substring(dest.length + 1);
+        } else {
+            // pkgPath is not under this entry's dest — skip
+            return null;
+        }
+
+        // For globstar patterns, the src base is everything before '**'
+        const globstarIdx = entry.src.indexOf('**');
+        if (globstarIdx > -1) {
+            const srcBase = path.resolve(rootDir, entry.src.substring(0, globstarIdx));
+            return path.join(srcBase, pathWithinDest);
+        }
+        // No globstar: fall back to rootDir + pkgPath (covers simple exact-file entries)
+        return path.join(rootDir, pkgPath);
     }
 
     /**

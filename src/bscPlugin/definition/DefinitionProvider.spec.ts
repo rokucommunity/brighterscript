@@ -561,5 +561,31 @@ describe('DefinitionProvider', () => {
             const result = diskProgram.getDefinition(xmlFile.srcPath, util.createPosition(3, 40));
             expect(result).to.eql([]);
         });
+
+        it('navigates to a dest-remapped image asset using src→dest pattern', () => {
+            // Create the file at the SOURCE location (assets/), not at the dest location (images/)
+            const imgSrcPath = s`${diskRootDir}/assets/hero.png`;
+            fsExtra.outputFileSync(imgSrcPath, 'PNG_DUMMY');
+
+            // The program is configured to map assets/** → images in the package
+            const remapProgram = new Program({
+                rootDir: diskRootDir,
+                files: [{ src: 'assets/**', dest: 'images' }]
+            });
+
+            const main = remapProgram.setFile('source/main.brs', `
+                sub main()
+                    m.uri = "pkg:/images/hero.png"
+                end sub
+            `);
+            // Line 2 (0-indexed): `                    m.uri = "pkg:/images/hero.png"`
+            const result = remapProgram.getDefinition(main.srcPath, util.createPosition(2, 32));
+            remapProgram.dispose();
+            expect(result).to.be.lengthOf(1);
+            expect(result[0]).to.include({
+                targetUri: URI.file(imgSrcPath).toString()
+            });
+            expect((result[0] as any).originSelectionRange).to.exist;
+        });
     });
 });
