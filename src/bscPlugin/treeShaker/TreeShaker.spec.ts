@@ -455,6 +455,25 @@ describe('TreeShaker', () => {
             expect(code).not.to.include('sub unused()');
         });
 
+        it('preserves a function passed by reference as an argument to another function', async () => {
+            program.setFile('source/main.bs', `
+                sub init()
+                    setHandler(mySub1)
+                end sub
+
+                sub mySub1()
+                    print "hey"
+                end sub
+
+                sub unused()
+                end sub
+            `);
+
+            const code = await getTranspiled('source/main.bs');
+            expect(code).to.include('sub mySub1()');
+            expect(code).not.to.include('sub unused()');
+        });
+
         it('preserves functions called via @. callfunc shorthand', async () => {
             program.setFile('source/main.bs', `
                 sub init()
