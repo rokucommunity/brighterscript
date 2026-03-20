@@ -340,6 +340,24 @@ export class TreeShaker {
         // Collect onChange="callbackName" attribute values from any element in the
         // component <children> tree (e.g. inline node definitions with onChange set).
         this.collectXmlOnChangeCallbacks(component?.children);
+
+        // Collect handler function names from <customization> elements.
+        // Roku Instant Resume uses attributes like suspendhandler="onApplicationSuspend"
+        // and resumehandler="onApplicationResume" outside the <children> tree, so they
+        // are invisible to collectXmlOnChangeCallbacks.
+        if (Array.isArray(component?.customizations)) {
+            for (const node of component.customizations) {
+                if (Array.isArray(node?.attributes)) {
+                    for (const attr of node.attributes) {
+                        const key: string | undefined = attr?.key?.text;
+                        const value: string | undefined = attr?.value?.text;
+                        if (key?.toLowerCase().endsWith('handler') && value && /^[a-z_][a-z0-9_.]*$/i.test(value)) {
+                            this.xmlInterfaceFunctions.add(value.toLowerCase());
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private collectXmlOnChangeCallbacks(children: any) {

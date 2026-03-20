@@ -772,6 +772,39 @@ describe('TreeShaker', () => {
             expect(code).to.include('sub onContentChanged()');
             expect(code).not.to.include('sub unused()');
         });
+
+        it('preserves functions referenced in XML customization handler attributes (Instant Resume)', async () => {
+            program.setFile('components/MainScene.xml', undent`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MainScene" extends="Scene">
+                    <customization suspendhandler="onApplicationSuspend" />
+                    <customization resumehandler="onApplicationResume" />
+                    <script type="text/brightscript" uri="MainScene.bs"/>
+                    <children>
+                    </children>
+                </component>
+            `);
+            program.setFile('components/MainScene.bs', `
+                sub init()
+                end sub
+
+                sub onApplicationSuspend()
+                    print "suspend"
+                end sub
+
+                sub onApplicationResume()
+                    print "resume"
+                end sub
+
+                sub unused()
+                end sub
+            `);
+
+            const code = await getTranspiled('components/MainScene.bs');
+            expect(code).to.include('sub onApplicationSuspend()');
+            expect(code).to.include('sub onApplicationResume()');
+            expect(code).not.to.include('sub unused()');
+        });
     });
 
     describe('treeShaking.keep rules', () => {
