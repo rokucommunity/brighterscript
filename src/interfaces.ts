@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction, Position, CompletionItem, Location, LocationLink, DocumentSymbol, WorkspaceSymbol, Disposable, FileChangeType, DocumentLink } from 'vscode-languageserver-protocol';
+import type { Range, Diagnostic, CodeAction, Position, CompletionItem, Location, LocationLink, DocumentSymbol, WorkspaceSymbol, Disposable, FileChangeType } from 'vscode-languageserver-protocol';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -278,24 +278,6 @@ export interface Plugin {
 
 
     /**
-     * Called before the `provideDocumentLinks` hook
-     */
-    beforeProvideDocumentLinks?(event: BeforeProvideDocumentLinksEvent): any;
-    /**
-     * Provide `DocumentLink`s for the given file.
-     * Document links are used to determine `originSelectionRange` in go-to-definition results so the full
-     * link range (e.g. an entire script tag URI path) is highlighted on Ctrl+hover.
-     * @param event
-     */
-    provideDocumentLinks?(event: ProvideDocumentLinksEvent): any;
-    /**
-     * Called after `provideDocumentLinks`. Use this if you want to intercept or sanitize the document links data provided by bsc or other plugins
-     * @param event
-     */
-    afterProvideDocumentLinks?(event: AfterProvideDocumentLinksEvent): any;
-
-
-    /**
      * Called before the `provideDocumentSymbols` hook
      */
     beforeProvideDocumentSymbols?(event: BeforeProvideDocumentSymbolsEvent): any;
@@ -454,23 +436,6 @@ export interface ProvideDocumentSymbolsEvent<TFile = BscFile> {
 }
 export type BeforeProvideDocumentSymbolsEvent<TFile = BscFile> = ProvideDocumentSymbolsEvent<TFile>;
 export type AfterProvideDocumentSymbolsEvent<TFile = BscFile> = ProvideDocumentSymbolsEvent<TFile>;
-
-export interface ProvideDocumentLinksEvent<TFile = BscFile> {
-    program: Program;
-    /**
-     * The file for which document links are being requested
-     */
-    file: TFile;
-    /**
-     * The list of document links contributed by plugins.
-     * Document links are used to resolve `originSelectionRange` in go-to-definition results,
-     * so that the full link range (e.g. an entire script tag URI path) is highlighted on Ctrl+hover
-     * rather than just the word under the cursor.
-     */
-    documentLinks: DocumentLink[];
-}
-export type BeforeProvideDocumentLinksEvent<TFile = BscFile> = ProvideDocumentLinksEvent<TFile>;
-export type AfterProvideDocumentLinksEvent<TFile = BscFile> = ProvideDocumentLinksEvent<TFile>;
 
 
 export interface ProvideWorkspaceSymbolsEvent {

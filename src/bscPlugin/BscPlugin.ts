@@ -1,10 +1,9 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
-import type { BeforeFileTranspileEvent, Plugin, OnFileValidateEvent, OnGetCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, ProvideDocumentLinksEvent } from '../interfaces';
+import type { BeforeFileTranspileEvent, Plugin, OnFileValidateEvent, OnGetCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent } from '../interfaces';
 import type { Program } from '../Program';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
 import { DefinitionProvider } from './definition/DefinitionProvider';
-import { DocumentLinksProvider } from './documentLinks/DocumentLinksProvider';
 import { DocumentSymbolProcessor } from './symbols/DocumentSymbolProcessor';
 import { HoverProcessor } from './hover/HoverProcessor';
 import { ReferencesProvider } from './references/ReferencesProvider';
@@ -41,10 +40,6 @@ export class BscPlugin implements Plugin {
 
     public provideDefinition(event: ProvideDefinitionEvent) {
         new DefinitionProvider(event).process();
-    }
-
-    public provideDocumentLinks(event: ProvideDocumentLinksEvent) {
-        new DocumentLinksProvider(event).process();
     }
 
     public provideReferences(event: ProvideReferencesEvent) {

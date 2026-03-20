@@ -264,9 +264,13 @@ export class DefinitionProvider {
             if (scriptImport.filePathRange && util.rangeContains(scriptImport.filePathRange, this.event.position)) {
                 const scriptFile = this.event.program.getFile(scriptImport.pkgPath);
                 if (scriptFile) {
+                    // Return a LocationLink so VS Code uses `originSelectionRange` to underline the
+                    // entire URI path as a single unit on Ctrl+hover (rather than per path-segment).
                     this.event.definitions.push({
-                        range: util.createRange(0, 0, 0, 0),
-                        uri: util.pathToUri(scriptFile.srcPath)
+                        originSelectionRange: scriptImport.filePathRange,
+                        targetUri: util.pathToUri(scriptFile.srcPath),
+                        targetRange: util.createRange(0, 0, 0, 0),
+                        targetSelectionRange: util.createRange(0, 0, 0, 0)
                     });
                 }
                 break;

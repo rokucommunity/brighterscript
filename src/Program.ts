@@ -1,14 +1,14 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, LocationLink, DocumentSymbol, CancellationToken, DocumentLink } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, LocationLink, DocumentSymbol, CancellationToken } from 'vscode-languageserver';
 import { CancellationTokenSource, CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, ProvideDocumentLinksEvent } from './interfaces';
+import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -1018,55 +1018,7 @@ export class Program {
         this.plugins.emit('provideDefinition', event);
         this.plugins.emit('afterProvideDefinition', event);
 
-        // If a document link's range contains the cursor position, wrap the definitions as
-        // LocationLink objects with originSelectionRange so VS Code underlines the full link range
-        // (e.g. the entire URI path in a script tag attribute) on Ctrl+hover rather than per-word.
-        if (event.definitions.length > 0) {
-            const documentLinks = this.getDocumentLinks(srcPath);
-            const matchingLink = documentLinks.find(link => util.rangeContains(link.range, position));
-            if (matchingLink) {
-                return event.definitions.map(def => {
-                    if (isLocationLinkDef(def)) {
-                        //already a LocationLink; overwrite originSelectionRange with the full link range
-                        return {
-                            originSelectionRange: matchingLink.range,
-                            targetUri: def.targetUri,
-                            targetRange: def.targetRange,
-                            targetSelectionRange: def.targetSelectionRange
-                        } as LocationLink;
-                    }
-                    return {
-                        originSelectionRange: matchingLink.range,
-                        targetUri: def.uri,
-                        targetRange: def.range,
-                        targetSelectionRange: def.range
-                    } as LocationLink;
-                });
-            }
-        }
-
         return event.definitions;
-    }
-
-    /**
-     * Get document links for the specified file by emitting the `provideDocumentLinks` plugin event.
-     * Document links are used to resolve `originSelectionRange` in go-to-definition results so that the
-     * full link range (e.g. an entire script tag URI path) is highlighted on Ctrl+hover.
-     */
-    public getDocumentLinks(srcPath: string): DocumentLink[] {
-        const file = this.getFile(srcPath);
-        if (!file) {
-            return [];
-        }
-        const event: ProvideDocumentLinksEvent = {
-            program: this,
-            file: file,
-            documentLinks: []
-        };
-        this.plugins.emit('beforeProvideDocumentLinks', event);
-        this.plugins.emit('provideDocumentLinks', event);
-        this.plugins.emit('afterProvideDocumentLinks', event);
-        return event.documentLinks;
     }
 
     public getHover(srcPath: string, position: Position): Hover[] {
@@ -1590,17 +1542,6 @@ export class Program {
         this.globalScope.dispose();
         this.dependencyGraph.dispose();
     }
-}
-
-/**
- * Type guard that returns true if the given `Location | LocationLink` is a `LocationLink`.
- * A `LocationLink` has `targetUri`, `targetRange`, and `targetSelectionRange` properties,
- * whereas a `Location` has `uri` and `range`.
- */
-function isLocationLinkDef(def: Location | LocationLink): def is LocationLink {
-    return typeof (def as LocationLink).targetUri === 'string' &&
-        (def as LocationLink).targetRange !== undefined &&
-        (def as LocationLink).targetSelectionRange !== undefined;
 }
 
 export interface FileTranspileResult {
