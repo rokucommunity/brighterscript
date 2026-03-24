@@ -213,6 +213,14 @@ export interface BsConfig {
      * scripts inside `source` that depend on bslib.brs.  Defaults to `source`.
      */
     bslibDestinationDir?: string;
+
+    /**
+     * When enabled, injects a Perfetto scoped tracing statement at the top of every
+     * transpiled function and method body:
+     *   `bsc__trace = CreateObject("roPerfetto").createScopedEvent("function_name")`
+     * @default false
+     */
+    perfettoTracing?: boolean;
 }
 
 type OptionalBsConfigFields =

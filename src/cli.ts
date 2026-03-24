@@ -42,6 +42,7 @@ let options = yargs
     .option('source-root', { type: 'string', description: 'Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within rootDir. This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files.' })
     .option('watch', { type: 'boolean', defaultDescription: 'false', description: 'Watch input files.' })
     .option('require', { type: 'array', description: 'A list of modules to require() on startup. Useful for doing things like ts-node registration.' })
+    .option('perfetto-tracing', { type: 'boolean', defaultDescription: 'false', description: 'Inject Perfetto scoped tracing statements at the top of every transpiled function body.' })
     .option('profile', { type: 'boolean', defaultDescription: 'false', description: 'Generate a cpuprofile report during this run' })
     .option('lsp', { type: 'boolean', defaultDescription: 'false', description: 'Run brighterscript as a language server.' })
     .check(argv => {
