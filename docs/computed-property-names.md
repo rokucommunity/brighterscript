@@ -2,7 +2,7 @@
 
 BrighterScript supports using compile-time constants as associative array keys via the `[expr]` bracket syntax, similar to [computed property names in JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Object_initializer#computed_property_names).
 
-The expression inside the brackets must resolve to a **string** at compile-time. Only [enum members](enums.md) (string enums), [constants](constants.md), and string literals are supported.
+The expression inside the brackets must resolve to a **string** at compile-time. Currently only [enum members](enums.md) (string enums), [constants](constants.md), and string literals are supported.
 
 ## String literals
 
