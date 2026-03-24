@@ -935,14 +935,10 @@ export class AAMemberExpression extends Expression {
         public keyToken: Token,
         public colonToken: Token,
         /** The expression evaluated to determine the member's initial value. */
-        public value: Expression,
-        /** For computed keys: the expression inside `[...]`. e.g. `{ [myEnum.KEY]: value }` */
-        public keyExpr?: Expression,
-        public openBracketToken?: Token,
-        public closeBracketToken?: Token
+        public value: Expression
     ) {
         super();
-        this.range = util.createBoundingRange(this.openBracketToken ?? this.keyToken, this.colonToken, this.value);
+        this.range = util.createBoundingRange(this.keyToken, this.colonToken, this.value);
     }
 
     public range: Range | undefined;
@@ -954,9 +950,6 @@ export class AAMemberExpression extends Expression {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (this.keyExpr) {
-            walk(this, 'keyExpr', visitor, options);
-        }
         walk(this, 'value', visitor, options);
     }
 
@@ -965,20 +958,68 @@ export class AAMemberExpression extends Expression {
             new AAMemberExpression(
                 util.cloneToken(this.keyToken),
                 util.cloneToken(this.colonToken),
-                this.value?.clone(),
-                this.keyExpr ? this.keyExpr.clone() : this.keyExpr,
-                util.cloneToken(this.openBracketToken),
-                util.cloneToken(this.closeBracketToken)
+                this.value?.clone()
             ),
+            ['value']
+        );
+    }
+}
+
+export class AAIndexedMemberExpression extends Expression {
+    constructor(options: {
+        openBracketToken: Token;
+        keyExpr: Expression;
+        closeBracketToken: Token;
+        colonToken: Token;
+        /** The expression evaluated to determine the member's initial value. */
+        value: Expression;
+    }) {
+        super();
+        this.openBracketToken = options.openBracketToken;
+        this.keyExpr = options.keyExpr;
+        this.closeBracketToken = options.closeBracketToken;
+        this.colonToken = options.colonToken;
+        this.value = options.value;
+        this.range = util.createBoundingRange(this.openBracketToken, this.colonToken, this.value);
+    }
+
+    public openBracketToken: Token;
+    public keyExpr: Expression;
+    public closeBracketToken: Token;
+    public colonToken: Token;
+    /** The expression evaluated to determine the member's initial value. */
+    public value: Expression;
+
+    public range: Range | undefined;
+    public commaToken?: Token;
+
+    transpile(state: BrsTranspileState) {
+        //TODO move the logic from AALiteralExpression loop into this function
+        return [];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        walk(this, 'keyExpr', visitor, options);
+        walk(this, 'value', visitor, options);
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new AAIndexedMemberExpression({
+                openBracketToken: util.cloneToken(this.openBracketToken),
+                keyExpr: this.keyExpr?.clone(),
+                closeBracketToken: util.cloneToken(this.closeBracketToken),
+                colonToken: util.cloneToken(this.colonToken),
+                value: this.value?.clone()
+            }),
             ['keyExpr', 'value']
         );
     }
-
 }
 
 export class AALiteralExpression extends Expression {
     constructor(
-        readonly elements: Array<AAMemberExpression | CommentStatement>,
+        readonly elements: Array<AAMemberExpression | AAIndexedMemberExpression | CommentStatement>,
         readonly open: Token,
         readonly close: Token
     ) {
@@ -1021,7 +1062,7 @@ export class AALiteralExpression extends Expression {
                 result.push(...element.transpile(state));
             } else {
                 //key
-                if (element.keyExpr) {
+                if (element instanceof AAIndexedMemberExpression) {
                     //computed key: transpile the resolved expression (pre-transpile overrides it to a literal)
                     result.push(...element.keyExpr.transpile(state));
                 } else {
@@ -2045,7 +2086,7 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
     }
     if (isAALiteralExpression(expr)) {
         return expr.elements.reduce((acc, e) => {
-            if (!isCommentStatement(e)) {
+            if (!isCommentStatement(e) && !(e instanceof AAIndexedMemberExpression)) {
                 acc[e.keyToken.text] = expressionToValue(e.value, strict);
             }
             return acc;

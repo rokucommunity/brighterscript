@@ -60,10 +60,7 @@ export class ScopeValidator {
     private validateComputedAAKeys(file: BrsFile) {
         const { scope } = this.event;
         file.ast.walk(createVisitor({
-            AAMemberExpression: (member) => {
-                if (!member.keyExpr) {
-                    return;
-                }
+            AAIndexedMemberExpression: (member) => {
                 // Direct string literal (e.g. ["my-key"]) is valid
                 if (isLiteralExpression(member.keyExpr)) {
                     if (member.keyExpr.token.kind !== TokenKind.StringLiteral) {

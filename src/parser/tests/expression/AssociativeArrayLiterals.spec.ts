@@ -5,8 +5,8 @@ import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import type { AssignmentStatement } from '../../Statement';
-import type { AALiteralExpression, AAMemberExpression } from '../../Expression';
-import { isAALiteralExpression, isAAMemberExpression, isAssignmentStatement, isCommentStatement, isDottedGetExpression, isLiteralExpression } from '../../../astUtils/reflection';
+import type { AAIndexedMemberExpression, AALiteralExpression, AAMemberExpression } from '../../Expression';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isAssignmentStatement, isCommentStatement, isDottedGetExpression, isLiteralExpression } from '../../../astUtils/reflection';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics } from '../../../testHelpers.spec';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 
@@ -259,9 +259,8 @@ describe('parser associative array literals', () => {
             expectZeroDiagnostics(diagnostics);
             const aaLit = (statements[0] as AssignmentStatement).value as AALiteralExpression;
             expect(isAALiteralExpression(aaLit)).to.be.true;
-            const member = aaLit.elements[0] as AAMemberExpression;
-            expect(isAAMemberExpression(member)).to.be.true;
-            expect(member.keyToken).to.be.null;
+            const member = aaLit.elements[0] as AAIndexedMemberExpression;
+            expect(isAAIndexedMemberExpression(member)).to.be.true;
             expect(member.keyExpr).to.exist;
             expect(isDottedGetExpression(member.keyExpr)).to.be.true;
             expect(member.openBracketToken).to.exist;
@@ -276,7 +275,8 @@ describe('parser associative array literals', () => {
             `);
             expectZeroDiagnostics(diagnostics);
             const aaLit = (statements[0] as AssignmentStatement).value as AALiteralExpression;
-            const member = aaLit.elements[0] as AAMemberExpression;
+            const member = aaLit.elements[0] as AAIndexedMemberExpression;
+            expect(isAAIndexedMemberExpression(member)).to.be.true;
             expect(member.keyExpr).to.exist;
             expect(isLiteralExpression(member.keyExpr)).to.be.true;
         });
@@ -302,8 +302,8 @@ describe('parser associative array literals', () => {
             expectZeroDiagnostics(diagnostics);
             const aaLit = (statements[0] as AssignmentStatement).value as AALiteralExpression;
             expect(aaLit.elements).to.have.lengthOf(2);
-            expect(isAAMemberExpression(aaLit.elements[0]) && (aaLit.elements[0] as AAMemberExpression).keyExpr).to.exist;
-            expect(isAAMemberExpression(aaLit.elements[1]) && (aaLit.elements[1] as AAMemberExpression).keyExpr).to.exist;
+            expect(isAAIndexedMemberExpression(aaLit.elements[0])).to.be.true;
+            expect(isAAIndexedMemberExpression(aaLit.elements[1])).to.be.true;
         });
 
         it('supports mixing computed and non-computed keys', () => {
@@ -316,9 +316,10 @@ describe('parser associative array literals', () => {
             expectZeroDiagnostics(diagnostics);
             const aaLit = (statements[0] as AssignmentStatement).value as AALiteralExpression;
             const first = aaLit.elements[0] as AAMemberExpression;
-            const second = aaLit.elements[1] as AAMemberExpression;
-            expect(first.keyExpr).to.not.exist;
+            const second = aaLit.elements[1] as AAIndexedMemberExpression;
+            expect(isAAMemberExpression(first)).to.be.true;
             expect(first.keyToken).to.exist;
+            expect(isAAIndexedMemberExpression(second)).to.be.true;
             expect(second.keyExpr).to.exist;
         });
     });
