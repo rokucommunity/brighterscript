@@ -119,8 +119,7 @@ export class ScopeValidator {
 
     /**
      * Recursively resolve a const/enum reference to determine if its ultimate value is a string.
-     * Returns true if resolvable to a string, false if resolvable to a non-string, and true (permissive)
-     * if it cannot be resolved (to avoid false positives).
+     * Returns true only if the value is confirmed to be a string.
      */
     private constResolvesToString(value: Expression, enclosingNamespace: string, scope: Scope, visited = new Set<string>()): boolean {
         if (isLiteralExpression(value)) {
@@ -128,12 +127,11 @@ export class ScopeValidator {
         }
         const parts = util.getDottedGetPath(value);
         if (parts.length === 0) {
-            // Cannot resolve — be permissive to avoid false positives
-            return true;
+            return false;
         }
         const entityName = parts.map(p => p.name.text.toLowerCase()).join('.');
         if (visited.has(entityName)) {
-            return true; // circular — be permissive
+            return false; // circular reference — cannot confirm string
         }
         visited.add(entityName);
         const constLink = scope.getConstFileLink(entityName, enclosingNamespace);
@@ -142,9 +140,9 @@ export class ScopeValidator {
         }
         const memberLink = scope.getEnumMemberFileLink(entityName, enclosingNamespace);
         if (memberLink) {
-            return memberLink.item.getValue()?.startsWith('"') ?? false;
+            return this.constResolvesToString(memberLink.item.value, enclosingNamespace, scope, visited);
         }
-        return true; // unresolvable — be permissive
+        return false;
     }
 
     private expressionsByFile = new Cache<BrsFile, Readonly<ExpressionInfo>[]>();

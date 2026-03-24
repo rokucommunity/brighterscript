@@ -3098,18 +3098,18 @@ export class Parser {
 
         let key = () => {
             let result = {
-                colonToken: null as Token,
+                colon: null as Token,
                 keyToken: null as Token,
-                keyExpr: null as Expression,
-                openBracketToken: null as Token,
-                closeBracketToken: null as Token,
+                key: null as Expression,
+                leftBracket: null as Token,
+                rightBracket: null as Token,
                 range: null as Range
             };
             if (this.check(TokenKind.LeftSquareBracket)) {
                 // Computed key: [expr]
-                result.openBracketToken = this.advance();
-                result.keyExpr = this.expression();
-                result.closeBracketToken = this.tryConsumeToken(TokenKind.RightSquareBracket);
+                result.leftBracket = this.advance();
+                result.key = this.expression();
+                result.rightBracket = this.tryConsumeToken(TokenKind.RightSquareBracket);
             } else if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
                 result.keyToken = this.identifier(...AllowedProperties);
             } else if (this.check(TokenKind.StringLiteral)) {
@@ -3122,11 +3122,11 @@ export class Parser {
                 throw this.lastDiagnosticAsError();
             }
 
-            result.colonToken = this.consume(
+            result.colon = this.consume(
                 DiagnosticMessages.expectedColonBetweenAAKeyAndvalue(),
                 TokenKind.Colon
             );
-            result.range = util.getRange(result.keyToken ?? result.openBracketToken, result.colonToken);
+            result.range = util.getRange(result.keyToken ?? result.leftBracket, result.colon);
             return result;
         };
 
@@ -3141,9 +3141,9 @@ export class Parser {
                 } else {
                     let k = key();
                     let expr = this.expression();
-                    lastAAMember = k.keyExpr
-                        ? new AAIndexedMemberExpression({ leftBracket: k.openBracketToken, key: k.keyExpr, rightBracket: k.closeBracketToken, colon: k.colonToken, value: expr })
-                        : new AAMemberExpression(k.keyToken, k.colonToken, expr);
+                    lastAAMember = k.key
+                        ? new AAIndexedMemberExpression({ leftBracket: k.leftBracket, key: k.key, rightBracket: k.rightBracket, colon: k.colon, value: expr })
+                        : new AAMemberExpression(k.keyToken, k.colon, expr);
                     members.push(lastAAMember);
                 }
 
@@ -3173,9 +3173,9 @@ export class Parser {
                         }
                         let k = key();
                         let expr = this.expression();
-                        lastAAMember = k.keyExpr
-                            ? new AAIndexedMemberExpression({ leftBracket: k.openBracketToken, key: k.keyExpr, rightBracket: k.closeBracketToken, colon: k.colonToken, value: expr })
-                            : new AAMemberExpression(k.keyToken, k.colonToken, expr);
+                        lastAAMember = k.key
+                            ? new AAIndexedMemberExpression({ leftBracket: k.leftBracket, key: k.key, rightBracket: k.rightBracket, colon: k.colon, value: expr })
+                            : new AAMemberExpression(k.keyToken, k.colon, expr);
                         members.push(lastAAMember);
                     }
                 }
