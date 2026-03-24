@@ -261,10 +261,10 @@ describe('parser associative array literals', () => {
             expect(isAALiteralExpression(aaLit)).to.be.true;
             const member = aaLit.elements[0] as AAIndexedMemberExpression;
             expect(isAAIndexedMemberExpression(member)).to.be.true;
-            expect(member.keyExpr).to.exist;
-            expect(isDottedGetExpression(member.keyExpr)).to.be.true;
-            expect(member.openBracketToken).to.exist;
-            expect(member.closeBracketToken).to.exist;
+            expect(member.key).to.exist;
+            expect(isDottedGetExpression(member.key)).to.be.true;
+            expect(member.tokens.leftBracket).to.exist;
+            expect(member.tokens.rightBracket).to.exist;
         });
 
         it('parses [literal] computed key syntax', () => {
@@ -277,8 +277,8 @@ describe('parser associative array literals', () => {
             const aaLit = (statements[0] as AssignmentStatement).value as AALiteralExpression;
             const member = aaLit.elements[0] as AAIndexedMemberExpression;
             expect(isAAIndexedMemberExpression(member)).to.be.true;
-            expect(member.keyExpr).to.exist;
-            expect(isLiteralExpression(member.keyExpr)).to.be.true;
+            expect(member.key).to.exist;
+            expect(isLiteralExpression(member.key)).to.be.true;
         });
 
         it('errors on missing ] in computed key', () => {
@@ -320,7 +320,7 @@ describe('parser associative array literals', () => {
             expect(isAAMemberExpression(first)).to.be.true;
             expect(first.keyToken).to.exist;
             expect(isAAIndexedMemberExpression(second)).to.be.true;
-            expect(second.keyExpr).to.exist;
+            expect(second.key).to.exist;
         });
     });
 

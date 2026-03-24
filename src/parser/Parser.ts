@@ -3145,7 +3145,7 @@ export class Parser {
                     let k = key();
                     let expr = this.expression();
                     lastAAMember = k.keyExpr
-                        ? new AAIndexedMemberExpression({ openBracketToken: k.openBracketToken, keyExpr: k.keyExpr, closeBracketToken: k.closeBracketToken, colonToken: k.colonToken, value: expr })
+                        ? new AAIndexedMemberExpression({ leftBracket: k.openBracketToken, key: k.keyExpr, rightBracket: k.closeBracketToken, colon: k.colonToken, value: expr })
                         : new AAMemberExpression(k.keyToken, k.colonToken, expr);
                     members.push(lastAAMember);
                 }
@@ -3177,7 +3177,7 @@ export class Parser {
                         let k = key();
                         let expr = this.expression();
                         lastAAMember = k.keyExpr
-                            ? new AAIndexedMemberExpression({ openBracketToken: k.openBracketToken, keyExpr: k.keyExpr, closeBracketToken: k.closeBracketToken, colonToken: k.colonToken, value: expr })
+                            ? new AAIndexedMemberExpression({ leftBracket: k.openBracketToken, key: k.keyExpr, rightBracket: k.closeBracketToken, colon: k.colonToken, value: expr })
                             : new AAMemberExpression(k.keyToken, k.colonToken, expr);
                         members.push(lastAAMember);
                     }
@@ -3538,7 +3538,7 @@ export class Parser {
                         this._references.expressions.add(member.value);
                     } else if (isAAIndexedMemberExpression(member)) {
                         this._references.expressions.add(member.value);
-                        this._references.expressions.add(member.keyExpr);
+                        this._references.expressions.add(member.key);
                     }
                 }
             },

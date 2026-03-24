@@ -62,26 +62,26 @@ export class ScopeValidator {
         file.ast.walk(createVisitor({
             AAIndexedMemberExpression: (member) => {
                 // Direct string literal (e.g. ["my-key"]) is valid
-                if (isLiteralExpression(member.keyExpr)) {
-                    if (member.keyExpr.token.kind !== TokenKind.StringLiteral) {
+                if (isLiteralExpression(member.key)) {
+                    if (member.key.token.kind !== TokenKind.StringLiteral) {
                         this.addMultiScopeDiagnostic({
                             file: file,
                             ...DiagnosticMessages.computedAAKeyMustBeStringExpression(),
-                            range: member.keyExpr.range
+                            range: member.key.range
                         });
                     }
                     return;
                 }
-                const parts = util.getDottedGetPath(member.keyExpr);
+                const parts = util.getDottedGetPath(member.key);
                 if (parts.length === 0) {
                     this.addMultiScopeDiagnostic({
                         file: file,
                         ...DiagnosticMessages.computedPropertyKeyMustBeConstantExpression(),
-                        range: member.keyExpr.range
+                        range: member.key.range
                     });
                     return;
                 }
-                const enclosingNamespace = member.keyExpr.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase();
+                const enclosingNamespace = member.key.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase();
                 const entityName = parts.map(p => p.name.text.toLowerCase()).join('.');
                 // Check enum member
                 const memberLink = scope.getEnumMemberFileLink(entityName, enclosingNamespace);
@@ -91,7 +91,7 @@ export class ScopeValidator {
                         this.addMultiScopeDiagnostic({
                             file: file,
                             ...DiagnosticMessages.computedAAKeyMustBeStringExpression(),
-                            range: member.keyExpr.range
+                            range: member.key.range
                         });
                     }
                     return;
@@ -103,7 +103,7 @@ export class ScopeValidator {
                         this.addMultiScopeDiagnostic({
                             file: file,
                             ...DiagnosticMessages.computedAAKeyMustBeStringExpression(),
-                            range: member.keyExpr.range
+                            range: member.key.range
                         });
                     }
                     return;
@@ -111,7 +111,7 @@ export class ScopeValidator {
                 this.addMultiScopeDiagnostic({
                     file: file,
                     ...DiagnosticMessages.computedPropertyKeyMustBeConstantExpression(),
-                    range: member.keyExpr.range
+                    range: member.key.range
                 });
             }
         }), { walkMode: WalkMode.visitAllRecursive });
