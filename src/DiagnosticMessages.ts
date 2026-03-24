@@ -752,6 +752,16 @@ export let DiagnosticMessages = {
         message: `${accessDescription} access not permitted after a function call when used in an expression statement`,
         code: 1143,
         severity: DiagnosticSeverity.Error
+    }),
+    computedPropertyKeyMustBeConstantExpression: () => ({
+        message: `Computed property keys must be a compile-time constant (enum member or const value)`,
+        code: 1144,
+        severity: DiagnosticSeverity.Error
+    }),
+    computedAAKeyMustBeStringExpression: () => ({
+        message: `Computed associative array keys must resolve to a string value`,
+        code: 1145,
+        severity: DiagnosticSeverity.Error
     })
 };
 

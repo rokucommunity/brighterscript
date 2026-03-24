@@ -63,6 +63,7 @@ import type { DiagnosticInfo } from '../DiagnosticMessages';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { util } from '../util';
 import {
+    AAIndexedMemberExpression,
     AALiteralExpression,
     AAMemberExpression,
     AnnotationExpression,
@@ -94,7 +95,7 @@ import {
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import type { Logger } from '../logging';
 import { createLogger } from '../logging';
-import { isAAMemberExpression, isAnnotationExpression, isBinaryExpression, isCallExpression, isCallfuncExpression, isMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression, isXmlAttributeGetExpression } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAAMemberExpression, isAnnotationExpression, isBinaryExpression, isCallExpression, isCallfuncExpression, isMethodStatement, isCommentStatement, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression, isXmlAttributeGetExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import { Cache } from '../Cache';
@@ -158,7 +159,7 @@ export class Parser {
             this._references.propertyHints[name.toLowerCase()] = name;
         } else {
             for (const member of item.elements) {
-                if (!isCommentStatement(member)) {
+                if (!isCommentStatement(member) && isAAMemberExpression(member) && member.keyToken) {
                     const name = member.keyToken.text;
                     if (!name.startsWith('"')) {
                         this._references.propertyHints[name.toLowerCase()] = name;
@@ -3093,15 +3094,23 @@ export class Parser {
 
     private aaLiteral() {
         let openingBrace = this.previous();
-        let members: Array<AAMemberExpression | CommentStatement> = [];
+        let members: Array<AAMemberExpression | AAIndexedMemberExpression | CommentStatement> = [];
 
         let key = () => {
             let result = {
-                colonToken: null as Token,
+                colon: null as Token,
                 keyToken: null as Token,
+                key: null as Expression,
+                leftBracket: null as Token,
+                rightBracket: null as Token,
                 range: null as Range
             };
-            if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
+            if (this.check(TokenKind.LeftSquareBracket)) {
+                // Computed key: [expr]
+                result.leftBracket = this.advance();
+                result.key = this.expression();
+                result.rightBracket = this.tryConsumeToken(TokenKind.RightSquareBracket);
+            } else if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
                 result.keyToken = this.identifier(...AllowedProperties);
             } else if (this.check(TokenKind.StringLiteral)) {
                 result.keyToken = this.advance();
@@ -3113,18 +3122,18 @@ export class Parser {
                 throw this.lastDiagnosticAsError();
             }
 
-            result.colonToken = this.consume(
+            result.colon = this.consume(
                 DiagnosticMessages.expectedColonBetweenAAKeyAndvalue(),
                 TokenKind.Colon
             );
-            result.range = util.getRange(result.keyToken, result.colonToken);
+            result.range = util.getRange(result.keyToken ?? result.leftBracket, result.colon);
             return result;
         };
 
         while (this.match(TokenKind.Newline)) { }
         let closingBrace: Token;
         if (!this.match(TokenKind.RightCurlyBrace)) {
-            let lastAAMember: AAMemberExpression;
+            let lastAAMember: AAMemberExpression | AAIndexedMemberExpression;
             try {
                 if (this.check(TokenKind.Comment)) {
                     lastAAMember = null;
@@ -3132,11 +3141,9 @@ export class Parser {
                 } else {
                     let k = key();
                     let expr = this.expression();
-                    lastAAMember = new AAMemberExpression(
-                        k.keyToken,
-                        k.colonToken,
-                        expr
-                    );
+                    lastAAMember = k.key
+                        ? new AAIndexedMemberExpression({ leftBracket: k.leftBracket, key: k.key, rightBracket: k.rightBracket, colon: k.colon, value: expr })
+                        : new AAMemberExpression(k.keyToken, k.colon, expr);
                     members.push(lastAAMember);
                 }
 
@@ -3166,11 +3173,9 @@ export class Parser {
                         }
                         let k = key();
                         let expr = this.expression();
-                        lastAAMember = new AAMemberExpression(
-                            k.keyToken,
-                            k.colonToken,
-                            expr
-                        );
+                        lastAAMember = k.key
+                            ? new AAIndexedMemberExpression({ leftBracket: k.leftBracket, key: k.key, rightBracket: k.rightBracket, colon: k.colon, value: expr })
+                            : new AAMemberExpression(k.keyToken, k.colon, expr);
                         members.push(lastAAMember);
                     }
                 }
@@ -3528,6 +3533,9 @@ export class Parser {
                 for (const member of e.elements) {
                     if (isAAMemberExpression(member)) {
                         this._references.expressions.add(member.value);
+                    } else if (isAAIndexedMemberExpression(member)) {
+                        this._references.expressions.add(member.value);
+                        this._references.expressions.add(member.key);
                     }
                 }
             },
