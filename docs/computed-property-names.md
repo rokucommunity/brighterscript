@@ -1,32 +1,11 @@
 # Computed Property Names
 
-BrighterScript supports using compile-time constants as associative array keys via the `[expr]` bracket syntax, similar to [computed property names in JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Object_initializer#computed_property_names).
+BrighterScript supports using computed property names for associative array keys via the `[expr]` bracket syntax, similar to [computed property names in JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Object_initializer#computed_property_names).
 
 The expression inside the brackets must resolve to a **string** at compile-time. Currently only [enum members](enums.md) (string enums), [constants](constants.md), and string literals are supported.
 
-## String literals
-
-The most basic use case is a string literal in brackets. This is useful for keys that contain characters that would be invalid as bare identifiers (such as hyphens).
-
-```brighterscript
-sub main()
-    headers = {
-        ["Content-Type"]: "application/json",
-        ["X-Api-Key"]: "abc123"
-    }
-end sub
-```
-
-transpiles to
-
-```brightscript
-sub main()
-    headers = {
-        "Content-Type": "application/json"
-        "X-Api-Key": "abc123"
-    }
-end sub
-```
+> [!NOTE]
+>**Currently runtime values, such as variables, are not supported**
 
 ## Enum members
 
@@ -48,7 +27,9 @@ sub main()
 end sub
 ```
 
-transpiles to
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```brightscript
 sub main()
@@ -59,6 +40,8 @@ sub main()
     }
 end sub
 ```
+
+</details>
 
 Namespaced enums work the same way:
 
@@ -94,7 +77,8 @@ sub main()
 end sub
 ```
 
-transpiles to
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```brightscript
 sub main()
@@ -104,6 +88,8 @@ sub main()
     }
 end sub
 ```
+
+</details>
 
 Namespaced constants work as well:
 
@@ -139,7 +125,8 @@ sub main()
 end sub
 ```
 
-transpiles to
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```brightscript
 sub main()
@@ -150,6 +137,35 @@ sub main()
     }
 end sub
 ```
+
+</details>
+
+## String literals
+
+The most basic use case is a string literal in brackets.
+
+```brighterscript
+sub main()
+    headers = {
+        ["Content-Type"]: "application/json",
+        ["X-Api-Key"]: "abc123"
+    }
+end sub
+```
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
+```brightscript
+sub main()
+    headers = {
+        "Content-Type": "application/json"
+        "X-Api-Key": "abc123"
+    }
+end sub
+```
+
+</details>
 
 ## Restrictions
 
