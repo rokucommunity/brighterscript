@@ -1116,8 +1116,8 @@ describe('EnumStatement', () => {
             `);
         });
 
-        it('transpiles integer enum member as AA key', () => {
-            testTranspile(`
+        it('emits diagnostic for integer enum member used as AA key', () => {
+            program.addOrReplaceFile('source/main.bs', `
                 enum MyKey
                     first = 1
                 end enum
@@ -1126,13 +1126,11 @@ describe('EnumStatement', () => {
                         [MyKey.first]: "value1"
                     }
                 end sub
-            `, `
-                sub main()
-                    myAA = {
-                        1: "value1"
-                    }
-                end sub
             `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
+            ]);
         });
 
         it('transpiles const as AA key', () => {
@@ -1244,6 +1242,35 @@ describe('EnumStatement', () => {
             program.validate();
             expectDiagnostics(program, [
                 DiagnosticMessages.computedPropertyKeyMustBeConstantExpression()
+            ]);
+        });
+
+        it('emits diagnostic for non-string literal used as computed key', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                sub main()
+                    myAA = {
+                        [42]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
+            ]);
+        });
+
+        it('emits diagnostic for non-string const used as computed key', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                const MY_INT_KEY = 42
+                sub main()
+                    myAA = {
+                        [MY_INT_KEY]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
             ]);
         });
     });

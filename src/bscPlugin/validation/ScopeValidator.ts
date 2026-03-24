@@ -9,6 +9,7 @@ import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
+import { TokenKind } from '../../lexer/TokenKind';
 import type { Scope } from '../../Scope';
 import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
 import type { Expression } from '../../parser/AstNode';
@@ -63,8 +64,15 @@ export class ScopeValidator {
                 if (!member.keyExpr) {
                     return;
                 }
-                // Literal expressions (e.g. ["literal-key"]) are valid
+                // Direct string literal (e.g. ["my-key"]) is valid
                 if (isLiteralExpression(member.keyExpr)) {
+                    if (member.keyExpr.token.kind !== TokenKind.StringLiteral) {
+                        this.addMultiScopeDiagnostic({
+                            file: file,
+                            ...DiagnosticMessages.computedAAKeyMustBeStringExpression(),
+                            range: member.keyExpr.range
+                        });
+                    }
                     return;
                 }
                 const parts = util.getDottedGetPath(member.keyExpr);
@@ -78,7 +86,29 @@ export class ScopeValidator {
                 }
                 const enclosingNamespace = member.keyExpr.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase();
                 const entityName = parts.map(p => p.name.text.toLowerCase()).join('.');
-                if (scope.getEnumMemberFileLink(entityName, enclosingNamespace) || scope.getConstFileLink(entityName, enclosingNamespace)) {
+                // Check enum member
+                const memberLink = scope.getEnumMemberFileLink(entityName, enclosingNamespace);
+                if (memberLink) {
+                    const value = memberLink.item.getValue();
+                    if (!value?.startsWith('"')) {
+                        this.addMultiScopeDiagnostic({
+                            file: file,
+                            ...DiagnosticMessages.computedAAKeyMustBeStringExpression(),
+                            range: member.keyExpr.range
+                        });
+                    }
+                    return;
+                }
+                // Check const — follow the chain to find the root literal type
+                const constLink = scope.getConstFileLink(entityName, enclosingNamespace);
+                if (constLink) {
+                    if (!this.constResolvesToString(constLink.item.value, enclosingNamespace, scope)) {
+                        this.addMultiScopeDiagnostic({
+                            file: file,
+                            ...DiagnosticMessages.computedAAKeyMustBeStringExpression(),
+                            range: member.keyExpr.range
+                        });
+                    }
                     return;
                 }
                 this.addMultiScopeDiagnostic({
@@ -88,6 +118,36 @@ export class ScopeValidator {
                 });
             }
         }), { walkMode: WalkMode.visitAllRecursive });
+    }
+
+    /**
+     * Recursively resolve a const/enum reference to determine if its ultimate value is a string.
+     * Returns true if resolvable to a string, false if resolvable to a non-string, and true (permissive)
+     * if it cannot be resolved (to avoid false positives).
+     */
+    private constResolvesToString(value: Expression, enclosingNamespace: string, scope: Scope, visited = new Set<string>()): boolean {
+        if (isLiteralExpression(value)) {
+            return value.token.kind === TokenKind.StringLiteral;
+        }
+        const parts = util.getDottedGetPath(value);
+        if (parts.length === 0) {
+            // Cannot resolve — be permissive to avoid false positives
+            return true;
+        }
+        const entityName = parts.map(p => p.name.text.toLowerCase()).join('.');
+        if (visited.has(entityName)) {
+            return true; // circular — be permissive
+        }
+        visited.add(entityName);
+        const constLink = scope.getConstFileLink(entityName, enclosingNamespace);
+        if (constLink) {
+            return this.constResolvesToString(constLink.item.value, enclosingNamespace, scope, visited);
+        }
+        const memberLink = scope.getEnumMemberFileLink(entityName, enclosingNamespace);
+        if (memberLink) {
+            return memberLink.item.getValue()?.startsWith('"') ?? false;
+        }
+        return true; // unresolvable — be permissive
     }
 
     private expressionsByFile = new Cache<BrsFile, Readonly<ExpressionInfo>[]>();

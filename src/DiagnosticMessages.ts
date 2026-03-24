@@ -429,6 +429,11 @@ export let DiagnosticMessages = {
         code: 1145,
         severity: DiagnosticSeverity.Error
     }),
+    computedAAKeyMustBeStringExpression: () => ({
+        message: `Computed associative array keys must resolve to a string value`,
+        code: 1146,
+        severity: DiagnosticSeverity.Error
+    }),
     expectedColonBetweenAAKeyAndvalue: () => ({
         message: `Expected ':' between associative array key and value`,
         code: 1079,
