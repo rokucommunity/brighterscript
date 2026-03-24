@@ -194,7 +194,7 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('does not inject trace into an anonymous function expression inside a named function', () => {
+        it('does inject trace into an anonymous function expression inside a named function', () => {
             testTranspile(`
                 function outer()
                     callback = function()
@@ -206,6 +206,7 @@ describe('BrsFile', () => {
                 function outer()
                     bsc__trace = CreateObject("roPerfetto").createScopedEvent("outer")
                     callback = function()
+                        bsc__trace = CreateObject("roPerfetto").createScopedEvent("outer$anon0")
                         print "I am anon"
                     end function
                     callback()
@@ -213,7 +214,7 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('does not inject trace into multiple anonymous function expressions inside a named function', () => {
+        it('does inject trace into multiple anonymous function expressions inside a named function', () => {
             testTranspile(`
                 function outer()
                     a = function()
@@ -229,9 +230,11 @@ describe('BrsFile', () => {
                 function outer()
                     bsc__trace = CreateObject("roPerfetto").createScopedEvent("outer")
                     a = function()
+                        bsc__trace = CreateObject("roPerfetto").createScopedEvent("outer$anon0")
                         print "anon a"
                     end function
                     b = function()
+                        bsc__trace = CreateObject("roPerfetto").createScopedEvent("outer$anon1")
                         print "anon b"
                     end function
                     a()
@@ -240,7 +243,7 @@ describe('BrsFile', () => {
             `);
         });
 
-        it('does not inject trace into a deeply nested anonymous function expression', () => {
+        it('does inject trace into a deeply nested anonymous function expression', () => {
             testTranspile(`
                 function outer()
                     a = function()
@@ -255,7 +258,9 @@ describe('BrsFile', () => {
                 function outer()
                     bsc__trace = CreateObject("roPerfetto").createScopedEvent("outer")
                     a = function()
+                        bsc__trace = CreateObject("roPerfetto").createScopedEvent("outer$anon0")
                         b = function()
+                            bsc__trace = CreateObject("roPerfetto").createScopedEvent("outer$anon0$anon0")
                             print "deeply anon"
                         end function
                         b()
