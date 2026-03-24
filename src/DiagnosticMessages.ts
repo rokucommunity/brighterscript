@@ -419,21 +419,6 @@ export let DiagnosticMessages = {
         code: 1078,
         severity: DiagnosticSeverity.Error
     }),
-    expectedRightSquareBracketAfterAAComputedKey: () => ({
-        message: `Expected ']' after associative array computed key expression`,
-        code: 1144,
-        severity: DiagnosticSeverity.Error
-    }),
-    computedPropertyKeyMustBeConstantExpression: () => ({
-        message: `Computed property keys must be a compile-time constant (enum member or const value)`,
-        code: 1145,
-        severity: DiagnosticSeverity.Error
-    }),
-    computedAAKeyMustBeStringExpression: () => ({
-        message: `Computed associative array keys must resolve to a string value`,
-        code: 1146,
-        severity: DiagnosticSeverity.Error
-    }),
     expectedColonBetweenAAKeyAndvalue: () => ({
         message: `Expected ':' between associative array key and value`,
         code: 1079,
@@ -766,6 +751,16 @@ export let DiagnosticMessages = {
     propAccessNotPermittedAfterFunctionCallInExpressionStatement: (accessDescription: string) => ({
         message: `${accessDescription} access not permitted after a function call when used in an expression statement`,
         code: 1143,
+        severity: DiagnosticSeverity.Error
+    }),
+    computedPropertyKeyMustBeConstantExpression: () => ({
+        message: `Computed property keys must be a compile-time constant (enum member or const value)`,
+        code: 1144,
+        severity: DiagnosticSeverity.Error
+    }),
+    computedAAKeyMustBeStringExpression: () => ({
+        message: `Computed associative array keys must resolve to a string value`,
+        code: 1145,
         severity: DiagnosticSeverity.Error
     })
 };

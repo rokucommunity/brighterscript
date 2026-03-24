@@ -3109,10 +3109,7 @@ export class Parser {
                 // Computed key: [expr]
                 result.openBracketToken = this.advance();
                 result.keyExpr = this.expression();
-                result.closeBracketToken = this.tryConsume(
-                    DiagnosticMessages.expectedRightSquareBracketAfterAAComputedKey(),
-                    TokenKind.RightSquareBracket
-                );
+                result.closeBracketToken = this.tryConsumeToken(TokenKind.RightSquareBracket);
             } else if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
                 result.keyToken = this.identifier(...AllowedProperties);
             } else if (this.check(TokenKind.StringLiteral)) {

@@ -288,7 +288,7 @@ describe('parser associative array literals', () => {
                 }
             `);
             expectDiagnosticsIncludes(diagnostics, [
-                DiagnosticMessages.expectedRightSquareBracketAfterAAComputedKey()
+                DiagnosticMessages.expectedToken(TokenKind.RightSquareBracket)
             ]);
         });
 
