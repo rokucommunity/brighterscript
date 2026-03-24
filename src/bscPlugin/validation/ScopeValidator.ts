@@ -14,6 +14,7 @@ import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
 import type { Expression } from '../../parser/AstNode';
 import type { VariableExpression, DottedGetExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
+import { createVisitor, WalkMode } from '../../astUtils/visitors';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -50,8 +51,43 @@ export class ScopeValidator {
             if (isBrsFile(file)) {
                 this.iterateFileExpressions(file);
                 this.validateCreateObjectCalls(file);
+                this.validateComputedAAKeys(file);
             }
         });
+    }
+
+    private validateComputedAAKeys(file: BrsFile) {
+        const { scope } = this.event;
+        file.ast.walk(createVisitor({
+            AAMemberExpression: (member) => {
+                if (!member.keyExpr) {
+                    return;
+                }
+                // Literal expressions (e.g. ["literal-key"]) are valid
+                if (isLiteralExpression(member.keyExpr)) {
+                    return;
+                }
+                const parts = util.getDottedGetPath(member.keyExpr);
+                if (parts.length === 0) {
+                    this.addMultiScopeDiagnostic({
+                        file: file,
+                        ...DiagnosticMessages.computedPropertyKeyMustBeConstantExpression(),
+                        range: member.keyExpr.range
+                    });
+                    return;
+                }
+                const enclosingNamespace = member.keyExpr.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase();
+                const entityName = parts.map(p => p.name.text.toLowerCase()).join('.');
+                if (scope.getEnumMemberFileLink(entityName, enclosingNamespace) || scope.getConstFileLink(entityName, enclosingNamespace)) {
+                    return;
+                }
+                this.addMultiScopeDiagnostic({
+                    file: file,
+                    ...DiagnosticMessages.computedPropertyKeyMustBeConstantExpression(),
+                    range: member.keyExpr.range
+                });
+            }
+        }), { walkMode: WalkMode.visitAllRecursive });
     }
 
     private expressionsByFile = new Cache<BrsFile, Readonly<ExpressionInfo>[]>();

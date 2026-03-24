@@ -419,6 +419,16 @@ export let DiagnosticMessages = {
         code: 1078,
         severity: DiagnosticSeverity.Error
     }),
+    expectedRightSquareBracketAfterAAComputedKey: () => ({
+        message: `Expected ']' after associative array computed key expression`,
+        code: 1144,
+        severity: DiagnosticSeverity.Error
+    }),
+    computedPropertyKeyMustBeConstantExpression: () => ({
+        message: `Computed property keys must be a compile-time constant (enum member or const value)`,
+        code: 1145,
+        severity: DiagnosticSeverity.Error
+    }),
     expectedColonBetweenAAKeyAndvalue: () => ({
         message: `Expected ':' between associative array key and value`,
         code: 1079,

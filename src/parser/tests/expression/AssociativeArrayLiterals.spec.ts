@@ -6,8 +6,8 @@ import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import type { AssignmentStatement } from '../../Statement';
 import type { AALiteralExpression, AAMemberExpression } from '../../Expression';
-import { isAALiteralExpression, isAssignmentStatement, isCommentStatement, isDottedGetExpression, isLiteralExpression } from '../../../astUtils/reflection';
-import { expectDiagnostics, expectDiagnosticsIncludes } from '../../../testHelpers.spec';
+import { isAALiteralExpression, isAAMemberExpression, isAssignmentStatement, isCommentStatement, isDottedGetExpression, isLiteralExpression } from '../../../astUtils/reflection';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics } from '../../../testHelpers.spec';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 
 describe('parser associative array literals', () => {
@@ -246,6 +246,80 @@ describe('parser associative array literals', () => {
             expectDiagnosticsIncludes(diagnostics, [
                 DiagnosticMessages.unmatchedLeftCurlyAfterAALiteral()
             ]);
+        });
+    });
+
+    describe('computed keys', () => {
+        it('parses [expr] computed key syntax', () => {
+            const { statements, diagnostics } = Parser.parse(`
+                _ = {
+                    [someEnum.key]: "value"
+                }
+            `);
+            expectZeroDiagnostics(diagnostics);
+            const aaLit = (statements[0] as AssignmentStatement).value as AALiteralExpression;
+            expect(isAALiteralExpression(aaLit)).to.be.true;
+            const member = aaLit.elements[0] as AAMemberExpression;
+            expect(isAAMemberExpression(member)).to.be.true;
+            expect(member.keyToken).to.be.null;
+            expect(member.keyExpr).to.exist;
+            expect(isDottedGetExpression(member.keyExpr)).to.be.true;
+            expect(member.openBracketToken).to.exist;
+            expect(member.closeBracketToken).to.exist;
+        });
+
+        it('parses [literal] computed key syntax', () => {
+            const { statements, diagnostics } = Parser.parse(`
+                _ = {
+                    ["my-key"]: "value"
+                }
+            `);
+            expectZeroDiagnostics(diagnostics);
+            const aaLit = (statements[0] as AssignmentStatement).value as AALiteralExpression;
+            const member = aaLit.elements[0] as AAMemberExpression;
+            expect(member.keyExpr).to.exist;
+            expect(isLiteralExpression(member.keyExpr)).to.be.true;
+        });
+
+        it('errors on missing ] in computed key', () => {
+            const { diagnostics } = Parser.parse(`
+                _ = {
+                    [someEnum.key: "value"
+                }
+            `);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.expectedRightSquareBracketAfterAAComputedKey()
+            ]);
+        });
+
+        it('supports multiple computed keys in one AA', () => {
+            const { statements, diagnostics } = Parser.parse(`
+                _ = {
+                    [myEnum.a]: 1,
+                    [myEnum.b]: 2
+                }
+            `);
+            expectZeroDiagnostics(diagnostics);
+            const aaLit = (statements[0] as AssignmentStatement).value as AALiteralExpression;
+            expect(aaLit.elements).to.have.lengthOf(2);
+            expect(isAAMemberExpression(aaLit.elements[0]) && (aaLit.elements[0] as AAMemberExpression).keyExpr).to.exist;
+            expect(isAAMemberExpression(aaLit.elements[1]) && (aaLit.elements[1] as AAMemberExpression).keyExpr).to.exist;
+        });
+
+        it('supports mixing computed and non-computed keys', () => {
+            const { statements, diagnostics } = Parser.parse(`
+                _ = {
+                    normalKey: 1,
+                    [myEnum.computed]: 2
+                }
+            `);
+            expectZeroDiagnostics(diagnostics);
+            const aaLit = (statements[0] as AssignmentStatement).value as AALiteralExpression;
+            const first = aaLit.elements[0] as AAMemberExpression;
+            const second = aaLit.elements[1] as AAMemberExpression;
+            expect(first.keyExpr).to.not.exist;
+            expect(first.keyToken).to.exist;
+            expect(second.keyExpr).to.exist;
         });
     });
 

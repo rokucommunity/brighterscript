@@ -935,10 +935,14 @@ export class AAMemberExpression extends Expression {
         public keyToken: Token,
         public colonToken: Token,
         /** The expression evaluated to determine the member's initial value. */
-        public value: Expression
+        public value: Expression,
+        /** For computed keys: the expression inside `[...]`. e.g. `{ [myEnum.KEY]: value }` */
+        public keyExpr?: Expression,
+        public openBracketToken?: Token,
+        public closeBracketToken?: Token
     ) {
         super();
-        this.range = util.createBoundingRange(this.keyToken, this.colonToken, this.value);
+        this.range = util.createBoundingRange(this.openBracketToken ?? this.keyToken, this.colonToken, this.value);
     }
 
     public range: Range | undefined;
@@ -950,6 +954,9 @@ export class AAMemberExpression extends Expression {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.keyExpr) {
+            walk(this, 'keyExpr', visitor, options);
+        }
         walk(this, 'value', visitor, options);
     }
 
@@ -958,9 +965,12 @@ export class AAMemberExpression extends Expression {
             new AAMemberExpression(
                 util.cloneToken(this.keyToken),
                 util.cloneToken(this.colonToken),
-                this.value?.clone()
+                this.value?.clone(),
+                this.keyExpr ? this.keyExpr.clone() : this.keyExpr,
+                util.cloneToken(this.openBracketToken),
+                util.cloneToken(this.closeBracketToken)
             ),
-            ['value']
+            ['keyExpr', 'value']
         );
     }
 
@@ -1011,9 +1021,14 @@ export class AALiteralExpression extends Expression {
                 result.push(...element.transpile(state));
             } else {
                 //key
-                result.push(
-                    state.transpileToken(element.keyToken)
-                );
+                if (element.keyExpr) {
+                    //computed key: transpile the resolved expression (pre-transpile overrides it to a literal)
+                    result.push(...element.keyExpr.transpile(state));
+                } else {
+                    result.push(
+                        state.transpileToken(element.keyToken)
+                    );
+                }
                 //colon
                 result.push(
                     state.transpileToken(element.colonToken),

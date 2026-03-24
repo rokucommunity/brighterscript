@@ -1095,4 +1095,156 @@ describe('EnumStatement', () => {
             end sub
         `);
     });
+
+    describe('computed AA keys', () => {
+        it('transpiles enum member as AA key', () => {
+            testTranspile(`
+                enum MyKey
+                    first = "key1"
+                end enum
+                sub main()
+                    myAA = {
+                        [MyKey.first]: "value1"
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        "key1": "value1"
+                    }
+                end sub
+            `);
+        });
+
+        it('transpiles integer enum member as AA key', () => {
+            testTranspile(`
+                enum MyKey
+                    first = 1
+                end enum
+                sub main()
+                    myAA = {
+                        [MyKey.first]: "value1"
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        1: "value1"
+                    }
+                end sub
+            `);
+        });
+
+        it('transpiles const as AA key', () => {
+            testTranspile(`
+                const MY_KEY = "myKey"
+                sub main()
+                    myAA = {
+                        [MY_KEY]: "value1"
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        "myKey": "value1"
+                    }
+                end sub
+            `);
+        });
+
+        it('transpiles namespaced enum member as AA key', () => {
+            testTranspile(`
+                namespace Keys
+                    enum MyKey
+                        first = "key1"
+                    end enum
+                end namespace
+                sub main()
+                    myAA = {
+                        [Keys.MyKey.first]: "value1"
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        "key1": "value1"
+                    }
+                end sub
+            `);
+        });
+
+        it('transpiles literal string as AA key', () => {
+            testTranspile(`
+                sub main()
+                    myAA = {
+                        ["my-hyphenated-key"]: "value1"
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        "my-hyphenated-key": "value1"
+                    }
+                end sub
+            `);
+        });
+
+        it('transpiles multiple computed keys in one AA', () => {
+            testTranspile(`
+                enum Keys
+                    a = "keyA"
+                    b = "keyB"
+                end enum
+                sub main()
+                    myAA = {
+                        [Keys.a]: 1,
+                        [Keys.b]: 2
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        "keyA": 1
+                        "keyB": 2
+                    }
+                end sub
+            `);
+        });
+
+        it('transpiles mixed computed and normal keys', () => {
+            testTranspile(`
+                enum Keys
+                    first = "key1"
+                end enum
+                sub main()
+                    myAA = {
+                        normalKey: 1,
+                        [Keys.first]: 2
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        normalKey: 1
+                        "key1": 2
+                    }
+                end sub
+            `);
+        });
+
+        it('emits diagnostic for non-constant computed key', () => {
+            program.addOrReplaceFile('source/main.bs', `
+                sub main()
+                    someVar = "key"
+                    myAA = {
+                        [someVar]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedPropertyKeyMustBeConstantExpression()
+            ]);
+        });
+    });
 });

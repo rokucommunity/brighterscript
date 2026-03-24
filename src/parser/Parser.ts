@@ -158,7 +158,7 @@ export class Parser {
             this._references.propertyHints[name.toLowerCase()] = name;
         } else {
             for (const member of item.elements) {
-                if (!isCommentStatement(member)) {
+                if (!isCommentStatement(member) && member.keyToken) {
                     const name = member.keyToken.text;
                     if (!name.startsWith('"')) {
                         this._references.propertyHints[name.toLowerCase()] = name;
@@ -3099,9 +3099,20 @@ export class Parser {
             let result = {
                 colonToken: null as Token,
                 keyToken: null as Token,
+                keyExpr: null as Expression,
+                openBracketToken: null as Token,
+                closeBracketToken: null as Token,
                 range: null as Range
             };
-            if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
+            if (this.check(TokenKind.LeftSquareBracket)) {
+                // Computed key: [expr]
+                result.openBracketToken = this.advance();
+                result.keyExpr = this.expression();
+                result.closeBracketToken = this.tryConsume(
+                    DiagnosticMessages.expectedRightSquareBracketAfterAAComputedKey(),
+                    TokenKind.RightSquareBracket
+                );
+            } else if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
                 result.keyToken = this.identifier(...AllowedProperties);
             } else if (this.check(TokenKind.StringLiteral)) {
                 result.keyToken = this.advance();
@@ -3117,7 +3128,7 @@ export class Parser {
                 DiagnosticMessages.expectedColonBetweenAAKeyAndvalue(),
                 TokenKind.Colon
             );
-            result.range = util.getRange(result.keyToken, result.colonToken);
+            result.range = util.getRange(result.keyToken ?? result.openBracketToken, result.colonToken);
             return result;
         };
 
@@ -3135,7 +3146,10 @@ export class Parser {
                     lastAAMember = new AAMemberExpression(
                         k.keyToken,
                         k.colonToken,
-                        expr
+                        expr,
+                        k.keyExpr,
+                        k.openBracketToken,
+                        k.closeBracketToken
                     );
                     members.push(lastAAMember);
                 }
@@ -3169,7 +3183,10 @@ export class Parser {
                         lastAAMember = new AAMemberExpression(
                             k.keyToken,
                             k.colonToken,
-                            expr
+                            expr,
+                            k.keyExpr,
+                            k.openBracketToken,
+                            k.closeBracketToken
                         );
                         members.push(lastAAMember);
                     }
@@ -3528,6 +3545,9 @@ export class Parser {
                 for (const member of e.elements) {
                     if (isAAMemberExpression(member)) {
                         this._references.expressions.add(member.value);
+                        if (member.keyExpr) {
+                            this._references.expressions.add(member.keyExpr);
+                        }
                     }
                 }
             },
