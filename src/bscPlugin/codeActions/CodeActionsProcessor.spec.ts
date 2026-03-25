@@ -340,6 +340,52 @@ describe('CodeActionsProcessor', () => {
             // return tr|ue
             testGetCodeActions(file, util.createRange(3, 29, 3, 29), [`Remove return type from function declaration`, `Remove return value`]);
         });
+
+        it('offers fix-all when multiple void-return violations exist in the file', () => {
+            const file = program.setFile('source/main.brs', `
+                sub test1()
+                    return true
+                end sub
+                sub test2()
+                    return false
+                end sub
+            `);
+
+            // return tr|ue (first violation)
+            testGetCodeActions(file, util.createRange(2, 27, 2, 27), [
+                `Convert sub to function`,
+                `Fix all: Remove void return values`,
+                `Remove return value`
+            ]);
+        });
+
+        it('does not offer fix-all when only one void-return violation exists', () => {
+            const file = program.setFile('source/main.brs', `
+                sub test1()
+                    return true
+                end sub
+                sub test2()
+                end sub
+            `);
+
+            // return tr|ue
+            testGetCodeActions(file, util.createRange(2, 27, 2, 27), [`Convert sub to function`, `Remove return value`]);
+        });
+
+        it('does not duplicate fix-all when multiple violations are at the cursor range', () => {
+            const file = program.setFile('source/main.brs', `
+                sub test1()
+                    return true
+                end sub
+                sub test2()
+                    return false
+                end sub
+            `);
+
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(2, 20, 4, 20));
+            expect(actions.filter(a => a.title === 'Fix all: Remove void return values')).to.have.lengthOf(1);
+        });
     });
 
     describe('typed function/sub empty return', () => {
@@ -365,6 +411,70 @@ describe('CodeActionsProcessor', () => {
 
             // ret|urn
             testGetCodeActions(file, util.createRange(3, 23, 3, 23), [`Remove return type from sub declaration`]);
+        });
+
+        it('offers fix-all for multiple subs with return types', () => {
+            const file = program.setFile('source/main.brs', `
+                sub test1() as integer
+                    return
+                end sub
+                sub test2() as string
+                    return
+                end sub
+            `);
+
+            // ret|urn (first violation)
+            testGetCodeActions(file, util.createRange(2, 24, 2, 24), [
+                `Fix all: Remove return type from sub declarations`,
+                `Remove return type from sub declaration`
+            ]);
+        });
+
+        it('offers fix-all for multiple functions with missing return types', () => {
+            const file = program.setFile('source/main.brs', `
+                function test1()
+                    return
+                end function
+                function test2()
+                    return
+                end function
+            `);
+
+            // ret|urn (first violation)
+            testGetCodeActions(file, util.createRange(2, 24, 2, 24), [
+                `Add void return type to function declaration`,
+                `Convert function to sub`,
+                `Fix all: Add void return type to function declarations`
+            ]);
+        });
+
+        it('does not offer fix-all when only one non-void-return violation exists', () => {
+            const file = program.setFile('source/main.brs', `
+                sub test1() as integer
+                    return
+                end sub
+            `);
+
+            // ret|urn
+            testGetCodeActions(file, util.createRange(2, 24, 2, 24), [`Remove return type from sub declaration`]);
+        });
+
+        it('deduplicates fix-all changes when one function has multiple bare returns', () => {
+            const file = program.setFile('source/main.brs', `
+                sub test1() as integer
+                    return
+                    return
+                end sub
+                sub test2() as string
+                    return
+                end sub
+            `);
+
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(2, 24, 2, 24));
+            const fixAll = actions.find(a => a.title === 'Fix all: Remove return type from sub declarations');
+            // Two unique functions → two changes (not three)
+            expect(Object.values(fixAll!.edit!.changes!)[0]).to.have.lengthOf(2);
         });
     });
 });

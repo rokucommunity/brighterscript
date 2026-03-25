@@ -1,6 +1,7 @@
 import type { Diagnostic } from 'vscode-languageserver';
 import { CodeActionKind } from 'vscode-languageserver';
 import { codeActionUtil } from '../../CodeActionUtil';
+import type { DeleteChange, InsertChange, ReplaceChange } from '../../CodeActionUtil';
 import type { DiagnosticMessageType } from '../../DiagnosticMessages';
 import { DiagnosticCodeMap } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -20,6 +21,7 @@ export class CodeActionsProcessor {
     }
 
     public process() {
+        // First pass: individual fixes for each diagnostic at the cursor position
         for (const diagnostic of this.event.diagnostics) {
             if (diagnostic.code === DiagnosticCodeMap.cannotFindName || diagnostic.code === DiagnosticCodeMap.cannotFindFunction) {
                 this.suggestCannotFindName(diagnostic as any);
@@ -28,9 +30,24 @@ export class CodeActionsProcessor {
             } else if (diagnostic.code === DiagnosticCodeMap.xmlComponentMissingExtendsAttribute) {
                 this.addMissingExtends(diagnostic as any);
             } else if (diagnostic.code === DiagnosticCodeMap.voidFunctionMayNotReturnValue) {
-                this.addVoidFunctionReturnActions(diagnostic);
+                this.addVoidFunctionReturnActions([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.nonVoidFunctionMustReturnValue) {
-                this.addNonVoidFunctionReturnActions(diagnostic);
+                this.addNonVoidFunctionReturnActions([diagnostic]);
+            }
+        }
+
+        // Second pass: fix-all actions for any code that appeared in the event.
+        // Only runs when there are multiple matching diagnostics in the file (otherwise
+        // there is nothing to fix-all and the handler's else-branch would be a no-op).
+        const eventCodes = new Set(this.event.diagnostics.map(d => d.code));
+        for (const code of eventCodes) {
+            const allInFile = this.event.file.getDiagnostics().filter(d => d.code === code);
+            if (allInFile.length > 1) {
+                if (code === DiagnosticCodeMap.voidFunctionMayNotReturnValue) {
+                    this.addVoidFunctionReturnActions(allInFile);
+                } else if (code === DiagnosticCodeMap.nonVoidFunctionMustReturnValue) {
+                    this.addNonVoidFunctionReturnActions(allInFile);
+                }
             }
         }
     }
@@ -150,25 +167,91 @@ export class CodeActionsProcessor {
         );
     }
 
-    private addVoidFunctionReturnActions(diagnostic: Diagnostic) {
-        this.event.codeActions.push(
-            codeActionUtil.createCodeAction({
-                title: `Remove return value`,
-                diagnostics: [diagnostic],
-                kind: CodeActionKind.QuickFix,
-                changes: [{
-                    type: 'delete',
-                    filePath: this.event.file.srcPath,
-                    range: util.createRange(
-                        diagnostic.range.start.line,
-                        diagnostic.range.start.character + 'return'.length,
-                        diagnostic.range.end.line,
-                        diagnostic.range.end.character
-                    )
-                }]
-            })
-        );
-        if (isBrsFile(this.event.file)) {
+    // ---- change helpers ----
+
+    private getRemoveReturnValueChange(diagnostic: Diagnostic): DeleteChange {
+        return {
+            type: 'delete',
+            filePath: this.event.file.srcPath,
+            range: util.createRange(
+                diagnostic.range.start.line,
+                diagnostic.range.start.character + 'return'.length,
+                diagnostic.range.end.line,
+                diagnostic.range.end.character
+            )
+        };
+    }
+
+    /**
+     * Builds the change that deletes `) as <type>` from a function/sub declaration.
+     * Used for both `as void` on a function and any return type on a sub.
+     */
+    private getRemoveFunctionReturnTypeChange(func: FunctionExpression): DeleteChange {
+        return {
+            type: 'delete',
+            filePath: this.event.file.srcPath,
+            // )| as <type>|
+            range: util.createRange(
+                func.rightParen.range.start.line,
+                func.rightParen.range.start.character + 1,
+                func.returnTypeToken.range.end.line,
+                func.returnTypeToken.range.end.character
+            )
+        };
+    }
+
+    private getAddVoidReturnTypeChange(func: FunctionExpression, asText: string, voidText: string): InsertChange {
+        return {
+            type: 'insert',
+            filePath: this.event.file.srcPath,
+            position: func.rightParen.range.end,
+            newText: ` ${asText} ${voidText}`
+        };
+    }
+
+    /**
+     * Emits a single code action when there is exactly one change, or a "fix all" composite
+     * action when there are multiple changes (same pattern as ESLint's "Fix all X problems").
+     * Does nothing when the changes array is empty.
+     */
+    private emitOrFixAll(
+        singleTitle: string,
+        fixAllTitle: string,
+        changes: Array<InsertChange | DeleteChange | ReplaceChange>,
+        diagnostic: Diagnostic
+    ) {
+        if (changes.length === 0) {
+            return;
+        }
+        if (changes.length === 1) {
+            this.event.codeActions.push(
+                codeActionUtil.createCodeAction({
+                    title: singleTitle,
+                    diagnostics: [diagnostic],
+                    kind: CodeActionKind.QuickFix,
+                    changes: changes
+                })
+            );
+        } else {
+            this.event.codeActions.push(
+                codeActionUtil.createCodeAction({
+                    title: fixAllTitle,
+                    kind: CodeActionKind.QuickFix,
+                    changes: changes
+                })
+            );
+        }
+    }
+
+    // ---- action adders ----
+
+    private addVoidFunctionReturnActions(diagnostics: Diagnostic[]) {
+        const changes = diagnostics.map(d => this.getRemoveReturnValueChange(d));
+        this.emitOrFixAll(`Remove return value`, `Fix all: Remove void return values`, changes, diagnostics[0]);
+
+        //contextual BrsFile actions only apply to the individual (single-violation) case
+        if (changes.length === 1 && isBrsFile(this.event.file)) {
+            const diagnostic = diagnostics[0];
             const expression = this.event.file.getClosestExpression(diagnostic.range.start);
             const func = expression.findAncestor<FunctionExpression>(isFunctionExpression);
 
@@ -187,19 +270,9 @@ export class CodeActionsProcessor {
                         kind: CodeActionKind.QuickFix,
                         changes: [
                             //function
-                            {
-                                type: 'replace',
-                                filePath: this.event.file.srcPath,
-                                range: func.functionType.range,
-                                newText: functionTypeText
-                            },
+                            { type: 'replace', filePath: this.event.file.srcPath, range: func.functionType.range, newText: functionTypeText },
                             //end function
-                            {
-                                type: 'replace',
-                                filePath: this.event.file.srcPath,
-                                range: func.end.range,
-                                newText: endFunctionTypeText
-                            }
+                            { type: 'replace', filePath: this.event.file.srcPath, range: func.end.range, newText: endFunctionTypeText }
                         ]
                     })
                 );
@@ -212,106 +285,92 @@ export class CodeActionsProcessor {
                         title: `Remove return type from function declaration`,
                         diagnostics: [diagnostic],
                         kind: CodeActionKind.QuickFix,
-                        changes: [{
-                            type: 'delete',
-                            filePath: this.event.file.srcPath,
-                            // )| as void|
-                            range: util.createRange(
-                                func.rightParen.range.start.line,
-                                func.rightParen.range.start.character + 1,
-                                func.returnTypeToken.range.end.line,
-                                func.returnTypeToken.range.end.character
-                            )
-                        }]
+                        changes: [this.getRemoveFunctionReturnTypeChange(func)]
                     })
                 );
             }
         }
     }
 
-    private addNonVoidFunctionReturnActions(diagnostic: Diagnostic) {
-        if (isBrsFile(this.event.file)) {
-            const expression = this.event.file.getClosestExpression(diagnostic.range.start);
-            const func = expression.findAncestor<FunctionExpression>(isFunctionExpression);
+    private addNonVoidFunctionReturnActions(diagnostics: Diagnostic[]) {
+        if (!isBrsFile(this.event.file)) {
+            return;
+        }
+        const file = this.event.file;
 
-            //`sub as <non-void type>`, suggest removing the return type
-            if (func.functionType.kind === TokenKind.Sub && func.returnTypeToken && func.returnTypeToken?.kind !== TokenKind.Void) {
-                this.event.codeActions.push(
-                    codeActionUtil.createCodeAction({
-                        title: `Remove return type from sub declaration`,
-                        diagnostics: [diagnostic],
-                        kind: CodeActionKind.QuickFix,
-                        changes: [{
-                            type: 'delete',
-                            filePath: this.event.file.srcPath,
-                            // )| as void|
-                            range: util.createRange(
-                                func.rightParen.range.start.line,
-                                func.rightParen.range.start.character + 1,
-                                func.returnTypeToken.range.end.line,
-                                func.returnTypeToken.range.end.character
-                            )
-                        }]
-                    })
-                );
+        //find tokens for `as`, `void`, `sub`, `end sub` in the file if possible
+        let asText: string;
+        let voidText: string;
+        let subText: string;
+        let endSubText: string;
+        for (const token of file.parser.tokens) {
+            if (asText && voidText && subText && endSubText) {
+                break;
             }
-
-            //function with no return type.
-            if (func.functionType.kind === TokenKind.Function && !func.returnTypeToken) {
-                //find tokens for `as` and `void` in the file if possible
-                let asText: string;
-                let voidText: string;
-                let subText: string;
-                let endSubText: string;
-                for (const token of this.event.file.parser.tokens) {
-                    if (asText && voidText && subText && endSubText) {
-                        break;
-                    }
-                    if (token?.kind === TokenKind.As) {
-                        asText = token?.text;
-                    } else if (token?.kind === TokenKind.Void) {
-                        voidText = token?.text;
-                    } else if (token?.kind === TokenKind.Sub) {
-                        subText = token?.text;
-                    } else if (token?.kind === TokenKind.EndSub) {
-                        endSubText = token?.text;
-                    }
-                }
-
-                //suggest converting to `as void`
-                this.event.codeActions.push(
-                    codeActionUtil.createCodeAction({
-                        title: `Add void return type to function declaration`,
-                        diagnostics: [diagnostic],
-                        kind: CodeActionKind.QuickFix,
-                        changes: [{
-                            type: 'insert',
-                            filePath: this.event.file.srcPath,
-                            position: func.rightParen.range.end,
-                            newText: ` ${asText ?? 'as'} ${voidText ?? 'void'}`
-                        }]
-                    })
-                );
-                //suggest converting to sub
-                this.event.codeActions.push(
-                    codeActionUtil.createCodeAction({
-                        title: `Convert function to sub`,
-                        diagnostics: [diagnostic],
-                        kind: CodeActionKind.QuickFix,
-                        changes: [{
-                            type: 'replace',
-                            filePath: this.event.file.srcPath,
-                            range: func.functionType.range,
-                            newText: subText ?? 'sub'
-                        }, {
-                            type: 'replace',
-                            filePath: this.event.file.srcPath,
-                            range: func.end.range,
-                            newText: endSubText ?? 'end sub'
-                        }]
-                    })
-                );
+            if (token?.kind === TokenKind.As) {
+                asText = token?.text;
+            } else if (token?.kind === TokenKind.Void) {
+                voidText = token?.text;
+            } else if (token?.kind === TokenKind.Sub) {
+                subText = token?.text;
+            } else if (token?.kind === TokenKind.EndSub) {
+                endSubText = token?.text;
             }
+        }
+
+        // Build per-fix-type change arrays, deduplicating by enclosing function so that one
+        // function with multiple bare returns only contributes one change.
+        const removeReturnTypeChanges: DeleteChange[] = [];
+        const addVoidChanges: InsertChange[] = [];
+        const seenFunctions = new Set<string>();
+
+        for (const d of diagnostics) {
+            const expr = file.getClosestExpression(d.range.start);
+            const fn = expr?.findAncestor<FunctionExpression>(isFunctionExpression);
+            if (!fn) {
+                continue;
+            }
+            const fnKey = `${fn.range.start.line}:${fn.range.start.character}`;
+            if (seenFunctions.has(fnKey)) {
+                continue;
+            }
+            seenFunctions.add(fnKey);
+
+            if (fn.functionType.kind === TokenKind.Sub && fn.returnTypeToken && fn.returnTypeToken.kind !== TokenKind.Void) {
+                removeReturnTypeChanges.push(this.getRemoveFunctionReturnTypeChange(fn));
+            } else if (fn.functionType.kind === TokenKind.Function && !fn.returnTypeToken) {
+                addVoidChanges.push(this.getAddVoidReturnTypeChange(fn, asText ?? 'as', voidText ?? 'void'));
+            }
+        }
+
+        this.emitOrFixAll(
+            `Remove return type from sub declaration`,
+            `Fix all: Remove return type from sub declarations`,
+            removeReturnTypeChanges,
+            diagnostics[0]
+        );
+
+        this.emitOrFixAll(
+            `Add void return type to function declaration`,
+            `Fix all: Add void return type to function declarations`,
+            addVoidChanges,
+            diagnostics[0]
+        );
+
+        //'Convert function to sub' has no fix-all variant; only add it for the individual case
+        if (addVoidChanges.length === 1 && diagnostics.length === 1) {
+            const func = file.getClosestExpression(diagnostics[0].range.start).findAncestor<FunctionExpression>(isFunctionExpression);
+            this.event.codeActions.push(
+                codeActionUtil.createCodeAction({
+                    title: `Convert function to sub`,
+                    diagnostics: [diagnostics[0]],
+                    kind: CodeActionKind.QuickFix,
+                    changes: [
+                        { type: 'replace', filePath: file.srcPath, range: func.functionType.range, newText: subText ?? 'sub' },
+                        { type: 'replace', filePath: file.srcPath, range: func.end.range, newText: endSubText ?? 'end sub' }
+                    ]
+                })
+            );
         }
     }
 }
