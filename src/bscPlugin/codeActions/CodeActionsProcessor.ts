@@ -50,6 +50,15 @@ export class CodeActionsProcessor {
                 }
             }
         }
+
+        // Import fix-all aggregates across multiple codes so it runs as its own step
+        if (
+            eventCodes.has(DiagnosticCodeMap.cannotFindName) ||
+            eventCodes.has(DiagnosticCodeMap.cannotFindFunction) ||
+            eventCodes.has(DiagnosticCodeMap.classCouldNotBeFound)
+        ) {
+            this.addAutoFixableMissingImportsFixAll();
+        }
     }
 
     private suggestedImports = new Set<string>();
@@ -118,6 +127,77 @@ export class CodeActionsProcessor {
             lowerClassName,
             this.event.file.program.findFilesForClass(lowerClassName)
         );
+    }
+
+    /**
+     * Scans all import-related diagnostics in the file and emits a single composite
+     * "Fix all: Add missing imports" action when 2+ unambiguous imports are needed.
+     * Ambiguous names (multiple possible source files) are excluded since we cannot
+     * automatically choose one.
+     */
+    private addAutoFixableMissingImportsFixAll() {
+        if (!isBrsFile(this.event.file) || this.event.file.parseMode !== ParseMode.BrighterScript) {
+            return;
+        }
+        const file = this.event.file;
+        const importStatements = file.parser.references.importStatements;
+        const insertPosition = importStatements[importStatements.length - 1]?.importToken.range?.start ?? util.createPosition(0, 0);
+
+        const changes: InsertChange[] = [];
+        const addedPaths = new Set<string>();
+
+        // cannotFindName/classCouldNotBeFound are scope-level diagnostics, so we must
+        // use program.getDiagnostics() (filtered by file) rather than file.getDiagnostics().
+        const allFileDiagnostics = this.event.program.getDiagnostics().filter(d => d.file === file);
+
+        for (const diagnostic of allFileDiagnostics) {
+            let files: BscFile[] = [];
+
+            if (diagnostic.code === DiagnosticCodeMap.cannotFindName || diagnostic.code === DiagnosticCodeMap.cannotFindFunction) {
+                const d = diagnostic as DiagnosticMessageType<'cannotFindName'>;
+                const lowerName = (d.data?.fullName ?? d.data?.name)?.toLowerCase();
+                if (lowerName) {
+                    files = [
+                        ...file.program.findFilesForFunction(lowerName),
+                        ...file.program.findFilesForClass(lowerName),
+                        ...file.program.findFilesForNamespace(lowerName),
+                        ...file.program.findFilesForEnum(lowerName)
+                    ];
+                }
+            } else if (diagnostic.code === DiagnosticCodeMap.classCouldNotBeFound) {
+                const d = diagnostic as DiagnosticMessageType<'classCouldNotBeFound'>;
+                const lowerClassName = d.data?.className?.toLowerCase();
+                if (lowerClassName) {
+                    files = file.program.findFilesForClass(lowerClassName);
+                }
+            }
+
+            //skip ambiguous names — we can't choose a file automatically
+            if (files.length !== 1) {
+                continue;
+            }
+
+            const pkgPath = util.getRokuPkgPath(files[0].pkgPath);
+            if (!addedPaths.has(pkgPath)) {
+                addedPaths.add(pkgPath);
+                changes.push({
+                    type: 'insert',
+                    filePath: file.srcPath,
+                    position: insertPosition,
+                    newText: `import "${pkgPath}"\n`
+                });
+            }
+        }
+
+        if (changes.length > 1) {
+            this.event.codeActions.push(
+                codeActionUtil.createCodeAction({
+                    title: `Fix all: Auto fixable missing imports`,
+                    kind: CodeActionKind.QuickFix,
+                    changes: changes
+                })
+            );
+        }
     }
 
     private addMissingExtends(diagnostic: DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>) {

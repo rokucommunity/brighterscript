@@ -296,6 +296,129 @@ describe('CodeActionsProcessor', () => {
         });
     });
 
+    describe('Fix all: Auto fixable missing imports', () => {
+        it('offers fix-all when multiple unambiguous imports are missing', () => {
+            program.setFile('source/lib1.bs', `
+                function doSomething()
+                end function
+            `);
+            program.setFile('source/lib2.bs', `
+                function doSomethingElse()
+                end function
+            `);
+            program.setFile('components/MainScene.xml', trim`<component name="MainScene"></component>`);
+            const file = program.setFile('components/MainScene.bs', `
+                sub init()
+                    doSomething()
+                    doSomethingElse()
+                end sub
+            `);
+
+            // doSome|thing()
+            testGetCodeActions(file, util.createRange(2, 26, 2, 26), [
+                `Fix all: Auto fixable missing imports`,
+                `import "pkg:/source/lib1.bs"`
+            ]);
+        });
+
+        it('does not offer fix-all when only one import is missing', () => {
+            program.setFile('source/lib1.bs', `
+                function doSomething()
+                end function
+            `);
+            program.setFile('components/MainScene.xml', trim`<component name="MainScene"></component>`);
+            const file = program.setFile('components/MainScene.bs', `
+                sub init()
+                    doSomething()
+                end sub
+            `);
+
+            // doSome|thing()
+            testGetCodeActions(file, util.createRange(2, 26, 2, 26), [
+                `import "pkg:/source/lib1.bs"`
+            ]);
+        });
+
+        it('excludes ambiguous names from fix-all', () => {
+            program.setFile('source/lib1.bs', `
+                function doSomething()
+                end function
+            `);
+            program.setFile('source/lib2.bs', `
+                function doSomething()
+                end function
+            `);
+            program.setFile('source/lib3.bs', `
+                function doSomethingUnambiguous()
+                end function
+            `);
+            program.setFile('components/MainScene.xml', trim`<component name="MainScene"></component>`);
+            const file = program.setFile('components/MainScene.bs', `
+                sub init()
+                    doSomething()
+                    doSomethingUnambiguous()
+                end sub
+            `);
+
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(2, 26, 2, 26));
+            // fix-all only has the unambiguous import, not doSomething (which has 2 options)
+            const fixAll = actions.find(a => a.title === 'Fix all: Auto fixable missing imports');
+            expect(fixAll).to.be.undefined;
+        });
+
+        it('includes class imports in fix-all', () => {
+            program.setFile('source/lib1.bs', `
+                function doSomething()
+                end function
+            `);
+            program.setFile('source/MyClass.bs', `
+                class MyClass
+                end class
+            `);
+            program.setFile('components/MainScene.xml', trim`<component name="MainScene"></component>`);
+            const file = program.setFile('components/MainScene.bs', `
+                sub init()
+                    doSomething()
+                    obj = new MyClass()
+                end sub
+            `);
+
+            // doSome|thing()
+            testGetCodeActions(file, util.createRange(2, 26, 2, 26), [
+                `Fix all: Auto fixable missing imports`,
+                `import "pkg:/source/lib1.bs"`
+            ]);
+        });
+
+        it('deduplicates when multiple missing names resolve to the same file', () => {
+            program.setFile('source/lib1.bs', `
+                function doSomething()
+                end function
+                function doSomethingElse()
+                end function
+            `);
+            program.setFile('source/lib2.bs', `
+                function doThird()
+                end function
+            `);
+            program.setFile('components/MainScene.xml', trim`<component name="MainScene"></component>`);
+            const file = program.setFile('components/MainScene.bs', `
+                sub init()
+                    doSomething()
+                    doSomethingElse()
+                    doThird()
+                end sub
+            `);
+
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(2, 26, 2, 26));
+            const fixAll = actions.find(a => a.title === 'Fix all: Auto fixable missing imports');
+            // lib1.bs and lib2.bs — only 2 changes despite 3 missing names
+            expect(Object.values(fixAll!.edit!.changes!)[0]).to.have.lengthOf(2);
+        });
+    });
+
     it('suggests imports at very start and very end of diagnostic', () => {
         program.setFile('source/first.bs', `
             namespace alpha
