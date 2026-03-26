@@ -1193,7 +1193,7 @@ export class Scope {
                 const correctUri = scriptImport.text.startsWith('pkg:/')
                     ? util.getRokuPkgPath(referencedFile.pkgPath)
                     : path.posix.relative(
-                        path.posix.dirname(scriptImport.sourceFile.pkgPath).replace(/\\/g, '/'),
+                        path.dirname(scriptImport.sourceFile.pkgPath).replace(/\\/g, '/'),
                         referencedFile.pkgPath.replace(/\\/g, '/')
                     );
                 this.diagnostics.push({
