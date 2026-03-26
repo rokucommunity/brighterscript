@@ -813,7 +813,7 @@ export class Program {
                         relatedInformation: xmlFiles.filter(x => x !== xmlFile).map(x => {
                             return {
                                 location: util.createLocation(
-                                    URI.file(xmlFile.srcPath ?? xmlFile.srcPath).toString(),
+                                    URI.file(x.srcPath ?? xmlFile.srcPath).toString(),
                                     x.componentName.range
                                 ),
                                 message: 'Also defined here'

@@ -348,7 +348,7 @@ describe('Program', () => {
                 range: Range.create(1, 17, 1, 27),
                 relatedInformation: [{
                     location: util.createLocation(
-                        URI.file(s`${rootDir}/components/component1.xml`).toString(),
+                        URI.file(s`${rootDir}/components/component2.xml`).toString(),
                         Range.create(1, 17, 1, 27)
                     ),
                     message: 'Also defined here'
@@ -358,7 +358,7 @@ describe('Program', () => {
                 range: Range.create(1, 17, 1, 27),
                 relatedInformation: [{
                     location: util.createLocation(
-                        URI.file(s`${rootDir}/components/component2.xml`).toString(),
+                        URI.file(s`${rootDir}/components/component1.xml`).toString(),
                         Range.create(1, 17, 1, 27)
                     ),
                     message: 'Also defined here'
