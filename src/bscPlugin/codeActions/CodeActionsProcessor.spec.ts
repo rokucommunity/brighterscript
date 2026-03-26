@@ -494,6 +494,29 @@ describe('CodeActionsProcessor', () => {
             testGetCodeActions(file, util.createRange(3, 29, 3, 29), [`Convert sub to function`, `Remove return value`]);
         });
 
+        it('suggests converting sub to function with inline body', () => {
+            const file = program.setFile('source/main.brs', `
+                sub test() : print "onItemContentChange"
+                    return true
+                end sub
+            `);
+
+            // return tr|ue
+            testGetCodeActions(file, util.createRange(2, 28, 2, 28), [`Convert sub to function`, `Remove return value`]);
+
+            // verify only the `sub` and `end sub` keywords are replaced, not the `: print ...` inline body
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(2, 28, 2, 28));
+            const convertAction = actions.find(a => a.title === 'Convert sub to function');
+            const changes = Object.values(convertAction!.edit!.changes!)[0];
+            // change[0] replaces `sub` keyword only
+            expect(changes[0].range).to.eql(util.createRange(1, 16, 1, 19));
+            expect(changes[0].newText).to.eql('function');
+            // change[1] replaces `end sub` keyword only
+            expect(changes[1].range).to.eql(util.createRange(3, 16, 3, 23));
+            expect(changes[1].newText).to.eql('end function');
+        });
+
         it('suggests deleting the return type from void function', () => {
             const file = program.setFile('source/main.brs', `
                 function test() as void
@@ -504,6 +527,25 @@ describe('CodeActionsProcessor', () => {
 
             // return tr|ue
             testGetCodeActions(file, util.createRange(3, 29, 3, 29), [`Remove return type from function declaration`, `Remove return value`]);
+        });
+
+        it('suggests deleting only the return type from void function with inline body', () => {
+            const file = program.setFile('source/main.brs', `
+                function test() as void : print "onItemContentChange"
+                    return "test"
+                end function
+            `);
+
+            // return |"test"
+            testGetCodeActions(file, util.createRange(2, 28, 2, 28), [`Remove return type from function declaration`, `Remove return value`]);
+
+            // verify only ` as void` is deleted, not the `: print ...` inline body
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(2, 28, 2, 28));
+            const removeTypeAction = actions.find(a => a.title === 'Remove return type from function declaration');
+            const changes = Object.values(removeTypeAction!.edit!.changes!)[0];
+            // range should span ` as void` only, starting after `)` and ending at the close of `void`
+            expect(changes[0].range).to.eql(util.createRange(1, 31, 1, 39));
         });
 
         it('offers fix-all when multiple void-return violations exist in the file', () => {
@@ -566,6 +608,26 @@ describe('CodeActionsProcessor', () => {
             testGetCodeActions(file, util.createRange(3, 23, 3, 23), [`Add void return type to function declaration`, `Convert function to sub`]);
         });
 
+        it('suggests adding void return type to function with inline body', () => {
+            const file = program.setFile('source/main.brs', `
+                function test() : print "onItemContentChange"
+                    return
+                end function
+            `);
+
+            // ret|urn
+            testGetCodeActions(file, util.createRange(2, 23, 2, 23), [`Add void return type to function declaration`, `Convert function to sub`]);
+
+            // verify ` as void` is inserted after `)`, not after the inline body
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(2, 23, 2, 23));
+            const addVoidAction = actions.find(a => a.title === 'Add void return type to function declaration');
+            const changes = Object.values(addVoidAction!.edit!.changes!)[0];
+            // insert position should be immediately after `)`, before ` : print ...`
+            expect(changes[0].range).to.eql(util.createRange(1, 31, 1, 31));
+            expect(changes[0].newText).to.eql(' as void');
+        });
+
         it('suggests deleting the return type from void function', () => {
             const file = program.setFile('source/main.brs', `
                 sub test() as integer
@@ -576,6 +638,25 @@ describe('CodeActionsProcessor', () => {
 
             // ret|urn
             testGetCodeActions(file, util.createRange(3, 23, 3, 23), [`Remove return type from sub declaration`]);
+        });
+
+        it('suggests deleting only the return type from sub with inline body', () => {
+            const file = program.setFile('source/main.brs', `
+                sub test() as integer : print "onItemContentChange"
+                    return
+                end sub
+            `);
+
+            // ret|urn
+            testGetCodeActions(file, util.createRange(2, 23, 2, 23), [`Remove return type from sub declaration`]);
+
+            // verify only ` as integer` is deleted, not the `: print ...` inline body
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(2, 23, 2, 23));
+            const removeTypeAction = actions.find(a => a.title === 'Remove return type from sub declaration');
+            const changes = Object.values(removeTypeAction!.edit!.changes!)[0];
+            // range should span ` as integer` only, starting after `)` and ending at the close of `integer`
+            expect(changes[0].range).to.eql(util.createRange(1, 26, 1, 37));
         });
 
         it('offers fix-all for multiple subs with return types', () => {
