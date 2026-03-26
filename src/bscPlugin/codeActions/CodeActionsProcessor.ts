@@ -6,11 +6,13 @@ import type { DiagnosticMessageType } from '../../DiagnosticMessages';
 import { DiagnosticCodeMap } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
-import type { BscFile, OnGetCodeActionsEvent } from '../../interfaces';
+import type { BscFile, BsDiagnostic, OnGetCodeActionsEvent } from '../../interfaces';
 import { ParseMode } from '../../parser/Parser';
 import { util } from '../../util';
-import { isBrsFile, isFunctionExpression } from '../../astUtils/reflection';
+import { isBrsFile, isFunctionExpression, isMethodStatement } from '../../astUtils/reflection';
 import type { FunctionExpression } from '../../parser/Expression';
+import type { MethodStatement } from '../../parser/Statement';
+import { WalkMode } from '../../astUtils/visitors';
 import { TokenKind } from '../../lexer/TokenKind';
 
 export class CodeActionsProcessor {
@@ -33,6 +35,18 @@ export class CodeActionsProcessor {
                 this.addVoidFunctionReturnActions([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.nonVoidFunctionMustReturnValue) {
                 this.addNonVoidFunctionReturnActions([diagnostic]);
+            } else if (diagnostic.code === DiagnosticCodeMap.referencedFileDoesNotExist) {
+                this.addRemoveScriptImportActions([diagnostic]);
+            } else if (diagnostic.code === DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent) {
+                this.addRemoveScriptImportActions([diagnostic]);
+            } else if (diagnostic.code === DiagnosticCodeMap.unnecessaryCodebehindScriptImport) {
+                this.addRemoveScriptImportActions([diagnostic]);
+            } else if (diagnostic.code === DiagnosticCodeMap.scriptImportCaseMismatch) {
+                this.addScriptImportCasingFix([diagnostic as DiagnosticMessageType<'scriptImportCaseMismatch'>]);
+            } else if (diagnostic.code === DiagnosticCodeMap.missingOverrideKeyword) {
+                this.addMissingOverrideActions([diagnostic]);
+            } else if (diagnostic.code === DiagnosticCodeMap.cannotUseOverrideKeywordOnConstructorFunction) {
+                this.addRemoveOverrideFromConstructorActions([diagnostic]);
             }
         }
 
@@ -47,6 +61,37 @@ export class CodeActionsProcessor {
                     this.addVoidFunctionReturnActions(allInFile);
                 } else if (code === DiagnosticCodeMap.nonVoidFunctionMustReturnValue) {
                     this.addNonVoidFunctionReturnActions(allInFile);
+                } else if (code === DiagnosticCodeMap.unnecessaryCodebehindScriptImport) {
+                    this.addRemoveScriptImportActions(allInFile);
+                } else if (code === DiagnosticCodeMap.cannotUseOverrideKeywordOnConstructorFunction) {
+                    this.addRemoveOverrideFromConstructorActions(allInFile);
+                }
+            }
+        }
+
+        // Fix-all for scope-level diagnostics (not present in file.getDiagnostics())
+        const scopeFixAllCodes = [
+            DiagnosticCodeMap.referencedFileDoesNotExist,
+            DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent,
+            DiagnosticCodeMap.scriptImportCaseMismatch,
+            DiagnosticCodeMap.missingOverrideKeyword
+        ];
+        if (scopeFixAllCodes.some(code => eventCodes.has(code))) {
+            const allScopeFileDiags = this.event.program.getDiagnostics().filter(
+                d => (d as BsDiagnostic).file === this.event.file
+            );
+            for (const code of eventCodes) {
+                const allInFile = allScopeFileDiags.filter(d => d.code === code);
+                if (allInFile.length > 1) {
+                    if (code === DiagnosticCodeMap.referencedFileDoesNotExist) {
+                        this.addRemoveScriptImportActions(allInFile);
+                    } else if (code === DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent) {
+                        this.addRemoveScriptImportActions(allInFile);
+                    } else if (code === DiagnosticCodeMap.scriptImportCaseMismatch) {
+                        this.addScriptImportCasingFix(allInFile as DiagnosticMessageType<'scriptImportCaseMismatch'>[]);
+                    } else if (code === DiagnosticCodeMap.missingOverrideKeyword) {
+                        this.addMissingOverrideActions(allInFile);
+                    }
                 }
             }
         }
@@ -452,5 +497,111 @@ export class CodeActionsProcessor {
                 })
             );
         }
+    }
+
+    // ---- script import fixes ----
+
+    private getRemoveScriptImportLineChange(diagnostic: Diagnostic): DeleteChange {
+        return {
+            type: 'delete',
+            filePath: this.event.file.srcPath,
+            range: util.createRange(
+                diagnostic.range.start.line,
+                0,
+                diagnostic.range.start.line + 1,
+                0
+            )
+        };
+    }
+
+    private addRemoveScriptImportActions(diagnostics: Diagnostic[]) {
+        const titles: Record<number, [string, string]> = {
+            [DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent]: ['Remove redundant script import', 'Fix all: Remove redundant script imports'],
+            [DiagnosticCodeMap.unnecessaryCodebehindScriptImport]: ['Remove unnecessary codebehind import', 'Fix all: Remove unnecessary codebehind imports']
+        };
+        const [singleTitle, fixAllTitle] = titles[diagnostics[0]?.code] ?? ['Remove script import', 'Fix all: Remove script imports'];
+        const changes = diagnostics.map(d => this.getRemoveScriptImportLineChange(d));
+        this.emitOrFixAll(singleTitle, fixAllTitle, changes, diagnostics[0]);
+    }
+
+    private addScriptImportCasingFix(diagnostics: DiagnosticMessageType<'scriptImportCaseMismatch'>[]) {
+        const changes: ReplaceChange[] = [];
+        for (const diagnostic of diagnostics) {
+            const correctFilePath = diagnostic.data?.correctFilePath;
+            if (!correctFilePath) {
+                continue;
+            }
+            changes.push({
+                type: 'replace',
+                filePath: this.event.file.srcPath,
+                range: diagnostic.range,
+                newText: correctFilePath
+            });
+        }
+        this.emitOrFixAll(
+            'Fix script import path casing',
+            'Fix all: Fix script import path casing',
+            changes,
+            diagnostics[0]
+        );
+    }
+
+    // ---- override keyword fixes ----
+
+    private addMissingOverrideActions(diagnostics: Diagnostic[]) {
+        if (!isBrsFile(this.event.file)) {
+            return;
+        }
+        const file = this.event.file;
+        const changes: InsertChange[] = [];
+
+        for (const diagnostic of diagnostics) {
+            let insertPosition: { line: number; character: number } | undefined;
+            file.ast.walk((node) => {
+                if (
+                    isMethodStatement(node) &&
+                    node.range?.start?.line === diagnostic.range.start.line &&
+                    node.range?.start?.character === diagnostic.range.start.character
+                ) {
+                    insertPosition = (node as MethodStatement).func.functionType?.range?.start;
+                }
+            }, { walkMode: WalkMode.visitStatementsRecursive });
+
+            if (insertPosition) {
+                changes.push({
+                    type: 'insert',
+                    filePath: file.srcPath,
+                    position: insertPosition,
+                    newText: 'override '
+                });
+            }
+        }
+
+        this.emitOrFixAll(
+            `Add missing 'override' keyword`,
+            `Fix all: Add missing 'override' keywords`,
+            changes,
+            diagnostics[0]
+        );
+    }
+
+    private addRemoveOverrideFromConstructorActions(diagnostics: Diagnostic[]) {
+        const changes: DeleteChange[] = diagnostics.map(d => ({
+            type: 'delete' as const,
+            filePath: this.event.file.srcPath,
+            // delete "override " — the keyword token plus the trailing space before function/sub
+            range: util.createRange(
+                d.range.start.line,
+                d.range.start.character,
+                d.range.end.line,
+                d.range.end.character + 1
+            )
+        }));
+        this.emitOrFixAll(
+            `Remove 'override' from constructor`,
+            `Fix all: Remove 'override' from constructors`,
+            changes,
+            diagnostics[0]
+        );
     }
 }

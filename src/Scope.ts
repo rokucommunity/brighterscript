@@ -1190,8 +1190,11 @@ export class Scope {
                 });
                 //if the character casing of the script import path does not match that of the actual path
             } else if (scriptImport.pkgPath !== referencedFile.pkgPath) {
+                const correctUri = scriptImport.text.startsWith('pkg:/')
+                    ? util.getRokuPkgPath(referencedFile.pkgPath)
+                    : referencedFile.pkgPath;
                 this.diagnostics.push({
-                    ...DiagnosticMessages.scriptImportCaseMismatch(referencedFile.pkgPath),
+                    ...DiagnosticMessages.scriptImportCaseMismatch(referencedFile.pkgPath, correctUri),
                     range: scriptImport.filePathRange,
                     file: scriptImport.sourceFile
                 });

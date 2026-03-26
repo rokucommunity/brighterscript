@@ -78,9 +78,12 @@ export let DiagnosticMessages = {
         code: 1011,
         severity: DiagnosticSeverity.Warning
     }),
-    scriptImportCaseMismatch: (correctFilePath: string) => ({
+    scriptImportCaseMismatch: (correctFilePath: string, correctUri?: string) => ({
         message: `Script import path does not match casing of actual file path '${correctFilePath}'.`,
         code: 1012,
+        data: {
+            correctFilePath: correctUri ?? correctFilePath
+        },
         severity: DiagnosticSeverity.Warning
     }),
     fileNotReferencedByAnyOtherFile: () => ({

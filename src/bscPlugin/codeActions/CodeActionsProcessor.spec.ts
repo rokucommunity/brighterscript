@@ -600,4 +600,240 @@ describe('CodeActionsProcessor', () => {
             expect(Object.values(fixAll!.edit!.changes!)[0]).to.have.lengthOf(2);
         });
     });
+
+    describe('referencedFileDoesNotExist', () => {
+        it('offers to remove the script import line', () => {
+            const file = program.setFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/source/missing.brs" />
+                </component>
+            `);
+            // uri="pkg:/source/missing.brs" is on line 2
+            testGetCodeActions(file, util.createRange(2, 50, 2, 50), ['Remove script import']);
+        });
+
+        it('deletes the entire script tag line', () => {
+            const file = program.setFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/source/missing.brs" />
+                </component>
+            `);
+            program.validate();
+            expectCodeActions(() => {
+                program.getCodeActions(file.srcPath, util.createRange(2, 50, 2, 50));
+            }, [{
+                title: 'Remove script import',
+                kind: 'quickfix',
+                changes: [{
+                    type: 'delete',
+                    filePath: s`${rootDir}/components/comp1.xml`,
+                    range: util.createRange(2, 0, 3, 0)
+                }]
+            }]);
+        });
+
+        it('offers fix-all when multiple missing imports exist', () => {
+            const file = program.setFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/source/missing1.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/missing2.brs" />
+                </component>
+            `);
+            testGetCodeActions(file, util.createRange(2, 50, 2, 50), [
+                'Fix all: Remove script imports',
+                'Remove script import'
+            ]);
+        });
+    });
+
+    describe('unnecessaryScriptImportInChildFromParent', () => {
+        it('offers to remove the redundant script import', () => {
+            program.setFile('components/parent.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ParentScene" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/source/lib.brs" />
+                </component>
+            `);
+            program.setFile('source/lib.brs', '');
+            const file = program.setFile('components/child.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="ParentScene">
+                    <script type="text/brightscript" uri="pkg:/source/lib.brs" />
+                </component>
+            `);
+            // uri on line 2 of child.xml
+            testGetCodeActions(file, util.createRange(2, 50, 2, 50), ['Remove redundant script import']);
+        });
+
+        it('offers fix-all when multiple redundant imports exist', () => {
+            program.setFile('components/parent.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ParentScene" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/source/lib1.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/lib2.brs" />
+                </component>
+            `);
+            program.setFile('source/lib1.brs', '');
+            program.setFile('source/lib2.brs', '');
+            const file = program.setFile('components/child.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildScene" extends="ParentScene">
+                    <script type="text/brightscript" uri="pkg:/source/lib1.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/lib2.brs" />
+                </component>
+            `);
+            testGetCodeActions(file, util.createRange(2, 50, 2, 50), [
+                'Fix all: Remove redundant script imports',
+                'Remove redundant script import'
+            ]);
+        });
+    });
+
+    describe('unnecessaryCodebehindScriptImport', () => {
+        it('offers to remove the unnecessary codebehind import', () => {
+            const file = program.setFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/components/comp1.brs" />
+                </component>
+            `);
+            program.setFile('components/comp1.brs', '');
+            // uri on line 2
+            testGetCodeActions(file, util.createRange(2, 50, 2, 50), ['Remove unnecessary codebehind import']);
+        });
+    });
+
+    describe('scriptImportCaseMismatch', () => {
+        it('offers to fix the casing of the script import path', () => {
+            const file = program.setFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/SOURCE/lib.brs" />
+                </component>
+            `);
+            program.setFile('source/lib.brs', '');
+            testGetCodeActions(file, util.createRange(2, 50, 2, 50), ['Fix script import path casing']);
+        });
+
+        it('replaces the URI value with the correctly-cased path', () => {
+            const file = program.setFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/SOURCE/lib.brs" />
+                </component>
+            `);
+            program.setFile('source/lib.brs', '');
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(2, 50, 2, 50));
+            const fix = actions.find(a => a.title === 'Fix script import path casing');
+            const changes = Object.values(fix!.edit!.changes!)[0];
+            expect(changes[0].newText).to.equal('pkg:/source/lib.brs');
+        });
+
+        it('offers fix-all when multiple case-mismatched imports exist', () => {
+            const file = program.setFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/SOURCE/lib1.brs" />
+                    <script type="text/brightscript" uri="pkg:/SOURCE/lib2.brs" />
+                </component>
+            `);
+            program.setFile('source/lib1.brs', '');
+            program.setFile('source/lib2.brs', '');
+            testGetCodeActions(file, util.createRange(2, 50, 2, 50), [
+                'Fix all: Fix script import path casing',
+                'Fix script import path casing'
+            ]);
+        });
+    });
+
+    describe('missingOverrideKeyword', () => {
+        it('offers to add the override keyword', () => {
+            program.setFile('components/comp1.xml', trim`<component name="comp1" extends="Scene"></component>`);
+            const file = program.setFile('components/comp1.bs', `
+                class Animal
+                    function speak()
+                    end function
+                end class
+                class Dog extends Animal
+                    function speak()
+                    end function
+                end class
+            `);
+            // "function speak()" in Dog — diagnostic starts at the function keyword on line 6
+            testGetCodeActions(file, util.createRange(6, 20, 6, 20), [`Add missing 'override' keyword`]);
+        });
+
+        it('inserts override before the function keyword', () => {
+            program.setFile('components/comp1.xml', trim`<component name="comp1" extends="Scene"></component>`);
+            const file = program.setFile('components/comp1.bs', `
+                class Animal
+                    function speak()
+                    end function
+                end class
+                class Dog extends Animal
+                    function speak()
+                    end function
+                end class
+            `);
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(6, 20, 6, 20));
+            const fix = actions.find(a => a.title === `Add missing 'override' keyword`);
+            const changes = Object.values(fix!.edit!.changes!)[0];
+            expect(changes[0].newText).to.equal('override ');
+        });
+
+        it('offers fix-all when multiple methods are missing override', () => {
+            program.setFile('components/comp1.xml', trim`<component name="comp1" extends="Scene"></component>`);
+            const file = program.setFile('components/comp1.bs', `
+                class Animal
+                    function speak()
+                    end function
+                    function move()
+                    end function
+                end class
+                class Dog extends Animal
+                    function speak()
+                    end function
+                    function move()
+                    end function
+                end class
+            `);
+            testGetCodeActions(file, util.createRange(8, 20, 8, 20), [
+                `Add missing 'override' keyword`,
+                `Fix all: Add missing 'override' keywords`
+            ]);
+        });
+    });
+
+    describe('cannotUseOverrideKeywordOnConstructorFunction', () => {
+        it('offers to remove override from constructor', () => {
+            const file = program.setFile('source/main.bs', `
+                class Dog
+                    override function new()
+                    end function
+                end class
+            `);
+            // "override" is on line 2
+            testGetCodeActions(file, util.createRange(2, 20, 2, 20), [`Remove 'override' from constructor`]);
+        });
+
+        it('deletes the override keyword and trailing space', () => {
+            const file = program.setFile('source/main.bs', `
+                class Dog
+                    override function new()
+                    end function
+                end class
+            `);
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(2, 20, 2, 20));
+            const fix = actions.find(a => a.title === `Remove 'override' from constructor`);
+            const changes = Object.values(fix!.edit!.changes!)[0];
+            // range covers "override " (8 chars + 1 space)
+            expect(changes[0].range.start.character).to.equal(changes[0].range.end.character - 9);
+        });
+    });
 });
