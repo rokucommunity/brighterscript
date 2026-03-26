@@ -220,8 +220,8 @@ export class CodeActionsProcessor {
             let files: BscFile[] = [];
 
             if (diagnostic.code === DiagnosticCodeMap.cannotFindName || diagnostic.code === DiagnosticCodeMap.cannotFindFunction) {
-                const d = diagnostic as DiagnosticMessageType<'cannotFindName'>;
-                const lowerName = (d.data?.fullName ?? d.data?.name)?.toLowerCase();
+                const cannotFindNameDiagnostic = diagnostic as DiagnosticMessageType<'cannotFindName'>;
+                const lowerName = (cannotFindNameDiagnostic.data?.fullName ?? cannotFindNameDiagnostic.data?.name)?.toLowerCase();
                 if (lowerName) {
                     files = [
                         ...file.program.findFilesForFunction(lowerName),
@@ -231,8 +231,8 @@ export class CodeActionsProcessor {
                     ];
                 }
             } else if (diagnostic.code === DiagnosticCodeMap.classCouldNotBeFound) {
-                const d = diagnostic as DiagnosticMessageType<'classCouldNotBeFound'>;
-                const lowerClassName = d.data?.className?.toLowerCase();
+                const classCouldNotBeFoundDiagnostic = diagnostic as DiagnosticMessageType<'classCouldNotBeFound'>;
+                const lowerClassName = classCouldNotBeFoundDiagnostic.data?.className?.toLowerCase();
                 if (lowerClassName) {
                     files = file.program.findFilesForClass(lowerClassName);
                 }
