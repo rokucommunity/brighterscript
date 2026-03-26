@@ -2175,7 +2175,7 @@ describe('LanguageServer', () => {
 
         async function callOnCodeAction(only: string[], kinds: (string | undefined)[]) {
             sinon.stub(server['projectManager'], 'getCodeActions').resolves(
-                kinds.map(kind => ({ kind, title: kind }))
+                kinds.map(kind => ({ kind: kind, title: kind }))
             );
             return server['onCodeAction']({
                 textDocument: { uri: URI.file(`${rootDir}/source/main.bs`).toString() },
