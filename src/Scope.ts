@@ -461,7 +461,7 @@ export class Scope {
         }
 
         const key = path.isAbsolute(filePath) ? 'srcPath' : 'pkgPath';
-        let map = this.cache.getOrAdd('fileMaps-srcPath', () => {
+        let map = this.cache.getOrAdd(`fileMaps-${key}`, () => {
             const result = new Map<string, BscFile>();
             for (const file of this.getAllFiles()) {
                 result.set(file[key].toLowerCase(), file);
@@ -1206,12 +1206,7 @@ export class Scope {
         if (!relativePath) {
             return;
         }
-        let files = this.getAllFiles();
-        for (let file of files) {
-            if (file.pkgPath.toLowerCase() === relativePath.toLowerCase()) {
-                return file;
-            }
-        }
+        return this.getFile(relativePath, false);
     }
 
     /**
