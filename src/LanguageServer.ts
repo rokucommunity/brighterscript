@@ -214,7 +214,7 @@ export class LanguageServer {
                 } as SemanticTokensOptions,
                 referencesProvider: true,
                 codeActionProvider: {
-                    codeActionKinds: [CodeActionKind.Refactor]
+                    codeActionKinds: [CodeActionKind.QuickFix, CodeActionKind.Refactor]
                 },
                 signatureHelpProvider: {
                     triggerCharacters: ['(', ',']
