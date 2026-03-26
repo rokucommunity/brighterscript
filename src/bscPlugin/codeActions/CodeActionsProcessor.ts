@@ -22,6 +22,9 @@ export class CodeActionsProcessor {
 
     }
 
+    /**
+     * Processes all diagnostics in the event and emits code actions for each recognized diagnostic code.
+     */
     public process() {
         // First pass: individual fixes for each diagnostic at the cursor position
         for (const diagnostic of this.event.diagnostics) {
@@ -163,6 +166,9 @@ export class CodeActionsProcessor {
         }
     }
 
+    /**
+     * Suggests import statements for an unresolved name (function, class, namespace, or enum).
+     */
     private suggestCannotFindName(diagnostic: DiagnosticMessageType<'cannotFindName'>) {
         //skip if not a BrighterScript file
         if ((diagnostic.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
@@ -182,6 +188,9 @@ export class CodeActionsProcessor {
         );
     }
 
+    /**
+     * Suggests import statements for an unresolved class name.
+     */
     private suggestClassImports(diagnostic: DiagnosticMessageType<'classCouldNotBeFound'>) {
         //skip if not a BrighterScript file
         if ((diagnostic.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
@@ -266,6 +275,10 @@ export class CodeActionsProcessor {
         }
     }
 
+    /**
+     * Adds code actions to insert a missing `extends` attribute on an XML component tag.
+     * Offers Group, Task, and ContentNode as common choices.
+     */
     private addMissingExtends(diagnostic: DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>) {
         const srcPath = this.event.file.srcPath;
         const { component } = (this.event.file as XmlFile).parser.ast;
@@ -313,8 +326,10 @@ export class CodeActionsProcessor {
         );
     }
 
-    // ---- action adders ----
-
+    /**
+     * Adds code actions to resolve a `voidFunctionMayNotReturnValue` diagnostic.
+     * Offers removing the return value, converting sub→function, or removing an `as void` return type.
+     */
     private addVoidFunctionReturnActions(diagnostics: Diagnostic[]) {
         const changes = diagnostics.map(d => this.getRemoveReturnValueChange(d));
         this.emitOrFixAll(`Remove return value`, `Fix all: Remove void return values`, changes, diagnostics[0]);
@@ -362,6 +377,10 @@ export class CodeActionsProcessor {
         }
     }
 
+    /**
+     * Adds code actions to resolve a `nonVoidFunctionMustReturnValue` diagnostic.
+     * Offers removing the return type from a sub, adding `as void` to a function, or converting function→sub.
+     */
     private addNonVoidFunctionReturnActions(diagnostics: Diagnostic[]) {
         if (!isBrsFile(this.event.file)) {
             return;
@@ -451,6 +470,9 @@ export class CodeActionsProcessor {
 
     // ---- script import fixes ----
 
+    /**
+     * Adds code actions to delete one or more unnecessary or broken script import lines.
+     */
     private addRemoveScriptImportActions(diagnostics: Diagnostic[]) {
         const titles: Record<number, [string, string]> = {
             [DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent]: ['Remove redundant script import', 'Fix all: Remove redundant script imports'],
@@ -472,6 +494,9 @@ export class CodeActionsProcessor {
         this.emitOrFixAll(singleTitle, fixAllTitle, changes, diagnostics[0]);
     }
 
+    /**
+     * Adds code actions to correct the casing of script import paths to match the actual file name on disk.
+     */
     private addScriptImportCasingFix(diagnostics: DiagnosticMessageType<'scriptImportCaseMismatch'>[]) {
         const changes: ReplaceChange[] = [];
         for (const diagnostic of diagnostics) {
@@ -496,6 +521,9 @@ export class CodeActionsProcessor {
 
     // ---- override keyword fixes ----
 
+    /**
+     * Adds code actions to insert the missing `override` keyword before a method declaration.
+     */
     private addMissingOverrideActions(diagnostics: Diagnostic[]) {
         if (!isBrsFile(this.event.file)) {
             return;
@@ -533,6 +561,9 @@ export class CodeActionsProcessor {
         );
     }
 
+    /**
+     * Adds code actions to remove the invalid `override` keyword from a constructor method.
+     */
     private addRemoveOverrideFromConstructorActions(diagnostics: Diagnostic[]) {
         const changes: DeleteChange[] = diagnostics.map(d => ({
             type: 'delete' as const,
@@ -555,6 +586,10 @@ export class CodeActionsProcessor {
 
     // ---- change helpers ----
 
+    /**
+     * Builds a delete change that removes the return value from a `return <expr>` statement,
+     * leaving just a bare `return`.
+     */
     private getRemoveReturnValueChange(diagnostic: Diagnostic): DeleteChange {
         return {
             type: 'delete',
