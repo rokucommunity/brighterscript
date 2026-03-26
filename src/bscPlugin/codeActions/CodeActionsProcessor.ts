@@ -313,82 +313,6 @@ export class CodeActionsProcessor {
         );
     }
 
-    // ---- change helpers ----
-
-    private getRemoveReturnValueChange(diagnostic: Diagnostic): DeleteChange {
-        return {
-            type: 'delete',
-            filePath: this.event.file.srcPath,
-            range: util.createRange(
-                diagnostic.range.start.line,
-                diagnostic.range.start.character + 'return'.length,
-                diagnostic.range.end.line,
-                diagnostic.range.end.character
-            )
-        };
-    }
-
-    /**
-     * Builds the change that deletes `) as <type>` from a function/sub declaration.
-     * Used for both `as void` on a function and any return type on a sub.
-     */
-    private getRemoveFunctionReturnTypeChange(func: FunctionExpression): DeleteChange {
-        return {
-            type: 'delete',
-            filePath: this.event.file.srcPath,
-            // )| as <type>|
-            range: util.createRange(
-                func.rightParen.range.start.line,
-                func.rightParen.range.start.character + 1,
-                func.returnTypeToken.range.end.line,
-                func.returnTypeToken.range.end.character
-            )
-        };
-    }
-
-    private getAddVoidReturnTypeChange(func: FunctionExpression, asText: string, voidText: string): InsertChange {
-        return {
-            type: 'insert',
-            filePath: this.event.file.srcPath,
-            position: func.rightParen.range.end,
-            newText: ` ${asText} ${voidText}`
-        };
-    }
-
-    /**
-     * Emits a single code action when there is exactly one change, or a "fix all" composite
-     * action when there are multiple changes (same pattern as ESLint's "Fix all X problems").
-     * Does nothing when the changes array is empty.
-     */
-    private emitOrFixAll(
-        singleTitle: string,
-        fixAllTitle: string,
-        changes: Array<InsertChange | DeleteChange | ReplaceChange>,
-        diagnostic: Diagnostic
-    ) {
-        if (changes.length === 0) {
-            return;
-        }
-        if (changes.length === 1) {
-            this.event.codeActions.push(
-                codeActionUtil.createCodeAction({
-                    title: singleTitle,
-                    diagnostics: [diagnostic],
-                    kind: CodeActionKind.QuickFix,
-                    changes: changes
-                })
-            );
-        } else {
-            this.event.codeActions.push(
-                codeActionUtil.createCodeAction({
-                    title: fixAllTitle,
-                    kind: CodeActionKind.QuickFix,
-                    changes: changes
-                })
-            );
-        }
-    }
-
     // ---- action adders ----
 
     private addVoidFunctionReturnActions(diagnostics: Diagnostic[]) {
@@ -485,7 +409,12 @@ export class CodeActionsProcessor {
             if (fn.functionType.kind === TokenKind.Sub && fn.returnTypeToken && fn.returnTypeToken.kind !== TokenKind.Void) {
                 removeReturnTypeChanges.push(this.getRemoveFunctionReturnTypeChange(fn));
             } else if (fn.functionType.kind === TokenKind.Function && !fn.returnTypeToken) {
-                addVoidChanges.push(this.getAddVoidReturnTypeChange(fn, asText ?? 'as', voidText ?? 'void'));
+                addVoidChanges.push({
+                    type: 'insert',
+                    filePath: this.event.file.srcPath,
+                    position: fn.rightParen.range.end,
+                    newText: ` ${asText ?? 'as'} ${voidText ?? 'void'}`
+                });
             }
         }
 
@@ -522,26 +451,24 @@ export class CodeActionsProcessor {
 
     // ---- script import fixes ----
 
-    private getRemoveScriptImportLineChange(diagnostic: Diagnostic): DeleteChange {
-        return {
-            type: 'delete',
-            filePath: this.event.file.srcPath,
-            range: util.createRange(
-                diagnostic.range.start.line,
-                0,
-                diagnostic.range.start.line + 1,
-                0
-            )
-        };
-    }
-
     private addRemoveScriptImportActions(diagnostics: Diagnostic[]) {
         const titles: Record<number, [string, string]> = {
             [DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent]: ['Remove redundant script import', 'Fix all: Remove redundant script imports'],
             [DiagnosticCodeMap.unnecessaryCodebehindScriptImport]: ['Remove unnecessary codebehind import', 'Fix all: Remove unnecessary codebehind imports']
         };
         const [singleTitle, fixAllTitle] = titles[diagnostics[0]?.code] ?? ['Remove script import', 'Fix all: Remove script imports'];
-        const changes = diagnostics.map(d => this.getRemoveScriptImportLineChange(d));
+        const changes = diagnostics.map<DeleteChange>(diagnostic => {
+            return {
+                type: 'delete',
+                filePath: this.event.file.srcPath,
+                range: util.createRange(
+                    diagnostic.range.start.line,
+                    0,
+                    diagnostic.range.start.line + 1,
+                    0
+                )
+            };
+        });
         this.emitOrFixAll(singleTitle, fixAllTitle, changes, diagnostics[0]);
     }
 
@@ -624,5 +551,72 @@ export class CodeActionsProcessor {
             changes,
             diagnostics[0]
         );
+    }
+
+    // ---- change helpers ----
+
+    private getRemoveReturnValueChange(diagnostic: Diagnostic): DeleteChange {
+        return {
+            type: 'delete',
+            filePath: this.event.file.srcPath,
+            range: util.createRange(
+                diagnostic.range.start.line,
+                diagnostic.range.start.character + 'return'.length,
+                diagnostic.range.end.line,
+                diagnostic.range.end.character
+            )
+        };
+    }
+
+    /**
+     * Builds the change that deletes `) as <type>` from a function/sub declaration.
+     * Used for both `as void` on a function and any return type on a sub.
+     */
+    private getRemoveFunctionReturnTypeChange(func: FunctionExpression): DeleteChange {
+        return {
+            type: 'delete',
+            filePath: this.event.file.srcPath,
+            // )| as <type>|
+            range: util.createRange(
+                func.rightParen.range.start.line,
+                func.rightParen.range.start.character + 1,
+                func.returnTypeToken.range.end.line,
+                func.returnTypeToken.range.end.character
+            )
+        };
+    }
+
+    /**
+     * Emits a single code action when there is exactly one change, or a "fix all" composite
+     * action when there are multiple changes (same pattern as ESLint's "Fix all X problems").
+     * Does nothing when the changes array is empty.
+     */
+    private emitOrFixAll(
+        singleTitle: string,
+        fixAllTitle: string,
+        changes: Array<InsertChange | DeleteChange | ReplaceChange>,
+        diagnostic: Diagnostic
+    ) {
+        if (changes.length === 0) {
+            return;
+        }
+        if (changes.length === 1) {
+            this.event.codeActions.push(
+                codeActionUtil.createCodeAction({
+                    title: singleTitle,
+                    diagnostics: [diagnostic],
+                    kind: CodeActionKind.QuickFix,
+                    changes: changes
+                })
+            );
+        } else {
+            this.event.codeActions.push(
+                codeActionUtil.createCodeAction({
+                    title: fixAllTitle,
+                    kind: CodeActionKind.QuickFix,
+                    changes: changes
+                })
+            );
+        }
     }
 }
