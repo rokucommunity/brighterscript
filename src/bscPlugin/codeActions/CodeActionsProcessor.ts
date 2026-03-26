@@ -51,11 +51,12 @@ export class CodeActionsProcessor {
         }
 
         // Second pass: fix-all actions for any code that appeared in the event.
-        // Only runs when there are multiple matching diagnostics in the file (otherwise
-        // there is nothing to fix-all and the handler's else-branch would be a no-op).
+        // Also makes sure that fix-all actions appear after individual fixes
         const eventCodes = new Set(this.event.diagnostics.map(d => d.code));
-        for (const code of eventCodes) {
-            const allInFile = this.event.file.getDiagnostics().filter(d => d.code === code);
+        const fixAllDiagsByCode = this.collectFixAllDiagnostics(eventCodes);
+
+        // only offer fix-all when there are multiple instances of the same issue in the file
+        for (const [code, allInFile] of fixAllDiagsByCode) {
             if (allInFile.length > 1) {
                 if (code === DiagnosticCodeMap.voidFunctionMayNotReturnValue) {
                     this.addVoidFunctionReturnActions(allInFile);
@@ -65,33 +66,14 @@ export class CodeActionsProcessor {
                     this.addRemoveScriptImportActions(allInFile);
                 } else if (code === DiagnosticCodeMap.cannotUseOverrideKeywordOnConstructorFunction) {
                     this.addRemoveOverrideFromConstructorActions(allInFile);
-                }
-            }
-        }
-
-        // Fix-all for scope-level diagnostics (not present in file.getDiagnostics())
-        const scopeFixAllCodes = [
-            DiagnosticCodeMap.referencedFileDoesNotExist,
-            DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent,
-            DiagnosticCodeMap.scriptImportCaseMismatch,
-            DiagnosticCodeMap.missingOverrideKeyword
-        ];
-        if (scopeFixAllCodes.some(code => eventCodes.has(code))) {
-            const allScopeFileDiags = this.event.program.getDiagnostics().filter(
-                d => (d as BsDiagnostic).file === this.event.file
-            );
-            for (const code of eventCodes) {
-                const allInFile = allScopeFileDiags.filter(d => d.code === code);
-                if (allInFile.length > 1) {
-                    if (code === DiagnosticCodeMap.referencedFileDoesNotExist) {
-                        this.addRemoveScriptImportActions(allInFile);
-                    } else if (code === DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent) {
-                        this.addRemoveScriptImportActions(allInFile);
-                    } else if (code === DiagnosticCodeMap.scriptImportCaseMismatch) {
-                        this.addScriptImportCasingFix(allInFile as DiagnosticMessageType<'scriptImportCaseMismatch'>[]);
-                    } else if (code === DiagnosticCodeMap.missingOverrideKeyword) {
-                        this.addMissingOverrideActions(allInFile);
-                    }
+                } else if (code === DiagnosticCodeMap.referencedFileDoesNotExist) {
+                    this.addRemoveScriptImportActions(allInFile);
+                } else if (code === DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent) {
+                    this.addRemoveScriptImportActions(allInFile);
+                } else if (code === DiagnosticCodeMap.scriptImportCaseMismatch) {
+                    this.addScriptImportCasingFix(allInFile as DiagnosticMessageType<'scriptImportCaseMismatch'>[]);
+                } else if (code === DiagnosticCodeMap.missingOverrideKeyword) {
+                    this.addMissingOverrideActions(allInFile);
                 }
             }
         }
@@ -104,6 +86,43 @@ export class CodeActionsProcessor {
         ) {
             this.addAutoFixableMissingImportsFixAll();
         }
+    }
+
+    /**
+     * Builds a map of diagnostic code → all matching diagnostics in the current file for each
+     * code in `eventCodes`. Scope-level codes are not present in `file.getDiagnostics()` so they
+     * are sourced from `program.getDiagnostics()` (fetched lazily, only when needed).
+     */
+    private collectFixAllDiagnostics(eventCodes: Set<number | string>): Map<number | string, BsDiagnostic[]> {
+        const scopeLevelCodes = new Set<number | string>([
+            DiagnosticCodeMap.referencedFileDoesNotExist,
+            DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent,
+            DiagnosticCodeMap.scriptImportCaseMismatch,
+            DiagnosticCodeMap.missingOverrideKeyword
+        ]);
+
+        const fileDiagsByCode = new Map<number | string, BsDiagnostic[]>();
+        for (const d of this.event.file.getDiagnostics()) {
+            if (!fileDiagsByCode.has(d.code)) {
+                fileDiagsByCode.set(d.code, []);
+            }
+            fileDiagsByCode.get(d.code).push(d);
+        }
+
+        const allScopeFileDiags: BsDiagnostic[] = [...eventCodes].some(c => scopeLevelCodes.has(c))
+            ? this.event.program.getDiagnostics().filter(d => (d as BsDiagnostic).file === this.event.file) as BsDiagnostic[]
+            : [];
+
+        const result = new Map<number | string, BsDiagnostic[]>();
+        for (const code of eventCodes) {
+            result.set(
+                code,
+                scopeLevelCodes.has(code)
+                    ? allScopeFileDiags.filter(d => d.code === code)
+                    : fileDiagsByCode.get(code) ?? []
+            );
+        }
+        return result;
     }
 
     private suggestedImports = new Set<string>();
