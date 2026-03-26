@@ -29,27 +29,27 @@ export class CodeActionsProcessor {
         // First pass: individual fixes for each diagnostic at the cursor position
         for (const diagnostic of this.event.diagnostics) {
             if (diagnostic.code === DiagnosticCodeMap.cannotFindName || diagnostic.code === DiagnosticCodeMap.cannotFindFunction) {
-                this.suggestCannotFindName(diagnostic as any);
+                this.suggestCannotFindNameQuickFix(diagnostic as any);
             } else if (diagnostic.code === DiagnosticCodeMap.classCouldNotBeFound) {
-                this.suggestClassImports(diagnostic as any);
+                this.suggestClassImportQuickFix(diagnostic as any);
             } else if (diagnostic.code === DiagnosticCodeMap.xmlComponentMissingExtendsAttribute) {
-                this.addMissingExtends(diagnostic as any);
+                this.suggestMissingExtendsQuickFix(diagnostic as any);
             } else if (diagnostic.code === DiagnosticCodeMap.voidFunctionMayNotReturnValue) {
-                this.addVoidFunctionReturnActions([diagnostic]);
+                this.suggestVoidFunctionReturnQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.nonVoidFunctionMustReturnValue) {
-                this.addNonVoidFunctionReturnActions([diagnostic]);
+                this.suggestNonVoidFunctionReturnQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.referencedFileDoesNotExist) {
-                this.addRemoveScriptImportActions([diagnostic]);
+                this.suggestRemoveScriptImportQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent) {
-                this.addRemoveScriptImportActions([diagnostic]);
+                this.suggestRemoveScriptImportQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.unnecessaryCodebehindScriptImport) {
-                this.addRemoveScriptImportActions([diagnostic]);
+                this.suggestRemoveScriptImportQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.scriptImportCaseMismatch) {
-                this.addScriptImportCasingFix([diagnostic as DiagnosticMessageType<'scriptImportCaseMismatch'>]);
+                this.suggestScriptImportCasingQuickFixes([diagnostic as DiagnosticMessageType<'scriptImportCaseMismatch'>]);
             } else if (diagnostic.code === DiagnosticCodeMap.missingOverrideKeyword) {
-                this.addMissingOverrideActions([diagnostic]);
+                this.suggestMissingOverrideQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.cannotUseOverrideKeywordOnConstructorFunction) {
-                this.addRemoveOverrideFromConstructorActions([diagnostic]);
+                this.suggestRemoveOverrideFromConstructorQuickFixes([diagnostic]);
             }
         }
 
@@ -62,21 +62,21 @@ export class CodeActionsProcessor {
         for (const [code, allInFile] of fixAllDiagsByCode) {
             if (allInFile.length > 1) {
                 if (code === DiagnosticCodeMap.voidFunctionMayNotReturnValue) {
-                    this.addVoidFunctionReturnActions(allInFile);
+                    this.suggestVoidFunctionReturnQuickFixes(allInFile);
                 } else if (code === DiagnosticCodeMap.nonVoidFunctionMustReturnValue) {
-                    this.addNonVoidFunctionReturnActions(allInFile);
+                    this.suggestNonVoidFunctionReturnQuickFixes(allInFile);
                 } else if (code === DiagnosticCodeMap.unnecessaryCodebehindScriptImport) {
-                    this.addRemoveScriptImportActions(allInFile);
+                    this.suggestRemoveScriptImportQuickFixes(allInFile);
                 } else if (code === DiagnosticCodeMap.cannotUseOverrideKeywordOnConstructorFunction) {
-                    this.addRemoveOverrideFromConstructorActions(allInFile);
+                    this.suggestRemoveOverrideFromConstructorQuickFixes(allInFile);
                 } else if (code === DiagnosticCodeMap.referencedFileDoesNotExist) {
-                    this.addRemoveScriptImportActions(allInFile);
+                    this.suggestRemoveScriptImportQuickFixes(allInFile);
                 } else if (code === DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent) {
-                    this.addRemoveScriptImportActions(allInFile);
+                    this.suggestRemoveScriptImportQuickFixes(allInFile);
                 } else if (code === DiagnosticCodeMap.scriptImportCaseMismatch) {
-                    this.addScriptImportCasingFix(allInFile as DiagnosticMessageType<'scriptImportCaseMismatch'>[]);
+                    this.suggestScriptImportCasingQuickFixes(allInFile as DiagnosticMessageType<'scriptImportCaseMismatch'>[]);
                 } else if (code === DiagnosticCodeMap.missingOverrideKeyword) {
-                    this.addMissingOverrideActions(allInFile);
+                    this.suggestMissingOverrideQuickFixes(allInFile);
                 }
             }
         }
@@ -87,7 +87,7 @@ export class CodeActionsProcessor {
             eventCodes.has(DiagnosticCodeMap.cannotFindFunction) ||
             eventCodes.has(DiagnosticCodeMap.classCouldNotBeFound)
         ) {
-            this.addAutoFixableMissingImportsFixAll();
+            this.suggestMissingImportsFixAllQuickFix();
         }
 
         this.suggestedImports.clear();
@@ -135,7 +135,7 @@ export class CodeActionsProcessor {
     /**
      * Generic import suggestion function. Shouldn't be called directly from the main loop, but instead called by more specific diagnostic handlers
      */
-    private suggestImports(diagnostic: Diagnostic, key: string, files: BscFile[]) {
+    private suggestImportQuickFix(diagnostic: Diagnostic, key: string, files: BscFile[]) {
         //skip if we already have this suggestion
         if (this.suggestedImports.has(key)) {
             return;
@@ -169,14 +169,14 @@ export class CodeActionsProcessor {
     /**
      * Suggests import statements for an unresolved name (function, class, namespace, or enum).
      */
-    private suggestCannotFindName(diagnostic: DiagnosticMessageType<'cannotFindName'>) {
+    private suggestCannotFindNameQuickFix(diagnostic: DiagnosticMessageType<'cannotFindName'>) {
         //skip if not a BrighterScript file
         if ((diagnostic.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
             return;
         }
         const lowerName = (diagnostic.data.fullName ?? diagnostic.data.name).toLowerCase();
 
-        this.suggestImports(
+        this.suggestImportQuickFix(
             diagnostic,
             lowerName,
             [
@@ -191,13 +191,13 @@ export class CodeActionsProcessor {
     /**
      * Suggests import statements for an unresolved class name.
      */
-    private suggestClassImports(diagnostic: DiagnosticMessageType<'classCouldNotBeFound'>) {
+    private suggestClassImportQuickFix(diagnostic: DiagnosticMessageType<'classCouldNotBeFound'>) {
         //skip if not a BrighterScript file
         if ((diagnostic.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
             return;
         }
         const lowerClassName = diagnostic.data.className.toLowerCase();
-        this.suggestImports(
+        this.suggestImportQuickFix(
             diagnostic,
             lowerClassName,
             this.event.file.program.findFilesForClass(lowerClassName)
@@ -210,7 +210,7 @@ export class CodeActionsProcessor {
      * Ambiguous names (multiple possible source files) are excluded since we cannot
      * automatically choose one.
      */
-    private addAutoFixableMissingImportsFixAll() {
+    private suggestMissingImportsFixAllQuickFix() {
         if (!isBrsFile(this.event.file) || this.event.file.parseMode !== ParseMode.BrighterScript) {
             return;
         }
@@ -279,7 +279,7 @@ export class CodeActionsProcessor {
      * Adds code actions to insert a missing `extends` attribute on an XML component tag.
      * Offers Group, Task, and ContentNode as common choices.
      */
-    private addMissingExtends(diagnostic: DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>) {
+    private suggestMissingExtendsQuickFix(diagnostic: DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>) {
         const srcPath = this.event.file.srcPath;
         const { component } = (this.event.file as XmlFile).parser.ast;
         //inject new attribute after the final attribute, or after the `<component` if there are no attributes
@@ -330,7 +330,7 @@ export class CodeActionsProcessor {
      * Adds code actions to resolve a `voidFunctionMayNotReturnValue` diagnostic.
      * Offers removing the return value, converting sub→function, or removing an `as void` return type.
      */
-    private addVoidFunctionReturnActions(diagnostics: Diagnostic[]) {
+    private suggestVoidFunctionReturnQuickFixes(diagnostics: Diagnostic[]) {
         const changes = diagnostics.map(d => this.getRemoveReturnValueChange(d));
         this.emitOrFixAll(`Remove return value`, `Fix all: Remove void return values`, changes, diagnostics[0]);
 
@@ -381,7 +381,7 @@ export class CodeActionsProcessor {
      * Adds code actions to resolve a `nonVoidFunctionMustReturnValue` diagnostic.
      * Offers removing the return type from a sub, adding `as void` to a function, or converting function→sub.
      */
-    private addNonVoidFunctionReturnActions(diagnostics: Diagnostic[]) {
+    private suggestNonVoidFunctionReturnQuickFixes(diagnostics: Diagnostic[]) {
         if (!isBrsFile(this.event.file)) {
             return;
         }
@@ -473,7 +473,7 @@ export class CodeActionsProcessor {
     /**
      * Adds code actions to delete one or more unnecessary or broken script import lines.
      */
-    private addRemoveScriptImportActions(diagnostics: Diagnostic[]) {
+    private suggestRemoveScriptImportQuickFixes(diagnostics: Diagnostic[]) {
         const titles: Record<number, [string, string]> = {
             [DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent]: ['Remove redundant script import', 'Fix all: Remove redundant script imports'],
             [DiagnosticCodeMap.unnecessaryCodebehindScriptImport]: ['Remove unnecessary codebehind import', 'Fix all: Remove unnecessary codebehind imports']
@@ -497,7 +497,7 @@ export class CodeActionsProcessor {
     /**
      * Adds code actions to correct the casing of script import paths to match the actual file name on disk.
      */
-    private addScriptImportCasingFix(diagnostics: DiagnosticMessageType<'scriptImportCaseMismatch'>[]) {
+    private suggestScriptImportCasingQuickFixes(diagnostics: DiagnosticMessageType<'scriptImportCaseMismatch'>[]) {
         const changes: ReplaceChange[] = [];
         for (const diagnostic of diagnostics) {
             const correctFilePath = diagnostic.data?.correctFilePath;
@@ -524,7 +524,7 @@ export class CodeActionsProcessor {
     /**
      * Adds code actions to insert the missing `override` keyword before a method declaration.
      */
-    private addMissingOverrideActions(diagnostics: Diagnostic[]) {
+    private suggestMissingOverrideQuickFixes(diagnostics: Diagnostic[]) {
         if (!isBrsFile(this.event.file)) {
             return;
         }
@@ -564,7 +564,7 @@ export class CodeActionsProcessor {
     /**
      * Adds code actions to remove the invalid `override` keyword from a constructor method.
      */
-    private addRemoveOverrideFromConstructorActions(diagnostics: Diagnostic[]) {
+    private suggestRemoveOverrideFromConstructorQuickFixes(diagnostics: Diagnostic[]) {
         const changes: DeleteChange[] = diagnostics.map(d => ({
             type: 'delete' as const,
             filePath: this.event.file.srcPath,
