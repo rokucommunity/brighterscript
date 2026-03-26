@@ -1194,7 +1194,7 @@ export class Scope {
                     ? util.getRokuPkgPath(referencedFile.pkgPath)
                     : path.posix.relative(
                         path.posix.dirname(scriptImport.sourceFile.pkgPath).replace(/\\/g, '/'),
-                        referencedFile.pkgPath
+                        referencedFile.pkgPath.replace(/\\/g, '/')
                     );
                 this.diagnostics.push({
                     ...DiagnosticMessages.scriptImportCaseMismatch(referencedFile.pkgPath, correctUri),
