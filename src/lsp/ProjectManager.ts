@@ -668,6 +668,18 @@ export class ProjectManager {
         return result;
     }
 
+    @TrackBusyStatus
+    public async getFixAllCodeActions(options: { srcPath: string }) {
+        //wait for all pending syncs to finish
+        await this.onIdle();
+
+        let result = await util.promiseRaceMatch(
+            this.projects.map(x => x.getSourceFixAllCodeActions(options)),
+            (result) => !!result
+        );
+        return result;
+    }
+
     /**
      * Scan a given workspace for all `bsconfig.json` files. If at least one is found, then only folders who have bsconfig.json are returned.
      * If none are found, then the workspaceFolder itself is treated as a project

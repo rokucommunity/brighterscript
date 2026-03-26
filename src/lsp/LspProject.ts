@@ -143,6 +143,11 @@ export interface LspProject {
     getCodeActions(options: { srcPath: string; range: Range }): Promise<CodeAction[]>;
 
     /**
+     * Get all "fix all" source actions for the specified file
+     */
+    getSourceFixAllCodeActions(options: { srcPath: string }): Promise<CodeAction[]>;
+
+    /**
      * Get the completions for the specified file and position
      */
     getCompletions(options: { srcPath: string; position: Position }): Promise<CompletionList>;

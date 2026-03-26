@@ -11,6 +11,7 @@ import { util } from '../../util';
 import { isBrsFile, isFunctionExpression } from '../../astUtils/reflection';
 import type { FunctionExpression } from '../../parser/Expression';
 import { TokenKind } from '../../lexer/TokenKind';
+import { getMissingExtendsInsertPosition, getRemoveReturnValueChange } from './codeActionHelpers';
 
 export class CodeActionsProcessor {
     public constructor(
@@ -105,9 +106,7 @@ export class CodeActionsProcessor {
 
     private addMissingExtends(diagnostic: DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>) {
         const srcPath = this.event.file.srcPath;
-        const { component } = (this.event.file as XmlFile).parser.ast;
-        //inject new attribute after the final attribute, or after the `<component` if there are no attributes
-        const pos = (component.attributes[component.attributes.length - 1] ?? component.tag).range.end;
+        const pos = getMissingExtendsInsertPosition(this.event.file as XmlFile);
         this.event.codeActions.push(
             codeActionUtil.createCodeAction({
                 title: `Extend "Group"`,
@@ -156,18 +155,23 @@ export class CodeActionsProcessor {
                 title: `Remove return value`,
                 diagnostics: [diagnostic],
                 kind: CodeActionKind.QuickFix,
-                changes: [{
-                    type: 'delete',
-                    filePath: this.event.file.srcPath,
-                    range: util.createRange(
-                        diagnostic.range.start.line,
-                        diagnostic.range.start.character + 'return'.length,
-                        diagnostic.range.end.line,
-                        diagnostic.range.end.character
-                    )
-                }]
+                changes: [getRemoveReturnValueChange(diagnostic, this.event.file.srcPath)]
             })
         );
+
+        // If there are multiple instances in this file, offer a "fix all" quickfix that appears
+        // directly in the lightbulb (same as ESLint's "Fix all 'rule-name' problems" pattern)
+        const allInFile = this.event.program.getDiagnostics()
+            .filter(x => x.file === this.event.file && x.code === diagnostic.code);
+        if (allInFile.length > 1) {
+            this.event.codeActions.push(
+                codeActionUtil.createCodeAction({
+                    title: `Fix all: Remove void return values`,
+                    kind: CodeActionKind.QuickFix,
+                    changes: allInFile.map(d => getRemoveReturnValueChange(d, this.event.file.srcPath))
+                })
+            );
+        }
         if (isBrsFile(this.event.file)) {
             const expression = this.event.file.getClosestExpression(diagnostic.range.start);
             const func = expression.findAncestor<FunctionExpression>(isFunctionExpression);

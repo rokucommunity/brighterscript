@@ -244,6 +244,10 @@ export class WorkerThreadProject implements LspProject {
         return this.sendStandardRequest<CodeAction[]>('getCodeActions', options);
     }
 
+    public async getSourceFixAllCodeActions(options: { srcPath: string }): Promise<CodeAction[]> {
+        return this.sendStandardRequest<CodeAction[]>('getFixAllCodeActions', options);
+    }
+
     public async getCompletions(options: { srcPath: string; position: Position }): Promise<CompletionList> {
         return this.sendStandardRequest<CompletionList>('getCompletions', options);
     }

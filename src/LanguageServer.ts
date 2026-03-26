@@ -214,7 +214,10 @@ export class LanguageServer {
                 } as SemanticTokensOptions,
                 referencesProvider: true,
                 codeActionProvider: {
-                    codeActionKinds: [CodeActionKind.Refactor]
+                    codeActionKinds: [
+                        CodeActionKind.QuickFix,
+                        CodeActionKind.SourceFixAll
+                    ]
                 },
                 signatureHelpProvider: {
                     triggerCharacters: ['(', ',']
@@ -627,8 +630,23 @@ export class LanguageServer {
         this.logger.debug('onCodeAction', params);
 
         const srcPath = util.uriToPath(params.textDocument.uri);
-        const result = await this.projectManager.getCodeActions({ srcPath: srcPath, range: params.range });
-        return result;
+        const requestedKinds = params.context?.only ?? [];
+
+        // In LSP, kinds are hierarchical: 'source' matches 'source.fixAll.*', 'quickfix' matches 'quickfix.*'.
+        // A requested kind K matches an action kind A if A.startsWith(K) or K.startsWith(A).
+        // When context.only is absent the client wants everything, so we fetch both.
+        const matchesKind = (actionKind: string) => requestedKinds.length === 0 ||
+            requestedKinds.some(kind => actionKind.startsWith(kind) || kind.startsWith(actionKind));
+
+        const wantsQuickFix = matchesKind(CodeActionKind.QuickFix);
+        const wantsFixAll = matchesKind(CodeActionKind.SourceFixAll);
+
+        const [quickFixes, fixAllActions] = await Promise.all([
+            wantsQuickFix ? this.projectManager.getCodeActions({ srcPath: srcPath, range: params.range }) : [],
+            wantsFixAll ? this.projectManager.getFixAllCodeActions({ srcPath: srcPath }) : []
+        ]);
+
+        return [...(quickFixes ?? []), ...(fixAllActions ?? [])];
     }
 
 
