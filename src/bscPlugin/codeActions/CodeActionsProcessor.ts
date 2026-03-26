@@ -86,6 +86,8 @@ export class CodeActionsProcessor {
         ) {
             this.addAutoFixableMissingImportsFixAll();
         }
+
+        this.suggestedImports.clear();
     }
 
     /**

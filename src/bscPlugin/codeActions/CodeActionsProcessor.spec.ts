@@ -1,11 +1,12 @@
 import { expect } from '../../chai-config.spec';
 import { URI } from 'vscode-uri';
 import type { Range } from 'vscode-languageserver';
-import type { BscFile } from '../../interfaces';
+import type { BscFile, OnGetCodeActionsEvent } from '../../interfaces';
 import { Program } from '../../Program';
 import { expectCodeActions, trim } from '../../testHelpers.spec';
 import { standardizePath as s, util } from '../../util';
 import { rootDir } from '../../testHelpers.spec';
+import { CodeActionsProcessor } from './CodeActionsProcessor';
 
 describe('CodeActionsProcessor', () => {
     let program: Program;
@@ -268,6 +269,47 @@ describe('CodeActionsProcessor', () => {
                 `import "pkg:/source/first.bs"`,
                 `import "pkg:/source/second.bs"`
             ]);
+        });
+
+        it('clears suggestedImports after process() so the same instance could be reused in the future', () => {
+            program.setFile('source/lib.bs', `
+                function doSomething()
+                end function
+            `);
+            program.setFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1" extends="Scene">
+                    <script uri="comp1.bs" />
+                </component>
+            `);
+            const file = program.setFile('components/comp1.bs', `
+                sub init()
+                    doSomething()
+                end sub
+            `);
+            program.validate();
+
+            const range = util.createRange(2, 24, 2, 24);
+            const event: OnGetCodeActionsEvent = {
+                program: program,
+                file: file,
+                range: range,
+                scopes: program.getScopesForFile(file),
+                diagnostics: program.getDiagnostics().filter(d => d.file === file && util.rangesIntersectOrTouch(d.range, range)),
+                codeActions: []
+            };
+
+            const processor = new CodeActionsProcessor(event);
+            processor.process();
+            const firstCallTitles = event.codeActions.map(x => x.title).sort();
+
+            // Reset codeActions and call process() again on the same instance.
+            // If suggestedImports were NOT cleared, the second call would return no import suggestions.
+            event.codeActions = [];
+            processor.process();
+            const secondCallTitles = event.codeActions.map(x => x.title).sort();
+
+            expect(secondCallTitles).to.eql(firstCallTitles);
         });
 
         it('suggests files for second part of missing namespace', () => {
