@@ -748,6 +748,47 @@ describe('CodeActionsProcessor', () => {
                 'Fix script import path casing'
             ]);
         });
+
+        it('offers to fix the casing of a relative script import path', () => {
+            const file = program.setFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1" extends="Scene">
+                    <script type="text/brightscript" uri="LIB.brs" />
+                </component>
+            `);
+            program.setFile('components/lib.brs', '');
+            testGetCodeActions(file, util.createRange(2, 45, 2, 45), ['Fix script import path casing']);
+        });
+
+        it('replaces a relative URI with the correctly-cased relative path', () => {
+            const file = program.setFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1" extends="Scene">
+                    <script type="text/brightscript" uri="LIB.brs" />
+                </component>
+            `);
+            program.setFile('components/lib.brs', '');
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(2, 45, 2, 45));
+            const fix = actions.find(a => a.title === 'Fix script import path casing');
+            const changes = Object.values(fix!.edit!.changes!)[0];
+            expect(changes[0].newText).to.equal('lib.brs');
+        });
+
+        it('replaces a cross-directory relative URI with the correctly-cased relative path', () => {
+            const file = program.setFile('components/sub/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1" extends="Scene">
+                    <script type="text/brightscript" uri="../utils/HELPER.brs" />
+                </component>
+            `);
+            program.setFile('components/utils/helper.brs', '');
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(2, 50, 2, 50));
+            const fix = actions.find(a => a.title === 'Fix script import path casing');
+            const changes = Object.values(fix!.edit!.changes!)[0];
+            expect(changes[0].newText).to.equal('../utils/helper.brs');
+        });
     });
 
     describe('missingOverrideKeyword', () => {
