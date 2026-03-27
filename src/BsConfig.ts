@@ -213,6 +213,59 @@ export interface BsConfig {
      * scripts inside `source` that depend on bslib.brs.  Defaults to `source`.
      */
     bslibDestinationDir?: string;
+
+    /**
+     * Configuration for tree shaking (dead code elimination).
+     */
+    treeShaking?: TreeShakingConfig;
+}
+
+/**
+ * A single keep-rule entry in `treeShaking.keep`.
+ *
+ * A plain string is shorthand for `{ functions: [string] }`.
+ * An object entry must contain at least one of `src`, `dest`, `functions`, or `matches`.
+ * All fields present on one rule are combined with AND semantics.
+ * Rules across the list are combined with OR semantics.
+ */
+export type TreeShakingKeepEntry = string | TreeShakingKeepRule;
+
+export interface TreeShakingKeepRule {
+    /** Glob pattern(s) matched against the declaration's source file path. */
+    src?: string | string[];
+    /** Glob pattern(s) matched against the declaration's package-relative destination path. */
+    dest?: string | string[];
+    /** Exact function name(s) to keep (BrightScript/transpiled names). */
+    functions?: string | string[];
+    /** Glob/wildcard pattern(s) matched against the function name (BrightScript/transpiled names). */
+    matches?: string | string[];
+}
+
+export interface TreeShakingConfig {
+    /**
+     * Enable or disable tree shaking. Defaults to `false` (opt-in).
+     */
+    enabled?: boolean;
+    /**
+     * Declarations matching any rule in this list are always retained,
+     * along with their statically detectable dependencies (as determined by static analysis).
+     * Dynamic dependencies may not be detected, and statically referenced callees may be kept
+     * even when referenced only from otherwise dead code.
+     */
+    keep?: TreeShakingKeepEntry[];
+}
+
+/** Normalized internal form produced by `normalizeConfig`. */
+export interface NormalizedKeepRule {
+    src?: string[];
+    dest?: string[];
+    functions?: string[];
+    matches?: string[];
+}
+
+export interface NormalizedTreeShakingConfig {
+    enabled: boolean;
+    keep: NormalizedKeepRule[];
 }
 
 type OptionalBsConfigFields =
@@ -231,5 +284,6 @@ type OptionalBsConfigFields =
     | 'stagingDir';
 
 export type FinalizedBsConfig =
-    Omit<Required<BsConfig>, OptionalBsConfigFields>
-    & Pick<BsConfig, OptionalBsConfigFields>;
+    Omit<Required<BsConfig>, OptionalBsConfigFields | 'treeShaking'>
+    & Pick<BsConfig, OptionalBsConfigFields>
+    & { treeShaking: NormalizedTreeShakingConfig };

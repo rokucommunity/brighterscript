@@ -7,7 +7,7 @@ import { rokuDeploy, DefaultFiles } from 'roku-deploy';
 import type { Diagnostic, Position, Range, Location, DiagnosticRelatedInformation } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
-import type { BsConfig, FinalizedBsConfig } from './BsConfig';
+import type { BsConfig, FinalizedBsConfig, NormalizedKeepRule, NormalizedTreeShakingConfig, TreeShakingConfig, TreeShakingKeepEntry } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, Plugin, ExpressionInfo, TranspileResult, MaybePromise, DisposableLike, PluginFactory } from './interfaces';
 import { BooleanType } from './types/BooleanType';
@@ -376,6 +376,9 @@ export class Util {
             bslibDestinationDir = bslibDestinationDir.replace(/^(\/*)(.*?)(\/*)$/, '$2');
         }
 
+        // compute an initial normalized treeShaking config; this will be kept normalized
+        let normalizedTreeShaking = this.normalizeTreeShakingConfig(config.treeShaking);
+
         const configWithDefaults: Omit<FinalizedBsConfig, 'rootDir'> = {
             cwd: cwd,
             deploy: config.deploy === true ? true : false,
@@ -403,13 +406,69 @@ export class Util {
             emitDefinitions: config.emitDefinitions === true ? true : false,
             removeParameterTypes: config.removeParameterTypes === true ? true : false,
             logLevel: logLevel,
-            bslibDestinationDir: bslibDestinationDir
+            bslibDestinationDir: bslibDestinationDir,
+            treeShaking: normalizedTreeShaking
         };
 
         //mutate `config` in case anyone is holding a reference to the incomplete one
         const merged: FinalizedBsConfig = Object.assign(config, configWithDefaults);
 
+        // ensure treeShaking remains normalized even if overwritten later (e.g. by merges)
+        Object.defineProperty(merged, 'treeShaking', {
+            get: () => normalizedTreeShaking,
+            set: (value: TreeShakingConfig | NormalizedTreeShakingConfig | undefined) => {
+                normalizedTreeShaking = this.normalizeTreeShakingConfig(value as any);
+            },
+            enumerable: true,
+            configurable: true
+        });
+
         return merged;
+    }
+
+    /**
+     * Normalize `treeShaking` config into the internal `NormalizedTreeShakingConfig` form.
+     * - Plain strings are expanded to `{ functions: [string] }`.
+     * - Scalar `src`/`dest`/`functions`/`matches` values are wrapped in arrays.
+     * - Object rules that contain none of the known fields are silently skipped.
+     */
+    private normalizeTreeShakingConfig(config?: TreeShakingConfig | NormalizedTreeShakingConfig): NormalizedTreeShakingConfig {
+        const enabled = config?.enabled === true;
+        const keep: NormalizedKeepRule[] = [];
+
+        const keepEntries = Array.isArray(config?.keep) ? config.keep : [];
+        for (const entry of keepEntries as TreeShakingKeepEntry[]) {
+            if (typeof entry === 'string') {
+                keep.push({ functions: [entry.toLowerCase()] });
+            } else if (entry && typeof entry === 'object') {
+                const hasField =
+                    entry.src !== undefined ||
+                    entry.dest !== undefined ||
+                    entry.functions !== undefined ||
+                    entry.matches !== undefined;
+                if (!hasField) {
+                    // Invalid rule — no recognized field present; skip silently
+                    continue;
+                }
+                const rule: NormalizedKeepRule = {};
+                if (entry.src !== undefined) {
+                    rule.src = Array.isArray(entry.src) ? entry.src : [entry.src];
+                }
+                if (entry.dest !== undefined) {
+                    rule.dest = Array.isArray(entry.dest) ? entry.dest : [entry.dest];
+                }
+                if (entry.functions !== undefined) {
+                    rule.functions = (Array.isArray(entry.functions) ? entry.functions : [entry.functions])
+                        .map(f => f.toLowerCase());
+                }
+                if (entry.matches !== undefined) {
+                    rule.matches = Array.isArray(entry.matches) ? entry.matches : [entry.matches];
+                }
+                keep.push(rule);
+            }
+        }
+
+        return { enabled: enabled, keep: keep };
     }
 
     /**

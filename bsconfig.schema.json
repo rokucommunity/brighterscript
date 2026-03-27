@@ -299,6 +299,66 @@
             "description": "Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.",
             "type": "boolean",
             "default": false
+        },
+        "treeShaking": {
+            "description": "Configuration for tree shaking (dead code elimination). Disabled by default; set `enabled: true` to opt in.",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "enabled": {
+                    "description": "Enable tree shaking. Defaults to false.",
+                    "type": "boolean",
+                    "default": false
+                },
+                "keep": {
+                    "description": "List of keep rules. Functions matching any rule are always retained along with their full dependency closure. A plain string is shorthand for `{ functions: [string] }`.",
+                    "type": "array",
+                    "items": {
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "description": "Exact BrightScript function name to always keep."
+                            },
+                            {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "minProperties": 1,
+                                "description": "Keep rule object. All specified fields must match (AND semantics). Rules are combined with OR semantics.",
+                                "properties": {
+                                    "src": {
+                                        "description": "Glob pattern(s) matched against the source file path.",
+                                        "oneOf": [
+                                            { "type": "string" },
+                                            { "type": "array", "items": { "type": "string" } }
+                                        ]
+                                    },
+                                    "dest": {
+                                        "description": "Glob pattern(s) matched against the package-relative destination path.",
+                                        "oneOf": [
+                                            { "type": "string" },
+                                            { "type": "array", "items": { "type": "string" } }
+                                        ]
+                                    },
+                                    "functions": {
+                                        "description": "Exact BrightScript function name(s) to keep.",
+                                        "oneOf": [
+                                            { "type": "string" },
+                                            { "type": "array", "items": { "type": "string" } }
+                                        ]
+                                    },
+                                    "matches": {
+                                        "description": "Glob/wildcard pattern(s) matched against the BrightScript function name.",
+                                        "oneOf": [
+                                            { "type": "string" },
+                                            { "type": "array", "items": { "type": "string" } }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
         }
     }
 }
