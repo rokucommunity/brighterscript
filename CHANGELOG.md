@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.71.0](https://github.com/rokucommunity/brighterscript/compare/0.70.4...v0.71.0) - 2026-03-27
+### Added
+ - Add computed property names (compile-time support only) ([#1658](https://github.com/rokucommunity/brighterscript/pull/1658))
+### Changed
+ - More quick fixes and fix all quick fixes ([#1662](https://github.com/rokucommunity/brighterscript/pull/1662))
+  - Bump picomatch from 2.3.1 to 2.3.2 ([#1661](https://github.com/rokucommunity/brighterscript/pull/1661))
+ - Bump picomatch from 2.3.1 to 2.3.2 in /benchmarks ([#1660](https://github.com/rokucommunity/brighterscript/pull/1660))
+
+ - 
+ ### Fixed
+ - bugfix/small perf improvements ([#1663](https://github.com/rokucommunity/brighterscript/pull/1663))
+
+
+
 ## [0.70.4](https://github.com/rokucommunity/brighterscript/compare/0.70.3...v0.70.4) - 2026-03-24
 ### Added
  - Add definition provider for import statement ([#1595](https://github.com/rokucommunity/brighterscript/pull/1595))
