@@ -708,7 +708,7 @@ export class Program {
                         const inlinePkgPath = xmlFile.inlineScriptPkgPaths[cdataScriptIndex++];
                         const inlineFile = this.setFile<BrsFile>(inlinePkgPath, script.cdataText ?? '');
                         inlineFile.isSynthetic = true;
-                        this.syntheticFileMeta.set(inlinePkgPath.toLowerCase(), {
+                        this.syntheticFileMeta.set(s`${inlinePkgPath}`.toLowerCase(), {
                             xmlFile: xmlFile,
                             cdataRange: script.cdata.range
                         });

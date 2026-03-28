@@ -306,7 +306,7 @@ export class XmlFile {
 
         let dependencies = [
             ...this.scriptTagImports.map(x => x.pkgPath.toLowerCase()),
-            ...this.inlineScriptPkgPaths.map(p => p.toLowerCase())
+            ...this.inlineScriptPkgPaths.map(p => util.standardizePath(p).toLowerCase())
         ];
         //if autoImportComponentScript is enabled, add the .bs and .brs files with the same name
         if (this.program.options.autoImportComponentScript) {
@@ -476,9 +476,10 @@ export class XmlFile {
             return map;
         }, {});
         for (const pkgPath of this.inlineScriptPkgPaths) {
-            alreadyThereScriptImportMap[pkgPath.toLowerCase()] = true;
+            const normalizedPkgPath = util.standardizePath(pkgPath).toLowerCase();
+            alreadyThereScriptImportMap[normalizedPkgPath] = true;
             //also mark the .brs variant so a .bs inline script doesn't get added as an extra import
-            alreadyThereScriptImportMap[pkgPath.toLowerCase().replace(/\.bs$/, '.brs')] = true;
+            alreadyThereScriptImportMap[normalizedPkgPath.replace(/\.bs$/, '.brs')] = true;
         }
 
         let resultMap = {};
