@@ -189,7 +189,7 @@ export class XmlFile {
     private getInlineScriptPkgPath(cdataIndex: number, scriptType: string | undefined): string {
         const isBrighterScript = /brighterscript|text\/bs\b/i.test(scriptType ?? '');
         const ext = isBrighterScript ? '.bs' : '.brs';
-        return this.pkgPath.replace(/\.xml$/i, `.cdata-${cdataIndex}.script${ext}`);
+        return this.pkgPath.replace(/\\/g, '/').replace(/\.xml$/i, `.cdata-${cdataIndex}.script${ext}`);
     }
 
     public functionScopes = [] as FunctionScope[];
