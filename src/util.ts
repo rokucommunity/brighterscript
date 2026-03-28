@@ -400,6 +400,7 @@ export class Util {
             sourceRoot: config.sourceRoot ? standardizePath(config.sourceRoot) : undefined,
             resolveSourceRoot: config.resolveSourceRoot === true ? true : false,
             allowBrighterScriptInBrightScript: config.allowBrighterScriptInBrightScript === true ? true : false,
+            allowLineContinuation: config.allowLineContinuation === true ? true : false,
             emitDefinitions: config.emitDefinitions === true ? true : false,
             removeParameterTypes: config.removeParameterTypes === true ? true : false,
             logLevel: logLevel,
