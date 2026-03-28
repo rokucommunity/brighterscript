@@ -57,6 +57,22 @@ export interface SignatureInfoObj {
     signature: SignatureInformation;
 }
 
+/**
+ * Coordinate-space remapping context for a single CDATA block. Returned by
+ * `Program.resolveCdataContext` when a position falls inside an inline script block.
+ * Provides bound helpers to convert positions between the parent XML file's coordinate
+ * space and the synthetic BrsFile's coordinate space.
+ */
+export interface CdataContext {
+    brsFile: BrsFile;
+    xmlFile: XmlFile;
+    cdataRange: Range;
+    /** Convert a position from parent XML coordinates to synthetic BrsFile coordinates. */
+    toSynthetic(pos: Position): Position;
+    /** Convert a position from synthetic BrsFile coordinates back to parent XML coordinates. */
+    fromSynthetic(pos: Position): Position;
+}
+
 export class Program {
     constructor(
         /**
@@ -428,7 +444,7 @@ export class Program {
      */
     private remapCodeActionChangesToXml(
         codeActions: CodeAction[],
-        meta: { cdataRange: Range },
+        cdataCtx: CdataContext,
         brsFile: BrsFile,
         xmlFile: XmlFile
     ) {
@@ -448,12 +464,74 @@ export class Program {
                 changes[xmlUri].push({
                     ...edit,
                     range: {
-                        start: this.remapPosFromSynthetic(meta.cdataRange, edit.range.start),
-                        end: this.remapPosFromSynthetic(meta.cdataRange, edit.range.end)
+                        start: cdataCtx.fromSynthetic(edit.range.start),
+                        end: cdataCtx.fromSynthetic(edit.range.end)
                     }
                 });
             }
         }
+    }
+
+    /**
+     * Given an XmlFile and a cursor position, returns a `CdataContext` if the position falls
+     * inside a `<![CDATA[...]]>` block, or `undefined` if it does not. Use the returned context
+     * to redirect LSP events to the synthetic BrsFile and remap positions in both directions.
+     */
+    public resolveCdataContext(xmlFile: XmlFile, position: Position): CdataContext | undefined {
+        const pointRange = util.createRange(position.line, position.character, position.line, position.character);
+        const info = this.findCdataInfoForRange(xmlFile, pointRange);
+        if (!info) {
+            return undefined;
+        }
+        const cdataRange = info.meta.cdataRange;
+        return {
+            brsFile: info.brsFile,
+            xmlFile: xmlFile,
+            cdataRange: cdataRange,
+            toSynthetic: (pos) => this.remapPosToSynthetic(cdataRange, pos),
+            fromSynthetic: (pos) => this.remapPosFromSynthetic(cdataRange, pos)
+        };
+    }
+
+    /**
+     * Remaps any `Location` entries that reference the synthetic BrsFile back to the parent
+     * XML file with positions converted to XML coordinates. Locations in other files are
+     * returned unchanged.
+     */
+    private remapLocationsFromSynthetic(locations: Location[], cdataCtx: CdataContext): Location[] {
+        const syntheticUri = URI.file(cdataCtx.brsFile.srcPath).toString();
+        const xmlUri = URI.file(cdataCtx.xmlFile.srcPath).toString();
+        return locations.map(loc => {
+            if (loc.uri !== syntheticUri) {
+                return loc;
+            }
+            return {
+                uri: xmlUri,
+                range: {
+                    start: cdataCtx.fromSynthetic(loc.range.start),
+                    end: cdataCtx.fromSynthetic(loc.range.end)
+                }
+            };
+        });
+    }
+
+    /**
+     * Recursively remaps `range` and `selectionRange` in a `DocumentSymbol` tree from
+     * synthetic BrsFile coordinates to parent XML file coordinates.
+     */
+    private remapDocumentSymbolsFromSynthetic(symbols: DocumentSymbol[], cdataCtx: CdataContext): DocumentSymbol[] {
+        return symbols.map(sym => ({
+            ...sym,
+            range: {
+                start: cdataCtx.fromSynthetic(sym.range.start),
+                end: cdataCtx.fromSynthetic(sym.range.end)
+            },
+            selectionRange: {
+                start: cdataCtx.fromSynthetic(sym.selectionRange.start),
+                end: cdataCtx.fromSynthetic(sym.selectionRange.end)
+            },
+            children: sym.children ? this.remapDocumentSymbolsFromSynthetic(sym.children, cdataCtx) : undefined
+        }));
     }
 
     public addDiagnostics(diagnostics: BsDiagnostic[]) {
@@ -1133,25 +1211,42 @@ export class Program {
             return [];
         }
 
+        const cdataCtx = isXmlFile(file) ? this.resolveCdataContext(file, position) : undefined;
+        const effectiveFile = cdataCtx?.brsFile ?? file;
+        const effectivePosition = cdataCtx ? cdataCtx.toSynthetic(position) : position;
+
         //find the scopes for this file
-        let scopes = this.getScopesForFile(file);
+        let scopes = this.getScopesForFile(effectiveFile);
 
         //if there are no scopes, include the global scope so we at least get the built-in functions
         scopes = scopes.length > 0 ? scopes : [this.globalScope];
 
         const event: ProvideCompletionsEvent = {
             program: this,
-            file: file,
+            file: effectiveFile,
             scopes: scopes,
-            position: position,
+            position: effectivePosition,
             completions: []
         };
 
         this.plugins.emit('beforeProvideCompletions', event);
-
         this.plugins.emit('provideCompletions', event);
-
         this.plugins.emit('afterProvideCompletions', event);
+
+        if (cdataCtx) {
+            for (const completion of event.completions) {
+                if (completion.textEdit) {
+                    if ('range' in completion.textEdit) {
+                        completion.textEdit = { ...completion.textEdit, range: { start: cdataCtx.fromSynthetic(completion.textEdit.range.start), end: cdataCtx.fromSynthetic(completion.textEdit.range.end) } };
+                    } else {
+                        completion.textEdit = { ...completion.textEdit, insert: { start: cdataCtx.fromSynthetic(completion.textEdit.insert.start), end: cdataCtx.fromSynthetic(completion.textEdit.insert.end) }, replace: { start: cdataCtx.fromSynthetic(completion.textEdit.replace.start), end: cdataCtx.fromSynthetic(completion.textEdit.replace.end) } };
+                    }
+                }
+                if (completion.additionalTextEdits) {
+                    completion.additionalTextEdits = completion.additionalTextEdits.map(e => ({ ...e, range: { start: cdataCtx.fromSynthetic(e.range.start), end: cdataCtx.fromSynthetic(e.range.end) } }));
+                }
+            }
+        }
 
         return event.completions;
     }
@@ -1180,17 +1275,21 @@ export class Program {
             return [];
         }
 
+        const cdataCtx = isXmlFile(file) ? this.resolveCdataContext(file, position) : undefined;
+        const effectiveFile = cdataCtx?.brsFile ?? file;
+        const effectivePosition = cdataCtx ? cdataCtx.toSynthetic(position) : position;
+
         const event: ProvideDefinitionEvent = {
             program: this,
-            file: file,
-            position: position,
+            file: effectiveFile,
+            position: effectivePosition,
             definitions: []
         };
 
         this.plugins.emit('beforeProvideDefinition', event);
         this.plugins.emit('provideDefinition', event);
         this.plugins.emit('afterProvideDefinition', event);
-        return event.definitions;
+        return cdataCtx ? this.remapLocationsFromSynthetic(event.definitions, cdataCtx) : event.definitions;
     }
 
     /**
@@ -1200,17 +1299,24 @@ export class Program {
         let file = this.getFile(srcPath);
         let result: Hover[];
         if (file) {
+            const cdataCtx = isXmlFile(file) ? this.resolveCdataContext(file, position) : undefined;
+            const effectiveFile = cdataCtx?.brsFile ?? file;
+            const effectivePosition = cdataCtx ? cdataCtx.toSynthetic(position) : position;
+
             const event = {
                 program: this,
-                file: file,
-                position: position,
-                scopes: this.getScopesForFile(file),
+                file: effectiveFile,
+                position: effectivePosition,
+                scopes: this.getScopesForFile(effectiveFile),
                 hovers: []
             } as ProvideHoverEvent;
             this.plugins.emit('beforeProvideHover', event);
             this.plugins.emit('provideHover', event);
             this.plugins.emit('afterProvideHover', event);
-            result = event.hovers;
+
+            result = cdataCtx
+                ? event.hovers.map(h => (h.range ? { ...h, range: { start: cdataCtx.fromSynthetic(h.range.start), end: cdataCtx.fromSynthetic(h.range.end) } } : h))
+                : event.hovers;
         }
 
         return result ?? [];
@@ -1222,19 +1328,45 @@ export class Program {
      */
     public getDocumentSymbols(srcPath: string): DocumentSymbol[] | undefined {
         let file = this.getFile(srcPath);
-        if (file) {
-            const event: ProvideDocumentSymbolsEvent = {
-                program: this,
-                file: file,
-                documentSymbols: []
-            };
-            this.plugins.emit('beforeProvideDocumentSymbols', event);
-            this.plugins.emit('provideDocumentSymbols', event);
-            this.plugins.emit('afterProvideDocumentSymbols', event);
-            return event.documentSymbols;
-        } else {
+        if (!file) {
             return undefined;
         }
+        const event: ProvideDocumentSymbolsEvent = {
+            program: this,
+            file: file,
+            documentSymbols: []
+        };
+        this.plugins.emit('beforeProvideDocumentSymbols', event);
+        this.plugins.emit('provideDocumentSymbols', event);
+        this.plugins.emit('afterProvideDocumentSymbols', event);
+
+        // For XML files, also collect symbols from each inline CDATA block and remap
+        if (isXmlFile(file)) {
+            for (const [pkgPath, meta] of this.syntheticFileMeta) {
+                if (meta.xmlFile !== file) {
+                    continue;
+                }
+                const brsFile = this.getFile<BrsFile>(pkgPath);
+                if (!brsFile) {
+                    continue;
+                }
+                const cdataCtx = this.resolveCdataContext(file, meta.cdataRange.start);
+                if (!cdataCtx) {
+                    continue;
+                }
+                const cdataEvent: ProvideDocumentSymbolsEvent = {
+                    program: this,
+                    file: brsFile,
+                    documentSymbols: []
+                };
+                this.plugins.emit('beforeProvideDocumentSymbols', cdataEvent);
+                this.plugins.emit('provideDocumentSymbols', cdataEvent);
+                this.plugins.emit('afterProvideDocumentSymbols', cdataEvent);
+                event.documentSymbols.push(...this.remapDocumentSymbolsFromSynthetic(cdataEvent.documentSymbols, cdataCtx));
+            }
+        }
+
+        return event.documentSymbols;
     }
 
     /**
@@ -1244,10 +1376,9 @@ export class Program {
         const codeActions = [] as CodeAction[];
         const file = this.getFile(srcPath);
         if (file) {
-            let cdataInfo: { meta: { xmlFile: XmlFile; cdataRange: Range }; brsFile: BrsFile } | undefined;
-            if (isXmlFile(file)) {
-                cdataInfo = this.findCdataInfoForRange(file, range);
-            }
+            // resolveCdataContext uses range.start as a probe point; findCdataInfoForRange
+            // is used internally to check intersection with the full range.
+            const cdataCtx = isXmlFile(file) ? this.resolveCdataContext(file, range.start) : undefined;
 
             // When the range falls inside a CDATA block, redirect the event to the synthetic
             // BrsFile so that BrsFile-specific code actions work correctly. Setting
@@ -1255,13 +1386,13 @@ export class Program {
             // in synthetic-file coordinate space (rather than remapping to the parent XML file),
             // so that plugins can match diagnostics by file identity (x.file === event.file)
             // and derive correct edit positions from diagnostic.data (AST node ranges).
-            const effectiveFile = cdataInfo?.brsFile ?? file;
-            const effectiveRange = cdataInfo ? {
-                start: this.remapPosToSynthetic(cdataInfo.meta.cdataRange, range.start),
-                end: this.remapPosToSynthetic(cdataInfo.meta.cdataRange, range.end)
+            const effectiveFile = cdataCtx?.brsFile ?? file;
+            const effectiveRange = cdataCtx ? {
+                start: cdataCtx.toSynthetic(range.start),
+                end: cdataCtx.toSynthetic(range.end)
             } : range;
 
-            this._cdataDiagnosticsContext = cdataInfo?.brsFile;
+            this._cdataDiagnosticsContext = cdataCtx?.brsFile;
 
             const diagnostics = this
                 //get all current diagnostics (filtered by diagnostic filters)
@@ -1284,8 +1415,8 @@ export class Program {
 
             this._cdataDiagnosticsContext = undefined;
 
-            if (cdataInfo) {
-                this.remapCodeActionChangesToXml(codeActions, cdataInfo.meta, cdataInfo.brsFile, file as XmlFile);
+            if (cdataCtx) {
+                this.remapCodeActionChangesToXml(codeActions, cdataCtx, cdataCtx.brsFile, file as XmlFile);
             }
         }
         return codeActions;
@@ -1296,24 +1427,65 @@ export class Program {
      */
     public getSemanticTokens(srcPath: string): SemanticToken[] | undefined {
         const file = this.getFile(srcPath);
-        if (file) {
-            const result = [] as SemanticToken[];
-            this.plugins.emit('onGetSemanticTokens', {
-                program: this,
-                file: file,
-                scopes: this.getScopesForFile(file),
-                semanticTokens: result
-            });
-            return result;
+        if (!file) {
+            return undefined;
         }
+        const result = [] as SemanticToken[];
+        this.plugins.emit('onGetSemanticTokens', {
+            program: this,
+            file: file,
+            scopes: this.getScopesForFile(file),
+            semanticTokens: result
+        });
+
+        // For XML files, also collect semantic tokens from each inline CDATA block and remap
+        if (isXmlFile(file)) {
+            for (const [pkgPath, meta] of this.syntheticFileMeta) {
+                if (meta.xmlFile !== file) {
+                    continue;
+                }
+                const brsFile = this.getFile<BrsFile>(pkgPath);
+                if (!brsFile) {
+                    continue;
+                }
+                const cdataCtx = this.resolveCdataContext(file, meta.cdataRange.start);
+                if (!cdataCtx) {
+                    continue;
+                }
+                const cdataTokens = [] as SemanticToken[];
+                this.plugins.emit('onGetSemanticTokens', {
+                    program: this,
+                    file: brsFile,
+                    scopes: this.getScopesForFile(brsFile),
+                    semanticTokens: cdataTokens
+                });
+                for (const token of cdataTokens) {
+                    result.push({
+                        ...token,
+                        range: {
+                            start: cdataCtx.fromSynthetic(token.range.start),
+                            end: cdataCtx.fromSynthetic(token.range.end)
+                        }
+                    });
+                }
+            }
+        }
+
+        return result;
     }
 
     public getSignatureHelp(filePath: string, position: Position): SignatureInfoObj[] {
-        let file: BrsFile = this.getFile(filePath);
-        if (!file || !isBrsFile(file)) {
+        let file = this.getFile(filePath);
+        if (!file) {
             return [];
         }
-        let callExpressionInfo = new CallExpressionInfo(file, position);
+        const cdataCtx = isXmlFile(file) ? this.resolveCdataContext(file, position) : undefined;
+        const effectiveFile = cdataCtx?.brsFile ?? file;
+        const effectivePosition = cdataCtx ? cdataCtx.toSynthetic(position) : position;
+        if (!isBrsFile(effectiveFile)) {
+            return [];
+        }
+        let callExpressionInfo = new CallExpressionInfo(effectiveFile, effectivePosition);
         let signatureHelpUtil = new SignatureHelpUtil();
         return signatureHelpUtil.getSignatureHelpItems(callExpressionInfo);
     }
@@ -1325,10 +1497,14 @@ export class Program {
             return null;
         }
 
+        const cdataCtx = isXmlFile(file) ? this.resolveCdataContext(file, position) : undefined;
+        const effectiveFile = cdataCtx?.brsFile ?? file;
+        const effectivePosition = cdataCtx ? cdataCtx.toSynthetic(position) : position;
+
         const event: ProvideReferencesEvent = {
             program: this,
-            file: file,
-            position: position,
+            file: effectiveFile,
+            position: effectivePosition,
             references: []
         };
 
@@ -1336,7 +1512,7 @@ export class Program {
         this.plugins.emit('provideReferences', event);
         this.plugins.emit('afterProvideReferences', event);
 
-        return event.references;
+        return cdataCtx ? this.remapLocationsFromSynthetic(event.references, cdataCtx) : event.references;
     }
 
     /**
