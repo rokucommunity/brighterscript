@@ -1248,7 +1248,7 @@ export class Util {
      * @param typeDescriptor the type descriptor from the docs
      * @returns {BscType} the known type, or dynamic
      */
-    public getNodeFieldType(typeDescriptor: string, lookupTable?: SymbolTable): BscType {
+    public getNodeFieldType(typeDescriptor: string, lookupTable?: SymbolTable, dynamicIfNotFound = true): BscType {
         let typeDescriptorLower = typeDescriptor.toLowerCase().trim().replace(/\*/g, '');
 
         if (typeDescriptorLower.startsWith('as ')) {
@@ -1364,13 +1364,17 @@ export class Util {
             return this.getNodeFieldType('roSGNodeContentNode', lookupTable);
         } else if (typeDescriptorLower.endsWith(' node')) {
             return this.getNodeFieldType('roSgNode' + typeDescriptorLower.substring(0, typeDescriptorLower.length - 5), lookupTable);
-        } else if (lookupTable) {
+        } else if (lookupTable && !typeDescriptorLower.includes(' ')) {
             //try doing a lookup
             return lookupTable.getSymbolType(typeDescriptorLower, {
                 flags: SymbolTypeFlag.typetime,
                 fullName: typeDescriptor,
                 tableProvider: () => lookupTable
             });
+        }
+
+        if (!dynamicIfNotFound) {
+            return undefined;
         }
 
         return DynamicType.instance;

@@ -475,7 +475,7 @@ export let DiagnosticMessages = {
         code: 'function-not-found'
     }),
     xmlInvalidFieldType: (name: string) => ({
-        message: `Invalid field type ${name}`,
+        message: `Invalid field type '${name}'`,
         legacyCode: 1068,
         severity: DiagnosticSeverity.Error,
         code: 'invalid-field-type'
