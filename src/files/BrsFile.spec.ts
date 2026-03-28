@@ -84,8 +84,8 @@ describe('BrsFile', () => {
         it('binary operator continuation is not allowed in .brs files by default', () => {
             program.setFile('source/main.brs', `
                 sub main()
-                    result = value1 +
-                             value2
+                    result = 1 +
+                             2
                 end sub
             `);
             program.validate();
@@ -95,8 +95,8 @@ describe('BrsFile', () => {
         it('binary operator continuation is always allowed in .bs files', () => {
             program.setFile('source/main.bs', `
                 sub main()
-                    result = value1 +
-                             value2
+                    result = 1 +
+                             2
                 end sub
             `);
             program.validate();
@@ -107,8 +107,8 @@ describe('BrsFile', () => {
             program.options.allowBrighterScriptInBrightScript = true;
             program.setFile('source/main.brs', `
                 sub main()
-                    result = value1 +
-                             value2
+                    result = 1 +
+                             2
                 end sub
             `);
             program.validate();
@@ -116,11 +116,11 @@ describe('BrsFile', () => {
         });
 
         it('binary operator continuation is allowed in .brs files when allowLineContinuation is enabled', () => {
-            (program.options as any).allowLineContinuation = true;
+            program.options.allowLineContinuation = true;
             program.setFile('source/main.brs', `
                 sub main()
-                    result = value1 +
-                             value2
+                    result = 1 +
+                             2
                 end sub
             `);
             program.validate();
