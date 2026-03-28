@@ -190,6 +190,16 @@ export class Parser {
      */
     private allowLineContinuation: boolean;
 
+    /**
+     * If line continuation is enabled, consumes all immediately following Newline tokens.
+     * Call this after matching a binary operator to allow the right-hand operand on the next line.
+     */
+    private consumeNewlinesIfAllowed() {
+        if (this.allowLineContinuation) {
+            while (this.match(TokenKind.Newline)) { }
+        }
+    }
+
     private globalTerminators = [] as TokenKind[][];
 
     /**
@@ -2528,6 +2538,7 @@ export class Parser {
 
         while (this.matchAny(TokenKind.And, TokenKind.Or)) {
             let operator = this.previous();
+            this.consumeNewlinesIfAllowed();
             let right = this.relational();
             this.addExpressionsToReferences(expr, right);
             expr = new BinaryExpression(expr, operator, right);
@@ -2550,6 +2561,7 @@ export class Parser {
             )
         ) {
             let operator = this.previous();
+            this.consumeNewlinesIfAllowed();
             let right = this.additive();
             this.addExpressionsToReferences(expr, right);
             expr = new BinaryExpression(expr, operator, right);
@@ -2573,6 +2585,7 @@ export class Parser {
 
         while (this.matchAny(TokenKind.Plus, TokenKind.Minus)) {
             let operator = this.previous();
+            this.consumeNewlinesIfAllowed();
             let right = this.multiplicative();
             this.addExpressionsToReferences(expr, right);
             expr = new BinaryExpression(expr, operator, right);
@@ -2593,6 +2606,7 @@ export class Parser {
             TokenKind.RightShift
         )) {
             let operator = this.previous();
+            this.consumeNewlinesIfAllowed();
             let right = this.exponential();
             this.addExpressionsToReferences(expr, right);
             expr = new BinaryExpression(expr, operator, right);
@@ -2606,6 +2620,7 @@ export class Parser {
 
         while (this.match(TokenKind.Caret)) {
             let operator = this.previous();
+            this.consumeNewlinesIfAllowed();
             let right = this.prefixUnary();
             this.addExpressionsToReferences(expr, right);
             expr = new BinaryExpression(expr, operator, right);
