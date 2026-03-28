@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, DocumentSymbol, CancellationToken } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, DocumentSymbol, CancellationToken, WorkspaceEdit } from 'vscode-languageserver';
 import { CancellationTokenSource, CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
@@ -165,6 +165,13 @@ export class Program {
      */
     private syntheticFileMeta = new Map<string, { xmlFile: XmlFile; cdataRange: Range }>();
 
+    /**
+     * When set, `getDiagnostics()` will skip remapping diagnostics for this synthetic BrsFile,
+     * leaving them in synthetic-file coordinate space. Used during code action events for CDATA
+     * blocks so that plugins can match diagnostics by file identity (`x.file === event.file`).
+     */
+    private _cdataDiagnosticsContext: BrsFile | undefined;
+
     private scopes = {} as Record<string, Scope>;
 
     protected addScope(scope: Scope) {
@@ -306,7 +313,9 @@ export class Program {
             });
 
             this.logger.info(`diagnostic counts: total=${chalk.yellow(diagnostics.length.toString())}, after filter=${chalk.yellow(filteredDiagnostics.length.toString())}`);
-            return this.remapSyntheticFileDiagnostics(filteredDiagnostics);
+            return this._cdataDiagnosticsContext
+                ? this.partialRemapSyntheticFileDiagnostics(filteredDiagnostics, this._cdataDiagnosticsContext)
+                : this.remapSyntheticFileDiagnostics(filteredDiagnostics);
         });
     }
 
@@ -324,24 +333,127 @@ export class Program {
             if (!meta) {
                 return diagnostic;
             }
-            const cdataStartLine = meta.cdataRange.start.line;
-            // content starts 9 chars after the opening '<![CDATA[' on the same line
-            const cdataContentStartChar = meta.cdataRange.start.character + '<![CDATA['.length;
-
-            const remapPos = (pos: Position) => ({
-                line: cdataStartLine + pos.line,
-                character: pos.line === 0 ? cdataContentStartChar + pos.character : pos.character
-            });
-
             return {
                 ...diagnostic,
                 file: meta.xmlFile,
                 range: {
-                    start: remapPos(diagnostic.range.start),
-                    end: remapPos(diagnostic.range.end)
+                    start: this.remapPosFromSynthetic(meta.cdataRange, diagnostic.range.start),
+                    end: this.remapPosFromSynthetic(meta.cdataRange, diagnostic.range.end)
                 }
             };
         });
+    }
+
+    /**
+     * Like `remapSyntheticFileDiagnostics`, but skips remapping for `contextFile` so its
+     * diagnostics remain in synthetic-file coordinate space. Used during code action events
+     * so that plugins can match diagnostics by file identity (`x.file === event.file`).
+     */
+    private partialRemapSyntheticFileDiagnostics(diagnostics: BsDiagnostic[], contextFile: BrsFile): BsDiagnostic[] {
+        return diagnostics.map(diagnostic => {
+            if (!diagnostic.file?.isSynthetic) {
+                return diagnostic;
+            }
+            // Keep the context file's diagnostics in synthetic coordinate space
+            if (diagnostic.file === contextFile) {
+                return diagnostic;
+            }
+            // All other synthetic files remap to XML as usual
+            const meta = this.syntheticFileMeta.get(diagnostic.file.pkgPath.toLowerCase());
+            if (!meta) {
+                return diagnostic;
+            }
+            return {
+                ...diagnostic,
+                file: meta.xmlFile,
+                range: {
+                    start: this.remapPosFromSynthetic(meta.cdataRange, diagnostic.range.start),
+                    end: this.remapPosFromSynthetic(meta.cdataRange, diagnostic.range.end)
+                }
+            };
+        });
+    }
+
+    /**
+     * Converts a position in synthetic BrsFile coordinates to its equivalent position in the
+     * parent XML file. Line 0 of the synthetic file maps to the line containing `<![CDATA[`,
+     * offset by 9 characters (the length of `<![CDATA[`). Subsequent lines are column-accurate.
+     */
+    private remapPosFromSynthetic(cdataRange: Range, pos: Position): Position {
+        const cdataStartLine = cdataRange.start.line;
+        const cdataContentStartChar = cdataRange.start.character + '<![CDATA['.length;
+        return {
+            line: cdataStartLine + pos.line,
+            character: pos.line === 0 ? cdataContentStartChar + pos.character : pos.character
+        };
+    }
+
+    /**
+     * Converts a position in the parent XML file to the equivalent position in the synthetic
+     * BrsFile coordinate space (inverse of `remapPosFromSynthetic`).
+     */
+    private remapPosToSynthetic(cdataRange: Range, pos: Position): Position {
+        const cdataStartLine = cdataRange.start.line;
+        const cdataContentStartChar = cdataRange.start.character + '<![CDATA['.length;
+        const syntheticLine = pos.line - cdataStartLine;
+        return {
+            line: syntheticLine,
+            character: syntheticLine === 0 ? pos.character - cdataContentStartChar : pos.character
+        };
+    }
+
+    /**
+     * Returns the CDATA metadata and corresponding synthetic BrsFile for the CDATA block whose
+     * range intersects `range` within `xmlFile`, or `undefined` if no block matches.
+     */
+    private findCdataInfoForRange(xmlFile: XmlFile, range: Range): { meta: { xmlFile: XmlFile; cdataRange: Range }; brsFile: BrsFile } | undefined {
+        for (const [pkgPathKey, meta] of this.syntheticFileMeta) {
+            if (meta.xmlFile !== xmlFile) {
+                continue;
+            }
+            if (util.rangesIntersectOrTouch(meta.cdataRange, range)) {
+                const brsFile = this.getFile<BrsFile>(pkgPathKey);
+                if (brsFile) {
+                    return { meta: meta, brsFile: brsFile };
+                }
+            }
+        }
+        return undefined;
+    }
+
+    /**
+     * After code actions are generated using a synthetic BrsFile as the target, this remaps any
+     * workspace edit changes that reference the synthetic file back to the parent XML file, with
+     * positions converted from BrsFile coordinates to XML coordinates.
+     */
+    private remapCodeActionChangesToXml(
+        codeActions: CodeAction[],
+        meta: { cdataRange: Range },
+        brsFile: BrsFile,
+        xmlFile: XmlFile
+    ) {
+        const syntheticUri = URI.file(brsFile.srcPath).toString();
+        const xmlUri = URI.file(xmlFile.srcPath).toString();
+        for (const action of codeActions) {
+            const changes = (action.edit as WorkspaceEdit)?.changes;
+            if (!changes?.[syntheticUri]) {
+                continue;
+            }
+            const syntheticEdits = changes[syntheticUri];
+            delete changes[syntheticUri];
+            if (!changes[xmlUri]) {
+                changes[xmlUri] = [];
+            }
+            for (const edit of syntheticEdits) {
+                changes[xmlUri].push({
+                    ...edit,
+                    range: {
+                        start: this.remapPosFromSynthetic(meta.cdataRange, edit.range.start),
+                        end: this.remapPosFromSynthetic(meta.cdataRange, edit.range.end)
+                    }
+                });
+            }
+        }
     }
 
     public addDiagnostics(diagnostics: BsDiagnostic[]) {
@@ -1132,24 +1244,49 @@ export class Program {
         const codeActions = [] as CodeAction[];
         const file = this.getFile(srcPath);
         if (file) {
+            let cdataInfo: { meta: { xmlFile: XmlFile; cdataRange: Range }; brsFile: BrsFile } | undefined;
+            if (isXmlFile(file)) {
+                cdataInfo = this.findCdataInfoForRange(file, range);
+            }
+
+            // When the range falls inside a CDATA block, redirect the event to the synthetic
+            // BrsFile so that BrsFile-specific code actions work correctly. Setting
+            // _cdataDiagnosticsContext causes getDiagnostics() to keep that file's diagnostics
+            // in synthetic-file coordinate space (rather than remapping to the parent XML file),
+            // so that plugins can match diagnostics by file identity (x.file === event.file)
+            // and derive correct edit positions from diagnostic.data (AST node ranges).
+            const effectiveFile = cdataInfo?.brsFile ?? file;
+            const effectiveRange = cdataInfo ? {
+                start: this.remapPosToSynthetic(cdataInfo.meta.cdataRange, range.start),
+                end: this.remapPosToSynthetic(cdataInfo.meta.cdataRange, range.end)
+            } : range;
+
+            this._cdataDiagnosticsContext = cdataInfo?.brsFile;
+
             const diagnostics = this
                 //get all current diagnostics (filtered by diagnostic filters)
                 .getDiagnostics()
                 //only keep diagnostics related to this file
-                .filter(x => x.file === file)
+                .filter(x => x.file === effectiveFile)
                 //only keep diagnostics that touch this range
-                .filter(x => util.rangesIntersectOrTouch(x.range, range));
+                .filter(x => util.rangesIntersectOrTouch(x.range, effectiveRange));
 
-            const scopes = this.getScopesForFile(file);
+            const scopes = this.getScopesForFile(effectiveFile);
 
             this.plugins.emit('onGetCodeActions', {
                 program: this,
-                file: file,
-                range: range,
+                file: effectiveFile,
+                range: effectiveRange,
                 diagnostics: diagnostics,
                 scopes: scopes,
                 codeActions: codeActions
             });
+
+            this._cdataDiagnosticsContext = undefined;
+
+            if (cdataInfo) {
+                this.remapCodeActionChangesToXml(codeActions, cdataInfo.meta, cdataInfo.brsFile, file as XmlFile);
+            }
         }
         return codeActions;
     }
