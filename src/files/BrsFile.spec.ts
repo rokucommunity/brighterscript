@@ -4659,6 +4659,51 @@ describe('BrsFile', () => {
         }]);
     });
 
+    it('warns on duplicate parameter names in a function', () => {
+        program.setFile('source/main.bs', `
+            function test(a, b, a)
+            end function
+        `);
+        program.validate();
+        expectDiagnostics(program, [{
+            ...DiagnosticMessages.duplicateFunctionParameter('a'),
+            range: util.createRange(1, 32, 1, 33)
+        }]);
+    });
+
+    it('warns on duplicate parameter names in a sub', () => {
+        program.setFile('source/main.bs', `
+            sub test(name as string, name as string)
+            end sub
+        `);
+        program.validate();
+        expectDiagnostics(program, [{
+            ...DiagnosticMessages.duplicateFunctionParameter('name'),
+            range: util.createRange(1, 37, 1, 41)
+        }]);
+    });
+
+    it('does not warn when all parameter names are unique', () => {
+        program.setFile('source/main.bs', `
+            function test(a, b, c)
+            end function
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
+    it('duplicate parameter check is case-insensitive', () => {
+        program.setFile('source/main.bs', `
+            function test(myParam, MyParam)
+            end function
+        `);
+        program.validate();
+        expectDiagnostics(program, [{
+            ...DiagnosticMessages.duplicateFunctionParameter('MyParam'),
+            range: util.createRange(1, 35, 1, 42)
+        }]);
+    });
+
     describe('getClosestExpression', () => {
         it('returns undefined for missing Position', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `

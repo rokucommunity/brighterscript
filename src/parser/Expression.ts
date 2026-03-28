@@ -90,6 +90,12 @@ export class CallExpression extends Expression {
     public readonly range: Range | undefined;
 
     /**
+     * When named arguments are used and successfully resolved during validation, this holds the
+     * positional-ordered argument list used for transpilation. If undefined, `args` is used directly.
+     */
+    public resolvedArgs?: Expression[];
+
+    /**
      * Get the name of the wrapping namespace (if it exists)
      * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
      */
@@ -110,12 +116,15 @@ export class CallExpression extends Expression {
         result.push(
             state.transpileToken(this.openingParen)
         );
-        for (let i = 0; i < this.args.length; i++) {
+        // Use resolvedArgs when named arguments have been reordered during validation,
+        // otherwise fall back to the original args list
+        const argsToTranspile = this.resolvedArgs ?? this.args;
+        for (let i = 0; i < argsToTranspile.length; i++) {
             //add comma between args
             if (i > 0) {
                 result.push(', ');
             }
-            let arg = this.args[i];
+            let arg = argsToTranspile[i];
             result.push(...arg.transpile(state));
         }
         if (this.closingParen) {
@@ -142,6 +151,43 @@ export class CallExpression extends Expression {
                 this.args?.map(e => e?.clone())
             ),
             ['callee', 'args']
+        );
+    }
+}
+
+export class NamedArgumentExpression extends Expression {
+    constructor(
+        readonly name: Identifier,
+        readonly colon: Token,
+        readonly value: Expression
+    ) {
+        super();
+        this.range = util.createBoundingRange(this.name, this.colon, this.value);
+    }
+
+    public readonly range: Range | undefined;
+
+    transpile(state: BrsTranspileState) {
+        // Named arguments are resolved to positional order during validation.
+        // If reached during transpile (e.g. for an unresolvable call), emit the value only.
+        return this.value.transpile(state);
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        // eslint-disable-next-line no-bitwise
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'value', visitor, options);
+        }
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new NamedArgumentExpression(
+                util.cloneToken(this.name),
+                util.cloneToken(this.colon),
+                this.value?.clone()
+            ),
+            ['value']
         );
     }
 }

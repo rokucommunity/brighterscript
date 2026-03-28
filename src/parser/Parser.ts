@@ -90,7 +90,8 @@ import {
     TypeCastExpression,
     UnaryExpression,
     VariableExpression,
-    XmlAttributeGetExpression
+    XmlAttributeGetExpression,
+    NamedArgumentExpression
 } from './Expression';
 import type { Diagnostic, Range } from 'vscode-languageserver';
 import type { Logger } from '../logging';
@@ -2777,7 +2778,20 @@ export class Parser {
                     throw this.lastDiagnosticAsError();
                 }
                 try {
-                    args.push(this.expression());
+                    // In BrighterScript mode, detect named argument syntax: `paramName: value`
+                    if (
+                        this.options.mode === ParseMode.BrighterScript &&
+                        this.checkAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers) &&
+                        this.checkNext(TokenKind.Colon)
+                    ) {
+                        const name = this.advance() as Identifier;
+                        name.kind = TokenKind.Identifier;
+                        const colon = this.advance();
+                        const value = this.expression();
+                        args.push(new NamedArgumentExpression(name, colon, value));
+                    } else {
+                        args.push(this.expression());
+                    }
                 } catch (error) {
                     this.rethrowNonDiagnosticError(error);
                     // we were unable to get an expression, so don't continue

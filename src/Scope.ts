@@ -8,15 +8,17 @@ import type { CallableContainer, BsDiagnostic, FileReference, BscFile, CallableC
 import type { Program } from './Program';
 import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, FunctionStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement, ConstStatement, TypeStatement } from './parser/Statement';
-import type { NewExpression } from './parser/Expression';
+import type { NewExpression, NamedArgumentExpression } from './parser/Expression';
+import type { Expression } from './parser/AstNode';
 import { ParseMode } from './parser/Parser';
+import { createInvalidLiteral } from './astUtils/creators';
 import { util } from './util';
 import { globalCallableMap } from './globalCallables';
 import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isMethodStatement, isClassStatement, isConstStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile, isNamespaceStatement, isEnumMemberStatement } from './astUtils/reflection';
+import { isBrsFile, isMethodStatement, isClassStatement, isConstStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile, isNamespaceStatement, isEnumMemberStatement, isNamedArgumentExpression, isVariableExpression } from './astUtils/reflection';
 import { SymbolTable } from './SymbolTable';
 import type { Statement } from './parser/AstNode';
 import { LogLevel } from './logging';
@@ -777,6 +779,7 @@ export class Scope {
 
         //do many per-file checks
         this.enumerateBrsFiles((file) => {
+            this.validateNamedArgCalls(file, callableContainerMap);
             this.diagnosticDetectFunctionCallsWithWrongParamCount(file, callableContainerMap);
             this.diagnosticDetectShadowedLocalVars(file, callableContainerMap);
             this.diagnosticDetectFunctionCollisions(file);
@@ -985,11 +988,158 @@ export class Scope {
     }
 
     /**
+     * Validate calls that use named arguments, and resolve them to positional order for transpilation.
+     * Only handles simple function calls (VariableExpression callee); method calls are not supported.
+     */
+    private validateNamedArgCalls(file: BscFile, callableContainerMap: CallableContainerMap) {
+        if (!isBrsFile(file)) {
+            return;
+        }
+        for (const func of file.parser.references.functionExpressions) {
+            for (const callExpr of func.callExpressions) {
+                if (!callExpr.args.some(isNamedArgumentExpression)) {
+                    continue;
+                }
+
+                // Named args are only supported for simple variable calls (not method/dotted calls)
+                if (!isVariableExpression(callExpr.callee)) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.namedArgsNotAllowedForUnknownFunction((callExpr.callee as any)?.name?.text ?? '?'),
+                        range: callExpr.openingParen.range,
+                        file: file
+                    });
+                    continue;
+                }
+
+                const funcName = callExpr.callee.name.text;
+                const callableContainers = callableContainerMap.get(funcName.toLowerCase());
+                const callable = callableContainers?.[0]?.callable;
+
+                if (!callable) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.namedArgsNotAllowedForUnknownFunction(funcName),
+                        range: callExpr.callee.range,
+                        file: file
+                    });
+                    continue;
+                }
+
+                const params = callable.functionStatement.func.parameters;
+                // resolvedArgs[i] holds the resolved expression for the i-th positional parameter.
+                // Use assignedParams to track which slots are filled (avoids a null-union type).
+                const resolvedArgs: Expression[] = [];
+                const assignedParams = new Set<number>();
+                let seenNamedArg = false;
+                let hasError = false;
+
+                for (const arg of callExpr.args) {
+                    if (!isNamedArgumentExpression(arg)) {
+                        if (seenNamedArg) {
+                            this.diagnostics.push({
+                                ...DiagnosticMessages.positionalArgAfterNamedArg(),
+                                range: arg.range,
+                                file: file
+                            });
+                            hasError = true;
+                            continue;
+                        }
+                        const idx = assignedParams.size;
+                        if (idx < params.length) {
+                            resolvedArgs[idx] = arg;
+                            assignedParams.add(idx);
+                        }
+                    } else {
+                        seenNamedArg = true;
+                        const paramName = (arg as NamedArgumentExpression).name.text.toLowerCase();
+                        const paramIdx = params.findIndex(p => p.name.text.toLowerCase() === paramName);
+
+                        if (paramIdx < 0) {
+                            this.diagnostics.push({
+                                ...DiagnosticMessages.unknownNamedArgument((arg as NamedArgumentExpression).name.text, funcName),
+                                range: (arg as NamedArgumentExpression).name.range,
+                                file: file
+                            });
+                            hasError = true;
+                            continue;
+                        }
+
+                        if (assignedParams.has(paramIdx)) {
+                            this.diagnostics.push({
+                                ...DiagnosticMessages.namedArgDuplicate((arg as NamedArgumentExpression).name.text),
+                                range: (arg as NamedArgumentExpression).name.range,
+                                file: file
+                            });
+                            hasError = true;
+                            continue;
+                        }
+
+                        resolvedArgs[paramIdx] = (arg as NamedArgumentExpression).value;
+                        assignedParams.add(paramIdx);
+                    }
+                }
+
+                if (hasError) {
+                    continue;
+                }
+
+                // Validate all required params are provided
+                for (let i = 0; i < params.length; i++) {
+                    if (!assignedParams.has(i) && !params[i].defaultValue) {
+                        const minParams = params.filter(p => !p.defaultValue).length;
+                        const maxParams = params.length;
+                        this.diagnostics.push({
+                            ...DiagnosticMessages.mismatchArgumentCount(
+                                minParams === maxParams ? maxParams : `${minParams}-${maxParams}`,
+                                callExpr.args.length
+                            ),
+                            range: callExpr.callee.range,
+                            file: file
+                        });
+                        hasError = true;
+                        break;
+                    }
+                }
+
+                if (hasError) {
+                    continue;
+                }
+
+                // Find the last provided param index so we know how many args to emit
+                let lastProvidedIdx = -1;
+                for (let i = params.length - 1; i >= 0; i--) {
+                    if (assignedParams.has(i)) {
+                        lastProvidedIdx = i;
+                        break;
+                    }
+                }
+
+                // Build the final positional arg list, filling in defaults for skipped middle optionals
+                const finalArgs: Expression[] = [];
+                for (let i = 0; i <= lastProvidedIdx; i++) {
+                    if (assignedParams.has(i)) {
+                        finalArgs.push(resolvedArgs[i]);
+                    } else {
+                        // Skipped optional param — use its default value or `invalid`
+                        finalArgs.push(params[i].defaultValue?.clone() ?? createInvalidLiteral());
+                    }
+                }
+
+                callExpr.resolvedArgs = finalArgs;
+            }
+        }
+    }
+
+    /**
      * Detect calls to functions with the incorrect number of parameters
      */
     private diagnosticDetectFunctionCallsWithWrongParamCount(file: BscFile, callableContainersByLowerName: CallableContainerMap) {
         //validate all function calls
         for (let expCall of file?.functionCalls ?? []) {
+            // Skip calls that use named arguments — those are fully validated by validateNamedArgCalls()
+            if (expCall.args.some(a => isNamedArgumentExpression(a.expression))) {
+                continue;
+            }
+
             let callableContainersWithThisName = callableContainersByLowerName.get(expCall.name.toLowerCase());
 
             //use the first item from callablesByLowerName, because if there are more, that's a separate error
