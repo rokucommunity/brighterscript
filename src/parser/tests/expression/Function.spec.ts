@@ -359,7 +359,7 @@ describe('parser', () => {
 
                 token(TokenKind.RightParen, ')'),
                 EOF
-            ]);
+            ], { allowLineContinuation: true });
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(statements).to.be.length.greaterThan(0);

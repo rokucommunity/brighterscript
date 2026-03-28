@@ -70,7 +70,7 @@ describe('parser call expressions', () => {
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.RightParen, ')'),
             EOF
-        ]);
+        ], { allowLineContinuation: true });
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);
@@ -208,10 +208,9 @@ describe('parser call expressions', () => {
                 end sub
             `);
 
-            expect(diagnostics).to.be.lengthOf(2);
+            expect(diagnostics).to.be.lengthOf(1);
             expectDiagnostics(diagnostics, [
-                DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
-                DiagnosticMessages.expectedNewlineOrColon()
+                DiagnosticMessages.expectedRightParenAfterFunctionCallArguments()
             ]);
             expect(statements).to.be.lengthOf(1);
             const bodyStatements = (statements[0] as FunctionStatement).func.body.statements;

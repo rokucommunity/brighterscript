@@ -81,7 +81,7 @@ describe('BrsFile', () => {
     });
 
     describe('allowLineContinuation', () => {
-        it('binary operator continuation is not allowed in .brs files by default', () => {
+        it('does not allow binary operator continuation in .brs files by default', () => {
             program.setFile('source/main.brs', `
                 sub main()
                     result = 1 +
@@ -92,7 +92,7 @@ describe('BrsFile', () => {
             expectHasDiagnostics(program);
         });
 
-        it('binary operator continuation is always allowed in .bs files', () => {
+        it('allows binary operator continuation in .bs files', () => {
             program.setFile('source/main.bs', `
                 sub main()
                     result = 1 +
@@ -103,7 +103,7 @@ describe('BrsFile', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('binary operator continuation is allowed in .brs files when allowBrighterScriptInBrightScript is enabled', () => {
+        it('allows binary operator continuation in .brs files when allowBrighterScriptInBrightScript is enabled', () => {
             program.options.allowBrighterScriptInBrightScript = true;
             program.setFile('source/main.brs', `
                 sub main()
@@ -115,12 +115,58 @@ describe('BrsFile', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('binary operator continuation is allowed in .brs files when allowLineContinuation is enabled', () => {
+        it('allows binary operator continuation in .brs files when allowLineContinuation is enabled', () => {
             program.options.allowLineContinuation = true;
             program.setFile('source/main.brs', `
                 sub main()
                     result = 1 +
                              2
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not allow multi-line function call args in .brs files by default', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+                sub foo(a, b)
+                end sub
+            `);
+            program.validate();
+            expectHasDiagnostics(program);
+        });
+
+        it('allows multi-line function call args in .bs files', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+                sub foo(a, b)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows multi-line function call args in .brs files when allowLineContinuation is enabled', () => {
+            program.options.allowLineContinuation = true;
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+                sub foo(a, b)
                 end sub
             `);
             program.validate();
@@ -1599,10 +1645,8 @@ describe('BrsFile', () => {
             `);
             expectDiagnostics(file.parser.diagnostics, [
                 DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
-                DiagnosticMessages.expectedNewlineOrColon(),
-                DiagnosticMessages.unexpectedToken('end function'),
                 DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
-                DiagnosticMessages.expectedNewlineOrColon()
+                DiagnosticMessages.unexpectedToken('\n')
             ]);
             expect(file.functionCalls.length).to.equal(2);
 

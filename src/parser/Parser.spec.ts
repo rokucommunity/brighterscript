@@ -1842,7 +1842,7 @@ describe('parser', () => {
                 expectZeroDiagnostics(diagnostics);
             });
 
-            it('is allowed in BrightScript mode when allowLineContinuation option is set', () => {
+            it('is allowed in BrightScript mode when allowLineContinuation is set', () => {
                 let { tokens } = Lexer.scan(`
                     sub main()
                         result = value1 +
@@ -1856,7 +1856,7 @@ describe('parser', () => {
                 expectZeroDiagnostics(diagnostics);
             });
 
-            it('is not allowed in plain BrightScript mode', () => {
+            it('is not allowed in BrightScript mode', () => {
                 let { diagnostics } = parse(`
                     sub main()
                         result = value1 +
@@ -1864,6 +1864,67 @@ describe('parser', () => {
                     end sub
                 `, ParseMode.BrightScript);
                 expect(diagnostics.length).to.be.greaterThan(0);
+            });
+        });
+
+        describe('function call argument continuation', () => {
+            it('is not allowed in BrightScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        result = foo(
+                            arg1,
+                            arg2
+                        )
+                    end sub
+                    sub foo(a, b)
+                    end sub
+                `, ParseMode.BrightScript);
+                expect(diagnostics.length).to.be.greaterThan(0);
+            });
+
+            it('is allowed in BrighterScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        result = foo(
+                            arg1,
+                            arg2
+                        )
+                    end sub
+                    sub foo(a, b)
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('is allowed in BrightScript mode when allowLineContinuation is set', () => {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        result = foo(
+                            arg1,
+                            arg2
+                        )
+                    end sub
+                    sub foo(a, b)
+                    end sub
+                `);
+                let { diagnostics } = Parser.parse(tokens, {
+                    mode: ParseMode.BrightScript,
+                    allowLineContinuation: true
+                });
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('does not affect inline objects passed as arguments in BrightScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        foo({
+                            key: "value"
+                        })
+                    end sub
+                    sub foo(a)
+                    end sub
+                `, ParseMode.BrightScript);
+                expectZeroDiagnostics(diagnostics);
             });
         });
     });

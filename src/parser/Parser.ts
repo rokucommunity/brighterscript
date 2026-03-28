@@ -2785,11 +2785,11 @@ export class Parser {
 
     private finishCall(openingParen: Token, callee: Expression, addToCallExpressionList = true) {
         let args = [] as Expression[];
-        while (this.match(TokenKind.Newline)) { }
+        this.consumeNewlinesIfAllowed();
 
         if (!this.check(TokenKind.RightParen)) {
             do {
-                while (this.match(TokenKind.Newline)) { }
+                this.consumeNewlinesIfAllowed();
 
                 if (args.length >= CallExpression.MaximumArguments) {
                     this.diagnostics.push({
@@ -2808,7 +2808,7 @@ export class Parser {
             } while (this.match(TokenKind.Comma));
         }
 
-        while (this.match(TokenKind.Newline)) { }
+        this.consumeNewlinesIfAllowed();
 
         const closingParen = this.tryConsume(
             DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
