@@ -80,6 +80,12 @@ export class BrsFile {
     }
 
     /**
+     * When true, this file was generated from inline CDATA content in an XML file and is not backed by a file on disk.
+     * The file watcher should ignore change events for paths that match a synthetic file.
+     */
+    public isSynthetic = false;
+
+    /**
      * Will this file result in only comment or whitespace output? If so, it can be excluded from the output if that bsconfig setting is enabled.
      */
     public get canBePruned() {

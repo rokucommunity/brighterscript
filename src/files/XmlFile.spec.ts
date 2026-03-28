@@ -1324,4 +1324,217 @@ describe('XmlFile', () => {
             expect(program.getComponent('comp1')!.file.pkgPath).to.equal(comp2.pkgPath);
         });
     });
+
+    describe('inline CDATA scripts', () => {
+
+        it('registers a synthetic BrsFile for a brightscript CDATA block', () => {
+            const xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        function init()
+                        end function
+                    ]]></script>
+                </component>
+            `);
+            expect(xmlFile.inlineScriptPkgPaths).to.eql(['components/MyComp.cdata-0.script.brs']);
+            const syntheticFile = program.getFile<BrsFile>('components/MyComp.cdata-0.script.brs');
+            expect(syntheticFile).to.exist;
+            expect(syntheticFile.isSynthetic).to.be.true;
+        });
+
+        it('registers a synthetic .bs file when type is text/brighterscript', () => {
+            const xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brighterscript"><![CDATA[
+                        function init()
+                        end function
+                    ]]></script>
+                </component>
+            `);
+            expect(xmlFile.inlineScriptPkgPaths).to.eql(['components/MyComp.cdata-0.script.bs']);
+            expect(program.getFile('components/MyComp.cdata-0.script.bs')).to.exist;
+        });
+
+        it('registers a synthetic .bs file when type is text/bs', () => {
+            const xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/bs"><![CDATA[
+                        function init()
+                        end function
+                    ]]></script>
+                </component>
+            `);
+            expect(xmlFile.inlineScriptPkgPaths).to.eql(['components/MyComp.cdata-0.script.bs']);
+            expect(program.getFile('components/MyComp.cdata-0.script.bs')).to.exist;
+        });
+
+        it('does NOT treat text/brightscript as brighterscript', () => {
+            const xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        function init()
+                        end function
+                    ]]></script>
+                </component>
+            `);
+            expect(xmlFile.inlineScriptPkgPaths[0]).to.equal('components/MyComp.cdata-0.script.brs');
+        });
+
+        it('indexes multiple CDATA blocks independently', () => {
+            const xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        function a()
+                        end function
+                    ]]></script>
+                    <script type="text/brighterscript"><![CDATA[
+                        function b()
+                        end function
+                    ]]></script>
+                </component>
+            `);
+            expect(xmlFile.inlineScriptPkgPaths).to.eql([
+                'components/MyComp.cdata-0.script.brs',
+                'components/MyComp.cdata-1.script.bs'
+            ]);
+            expect(program.getFile('components/MyComp.cdata-0.script.brs')).to.exist;
+            expect(program.getFile('components/MyComp.cdata-1.script.bs')).to.exist;
+        });
+
+        it('transpile replaces CDATA blocks with uri script tags', () => {
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        function init()
+                        end function
+                    ]]></script>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript" uri="pkg:/components/MyComp.cdata-0.script.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/MyComp.xml');
+        });
+
+        it('transpile replaces mixed uri and CDATA scripts preserving order', () => {
+            program.setFile('components/helper.brs', '');
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript" uri="./helper.brs" />
+                    <script type="text/brightscript"><![CDATA[
+                        function init()
+                        end function
+                    ]]></script>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript" uri="./helper.brs" />
+                    <script type="text/brightscript" uri="pkg:/components/MyComp.cdata-0.script.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/MyComp.xml');
+        });
+
+        it('cleans up synthetic files when the xml file is removed', () => {
+            program.setFile('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        function init()
+                        end function
+                    ]]></script>
+                </component>
+            `);
+            expect(program.getFile('components/MyComp.cdata-0.script.brs')).to.exist;
+            program.removeFile(s`${rootDir}/components/MyComp.xml`);
+            expect(program.getFile('components/MyComp.cdata-0.script.brs')).to.not.exist;
+        });
+
+        it('replaces old synthetic files when the xml file is re-parsed', () => {
+            program.setFile('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        function init()
+                        end function
+                    ]]></script>
+                </component>
+            `);
+            const firstFile = program.getFile('components/MyComp.cdata-0.script.brs');
+            expect(firstFile).to.exist;
+
+            //re-set with different cdata content
+            program.setFile('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        function init()
+                            print "updated"
+                        end function
+                    ]]></script>
+                </component>
+            `);
+            const secondFile = program.getFile<BrsFile>('components/MyComp.cdata-0.script.brs');
+            expect(secondFile).to.exist;
+            //a new BrsFile object should have been created
+            expect(secondFile).to.not.equal(firstFile);
+        });
+
+        it('includes the synthetic file in scope dependencies', () => {
+            const xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        function init()
+                        end function
+                    ]]></script>
+                </component>
+            `);
+            const deps = xmlFile.getOwnDependencies();
+            expect(deps.some(d => d.includes('cdata-0.script.brs'))).to.be.true;
+        });
+
+        it('validates code inside CDATA blocks', () => {
+            program.setFile('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        function init()
+                            undeclaredVar = unknownFunction()
+                        end function
+                    ]]></script>
+                </component>
+            `);
+            program.validate();
+            //the synthetic file should have been validated — unknown function call should produce a diagnostic
+            const syntheticFile = program.getFile<BrsFile>('components/MyComp.cdata-0.script.brs');
+            expect(syntheticFile).to.exist;
+            const allDiagnostics = program.getDiagnostics();
+            //there should be a diagnostic about the unknown function
+            expect(allDiagnostics.some(d => d.file.pkgPath === syntheticFile.pkgPath)).to.be.true;
+        });
+
+        it('sets needsTranspiled on the xml file when CDATA is present', () => {
+            const xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        function init()
+                        end function
+                    ]]></script>
+                </component>
+            `);
+            expect(xmlFile.needsTranspiled).to.be.true;
+        });
+    });
 });

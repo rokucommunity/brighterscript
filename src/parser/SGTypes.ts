@@ -164,6 +164,16 @@ export class SGScript extends SGTag {
         this.setAttribute('uri', value);
     }
 
+    /**
+     * The raw text content of the CDATA block, with the `<![CDATA[` and `]]>` wrappers stripped.
+     * Returns undefined if this script tag has no CDATA content.
+     */
+    get cdataText(): string | undefined {
+        return this.cdata?.text
+            .replace(/^<!\[CDATA\[/, '')
+            .replace(/\]\]>$/, '');
+    }
+
     protected transpileBody(state: TranspileState): (string | SourceNode)[] {
         if (this.cdata) {
             return [

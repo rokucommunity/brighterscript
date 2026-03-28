@@ -469,6 +469,17 @@ export class Program {
 
                 file = xmlFile;
 
+                //register synthetic BrsFiles for any inline CDATA script blocks.
+                //these are treated as first-class files so all plugins (linters, validators, etc.) see them normally.
+                let cdataScriptIndex = 0;
+                for (const script of xmlFile.ast.component?.scripts ?? []) {
+                    if (script.cdata) {
+                        const inlinePkgPath = xmlFile.inlineScriptPkgPaths[cdataScriptIndex++];
+                        const inlineFile = this.setFile<BrsFile>(inlinePkgPath, script.cdataText ?? '');
+                        inlineFile.isSynthetic = true;
+                    }
+                }
+
                 //create a new scope for this xml file
                 let scope = new XmlScope(xmlFile, this);
                 this.addScope(scope);
