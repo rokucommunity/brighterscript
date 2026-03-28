@@ -2,7 +2,7 @@ import { assert, expect } from '../chai-config.spec';
 import * as path from 'path';
 import * as sinonImport from 'sinon';
 import type { CompletionItem } from 'vscode-languageserver';
-import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
+import { CompletionItemKind, Position, Range, SymbolKind } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { BsDiagnostic, FileReference } from '../interfaces';
@@ -1536,6 +1536,199 @@ describe('XmlFile', () => {
                 </component>
             `);
             expect(xmlFile.needsTranspiled).to.be.true;
+        });
+
+        describe('LSP event remapping', () => {
+            // After trim, the file looks like:
+            //   line 0: <?xml version="1.0" encoding="utf-8" ?>
+            //   line 1: <component name="MyComp" extends="Scene">
+            //   line 2:     <script type="text/brightscript"><![CDATA[   <- cdataStartLine=2, cdataStartChar=37
+            //   line 3:         sub greet(name as string)
+            //   line 4:             print name
+            //   line 5:         end sub
+            //   line 6:         function getCount() as integer
+            //   line 7:             return 42
+            //   line 8:         end function
+            //   line 9:     ]]></script>
+            //   line 10: </component>
+            const cdataStartLine = 2;
+
+            let xmlFile: XmlFile;
+            beforeEach(() => {
+                xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="MyComp" extends="Scene">
+                        <script type="text/brightscript"><![CDATA[
+                            sub greet(name as string)
+                                print name
+                            end sub
+                            function getCount() as integer
+                                return 42
+                            end function
+                        ]]></script>
+                    </component>
+                `);
+                program.validate();
+            });
+
+            it('getCompletions returns BrightScript completions inside CDATA', () => {
+                // position cursor at `name` usage on line 4 col 20 (inside "name")
+                const completions = program.getCompletions(xmlFile.srcPath, Position.create(4, 20));
+                expect(completions.map(c => c.label)).to.include('name');
+            });
+
+            it('getCompletions returns empty outside CDATA', () => {
+                // position inside the <component> tag (line 1), not in CDATA
+                const completions = program.getCompletions(xmlFile.srcPath, Position.create(1, 5));
+                expect(completions).to.be.empty;
+            });
+
+            it('getHover returns hover info for a function inside CDATA', () => {
+                // hover over `greet` at line 3 col 12
+                const hovers = program.getHover(xmlFile.srcPath, Position.create(3, 12));
+                expect(hovers).to.have.length.greaterThan(0);
+            });
+
+            it('getHover remaps the hover range to XML coordinates', () => {
+                // hover over `greet` at line 3 col 12
+                const hovers = program.getHover(xmlFile.srcPath, Position.create(3, 12));
+                for (const hover of hovers) {
+                    if (hover.range) {
+                        // range must be within the CDATA block in XML coordinates, not synthetic line 0
+                        expect(hover.range.start.line).to.be.at.least(cdataStartLine);
+                    }
+                }
+            });
+
+            it('getDefinition returns a location inside the XML file for a symbol in CDATA', () => {
+                // go-to-definition on `greet` reference (line 3, col 12 is the definition site itself)
+                // use getCount call from synthetic line 0 edge case — instead hover greet on its def line
+                const locations = program.getDefinition(xmlFile.srcPath, Position.create(3, 12));
+                expect(locations).to.have.length.greaterThan(0);
+                for (const loc of locations) {
+                    // all returned locations must use the xml file URI
+                    expect(loc.uri).to.include('MyComp.xml');
+                    // and be within the CDATA block line range
+                    expect(loc.range.start.line).to.be.at.least(cdataStartLine);
+                }
+            });
+
+            it('getReferences returns locations in XML coordinates', () => {
+                // find references of the `name` parameter — position inside the word (not at the start)
+                // line 3: `        sub greet(name as string)` — `name` starts at col 18, use col 20 (inside)
+                const refs = program.getReferences(xmlFile.srcPath, Position.create(3, 20));
+                expect(refs).to.have.length.greaterThan(0);
+                for (const ref of refs) {
+                    expect(ref.uri).to.include('MyComp.xml');
+                    expect(ref.range.start.line).to.be.at.least(cdataStartLine);
+                }
+            });
+
+            it('getSemanticTokens returns tokens with XML-file coordinates', () => {
+                // Use a .bs CDATA block with namespace+class to generate semantic tokens
+                const bsXmlFile = program.setFile<XmlFile>('components/BsComp.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="BsComp" extends="Scene">
+                        <script type="text/brighterscript"><![CDATA[
+                            namespace MyNs
+                                class Greeter
+                                end class
+                            end namespace
+                            sub init()
+                                x = new MyNs.Greeter()
+                            end sub
+                        ]]></script>
+                    </component>
+                `);
+                program.validate();
+                const tokens = program.getSemanticTokens(bsXmlFile.srcPath);
+                expect(tokens).to.exist;
+                expect(tokens).to.have.length.greaterThan(0);
+                for (const token of tokens) {
+                    // all tokens must be inside the CDATA block (line 2+ in XML)
+                    expect(token.range.start.line).to.be.at.least(cdataStartLine + 1);
+                }
+            });
+
+            it('getDocumentSymbols returns function symbols with XML-file coordinates', () => {
+                const symbols = program.getDocumentSymbols(xmlFile.srcPath);
+                expect(symbols).to.exist;
+                const names = symbols.map(s => s.name);
+                expect(names).to.include('greet');
+                expect(names).to.include('getCount');
+                for (const sym of symbols) {
+                    if (sym.name === 'greet' || sym.name === 'getCount') {
+                        expect(sym.kind).to.equal(SymbolKind.Function);
+                        // symbol range must start inside the CDATA block
+                        expect(sym.range.start.line).to.be.at.least(cdataStartLine + 1);
+                    }
+                }
+            });
+
+            it('getSignatureHelp returns signature for a function call inside CDATA', () => {
+                // Add a call site so we can test signature help
+                xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="MyComp" extends="Scene">
+                        <script type="text/brightscript"><![CDATA[
+                            sub greet(name as string)
+                            end sub
+                            sub init()
+                                greet(
+                            end sub
+                        ]]></script>
+                    </component>
+                `);
+                program.validate();
+                // line 6 is `            greet(` — `(` is at col 17, col 18 is inside the arg list
+                const sigHelp = program.getSignatureHelp(xmlFile.srcPath, Position.create(6, 18));
+                expect(sigHelp).to.have.length.greaterThan(0);
+                expect(sigHelp[0].signature.label).to.include('greet');
+            });
+
+            it('getCodeActions workspace edits reference the XML file URI', () => {
+                // use a range inside the CDATA block (line 3 = `sub greet(name as string)`)
+                const actions = program.getCodeActions(xmlFile.srcPath, Range.create(3, 8, 3, 30));
+                // if any code action has workspace edits, they must target the xml file
+                for (const action of actions) {
+                    if (action.edit?.changes) {
+                        for (const uri of Object.keys(action.edit.changes)) {
+                            expect(uri).to.include('MyComp.xml');
+                        }
+                    }
+                    if (action.edit?.documentChanges) {
+                        for (const change of action.edit.documentChanges) {
+                            if ('textDocument' in change) {
+                                expect(change.textDocument.uri).to.include('MyComp.xml');
+                            }
+                        }
+                    }
+                }
+            });
+
+            it('uses cdataStartChar correctly for first-line synthetic positions', () => {
+                // The first line of the synthetic file (line 0) maps to the <![CDATA[ line
+                // at character offset cdataStartChar + '<![CDATA['.length.
+                // If content starts on the same line as <![CDATA[, hover should still work.
+                const inlineFile = program.setFile<XmlFile>('components/Inline.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Inline" extends="Scene">
+                        <script type="text/brightscript"><![CDATA[sub init()
+                        end sub]]></script>
+                    </component>
+                `);
+                program.validate();
+                // `sub` and `init` are on the same line as <![CDATA[, so XML line 2
+                // cdataContentStartChar = cdataStartChar + 9 = 37 + 9 = 46
+                // `init` starts at col 46 + 4 = 50 (after `sub `)
+                const hovers = program.getHover(inlineFile.srcPath, Position.create(2, 50));
+                expect(hovers).to.have.length.greaterThan(0);
+                for (const hover of hovers) {
+                    if (hover.range) {
+                        expect(hover.range.start.line).to.equal(cdataStartLine);
+                    }
+                }
+            });
         });
     });
 });
