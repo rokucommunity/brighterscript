@@ -1504,8 +1504,8 @@ describe('XmlFile', () => {
             expect(deps.some(d => d.includes('cdata-0.script.brs'))).to.be.true;
         });
 
-        it('validates code inside CDATA blocks', () => {
-            program.setFile('components/MyComp.xml', trim`
+        it('validates code inside CDATA blocks and remaps diagnostics to the xml file', () => {
+            const xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="MyComp" extends="Scene">
                     <script type="text/brightscript"><![CDATA[
@@ -1516,12 +1516,13 @@ describe('XmlFile', () => {
                 </component>
             `);
             program.validate();
-            //the synthetic file should have been validated — unknown function call should produce a diagnostic
-            const syntheticFile = program.getFile<BrsFile>('components/MyComp.cdata-0.script.brs');
-            expect(syntheticFile).to.exist;
             const allDiagnostics = program.getDiagnostics();
-            //there should be a diagnostic about the unknown function
-            expect(allDiagnostics.some(d => d.file.pkgPath === syntheticFile.pkgPath)).to.be.true;
+            //diagnostics from the CDATA block should be remapped to the parent xml file, not the synthetic file
+            expect(allDiagnostics.some(d => d.file.pkgPath === xmlFile.pkgPath)).to.be.true;
+            expect(allDiagnostics.every(d => d.file.pkgPath !== 'components/MyComp.cdata-0.script.brs')).to.be.true;
+            //the reported position should be within the xml file's line range (not line 1 of a standalone brs file)
+            const cdataDiagnostics = allDiagnostics.filter(d => d.file.pkgPath === xmlFile.pkgPath);
+            expect(cdataDiagnostics.every(d => d.range.start.line > 2)).to.be.true;
         });
 
         it('sets needsTranspiled on the xml file when CDATA is present', () => {

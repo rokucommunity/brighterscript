@@ -158,6 +158,13 @@ export class Program {
     public files = {} as Record<string, BscFile>;
     private pkgMap = {} as Record<string, BscFile>;
 
+    /**
+     * Metadata for synthetic BrsFiles extracted from CDATA blocks.
+     * Keyed by the synthetic file's pkgPath (lowercase).
+     * Used to remap diagnostics back to the correct position in the parent XML file.
+     */
+    private syntheticFileMeta = new Map<string, { xmlFile: XmlFile; cdataRange: Range }>();
+
     private scopes = {} as Record<string, Scope>;
 
     protected addScope(scope: Scope) {
@@ -299,7 +306,41 @@ export class Program {
             });
 
             this.logger.info(`diagnostic counts: total=${chalk.yellow(diagnostics.length.toString())}, after filter=${chalk.yellow(filteredDiagnostics.length.toString())}`);
-            return filteredDiagnostics;
+            return this.remapSyntheticFileDiagnostics(filteredDiagnostics);
+        });
+    }
+
+    /**
+     * Remaps diagnostics from synthetic CDATA BrsFiles back to their parent XmlFile at the
+     * correct position. `<![CDATA[` is 9 characters; positions on the first line of the CDATA
+     * token need that offset added. Subsequent lines are column-accurate already.
+     */
+    private remapSyntheticFileDiagnostics(diagnostics: BsDiagnostic[]): BsDiagnostic[] {
+        return diagnostics.map(diagnostic => {
+            if (!diagnostic.file?.isSynthetic) {
+                return diagnostic;
+            }
+            const meta = this.syntheticFileMeta.get(diagnostic.file.pkgPath.toLowerCase());
+            if (!meta) {
+                return diagnostic;
+            }
+            const cdataStartLine = meta.cdataRange.start.line;
+            // content starts 9 chars after the opening '<![CDATA[' on the same line
+            const cdataContentStartChar = meta.cdataRange.start.character + '<![CDATA['.length;
+
+            const remapPos = (pos: Position) => ({
+                line: cdataStartLine + pos.line,
+                character: pos.line === 0 ? cdataContentStartChar + pos.character : pos.character
+            });
+
+            return {
+                ...diagnostic,
+                file: meta.xmlFile,
+                range: {
+                    start: remapPos(diagnostic.range.start),
+                    end: remapPos(diagnostic.range.end)
+                }
+            };
         });
     }
 
@@ -477,6 +518,10 @@ export class Program {
                         const inlinePkgPath = xmlFile.inlineScriptPkgPaths[cdataScriptIndex++];
                         const inlineFile = this.setFile<BrsFile>(inlinePkgPath, script.cdataText ?? '');
                         inlineFile.isSynthetic = true;
+                        this.syntheticFileMeta.set(inlinePkgPath.toLowerCase(), {
+                            xmlFile: xmlFile,
+                            cdataRange: script.cdata.range
+                        });
                     }
                 }
 
@@ -651,6 +696,11 @@ export class Program {
             }
             //remove the file from the program
             this.unassignFile(file);
+
+            //clean up synthetic file metadata if this was a synthetic CDATA file
+            if (isBrsFile(file) && file.isSynthetic) {
+                this.syntheticFileMeta.delete(file.pkgPath.toLowerCase());
+            }
 
             this.dependencyGraph.remove(file.dependencyGraphKey);
 
