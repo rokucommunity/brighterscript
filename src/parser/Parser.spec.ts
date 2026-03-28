@@ -1786,6 +1786,88 @@ describe('parser', () => {
         });
     });
 
+    describe('line continuation', () => {
+        describe('binary operator continuation', () => {
+            it('is allowed after arithmetic operators in BrighterScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        a = x +
+                            y
+                        b = x -
+                            y
+                        c = x *
+                            y
+                        d = x /
+                            y
+                        e = x \\
+                            y
+                        f = x mod
+                            y
+                        g = x ^
+                            y
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('is allowed after boolean operators in BrighterScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        a = isValid and
+                            isEnabled
+                        b = isValid or
+                            isEnabled
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('is allowed after relational operators in BrighterScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        a = x =
+                            y
+                        b = x <>
+                            y
+                        c = x >
+                            y
+                        d = x >=
+                            y
+                        e = x <
+                            y
+                        f = x <=
+                            y
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('is allowed in BrightScript mode when allowLineContinuation option is set', () => {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        result = value1 +
+                                 value2
+                    end sub
+                `);
+                let { diagnostics } = Parser.parse(tokens, {
+                    mode: ParseMode.BrightScript,
+                    allowLineContinuation: true
+                } as any);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('is not allowed in plain BrightScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        result = value1 +
+                                 value2
+                    end sub
+                `, ParseMode.BrightScript);
+                expect(diagnostics.length).to.be.greaterThan(0);
+            });
+        });
+    });
+
     describe('typed functions as types', () => {
         it('disallowed in brightscript mode', () => {
             let { diagnostics } = parse(`

@@ -80,6 +80,54 @@ describe('BrsFile', () => {
         });
     });
 
+    describe('allowLineContinuation', () => {
+        it('binary operator continuation is not allowed in .brs files by default', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    result = value1 +
+                             value2
+                end sub
+            `);
+            program.validate();
+            expectHasDiagnostics(program);
+        });
+
+        it('binary operator continuation is always allowed in .bs files', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    result = value1 +
+                             value2
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('binary operator continuation is allowed in .brs files when allowBrighterScriptInBrightScript is enabled', () => {
+            program.options.allowBrighterScriptInBrightScript = true;
+            program.setFile('source/main.brs', `
+                sub main()
+                    result = value1 +
+                             value2
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('binary operator continuation is allowed in .brs files when allowLineContinuation is enabled', () => {
+            (program.options as any).allowLineContinuation = true;
+            program.setFile('source/main.brs', `
+                sub main()
+                    result = value1 +
+                             value2
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
+
     it('does not show "missing function" diagnostic for `call().dottedGet` as a statement', () => {
         program.setFile(`source/main.brs`, `
             sub main()
