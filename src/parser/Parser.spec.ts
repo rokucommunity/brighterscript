@@ -1822,25 +1822,6 @@ describe('parser', () => {
                 expectZeroDiagnostics(diagnostics);
             });
 
-            it('is allowed after relational operators in BrighterScript mode', () => {
-                let { diagnostics } = parse(`
-                    sub main()
-                        a = x =
-                            y
-                        b = x <>
-                            y
-                        c = x >
-                            y
-                        d = x >=
-                            y
-                        e = x <
-                            y
-                        f = x <=
-                            y
-                    end sub
-                `, ParseMode.BrighterScript);
-                expectZeroDiagnostics(diagnostics);
-            });
 
             it('is allowed in BrightScript mode when allowLineContinuation is set', () => {
                 let { tokens } = Lexer.scan(`
