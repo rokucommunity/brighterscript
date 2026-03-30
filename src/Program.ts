@@ -173,13 +173,6 @@ export class Program {
     private pkgMap = {} as Record<string, BscFile>;
 
     /**
-     * Metadata for synthetic BrsFiles extracted from CDATA blocks.
-     * Keyed by the synthetic file's pkgPath (lowercase).
-     * Used to remap diagnostics back to the correct position in the parent XML file.
-     */
-    private syntheticFileMeta = new Map<string, { xmlFile: XmlFile; cdataRange: Range }>();
-
-    /**
      * When set, `getDiagnostics()` will skip remapping diagnostics for this synthetic BrsFile,
      * leaving them in synthetic-file coordinate space. Used during code action events for CDATA
      * blocks so that plugins can match diagnostics by file identity (`x.file === event.file`).
@@ -343,11 +336,11 @@ export class Program {
             if (!diagnostic.file?.isSynthetic) {
                 return diagnostic;
             }
-            const meta = this.syntheticFileMeta.get(diagnostic.file.pkgPath.toLowerCase());
-            if (!meta) {
+            const parentXmlFile = (diagnostic.file as BrsFile).parentXmlFile;
+            if (!parentXmlFile) {
                 return diagnostic;
             }
-            return { ...diagnostic, file: meta.xmlFile };
+            return { ...diagnostic, file: parentXmlFile };
         });
     }
 
@@ -363,11 +356,11 @@ export class Program {
             if (diagnostic.file === contextFile) {
                 return diagnostic;
             }
-            const meta = this.syntheticFileMeta.get(diagnostic.file.pkgPath.toLowerCase());
-            if (!meta) {
+            const parentXmlFile = (diagnostic.file as BrsFile).parentXmlFile;
+            if (!parentXmlFile) {
                 return diagnostic;
             }
-            return { ...diagnostic, file: meta.xmlFile };
+            return { ...diagnostic, file: parentXmlFile };
         });
     }
 
@@ -376,15 +369,13 @@ export class Program {
      * range intersects `range` within `xmlFile`, or `undefined` if no block matches.
      */
     private findCdataInfoForRange(xmlFile: XmlFile, range: Range): { meta: { xmlFile: XmlFile; cdataRange: Range }; brsFile: BrsFile } | undefined {
-        for (const [pkgPathKey, meta] of this.syntheticFileMeta) {
-            if (meta.xmlFile !== xmlFile) {
+        for (const pkgPath of xmlFile.inlineScriptPkgPaths) {
+            const brsFile = this.getFile<BrsFile>(pkgPath);
+            if (!brsFile?.cdataScript?.cdata) {
                 continue;
             }
-            if (util.rangesIntersectOrTouch(meta.cdataRange, range)) {
-                const brsFile = this.getFile<BrsFile>(pkgPathKey);
-                if (brsFile) {
-                    return { meta: meta, brsFile: brsFile };
-                }
+            if (util.rangesIntersectOrTouch(brsFile.cdataScript.cdata.range, range)) {
+                return { meta: { xmlFile: xmlFile, cdataRange: brsFile.cdataScript.cdata.range }, brsFile: brsFile };
             }
         }
         return undefined;
@@ -624,10 +615,8 @@ export class Program {
                             (script.cdataText ?? '');
                         const inlineFile = this.setFile<BrsFile>(inlinePkgPath, paddedContent);
                         inlineFile.isSynthetic = true;
-                        this.syntheticFileMeta.set(s`${inlinePkgPath}`.toLowerCase(), {
-                            xmlFile: xmlFile,
-                            cdataRange: cdataRange
-                        });
+                        inlineFile.parentXmlFile = xmlFile;
+                        inlineFile.cdataScript = script;
                     }
                 }
 
@@ -802,11 +791,6 @@ export class Program {
             }
             //remove the file from the program
             this.unassignFile(file);
-
-            //clean up synthetic file metadata if this was a synthetic CDATA file
-            if (isBrsFile(file) && file.isSynthetic) {
-                this.syntheticFileMeta.delete(file.pkgPath.toLowerCase());
-            }
 
             this.dependencyGraph.remove(file.dependencyGraphKey);
 
@@ -1237,10 +1221,7 @@ export class Program {
         // For XML files, also collect symbols from each inline CDATA block.
         // Ranges are already in XML coordinate space — no remapping needed.
         if (isXmlFile(file)) {
-            for (const [pkgPath, meta] of this.syntheticFileMeta) {
-                if (meta.xmlFile !== file) {
-                    continue;
-                }
+            for (const pkgPath of file.inlineScriptPkgPaths) {
                 const brsFile = this.getFile<BrsFile>(pkgPath);
                 if (!brsFile) {
                     continue;
@@ -1328,10 +1309,7 @@ export class Program {
         // For XML files, also collect semantic tokens from each inline CDATA block.
         // Ranges are already in XML coordinate space — no remapping needed.
         if (isXmlFile(file)) {
-            for (const [pkgPath, meta] of this.syntheticFileMeta) {
-                if (meta.xmlFile !== file) {
-                    continue;
-                }
+            for (const pkgPath of file.inlineScriptPkgPaths) {
                 const brsFile = this.getFile<BrsFile>(pkgPath);
                 if (!brsFile) {
                     continue;

@@ -16,6 +16,8 @@ import { Parser, ParseMode } from '../parser/Parser';
 import type { FunctionExpression, VariableExpression } from '../parser/Expression';
 import type { ClassStatement, NamespaceStatement, AssignmentStatement, MethodStatement, FieldStatement } from '../parser/Statement';
 import type { Program } from '../Program';
+import type { XmlFile } from './XmlFile';
+import type { SGScript } from '../parser/SGTypes';
 import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
 import { VoidType } from '../types/VoidType';
@@ -84,6 +86,17 @@ export class BrsFile {
      * The file watcher should ignore change events for paths that match a synthetic file.
      */
     public isSynthetic = false;
+
+    /**
+     * The XML file this synthetic BrsFile was extracted from. Only set when `isSynthetic` is true.
+     */
+    public parentXmlFile: XmlFile | undefined;
+
+    /**
+     * The SGScript AST node whose CDATA block this file was extracted from. Only set when `isSynthetic` is true.
+     * Provides access to the CDATA range (`cdataScript.cdata.range`), raw text, and script type.
+     */
+    public cdataScript: SGScript | undefined;
 
     /**
      * Will this file result in only comment or whitespace output? If so, it can be excluded from the output if that bsconfig setting is enabled.
