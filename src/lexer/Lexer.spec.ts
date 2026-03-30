@@ -1225,6 +1225,40 @@ describe('lexer', () => {
                 Range.create(2, 7, 2, 8) // EOF
             ]);
         });
+
+        it('offsets all token ranges by startLine and startCharacter', () => {
+            // Simulates scanning an inline CDATA fragment that begins on line 5, col 10 of a parent file.
+            // The first character of the source is a newline (right after <![CDATA[]), so:
+            //   - the Newline token itself lands on (5, 10)
+            //   - subsequent lines start at their natural column (no offset after first newline)
+            const { tokens } = Lexer.scan('\nsub foo()\nend sub', {
+                includeWhitespace: false,
+                startLine: 5,
+                startCharacter: 10
+            });
+            expect(tokens.map(t => ({ kind: t.kind, range: t.range }))).to.eql([
+                { kind: TokenKind.Newline, range: Range.create(5, 10, 5, 11) },
+                { kind: TokenKind.Sub, range: Range.create(6, 0, 6, 3) },
+                { kind: TokenKind.Identifier, range: Range.create(6, 4, 6, 7) }, // foo
+                { kind: TokenKind.LeftParen, range: Range.create(6, 7, 6, 8) },
+                { kind: TokenKind.RightParen, range: Range.create(6, 8, 6, 9) },
+                { kind: TokenKind.Newline, range: Range.create(6, 9, 6, 10) },
+                { kind: TokenKind.EndSub, range: Range.create(7, 0, 7, 7) },
+                { kind: TokenKind.Eof, range: Range.create(7, 7, 7, 8) }
+            ]);
+        });
+
+        it('produces no tokens before startLine when scanning a fragment with a leading newline', () => {
+            // The leading newline is at the startLine position — no tokens at lines 0..startLine-1.
+            const { tokens } = Lexer.scan('\nsub foo()\nend sub', {
+                includeWhitespace: false,
+                startLine: 5,
+                startCharacter: 10
+            });
+            for (const token of tokens) {
+                expect(token.range.start.line).to.be.at.least(5);
+            }
+        });
     });
 
     describe('two word keywords', () => {

@@ -1407,6 +1407,47 @@ describe('XmlFile', () => {
             expect(program.getFile('components/MyComp.cdata-1.script.bs')).to.exist;
         });
 
+        it('synthetic BrsFile token ranges start at the CDATA position in the XML file', () => {
+            // The <![CDATA[ is on line 2 of the XML. All tokens produced by the lexer must have
+            // ranges that start at line 2 or later — there should be no spurious Newline tokens
+            // at lines 0 or 1 from the padding that was previously prepended to the source.
+            const xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        sub init()
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            const brsFile = program.getFile<BrsFile>(xmlFile.inlineScriptPkgPaths[0]);
+            // line 2 is where <![CDATA[ lives — the leading \n in cdataText lands there.
+            // No token should be at line 0 or 1 (those would be spurious padding tokens).
+            for (const token of brsFile.parser.tokens) {
+                expect(token.range.start.line).to.be.at.least(2,
+                    `token "${token.text}" (${token.kind}) should not appear before the CDATA block`
+                );
+            }
+        });
+
+        it('synthetic BrsFile fileContents has correct content at XML-space line numbers', () => {
+            // fileContents must be indexable by XML-space line numbers so that tools like
+            // SignatureHelpUtil can extract the function signature text correctly.
+            const xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        sub greet(name as string)
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            const brsFile = program.getFile<BrsFile>(xmlFile.inlineScriptPkgPaths[0]);
+            const lines = brsFile.fileContents.split(/\r?\n/g);
+            // line 3 (0-indexed) of the XML is "        sub greet(name as string)"
+            expect(lines[3]).to.include('sub greet');
+        });
+
         it('transpile preserves CDATA blocks inline in the xml output', () => {
             testTranspile(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
