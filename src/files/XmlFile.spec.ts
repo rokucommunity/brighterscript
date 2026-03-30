@@ -1706,10 +1706,10 @@ describe('XmlFile', () => {
                 }
             });
 
-            it('uses cdataStartChar correctly for first-line synthetic positions', () => {
-                // The first line of the synthetic file (line 0) maps to the <![CDATA[ line
-                // at character offset cdataStartChar + '<![CDATA['.length.
-                // If content starts on the same line as <![CDATA[, hover should still work.
+            it('hover works when CDATA content starts on the same line as the opening marker', () => {
+                // The synthetic BrsFile is padded so its positions match XML coordinates directly.
+                // When content starts inline with <![CDATA[, the first token sits at the same
+                // line/column as in the XML file — no coordinate transformation needed.
                 const inlineFile = program.setFile<XmlFile>('components/Inline.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="Inline" extends="Scene">
@@ -1718,9 +1718,8 @@ describe('XmlFile', () => {
                     </component>
                 `);
                 program.validate();
-                // `sub` and `init` are on the same line as <![CDATA[, so XML line 2
-                // cdataContentStartChar = cdataStartChar + 9 = 37 + 9 = 46
-                // `init` starts at col 46 + 4 = 50 (after `sub `)
+                // `<![CDATA[` starts at col 37, so content starts at col 46.
+                // `init` is after `sub `, so at col 46 + 4 = 50 on XML line 2.
                 const hovers = program.getHover(inlineFile.srcPath, Position.create(2, 50));
                 expect(hovers).to.have.length.greaterThan(0);
                 for (const hover of hovers) {

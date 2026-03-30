@@ -58,19 +58,15 @@ export interface SignatureInfoObj {
 }
 
 /**
- * Coordinate-space remapping context for a single CDATA block. Returned by
- * `Program.resolveCdataContext` when a position falls inside an inline script block.
- * Provides bound helpers to convert positions between the parent XML file's coordinate
- * space and the synthetic BrsFile's coordinate space.
+ * Context for a single CDATA block. Returned by `Program.resolveCdataContext` when a
+ * position falls inside an inline script block. Because synthetic BrsFiles are created
+ * with offset-padded content, their positions are already in parent XML coordinate space
+ * — no coordinate transformation is required.
  */
 export interface CdataContext {
     brsFile: BrsFile;
     xmlFile: XmlFile;
     cdataRange: Range;
-    /** Convert a position from parent XML coordinates to synthetic BrsFile coordinates. */
-    toSynthetic(pos: Position): Position;
-    /** Convert a position from synthetic BrsFile coordinates back to parent XML coordinates. */
-    fromSynthetic(pos: Position): Position;
 }
 
 export class Program {
@@ -336,9 +332,9 @@ export class Program {
     }
 
     /**
-     * Remaps diagnostics from synthetic CDATA BrsFiles back to their parent XmlFile at the
-     * correct position. `<![CDATA[` is 9 characters; positions on the first line of the CDATA
-     * token need that offset added. Subsequent lines are column-accurate already.
+     * Redirects diagnostics from synthetic CDATA BrsFiles to their parent XmlFile.
+     * Because synthetic files are created with offset-padded content, ranges are already
+     * in XML coordinate space — only the file reference needs updating.
      */
     private remapSyntheticFileDiagnostics(diagnostics: BsDiagnostic[]): BsDiagnostic[] {
         return diagnostics.map(diagnostic => {
@@ -349,73 +345,28 @@ export class Program {
             if (!meta) {
                 return diagnostic;
             }
-            return {
-                ...diagnostic,
-                file: meta.xmlFile,
-                range: {
-                    start: this.remapPosFromSynthetic(meta.cdataRange, diagnostic.range.start),
-                    end: this.remapPosFromSynthetic(meta.cdataRange, diagnostic.range.end)
-                }
-            };
+            return { ...diagnostic, file: meta.xmlFile };
         });
     }
 
     /**
-     * Like `remapSyntheticFileDiagnostics`, but skips remapping for `contextFile` so its
-     * diagnostics remain in synthetic-file coordinate space. Used during code action events
-     * so that plugins can match diagnostics by file identity (`x.file === event.file`).
+     * Like `remapSyntheticFileDiagnostics`, but keeps `contextFile`'s diagnostics pointing
+     * at the synthetic BrsFile so plugins can match by file identity during code action events.
      */
     private partialRemapSyntheticFileDiagnostics(diagnostics: BsDiagnostic[], contextFile: BrsFile): BsDiagnostic[] {
         return diagnostics.map(diagnostic => {
             if (!diagnostic.file?.isSynthetic) {
                 return diagnostic;
             }
-            // Keep the context file's diagnostics in synthetic coordinate space
             if (diagnostic.file === contextFile) {
                 return diagnostic;
             }
-            // All other synthetic files remap to XML as usual
             const meta = this.syntheticFileMeta.get(diagnostic.file.pkgPath.toLowerCase());
             if (!meta) {
                 return diagnostic;
             }
-            return {
-                ...diagnostic,
-                file: meta.xmlFile,
-                range: {
-                    start: this.remapPosFromSynthetic(meta.cdataRange, diagnostic.range.start),
-                    end: this.remapPosFromSynthetic(meta.cdataRange, diagnostic.range.end)
-                }
-            };
+            return { ...diagnostic, file: meta.xmlFile };
         });
-    }
-
-    /**
-     * Converts a position in synthetic BrsFile coordinates to its equivalent position in the
-     * parent XML file. Line 0 of the synthetic file maps to the line containing `<![CDATA[`,
-     * offset by 9 characters (the length of `<![CDATA[`). Subsequent lines are column-accurate.
-     */
-    private remapPosFromSynthetic(cdataRange: Range, pos: Position): Position {
-        const cdataStartLine = cdataRange.start.line;
-        const cdataContentStartChar = cdataRange.start.character + '<![CDATA['.length;
-        return {
-            line: cdataStartLine + pos.line,
-            character: pos.line === 0 ? cdataContentStartChar + pos.character : pos.character
-        };
-    }
-
-    /**
-     * Converts a position in the parent XML file to the equivalent position in the synthetic
-     * BrsFile coordinate space (inverse of `remapPosFromSynthetic`).
-     */
-    private remapPosToSynthetic(cdataRange: Range, pos: Position): Position {
-        const cdataStartLine = cdataRange.start.line;
-        const cdataContentStartChar = cdataRange.start.character + '<![CDATA['.length;
-        const syntheticLine = pos.line - cdataStartLine;
-        return {
-            line: syntheticLine,
-            character: syntheticLine === 0 ? pos.character - cdataContentStartChar : pos.character
-        };
     }
 
     /**
@@ -438,16 +389,11 @@ export class Program {
     }
 
     /**
-     * After code actions are generated using a synthetic BrsFile as the target, this remaps any
-     * workspace edit changes that reference the synthetic file back to the parent XML file, with
-     * positions converted from BrsFile coordinates to XML coordinates.
+     * After code actions are generated using a synthetic BrsFile as the target, this substitutes
+     * the synthetic file URI with the parent XML file URI in any workspace edit changes.
+     * Ranges are already in XML coordinate space and need no adjustment.
      */
-    private remapCodeActionChangesToXml(
-        codeActions: CodeAction[],
-        cdataCtx: CdataContext,
-        brsFile: BrsFile,
-        xmlFile: XmlFile
-    ) {
+    private remapCodeActionChangesToXml(codeActions: CodeAction[], brsFile: BrsFile, xmlFile: XmlFile) {
         const syntheticUri = URI.file(brsFile.srcPath).toString();
         const xmlUri = URI.file(xmlFile.srcPath).toString();
         for (const action of codeActions) {
@@ -460,22 +406,15 @@ export class Program {
             if (!changes[xmlUri]) {
                 changes[xmlUri] = [];
             }
-            for (const edit of syntheticEdits) {
-                changes[xmlUri].push({
-                    ...edit,
-                    range: {
-                        start: cdataCtx.fromSynthetic(edit.range.start),
-                        end: cdataCtx.fromSynthetic(edit.range.end)
-                    }
-                });
-            }
+            changes[xmlUri].push(...syntheticEdits);
         }
     }
 
     /**
      * Given an XmlFile and a cursor position, returns a `CdataContext` if the position falls
-     * inside a `<![CDATA[...]]>` block, or `undefined` if it does not. Use the returned context
-     * to redirect LSP events to the synthetic BrsFile and remap positions in both directions.
+     * inside a `<![CDATA[...]]>` block, or `undefined` if it does not.
+     * Because synthetic files use offset-padded content, no position transformation is needed —
+     * pass the original XML-space position directly to the synthetic BrsFile's handlers.
      */
     public resolveCdataContext(xmlFile: XmlFile, position: Position): CdataContext | undefined {
         const pointRange = util.createRange(position.line, position.character, position.line, position.character);
@@ -483,55 +422,21 @@ export class Program {
         if (!info) {
             return undefined;
         }
-        const cdataRange = info.meta.cdataRange;
         return {
             brsFile: info.brsFile,
             xmlFile: xmlFile,
-            cdataRange: cdataRange,
-            toSynthetic: (pos) => this.remapPosToSynthetic(cdataRange, pos),
-            fromSynthetic: (pos) => this.remapPosFromSynthetic(cdataRange, pos)
+            cdataRange: info.meta.cdataRange
         };
     }
 
     /**
-     * Remaps any `Location` entries that reference the synthetic BrsFile back to the parent
-     * XML file with positions converted to XML coordinates. Locations in other files are
-     * returned unchanged.
+     * Substitutes the synthetic BrsFile URI with the parent XML file URI in any Location
+     * entries that reference it. Ranges are already in XML coordinate space.
      */
     private remapLocationsFromSynthetic(locations: Location[], cdataCtx: CdataContext): Location[] {
         const syntheticUri = URI.file(cdataCtx.brsFile.srcPath).toString();
         const xmlUri = URI.file(cdataCtx.xmlFile.srcPath).toString();
-        return locations.map(loc => {
-            if (loc.uri !== syntheticUri) {
-                return loc;
-            }
-            return {
-                uri: xmlUri,
-                range: {
-                    start: cdataCtx.fromSynthetic(loc.range.start),
-                    end: cdataCtx.fromSynthetic(loc.range.end)
-                }
-            };
-        });
-    }
-
-    /**
-     * Recursively remaps `range` and `selectionRange` in a `DocumentSymbol` tree from
-     * synthetic BrsFile coordinates to parent XML file coordinates.
-     */
-    private remapDocumentSymbolsFromSynthetic(symbols: DocumentSymbol[], cdataCtx: CdataContext): DocumentSymbol[] {
-        return symbols.map(sym => ({
-            ...sym,
-            range: {
-                start: cdataCtx.fromSynthetic(sym.range.start),
-                end: cdataCtx.fromSynthetic(sym.range.end)
-            },
-            selectionRange: {
-                start: cdataCtx.fromSynthetic(sym.selectionRange.start),
-                end: cdataCtx.fromSynthetic(sym.selectionRange.end)
-            },
-            children: sym.children ? this.remapDocumentSymbolsFromSynthetic(sym.children, cdataCtx) : undefined
-        }));
+        return locations.map(loc => (loc.uri === syntheticUri ? { uri: xmlUri, range: loc.range } : loc));
     }
 
     public addDiagnostics(diagnostics: BsDiagnostic[]) {
@@ -706,11 +611,20 @@ export class Program {
                 for (const script of xmlFile.ast.component?.scripts ?? []) {
                     if (script.cdata) {
                         const inlinePkgPath = xmlFile.inlineScriptPkgPaths[cdataScriptIndex++];
-                        const inlineFile = this.setFile<BrsFile>(inlinePkgPath, script.cdataText ?? '');
+                        // Pad the content with leading newlines and spaces so that every
+                        // position in the synthetic file naturally aligns with its position in
+                        // the parent XML file. This eliminates all coordinate remapping for LSP
+                        // events — only file URI substitution is needed in results.
+                        const cdataRange = script.cdata.range;
+                        const contentStartChar = cdataRange.start.character + '<![CDATA['.length;
+                        const paddedContent = '\n'.repeat(cdataRange.start.line) +
+                            ' '.repeat(contentStartChar) +
+                            (script.cdataText ?? '');
+                        const inlineFile = this.setFile<BrsFile>(inlinePkgPath, paddedContent);
                         inlineFile.isSynthetic = true;
                         this.syntheticFileMeta.set(s`${inlinePkgPath}`.toLowerCase(), {
                             xmlFile: xmlFile,
-                            cdataRange: script.cdata.range
+                            cdataRange: cdataRange
                         });
                     }
                 }
@@ -1211,9 +1125,7 @@ export class Program {
             return [];
         }
 
-        const cdataCtx = isXmlFile(file) ? this.resolveCdataContext(file, position) : undefined;
-        const effectiveFile = cdataCtx?.brsFile ?? file;
-        const effectivePosition = cdataCtx ? cdataCtx.toSynthetic(position) : position;
+        const effectiveFile = isXmlFile(file) ? (this.resolveCdataContext(file, position)?.brsFile ?? file) : file;
 
         //find the scopes for this file
         let scopes = this.getScopesForFile(effectiveFile);
@@ -1225,28 +1137,13 @@ export class Program {
             program: this,
             file: effectiveFile,
             scopes: scopes,
-            position: effectivePosition,
+            position: position,
             completions: []
         };
 
         this.plugins.emit('beforeProvideCompletions', event);
         this.plugins.emit('provideCompletions', event);
         this.plugins.emit('afterProvideCompletions', event);
-
-        if (cdataCtx) {
-            for (const completion of event.completions) {
-                if (completion.textEdit) {
-                    if ('range' in completion.textEdit) {
-                        completion.textEdit = { ...completion.textEdit, range: { start: cdataCtx.fromSynthetic(completion.textEdit.range.start), end: cdataCtx.fromSynthetic(completion.textEdit.range.end) } };
-                    } else {
-                        completion.textEdit = { ...completion.textEdit, insert: { start: cdataCtx.fromSynthetic(completion.textEdit.insert.start), end: cdataCtx.fromSynthetic(completion.textEdit.insert.end) }, replace: { start: cdataCtx.fromSynthetic(completion.textEdit.replace.start), end: cdataCtx.fromSynthetic(completion.textEdit.replace.end) } };
-                    }
-                }
-                if (completion.additionalTextEdits) {
-                    completion.additionalTextEdits = completion.additionalTextEdits.map(e => ({ ...e, range: { start: cdataCtx.fromSynthetic(e.range.start), end: cdataCtx.fromSynthetic(e.range.end) } }));
-                }
-            }
-        }
 
         return event.completions;
     }
@@ -1277,12 +1174,11 @@ export class Program {
 
         const cdataCtx = isXmlFile(file) ? this.resolveCdataContext(file, position) : undefined;
         const effectiveFile = cdataCtx?.brsFile ?? file;
-        const effectivePosition = cdataCtx ? cdataCtx.toSynthetic(position) : position;
 
         const event: ProvideDefinitionEvent = {
             program: this,
             file: effectiveFile,
-            position: effectivePosition,
+            position: position,
             definitions: []
         };
 
@@ -1299,14 +1195,12 @@ export class Program {
         let file = this.getFile(srcPath);
         let result: Hover[];
         if (file) {
-            const cdataCtx = isXmlFile(file) ? this.resolveCdataContext(file, position) : undefined;
-            const effectiveFile = cdataCtx?.brsFile ?? file;
-            const effectivePosition = cdataCtx ? cdataCtx.toSynthetic(position) : position;
+            const effectiveFile = isXmlFile(file) ? (this.resolveCdataContext(file, position)?.brsFile ?? file) : file;
 
             const event = {
                 program: this,
                 file: effectiveFile,
-                position: effectivePosition,
+                position: position,
                 scopes: this.getScopesForFile(effectiveFile),
                 hovers: []
             } as ProvideHoverEvent;
@@ -1314,9 +1208,7 @@ export class Program {
             this.plugins.emit('provideHover', event);
             this.plugins.emit('afterProvideHover', event);
 
-            result = cdataCtx
-                ? event.hovers.map(h => (h.range ? { ...h, range: { start: cdataCtx.fromSynthetic(h.range.start), end: cdataCtx.fromSynthetic(h.range.end) } } : h))
-                : event.hovers;
+            result = event.hovers;
         }
 
         return result ?? [];
@@ -1340,7 +1232,8 @@ export class Program {
         this.plugins.emit('provideDocumentSymbols', event);
         this.plugins.emit('afterProvideDocumentSymbols', event);
 
-        // For XML files, also collect symbols from each inline CDATA block and remap
+        // For XML files, also collect symbols from each inline CDATA block.
+        // Ranges are already in XML coordinate space — no remapping needed.
         if (isXmlFile(file)) {
             for (const [pkgPath, meta] of this.syntheticFileMeta) {
                 if (meta.xmlFile !== file) {
@@ -1348,10 +1241,6 @@ export class Program {
                 }
                 const brsFile = this.getFile<BrsFile>(pkgPath);
                 if (!brsFile) {
-                    continue;
-                }
-                const cdataCtx = this.resolveCdataContext(file, meta.cdataRange.start);
-                if (!cdataCtx) {
                     continue;
                 }
                 const cdataEvent: ProvideDocumentSymbolsEvent = {
@@ -1362,7 +1251,7 @@ export class Program {
                 this.plugins.emit('beforeProvideDocumentSymbols', cdataEvent);
                 this.plugins.emit('provideDocumentSymbols', cdataEvent);
                 this.plugins.emit('afterProvideDocumentSymbols', cdataEvent);
-                event.documentSymbols.push(...this.remapDocumentSymbolsFromSynthetic(cdataEvent.documentSymbols, cdataCtx));
+                event.documentSymbols.push(...cdataEvent.documentSymbols);
             }
         }
 
@@ -1387,10 +1276,6 @@ export class Program {
             // so that plugins can match diagnostics by file identity (x.file === event.file)
             // and derive correct edit positions from diagnostic.data (AST node ranges).
             const effectiveFile = cdataCtx?.brsFile ?? file;
-            const effectiveRange = cdataCtx ? {
-                start: cdataCtx.toSynthetic(range.start),
-                end: cdataCtx.toSynthetic(range.end)
-            } : range;
 
             this._cdataDiagnosticsContext = cdataCtx?.brsFile;
 
@@ -1400,14 +1285,14 @@ export class Program {
                 //only keep diagnostics related to this file
                 .filter(x => x.file === effectiveFile)
                 //only keep diagnostics that touch this range
-                .filter(x => util.rangesIntersectOrTouch(x.range, effectiveRange));
+                .filter(x => util.rangesIntersectOrTouch(x.range, range));
 
             const scopes = this.getScopesForFile(effectiveFile);
 
             this.plugins.emit('onGetCodeActions', {
                 program: this,
                 file: effectiveFile,
-                range: effectiveRange,
+                range: range,
                 diagnostics: diagnostics,
                 scopes: scopes,
                 codeActions: codeActions
@@ -1416,7 +1301,7 @@ export class Program {
             this._cdataDiagnosticsContext = undefined;
 
             if (cdataCtx) {
-                this.remapCodeActionChangesToXml(codeActions, cdataCtx, cdataCtx.brsFile, file as XmlFile);
+                this.remapCodeActionChangesToXml(codeActions, cdataCtx.brsFile, file as XmlFile);
             }
         }
         return codeActions;
@@ -1438,7 +1323,8 @@ export class Program {
             semanticTokens: result
         });
 
-        // For XML files, also collect semantic tokens from each inline CDATA block and remap
+        // For XML files, also collect semantic tokens from each inline CDATA block.
+        // Ranges are already in XML coordinate space — no remapping needed.
         if (isXmlFile(file)) {
             for (const [pkgPath, meta] of this.syntheticFileMeta) {
                 if (meta.xmlFile !== file) {
@@ -1448,10 +1334,6 @@ export class Program {
                 if (!brsFile) {
                     continue;
                 }
-                const cdataCtx = this.resolveCdataContext(file, meta.cdataRange.start);
-                if (!cdataCtx) {
-                    continue;
-                }
                 const cdataTokens = [] as SemanticToken[];
                 this.plugins.emit('onGetSemanticTokens', {
                     program: this,
@@ -1459,15 +1341,7 @@ export class Program {
                     scopes: this.getScopesForFile(brsFile),
                     semanticTokens: cdataTokens
                 });
-                for (const token of cdataTokens) {
-                    result.push({
-                        ...token,
-                        range: {
-                            start: cdataCtx.fromSynthetic(token.range.start),
-                            end: cdataCtx.fromSynthetic(token.range.end)
-                        }
-                    });
-                }
+                result.push(...cdataTokens);
             }
         }
 
@@ -1479,13 +1353,11 @@ export class Program {
         if (!file) {
             return [];
         }
-        const cdataCtx = isXmlFile(file) ? this.resolveCdataContext(file, position) : undefined;
-        const effectiveFile = cdataCtx?.brsFile ?? file;
-        const effectivePosition = cdataCtx ? cdataCtx.toSynthetic(position) : position;
+        const effectiveFile = isXmlFile(file) ? (this.resolveCdataContext(file, position)?.brsFile ?? file) : file;
         if (!isBrsFile(effectiveFile)) {
             return [];
         }
-        let callExpressionInfo = new CallExpressionInfo(effectiveFile, effectivePosition);
+        let callExpressionInfo = new CallExpressionInfo(effectiveFile, position);
         let signatureHelpUtil = new SignatureHelpUtil();
         return signatureHelpUtil.getSignatureHelpItems(callExpressionInfo);
     }
@@ -1499,12 +1371,11 @@ export class Program {
 
         const cdataCtx = isXmlFile(file) ? this.resolveCdataContext(file, position) : undefined;
         const effectiveFile = cdataCtx?.brsFile ?? file;
-        const effectivePosition = cdataCtx ? cdataCtx.toSynthetic(position) : position;
 
         const event: ProvideReferencesEvent = {
             program: this,
             file: effectiveFile,
-            position: effectivePosition,
+            position: position,
             references: []
         };
 
