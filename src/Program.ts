@@ -181,6 +181,14 @@ export class Program {
      */
     private _cdataDiagnosticsContext: BrsFile | undefined;
 
+    /**
+     * Set of absolute srcPaths for BrsFiles that are about to be registered as synthetic (CDATA)
+     * files. Populated before `setFile` is called so that `isSynthetic` can be pre-applied inside
+     * `setFile` before `afterFileParse` fires — otherwise `emitWithSyntheticFileContext` would see
+     * `isSynthetic === false` and skip the diagnostic-context guard.
+     */
+    private _pendingSyntheticSrcPaths = new Set<string>();
+
     private scopes = {} as Record<string, Scope>;
 
     protected addScope(scope: Scope) {
@@ -563,6 +571,13 @@ export class Program {
                     new BrsFile(srcPath, pkgPath, this)
                 );
 
+                // Pre-mark as synthetic before parsing so that `afterFileParse` fires with
+                // `isSynthetic === true`, allowing `emitWithSyntheticFileContext` to correctly
+                // set `_cdataDiagnosticsContext` for any plugins that call `getDiagnostics()`.
+                if (this._pendingSyntheticSrcPaths.has(srcPath)) {
+                    brsFile.isSynthetic = true;
+                }
+
                 //add file to the `source` dependency list
                 if (brsFile.pkgPath.startsWith(startOfSourcePkgPath)) {
                     this.createSourceScope();
@@ -631,8 +646,11 @@ export class Program {
                         const paddedContent = '\n'.repeat(cdataRange.start.line) +
                             ' '.repeat(contentStartChar) +
                             (script.cdataText ?? '');
+                        const inlineSrcPath = s`${path.resolve(this.options.rootDir, inlinePkgPath)}`;
+                        this._pendingSyntheticSrcPaths.add(inlineSrcPath);
                         const inlineFile = this.setFile<BrsFile>(inlinePkgPath, paddedContent);
-                        inlineFile.isSynthetic = true;
+                        this._pendingSyntheticSrcPaths.delete(inlineSrcPath);
+                        // isSynthetic was pre-applied inside setFile (see _pendingSyntheticSrcPaths)
                         inlineFile.excludeFromOutput = true;
                         inlineFile.parentXmlFile = xmlFile;
                         inlineFile.cdataScript = script;
