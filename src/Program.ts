@@ -554,6 +554,16 @@ export class Program {
      */
     public setFile<T extends BscFile>(fileEntry: FileObj, fileContents: string): T;
     public setFile<T extends BscFile>(fileParam: FileObj | string, fileContents: string): T {
+        return this.setFileInternal<T>(fileParam, fileContents);
+    }
+
+    /**
+     * Internal implementation of setFile that accepts optional BrsFile parse options.
+     * The extra `parseOptions` parameter is intentionally not exposed on the public overloads — it is
+     * only used when registering synthetic inline CDATA BrsFiles so that the lexer can start its
+     * position tracking at the correct XML-space offset without needing a side-channel map.
+     */
+    private setFileInternal<T extends BscFile>(fileParam: FileObj | string, fileContents: string, parseOptions?: { startLine?: number; startCharacter?: number; rawSource?: string }): T {
         //normalize the file paths
         const { srcPath, pkgPath } = this.getPaths(fileParam, this.options.rootDir);
 
@@ -593,7 +603,7 @@ export class Program {
                 this.plugins.emit('beforeFileParse', sourceObj);
 
                 this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
-                    brsFile.parse(sourceObj.source);
+                    brsFile.parse(sourceObj.source, parseOptions);
                 });
 
                 //notify plugins that this file has finished parsing
@@ -637,18 +647,29 @@ export class Program {
                 for (const script of xmlFile.ast.component?.scripts ?? []) {
                     if (script.cdata) {
                         const inlinePkgPath = xmlFile.inlineScriptPkgPaths[cdataScriptIndex++];
-                        // Pad the content with leading newlines and spaces so that every
-                        // position in the synthetic file naturally aligns with its position in
-                        // the parent XML file. This eliminates all coordinate remapping for LSP
-                        // events — only file URI substitution is needed in results.
+                        // The synthetic BrsFile needs two forms of the same source:
+                        //
+                        //  • fileContents = padded content (newlines + spaces prepended so that
+                        //    XML-coordinate line numbers index correctly into the text). Tools
+                        //    like SignatureHelpUtil use fileContents for line-based text extraction.
+                        //
+                        //  • rawSource = the actual cdataText passed to the lexer together with
+                        //    startLine/startCharacter so that every token range is already in the
+                        //    parent XML coordinate space — without the spurious Newline tokens that
+                        //    the padding newlines would otherwise introduce into the token stream.
                         const cdataRange = script.cdata.range;
                         const contentStartChar = cdataRange.start.character + '<![CDATA['.length;
+                        const rawSource = script.cdataText ?? '';
                         const paddedContent = '\n'.repeat(cdataRange.start.line) +
                             ' '.repeat(contentStartChar) +
-                            (script.cdataText ?? '');
+                            rawSource;
                         const inlineSrcPath = s`${path.resolve(this.options.rootDir, inlinePkgPath)}`;
                         this._pendingSyntheticSrcPaths.add(inlineSrcPath);
-                        const inlineFile = this.setFile<BrsFile>(inlinePkgPath, paddedContent);
+                        const inlineFile = this.setFileInternal<BrsFile>(inlinePkgPath, paddedContent, {
+                            startLine: cdataRange.start.line,
+                            startCharacter: contentStartChar,
+                            rawSource: rawSource
+                        });
                         this._pendingSyntheticSrcPaths.delete(inlineSrcPath);
                         // isSynthetic was pre-applied inside setFile (see _pendingSyntheticSrcPaths)
                         inlineFile.excludeFromOutput = true;

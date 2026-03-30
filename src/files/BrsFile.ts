@@ -333,9 +333,17 @@ export class BrsFile {
 
     /**
      * Calculate the AST for this file
-     * @param fileContents the raw source code to parse
+     * @param fileContents the source to store as fileContents (used for line-based text extraction). For
+     *   inline CDATA fragments this should be the offset-padded content so that XML-coordinate line
+     *   numbers index correctly into the text.
+     * @param options optional scan options forwarded to the lexer
+     * @param options.startLine the zero-indexed line to start position tracking from
+     * @param options.startCharacter the zero-indexed character offset on the first line
+     * @param options.rawSource if provided, the lexer scans this string instead of `fileContents`.
+     *   Use this when `fileContents` is padded for line-index alignment but you want tokens to be
+     *   produced without the padding characters (which would otherwise become spurious Newline tokens).
      */
-    public parse(fileContents: string) {
+    public parse(fileContents: string, options?: { startLine?: number; startCharacter?: number; rawSource?: string }) {
         try {
             this.fileContents = fileContents;
             this.diagnostics = [];
@@ -349,8 +357,10 @@ export class BrsFile {
 
             //tokenize the input file
             let lexer = this.program.logger.time('debug', ['lexer.lex', chalk.green(this.srcPath)], () => {
-                return Lexer.scan(fileContents, {
-                    includeWhitespace: false
+                return Lexer.scan(options?.rawSource ?? fileContents, {
+                    includeWhitespace: false,
+                    startLine: options?.startLine,
+                    startCharacter: options?.startCharacter
                 });
             });
 
