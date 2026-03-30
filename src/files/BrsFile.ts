@@ -99,6 +99,11 @@ export class BrsFile {
     public cdataScript: SGScript | undefined;
 
     /**
+     * When true, this file will not be written as a standalone output file during transpile.
+     */
+    public excludeFromOutput = false;
+
+    /**
      * Will this file result in only comment or whitespace output? If so, it can be excluded from the output if that bsconfig setting is enabled.
      */
     public get canBePruned() {

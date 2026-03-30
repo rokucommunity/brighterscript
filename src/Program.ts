@@ -615,6 +615,7 @@ export class Program {
                             (script.cdataText ?? '');
                         const inlineFile = this.setFile<BrsFile>(inlinePkgPath, paddedContent);
                         inlineFile.isSynthetic = true;
+                        inlineFile.excludeFromOutput = true;
                         inlineFile.parentXmlFile = xmlFile;
                         inlineFile.cdataScript = script;
                         script.cdataTranspile = (state) => {
@@ -1597,8 +1598,7 @@ export class Program {
             //mark this file as processed so we don't process it more than once
             processedFiles.add(outputPath?.toLowerCase());
 
-            //synthetic CDATA BrsFiles are embedded back into their parent XML — don't write them as separate output files
-            if (isBrsFile(file) && file.isSynthetic) {
+            if (file.excludeFromOutput) {
                 return;
             }
 

@@ -83,6 +83,11 @@ export class XmlFile {
     readonly isSynthetic = false;
 
     /**
+     * When true, this file will not be written as a standalone output file during transpile.
+     */
+    public excludeFromOutput = false;
+
+    /**
      * The list of script imports delcared in the XML of this file.
      * This excludes parent imports and auto codebehind imports
      */
