@@ -169,9 +169,11 @@ export class SGScript extends SGTag {
      * Returns undefined if this script tag has no CDATA content.
      */
     get cdataText(): string | undefined {
-        return this.cdata?.text
-            .replace(/^<!\[CDATA\[/, '')
-            .replace(/\]\]>$/, '');
+        // Use a capture group with [\s\S]*? so multiline content and edge cases
+        // (e.g. trailing whitespace after ]]>, or > characters inside the content) are handled
+        // correctly without relying on ^ / $ anchors that can misbehave at string boundaries.
+        const match = this.cdata?.text.match(/^<!\[CDATA\[([\s\S]*?)\]\]>/);
+        return match?.[1];
     }
 
     /**

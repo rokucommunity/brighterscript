@@ -181,14 +181,6 @@ export class Program {
      */
     private _cdataDiagnosticsContext: BrsFile | undefined;
 
-    /**
-     * Set of absolute srcPaths for BrsFiles that are about to be registered as synthetic (CDATA)
-     * files. Populated before `setFile` is called so that `isSynthetic` can be pre-applied inside
-     * `setFile` before `afterFileParse` fires — otherwise `emitWithSyntheticFileContext` would see
-     * `isSynthetic === false` and skip the diagnostic-context guard.
-     */
-    private _pendingSyntheticSrcPaths = new Set<string>();
-
     private scopes = {} as Record<string, Scope>;
 
     protected addScope(scope: Scope) {
@@ -563,7 +555,7 @@ export class Program {
      * only used when registering synthetic inline CDATA BrsFiles so that the lexer can start its
      * position tracking at the correct XML-space offset without needing a side-channel map.
      */
-    private setFileInternal<T extends BscFile>(fileParam: FileObj | string, fileContents: string, parseOptions?: { startLine?: number; startCharacter?: number; rawSource?: string }): T {
+    private setFileInternal<T extends BscFile>(fileParam: FileObj | string, fileContents: string, parseOptions?: { startLine?: number; startCharacter?: number; rawSource?: string }, configure?: (file: BrsFile) => void): T {
         //normalize the file paths
         const { srcPath, pkgPath } = this.getPaths(fileParam, this.options.rootDir);
 
@@ -581,12 +573,11 @@ export class Program {
                     new BrsFile(srcPath, pkgPath, this)
                 );
 
-                // Pre-mark as synthetic before parsing so that `afterFileParse` fires with
-                // `isSynthetic === true`, allowing `emitWithSyntheticFileContext` to correctly
-                // set `_cdataDiagnosticsContext` for any plugins that call `getDiagnostics()`.
-                if (this._pendingSyntheticSrcPaths.has(srcPath)) {
-                    brsFile.isSynthetic = true;
-                }
+                // Apply any caller-provided configuration (e.g. marking synthetic files) before
+                // parsing so that `afterFileParse` fires with the correct state — allowing
+                // `emitWithSyntheticFileContext` to set `_cdataDiagnosticsContext` for plugins
+                // that call `getDiagnostics()` from inside the handler.
+                configure?.(brsFile);
 
                 //add file to the `source` dependency list
                 if (brsFile.pkgPath.startsWith(startOfSourcePkgPath)) {
@@ -663,15 +654,13 @@ export class Program {
                         const paddedContent = '\n'.repeat(cdataRange.start.line) +
                             ' '.repeat(contentStartChar) +
                             rawSource;
-                        const inlineSrcPath = s`${path.resolve(this.options.rootDir, inlinePkgPath)}`;
-                        this._pendingSyntheticSrcPaths.add(inlineSrcPath);
                         const inlineFile = this.setFileInternal<BrsFile>(inlinePkgPath, paddedContent, {
                             startLine: cdataRange.start.line,
                             startCharacter: contentStartChar,
                             rawSource: rawSource
+                        }, (file) => {
+                            file.isSynthetic = true;
                         });
-                        this._pendingSyntheticSrcPaths.delete(inlineSrcPath);
-                        // isSynthetic was pre-applied inside setFile (see _pendingSyntheticSrcPaths)
                         inlineFile.excludeFromOutput = true;
                         inlineFile.parentXmlFile = xmlFile;
                         inlineFile.cdataScript = script;
@@ -1193,7 +1182,9 @@ export class Program {
         };
 
         this.plugins.emit('beforeProvideCompletions', event);
+
         this.plugins.emit('provideCompletions', event);
+
         this.plugins.emit('afterProvideCompletions', event);
 
         return event.completions;

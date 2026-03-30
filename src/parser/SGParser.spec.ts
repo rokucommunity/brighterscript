@@ -158,4 +158,70 @@ describe('SGParser', () => {
             range: Range.create(0, 0, 1, 12)
         });
     });
+
+    describe('SGScript.cdataText', () => {
+        function parseScript(xml: string) {
+            const parser = new SGParser();
+            parser.parse('pkg:/components/Comp.xml', xml);
+            return parser.ast.component?.scripts?.[0];
+        }
+
+        it('strips <![CDATA[ and ]]> from multiline content', () => {
+            const script = parseScript(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="C" extends="Scene">
+                    <script type="text/brightscript">
+                        <![CDATA[
+                            function init()
+                            end function
+                        ]]>
+                    </script>
+                </component>
+            `);
+            // cdataText should not contain the delimiters; whitespace inside is preserved as-is
+            expect(script?.cdataText).to.not.include('<![CDATA[');
+            expect(script?.cdataText).to.not.include(']]>');
+            expect(script?.cdataText?.trim()).to.equal('function init()\n            end function');
+        });
+
+        it('strips <![CDATA[ and ]]> from inline (single-line) content', () => {
+            const script = parseScript(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="C" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[function init() : end function]]></script>
+                </component>
+            `);
+            expect(script?.cdataText).to.equal('function init() : end function');
+        });
+
+        it('returns empty string for empty CDATA block', () => {
+            const script = parseScript(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="C" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[]]></script>
+                </component>
+            `);
+            expect(script?.cdataText).to.equal('');
+        });
+
+        it('preserves > characters inside CDATA content', () => {
+            const script = parseScript(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="C" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[if x > 5 then : end if]]></script>
+                </component>
+            `);
+            expect(script?.cdataText).to.equal('if x > 5 then : end if');
+        });
+
+        it('returns undefined when there is no CDATA block', () => {
+            const script = parseScript(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="C" extends="Scene">
+                    <script type="text/brightscript" uri="./Comp.brs" />
+                </component>
+            `);
+            expect(script?.cdataText).to.be.undefined;
+        });
+    });
 });
