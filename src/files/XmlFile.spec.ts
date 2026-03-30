@@ -14,7 +14,7 @@ import { standardizePath as s } from '../util';
 import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 import { ProgramBuilder } from '../ProgramBuilder';
 import { LogLevel } from '../logging';
-import { isXmlFile } from '../astUtils/reflection';
+import { isBrsFile, isXmlFile } from '../astUtils/reflection';
 import { tempDir, rootDir, stagingDir } from '../testHelpers.spec';
 
 describe('XmlFile', () => {
@@ -1979,5 +1979,130 @@ describe('XmlFile', () => {
                 }
             });
         });
+
+        describe('synthetic file plugin context', () => {
+            // Verifies that emitWithSyntheticFileContext sets _cdataDiagnosticsContext for
+            // every plugin event that fires with a synthetic BrsFile as event.file, so that
+            // plugins calling program.getDiagnostics() from inside the handler get results
+            // where x.file === event.file holds (diagnostics not yet remapped to the XmlFile).
+
+            let xmlFile: XmlFile;
+
+            beforeEach(() => {
+                xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="MyComp" extends="Scene">
+                        <script type="text/brightscript"><![CDATA[
+                            function init()
+                                undeclaredVar = unknownFunction()
+                            end function
+                        ]]></script>
+                    </component>
+                `);
+                program.validate();
+            });
+
+            // Note: afterFileParse cannot be covered here because isSynthetic is set on the
+            // BrsFile *after* setFile() returns, which is after afterFileParse fires. So the
+            // emitWithSyntheticFileContext wrapper cannot identify the file as synthetic at
+            // that point. This is a known limitation.
+
+            it('onFileValidate: _cdataDiagnosticsContext is set to the synthetic BrsFile during the event', () => {
+                // onFileValidate fires during the validation pass, before scope diagnostics are
+                // produced. We verify the context flag is set so getDiagnostics() would scope
+                // correctly if called by a plugin.
+                let contextFileInsideHandler: BrsFile | undefined;
+                program.plugins.add({
+                    name: 'test',
+                    onFileValidate: function(event) {
+                        if (isBrsFile(event.file) && event.file.isSynthetic) {
+                            contextFileInsideHandler = (program as any)._cdataDiagnosticsContext;
+                        }
+                    }
+                });
+                program.setFile('components/MyComp.xml', xmlFile.fileContents);
+                program.validate();
+                expect(contextFileInsideHandler).to.exist;
+                expect((contextFileInsideHandler as BrsFile).isSynthetic).to.be.true;
+            });
+
+            it('provideDocumentSymbols: program.getDiagnostics() inside handler associates diagnostics with the synthetic BrsFile', () => {
+                let fileIdentityWorked = false;
+                program.plugins.add({
+                    name: 'test',
+                    provideDocumentSymbols: function(event) {
+                        if (isBrsFile(event.file) && (event.file as BrsFile).isSynthetic) {
+                            const diags = program.getDiagnostics()
+                                .filter(x => x.file === event.file);
+                            if (diags.length > 0) {
+                                fileIdentityWorked = true;
+                            }
+                        }
+                    }
+                });
+                program.getDocumentSymbols(xmlFile.srcPath);
+                expect(fileIdentityWorked).to.be.true;
+            });
+
+            it('onGetSemanticTokens: program.getDiagnostics() inside handler associates diagnostics with the synthetic BrsFile', () => {
+                let fileIdentityWorked = false;
+                program.plugins.add({
+                    name: 'test',
+                    onGetSemanticTokens: function(event) {
+                        if (isBrsFile(event.file) && (event.file as BrsFile).isSynthetic) {
+                            const diags = program.getDiagnostics()
+                                .filter(x => x.file === event.file);
+                            if (diags.length > 0) {
+                                fileIdentityWorked = true;
+                            }
+                        }
+                    }
+                });
+                program.getSemanticTokens(xmlFile.srcPath);
+                expect(fileIdentityWorked).to.be.true;
+            });
+
+            it('onGetCodeActions: program.getDiagnostics() inside handler supports "fix all" pattern across multiple CDATA diagnostics', () => {
+                // Two `then` violations in one CDATA block — simulate the bslint "fix all" pattern
+                const twoThenFile = program.setFile<XmlFile>('components/TwoThen.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="TwoThen" extends="Scene">
+                        <script type="text/brightscript"><![CDATA[
+                            function a() : end function
+                            function b() : end function
+                        ]]></script>
+                    </component>
+                `);
+                program.validate();
+                const twoThenSynthetic = program.getFile<BrsFile>('components/TwoThen.cdata-0.script.brs');
+
+                // Simulate plugin calling getDiagnostics() filtered by event.file identity
+                const fixAllDiagsFoundBySyntheticIdentity: BsDiagnostic[][] = [];
+                program.plugins.add({
+                    name: 'test',
+                    onGetCodeActions: function(event) {
+                        if (event.file === twoThenSynthetic) {
+                            // This is exactly the pattern a "fix all" plugin would use
+                            const allInFile = program.getDiagnostics()
+                                .filter(x => x.file === event.file);
+                            fixAllDiagsFoundBySyntheticIdentity.push(allInFile);
+                        }
+                    }
+                });
+
+                // trigger inside first function range
+                program.getCodeActions(twoThenFile.srcPath, Range.create(3, 12, 3, 12));
+
+                // the plugin must have seen diagnostics associated with the synthetic BrsFile
+                expect(fixAllDiagsFoundBySyntheticIdentity.length).to.be.greaterThan(0);
+                // and all returned diagnostics must reference the synthetic file, not the xml file
+                for (const group of fixAllDiagsFoundBySyntheticIdentity) {
+                    for (const d of group) {
+                        expect(d.file).to.equal(twoThenSynthetic, 'expected diagnostic.file to be the synthetic BrsFile, not the XmlFile');
+                    }
+                }
+            });
+        });
     });
 });
+

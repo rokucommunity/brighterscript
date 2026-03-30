@@ -173,9 +173,11 @@ export class Program {
     private pkgMap = {} as Record<string, BscFile>;
 
     /**
-     * When set, `getDiagnostics()` will skip remapping diagnostics for this synthetic BrsFile,
-     * leaving them in synthetic-file coordinate space. Used during code action events for CDATA
-     * blocks so that plugins can match diagnostics by file identity (`x.file === event.file`).
+     * When set, `getDiagnostics()` keeps this synthetic BrsFile's diagnostics associated with
+     * the BrsFile rather than remapping them to the parent XmlFile. Set for the duration of any
+     * plugin event whose `event.file` is a synthetic BrsFile, so that plugins calling
+     * `program.getDiagnostics()` from inside the handler get results where
+     * `x.file === event.file` works correctly (e.g. a plugin implementing "fix all").
      */
     private _cdataDiagnosticsContext: BrsFile | undefined;
 
@@ -350,10 +352,7 @@ export class Program {
      */
     private partialRemapSyntheticFileDiagnostics(diagnostics: BsDiagnostic[], contextFile: BrsFile): BsDiagnostic[] {
         return diagnostics.map(diagnostic => {
-            if (!diagnostic.file?.isSynthetic) {
-                return diagnostic;
-            }
-            if (diagnostic.file === contextFile) {
+            if (!diagnostic.file?.isSynthetic || diagnostic.file === contextFile) {
                 return diagnostic;
             }
             const parentXmlFile = (diagnostic.file as BrsFile).parentXmlFile;
@@ -362,6 +361,25 @@ export class Program {
             }
             return { ...diagnostic, file: parentXmlFile };
         });
+    }
+
+    /**
+     * Emit a plugin event with `_cdataDiagnosticsContext` set for the duration if `file` is a
+     * synthetic BrsFile. This ensures plugins that call `program.getDiagnostics()` from inside
+     * the handler receive diagnostics still associated with the BrsFile, so that
+     * `x.file === event.file` identity checks work correctly.
+     */
+    private emitWithSyntheticFileContext(file: BscFile | undefined, emit: () => void) {
+        if (isBrsFile(file) && file.isSynthetic) {
+            this._cdataDiagnosticsContext = file;
+            try {
+                emit();
+            } finally {
+                this._cdataDiagnosticsContext = undefined;
+            }
+        } else {
+            emit();
+        }
     }
 
     /**
@@ -564,7 +582,7 @@ export class Program {
                 });
 
                 //notify plugins that this file has finished parsing
-                this.plugins.emit('afterFileParse', brsFile);
+                this.emitWithSyntheticFileContext(brsFile, () => this.plugins.emit('afterFileParse', brsFile));
 
                 file = brsFile;
 
@@ -886,21 +904,23 @@ export class Program {
             })
             .forEach(() => Object.values(this.files), (file) => {
                 if (!file.isValidated) {
-                    this.plugins.emit('beforeFileValidate', {
-                        program: this,
-                        file: file
-                    });
+                    this.emitWithSyntheticFileContext(file, () => {
+                        this.plugins.emit('beforeFileValidate', {
+                            program: this,
+                            file: file
+                        });
 
-                    //emit an event to allow plugins to contribute to the file validation process
-                    this.plugins.emit('onFileValidate', {
-                        program: this,
-                        file: file
-                    });
-                    //call file.validate() IF the file has that function defined
-                    file.validate?.();
-                    file.isValidated = true;
+                        //emit an event to allow plugins to contribute to the file validation process
+                        this.plugins.emit('onFileValidate', {
+                            program: this,
+                            file: file
+                        });
+                        //call file.validate() IF the file has that function defined
+                        file.validate?.();
+                        file.isValidated = true;
 
-                    this.plugins.emit('afterFileValidate', file);
+                        this.plugins.emit('afterFileValidate', file);
+                    });
                 }
             })
             .forEach(Object.values(this.scopes), (scope) => {
@@ -1237,9 +1257,11 @@ export class Program {
                     file: brsFile,
                     documentSymbols: []
                 };
-                this.plugins.emit('beforeProvideDocumentSymbols', cdataEvent);
-                this.plugins.emit('provideDocumentSymbols', cdataEvent);
-                this.plugins.emit('afterProvideDocumentSymbols', cdataEvent);
+                this.emitWithSyntheticFileContext(brsFile, () => {
+                    this.plugins.emit('beforeProvideDocumentSymbols', cdataEvent);
+                    this.plugins.emit('provideDocumentSymbols', cdataEvent);
+                    this.plugins.emit('afterProvideDocumentSymbols', cdataEvent);
+                });
                 event.documentSymbols.push(...cdataEvent.documentSymbols);
             }
         }
@@ -1259,14 +1281,8 @@ export class Program {
             const cdataCtx = isXmlFile(file) ? this.resolveCdataContext(file, range.start) : undefined;
 
             // When the range falls inside a CDATA block, redirect the event to the synthetic
-            // BrsFile so that BrsFile-specific code actions work correctly. Setting
-            // _cdataDiagnosticsContext causes getDiagnostics() to keep that file's diagnostics
-            // in synthetic-file coordinate space (rather than remapping to the parent XML file),
-            // so that plugins can match diagnostics by file identity (x.file === event.file)
-            // and derive correct edit positions from diagnostic.data (AST node ranges).
+            // BrsFile so that BrsFile-specific code actions work correctly.
             const effectiveFile = cdataCtx?.brsFile ?? file;
-
-            this._cdataDiagnosticsContext = cdataCtx?.brsFile;
 
             const diagnostics = this
                 //get all current diagnostics (filtered by diagnostic filters)
@@ -1278,16 +1294,16 @@ export class Program {
 
             const scopes = this.getScopesForFile(effectiveFile);
 
-            this.plugins.emit('onGetCodeActions', {
-                program: this,
-                file: effectiveFile,
-                range: range,
-                diagnostics: diagnostics,
-                scopes: scopes,
-                codeActions: codeActions
+            this.emitWithSyntheticFileContext(effectiveFile, () => {
+                this.plugins.emit('onGetCodeActions', {
+                    program: this,
+                    file: effectiveFile,
+                    range: range,
+                    diagnostics: diagnostics,
+                    scopes: scopes,
+                    codeActions: codeActions
+                });
             });
-
-            this._cdataDiagnosticsContext = undefined;
 
             if (cdataCtx) {
                 this.remapCodeActionChangesToXml(codeActions, cdataCtx.brsFile, file as XmlFile);
@@ -1321,11 +1337,13 @@ export class Program {
                     continue;
                 }
                 const cdataTokens = [] as SemanticToken[];
-                this.plugins.emit('onGetSemanticTokens', {
-                    program: this,
-                    file: brsFile,
-                    scopes: this.getScopesForFile(brsFile),
-                    semanticTokens: cdataTokens
+                this.emitWithSyntheticFileContext(brsFile, () => {
+                    this.plugins.emit('onGetSemanticTokens', {
+                        program: this,
+                        file: brsFile,
+                        scopes: this.getScopesForFile(brsFile),
+                        semanticTokens: cdataTokens
+                    });
                 });
                 result.push(...cdataTokens);
             }
@@ -1464,11 +1482,13 @@ export class Program {
     public transpileSyntheticBrsFileToSourceNode(brsFile: BrsFile, xmlSrcPath: string): SourceNode {
         const editor = new AstEditor();
 
-        this.plugins.emit('beforeFileTranspile', {
-            program: this,
-            file: brsFile,
-            outputPath: undefined,
-            editor: editor
+        this.emitWithSyntheticFileContext(brsFile, () => {
+            this.plugins.emit('beforeFileTranspile', {
+                program: this,
+                file: brsFile,
+                outputPath: undefined,
+                editor: editor
+            });
         });
         if (editor.hasChanges) {
             editor.setProperty(brsFile, 'needsTranspiled', true);
