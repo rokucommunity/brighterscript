@@ -1,4 +1,5 @@
 import { assert, expect } from '../chai-config.spec';
+import { SourceMapConsumer } from 'source-map';
 import * as path from 'path';
 import * as sinonImport from 'sinon';
 import type { CompletionItem } from 'vscode-languageserver';
@@ -1406,7 +1407,7 @@ describe('XmlFile', () => {
             expect(program.getFile('components/MyComp.cdata-1.script.bs')).to.exist;
         });
 
-        it('transpile replaces CDATA blocks with uri script tags', () => {
+        it('transpile preserves CDATA blocks inline in the xml output', () => {
             testTranspile(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="MyComp" extends="Scene">
@@ -1418,13 +1419,16 @@ describe('XmlFile', () => {
             `, trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="MyComp" extends="Scene">
-                    <script type="text/brightscript" uri="pkg:/components/MyComp.cdata-0.script.brs" />
+                    <script type="text/brightscript"><![CDATA[
+                        function init()
+                        end function
+                    ]]></script>
                     <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
                 </component>
             `, 'none', 'components/MyComp.xml');
         });
 
-        it('transpile replaces mixed uri and CDATA scripts preserving order', () => {
+        it('transpile preserves mixed uri and CDATA scripts inline preserving order', () => {
             program.setFile('components/helper.brs', '');
             testTranspile(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -1439,10 +1443,256 @@ describe('XmlFile', () => {
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="MyComp" extends="Scene">
                     <script type="text/brightscript" uri="./helper.brs" />
-                    <script type="text/brightscript" uri="pkg:/components/MyComp.cdata-0.script.brs" />
+                    <script type="text/brightscript"><![CDATA[
+                        function init()
+                        end function
+                    ]]></script>
                     <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
                 </component>
             `, 'none', 'components/MyComp.xml');
+        });
+
+        it('transpile transforms ternary expressions in brighterscript CDATA', () => {
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brighterscript"><![CDATA[
+                        sub init()
+                            x = true ? "yes" : "no"
+                        end sub
+                    ]]></script>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[sub init()
+                    if true then
+                        x = "yes"
+                    else
+                        x = "no"
+                    end if
+                end sub]]></script>
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/MyComp.xml');
+        });
+
+        it('transpile inlines enum values in brighterscript CDATA', () => {
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brighterscript"><![CDATA[
+                        enum Direction
+                            up = "up"
+                            down = "down"
+                        end enum
+                        sub init()
+                            d = Direction.up
+                        end sub
+                    ]]></script>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+
+                sub init()
+                    d = "up"
+                end sub]]></script>
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/MyComp.xml');
+        });
+
+        it('transpile flattens namespaces in brighterscript CDATA', () => {
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brighterscript"><![CDATA[
+                        namespace util
+                            sub greet(name as string)
+                                print "Hello " + name
+                            end sub
+                        end namespace
+                        sub init()
+                            util.greet("world")
+                        end sub
+                    ]]></script>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[sub util_greet(name as string)
+                    print "Hello " + name
+                end sub
+
+                sub init()
+                    util_greet("world")
+                end sub]]></script>
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/MyComp.xml');
+        });
+
+        it('transpile inlines const values in brighterscript CDATA', () => {
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brighterscript"><![CDATA[
+                        const MAX_RETRIES = 3
+                        sub init()
+                            print MAX_RETRIES
+                        end sub
+                    ]]></script>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+
+                sub init()
+                    print 3
+                end sub]]></script>
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/MyComp.xml');
+        });
+
+        it('transpile transforms null coalescing in brighterscript CDATA', () => {
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brighterscript"><![CDATA[
+                        sub init()
+                            x = m.value ?? "default"
+                        end sub
+                    ]]></script>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[sub init()
+                    x = (function(m)
+                            __bsConsequent = m.value
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return "default"
+                            end if
+                        end function)(m)
+                end sub]]></script>
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/MyComp.xml');
+        });
+
+        it('source map points back to original xml positions for plain brs CDATA', async () => {
+            // Generated output (1-based lines):
+            //   3: "    <script type="text/brightscript"><![CDATA["
+            //   4: "        sub init()"   ← col 0 → source line 4, col 0
+            //   5: "        end sub"      ← col 0 → source line 5, col 0
+            const xmlFile = program.setFile<XmlFile>({ src: s`${rootDir}/components/MyComp.xml`, dest: 'components/MyComp.xml' }, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        sub init()
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            program.options.sourceMap = true;
+            program.validate();
+            const result = xmlFile.transpile();
+            expect(result.map).to.exist;
+
+            await SourceMapConsumer.with(result.map.toJSON(), null, (consumer) => {
+                // raw CDATA lines map at col 0 back to the same line in the xml source
+                const subPos = consumer.originalPositionFor({ line: 4, column: 0 });
+                expect(subPos.source).to.include('MyComp.xml');
+                expect(subPos.line).to.equal(4);
+                expect(subPos.column).to.equal(0);
+
+                const endSubPos = consumer.originalPositionFor({ line: 5, column: 0 });
+                expect(endSubPos.source).to.include('MyComp.xml');
+                expect(endSubPos.line).to.equal(5);
+                expect(endSubPos.column).to.equal(0);
+            });
+        });
+
+        it('source map points back to xml positions for transpiled brighterscript CDATA', async () => {
+            // Generated output (1-based lines):
+            //   3: "    <script ...><![CDATA[sub init()"  ← 'sub' at col 46 → source (4, 8)
+            //   4: "    if true then"                     ← col 4           → source (5, 21) (ternary)
+            //   5: "        x = \"yes\""                  ← col 8           → source (5, 12)
+            const xmlFile = program.setFile<XmlFile>({ src: s`${rootDir}/components/MyComp.xml`, dest: 'components/MyComp.xml' }, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brighterscript"><![CDATA[
+                        sub init()
+                            x = true ? "yes" : "no"
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            program.options.sourceMap = true;
+            program.validate();
+            const result = xmlFile.transpile();
+            expect(result.map).to.exist;
+            // only the xml file should appear in sources — not the synthetic brs file
+            expect(result.map.toJSON().sources).to.eql([s`${rootDir}/components/MyComp.xml`]);
+
+            await SourceMapConsumer.with(result.map.toJSON(), null, (consumer) => {
+                // 'sub' is on gen line 3 right after '<![CDATA[' at col 46
+                const subPos = consumer.originalPositionFor({ line: 3, column: 46 });
+                expect(subPos.source).to.include('MyComp.xml');
+                expect(subPos.line).to.equal(4); // source line 4 (1-based) in the xml
+                expect(subPos.column).to.equal(8);
+
+                // the true branch 'x = "yes"' is on gen line 5 col 8, maps back to the ternary 'x' at source (5, 12)
+                const xPos = consumer.originalPositionFor({ line: 5, column: 8 });
+                expect(xPos.source).to.include('MyComp.xml');
+                expect(xPos.line).to.equal(5);
+                expect(xPos.column).to.equal(12);
+            });
+        });
+
+        it('source map points back to xml positions for transpiled enum values in CDATA', async () => {
+            // Generated output (1-based lines):
+            //   5: "sub init()"       ← col 0 → source (7, 8)
+            //   6: "    d = \"up\""   ← col 4 → source (8, 12)
+            //   7: "end sub]]>..."    ← col 0 → source (9, 8)
+            const xmlFile = program.setFile<XmlFile>({ src: s`${rootDir}/components/MyComp.xml`, dest: 'components/MyComp.xml' }, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brighterscript"><![CDATA[
+                        enum Direction
+                            up = "up"
+                        end enum
+                        sub init()
+                            d = Direction.up
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            program.options.sourceMap = true;
+            program.validate();
+            const result = xmlFile.transpile();
+            expect(result.map).to.exist;
+            expect(result.map.toJSON().sources).to.eql([s`${rootDir}/components/MyComp.xml`]);
+
+            await SourceMapConsumer.with(result.map.toJSON(), null, (consumer) => {
+                // 'sub' on gen line 5 col 0 → source (7, 8)
+                const subPos = consumer.originalPositionFor({ line: 5, column: 0 });
+                expect(subPos.source).to.include('MyComp.xml');
+                expect(subPos.line).to.equal(7);
+                expect(subPos.column).to.equal(8);
+
+                // 'd' on gen line 6 col 4 → source (8, 12)
+                const dPos = consumer.originalPositionFor({ line: 6, column: 4 });
+                expect(dPos.source).to.include('MyComp.xml');
+                expect(dPos.line).to.equal(8);
+                expect(dPos.column).to.equal(12);
+            });
         });
 
         it('cleans up synthetic files when the xml file is removed', () => {

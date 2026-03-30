@@ -24,7 +24,9 @@ import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement } from './astUti
 import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { AstEditor } from './astUtils/AstEditor';
+import type { SourceNode } from 'source-map';
 import type { SourceMapGenerator } from 'source-map';
+import { BrsTranspileState } from './parser/BrsTranspileState';
 import type { Statement } from './parser/AstNode';
 import { CallExpressionInfo } from './bscPlugin/CallExpressionInfo';
 import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
@@ -1465,6 +1467,44 @@ export class Program {
     }
 
     /**
+     * Transpile a synthetic CDATA BrsFile and return a SourceNode suitable for embedding
+     * back into the parent XML file's transpile output. Plugin beforeFileTranspile events are
+     * fired so AST edits (e.g. built-in transpile transforms) are applied. afterFileTranspile
+     * is intentionally skipped — it is designed for standalone file output, not embedded content.
+     *
+     * Because synthetic BrsFiles are created with offset-padded content, their token positions
+     * already align with positions in the parent XML file. Overriding state.srcPath to the XML
+     * file's path makes the resulting SourceNode reference the XML file directly, producing a
+     * correct unified source map.
+     */
+    public transpileSyntheticBrsFileToSourceNode(brsFile: BrsFile, xmlSrcPath: string): SourceNode {
+        const editor = new AstEditor();
+
+        this.plugins.emit('beforeFileTranspile', {
+            program: this,
+            file: brsFile,
+            outputPath: undefined,
+            editor: editor
+        });
+        if (editor.hasChanges) {
+            editor.setProperty(brsFile, 'needsTranspiled', true);
+        }
+
+        // Override srcPath so every SourceNode references the XML file at the correct position
+        const state = new BrsTranspileState(brsFile);
+        state.srcPath = xmlSrcPath;
+
+        const sourceNode = util.sourceNodeFromTranspileResult(
+            null, null, state.srcPath, brsFile.ast.transpile(state)
+        );
+
+        state.editor.undoAll();
+        editor.undoAll();
+
+        return sourceNode;
+    }
+
+    /**
      * Internal function used to transpile files.
      * This does not write anything to the file system
      */
@@ -1573,6 +1613,11 @@ export class Program {
             const file = this.getFile(srcPath);
             //mark this file as processed so we don't process it more than once
             processedFiles.add(outputPath?.toLowerCase());
+
+            //synthetic CDATA BrsFiles are embedded back into their parent XML — don't write them as separate output files
+            if (isBrsFile(file) && file.isSynthetic) {
+                return;
+            }
 
             if (!this.options.pruneEmptyCodeFiles || !file.canBePruned) {
                 //skip transpiling typedef files

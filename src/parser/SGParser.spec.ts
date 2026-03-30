@@ -63,7 +63,11 @@ describe('SGParser', () => {
                     <function name="load" />
                 </interface>
                 <script type="text/brightscript" uri="./Component1.brs" />
-                <script type="text/brightscript" uri="pkg:/components/file.cdata-0.script.brs" />
+                <script type="text/brightscript"><![CDATA[
+                        function init()
+                            print "hello"
+                        end function
+                    ]]></script>
                 <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
                 <children>
                     <Label id="loadingIndicator" text="Loading..." font="font:MediumBoldSystemFont" />

@@ -6,6 +6,7 @@ import { DiagnosticCodeMap, diagnosticCodes } from '../DiagnosticMessages';
 import type { FunctionScope } from '../FunctionScope';
 import type { Callable, BsDiagnostic, File, FileReference, FunctionCall, CommentFlag } from '../interfaces';
 import type { Program } from '../Program';
+import type { BrsFile } from './BrsFile';
 import util from '../util';
 import SGParser, { rangeFromTokenValue } from '../parser/SGParser';
 import chalk from 'chalk';
@@ -532,18 +533,20 @@ export class XmlFile {
 
         const originalScripts = this.ast.component?.scripts ?? [];
 
-        //replace CDATA script blocks with uri-based script tags pointing to the synthetic extracted files
+        //pre-transpile any CDATA scripts that need it, storing the SourceNode on the SGScript
+        //so that SGScript.transpileBody() can embed it directly into the XML output
         let cdataIndex = 0;
-        const scriptsWithInlineUris = originalScripts.map(script => {
+        let anySyntheticNeedsTranspiled = false;
+        for (const script of originalScripts) {
             if (script.cdata) {
                 const inlinePkgPath = this.inlineScriptPkgPaths[cdataIndex++];
-                const uriScript = new SGScript();
-                uriScript.type = 'text/brightscript';
-                uriScript.uri = util.getRokuPkgPath(inlinePkgPath.replace(/\.bs$/i, '.brs'));
-                return uriScript;
+                const brsFile = this.program.getFile<BrsFile>(inlinePkgPath);
+                if (brsFile?.needsTranspiled) {
+                    anySyntheticNeedsTranspiled = true;
+                    script.transpileSourceNode = this.program.transpileSyntheticBrsFileToSourceNode(brsFile, state.srcPath);
+                }
             }
-            return script;
-        });
+        }
 
         const extraImportScripts = this.getMissingImportsForTranspile().map(uri => {
             const script = new SGScript();
@@ -552,20 +555,24 @@ export class XmlFile {
         });
 
         const [scriptsHaveChanged, publishableScripts] = this.checkScriptsForPublishableImports([
-            ...scriptsWithInlineUris,
+            ...originalScripts,
             ...extraImportScripts
         ]);
 
         let transpileResult: SourceNode | undefined;
-        if (this.needsTranspiled || extraImportScripts.length > 0 || scriptsHaveChanged) {
+        if (this.needsTranspiled || anySyntheticNeedsTranspiled || extraImportScripts.length > 0 || scriptsHaveChanged) {
             //temporarily add the missing imports as script tags
             this.ast.component.scripts = publishableScripts;
-
 
             transpileResult = util.sourceNodeFromTranspileResult(null, null, state.srcPath, this.parser.ast.transpile(state));
 
             //restore the original scripts array
             this.ast.component.scripts = originalScripts;
+
+            //clean up transpileSourceNode — don't leave SourceNodes on AST nodes after transpile
+            for (const script of originalScripts) {
+                delete script.transpileSourceNode;
+            }
 
         } else if (this.program.options.sourceMap) {
             //emit code as-is with a simple map to the original file location
