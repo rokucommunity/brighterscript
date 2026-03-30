@@ -533,20 +533,9 @@ export class XmlFile {
 
         const originalScripts = this.ast.component?.scripts ?? [];
 
-        //pre-transpile any CDATA scripts that need it, storing the SourceNode on the SGScript
-        //so that SGScript.transpileBody() can embed it directly into the XML output
-        let cdataIndex = 0;
-        let anySyntheticNeedsTranspiled = false;
-        for (const script of originalScripts) {
-            if (script.cdata) {
-                const inlinePkgPath = this.inlineScriptPkgPaths[cdataIndex++];
-                const brsFile = this.program.getFile<BrsFile>(inlinePkgPath);
-                if (brsFile?.needsTranspiled) {
-                    anySyntheticNeedsTranspiled = true;
-                    script.transpileSourceNode = this.program.transpileSyntheticBrsFileToSourceNode(brsFile, state.srcPath);
-                }
-            }
-        }
+        const anySyntheticNeedsTranspiled = this.inlineScriptPkgPaths.some(
+            pkgPath => this.program.getFile<BrsFile>(pkgPath)?.needsTranspiled
+        );
 
         const extraImportScripts = this.getMissingImportsForTranspile().map(uri => {
             const script = new SGScript();
@@ -568,11 +557,6 @@ export class XmlFile {
 
             //restore the original scripts array
             this.ast.component.scripts = originalScripts;
-
-            //clean up transpileSourceNode — don't leave SourceNodes on AST nodes after transpile
-            for (const script of originalScripts) {
-                delete script.transpileSourceNode;
-            }
 
         } else if (this.program.options.sourceMap) {
             //emit code as-is with a simple map to the original file location

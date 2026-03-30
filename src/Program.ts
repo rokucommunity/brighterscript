@@ -617,6 +617,11 @@ export class Program {
                         inlineFile.isSynthetic = true;
                         inlineFile.parentXmlFile = xmlFile;
                         inlineFile.cdataScript = script;
+                        script.cdataTranspile = (state) => {
+                            return inlineFile.needsTranspiled
+                                ? this.transpileSyntheticBrsFileToSourceNode(inlineFile, state.srcPath)
+                                : undefined;
+                        };
                     }
                 }
 

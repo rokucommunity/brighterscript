@@ -175,19 +175,19 @@ export class SGScript extends SGTag {
     }
 
     /**
-     * Pre-transpiled SourceNode for CDATA content. When set, transpileBody() embeds this
-     * SourceNode directly instead of the raw cdata token, producing a unified XML+BrightScript
-     * source map. Populated by XmlFile.transpile() before the AST transpile call and cleaned
-     * up immediately after.
+     * When set, called during transpile to produce a SourceNode for this CDATA block's content.
+     * Returns undefined if the BrsFile does not need transpiling (raw cdata is used as-is).
+     * Set by Program when the synthetic BrsFile is registered; lives for the lifetime of the file.
      */
-    public transpileSourceNode?: SourceNode;
+    public cdataTranspile?: (state: TranspileState) => SourceNode | undefined;
 
     protected transpileBody(state: TranspileState): (string | SourceNode)[] {
-        if (this.transpileSourceNode) {
+        const cdataSourceNode = this.cdataTranspile?.(state);
+        if (cdataSourceNode) {
             return [
                 '>',
                 '<![CDATA[',
-                this.transpileSourceNode,
+                cdataSourceNode,
                 ']]>',
                 '</', this.tag.text, '>\n'
             ];
