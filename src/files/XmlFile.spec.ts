@@ -10,7 +10,7 @@ import type { BsDiagnostic, FileReference } from '../interfaces';
 import { Program } from '../Program';
 import { BrsFile } from './BrsFile';
 import { XmlFile } from './XmlFile';
-import { standardizePath as s } from '../util';
+import util, { standardizePath as s } from '../util';
 import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 import { ProgramBuilder } from '../ProgramBuilder';
 import { LogLevel } from '../logging';
@@ -1430,9 +1430,9 @@ describe('XmlFile', () => {
             }
         });
 
-        it('synthetic BrsFile fileContents has correct content at XML-space line numbers', () => {
-            // fileContents must be indexable by XML-space line numbers so that tools like
-            // SignatureHelpUtil can extract the function signature text correctly.
+        it('synthetic BrsFile fileContents is the raw CDATA text (not padded)', () => {
+            // fileContents stores only the raw CDATA text. Consumers that need line-indexed
+            // access at XML-space coordinates (e.g. SignatureHelpUtil) use parentXmlFile.fileContents.
             const xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="MyComp" extends="Scene">
@@ -1443,9 +1443,38 @@ describe('XmlFile', () => {
                 </component>
             `);
             const brsFile = program.getFile<BrsFile>(xmlFile.inlineScriptPkgPaths[0]);
-            const lines = brsFile.fileContents.split(/\r?\n/g);
-            // line 3 (0-indexed) of the XML is "        sub greet(name as string)"
-            expect(lines[3]).to.include('sub greet');
+            // fileContents is the raw CDATA source, not padded with leading newlines
+            expect(brsFile.fileContents).to.include('sub greet');
+            expect(brsFile.fileContents.split(/\r?\n/g)[0]).to.equal('');  // first "line" is the \n right after <![CDATA[
+            // parentXmlFile.fileContents is where XML-space line lookups should go
+            const xmlLines = xmlFile.fileContents.split(/\r?\n/g);
+            expect(xmlLines[3]).to.include('sub greet');
+        });
+
+        it('getSignatureHelp returns correct label for a CDATA function called from a uri-based script', () => {
+            // Tests that SignatureHelpUtil correctly extracts the function label from the parent
+            // XML file's contents when the callee is defined in a CDATA block (synthetic BrsFile).
+            program.setFile('components/MyComp.brs', trim`
+                sub main()
+                    greet("world")
+                end sub
+            `);
+            program.setFile<XmlFile>('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript" uri="MyComp.brs" />
+                    <script type="text/brightscript"><![CDATA[
+                        sub greet(name as string)
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            // line 1 of MyComp.brs is "    greet("world")" — col 10 is inside the arg list
+            const help = program.getSignatureHelp('components/MyComp.brs', util.createPosition(1, 10));
+            expect(help).to.have.length.greaterThan(0);
+            expect(help[0].signature.label).to.equal('sub greet(name as string)');
         });
 
         it('transpile preserves CDATA blocks inline in the xml output', () => {

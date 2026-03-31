@@ -555,7 +555,7 @@ export class Program {
      * only used when registering synthetic inline CDATA BrsFiles so that the lexer can start its
      * position tracking at the correct XML-space offset without needing a side-channel map.
      */
-    private setFileInternal<T extends BscFile>(fileParam: FileObj | string, fileContents: string, parseOptions?: { startLine?: number; startCharacter?: number; rawSource?: string }, configure?: (file: BrsFile) => void): T {
+    private setFileInternal<T extends BscFile>(fileParam: FileObj | string, fileContents: string, parseOptions?: { startLine?: number; startCharacter?: number }, configure?: (file: BrsFile) => void): T {
         //normalize the file paths
         const { srcPath, pkgPath } = this.getPaths(fileParam, this.options.rootDir);
 
@@ -638,26 +638,17 @@ export class Program {
                 for (const script of xmlFile.ast.component?.scripts ?? []) {
                     if (script.cdata) {
                         const inlinePkgPath = xmlFile.inlineScriptPkgPaths[cdataScriptIndex++];
-                        // The synthetic BrsFile needs two forms of the same source:
-                        //
-                        //  • fileContents = padded content (newlines + spaces prepended so that
-                        //    XML-coordinate line numbers index correctly into the text). Tools
-                        //    like SignatureHelpUtil use fileContents for line-based text extraction.
-                        //
-                        //  • rawSource = the actual cdataText passed to the lexer together with
-                        //    startLine/startCharacter so that every token range is already in the
-                        //    parent XML coordinate space — without the spurious Newline tokens that
-                        //    the padding newlines would otherwise introduce into the token stream.
+                        // Pass the raw CDATA text directly as fileContents. startLine/startCharacter
+                        // tell the lexer to start its position counters at the correct XML-space
+                        // offset, so all token ranges are already in parent XML coordinate space.
+                        // Consumers that need line-indexed text (e.g. SignatureHelpUtil) use the
+                        // parentXmlFile's fileContents instead of the synthetic file's.
                         const cdataRange = script.cdata.range;
                         const contentStartChar = cdataRange.start.character + '<![CDATA['.length;
                         const rawSource = script.cdataText ?? '';
-                        const paddedContent = '\n'.repeat(cdataRange.start.line) +
-                            ' '.repeat(contentStartChar) +
-                            rawSource;
-                        const inlineFile = this.setFileInternal<BrsFile>(inlinePkgPath, paddedContent, {
+                        const inlineFile = this.setFileInternal<BrsFile>(inlinePkgPath, rawSource, {
                             startLine: cdataRange.start.line,
-                            startCharacter: contentStartChar,
-                            rawSource: rawSource
+                            startCharacter: contentStartChar
                         }, (file) => {
                             file.isSynthetic = true;
                         });
