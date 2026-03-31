@@ -2,7 +2,7 @@ import { expect } from '../../../chai-config.spec';
 import { Program } from '../../../Program';
 import { ParseMode, Parser } from '../../Parser';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
-import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile, rootDir } from '../../../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile, rootDir, trim } from '../../../testHelpers.spec';
 import { isNamedArgumentExpression } from '../../../astUtils/reflection';
 import type { ExpressionStatement } from '../../Statement';
 import type { CallExpression } from '../../Expression';
@@ -167,6 +167,195 @@ describe('named argument expressions', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
+        });
+
+        describe('namespace calls', () => {
+            it('validates a correctly named argument call to a namespace function', () => {
+                program.setFile('source/main.bs', `
+                    namespace MyNs
+                        sub greet(name as string, excited as boolean)
+                        end sub
+                    end namespace
+                    sub main()
+                        MyNs.greet(excited: true, name: "Bob")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('gives diagnostic for unknown named argument on a namespace function', () => {
+                program.setFile('source/main.bs', `
+                    namespace MyNs
+                        sub greet(name as string)
+                        end sub
+                    end namespace
+                    sub main()
+                        MyNs.greet(nope: "Bob")
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.unknownNamedArgument('nope', 'MyNs_greet')
+                ]);
+            });
+
+            it('gives diagnostic for named args on a non-namespace dotted call', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        obj = {}
+                        obj.method(name: "Bob")
+                    end sub
+                `);
+                program.validate();
+                expectDiagnosticsIncludes(program, [
+                    DiagnosticMessages.namedArgsNotAllowedForUnknownFunction('method')
+                ]);
+            });
+        });
+
+        describe('constructor calls', () => {
+            it('validates correctly named argument call to a class constructor', () => {
+                program.setFile('source/main.bs', `
+                    class Point
+                        x as integer
+                        y as integer
+                        function new(x as integer, y as integer)
+                            m.x = x
+                            m.y = y
+                        end function
+                    end class
+                    sub main()
+                        p = new Point(y: 2, x: 1)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('gives diagnostic for unknown named argument on a constructor', () => {
+                program.setFile('source/main.bs', `
+                    class Point
+                        x as integer
+                        y as integer
+                        function new(x as integer, y as integer)
+                        end function
+                    end class
+                    sub main()
+                        p = new Point(z: 99)
+                    end sub
+                `);
+                program.validate();
+                expectDiagnosticsIncludes(program, [
+                    DiagnosticMessages.unknownNamedArgument('z', 'Point')
+                ]);
+            });
+
+            it('gives diagnostic for missing required constructor parameter', () => {
+                program.setFile('source/main.bs', `
+                    class Point
+                        x as integer
+                        y as integer
+                        function new(x as integer, y as integer)
+                        end function
+                    end class
+                    sub main()
+                        p = new Point(x: 1)
+                    end sub
+                `);
+                program.validate();
+                expectDiagnosticsIncludes(program, [
+                    DiagnosticMessages.mismatchArgumentCount('2', 1)
+                ]);
+            });
+
+            it('uses inherited constructor params when subclass has no constructor', () => {
+                program.setFile('source/main.bs', `
+                    class Shape
+                        color as string
+                        function new(color as string)
+                            m.color = color
+                        end function
+                    end class
+                    class Circle extends Shape
+                    end class
+                    sub main()
+                        c = new Circle(color: "red")
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+        });
+
+        describe('cross-scope conflict', () => {
+            it('gives diagnostic when same function name has different parameter signatures across component scopes', () => {
+                // shared.bs calls foo() with named args; each component imports a different
+                // definition of foo() with the same param names but in different order.
+                program.setFile('components/shared.bs', `
+                    sub callFoo()
+                        foo(b: 1, a: 2)
+                    end sub
+                `);
+                program.setFile('components/helperA.bs', `
+                    sub foo(a, b)
+                    end sub
+                `);
+                program.setFile('components/helperB.bs', `
+                    sub foo(b, a)
+                    end sub
+                `);
+                program.setFile('components/CompA.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="CompA" extends="Scene">
+                        <script type="text/brightscript" uri="shared.bs" />
+                        <script type="text/brightscript" uri="helperA.bs" />
+                    </component>
+                `);
+                program.setFile('components/CompB.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="CompB" extends="Scene">
+                        <script type="text/brightscript" uri="shared.bs" />
+                        <script type="text/brightscript" uri="helperB.bs" />
+                    </component>
+                `);
+                program.validate();
+                expectDiagnosticsIncludes(program, [
+                    DiagnosticMessages.namedArgsCrossScopeConflict('foo')
+                ]);
+            });
+
+            it('does not give cross-scope diagnostic when all scopes agree on the parameter signature', () => {
+                program.setFile('components/shared.bs', `
+                    sub callFoo()
+                        foo(b: 1, a: 2)
+                    end sub
+                `);
+                program.setFile('components/helperA.bs', `
+                    sub foo(a, b)
+                    end sub
+                `);
+                program.setFile('components/helperB.bs', `
+                    sub foo(a, b)
+                    end sub
+                `);
+                program.setFile('components/CompA.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="CompA" extends="Scene">
+                        <script type="text/brightscript" uri="shared.bs" />
+                        <script type="text/brightscript" uri="helperA.bs" />
+                    </component>
+                `);
+                program.setFile('components/CompB.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="CompB" extends="Scene">
+                        <script type="text/brightscript" uri="shared.bs" />
+                        <script type="text/brightscript" uri="helperB.bs" />
+                    </component>
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
         });
     });
 
@@ -1024,6 +1213,187 @@ describe('named argument expressions', () => {
                     greet(__bsArgs0, false)
                 end sub
             `);
+        });
+
+        describe('namespace calls', () => {
+            it('reorders named args for a namespace function call', () => {
+                testTranspile(`
+                    namespace MyNs
+                        sub greet(name as string, excited as boolean)
+                        end sub
+                    end namespace
+                    sub main()
+                        MyNs.greet(excited: true, name: "Bob")
+                    end sub
+                `, `
+                    sub MyNs_greet(name as string, excited as boolean)
+                    end sub
+
+                    sub main()
+                        MyNs_greet("Bob", true)
+                    end sub
+                `);
+            });
+
+            it('hoists complex args for a namespace function call', () => {
+                testTranspile(`
+                    namespace MyNs
+                        sub greet(name as string, excited as boolean)
+                        end sub
+                    end namespace
+                    function getName() as string
+                        return "Bob"
+                    end function
+                    sub main()
+                        MyNs.greet(excited: true, name: getName())
+                    end sub
+                `, `
+                    sub MyNs_greet(name as string, excited as boolean)
+                    end sub
+
+                    function getName() as string
+                        return "Bob"
+                    end function
+
+                    sub main()
+                        __bsArgs0 = getName()
+                        MyNs_greet(__bsArgs0, true)
+                    end sub
+                `);
+            });
+        });
+
+        describe('constructor calls', () => {
+            it('reorders named args for a constructor call', () => {
+                testTranspile(`
+                    class Point
+                        x as integer
+                        y as integer
+                        function new(x as integer, y as integer)
+                            m.x = x
+                            m.y = y
+                        end function
+                    end class
+                    sub main()
+                        p = new Point(y: 2, x: 1)
+                    end sub
+                `, `
+                    function __Point_method_new(x as integer, y as integer)
+                        m.x = invalid
+                        m.y = invalid
+                        m.x = x
+                        m.y = y
+                    end function
+                    function __Point_builder()
+                        instance = {}
+                        instance.new = __Point_method_new
+                        return instance
+                    end function
+                    function Point(x as integer, y as integer)
+                        instance = __Point_builder()
+                        instance.new(x, y)
+                        return instance
+                    end function
+
+                    sub main()
+                        p = Point(1, 2)
+                    end sub
+                `);
+            });
+
+            it('hoists complex args for a constructor call', () => {
+                testTranspile(`
+                    class Point
+                        x as integer
+                        y as integer
+                        function new(x as integer, y as integer)
+                            m.x = x
+                            m.y = y
+                        end function
+                    end class
+                    function getY() as integer
+                        return 2
+                    end function
+                    sub main()
+                        p = new Point(y: getY(), x: 1)
+                    end sub
+                `, `
+                    function __Point_method_new(x as integer, y as integer)
+                        m.x = invalid
+                        m.y = invalid
+                        m.x = x
+                        m.y = y
+                    end function
+                    function __Point_builder()
+                        instance = {}
+                        instance.new = __Point_method_new
+                        return instance
+                    end function
+                    function Point(x as integer, y as integer)
+                        instance = __Point_builder()
+                        instance.new(x, y)
+                        return instance
+                    end function
+
+                    function getY() as integer
+                        return 2
+                    end function
+
+                    sub main()
+                        __bsArgs0 = getY()
+                        p = Point(1, __bsArgs0)
+                    end sub
+                `);
+            });
+
+            it('uses inherited constructor params when subclass has no constructor', () => {
+                testTranspile(`
+                    class Shape
+                        color as string
+                        function new(color as string)
+                            m.color = color
+                        end function
+                    end class
+                    class Circle extends Shape
+                    end class
+                    sub main()
+                        c = new Circle(color: "red")
+                    end sub
+                `, `
+                    function __Shape_method_new(color as string)
+                        m.color = invalid
+                        m.color = color
+                    end function
+                    function __Shape_builder()
+                        instance = {}
+                        instance.new = __Shape_method_new
+                        return instance
+                    end function
+                    function Shape(color as string)
+                        instance = __Shape_builder()
+                        instance.new(color)
+                        return instance
+                    end function
+                    sub __Circle_method_new(color as string)
+                        m.super0_new(color)
+                    end sub
+                    function __Circle_builder()
+                        instance = __Shape_builder()
+                        instance.super0_new = instance.new
+                        instance.new = __Circle_method_new
+                        return instance
+                    end function
+                    function Circle(color as string)
+                        instance = __Circle_builder()
+                        instance.new(color)
+                        return instance
+                    end function
+
+                    sub main()
+                        c = Circle("red")
+                    end sub
+                `);
+            });
         });
     });
 });

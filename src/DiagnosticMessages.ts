@@ -786,6 +786,11 @@ export let DiagnosticMessages = {
         code: 1149,
         severity: DiagnosticSeverity.Error
     }),
+    namedArgsCrossScopeConflict: (funcName: string) => ({
+        message: `Named arguments for '${funcName}' are ambiguous: the function has different parameter signatures across component scopes that share this file. Named arguments cannot be safely transpiled.`,
+        code: 1151,
+        severity: DiagnosticSeverity.Error
+    }),
     duplicateFunctionParameter: (paramName: string) => ({
         message: `Duplicate parameter name '${paramName}'`,
         code: 1150,

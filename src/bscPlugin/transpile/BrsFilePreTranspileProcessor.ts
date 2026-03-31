@@ -1,5 +1,5 @@
 import { createAssignmentStatement, createBlock, createDottedSetStatement, createIfStatement, createIndexedSetStatement, createInvalidLiteral, createToken, createVariableExpression } from '../../astUtils/creators';
-import { isAssignmentStatement, isBinaryExpression, isBlock, isBody, isBrsFile, isDottedGetExpression, isDottedSetStatement, isGroupingExpression, isIndexedGetExpression, isIndexedSetStatement, isLiteralExpression, isNamedArgumentExpression, isStatement, isTernaryExpression, isUnaryExpression, isVariableExpression } from '../../astUtils/reflection';
+import { isAssignmentStatement, isBinaryExpression, isBlock, isBody, isBrsFile, isDottedGetExpression, isDottedSetStatement, isFunctionExpression, isGroupingExpression, isIndexedGetExpression, isIndexedSetStatement, isLiteralExpression, isNamedArgumentExpression, isNamespaceStatement, isStatement, isTernaryExpression, isUnaryExpression, isVariableExpression } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BeforeFileTranspileEvent } from '../../interfaces';
@@ -11,7 +11,7 @@ import type { CallExpression, FunctionExpression, FunctionParameterExpression, N
 import type { TranspileResult } from '../../interfaces';
 import { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { IfStatement } from '../../parser/Statement';
+import type { ClassStatement, IfStatement, MethodStatement, NamespaceStatement } from '../../parser/Statement';
 import type { Scope } from '../../Scope';
 import util from '../../util';
 
@@ -63,154 +63,227 @@ export class BrsFilePreTranspileProcessor {
                 if (!callExpr.args.some(isNamedArgumentExpression)) {
                     continue;
                 }
-                // Only handle simple variable calls (method calls are rejected by validation)
-                if (!isVariableExpression(callExpr.callee)) {
+
+                let params: FunctionParameterExpression[] | undefined;
+
+                if (isVariableExpression(callExpr.callee)) {
+                    const funcName = callExpr.callee.name.text;
+                    params = callableContainerMap.get(funcName.toLowerCase())?.[0]?.callable?.functionStatement?.func?.parameters;
+                } else if (isDottedGetExpression(callExpr.callee)) {
+                    // Namespace function call (e.g. MyNs.myFunc(a: 1))
+                    const brsName = this.getNamespaceCallableBrsName(callExpr.callee, scope);
+                    if (brsName) {
+                        params = callableContainerMap.get(brsName.toLowerCase())?.[0]?.callable?.functionStatement?.func?.parameters;
+                    }
+                }
+
+                if (!params) {
                     continue;
                 }
 
-                const funcName = callExpr.callee.name.text;
-                const callable = callableContainerMap.get(funcName.toLowerCase())?.[0]?.callable;
-                if (!callable) {
+                this.rewriteNamedArgCall(callExpr, params, func, hoistCounters);
+            }
+
+            // Process constructor calls (new MyClass(...)) after regular calls.
+            // Constructor CallExpressions are not in func.callExpressions (the parser removes them),
+            // so they are handled here. Processing after regular calls ensures that when a constructor
+            // call is hoisted as an arg to an outer named-arg call, the parent pointer update done by
+            // the outer call's hoisting is already in place when we process the constructor's own args.
+            for (const newExpr of this.event.file.parser.references.newExpressions) {
+                const callExpr = newExpr.call;
+                if (!callExpr.args.some(isNamedArgumentExpression)) {
+                    continue;
+                }
+                // Only process constructor calls that belong to this function
+                if (newExpr.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
                     continue;
                 }
 
-                const params = callable.functionStatement.func.parameters;
-
-                // Map each written arg to its positional param index and value.
-                // If anything is invalid (unknown param, duplicate, positional-after-named),
-                // bail out and leave the call untouched — diagnostics are already emitted by validation.
-                const writtenArgInfos: WrittenArgInfo[] = [];
-                const assignedParams = new Set<number>();
-                let seenNamedArg = false;
-                let isValid = true;
-                let positionalCount = 0;
-
-                for (const arg of callExpr.args) {
-                    if (!isNamedArgumentExpression(arg)) {
-                        if (seenNamedArg) {
-                            isValid = false;
-                            break;
-                        }
-                        const paramIdx = positionalCount++;
-                        if (paramIdx >= params.length || assignedParams.has(paramIdx)) {
-                            isValid = false;
-                            break;
-                        }
-                        assignedParams.add(paramIdx);
-                        writtenArgInfos.push({ paramIdx: paramIdx, value: arg });
-                    } else {
-                        seenNamedArg = true;
-                        const namedArg = arg as NamedArgumentExpression;
-                        const paramIdx = params.findIndex(p => p.name.text.toLowerCase() === namedArg.name.text.toLowerCase());
-                        if (paramIdx < 0 || assignedParams.has(paramIdx)) {
-                            isValid = false;
-                            break;
-                        }
-                        assignedParams.add(paramIdx);
-                        writtenArgInfos.push({ paramIdx: paramIdx, value: namedArg.value });
-                    }
-                }
-
-                if (!isValid) {
+                const className = newExpr.className.getName(ParseMode.BrighterScript);
+                const containingNamespace = newExpr.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase();
+                const classLink = scope.getClassFileLink(className, containingNamespace);
+                if (!classLink) {
                     continue;
                 }
 
-                // Find the immediate containing statement and check if it lives directly inside a
-                // Block or Body. If it does, we can safely insert hoisting assignments before it.
-                // If not (e.g. an `else if` condition whose containing IfStatement is the elseBranch
-                // of an outer IfStatement), we fall back to inline reordering without hoisting —
-                // similar to how ternary falls back to `bslib_ternary()` when it can't restructure.
-                const containingStatement = callExpr.findAncestor<Statement>(isStatement);
-                const parentBlock = containingStatement?.parent;
-                // Also prevent hoisting if the call is inside a ternary consequent or alternate —
-                // hoisting before the containing statement would run the expression unconditionally,
-                // breaking the ternary's conditional evaluation semantics.
-                let insideTernaryBranch = false;
-                {
-                    let child: typeof callExpr.parent = callExpr;
-                    let ancestor = callExpr.parent;
-                    while (ancestor && ancestor !== containingStatement) {
-                        if (isTernaryExpression(ancestor) && child !== ancestor.test) {
-                            insideTernaryBranch = true;
-                            break;
-                        }
-                        child = ancestor;
-                        ancestor = ancestor.parent;
-                    }
-                }
-                const canHoist = !!containingStatement && (isBlock(parentBlock) || isBody(parentBlock)) && !insideTernaryBranch;
-                const parentStatements = canHoist ? (parentBlock as any).statements as Statement[] : undefined;
-
-                // Find the last written index whose value is complex (needs hoisting).
-                // Args written after this point are side-effect-free and can be placed directly.
-                let lastComplexWrittenIdx = -1;
-                for (let i = writtenArgInfos.length - 1; i >= 0; i--) {
-                    if (this.needsHoisting(writtenArgInfos[i].value)) {
-                        lastComplexWrittenIdx = i;
-                        break;
-                    }
-                }
-
-                // If we can't hoist AND there are complex expressions, wrap the call in an IIFE
-                // so args are evaluated in written order but passed in positional order —
-                // the same pattern ternary uses when it can't restructure the surrounding statement.
-                if (!canHoist && lastComplexWrittenIdx >= 0) {
-                    this.event.editor.setProperty(callExpr, 'transpile', (state) => this.transpileNamedArgAsIIFE(state, callExpr, writtenArgInfos, params));
-                    continue;
-                }
-
-                // Build the positional arg map, hoisting complex expressions when safe to do so
-                const positionalArgExprs = new Map<number, Expression>();
-                for (let writtenIdx = 0; writtenIdx < writtenArgInfos.length; writtenIdx++) {
-                    const { paramIdx, value } = writtenArgInfos[writtenIdx];
-
-                    if (canHoist && writtenIdx <= lastComplexWrittenIdx && this.needsHoisting(value)) {
-                        // Hoist: emit `__bsArgs<N> = <value>` before the containing statement
-                        const counter = hoistCounters.get(func) ?? 0;
-                        hoistCounters.set(func, counter + 1);
-                        const varName = `__bsArgs${counter}`;
-
-                        const currentStmtIdx = parentStatements.indexOf(containingStatement);
-                        const hoistStatement = createAssignmentStatement({ name: varName, value: value });
-                        this.event.editor.addToArray(parentStatements, currentStmtIdx, hoistStatement);
-                        // Update the value's parent to the new hoist statement so that when a nested
-                        // named-arg call inside `value` is processed (in reversed order), its
-                        // findAncestor<Statement> walks up to the hoist statement and inserts its own
-                        // hoisting before it — preserving written evaluation order across nesting levels.
-                        this.event.editor.setProperty(value, 'parent', hoistStatement);
-                        positionalArgExprs.set(paramIdx, createVariableExpression(varName));
-                    } else {
-                        // Cannot hoist (e.g. inside an else-if condition) — place the expression
-                        // directly in positional order. Evaluation order may differ from written
-                        // order for complex expressions, but the call only runs if the branch is
-                        // reached, which is the correct semantic (unlike hoisting before the outer if).
-                        positionalArgExprs.set(paramIdx, value);
-                    }
-                }
-
-                // Find the highest assigned positional index to know how many args to emit
-                let lastProvidedIdx = -1;
-                for (const idx of positionalArgExprs.keys()) {
-                    if (idx > lastProvidedIdx) {
-                        lastProvidedIdx = idx;
-                    }
-                }
-
-                // Build the final positional arg list, filling any skipped middle optional params
-                const finalArgs: Expression[] = [];
-                for (let i = 0; i <= lastProvidedIdx; i++) {
-                    if (positionalArgExprs.has(i)) {
-                        finalArgs.push(positionalArgExprs.get(i)!);
-                    } else {
-                        // Skipped optional param — use its default value or `invalid`
-                        finalArgs.push(params[i].defaultValue?.clone() ?? createInvalidLiteral());
-                    }
-                }
-
-                // Replace the call's args with the reordered positional list
-                this.event.editor.arraySplice(callExpr.args, 0, callExpr.args.length, ...finalArgs);
+                const params = this.getClassConstructorParams(classLink.item, scope, containingNamespace);
+                this.rewriteNamedArgCall(callExpr, params, func, hoistCounters);
             }
         }
+    }
+
+    /**
+     * Rewrite a single named-argument call expression in place, hoisting complex arg expressions
+     * into temp variables as needed to preserve written evaluation order.
+     */
+    private rewriteNamedArgCall(callExpr: CallExpression, params: FunctionParameterExpression[], func: FunctionExpression, hoistCounters: WeakMap<FunctionExpression, number>) {
+        // Map each written arg to its positional param index and value.
+        // If anything is invalid (unknown param, duplicate, positional-after-named),
+        // bail out and leave the call untouched — diagnostics are already emitted by validation.
+        const writtenArgInfos: WrittenArgInfo[] = [];
+        const assignedParams = new Set<number>();
+        let seenNamedArg = false;
+        let isValid = true;
+        let positionalCount = 0;
+
+        for (const arg of callExpr.args) {
+            if (!isNamedArgumentExpression(arg)) {
+                if (seenNamedArg) {
+                    isValid = false;
+                    break;
+                }
+                const paramIdx = positionalCount++;
+                if (paramIdx >= params.length || assignedParams.has(paramIdx)) {
+                    isValid = false;
+                    break;
+                }
+                assignedParams.add(paramIdx);
+                writtenArgInfos.push({ paramIdx: paramIdx, value: arg });
+            } else {
+                seenNamedArg = true;
+                const namedArg = arg as NamedArgumentExpression;
+                const paramIdx = params.findIndex(p => p.name.text.toLowerCase() === namedArg.name.text.toLowerCase());
+                if (paramIdx < 0 || assignedParams.has(paramIdx)) {
+                    isValid = false;
+                    break;
+                }
+                assignedParams.add(paramIdx);
+                writtenArgInfos.push({ paramIdx: paramIdx, value: namedArg.value });
+            }
+        }
+
+        if (!isValid) {
+            return;
+        }
+
+        // Find the immediate containing statement and check if it lives directly inside a
+        // Block or Body. If it does, we can safely insert hoisting assignments before it.
+        // If not (e.g. an `else if` condition whose containing IfStatement is the elseBranch
+        // of an outer IfStatement), we fall back to inline reordering without hoisting —
+        // similar to how ternary falls back to `bslib_ternary()` when it can't restructure.
+        const containingStatement = callExpr.findAncestor<Statement>(isStatement);
+        const parentBlock = containingStatement?.parent;
+        // Also prevent hoisting if the call is inside a ternary consequent or alternate —
+        // hoisting before the containing statement would run the expression unconditionally,
+        // breaking the ternary's conditional evaluation semantics.
+        let insideTernaryBranch = false;
+        {
+            let child: typeof callExpr.parent = callExpr;
+            let ancestor = callExpr.parent;
+            while (ancestor && ancestor !== containingStatement) {
+                if (isTernaryExpression(ancestor) && child !== ancestor.test) {
+                    insideTernaryBranch = true;
+                    break;
+                }
+                child = ancestor;
+                ancestor = ancestor.parent;
+            }
+        }
+        const canHoist = !!containingStatement && (isBlock(parentBlock) || isBody(parentBlock)) && !insideTernaryBranch;
+        const parentStatements = canHoist ? (parentBlock as any).statements as Statement[] : undefined;
+
+        // Find the last written index whose value is complex (needs hoisting).
+        // Args written after this point are side-effect-free and can be placed directly.
+        let lastComplexWrittenIdx = -1;
+        for (let i = writtenArgInfos.length - 1; i >= 0; i--) {
+            if (this.needsHoisting(writtenArgInfos[i].value)) {
+                lastComplexWrittenIdx = i;
+                break;
+            }
+        }
+
+        // If we can't hoist AND there are complex expressions, wrap the call in an IIFE
+        // so args are evaluated in written order but passed in positional order —
+        // the same pattern ternary uses when it can't restructure the surrounding statement.
+        if (!canHoist && lastComplexWrittenIdx >= 0) {
+            this.event.editor.setProperty(callExpr, 'transpile', (state) => this.transpileNamedArgAsIIFE(state, callExpr, writtenArgInfos, params));
+            return;
+        }
+
+        // Build the positional arg map, hoisting complex expressions when safe to do so
+        const positionalArgExprs = new Map<number, Expression>();
+        for (let writtenIdx = 0; writtenIdx < writtenArgInfos.length; writtenIdx++) {
+            const { paramIdx, value } = writtenArgInfos[writtenIdx];
+
+            if (canHoist && writtenIdx <= lastComplexWrittenIdx && this.needsHoisting(value)) {
+                // Hoist: emit `__bsArgs<N> = <value>` before the containing statement
+                const counter = hoistCounters.get(func) ?? 0;
+                hoistCounters.set(func, counter + 1);
+                const varName = `__bsArgs${counter}`;
+
+                const currentStmtIdx = parentStatements.indexOf(containingStatement);
+                const hoistStatement = createAssignmentStatement({ name: varName, value: value });
+                this.event.editor.addToArray(parentStatements, currentStmtIdx, hoistStatement);
+                // Update the value's parent to the new hoist statement so that when a nested
+                // named-arg call inside `value` is processed (in reversed order), its
+                // findAncestor<Statement> walks up to the hoist statement and inserts its own
+                // hoisting before it — preserving written evaluation order across nesting levels.
+                this.event.editor.setProperty(value, 'parent', hoistStatement);
+                positionalArgExprs.set(paramIdx, createVariableExpression(varName));
+            } else {
+                // Cannot hoist (e.g. inside an else-if condition) — place the expression
+                // directly in positional order. Evaluation order may differ from written
+                // order for complex expressions, but the call only runs if the branch is
+                // reached, which is the correct semantic (unlike hoisting before the outer if).
+                positionalArgExprs.set(paramIdx, value);
+            }
+        }
+
+        // Find the highest assigned positional index to know how many args to emit
+        let lastProvidedIdx = -1;
+        for (const idx of positionalArgExprs.keys()) {
+            if (idx > lastProvidedIdx) {
+                lastProvidedIdx = idx;
+            }
+        }
+
+        // Build the final positional arg list, filling any skipped middle optional params
+        const finalArgs: Expression[] = [];
+        for (let i = 0; i <= lastProvidedIdx; i++) {
+            if (positionalArgExprs.has(i)) {
+                finalArgs.push(positionalArgExprs.get(i)!);
+            } else {
+                // Skipped optional param — use its default value or `invalid`
+                finalArgs.push(params[i].defaultValue?.clone() ?? createInvalidLiteral());
+            }
+        }
+
+        // Replace the call's args with the reordered positional list
+        this.event.editor.arraySplice(callExpr.args, 0, callExpr.args.length, ...finalArgs);
+    }
+
+    /**
+     * If the callee is a dotted-get expression whose leftmost identifier is a known namespace,
+     * returns the BrightScript-flattened name (e.g. "MyNs_myFunc"). Otherwise returns undefined.
+     */
+    private getNamespaceCallableBrsName(callee: Expression, scope: Scope): string | undefined {
+        const parts = util.getAllDottedGetParts(callee);
+        if (!parts || !scope.namespaceLookup.has(parts[0].text.toLowerCase())) {
+            return undefined;
+        }
+        return parts.map(p => p.text).join('_');
+    }
+
+    /**
+     * Walk the class and its ancestor chain to find the first constructor's parameter list.
+     * Returns an empty array if no constructor is defined anywhere in the hierarchy.
+     */
+    private getClassConstructorParams(classStmt: ClassStatement, scope: Scope, containingNamespace: string | undefined): FunctionParameterExpression[] {
+        let stmt: ClassStatement | undefined = classStmt;
+        while (stmt) {
+            const ctor = stmt.body.find(
+                s => (s as MethodStatement)?.name?.text?.toLowerCase() === 'new'
+            ) as MethodStatement | undefined;
+            if (ctor) {
+                return ctor.func.parameters;
+            }
+            if (!stmt.parentClassName) {
+                break;
+            }
+            const parentName = stmt.parentClassName.getName(ParseMode.BrighterScript);
+            stmt = scope.getClassFileLink(parentName, containingNamespace)?.item;
+        }
+        return [];
     }
 
     /**
