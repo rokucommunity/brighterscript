@@ -325,6 +325,46 @@ describe('named argument expressions', () => {
                 ]);
             });
 
+            it('includes relatedInformation pointing to each conflicting function definition', () => {
+                program.setFile('components/shared.bs', `
+                    sub callFoo()
+                        foo(b: 1, a: 2)
+                    end sub
+                `);
+                program.setFile('components/helperA.bs', `
+                    sub foo(a, b)
+                    end sub
+                `);
+                program.setFile('components/helperB.bs', `
+                    sub foo(b, a)
+                    end sub
+                `);
+                program.setFile('components/CompA.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="CompA" extends="Scene">
+                        <script type="text/brightscript" uri="shared.bs" />
+                        <script type="text/brightscript" uri="helperA.bs" />
+                    </component>
+                `);
+                program.setFile('components/CompB.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="CompB" extends="Scene">
+                        <script type="text/brightscript" uri="shared.bs" />
+                        <script type="text/brightscript" uri="helperB.bs" />
+                    </component>
+                `);
+                program.validate();
+                expectDiagnosticsIncludes(program, [
+                    {
+                        ...DiagnosticMessages.namedArgsCrossScopeConflict('foo'),
+                        relatedInformation: [
+                            { message: `'foo' defined in scope 'components/CompA.xml'` },
+                            { message: `'foo' defined in scope 'components/CompB.xml'` }
+                        ]
+                    }
+                ]);
+            });
+
             it('does not give cross-scope diagnostic when all scopes agree on the parameter signature', () => {
                 program.setFile('components/shared.bs', `
                     sub callFoo()

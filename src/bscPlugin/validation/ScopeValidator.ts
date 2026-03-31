@@ -3,7 +3,7 @@ import { isBrsFile, isCallExpression, isDottedGetExpression, isLiteralExpression
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { BscFile, BsDiagnostic, OnScopeValidateEvent, CallableContainerMap } from '../../interfaces';
+import type { BscFile, BsDiagnostic, OnScopeValidateEvent, CallableContainerMap, Callable } from '../../interfaces';
 import type { ClassStatement, EnumStatement, MethodStatement, NamespaceStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
@@ -459,7 +459,7 @@ export class ScopeValidator {
                         continue;
                     }
                     params = callable.functionStatement.func.parameters;
-                    this.checkNamedArgCrossScopeConflict(funcName, params, callExpr, file, scope);
+                    this.checkNamedArgCrossScopeConflict(funcName, callable, params, callExpr, file, scope);
                 } else if (isDottedGetExpression(callExpr.callee)) {
                     // Namespace function call (e.g. MyNs.myFunc(a: 1))
                     const brsName = this.getNamespaceCallableBrsName(callExpr.callee, scope);
@@ -600,7 +600,7 @@ export class ScopeValidator {
      * in other component scopes that share this file. Named arg transpilation is per-file
      * (using the first scope), so an ambiguous signature would produce incorrect output.
      */
-    private checkNamedArgCrossScopeConflict(funcName: string, params: FunctionParameterExpression[], callExpr: { callee: Expression }, file: BrsFile, scope: Scope) {
+    private checkNamedArgCrossScopeConflict(funcName: string, callable: Callable, params: FunctionParameterExpression[], callExpr: { callee: Expression }, file: BrsFile, scope: Scope) {
         for (const otherScope of this.event.program.getScopesForFile(file)) {
             if (otherScope === scope) {
                 continue;
@@ -618,10 +618,27 @@ export class ScopeValidator {
                 continue;
             }
             if (!this.haveSameParamSignature(params, otherParams)) {
+                const relatedInformation: DiagnosticRelatedInformation[] = [
+                    {
+                        message: `'${funcName}' defined in scope '${scope.name}'`,
+                        location: util.createLocation(
+                            URI.file(callable.file.srcPath).toString(),
+                            callable.nameRange ?? callable.range
+                        )
+                    },
+                    {
+                        message: `'${funcName}' defined in scope '${otherScope.name}'`,
+                        location: util.createLocation(
+                            URI.file(otherCallable.file.srcPath).toString(),
+                            otherCallable.nameRange ?? otherCallable.range
+                        )
+                    }
+                ];
                 this.addDiagnosticOnce({
                     ...DiagnosticMessages.namedArgsCrossScopeConflict(funcName),
                     range: callExpr.callee.range,
-                    file: file
+                    file: file,
+                    relatedInformation: relatedInformation
                 });
                 break;
             }
