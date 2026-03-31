@@ -1445,7 +1445,7 @@ describe('XmlFile', () => {
             const brsFile = program.getFile<BrsFile>(xmlFile.inlineScriptPkgPaths[0]);
             // fileContents is the raw CDATA source, not padded with leading newlines
             expect(brsFile.fileContents).to.include('sub greet');
-            expect(brsFile.fileContents.split(/\r?\n/g)[0]).to.equal('');  // first "line" is the \n right after <![CDATA[
+            expect(brsFile.fileContents.split(/\r?\n/g)[0]).to.equal(''); // first "line" is the \n right after <![CDATA[
             // parentXmlFile.fileContents is where XML-space line lookups should go
             const xmlLines = xmlFile.fileContents.split(/\r?\n/g);
             expect(xmlLines[3]).to.include('sub greet');
