@@ -90,12 +90,6 @@ export class CallExpression extends Expression {
     public readonly range: Range | undefined;
 
     /**
-     * When named arguments are used and successfully resolved during validation, this holds the
-     * positional-ordered argument list used for transpilation. If undefined, `args` is used directly.
-     */
-    public resolvedArgs?: Expression[];
-
-    /**
      * Get the name of the wrapping namespace (if it exists)
      * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
      */
@@ -116,15 +110,12 @@ export class CallExpression extends Expression {
         result.push(
             state.transpileToken(this.openingParen)
         );
-        // Use resolvedArgs when named arguments have been reordered during validation,
-        // otherwise fall back to the original args list
-        const argsToTranspile = this.resolvedArgs ?? this.args;
-        for (let i = 0; i < argsToTranspile.length; i++) {
+        for (let i = 0; i < this.args.length; i++) {
             //add comma between args
             if (i > 0) {
                 result.push(', ');
             }
-            let arg = argsToTranspile[i];
+            let arg = this.args[i];
             result.push(...arg.transpile(state));
         }
         if (this.closingParen) {
