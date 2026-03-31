@@ -766,35 +766,35 @@ export let DiagnosticMessages = {
         code: 1145,
         severity: DiagnosticSeverity.Error
     }),
+    duplicateFunctionParameter: (paramName: string) => ({
+        message: `Duplicate parameter name '${paramName}'`,
+        code: 1146,
+        severity: DiagnosticSeverity.Warning
+    }),
     unknownNamedArgument: (argName: string, funcName: string) => ({
         message: `Unknown named argument '${argName}' for function '${funcName}'`,
-        code: 1146,
+        code: 1147,
         severity: DiagnosticSeverity.Error
     }),
     namedArgDuplicate: (argName: string) => ({
         message: `Named argument '${argName}' was already provided`,
-        code: 1147,
+        code: 1148,
         severity: DiagnosticSeverity.Error
     }),
     positionalArgAfterNamedArg: () => ({
         message: `Positional arguments cannot follow named arguments`,
-        code: 1148,
+        code: 1149,
         severity: DiagnosticSeverity.Error
     }),
     namedArgsNotAllowedForUnknownFunction: (funcName: string) => ({
         message: `Cannot use named arguments when calling '${funcName}' because the function definition cannot be found`,
-        code: 1149,
+        code: 1150,
         severity: DiagnosticSeverity.Error
     }),
     namedArgsCrossScopeConflict: (funcName: string) => ({
         message: `Named arguments for '${funcName}' are ambiguous: the function has different parameter signatures across component scopes that share this file. Named arguments cannot be safely transpiled.`,
         code: 1151,
         severity: DiagnosticSeverity.Error
-    }),
-    duplicateFunctionParameter: (paramName: string) => ({
-        message: `Duplicate parameter name '${paramName}'`,
-        code: 1150,
-        severity: DiagnosticSeverity.Warning
     })
 };
 
