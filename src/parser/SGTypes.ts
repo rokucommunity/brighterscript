@@ -172,7 +172,7 @@ export class SGScript extends SGTag {
         // Use a capture group with [\s\S]*? so multiline content and edge cases
         // (e.g. trailing whitespace after ]]>, or > characters inside the content) are handled
         // correctly without relying on ^ / $ anchors that can misbehave at string boundaries.
-        const match = this.cdata?.text.match(/^<!\[CDATA\[([\s\S]*?)\]\]>/);
+        const match = /^<!\[CDATA\[([\s\S]*?)\]\]>/.exec(this.cdata?.text);
         return match?.[1];
     }
 
