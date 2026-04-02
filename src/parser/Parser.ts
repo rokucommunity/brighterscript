@@ -2561,6 +2561,7 @@ export class Parser {
             )
         ) {
             let operator = this.previous();
+            this.consumeNewlinesIfAllowed();
             let right = this.additive();
             this.addExpressionsToReferences(expr, right);
             expr = new BinaryExpression(expr, operator, right);
