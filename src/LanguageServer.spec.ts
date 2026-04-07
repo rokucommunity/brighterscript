@@ -94,6 +94,9 @@ describe('LanguageServer', () => {
         workspaceFolders = [workspacePath];
         LanguageServer.enableThreadingDefault = false;
 
+        //disable debounce by default for tests so existing tests run without delay
+        server.fileChangeDebounceDelay = 0;
+
         //mock the connection stuff
         sinon.stub(server as any, 'establishConnection').callsFake(() => {
             return connection;
@@ -1138,6 +1141,169 @@ describe('LanguageServer', () => {
                 stub.getCalls()[0].args[0]
             ).to.eql([]);
         });
+
+        describe('debouncing', () => {
+            let clock: sinon.SinonFakeTimers;
+
+            beforeEach(() => {
+                (server as any)['connection'] = connection;
+                //enable a non-zero debounce for these tests
+                server.fileChangeDebounceDelay = 150;
+                clock = sinon.useFakeTimers();
+            });
+
+            afterEach(() => {
+                clock.restore();
+            });
+
+            it('batches rapid successive file change events into a single handleFileChanges call', async () => {
+                const stub = sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => Promise.resolve());
+
+                //fire 3 rapid events without awaiting
+                const promise1 = server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Changed,
+                        uri: util.pathToUri(s`${rootDir}/source/file1.brs`)
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                const promise2 = server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Changed,
+                        uri: util.pathToUri(s`${rootDir}/source/file2.brs`)
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                const promise3 = server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Changed,
+                        uri: util.pathToUri(s`${rootDir}/source/file3.brs`)
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                //handleFileChanges should not have been called yet (still within debounce window)
+                expect(stub.callCount).to.eql(0);
+
+                //advance past the debounce window and flush microtasks
+                await clock.tickAsync(200);
+
+                //all promises should resolve to the same batch
+                await Promise.all([promise1, promise2, promise3]);
+
+                //handleFileChanges should have been called exactly once with all 3 changes
+                expect(stub.callCount).to.eql(1);
+                expect(stub.getCalls()[0].args[0]).to.have.lengthOf(3);
+            });
+
+            it('resets the debounce timer on each new event', async () => {
+                const stub = sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => Promise.resolve());
+
+                //fire first event
+                void server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Changed,
+                        uri: util.pathToUri(s`${rootDir}/source/file1.brs`)
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                //advance 100ms (less than the 150ms debounce)
+                await clock.tickAsync(100);
+
+                //fire another event -- this should reset the timer
+                void server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Changed,
+                        uri: util.pathToUri(s`${rootDir}/source/file2.brs`)
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                //advance another 100ms (200ms total, but only 100ms since last event)
+                await clock.tickAsync(100);
+
+                //should NOT have flushed yet because the timer was reset
+                expect(stub.callCount).to.eql(0);
+
+                //advance past the debounce window from the second event
+                await clock.tickAsync(100);
+
+                //now it should have flushed with both changes
+                expect(stub.callCount).to.eql(1);
+                expect(stub.getCalls()[0].args[0]).to.have.lengthOf(2);
+            });
+
+            it('calls rebuildPathFilterer at most once per batch when bsconfig changes', async () => {
+                sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => Promise.resolve());
+                const pathFiltererStub = sinon.stub(server as any, 'rebuildPathFilterer').callsFake(() => Promise.resolve());
+
+                //fire two bsconfig change events
+                void server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Changed,
+                        uri: util.pathToUri(s`${rootDir}/bsconfig.json`)
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                void server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Changed,
+                        uri: util.pathToUri(s`${rootDir}/sub/bsconfig.json`)
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                await clock.tickAsync(200);
+
+                //rebuildPathFilterer should have been called exactly once for the entire batch
+                expect(pathFiltererStub.callCount).to.eql(1);
+            });
+
+            it('deduplicates multiple events for the same file within a batch', async () => {
+                const stub = sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => Promise.resolve());
+
+                //fire 3 Changed events for the same file
+                for (let i = 0; i < 3; i++) {
+                    void server['onDidChangeWatchedFiles']({
+                        changes: [{
+                            type: FileChangeType.Changed,
+                            uri: util.pathToUri(s`${rootDir}/source/file1.brs`)
+                        }]
+                    } as DidChangeWatchedFilesParams);
+                }
+
+                await clock.tickAsync(200);
+
+                //should have been called once with only 1 unique change (not 3)
+                expect(stub.callCount).to.eql(1);
+                expect(stub.getCalls()[0].args[0]).to.have.lengthOf(1);
+            });
+
+            it('keeps the last event type when deduplicating (last event wins)', async () => {
+                const stub = sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => Promise.resolve());
+                const fileUri = util.pathToUri(s`${rootDir}/source/file1.brs`);
+
+                //fire Created then Deleted for the same file
+                void server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Created,
+                        uri: fileUri
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                void server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Deleted,
+                        uri: fileUri
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                await clock.tickAsync(200);
+
+                expect(stub.callCount).to.eql(1);
+                const changes = stub.getCalls()[0].args[0];
+                expect(changes).to.have.lengthOf(1);
+                //the Deleted event should win because it came last
+                expect(changes[0].type).to.eql(FileChangeType.Deleted);
+            });
+        });
     });
 
     describe('onDocumentClose', () => {
@@ -1998,6 +2164,59 @@ describe('LanguageServer', () => {
                     DiagnosticMessages.cannotFindName('missing2').message
                 ]
             });
+        });
+    });
+
+    describe('onCodeAction', () => {
+        beforeEach(async () => {
+            server.run();
+            await server['onInitialized']();
+        });
+
+        async function callOnCodeAction(only: string[], kinds: (string | undefined)[]) {
+            sinon.stub(server['projectManager'], 'getCodeActions').resolves(
+                kinds.map(kind => ({ kind: kind, title: kind }))
+            );
+            return server['onCodeAction']({
+                textDocument: { uri: URI.file(`${rootDir}/source/main.bs`).toString() },
+                range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+                context: { diagnostics: [], only: only }
+            });
+        }
+
+        it('returns all code actions when context.only is empty', async () => {
+            const result = await callOnCodeAction([], ['quickfix', 'refactor']);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix', 'refactor']);
+        });
+
+        it('returns kindless code actions when context.only is empty', async () => {
+            const result = await callOnCodeAction([], ['quickfix', undefined]);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix', undefined]);
+        });
+
+        it('filters to exact kind match', async () => {
+            const result = await callOnCodeAction(['quickfix'], ['quickfix', 'refactor']);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix']);
+        });
+
+        it('includes child kinds using startsWith hierarchy', async () => {
+            const result = await callOnCodeAction(['quickfix'], ['quickfix', 'quickfix.foo', 'quickfix.foo.bar', 'refactor']);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix', 'quickfix.foo', 'quickfix.foo.bar']);
+        });
+
+        it('does not match unrelated kinds that share a prefix', async () => {
+            const result = await callOnCodeAction(['quickfix'], ['quickfix', 'quickfixFoo', 'refactor']);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix']);
+        });
+
+        it('excludes kindless actions when context.only is set (kind is required to match)', async () => {
+            const result = await callOnCodeAction(['quickfix'], ['quickfix', undefined]);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix']);
+        });
+
+        it('matches across multiple requested kinds', async () => {
+            const result = await callOnCodeAction(['quickfix', 'refactor'], ['quickfix', 'quickfix.foo', 'refactor.extract', 'source']);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix', 'quickfix.foo', 'refactor.extract']);
         });
     });
 });

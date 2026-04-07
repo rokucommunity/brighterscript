@@ -9,11 +9,13 @@ import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
+import { TokenKind } from '../../lexer/TokenKind';
 import type { Scope } from '../../Scope';
 import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
 import type { Expression } from '../../parser/AstNode';
 import type { VariableExpression, DottedGetExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
+import { createVisitor, WalkMode } from '../../astUtils/visitors';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -50,8 +52,97 @@ export class ScopeValidator {
             if (isBrsFile(file)) {
                 this.iterateFileExpressions(file);
                 this.validateCreateObjectCalls(file);
+                this.validateComputedAAKeys(file);
             }
         });
+    }
+
+    private validateComputedAAKeys(file: BrsFile) {
+        const { scope } = this.event;
+        file.ast.walk(createVisitor({
+            AAIndexedMemberExpression: (member) => {
+                // Direct string literal (e.g. ["my-key"]) is valid
+                if (isLiteralExpression(member.key)) {
+                    if (member.key.token.kind !== TokenKind.StringLiteral) {
+                        this.addMultiScopeDiagnostic({
+                            file: file,
+                            ...DiagnosticMessages.computedAAKeyMustBeStringExpression(),
+                            range: member.key.range
+                        });
+                    }
+                    return;
+                }
+                const parts = util.getDottedGetPath(member.key);
+                if (parts.length === 0) {
+                    this.addMultiScopeDiagnostic({
+                        file: file,
+                        ...DiagnosticMessages.computedPropertyKeyMustBeConstantExpression(),
+                        range: member.key.range
+                    });
+                    return;
+                }
+                const enclosingNamespace = member.key.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase();
+                const entityName = parts.map(p => p.name.text.toLowerCase()).join('.');
+                // Check enum member
+                const memberLink = scope.getEnumMemberFileLink(entityName, enclosingNamespace);
+                if (memberLink) {
+                    const value = memberLink.item.getValue();
+                    if (!value?.startsWith('"')) {
+                        this.addMultiScopeDiagnostic({
+                            file: file,
+                            ...DiagnosticMessages.computedAAKeyMustBeStringExpression(),
+                            range: member.key.range
+                        });
+                    }
+                    return;
+                }
+                // Check const — follow the chain to find the root literal type
+                const constLink = scope.getConstFileLink(entityName, enclosingNamespace);
+                if (constLink) {
+                    if (!this.constResolvesToString(constLink.item.value, enclosingNamespace, scope)) {
+                        this.addMultiScopeDiagnostic({
+                            file: file,
+                            ...DiagnosticMessages.computedAAKeyMustBeStringExpression(),
+                            range: member.key.range
+                        });
+                    }
+                    return;
+                }
+                this.addMultiScopeDiagnostic({
+                    file: file,
+                    ...DiagnosticMessages.computedPropertyKeyMustBeConstantExpression(),
+                    range: member.key.range
+                });
+            }
+        }), { walkMode: WalkMode.visitAllRecursive });
+    }
+
+    /**
+     * Recursively resolve a const/enum reference to determine if its ultimate value is a string.
+     * Returns true only if the value is confirmed to be a string.
+     */
+    private constResolvesToString(value: Expression, enclosingNamespace: string, scope: Scope, visited = new Set<string>()): boolean {
+        if (isLiteralExpression(value)) {
+            return value.token.kind === TokenKind.StringLiteral;
+        }
+        const parts = util.getDottedGetPath(value);
+        if (parts.length === 0) {
+            return false;
+        }
+        const entityName = parts.map(p => p.name.text.toLowerCase()).join('.');
+        if (visited.has(entityName)) {
+            return false; // circular reference — cannot confirm string
+        }
+        visited.add(entityName);
+        const constLink = scope.getConstFileLink(entityName, enclosingNamespace);
+        if (constLink) {
+            return this.constResolvesToString(constLink.item.value, enclosingNamespace, scope, visited);
+        }
+        const memberLink = scope.getEnumMemberFileLink(entityName, enclosingNamespace);
+        if (memberLink) {
+            return this.constResolvesToString(memberLink.item.value, enclosingNamespace, scope, visited);
+        }
+        return false;
     }
 
     private expressionsByFile = new Cache<BrsFile, Readonly<ExpressionInfo>[]>();
