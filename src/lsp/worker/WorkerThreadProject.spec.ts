@@ -62,6 +62,7 @@ describe('WorkerThreadProject', () => {
                 bsconfigPath: undefined,
                 projectNumber: 1
             });
+            await project.validate();
             const diagnostics = await project.getDiagnostics();
             expect(diagnostics).lengthOf(1);
             await expectDiagnosticsAsync(diagnostics, [

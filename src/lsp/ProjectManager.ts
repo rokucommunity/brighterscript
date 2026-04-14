@@ -71,10 +71,10 @@ export class ProjectManager {
     public static documentManagerDelay = 150;
 
     /**
-     * Maximum number of projects to activate concurrently during syncProjects.
+     * Maximum number of projects to activate or validate concurrently during syncProjects.
      * Limits CPU spikes when many projects are discovered (e.g. in large monorepos).
      */
-    public static projectActivationConcurrencyLimit = 3;
+    public static projectConcurrencyLimit = 3;
 
     public busyStatusTracker = new BusyStatusTracker<LspProject>();
 
@@ -231,6 +231,7 @@ export class ProjectManager {
 
         this.standaloneProjects.set(srcPath, project);
         await this.activateProject(project, projectConfig);
+        void project.validate();
     }
 
     private removeStandaloneProject(srcPath: string) {
@@ -250,6 +251,13 @@ export class ProjectManager {
      */
     private syncPromise: Promise<void> | undefined;
     private firstSync = new Deferred();
+
+    /**
+     * Monotonically increasing counter used to detect stale sync cycles.
+     * When a new `syncProjects` call arrives, any in-progress activation or validation
+     * from a previous cycle will see a mismatched generation and bail out.
+     */
+    private syncGeneration = 0;
 
     /**
      * Get a promise that resolves when this manager is finished initializing
@@ -304,6 +312,8 @@ export class ProjectManager {
         }
         this.logger.log('syncProjects', workspaceConfigs.map(x => x.workspaceFolder));
 
+        const generation = ++this.syncGeneration;
+
         this.syncPromise = (async () => {
             //build a list of unique projects across all workspace folders
             let projectConfigs = (await Promise.all(
@@ -346,11 +356,28 @@ export class ProjectManager {
                 ).values()
             ];
 
-            //create missing projects with limited concurrency to avoid CPU spikes when many projects are discovered
-            await this.activateProjectsWithConcurrencyLimit(projectConfigs, ProjectManager.projectActivationConcurrencyLimit);
+            // Phase 1: activate projects with concurrency limit (awaited — gates LSP readiness)
+            const activatedProjects: LspProject[] = [];
+            await this.runWithConcurrencyLimit(projectConfigs, ProjectManager.projectConcurrencyLimit, async (config) => {
+                if (this.syncGeneration !== generation) {
+                    return;
+                }
+                const project = await this.createAndActivateProject(config);
+                activatedProjects.push(project);
+            });
 
             //mark that we've completed our first sync
             this.firstSync.tryResolve();
+
+            // Phase 2: validate activated projects with concurrency limit (NOT awaited — doesn't block LSP requests)
+            if (this.syncGeneration === generation) {
+                void this.runWithConcurrencyLimit(activatedProjects, ProjectManager.projectConcurrencyLimit, async (project) => {
+                    if (this.syncGeneration !== generation) {
+                        return;
+                    }
+                    await project.validate();
+                }).catch(e => this.logger.error('Validation phase error', e));
+            }
         })();
 
         //return the sync promise
@@ -358,20 +385,20 @@ export class ProjectManager {
     }
 
     /**
-     * Activate projects with a concurrency limit to prevent CPU spikes.
-     * Instead of activating all projects in parallel (which can overwhelm the system when dozens
-     * of projects are discovered), this limits how many projects activate simultaneously.
+     * Run async actions over a list of items with a concurrency limit.
+     * Uses a worker-pool pattern: `concurrencyLimit` workers pull items from a shared queue.
      */
-    private async activateProjectsWithConcurrencyLimit(projectConfigs: ProjectConfig[], concurrencyLimit: number) {
-        const queue = [...projectConfigs];
-        // Keep at least 1 worker, and no more than requested or available projects.
-        const limit = Math.max(1, Math.min(concurrencyLimit, queue.length));
-        // Start `limit` async workers; each worker pulls from `queue` until empty.
-        const workers = Array.from({ length: limit }, async () => {
+    private async runWithConcurrencyLimit<T>(items: T[], concurrencyLimit: number, action: (item: T) => Promise<void>): Promise<void> {
+        const queue = [...items];
+        if (queue.length === 0) {
+            return;
+        }
+        const workerCount = Math.max(1, Math.min(concurrencyLimit, queue.length));
+        const workers = Array.from({ length: workerCount }, async () => {
             while (queue.length > 0) {
-                const config = queue.shift();
-                if (config) {
-                    await this.createAndActivateProject(config);
+                const item = queue.shift();
+                if (item) {
+                    await action(item);
                 }
             }
         });
@@ -494,6 +521,7 @@ export class ProjectManager {
 
         this.removeProject(project);
         project = await this.createAndActivateProject(project.activateOptions);
+        void project.validate();
     }
 
     /**
