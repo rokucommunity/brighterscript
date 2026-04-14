@@ -349,7 +349,7 @@ describe('Program', () => {
                 range: Range.create(1, 17, 1, 27),
                 relatedInformation: [{
                     location: util.createLocation(
-                        URI.file(s`${rootDir}/components/component1.xml`).toString(),
+                        URI.file(s`${rootDir}/components/component2.xml`).toString(),
                         Range.create(1, 17, 1, 27)
                     ),
                     message: 'Also defined here'
@@ -359,7 +359,7 @@ describe('Program', () => {
                 range: Range.create(1, 17, 1, 27),
                 relatedInformation: [{
                     location: util.createLocation(
-                        URI.file(s`${rootDir}/components/component2.xml`).toString(),
+                        URI.file(s`${rootDir}/components/component1.xml`).toString(),
                         Range.create(1, 17, 1, 27)
                     ),
                     message: 'Also defined here'
@@ -939,8 +939,38 @@ describe('Program', () => {
             //validate
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.scriptImportCaseMismatch(s`components\\COMPONENT1.brs`)
+                DiagnosticMessages.scriptImportCaseMismatch(s`components\\COMPONENT1.brs`, 'COMPONENT1.brs')
             ]);
+        });
+
+        it('includes a correctly-cased relative path in the diagnostic data for a relative import', () => {
+            program.setFile('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="HeroScene" extends="Scene">
+                    <script type="text/brightscript" uri="component1.brs" />
+                </component>
+            `);
+            program.setFile('components/COMPONENT1.brs', '');
+
+            program.validate();
+            const diagnostics = program.getDiagnostics();
+            const mismatch = diagnostics.find(d => d.code === DiagnosticMessages.scriptImportCaseMismatch('').code);
+            expect((mismatch?.data as any)?.correctFilePath).to.equal('COMPONENT1.brs');
+        });
+
+        it('includes a correctly-cased relative path for imports across directories', () => {
+            program.setFile('components/sub/comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp" extends="Scene">
+                    <script type="text/brightscript" uri="../utils/helper.brs" />
+                </component>
+            `);
+            program.setFile('components/utils/HELPER.brs', '');
+
+            program.validate();
+            const diagnostics = program.getDiagnostics();
+            const mismatch = diagnostics.find(d => d.code === DiagnosticMessages.scriptImportCaseMismatch('').code);
+            expect((mismatch?.data as any)?.correctFilePath).to.equal('../utils/HELPER.brs');
         });
     });
 

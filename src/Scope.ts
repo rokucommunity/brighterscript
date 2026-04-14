@@ -922,13 +922,23 @@ export class Scope {
      */
     private diagnosticDetectInvalidFunctionExpressionTypes(file: BrsFile) {
         for (let func of file.parser.references.functionExpressions) {
+            // lazy-compute the namespace name only if a custom type is actually encountered
+            let namespaceFetched = false;
+            let currentNamespaceName: string;
+            const getNamespaceName = () => {
+                if (!namespaceFetched) {
+                    namespaceFetched = true;
+                    currentNamespaceName = func.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+                }
+                return currentNamespaceName;
+            };
+
             if (isCustomType(func.returnType) && func.returnTypeToken) {
                 // check if this custom type is in our class map
                 const returnTypeName = func.returnType.name;
-                const currentNamespaceName = func.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
                 // check for built in types
                 const isBuiltInType = util.isBuiltInType(returnTypeName);
-                if (!isBuiltInType && !this.hasClass(returnTypeName, currentNamespaceName) && !this.hasInterface(returnTypeName) && !this.hasEnum(returnTypeName) && !this.hasTypeStatementType(returnTypeName)) {
+                if (!isBuiltInType && !this.hasClass(returnTypeName, getNamespaceName()) && !this.hasInterface(returnTypeName) && !this.hasEnum(returnTypeName) && !this.hasTypeStatementType(returnTypeName)) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.invalidFunctionReturnType(returnTypeName),
                         range: func.returnTypeToken.range,
@@ -940,11 +950,10 @@ export class Scope {
             for (let param of func.parameters) {
                 if (isCustomType(param.type) && param.typeToken) {
                     const paramTypeName = param.type.name;
-                    const currentNamespaceName = func.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
                     // check for built in types
                     const isBuiltInType = util.isBuiltInType(paramTypeName);
 
-                    if (!isBuiltInType && !this.hasClass(paramTypeName, currentNamespaceName) && !this.hasInterface(paramTypeName) && !this.hasEnum(paramTypeName) && !this.hasTypeStatementType(paramTypeName)) {
+                    if (!isBuiltInType && !this.hasClass(paramTypeName, getNamespaceName()) && !this.hasInterface(paramTypeName) && !this.hasEnum(paramTypeName) && !this.hasTypeStatementType(paramTypeName)) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.functionParameterTypeIsInvalid(param.name.text, paramTypeName),
                             range: param.typeToken.range,
@@ -1190,8 +1199,14 @@ export class Scope {
                 });
                 //if the character casing of the script import path does not match that of the actual path
             } else if (scriptImport.pkgPath !== referencedFile.pkgPath) {
+                const correctUri = scriptImport.text.startsWith('pkg:/')
+                    ? util.getRokuPkgPath(referencedFile.pkgPath)
+                    : path.posix.relative(
+                        path.dirname(scriptImport.sourceFile.pkgPath).replace(/\\/g, '/'),
+                        referencedFile.pkgPath.replace(/\\/g, '/')
+                    );
                 this.diagnostics.push({
-                    ...DiagnosticMessages.scriptImportCaseMismatch(referencedFile.pkgPath),
+                    ...DiagnosticMessages.scriptImportCaseMismatch(referencedFile.pkgPath, correctUri),
                     range: scriptImport.filePathRange,
                     file: scriptImport.sourceFile
                 });
