@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.71.1](https://github.com/rokucommunity/brighterscript/compare/0.71.0...v0.71.1) - 2026-04-14
+### Changed
+ - Bump lodash from 4.17.23 to 4.18.1 ([#1673](https://github.com/rokucommunity/brighterscript/pull/1673))
+ - Bump follow-redirects from 1.15.6 to 1.16.0 ([#1672](https://github.com/rokucommunity/brighterscript/pull/1672))
+ - Bump lodash from 4.17.23 to 4.18.1 in /benchmarks ([#1670](https://github.com/rokucommunity/brighterscript/pull/1670))
+ - Bump brace-expansion in /benchmarks ([#1666](https://github.com/rokucommunity/brighterscript/pull/1666))
+ - upgrade to [roku-deploy@3.16.5](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3165---2026-04-13). Notable changes since 3.16.3:
+     - Bump lodash from 4.17.23 to 4.18.1 ([#247](https://github.com/rokucommunity/roku-deploy/pull/247))
+     - Resolve files array staging option ([#249](https://github.com/rokucommunity/roku-deploy/pull/249))
+     - Fix `zipFolder` bug that wasn't properly handling absolute stagingDir path ([#245](https://github.com/rokucommunity/roku-deploy/pull/245))
+     - Bump picomatch from 2.3.1 to 2.3.2 ([#242](https://github.com/rokucommunity/roku-deploy/pull/242))
+
+
+
 ## [0.71.0](https://github.com/rokucommunity/brighterscript/compare/0.70.4...v0.71.0) - 2026-03-27
 ### Added
  - Add computed property names (compile-time support only) ([#1658](https://github.com/rokucommunity/brighterscript/pull/1658))
