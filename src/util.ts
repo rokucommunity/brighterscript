@@ -384,6 +384,7 @@ export class Util {
             createPackage: config.createPackage === false ? false : true,
             outFile: config.outFile ?? `./out/${rootFolderName}.zip`,
             sourceMap: config.sourceMap === true,
+            sourceMapRelativePaths: config.sourceMapRelativePaths === true ? true : false,
             username: config.username ?? 'rokudev',
             watch: config.watch === true ? true : false,
             emitFullPaths: config.emitFullPaths === true ? true : false,

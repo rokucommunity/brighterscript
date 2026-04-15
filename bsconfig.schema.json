@@ -99,6 +99,11 @@
             "type": "boolean",
             "default": false
         },
+        "sourceMapRelativePaths": {
+            "description": "If true, source file paths in generated sourcemaps will be relative to the map file location instead of absolute. This makes sourcemaps portable across different machines and environments.",
+            "type": "boolean",
+            "default": false
+        },
         "copyToStaging": {
             "description": "If true, the files are copied to staging. This setting is ignored when deploy is enabled or if createPackage is enabled",
             "type": "boolean"

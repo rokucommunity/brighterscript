@@ -25,6 +25,8 @@ While a minimal `bsconfig.json` file is sufficient for getting started, `bsc` su
 - [require](#require)
 - [retainStagingDir](#retainStagingDir)
 - [rootDir](#rootDir)
+- [sourceMap](#sourceMap)
+- [sourceMapRelativePaths](#sourceMapRelativePaths)
 - [sourceRoot](#sourceRoot)
 - [stagingDir](#stagingDir)
 - [username](#username)
@@ -412,6 +414,18 @@ Prevent the staging folder from being deleted after creating the package. Defaul
 Type: `string`
 
 The root directory of your roku project. Defaults to `process.cwd()`.
+
+## `sourceMap`
+
+Type: `boolean`
+
+Enables generating sourcemap files (`.map`), which allow debugging tools to show the original source code while running the emitted files. Defaults to `false`.
+
+## `sourceMapRelativePaths`
+
+Type: `boolean`
+
+If `true`, file paths in sourcemap `sources` will be relative to the map file location instead of absolute. This makes sourcemaps portable across different machines and environments -- for example when build output is published as an npm package and consumed on another machine. Defaults to `false`.
 
 ## `sourceRoot`
 
