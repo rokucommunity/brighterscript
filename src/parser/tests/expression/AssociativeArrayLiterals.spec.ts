@@ -5,9 +5,9 @@ import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import type { AssignmentStatement } from '../../Statement';
-import type { AALiteralExpression, AAMemberExpression } from '../../Expression';
-import { isAALiteralExpression, isAssignmentStatement, isCommentStatement, isDottedGetExpression, isLiteralExpression } from '../../../astUtils/reflection';
-import { expectDiagnostics, expectDiagnosticsIncludes } from '../../../testHelpers.spec';
+import type { AAIndexedMemberExpression, AALiteralExpression, AAMemberExpression } from '../../Expression';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isAssignmentStatement, isCommentStatement, isDottedGetExpression, isLiteralExpression } from '../../../astUtils/reflection';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics } from '../../../testHelpers.spec';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 
 describe('parser associative array literals', () => {
@@ -246,6 +246,81 @@ describe('parser associative array literals', () => {
             expectDiagnosticsIncludes(diagnostics, [
                 DiagnosticMessages.unmatchedLeftCurlyAfterAALiteral()
             ]);
+        });
+    });
+
+    describe('computed keys', () => {
+        it('parses [expr] computed key syntax', () => {
+            const { statements, diagnostics } = Parser.parse(`
+                _ = {
+                    [someEnum.key]: "value"
+                }
+            `);
+            expectZeroDiagnostics(diagnostics);
+            const aaLit = (statements[0] as AssignmentStatement).value as AALiteralExpression;
+            expect(isAALiteralExpression(aaLit)).to.be.true;
+            const member = aaLit.elements[0] as AAIndexedMemberExpression;
+            expect(isAAIndexedMemberExpression(member)).to.be.true;
+            expect(member.key).to.exist;
+            expect(isDottedGetExpression(member.key)).to.be.true;
+            expect(member.tokens.leftBracket).to.exist;
+            expect(member.tokens.rightBracket).to.exist;
+        });
+
+        it('parses [literal] computed key syntax', () => {
+            const { statements, diagnostics } = Parser.parse(`
+                _ = {
+                    ["my-key"]: "value"
+                }
+            `);
+            expectZeroDiagnostics(diagnostics);
+            const aaLit = (statements[0] as AssignmentStatement).value as AALiteralExpression;
+            const member = aaLit.elements[0] as AAIndexedMemberExpression;
+            expect(isAAIndexedMemberExpression(member)).to.be.true;
+            expect(member.key).to.exist;
+            expect(isLiteralExpression(member.key)).to.be.true;
+        });
+
+        it('errors on missing ] in computed key', () => {
+            const { diagnostics } = Parser.parse(`
+                _ = {
+                    [someEnum.key: "value"
+                }
+            `);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.expectedToken(TokenKind.RightSquareBracket)
+            ]);
+        });
+
+        it('supports multiple computed keys in one AA', () => {
+            const { statements, diagnostics } = Parser.parse(`
+                _ = {
+                    [myEnum.a]: 1,
+                    [myEnum.b]: 2
+                }
+            `);
+            expectZeroDiagnostics(diagnostics);
+            const aaLit = (statements[0] as AssignmentStatement).value as AALiteralExpression;
+            expect(aaLit.elements).to.have.lengthOf(2);
+            expect(isAAIndexedMemberExpression(aaLit.elements[0])).to.be.true;
+            expect(isAAIndexedMemberExpression(aaLit.elements[1])).to.be.true;
+        });
+
+        it('supports mixing computed and non-computed keys', () => {
+            const { statements, diagnostics } = Parser.parse(`
+                _ = {
+                    normalKey: 1,
+                    [myEnum.computed]: 2
+                }
+            `);
+            expectZeroDiagnostics(diagnostics);
+            const aaLit = (statements[0] as AssignmentStatement).value as AALiteralExpression;
+            const first = aaLit.elements[0] as AAMemberExpression;
+            const second = aaLit.elements[1] as AAIndexedMemberExpression;
+            expect(isAAMemberExpression(first)).to.be.true;
+            expect(first.keyToken).to.exist;
+            expect(isAAIndexedMemberExpression(second)).to.be.true;
+            expect(second.key).to.exist;
         });
     });
 

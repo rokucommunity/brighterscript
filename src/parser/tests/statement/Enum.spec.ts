@@ -1095,4 +1095,342 @@ describe('EnumStatement', () => {
             end sub
         `);
     });
+
+    describe('computed AA keys', () => {
+        it('transpiles enum member as AA key', () => {
+            testTranspile(`
+                enum MyKey
+                    first = "key1"
+                end enum
+                sub main()
+                    myAA = {
+                        [MyKey.first]: "value1"
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        "key1": "value1"
+                    }
+                end sub
+            `);
+        });
+
+        it('emits diagnostic for integer enum member used as AA key', () => {
+            program.setFile('source/main.bs', `
+                enum MyKey
+                    first = 1
+                end enum
+                sub main()
+                    myAA = {
+                        [MyKey.first]: "value1"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
+            ]);
+        });
+
+        it('transpiles const as AA key', () => {
+            testTranspile(`
+                const MY_KEY = "myKey"
+                sub main()
+                    myAA = {
+                        [MY_KEY]: "value1"
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        "myKey": "value1"
+                    }
+                end sub
+            `);
+        });
+
+        it('transpiles namespaced enum member as AA key', () => {
+            testTranspile(`
+                namespace Keys
+                    enum MyKey
+                        first = "key1"
+                    end enum
+                end namespace
+                sub main()
+                    myAA = {
+                        [Keys.MyKey.first]: "value1"
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        "key1": "value1"
+                    }
+                end sub
+            `);
+        });
+
+        it('transpiles literal string as AA key', () => {
+            testTranspile(`
+                sub main()
+                    myAA = {
+                        ["my-hyphenated-key"]: "value1"
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        "my-hyphenated-key": "value1"
+                    }
+                end sub
+            `);
+        });
+
+        it('transpiles multiple computed keys in one AA', () => {
+            testTranspile(`
+                enum Keys
+                    a = "keyA"
+                    b = "keyB"
+                end enum
+                sub main()
+                    myAA = {
+                        [Keys.a]: 1,
+                        [Keys.b]: 2
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        "keyA": 1
+                        "keyB": 2
+                    }
+                end sub
+            `);
+        });
+
+        it('transpiles mixed computed and normal keys', () => {
+            testTranspile(`
+                enum Keys
+                    first = "key1"
+                end enum
+                sub main()
+                    myAA = {
+                        normalKey: 1,
+                        [Keys.first]: 2
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        normalKey: 1
+                        "key1": 2
+                    }
+                end sub
+            `);
+        });
+
+        it('transpiles const from enum', () => {
+            testTranspile(`
+                enum Keys
+                    first = "key1"
+                end enum
+                const MY_KEY = Keys.first
+                sub main()
+                    myAA = {
+                        [MY_KEY]: 2
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        "key1": 2
+                    }
+                end sub
+            `);
+        });
+
+        it('emits diagnostic for non-constant computed key', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    someVar = "key"
+                    myAA = {
+                        [someVar]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedPropertyKeyMustBeConstantExpression()
+            ]);
+        });
+
+        it('emits diagnostic for non-string literal used as computed key', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    myAA = {
+                        [42]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
+            ]);
+        });
+
+        it('emits diagnostic for non-string const used as computed key', () => {
+            program.setFile('source/main.bs', `
+                const MY_INT_KEY = 42
+                sub main()
+                    myAA = {
+                        [MY_INT_KEY]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
+            ]);
+        });
+
+        it('accepts a const that chains to a string const', () => {
+            program.setFile('source/main.bs', `
+                const BASE_KEY = "myKey"
+                const ALIAS_KEY = BASE_KEY
+                sub main()
+                    myAA = {
+                        [ALIAS_KEY]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('emits diagnostic when a const chain resolves to a non-string', () => {
+            program.setFile('source/main.bs', `
+                const INT_KEY = 99
+                const ALIAS_KEY = INT_KEY
+                sub main()
+                    myAA = {
+                        [ALIAS_KEY]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
+            ]);
+        });
+
+        it('emits diagnostic for circular const reference', () => {
+            program.setFile('source/main.bs', `
+                const A = B
+                const B = A
+                sub main()
+                    myAA = {
+                        [A]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
+            ]);
+        });
+
+        it('emits diagnostic for boolean literal used as computed key', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    myAA = {
+                        [true]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
+            ]);
+        });
+
+        it('emits diagnostic for float literal used as computed key', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    myAA = {
+                        [3.14]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
+            ]);
+        });
+
+        it('emits diagnostic for function call used as computed key', () => {
+            program.setFile('source/main.bs', `
+                sub getKey() as string
+                    return "key"
+                end sub
+                sub main()
+                    myAA = {
+                        [getKey()]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedPropertyKeyMustBeConstantExpression()
+            ]);
+        });
+
+        it('emits diagnostic for arithmetic expression used as computed key', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    myAA = {
+                        [1 + 2]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedPropertyKeyMustBeConstantExpression()
+            ]);
+        });
+
+        it('emits diagnostic for non-string default enum member used as computed key', () => {
+            program.setFile('source/main.bs', `
+                enum MyKey
+                    first
+                end enum
+                sub main()
+                    myAA = {
+                        [MyKey.first]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
+            ]);
+        });
+
+        it('emits diagnostic for non-string namespaced const used as computed key', () => {
+            program.setFile('source/main.bs', `
+                namespace Keys
+                    const MY_KEY = 42
+                end namespace
+                sub main()
+                    myAA = {
+                        [Keys.MY_KEY]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
+            ]);
+        });
+    });
 });

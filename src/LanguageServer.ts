@@ -215,7 +215,7 @@ export class LanguageServer {
                 } as SemanticTokensOptions,
                 referencesProvider: true,
                 codeActionProvider: {
-                    codeActionKinds: [CodeActionKind.Refactor]
+                    codeActionKinds: [CodeActionKind.QuickFix, CodeActionKind.Refactor]
                 },
                 signatureHelpProvider: {
                     triggerCharacters: ['(', ',']
@@ -638,6 +638,11 @@ export class LanguageServer {
 
         const srcPath = util.uriToPath(params.textDocument.uri);
         const result = await this.projectManager.getCodeActions({ srcPath: srcPath, range: params.range });
+
+        // filter out any code actions with a kind that the client did not ask for (if the client specified any kinds at all)
+        if (params.context?.only && params.context.only.length > 0) {
+            return result?.filter(x => x.kind && params.context.only.some(only => x.kind === only || x.kind.startsWith(only + '.')));
+        }
         return result;
     }
 

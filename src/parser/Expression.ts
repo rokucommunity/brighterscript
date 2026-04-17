@@ -10,7 +10,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isStringType, isTemplateStringExpression, isTypeCastExpression, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isStringType, isTemplateStringExpression, isTypeCastExpression, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
@@ -945,7 +945,6 @@ export class AAMemberExpression extends Expression {
     public commaToken?: Token;
 
     transpile(state: BrsTranspileState) {
-        //TODO move the logic from AALiteralExpression loop into this function
         return [];
     }
 
@@ -963,12 +962,67 @@ export class AAMemberExpression extends Expression {
             ['value']
         );
     }
+}
 
+export class AAIndexedMemberExpression extends Expression {
+    constructor(options: {
+        leftBracket: Token;
+        key: Expression;
+        rightBracket: Token;
+        colon: Token;
+        /** The expression evaluated to determine the member's initial value. */
+        value: Expression;
+    }) {
+        super();
+        this.key = options.key;
+        this.tokens = {
+            leftBracket: options.leftBracket,
+            rightBracket: options.rightBracket,
+            colon: options.colon
+        };
+        this.value = options.value;
+        this.range = util.createBoundingRange(this.tokens.leftBracket, this.key, this.tokens.rightBracket, this.tokens.colon, this.value);
+    }
+
+    public readonly tokens: {
+        readonly leftBracket: Token;
+        readonly rightBracket: Token;
+        readonly colon: Token;
+    };
+
+    public key: Expression;
+    /** The expression evaluated to determine the member's initial value. */
+    public value: Expression;
+
+    public range: Range | undefined;
+    public commaToken?: Token;
+
+    transpile(state: BrsTranspileState) {
+        return [];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        walk(this, 'key', visitor, options);
+        walk(this, 'value', visitor, options);
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new AAIndexedMemberExpression({
+                leftBracket: util.cloneToken(this.tokens.leftBracket),
+                key: this.key?.clone(),
+                rightBracket: util.cloneToken(this.tokens.rightBracket),
+                colon: util.cloneToken(this.tokens.colon),
+                value: this.value?.clone()
+            }),
+            ['key', 'value']
+        );
+    }
 }
 
 export class AALiteralExpression extends Expression {
     constructor(
-        readonly elements: Array<AAMemberExpression | CommentStatement>,
+        readonly elements: Array<AAMemberExpression | AAIndexedMemberExpression | CommentStatement>,
         readonly open: Token,
         readonly close: Token
     ) {
@@ -1011,12 +1065,17 @@ export class AALiteralExpression extends Expression {
                 result.push(...element.transpile(state));
             } else {
                 //key
-                result.push(
-                    state.transpileToken(element.keyToken)
-                );
+                if ('tokens' in element) {
+                    //computed key: transpile the resolved expression (pre-transpile overrides it to a literal)
+                    result.push(...element.key.transpile(state));
+                } else {
+                    result.push(
+                        state.transpileToken(element.keyToken)
+                    );
+                }
                 //colon
                 result.push(
-                    state.transpileToken(element.colonToken),
+                    state.transpileToken('tokens' in element ? element.tokens.colon : element.colonToken),
                     ' '
                 );
 
@@ -2030,7 +2089,7 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
     }
     if (isAALiteralExpression(expr)) {
         return expr.elements.reduce((acc, e) => {
-            if (!isCommentStatement(e)) {
+            if (!isCommentStatement(e) && !(isAAIndexedMemberExpression(e))) {
                 acc[e.keyToken.text] = expressionToValue(e.value, strict);
             }
             return acc;
