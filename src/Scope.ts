@@ -16,7 +16,7 @@ import { Cache } from './Cache';
 import { URI } from 'vscode-uri';
 import type { BrsFile } from './files/BrsFile';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isMethodStatement, isClassStatement, isConstStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile, isNamespaceStatement, isEnumMemberStatement } from './astUtils/reflection';
+import { isBrsFile, isMethodStatement, isClassStatement, isConstStatement, isCustomType, isEnumStatement, isFunctionStatement, isFunctionType, isXmlFile, isNamespaceStatement, isEnumMemberStatement, isNamedArgumentExpression } from './astUtils/reflection';
 import { SymbolTable } from './SymbolTable';
 import type { Statement } from './parser/AstNode';
 import { LogLevel } from './logging';
@@ -990,6 +990,11 @@ export class Scope {
     private diagnosticDetectFunctionCallsWithWrongParamCount(file: BscFile, callableContainersByLowerName: CallableContainerMap) {
         //validate all function calls
         for (let expCall of file?.functionCalls ?? []) {
+            // Skip calls that use named arguments — those are fully validated by validateNamedArgCalls()
+            if (expCall.args.some(a => isNamedArgumentExpression(a.expression))) {
+                continue;
+            }
+
             let callableContainersWithThisName = callableContainersByLowerName.get(expCall.name.toLowerCase());
 
             //use the first item from callablesByLowerName, because if there are more, that's a separate error

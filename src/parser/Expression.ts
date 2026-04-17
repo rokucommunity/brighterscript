@@ -146,6 +146,43 @@ export class CallExpression extends Expression {
     }
 }
 
+export class NamedArgumentExpression extends Expression {
+    constructor(
+        readonly name: Identifier,
+        readonly colon: Token,
+        readonly value: Expression
+    ) {
+        super();
+        this.range = util.createBoundingRange(this.name, this.colon, this.value);
+    }
+
+    public readonly range: Range | undefined;
+
+    transpile(state: BrsTranspileState) {
+        // Named arguments are resolved to positional order during validation.
+        // If reached during transpile (e.g. for an unresolvable call), emit the value only.
+        return this.value.transpile(state);
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        // eslint-disable-next-line no-bitwise
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'value', visitor, options);
+        }
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new NamedArgumentExpression(
+                util.cloneToken(this.name),
+                util.cloneToken(this.colon),
+                this.value?.clone()
+            ),
+            ['value']
+        );
+    }
+}
+
 export class FunctionExpression extends Expression implements TypedefProvider {
     constructor(
         readonly parameters: FunctionParameterExpression[],

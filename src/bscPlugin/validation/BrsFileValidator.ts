@@ -123,6 +123,7 @@ export class BrsFileValidator {
                     node.symbolTable.addSymbol('m', undefined, DynamicType.instance);
                 }
                 this.validateFunctionParameterCount(node);
+                this.validateFunctionParameterNames(node);
             },
             FunctionParameterExpression: (node) => {
                 if (node.name) {
@@ -216,6 +217,24 @@ export class BrsFileValidator {
                     ...DiagnosticMessages.tooManyCallableParameters(func.parameters.length, CallExpression.MaximumArguments),
                     range: func.parameters[i].name.range
                 });
+            }
+        }
+    }
+
+    private validateFunctionParameterNames(func: FunctionExpression) {
+        const seen = new Set<string>();
+        for (const param of func.parameters) {
+            const nameLower = param.name?.text?.toLowerCase();
+            if (!nameLower) {
+                continue;
+            }
+            if (seen.has(nameLower)) {
+                this.event.file.addDiagnostic({
+                    ...DiagnosticMessages.duplicateFunctionParameter(param.name.text),
+                    range: param.name.range
+                });
+            } else {
+                seen.add(nameLower);
             }
         }
     }

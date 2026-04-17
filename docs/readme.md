@@ -50,6 +50,15 @@ enum RemoteButton
 end enum
 ```
 
+## [Named Arguments](named-arguments.md)
+```brighterscript
+sub greet(name as string, excited as boolean)
+end sub
+
+' pass args by name, in any order
+greet(excited: true, name: "Bob")
+```
+
 ## [Namespaces](namespaces.md)
 ```brighterscript
 namespace util

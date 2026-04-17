@@ -23,7 +23,7 @@ import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Preprocessor } from '../preprocessor/Preprocessor';
 import { serializeError } from 'serialize-error';
-import { isCallExpression, isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isImportStatement, isFieldStatement, isEnumStatement, isConstStatement } from '../astUtils/reflection';
+import { isCallExpression, isMethodStatement, isClassStatement, isDottedGetExpression, isFunctionExpression, isFunctionStatement, isFunctionType, isLiteralExpression, isNamespaceStatement, isStringType, isVariableExpression, isImportStatement, isFieldStatement, isEnumStatement, isConstStatement, isNamedArgumentExpression } from '../astUtils/reflection';
 import type { BscType } from '../types/BscType';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyGraph } from '../DependencyGraph';
@@ -658,33 +658,35 @@ export class BrsFile {
                 let args = [] as CallableArg[];
                 //TODO convert if stmts to use instanceof instead
                 for (let arg of expression.args as any) {
+                    // For named arguments, delegate to the inner value expression for type analysis
+                    const innerArg = isNamedArgumentExpression(arg) ? arg.value : arg;
 
                     //is a literal parameter value
-                    if (isLiteralExpression(arg)) {
+                    if (isLiteralExpression(innerArg)) {
                         args.push({
                             range: arg.range,
-                            type: arg.type,
-                            text: arg.token.text,
+                            type: innerArg.type,
+                            text: innerArg.token.text,
                             expression: arg,
                             typeToken: undefined
                         });
 
                         //is variable being passed into argument
-                    } else if (arg.name) {
+                    } else if (innerArg.name) {
                         args.push({
                             range: arg.range,
                             //TODO - look up the data type of the actual variable
                             type: new DynamicType(),
-                            text: arg.name.text,
+                            text: innerArg.name.text,
                             expression: arg,
                             typeToken: undefined
                         });
 
-                    } else if (arg.value) {
+                    } else if (innerArg.value) {
                         let text = '';
                         /* istanbul ignore next: TODO figure out why value is undefined sometimes */
-                        if (arg.value.value) {
-                            text = arg.value.value.toString();
+                        if (innerArg.value.value) {
+                            text = innerArg.value.value.toString();
                         }
                         let callableArg = {
                             range: arg.range,
