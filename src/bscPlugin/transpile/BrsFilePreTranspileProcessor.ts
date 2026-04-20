@@ -1,15 +1,16 @@
-import { createAssignmentStatement, createBlock, createDottedSetStatement, createIfStatement, createIndexedSetStatement, createToken } from '../../astUtils/creators';
-import { isAssignmentStatement, isBinaryExpression, isBlock, isBody, isBrsFile, isDottedGetExpression, isDottedSetStatement, isGroupingExpression, isIndexedGetExpression, isIndexedSetStatement, isLiteralExpression, isUnaryExpression, isVariableExpression } from '../../astUtils/reflection';
+import { createAssignmentStatement, createBlock, createCall, createDottedSetStatement, createIdentifier, createIfStatement, createIndexedSetStatement, createStringLiteral, createToken, createVariableExpression } from '../../astUtils/creators';
+import { isAssignmentStatement, isBinaryExpression, isBlock, isBody, isBrsFile, isClassStatement, isDottedGetExpression, isDottedSetStatement, isFunctionExpression, isGroupingExpression, isIndexedGetExpression, isIndexedSetStatement, isLiteralExpression, isUnaryExpression, isVariableExpression } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BeforeFileTranspileEvent } from '../../interfaces';
 import type { Token } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { Expression, Statement } from '../../parser/AstNode';
-import type { TernaryExpression } from '../../parser/Expression';
+import { DottedGetExpression } from '../../parser/Expression';
+import type { FunctionExpression, TernaryExpression } from '../../parser/Expression';
 import { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { IfStatement } from '../../parser/Statement';
+import type { Block, ClassStatement, IfStatement } from '../../parser/Statement';
 import type { Scope } from '../../Scope';
 import util from '../../util';
 
@@ -21,8 +22,76 @@ export class BrsFilePreTranspileProcessor {
 
     public process() {
         if (isBrsFile(this.event.file)) {
+            this.injectPerfettoTracing();
             this.iterateExpressions();
         }
+    }
+
+    private injectPerfettoTracing() {
+        if (!this.event.program.options.perfettoTracing) {
+            return;
+        }
+        this.event.file.ast.walk(createVisitor({
+            FunctionStatement: (statement) => {
+                this.injectTraceStatement(statement.func.body, statement.getName(ParseMode.BrightScript));
+            },
+            MethodStatement: (statement) => {
+                const classStatement = statement.findAncestor<ClassStatement>(isClassStatement);
+                const className = classStatement?.getName(ParseMode.BrightScript) ?? 'unknown';
+                const traceName = `__${className}_method_${statement.name.text}`;
+                this.injectTraceStatement(statement.func.body, traceName);
+            },
+            FunctionExpression: (expression) => {
+                // Only handle anonymous function expressions (named ones are handled by FunctionStatement/MethodStatement above)
+                if (expression.functionStatement) {
+                    return;
+                }
+                const traceName = this.getAnonFunctionName(expression);
+                this.injectTraceStatement(expression.body, traceName);
+            }
+        }), { walkMode: WalkMode.visitAllRecursive });
+    }
+
+    /**
+     * Compute a name for an anonymous FunctionExpression using the same scheme as SOURCE_FUNCTION_NAME:
+     *   outerFunction$anon0, outerFunction$anon1, outerFunction$anon0$anon0, etc.
+     */
+    private getAnonFunctionName(func: FunctionExpression): string {
+        const nameParts: string[] = [];
+        let current = func;
+        let parentFunc = current.findAncestor<FunctionExpression>(isFunctionExpression);
+        while (parentFunc) {
+            const siblings: FunctionExpression[] = [];
+            parentFunc.walk(createVisitor({
+                FunctionExpression: (expr) => {
+                    siblings.push(expr);
+                }
+            }), { walkMode: WalkMode.visitAllRecursive });
+            nameParts.unshift(`anon${siblings.indexOf(current)}`);
+            current = parentFunc;
+            parentFunc = current.findAncestor<FunctionExpression>(isFunctionExpression);
+        }
+        const rootName = current.functionStatement?.getName(ParseMode.BrightScript) ?? 'unknown';
+        nameParts.unshift(rootName);
+        return nameParts.join('$');
+    }
+
+    private injectTraceStatement(body: Block, funcName: string) {
+        const traceStatement = createAssignmentStatement({
+            name: 'bsc__trace',
+            value: createCall(
+                new DottedGetExpression(
+                    createCall(
+                        createVariableExpression('CreateObject'),
+                        [createStringLiteral('roPerfetto')]
+                    ),
+                    createIdentifier('createScopedEvent'),
+                    createToken(TokenKind.Dot)
+                ),
+                [createStringLiteral(funcName)]
+            )
+        });
+        this.event.editor.arrayUnshift(body.statements, traceStatement);
     }
 
     private iterateExpressions() {
