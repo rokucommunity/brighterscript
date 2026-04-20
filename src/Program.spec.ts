@@ -2150,6 +2150,43 @@ describe('Program', () => {
             program.setFile({ src: s`${rootDir}/source/main.brs`, dest: 'source/main.brs' }, sourceWithInlineMap);
             await assertOutputMapChainsToOriginal();
         });
+
+        it('gracefully ignores a missing sourceMappingURL target file', async () => {
+            // sourceMappingURL points to a file that does not exist — should not throw and
+            // should produce an output map that still points to the intermediate .brs file.
+            const sourceWithBadRef = `${brsSource}\n'//# sourceMappingURL=./does-not-exist.map`;
+
+            fsExtra.writeFileSync(s`${rootDir}/source/main.brs`, sourceWithBadRef);
+
+            program.setFile({ src: s`${rootDir}/source/main.brs`, dest: 'source/main.brs' }, sourceWithBadRef);
+            program.validate();
+            // Should complete without throwing
+            await program.transpile([{ src: s`${rootDir}/source/main.brs`, dest: 'source/main.brs' }], stagingDir);
+
+            const outputMapPath = s`${stagingDir}/source/main.brs.map`;
+            expect(fsExtra.pathExistsSync(outputMapPath)).is.true;
+            const outputMapJson = JSON.parse(fsExtra.readFileSync(outputMapPath, 'utf8'));
+            // Without chaining the map still points to the intermediate .brs file (not original.bs)
+            await SourceMapConsumer.with(outputMapJson, null, (consumer) => {
+                const pos = consumer.originalPositionFor({ line: 2, column: 4 });
+                expect(pos.source).to.include('main.brs');
+            });
+        });
+
+        it('does not chain maps when sourceMap option is false', async () => {
+            // When sourceMap output is disabled no output .map file should be created,
+            // regardless of whether an input map exists.
+            program.options.sourceMap = false;
+
+            fsExtra.writeFileSync(s`${rootDir}/source/main.brs`, brsSource);
+            fsExtra.writeFileSync(s`${rootDir}/source/main.brs.map`, prebuildMapJson);
+
+            program.setFile({ src: s`${rootDir}/source/main.brs`, dest: 'source/main.brs' }, brsSource);
+            program.validate();
+            await program.transpile([{ src: s`${rootDir}/source/main.brs`, dest: 'source/main.brs' }], stagingDir);
+
+            expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs.map`)).is.false;
+        });
     });
 
     it('copies the bslib.brs file', async () => {
