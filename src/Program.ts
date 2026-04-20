@@ -1212,18 +1212,18 @@ export class Program {
             dest: file.pkgPath
         }];
         const { entries, astEditor } = this.beforeProgramTranspile(fileMap, this.options.stagingDir);
-        const result = this._getTranspiledFileContents(
+        const result = await this._getTranspiledFileContents(
             file
         );
         this.afterProgramTranspile(entries, astEditor);
-        return Promise.resolve(result);
+        return result;
     }
 
     /**
      * Internal function used to transpile files.
      * This does not write anything to the file system
      */
-    private _getTranspiledFileContents(file: BscFile, outputPath?: string): FileTranspileResult {
+    private async _getTranspiledFileContents(file: BscFile, outputPath?: string): Promise<FileTranspileResult> {
         const editor = new AstEditor();
         this.plugins.emit('beforeFileTranspile', {
             program: this,
@@ -1240,6 +1240,14 @@ export class Program {
 
         //transpile the file
         const result = file.transpile();
+
+        //chain any incoming sourcemap (from a prebuild step) into the generated map
+        if (result.map && isBrsFile(file)) {
+            const inputMap = await util.resolveInputSourceMap(file.fileContents ?? '', file.srcPath);
+            if (inputMap) {
+                await util.applySourceMap(result.map, inputMap, file.srcPath);
+            }
+        }
 
         //generate the typedef if enabled
         let typedef: string;
@@ -1335,7 +1343,7 @@ export class Program {
                     return;
                 }
 
-                const fileTranspileResult = this._getTranspiledFileContents(file, outputPath);
+                const fileTranspileResult = await this._getTranspiledFileContents(file, outputPath);
 
                 //make sure the full dir path exists
                 await fsExtra.ensureDir(path.dirname(outputPath));

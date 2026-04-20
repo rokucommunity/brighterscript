@@ -24,6 +24,7 @@ import type { BsDiagnostic, Plugin } from './interfaces';
 import { createLogger } from './logging';
 import { Scope } from './Scope';
 import undent from 'undent';
+import { SourceMapConsumer } from 'source-map';
 
 let sinon = sinonImport.createSandbox();
 
@@ -2066,6 +2067,89 @@ describe('Program', () => {
 
         expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs.map`)).is.true;
         expect(fsExtra.pathExistsSync(s`${stagingDir}/components/comp1.xml.map`)).is.true;
+    });
+
+    describe('prebuild sourcemap chaining', () => {
+        // A prebuild step produced main.brs with a map pointing back to original.bs.
+        // BrighterScript must apply that incoming map so the final output traces all the
+        // way to original.bs — not just to the intermediate main.brs.
+
+        let prebuildMapJson: string;
+        const brsSource = 'sub main()\n    print "hello"\nend sub';
+        const originalSrc = s`${rootDir}/source/original.bs`;
+
+        beforeEach(async () => {
+            const { SourceMapGenerator } = await import('source-map');
+            const gen = new SourceMapGenerator({ file: 'main.brs' });
+            gen.addMapping({ generated: { line: 1, column: 0 }, original: { line: 1, column: 0 }, source: originalSrc });
+            gen.addMapping({ generated: { line: 2, column: 0 }, original: { line: 2, column: 0 }, source: originalSrc });
+            gen.addMapping({ generated: { line: 3, column: 0 }, original: { line: 3, column: 0 }, source: originalSrc });
+            prebuildMapJson = gen.toString();
+
+            program.options.sourceMap = true;
+            fsExtra.ensureDirSync(s`${rootDir}/source`);
+            fsExtra.ensureDirSync(stagingDir);
+        });
+
+        async function assertOutputMapChainsToOriginal() {
+            program.validate();
+            await program.transpile([{ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }], stagingDir);
+
+            const outputMapPath = s`${stagingDir}/source/main.brs.map`;
+            expect(fsExtra.pathExistsSync(outputMapPath)).is.true;
+            const outputMapJson = JSON.parse(fsExtra.readFileSync(outputMapPath, 'utf8'));
+
+            // Program._getTranspiledFileContents chains the input map via applySourceMap.
+            await SourceMapConsumer.with(outputMapJson, null, (consumer) => {
+                const pos = consumer.originalPositionFor({ line: 2, column: 4 });
+                expect(pos.source, 'output map should chain back to original.bs').to.include('original.bs');
+                expect(pos.line).to.eql(2);
+            });
+        }
+
+        it('reads co-located .brs.map file', async () => {
+            fsExtra.writeFileSync(s`${rootDir}/source/main.brs`, brsSource);
+            fsExtra.writeFileSync(s`${rootDir}/source/main.brs.map`, prebuildMapJson);
+
+            program.setFile({ src: s`${rootDir}/source/main.brs`, dest: 'source/main.brs' }, brsSource);
+            await assertOutputMapChainsToOriginal();
+        });
+
+        it('follows relative sourceMappingURL comment in the .brs file', async () => {
+            // The map lives at a custom relative path referenced via sourceMappingURL.
+            const mapRelPath = './maps/main.brs.map';
+            const sourceWithComment = `${brsSource}\n'//# sourceMappingURL=${mapRelPath}`;
+
+            fsExtra.ensureDirSync(s`${rootDir}/source/maps`);
+            fsExtra.writeFileSync(s`${rootDir}/source/main.brs`, sourceWithComment);
+            fsExtra.writeFileSync(s`${rootDir}/source/maps/main.brs.map`, prebuildMapJson);
+
+            program.setFile({ src: s`${rootDir}/source/main.brs`, dest: 'source/main.brs' }, sourceWithComment);
+            await assertOutputMapChainsToOriginal();
+        });
+
+        it('follows absolute sourceMappingURL comment in the .brs file', async () => {
+            const absoluteMapPath = s`${rootDir}/maps/main.brs.map`;
+            const sourceWithComment = `${brsSource}\n'//# sourceMappingURL=${absoluteMapPath}`;
+
+            fsExtra.ensureDirSync(s`${rootDir}/maps`);
+            fsExtra.writeFileSync(s`${rootDir}/source/main.brs`, sourceWithComment);
+            fsExtra.writeFileSync(absoluteMapPath, prebuildMapJson);
+
+            program.setFile({ src: s`${rootDir}/source/main.brs`, dest: 'source/main.brs' }, sourceWithComment);
+            await assertOutputMapChainsToOriginal();
+        });
+
+        it('decodes inline base64 sourceMappingURL in the .brs file', async () => {
+            // The map is embedded as a data URI — no external file needed.
+            const base64Map = Buffer.from(prebuildMapJson).toString('base64');
+            const sourceWithInlineMap = `${brsSource}\n'//# sourceMappingURL=data:application/json;base64,${base64Map}`;
+
+            fsExtra.writeFileSync(s`${rootDir}/source/main.brs`, sourceWithInlineMap);
+
+            program.setFile({ src: s`${rootDir}/source/main.brs`, dest: 'source/main.brs' }, sourceWithInlineMap);
+            await assertOutputMapChainsToOriginal();
+        });
     });
 
     it('copies the bslib.brs file', async () => {
