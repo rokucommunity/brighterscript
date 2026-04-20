@@ -1399,6 +1399,20 @@ export class BrsFile {
             //simple SourceNode wrapping the entire file to simplify the logic below
             transpileResult = new SourceNode(null, null, state.srcPath, this.fileContents);
         }
+
+        // Inject bslib functions if using unique-per-file mode and functions were used
+        if (this.program.options.bslibHandling?.mode === 'unique-per-file' && 
+            state.usedBslibFunctions.size > 0) {
+            const bslibFunctions = util.getBslibFunctionsWithSuffix(state.bslibSuffix, state.usedBslibFunctions);
+            
+            // Append the bslib functions at the end of the file
+            transpileResult = new SourceNode(null, null, state.srcPath, [
+                transpileResult,
+                '\n\n',
+                bslibFunctions
+            ]);
+        }
+
         //undo any AST edits that the transpile cycle has made
         state.editor.undoAll();
 
