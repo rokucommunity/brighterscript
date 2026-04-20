@@ -2160,6 +2160,7 @@ describe('Program', () => {
 
             program.setFile({ src: s`${rootDir}/source/main.brs`, dest: 'source/main.brs' }, sourceWithBadRef);
             program.validate();
+            expectZeroDiagnostics(program);
             // Should complete without throwing
             await program.transpile([{ src: s`${rootDir}/source/main.brs`, dest: 'source/main.brs' }], stagingDir);
 
