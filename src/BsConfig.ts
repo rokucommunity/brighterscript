@@ -216,9 +216,10 @@ export interface BsConfig {
 
     /**
      * The minimum Roku firmware version required to run this project.
-     * When set, BrightScript (.brs) files will be validated to ensure they only use
-     * language features available in that firmware version or earlier.
-     * BrighterScript (.bs) files are always allowed to use all features since they are transpiled.
+     * When set, both BrightScript (.brs) and BrighterScript (.bs) files will be validated to
+     * ensure they only use language features available in that firmware version or earlier.
+     * Note that some features (such as optional chaining) are emitted as-is and not transpiled,
+     * so the version restriction applies to all file types.
      * Should be a semver-compatible string (e.g. "11.0.0").
      */
     minFirmwareVersion?: string;

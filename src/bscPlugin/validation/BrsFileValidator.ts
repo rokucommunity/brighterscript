@@ -466,19 +466,19 @@ export class BrsFileValidator {
     }
 
     /**
-     * The minimum Roku firmware version that introduced optional chaining support
+     * The minimum Roku firmware version that introduced optional chaining support (Roku OS 11).
+     * Optional chaining is NOT transpiled by BrighterScript, so this restriction applies to both
+     * .brs and .bs files.
      */
     private static readonly OPTIONAL_CHAINING_MIN_VERSION = '11.0.0';
 
     /**
-     * Add a diagnostic if the current file is a .brs file and the configured minFirmwareVersion
-     * is lower than the version that introduced optional chaining support (Roku OS 11)
+     * Add a diagnostic if the configured minFirmwareVersion is lower than the version that
+     * introduced optional chaining support (Roku OS 11).
+     * This applies to both .brs and .bs files because optional chaining is not transpiled —
+     * it is emitted as-is, so the target device must natively support it.
      */
     private validateMinFirmwareVersionForOptionalChaining(range: Range | undefined) {
-        //only validate .brs files (not .bs files, which are always transpiled)
-        if (this.event.file.parseMode !== ParseMode.BrightScript) {
-            return;
-        }
         const minFirmwareVersion = this.event.file.program.options.minFirmwareVersion;
         if (!minFirmwareVersion) {
             return;

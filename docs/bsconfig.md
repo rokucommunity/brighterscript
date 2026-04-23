@@ -360,7 +360,7 @@ The host of the Roku that this project will deploy to when the [`deploy`](#deplo
 
 Type: `string`
 
-The minimum Roku firmware version required to run this project. When set, BrightScript (`.brs`) files will be validated to ensure they only use language features available in that firmware version or earlier. BrighterScript (`.bs`) files are always allowed to use all features since they are transpiled down to compatible BrightScript.
+The minimum Roku firmware version required to run this project. When set, both BrightScript (`.brs`) and BrighterScript (`.bs`) files will be validated to ensure they only use language features available in that firmware version or earlier. Note that some BrighterScript features (such as optional chaining) are emitted as-is and not transpiled down, so the version restriction applies to all file types.
 
 Should be a semver-compatible string (e.g. `"11.0.0"` or `"11.0"`). Defaults to `undefined` (no version restriction).
 
@@ -372,7 +372,7 @@ Should be a semver-compatible string (e.g. `"11.0.0"` or `"11.0"`). Defaults to 
 }
 ```
 
-With this setting, using optional chaining (`?.`) in `.brs` files without the version requirement being met will produce an error like:
+With this setting, using optional chaining (`?.`) without the version requirement being met will produce an error like:
 
 > BrightScript feature 'optional chaining' requires Roku firmware version 11.0.0 or higher, but 'minFirmwareVersion' is set to 10.0.0
 
