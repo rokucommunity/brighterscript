@@ -2079,7 +2079,7 @@ describe('Program', () => {
         const brsSource = 'sub main()\n    print "hello"\nend sub';
         const xmlSource = trim`
             <?xml version="1.0" encoding="utf-8" ?>
-            <component name="MyComp" extends="Scene">
+            <component name="Comp1" extends="Scene">
             </component>
         `;
         const originalBrsSrc = s`${rootDir}/source/original.bs`;
@@ -2131,16 +2131,20 @@ describe('Program', () => {
 
             // Verify the output map sources include the original pre-prebuild XML source.
             // XML transpile generates character-level mappings, so use LEAST_UPPER_BOUND to
-            // find the first mapping at or after column 0 on any line.
+            // find the first mapping at or after column 0 on a given line.
             const originatesFromOriginal = outputMapJson.sources?.some((src: string) => src.includes('original.bxml'));
             expect(originatesFromOriginal, 'output map should chain back to original.bxml').to.be.true;
 
             await SourceMapConsumer.with(outputMapJson, null, (consumer) => {
-                // Use LEAST_UPPER_BOUND to find the first mapping >= (1, 0) since XML maps
+                // Use LEAST_UPPER_BOUND to find the first mapping >= (n, 0) since XML maps
                 // are character-level and may not start at column 0.
-                const pos = consumer.originalPositionFor({ line: 1, column: 0, bias: SourceMapConsumer.LEAST_UPPER_BOUND });
-                expect(pos.source, 'output map should chain back to original.bxml').to.include('original.bxml');
-                expect(pos.line).to.eql(1);
+                const pos1 = consumer.originalPositionFor({ line: 1, column: 0, bias: SourceMapConsumer.LEAST_UPPER_BOUND });
+                expect(pos1.source, 'line 1 output map should chain back to original.bxml').to.include('original.bxml');
+                expect(pos1.line).to.eql(1);
+
+                const pos2 = consumer.originalPositionFor({ line: 2, column: 0, bias: SourceMapConsumer.LEAST_UPPER_BOUND });
+                expect(pos2.source, 'line 2 output map should chain back to original.bxml').to.include('original.bxml');
+                expect(pos2.line).to.eql(2);
             });
         }
 
