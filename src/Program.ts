@@ -1242,7 +1242,7 @@ export class Program {
         const result = file.transpile();
 
         //chain any incoming sourcemap (from a prebuild step) into the generated map
-        if (result.map && isBrsFile(file)) {
+        if (result.map) {
             const inputMap = await util.resolveInputSourceMap(file.fileContents ?? '', file.srcPath);
             if (inputMap) {
                 await util.applySourceMap(result.map, inputMap, file.srcPath);

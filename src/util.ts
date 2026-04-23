@@ -1754,10 +1754,12 @@ export class Util {
      * Parse the `sourceMappingURL` comment from file contents and resolve it to a RawSourceMap.
      * Handles inline base64 data URIs, absolute paths, relative paths (resolved against srcPath's
      * directory), and falls back to a co-located `<srcPath>.map` file.
+     * Supports both BrightScript-style comments (`'//# sourceMappingURL=...`) and XML-style
+     * comments (`<!--//# sourceMappingURL=... -->`).
      * Returns undefined if no map can be found.
      */
     public async resolveInputSourceMap(fileContents: string, srcPath: string): Promise<RawSourceMap | undefined> {
-        const match = /['"]?\/\/# sourceMappingURL=(.+)$/m.exec(fileContents);
+        const match = /['"]?\/\/# sourceMappingURL=(.+?)(?:\s*-->)?\s*$/m.exec(fileContents);
         if (match) {
             const url = match[1].trim();
             if (url.startsWith('data:')) {
@@ -1772,12 +1774,12 @@ export class Util {
                     return JSON.parse(await fsExtra.readFile(mapPath, 'utf8')) as RawSourceMap;
                 }
             }
-        } else {
-            // no comment — try co-located <srcPath>.map
-            const colocated = `${srcPath}.map`;
-            if (await fsExtra.pathExists(colocated)) {
-                return JSON.parse(await fsExtra.readFile(colocated, 'utf8')) as RawSourceMap;
-            }
+        }
+
+        // no usable sourceMappingURL — try co-located <srcPath>.map
+        const colocated = `${srcPath}.map`;
+        if (await fsExtra.pathExists(colocated)) {
+            return JSON.parse(await fsExtra.readFile(colocated, 'utf8')) as RawSourceMap;
         }
         return undefined;
     }
