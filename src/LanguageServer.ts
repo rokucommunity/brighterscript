@@ -578,7 +578,7 @@ export class LanguageServer {
 
         const srcPath = util.uriToPath(params.textDocument.uri);
 
-        const result = this.projectManager.getDefinition({ srcPath: srcPath, position: params.position });
+        const result = await this.projectManager.getDefinition({ srcPath: srcPath, position: params.position });
         return result;
     }
 

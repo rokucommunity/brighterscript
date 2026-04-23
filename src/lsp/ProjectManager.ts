@@ -6,7 +6,7 @@ import type { LspDiagnostic, LspProject, ProjectConfig } from './LspProject';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
 import { FileChangeType } from 'vscode-languageserver-protocol';
-import type { Hover, Position, Range, Location, SignatureHelp, DocumentSymbol, SymbolInformation, WorkspaceSymbol, CompletionList, CancellationToken } from 'vscode-languageserver-protocol';
+import type { Hover, Position, Range, Location, LocationLink, SignatureHelp, DocumentSymbol, SymbolInformation, WorkspaceSymbol, CompletionList, CancellationToken } from 'vscode-languageserver-protocol';
 import { Deferred } from '../deferred';
 import type { DocumentActionWithStatus, FlushEvent } from './DocumentManager';
 import { DocumentManager } from './DocumentManager';
@@ -554,7 +554,7 @@ export class ProjectManager {
      * @returns a list of locations where the symbol under the position is defined in the project
      */
     @TrackBusyStatus
-    public async getDefinition(options: { srcPath: string; position: Position }): Promise<Location[]> {
+    public async getDefinition(options: { srcPath: string; position: Position }): Promise<Array<Location | LocationLink>> {
         //wait for all pending syncs to finish
         await this.onIdle();
 

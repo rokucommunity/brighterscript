@@ -1,8 +1,12 @@
+import * as path from 'path';
+import * as fsExtra from 'fs-extra';
+import { rokuDeploy } from 'roku-deploy';
+import type { StandardizedFileEntry, FileEntry } from 'roku-deploy';
 import { isBrsFile, isClassStatement, isDottedGetExpression, isImportStatement, isNamespaceStatement, isXmlFile, isXmlScope } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ProvideDefinitionEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
-import type { Location } from 'vscode-languageserver-protocol';
+import type { Location, LocationLink, Range } from 'vscode-languageserver-protocol';
 import type { ClassStatement, FunctionStatement, NamespaceStatement } from '../../parser/Statement';
 import { ParseMode } from '../../parser/Parser';
 import util from '../../util';
@@ -10,19 +14,151 @@ import { URI } from 'vscode-uri';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
 import type { Token } from '../../lexer/Token';
 import type { XmlFile } from '../../files/XmlFile';
+import type { SGAttribute, SGNode } from '../../parser/SGTypes';
 
 export class DefinitionProvider {
     constructor(
         private event: ProvideDefinitionEvent
     ) { }
 
-    public process(): Location[] {
-        if (isBrsFile(this.event.file)) {
-            this.brsFileGetDefinition(this.event.file);
-        } else if (isXmlFile(this.event.file)) {
-            this.xmlFileGetDefinition(this.event.file);
+    public process(): Array<Location | LocationLink> {
+        try {
+            if (isBrsFile(this.event.file)) {
+                this.brsFileGetDefinition(this.event.file);
+            } else if (isXmlFile(this.event.file)) {
+                this.xmlFileGetDefinition(this.event.file);
+            }
+        } catch (e) {
+            // swallow errors caused by mangled/partially-parsed ASTs so the LSP request
+            // never surfaces an unhandled exception to the client
         }
         return this.event.definitions;
+    }
+
+    /**
+     * Given a string that may be a file path and an origin range, try to resolve the path to a
+     * file in the program. Returns a LocationLink (with originSelectionRange set so VS Code
+     * underlines the whole path as one unit on Ctrl+hover) when the file is found, or null.
+     * Any non-empty string is tried:
+     *   1. First checks the program's loaded files (covers .brs/.bs/.xml).
+     *   2. If not found in the program (e.g. image assets), reverse-maps the dest path back to
+     *      candidate src paths via the project's `files` deploy entries, verifies each candidate
+     *      via `rokuDeploy.getDestPath` (no disk I/O), and only then checks disk with `existsSync`.
+     *      Returns a LocationLink pointing to the physical file if found.
+     *   3. If neither condition holds, returns null so no link is contributed and VS Code
+     *      does not show a (segmented) hover for the path.
+     */
+    private tryGetFilePathLocationLink(pathStr: string, containingFilePkgPath: string, originRange: Range): LocationLink | null {
+        if (!pathStr) {
+            return null;
+        }
+        const pkgPath = util.getPkgPathFromTarget(containingFilePkgPath, pathStr);
+        if (!pkgPath) {
+            return null;
+        }
+        // 1. Check if the file is loaded in the program (covers .brs/.bs/.xml)
+        const targetFile = this.event.program.getFile(pkgPath);
+        if (targetFile) {
+            return {
+                originSelectionRange: originRange,
+                targetUri: util.pathToUri(targetFile.srcPath),
+                targetRange: util.createRange(0, 0, 0, 0),
+                targetSelectionRange: util.createRange(0, 0, 0, 0)
+            };
+        }
+        // 2. File is not in the program (e.g. image assets).
+        //    Reverse-map pkgPath (destPath) → candidate srcPath, verify mapping, then check disk.
+        const srcPath = this.findSrcPathForPkgPath(pkgPath);
+        if (srcPath) {
+            return {
+                originSelectionRange: originRange,
+                targetUri: util.pathToUri(srcPath),
+                targetRange: util.createRange(0, 0, 0, 0),
+                targetSelectionRange: util.createRange(0, 0, 0, 0)
+            };
+        }
+        return null;
+    }
+
+    /**
+     * Given a pkgPath (the dest-relative path inside the Roku package, e.g. `images/hero.png`),
+     * find the absolute srcPath of the file on disk by reverse-mapping through every entry in the
+     * project's `files` deploy array.
+     *
+     * For each entry we compute a *candidate* srcPath without touching the disk, then:
+     *   1. Verify the candidate with `rokuDeploy.getDestPath` (cheap — pure path computation).
+     *   2. Only call `fsExtra.existsSync` (expensive — disk I/O) when verification passes.
+     *
+     * Returns the first matching absolute srcPath, or null.
+     */
+    private findSrcPathForPkgPath(pkgPath: string): string | null {
+        const { rootDir, files } = this.event.program.options;
+        if (!rootDir || !files?.length) {
+            return null;
+        }
+        const normalizedPkgPath = path.normalize(pkgPath).replace(/\\/g, '/');
+        const entries = rokuDeploy.normalizeFilesArray(files as FileEntry[]);
+
+        for (const entry of entries) {
+            const candidateSrcPath = this.reverseLookupSrcPath(normalizedPkgPath, entry, rootDir);
+            if (!candidateSrcPath) {
+                continue;
+            }
+            // Verify: the candidate srcPath must deploy to exactly our pkgPath (no disk I/O)
+            const destPath = rokuDeploy.getDestPath(candidateSrcPath, files as FileEntry[], rootDir);
+            if (!destPath) {
+                continue;
+            }
+            if (path.normalize(destPath).replace(/\\/g, '/') !== normalizedPkgPath) {
+                continue;
+            }
+            // Only after pattern verification do we access the disk
+            if (fsExtra.existsSync(candidateSrcPath)) {
+                return candidateSrcPath;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * For a single normalized files entry, compute the candidate srcPath that would produce
+     * `pkgPath` as its deploy dest path.  Returns null when the entry could not produce that dest.
+     *
+     * `pkgPath` is already normalized (forward slashes, no leading slash).
+     */
+    private reverseLookupSrcPath(
+        pkgPath: string,
+        entry: string | StandardizedFileEntry,
+        rootDir: string
+    ): string | null {
+        if (typeof entry === 'string') {
+            // String entry: files are relative to rootDir, dest mirrors src structure under rootDir
+            return path.join(rootDir, pkgPath);
+        }
+
+        // Object entry: check whether pkgPath is under this entry's dest subtree
+        const dest = entry.dest ? path.normalize(entry.dest).replace(/\\/g, '/') : '';
+        let pathWithinDest: string;
+        if (!dest) {
+            // No dest remap — dest path mirrors the src structure relative to the glob base
+            pathWithinDest = pkgPath;
+        } else if (pkgPath === dest) {
+            pathWithinDest = '';
+        } else if (pkgPath.startsWith(dest + '/')) {
+            pathWithinDest = pkgPath.substring(dest.length + 1);
+        } else {
+            // pkgPath is not under this entry's dest — skip
+            return null;
+        }
+
+        // For globstar patterns, the src base is everything before '**'
+        const globstarIdx = entry.src.indexOf('**');
+        if (globstarIdx > -1) {
+            const srcBase = path.resolve(rootDir, entry.src.substring(0, globstarIdx));
+            return path.join(srcBase, pathWithinDest);
+        }
+        // No globstar: fall back to rootDir + pkgPath (covers simple exact-file entries)
+        return path.join(rootDir, pkgPath);
     }
 
     /**
@@ -142,6 +278,24 @@ export class DefinitionProvider {
                 }
             }
 
+            // Generic file path detection: if the string literal looks like a file path
+            // (pkg:/, libpkg:/, ./, ../) resolve it and navigate to that file.
+            const pathValue = token.text.replace(/^"|"$/g, '');
+            const link = this.tryGetFilePathLocationLink(
+                pathValue,
+                file.pkgPath,
+                util.createRange(
+                    token.range.start.line,
+                    token.range.start.character + 1,
+                    token.range.end.line,
+                    token.range.end.character - 1
+                )
+            );
+            if (link) {
+                this.event.definitions.push(link);
+                return;
+            }
+
             // We need to strip off the quotes but only if present
             const startIndex = textToSearchFor.startsWith('"') ? 1 : 0;
 
@@ -257,6 +411,77 @@ export class DefinitionProvider {
                 range: util.createRange(0, 0, 0, 0),
                 uri: util.pathToUri(file.parentComponent.srcPath)
             });
+            return;
         }
+
+        // Generic XML attribute value path resolution.
+        // Walk the entire component tree (component attributes, script tags, children nodes,
+        // customization nodes) and return a definition for the first attribute value that
+        // looks like a file path and resolves to a known file.
+        const component = file.ast?.component;
+        if (!component) {
+            return;
+        }
+
+        // Component-level attributes (e.g. extends="...")
+        if (this.xmlGetFilePathDefinitionFromAttributes(component.attributes, file.pkgPath)) {
+            return;
+        }
+        // <script> tags (uri="...")
+        for (const script of component.scripts ?? []) {
+            if (this.xmlGetFilePathDefinitionFromAttributes(script.attributes, file.pkgPath)) {
+                return;
+            }
+        }
+        // Nodes inside <children>
+        if (component.children && this.xmlWalkNodeForFilePath(component.children, file.pkgPath)) {
+            return;
+        }
+        // <Customization> nodes
+        for (const custom of component.customizations ?? []) {
+            if (this.xmlWalkNodeForFilePath(custom, file.pkgPath)) {
+                return;
+            }
+        }
+    }
+
+    /**
+     * Check all attributes on an XML element for an attribute value that looks like a file path
+     * and whose range contains the cursor position.  Returns true and pushes a definition when a
+     * match is found.
+     * For XML, we attempt to resolve every attribute value (no prefix requirement) since most
+     * non-path values (e.g. name="MainScene") will simply not resolve to a known file.
+     */
+    private xmlGetFilePathDefinitionFromAttributes(attributes: SGAttribute[] | undefined, pkgPath: string): boolean {
+        for (const attr of attributes ?? []) {
+            if (attr.value?.range && util.rangeContains(attr.value.range, this.event.position)) {
+                const attrValue = attr.value.text;
+                if (!attrValue) {
+                    continue;
+                }
+                const link = this.tryGetFilePathLocationLink(attrValue, pkgPath, attr.value.range);
+                if (link) {
+                    this.event.definitions.push(link);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Recursively walk an SGNode and its children looking for an attribute value that looks like a
+     * file path at the cursor position.  Returns true and pushes a definition on first match.
+     */
+    private xmlWalkNodeForFilePath(node: SGNode, pkgPath: string): boolean {
+        if (this.xmlGetFilePathDefinitionFromAttributes(node.attributes, pkgPath)) {
+            return true;
+        }
+        for (const child of node.children ?? []) {
+            if (this.xmlWalkNodeForFilePath(child, pkgPath)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

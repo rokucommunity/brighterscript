@@ -1,4 +1,4 @@
-import type { Diagnostic, Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList } from 'vscode-languageserver-protocol';
+import type { Diagnostic, Position, Range, Location, LocationLink, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList } from 'vscode-languageserver-protocol';
 import type { Hover, MaybePromise, SemanticToken } from '../interfaces';
 import type { DocumentAction, DocumentActionWithStatus } from './DocumentManager';
 import type { FileTranspileResult, SignatureInfoObj } from '../Program';
@@ -114,7 +114,7 @@ export interface LspProject {
      * Get the locations where the symbol at the specified position is defined
      * @param options the file path and position to get the definition for
      */
-    getDefinition(options: { srcPath: string; position: Position }): MaybePromise<Location[]>;
+    getDefinition(options: { srcPath: string; position: Position }): MaybePromise<Array<Location | LocationLink>>;
 
     /**
      * Get the locations where the symbol at the specified position is defined

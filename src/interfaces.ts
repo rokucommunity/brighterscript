@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol, Disposable, FileChangeType } from 'vscode-languageserver-protocol';
+import type { Range, Diagnostic, CodeAction, Position, CompletionItem, Location, LocationLink, DocumentSymbol, WorkspaceSymbol, Disposable, FileChangeType } from 'vscode-languageserver-protocol';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -394,9 +394,12 @@ export interface ProvideDefinitionEvent<TFile = BscFile> {
      */
     position: Position;
     /**
-     * The list of locations for where the item at the file and position was defined
+     * The list of locations for where the item at the file and position was defined.
+     * Plugins may push either `Location` or `LocationLink` objects.
+     * When a `LocationLink` is pushed, VS Code will use `originSelectionRange` to highlight
+     * the source range of the link (e.g. the full URI of a script tag attribute).
      */
-    definitions: Location[];
+    definitions: Array<Location | LocationLink>;
 }
 export type BeforeProvideDefinitionEvent<TFile = BscFile> = ProvideDefinitionEvent<TFile>;
 export type AfterProvideDefinitionEvent<TFile = BscFile> = ProvideDefinitionEvent<TFile>;

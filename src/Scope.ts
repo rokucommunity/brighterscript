@@ -1,4 +1,4 @@
-import type { CompletionItem, Position, Range, Location } from 'vscode-languageserver';
+import type { CompletionItem, Position, Range, Location, LocationLink } from 'vscode-languageserver';
 import * as path from 'path';
 import { CompletionItemKind } from 'vscode-languageserver';
 import chalk from 'chalk';
@@ -1276,7 +1276,7 @@ export class Scope {
      * Get the definition (where was this thing first defined) of the symbol under the position
      * @deprecated use `DefinitionProvider.process()`
      */
-    public getDefinition(file: BscFile, position: Position): Location[] {
+    public getDefinition(file: BscFile, position: Position): Array<Location | LocationLink> {
         // Overridden in XMLScope. Brs files use implementation in BrsFile
         return [];
     }
