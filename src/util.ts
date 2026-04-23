@@ -1759,9 +1759,12 @@ export class Util {
      * Returns undefined if no map can be found.
      */
     public async resolveInputSourceMap(fileContents: string, srcPath: string): Promise<RawSourceMap | undefined> {
-        const match = /['"]?\/\/# sourceMappingURL=(.+?)(?:\s*-->)?\s*$/m.exec(fileContents);
+        // Match sourceMappingURL - [^\s]+ stops at whitespace (safe, no backtracking risk).
+        // Then strip any trailing XML comment close (-->) that may have been captured when
+        // the URL is not followed by a space in an XML comment like <!--//# ...=url-->.
+        const match = /['"]?\/\/# sourceMappingURL=([^\s]+)/m.exec(fileContents);
         if (match) {
-            const url = match[1].trim();
+            const url = match[1].replace(/-->$/, '').trim();
             if (url.startsWith('data:')) {
                 // inline base64: data:application/json;base64,<b64>
                 const b64Match = /base64,(.+)$/.exec(url);
