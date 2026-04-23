@@ -207,14 +207,6 @@ export interface BsConfig {
     allowBrighterScriptInBrightScript?: boolean;
 
     /**
-     * Allow automatic line continuation in BrightScript (`.brs`) files after binary operators (`+`, `-`, `*`, `/`, `\`, `mod`, `^`, `and`, `or`, and relational operators).
-     * This syntax is always enabled in BrighterScript (`.bs`) files.
-     * Corresponds to the line continuation support added in Roku OS 15.2.
-     * @default false
-     */
-    allowLineContinuation?: boolean;
-
-    /**
      * Override the destination directory for the bslib.brs file.  Use this if
      * you want to customize where the bslib.brs file is located in the staging
      * directory.  Note that using a location outside of `source` will break

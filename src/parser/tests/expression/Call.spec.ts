@@ -1,6 +1,6 @@
 import { expect } from '../../../chai-config.spec';
 
-import { Parser } from '../../Parser';
+import { ParseMode, Parser } from '../../Parser';
 import { Lexer } from '../../../lexer/Lexer';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
@@ -62,7 +62,7 @@ describe('parser call expressions', () => {
         expect(diagnostics[0].range.end.character).to.be.lessThan(25);
     });
 
-    it('allows closing parentheses on separate line', () => {
+    it('allows closing parentheses on separate line in BrighterScript mode', () => {
         const { statements, diagnostics } = Parser.parse([
             identifier('RebootSystem'),
             { kind: TokenKind.LeftParen, text: '(', range: null as any },
@@ -70,7 +70,7 @@ describe('parser call expressions', () => {
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.RightParen, ')'),
             EOF
-        ], { allowLineContinuation: true });
+        ], { mode: ParseMode.BrighterScript });
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(statements).to.be.length.greaterThan(0);

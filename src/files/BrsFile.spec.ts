@@ -16,7 +16,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import util, { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
-import { expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
+import { expectCompletionsIncludes, expectDiagnostics, expectDiagnosticsIncludes, expectHasDiagnostics, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 import { ParseMode, Parser } from '../parser/Parser';
 import { createLogger } from '../logging';
 import { ImportStatement } from '../parser/Statement';
@@ -80,7 +80,7 @@ describe('BrsFile', () => {
         });
     });
 
-    describe('allowLineContinuation', () => {
+    describe('line continuation', () => {
         it('does not allow binary operator continuation in .brs files by default', () => {
             program.setFile('source/main.brs', `
                 sub main()
@@ -89,7 +89,10 @@ describe('BrsFile', () => {
                 end sub
             `);
             program.validate();
-            expectHasDiagnostics(program);
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.unexpectedToken('\n'),
+                DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+            ]);
         });
 
         it('allows binary operator continuation in .bs files', () => {
@@ -115,18 +118,6 @@ describe('BrsFile', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('allows binary operator continuation in .brs files when allowLineContinuation is enabled', () => {
-            program.options.allowLineContinuation = true;
-            program.setFile('source/main.brs', `
-                sub main()
-                    result = 1 +
-                             2
-                end sub
-            `);
-            program.validate();
-            expectZeroDiagnostics(program);
-        });
-
         it('does not allow multi-line function call args in .brs files by default', () => {
             program.setFile('source/main.brs', `
                 sub main()
@@ -139,7 +130,11 @@ describe('BrsFile', () => {
                 end sub
             `);
             program.validate();
-            expectHasDiagnostics(program);
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.unexpectedToken('\n'),
+                DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+            ]);
         });
 
         it('allows multi-line function call args in .bs files', () => {
@@ -157,8 +152,8 @@ describe('BrsFile', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('allows multi-line function call args in .brs files when allowLineContinuation is enabled', () => {
-            program.options.allowLineContinuation = true;
+        it('allows multi-line function call args in .brs files when allowBrighterScriptInBrightScript is enabled', () => {
+            program.options.allowBrighterScriptInBrightScript = true;
             program.setFile('source/main.brs', `
                 sub main()
                     foo(

@@ -186,7 +186,7 @@ export class Parser {
 
     /**
      * Whether line continuation after binary operators is allowed.
-     * Always true in BrighterScript mode; also true in BrightScript mode when the `allowLineContinuation` option is set.
+     * Enabled only in BrighterScript mode.
      */
     private allowLineContinuation: boolean;
 
@@ -236,7 +236,7 @@ export class Parser {
         this.logger = options?.logger ?? createLogger();
         options = this.sanitizeParseOptions(options);
         this.options = options;
-        this.allowLineContinuation = options.mode === ParseMode.BrighterScript || options.allowLineContinuation === true;
+        this.allowLineContinuation = options.mode === ParseMode.BrighterScript;
 
         let tokens: Token[];
         if (typeof toParse === 'string') {
@@ -3630,12 +3630,6 @@ export interface ParseOptions {
      * @default true
      */
     trackLocations?: boolean;
-    /**
-     * Allow automatic line continuation after binary operators in BrightScript mode.
-     * Always enabled when `mode` is `BrighterScript`.
-     * @default false
-     */
-    allowLineContinuation?: boolean;
 }
 
 export class References {

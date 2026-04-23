@@ -21,7 +21,6 @@ let options = yargs
     .option('create-package', { type: 'boolean', defaultDescription: 'true', description: 'Creates a zip package. This setting is ignored when deploy is enabled.' })
     .option('source-map', { type: 'boolean', defaultDescription: 'false', description: 'Enables generating sourcemap files, which allow debugging tools to show the original source code while running the emitted files.' })
     .option('allow-brighterscript-in-brightscript', { alias: 'allow-brighter-script-in-bright-script', type: 'boolean', defaultDescription: 'false', description: 'Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled..' })
-    .option('allow-line-continuation', { type: 'boolean', defaultDescription: 'false', description: 'Allow automatic line continuation in BrightScript (`.brs`) files after binary operators. Always enabled in BrighterScript (`.bs`) files.' })
     .option('cwd', { type: 'string', description: 'Override the current working directory.' })
     .option('copy-to-staging', { type: 'boolean', defaultDescription: 'true', description: 'Copy project files into the staging folder, ready to be packaged.' })
     .option('diagnostic-level', { type: 'string', defaultDescription: '"warn"', description: 'Specify what diagnostic types should be printed to the console. Value can be "error", "warn", "hint", "info".' })

@@ -354,8 +354,7 @@ export class BrsFile {
             this.program.logger.time('debug', ['parser.parse', chalk.green(this.srcPath)], () => {
                 this._parser = Parser.parse(tokens, {
                     mode: this.parseMode,
-                    logger: this.program.logger,
-                    allowLineContinuation: this.program.options.allowLineContinuation
+                    logger: this.program.logger
                 });
             });
 
