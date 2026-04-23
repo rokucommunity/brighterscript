@@ -106,6 +106,19 @@ describe('BrsFile', () => {
             expectZeroDiagnostics(program);
         });
 
+        it('transpiles binary operator continuation in .bs files to a single line', () => {
+            testTranspile(`
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `, `
+                sub main()
+                    result = 1 + 2
+                end sub
+            `);
+        });
+
         it('allows binary operator continuation in .brs files when allowBrighterScriptInBrightScript is enabled', () => {
             program.options.allowBrighterScriptInBrightScript = true;
             program.setFile('source/main.brs', `
@@ -137,6 +150,36 @@ describe('BrsFile', () => {
             ]);
         });
 
+        it('allows multi-line array literals as function call args in .brs files by default', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo([
+                        1,
+                        2
+                    ])
+                end sub
+                sub foo(arg)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows multi-line associative array literals as function call args in .brs files by default', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo({
+                        name: "bob",
+                        age: 1
+                    })
+                end sub
+                sub foo(arg)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         it('allows multi-line function call args in .bs files', () => {
             program.setFile('source/main.bs', `
                 sub main()
@@ -150,6 +193,27 @@ describe('BrsFile', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
+        });
+
+        it('transpiles multi-line function call args in .bs files to a single line', () => {
+            testTranspile(`
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+
+                sub foo(a, b)
+                end sub
+            `, `
+                sub main()
+                    foo(1, 2)
+                end sub
+
+                sub foo(a, b)
+                end sub
+            `);
         });
 
         it('allows multi-line function call args in .brs files when allowBrighterScriptInBrightScript is enabled', () => {
