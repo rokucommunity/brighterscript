@@ -357,12 +357,14 @@ export class ScopeValidator {
      * aggregate cycles like const A = { x: B }; const B = { y: A }). Without this
      * check, the transpile pass silently emits unresolved refs at the cycle break
      * point, producing code that fails at runtime.
+     *
+     * Mirrors the existing class-hierarchy circular-reference detection: each const
+     * starts its own walk, and an N-cycle produces N diagnostics (one rooted at
+     * each member of the cycle).
      */
     private detectCircularConstReferences() {
         const scope = this.event.scope;
         const diagnostics: BsDiagnostic[] = [];
-        const fullyValidated = new Set<ConstStatement>();
-        const reportedCycleStarts = new Set<ConstStatement>();
 
         const followConstRef = (
             expression: Expression,
@@ -391,25 +393,12 @@ export class ScopeValidator {
         ) => {
             const cycleStart = chain.indexOf(constStatement);
             if (cycleStart >= 0) {
-                //emit one diagnostic per distinct cycle (keyed on the first const in the cycle).
-                //A 3-cycle A->B->C->A is otherwise reported 3 times (once per starting node).
-                const cycleNodes = chain.slice(cycleStart);
-                const canonicalStart = cycleNodes.reduce((min, c) => {
-                    return (c.fullName ?? '') < (min.fullName ?? '') ? c : min;
-                }, cycleNodes[0]);
-                if (reportedCycleStarts.has(canonicalStart)) {
-                    return;
-                }
-                reportedCycleStarts.add(canonicalStart);
-                const items = cycleNodes.map(c => c.fullName).concat(constStatement.fullName);
+                const items = chain.slice(cycleStart).map(c => c.fullName).concat(constStatement.fullName);
                 diagnostics.push({
                     ...DiagnosticMessages.circularReferenceDetected(items, scope.name),
                     file: file,
                     range: constStatement.tokens.name.range
                 });
-                return;
-            }
-            if (fullyValidated.has(constStatement)) {
                 return;
             }
             chain.push(constStatement);
@@ -436,7 +425,6 @@ export class ScopeValidator {
                 }
             }
             chain.pop();
-            fullyValidated.add(constStatement);
         };
 
         for (const [, link] of scope.getConstMap()) {
