@@ -1212,9 +1212,10 @@ export class Program {
             dest: file.pkgPath
         }];
         const { entries, astEditor } = this.beforeProgramTranspile(fileMap, this.options.stagingDir);
-        const result = await this._getTranspiledFileContents(
+        const result = this._getTranspiledFileContents(
             file
         );
+        await this._chainInputSourceMap(result, file);
         this.afterProgramTranspile(entries, astEditor);
         return result;
     }
@@ -1223,7 +1224,7 @@ export class Program {
      * Internal function used to transpile files.
      * This does not write anything to the file system
      */
-    private async _getTranspiledFileContents(file: BscFile, outputPath?: string): Promise<FileTranspileResult> {
+    private _getTranspiledFileContents(file: BscFile, outputPath?: string): FileTranspileResult {
         const editor = new AstEditor();
         this.plugins.emit('beforeFileTranspile', {
             program: this,
@@ -1240,14 +1241,6 @@ export class Program {
 
         //transpile the file
         const result = file.transpile();
-
-        //chain any incoming sourcemap (from a prebuild step) into the generated map
-        if (result.map) {
-            const inputMap = await util.resolveInputSourceMap(file.fileContents ?? '', file.srcPath);
-            if (inputMap) {
-                await util.applySourceMap(result.map, inputMap, file.srcPath);
-            }
-        }
 
         //generate the typedef if enabled
         let typedef: string;
@@ -1276,6 +1269,20 @@ export class Program {
             map: event.map,
             typedef: event.typedef
         };
+    }
+
+    /**
+     * If the file has an incoming sourcemap (from a prebuild step), chain it into the
+     * generated sourcemap so the output map traces all the way back to the original source.
+     * This is async because SourceMapConsumer requires async initialisation in source-map v0.7.
+     */
+    private async _chainInputSourceMap(result: FileTranspileResult, file: BscFile): Promise<void> {
+        if (result.map) {
+            const inputMap = await util.resolveInputSourceMap(file.fileContents ?? '', file.srcPath);
+            if (inputMap) {
+                await util.applySourceMap(result.map, inputMap, file.srcPath);
+            }
+        }
     }
 
     private beforeProgramTranspile(fileEntries: FileObj[], stagingDir: string) {
@@ -1343,7 +1350,8 @@ export class Program {
                     return;
                 }
 
-                const fileTranspileResult = await this._getTranspiledFileContents(file, outputPath);
+                const fileTranspileResult = this._getTranspiledFileContents(file, outputPath);
+                await this._chainInputSourceMap(fileTranspileResult, file);
 
                 //make sure the full dir path exists
                 await fsExtra.ensureDir(path.dirname(outputPath));
