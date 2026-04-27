@@ -1,10 +1,10 @@
 import { URI } from 'vscode-uri';
-import { isBrsFile, isCallExpression, isLiteralExpression, isNamespaceStatement, isXmlScope } from '../../astUtils/reflection';
+import { isBrsFile, isCallExpression, isDottedGetExpression, isLiteralExpression, isNamespaceStatement, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile, BsDiagnostic, OnScopeValidateEvent } from '../../interfaces';
-import type { EnumStatement, NamespaceStatement } from '../../parser/Statement';
+import type { ConstStatement, EnumStatement, NamespaceStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
@@ -39,6 +39,7 @@ export class ScopeValidator {
         this.event = event;
         this.walkFiles();
         this.detectDuplicateEnums();
+        this.detectCircularConstReferences();
     }
 
     public reset() {
@@ -349,6 +350,99 @@ export class ScopeValidator {
             }
         }
         this.event.scope.addDiagnostics(diagnostics);
+    }
+
+    /**
+     * Flag circular references between consts (e.g. const A = B; const B = A, or
+     * aggregate cycles like const A = { x: B }; const B = { y: A }). Without this
+     * check, the transpile pass silently emits unresolved refs at the cycle break
+     * point, producing code that fails at runtime.
+     */
+    private detectCircularConstReferences() {
+        const scope = this.event.scope;
+        const diagnostics: BsDiagnostic[] = [];
+        const fullyValidated = new Set<ConstStatement>();
+        const reportedCycleStarts = new Set<ConstStatement>();
+
+        const followConstRef = (
+            expression: Expression,
+            namespace: string | undefined,
+            chain: ConstStatement[]
+        ) => {
+            const parts = util.splitExpression(expression);
+            const processedNames: string[] = [];
+            for (const part of parts) {
+                if (!isVariableExpression(part) && !isDottedGetExpression(part)) {
+                    return;
+                }
+                processedNames.push(part.name?.text?.toLowerCase());
+                const link = scope.getConstFileLink(processedNames.join('.'), namespace);
+                if (link) {
+                    walkConst(link.item, link.file, chain);
+                    return;
+                }
+            }
+        };
+
+        const walkConst = (
+            constStatement: ConstStatement,
+            file: BrsFile,
+            chain: ConstStatement[]
+        ) => {
+            const cycleStart = chain.indexOf(constStatement);
+            if (cycleStart >= 0) {
+                //emit one diagnostic per distinct cycle (keyed on the first const in the cycle).
+                //A 3-cycle A->B->C->A is otherwise reported 3 times (once per starting node).
+                const cycleNodes = chain.slice(cycleStart);
+                const canonicalStart = cycleNodes.reduce((min, c) => {
+                    return (c.fullName ?? '') < (min.fullName ?? '') ? c : min;
+                }, cycleNodes[0]);
+                if (reportedCycleStarts.has(canonicalStart)) {
+                    return;
+                }
+                reportedCycleStarts.add(canonicalStart);
+                const items = cycleNodes.map(c => c.fullName).concat(constStatement.fullName);
+                diagnostics.push({
+                    ...DiagnosticMessages.circularReferenceDetected(items, scope.name),
+                    file: file,
+                    range: constStatement.tokens.name.range
+                });
+                return;
+            }
+            if (fullyValidated.has(constStatement)) {
+                return;
+            }
+            chain.push(constStatement);
+            const innerNamespace = constStatement.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+            const value = constStatement.value;
+            if (value) {
+                if (isVariableExpression(value) || isDottedGetExpression(value)) {
+                    followConstRef(value, innerNamespace, chain);
+                } else {
+                    value.walk(createVisitor({
+                        VariableExpression: (varExpr) => {
+                            if (isDottedGetExpression(varExpr.parent)) {
+                                return;
+                            }
+                            followConstRef(varExpr, innerNamespace, chain);
+                        },
+                        DottedGetExpression: (dottedExpr) => {
+                            if (isDottedGetExpression(dottedExpr.parent)) {
+                                return;
+                            }
+                            followConstRef(dottedExpr, innerNamespace, chain);
+                        }
+                    }), { walkMode: WalkMode.visitExpressionsRecursive });
+                }
+            }
+            chain.pop();
+            fullyValidated.add(constStatement);
+        };
+
+        for (const [, link] of scope.getConstMap()) {
+            walkConst(link.item, link.file, []);
+        }
+        scope.addDiagnostics(diagnostics);
     }
 
     /**
