@@ -359,18 +359,13 @@ describe('ProjectManager', () => {
                 });
 
                 //set a low concurrency limit for testing
-                const originalLimit = ProjectManager.projectConcurrencyLimit;
-                ProjectManager.projectConcurrencyLimit = 2;
+                manager.projectActivationConcurrencyLimit = 2;
 
-                try {
-                    await manager.syncProjects([workspaceSettings]);
-                    //should have activated all 6 projects
-                    expect(activateStub.callCount).to.eql(6);
-                    //but never more than 2 at a time
-                    expect(maxConcurrent).to.be.at.most(2);
-                } finally {
-                    ProjectManager.projectConcurrencyLimit = originalLimit;
-                }
+                await manager.syncProjects([workspaceSettings]);
+                //should have activated all 6 projects
+                expect(activateStub.callCount).to.eql(6);
+                //but never more than 2 at a time
+                expect(maxConcurrent).to.be.at.most(2);
             });
 
             it('activates all projects even with concurrency limit', async () => {
@@ -379,16 +374,11 @@ describe('ProjectManager', () => {
                     fsExtra.outputFileSync(`${rootDir}/project${i}/bsconfig.json`, '');
                 }
 
-                const originalLimit = ProjectManager.projectConcurrencyLimit;
-                ProjectManager.projectConcurrencyLimit = 2;
+                manager.projectActivationConcurrencyLimit = 2;
 
-                try {
-                    await manager.syncProjects([workspaceSettings]);
-                    //all projects should be created
-                    expect(manager.projects.length).to.eql(5);
-                } finally {
-                    ProjectManager.projectConcurrencyLimit = originalLimit;
-                }
+                await manager.syncProjects([workspaceSettings]);
+                //all projects should be created
+                expect(manager.projects.length).to.eql(5);
             });
 
             it('limits the number of projects validating concurrently', async () => {
@@ -412,20 +402,15 @@ describe('ProjectManager', () => {
                     currentConcurrent--;
                 });
 
-                const originalLimit = ProjectManager.projectConcurrencyLimit;
-                ProjectManager.projectConcurrencyLimit = 2;
+                manager.projectActivationConcurrencyLimit = 2;
 
-                try {
-                    await manager.syncProjects([workspaceSettings]);
+                await manager.syncProjects([workspaceSettings]);
 
-                    //wait for the fire-and-forget validation phase to complete
-                    await util.sleep(200);
+                //wait for the fire-and-forget validation phase to complete
+                await util.sleep(200);
 
-                    expect(validateCallCount).to.eql(6);
-                    expect(maxConcurrent).to.be.at.most(2);
-                } finally {
-                    ProjectManager.projectConcurrencyLimit = originalLimit;
-                }
+                expect(validateCallCount).to.eql(6);
+                expect(maxConcurrent).to.be.at.most(2);
             });
 
             it('validates all projects after activation completes', async () => {
@@ -447,27 +432,22 @@ describe('ProjectManager', () => {
                     return Promise.resolve();
                 });
 
-                const originalLimit = ProjectManager.projectConcurrencyLimit;
-                ProjectManager.projectConcurrencyLimit = 1;
+                manager.projectActivationConcurrencyLimit = 1;
 
-                try {
-                    //hook into the end of the activation phase by spying on firstSync
-                    const origTryResolve = manager['firstSync'].tryResolve.bind(manager['firstSync']);
-                    sinon.stub(manager['firstSync'], 'tryResolve').callsFake(() => {
-                        allActivated = true;
-                        return origTryResolve();
-                    });
+                //hook into the end of the activation phase by spying on firstSync
+                const origTryResolve = manager['firstSync'].tryResolve.bind(manager['firstSync']);
+                sinon.stub(manager['firstSync'], 'tryResolve').callsFake(() => {
+                    allActivated = true;
+                    return origTryResolve();
+                });
 
-                    await manager.syncProjects([workspaceSettings]);
+                await manager.syncProjects([workspaceSettings]);
 
-                    //wait for fire-and-forget validation phase
-                    await util.sleep(100);
+                //wait for fire-and-forget validation phase
+                await util.sleep(100);
 
-                    expect(validateCallCount).to.eql(3);
-                    expect(validationStartedBeforeActivation).to.be.false;
-                } finally {
-                    ProjectManager.projectConcurrencyLimit = originalLimit;
-                }
+                expect(validateCallCount).to.eql(3);
+                expect(validationStartedBeforeActivation).to.be.false;
             });
 
             it('stops activating projects when a new sync starts', async () => {
@@ -486,32 +466,27 @@ describe('ProjectManager', () => {
                     }
                 });
 
-                const originalLimit = ProjectManager.projectConcurrencyLimit;
-                ProjectManager.projectConcurrencyLimit = 1;
+                manager.projectActivationConcurrencyLimit = 1;
 
-                try {
-                    //start first sync (will block on first activation)
-                    const firstSync = manager.syncProjects([workspaceSettings]);
+                //start first sync (will block on first activation)
+                const firstSync = manager.syncProjects([workspaceSettings]);
 
-                    //wait for the first activation to start
-                    await util.sleep(50);
+                //wait for the first activation to start
+                await util.sleep(50);
 
-                    //start a second sync which bumps the generation counter
-                    const secondSync = manager.syncProjects([workspaceSettings], true);
+                //start a second sync which bumps the generation counter
+                const secondSync = manager.syncProjects([workspaceSettings], true);
 
-                    //unblock the first activation
-                    activateDeferred.resolve();
+                //unblock the first activation
+                activateDeferred.resolve();
 
-                    await firstSync;
-                    await secondSync;
+                await firstSync;
+                await secondSync;
 
-                    //the first sync should have stopped activating after generation changed.
-                    //the exact count depends on timing, but we should NOT see all 4 from the first sync
-                    //plus all 4 from the second sync (8 total). The first sync's remaining items should be skipped.
-                    expect(activateCount).to.be.lessThan(8);
-                } finally {
-                    ProjectManager.projectConcurrencyLimit = originalLimit;
-                }
+                //the first sync should have stopped activating after generation changed.
+                //the exact count depends on timing, but we should NOT see all 4 from the first sync
+                //plus all 4 from the second sync (8 total). The first sync's remaining items should be skipped.
+                expect(activateCount).to.be.lessThan(8);
             });
 
             it('skips validation when a new sync starts before validation phase', async () => {
@@ -534,44 +509,39 @@ describe('ProjectManager', () => {
                     return Promise.resolve();
                 });
 
-                const originalLimit = ProjectManager.projectConcurrencyLimit;
-                ProjectManager.projectConcurrencyLimit = 1;
+                manager.projectActivationConcurrencyLimit = 1;
 
-                try {
-                    //first sync — activates and validates normally (deferred starts resolved)
-                    activateDeferred.resolve();
-                    await manager.syncProjects([workspaceSettings]);
-                    await util.sleep(50);
-                    const firstSyncValidateCount = validateCallCount;
+                //first sync — activates and validates normally (deferred starts resolved)
+                activateDeferred.resolve();
+                await manager.syncProjects([workspaceSettings]);
+                await util.sleep(50);
+                const firstSyncValidateCount = validateCallCount;
 
-                    //reset for the next syncs: create a new deferred that blocks
-                    const blockDeferred = new Deferred();
-                    (manager as any).activateProject.callsFake(async () => {
-                        await blockDeferred.promise;
-                    });
+                //reset for the next syncs: create a new deferred that blocks
+                const blockDeferred = new Deferred();
+                (manager as any).activateProject.callsFake(async () => {
+                    await blockDeferred.promise;
+                });
 
-                    //start second sync (blocks on activation)
-                    const secondSync = manager.syncProjects([workspaceSettings], true);
-                    await util.sleep(10);
+                //start second sync (blocks on activation)
+                const secondSync = manager.syncProjects([workspaceSettings], true);
+                await util.sleep(10);
 
-                    //immediately start a third sync which bumps the generation
-                    const thirdSync = manager.syncProjects([workspaceSettings], true);
+                //immediately start a third sync which bumps the generation
+                const thirdSync = manager.syncProjects([workspaceSettings], true);
 
-                    //unblock activation
-                    blockDeferred.resolve();
+                //unblock activation
+                blockDeferred.resolve();
 
-                    await secondSync;
-                    await thirdSync;
+                await secondSync;
+                await thirdSync;
 
-                    //wait for any fire-and-forget validation
-                    await util.sleep(100);
+                //wait for any fire-and-forget validation
+                await util.sleep(100);
 
-                    //the second sync's validation should have been skipped because the third sync bumped the generation.
-                    //we should see at most the first sync's validations + the third sync's validations
-                    expect(validateCallCount - firstSyncValidateCount).to.be.at.most(3);
-                } finally {
-                    ProjectManager.projectConcurrencyLimit = originalLimit;
-                }
+                //the second sync's validation should have been skipped because the third sync bumped the generation.
+                //we should see at most the first sync's validations + the third sync's validations
+                expect(validateCallCount - firstSyncValidateCount).to.be.at.most(3);
             });
         });
     });

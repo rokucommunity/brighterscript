@@ -74,7 +74,7 @@ export class ProjectManager {
      * Maximum number of projects to activate or validate concurrently during syncProjects.
      * Limits CPU spikes when many projects are discovered (e.g. in large monorepos).
      */
-    public static projectConcurrencyLimit = 3;
+    public projectActivationConcurrencyLimit = 3;
 
     public busyStatusTracker = new BusyStatusTracker<LspProject>();
 
@@ -358,7 +358,7 @@ export class ProjectManager {
 
             // Phase 1: activate projects with concurrency limit (awaited — gates LSP readiness)
             const activatedProjects: LspProject[] = [];
-            await this.runWithConcurrencyLimit(projectConfigs, ProjectManager.projectConcurrencyLimit, async (config) => {
+            await this.runWithConcurrencyLimit(projectConfigs, this.projectActivationConcurrencyLimit, async (config) => {
                 if (this.syncGeneration !== generation) {
                     return;
                 }
@@ -371,7 +371,7 @@ export class ProjectManager {
 
             // Phase 2: validate activated projects with concurrency limit (NOT awaited — doesn't block LSP requests)
             if (this.syncGeneration === generation) {
-                void this.runWithConcurrencyLimit(activatedProjects, ProjectManager.projectConcurrencyLimit, async (project) => {
+                void this.runWithConcurrencyLimit(activatedProjects, this.projectActivationConcurrencyLimit, async (project) => {
                     if (this.syncGeneration !== generation) {
                         return;
                     }
@@ -1029,6 +1029,10 @@ export interface WorkspaceConfig {
          * Maximum depth to search for Roku projects
          */
         projectDiscoveryMaxDepth?: number;
+        /**
+         * The maximum number of projects that can be activated concurrently
+         */
+        projectActivationConcurrencyLimit?: number;
     };
 }
 

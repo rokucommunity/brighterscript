@@ -278,6 +278,187 @@ describe('LanguageServer', () => {
 
     });
 
+    describe('syncProjectActivationConcurrencyLimit', () => {
+        function makeConfig(workspaceFolder: string, limit?: number): WorkspaceConfig {
+            return {
+                languageServer: {
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
+                    logLevel: 'info',
+                    ...(limit !== undefined ? { projectActivationConcurrencyLimit: limit } : {})
+                },
+                workspaceFolder: workspaceFolder,
+                excludePatterns: []
+            };
+        }
+
+        it('defaults to 3 when no workspaces are configured', () => {
+            server['workspaceConfigsCache'] = new Map();
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(3);
+        });
+
+        it('defaults to 3 when workspace has no limit set', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(3);
+        });
+
+        it('reads limit from a single workspace config', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 5)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(5);
+        });
+
+        it('uses the smallest limit from multiple workspace folders', () => {
+            const folder2 = s`${tempDir}/project2`;
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 10)],
+                [folder2, makeConfig(folder2, 2)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(2);
+        });
+
+        it('ignores workspaces with no limit when others have a limit', () => {
+            const folder2 = s`${tempDir}/project2`;
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 7)],
+                [folder2, makeConfig(folder2)] // no limit
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            // only the workspace with a limit contributes; the limitless one is filtered out
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(7);
+        });
+
+        it('does not crash when languageServer is undefined on a cache entry', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, {
+                    languageServer: undefined,
+                    workspaceFolder: workspacePath,
+                    excludePatterns: []
+                } as any]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(3);
+        });
+
+        it('does not crash when projectActivationConcurrencyLimit is a non-numeric string', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 'bad' as any)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            // non-numeric values are filtered out; falls back to default
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(3);
+        });
+
+        it('does not crash when projectActivationConcurrencyLimit is null', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, null as any)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(3);
+        });
+
+        it('is called on startup (onInitialized) and reads the configured limit', async () => {
+            server['connection'] = connection as any;
+            const spy = sinon.spy(server as any, 'syncProjectActivationConcurrencyLimit');
+            sinon.stub(server as any, 'getWorkspaceConfigs').returns(Promise.resolve([
+                makeConfig(workspacePath, 4)
+            ]));
+            sinon.stub(server as any, 'syncLogLevel').resolves();
+            sinon.stub(server as any, 'rebuildPathFilterer').resolves();
+            sinon.stub(server as any, 'syncProjects').resolves();
+
+            await server['onInitialized']();
+
+            expect(spy.calledOnce).to.be.true;
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(4);
+        });
+
+        it('is updated by onDidChangeConfiguration', async () => {
+            (server as any)['connection'] = connection;
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 10)]
+            ]);
+            sinon.stub(server as any, 'getWorkspaceConfigs').returns(Promise.resolve([
+                makeConfig(workspacePath, 2)
+            ]));
+            sinon.stub(server as any, 'rebuildPathFilterer').resolves();
+            sinon.stub(server as any, 'syncProjects').resolves();
+
+            await server.onDidChangeConfiguration({ settings: {} });
+
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(2);
+        });
+
+        it('getWorkspaceConfigs does not bake in the default when client omits the setting', async () => {
+            // Regression test: getWorkspaceConfigs previously fell back to the default (3) when
+            // the client didn't configure projectActivationConcurrencyLimit. This caused the
+            // cache to always contain a number, so syncProjectActivationConcurrencyLimit could
+            // never distinguish "user set 3" from "user left it unset", and the "use smallest"
+            // logic would incorrectly override an explicit limit from another workspace with 3.
+            //
+            // Scenario: two workspaces — one sets limit=10, one has no opinion.
+            // Expected: syncProjectActivationConcurrencyLimit uses 10 (the only explicit limit).
+            // Broken behaviour: getWorkspaceConfigs stores 3 for the unconfigured workspace,
+            // so Math.min(10, 3) = 3 is used instead.
+            server.run();
+
+            const folder2 = s`${tempDir}/project2`;
+            workspaceFolders = [workspacePath, folder2];
+
+            sinon.stub(server as any, 'getClientConfiguration').callsFake((uri: string) => {
+                if (uri.includes('project2')) {
+                    // this workspace has no opinion on the concurrency limit
+                    return Promise.resolve({
+                        languageServer: { enableThreading: false, enableProjectDiscovery: true, logLevel: 'info' }
+                    });
+                }
+                return Promise.resolve({
+                    languageServer: { enableThreading: false, enableProjectDiscovery: true, logLevel: 'info', projectActivationConcurrencyLimit: 10 }
+                });
+            });
+            sinon.stub(server as any, 'getWorkspaceExcludeGlobs').resolves([]);
+
+            const configs = await server['getWorkspaceConfigs']();
+            const limitForFolder2 = configs.find(c => c.workspaceFolder === folder2)?.languageServer?.projectActivationConcurrencyLimit;
+
+            // the unconfigured workspace should NOT have the default baked in
+            expect(limitForFolder2).to.be.undefined;
+
+            // and the full sync path should respect only the explicitly-set limit
+            server['workspaceConfigsCache'] = new Map(configs.map(c => [c.workspaceFolder, c]));
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(10);
+        });
+
+        it('changing the limit mid-sync updates the property for the next sync but does not affect in-flight workers', () => {
+            // runWithConcurrencyLimit captures the limit by value at call time.
+            // Updating projectActivationConcurrencyLimit while workers are running
+            // has no effect on the current run — they continue until the queue drains.
+            // The new limit takes effect on the next syncProjects call.
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 5)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(5);
+
+            // a config change arrives while activation is hypothetically in progress
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 1)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+
+            // property reflects the new limit for the NEXT sync
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(1);
+        });
+    });
+
     describe('sendDiagnostics', () => {
         it('dedupes diagnostics found at same location from multiple projects', async () => {
             fsExtra.outputFileSync(s`${rootDir}/common/lib.brs`, `
@@ -549,7 +730,8 @@ describe('LanguageServer', () => {
                         enableProjectDiscovery: true,
                         projectDiscoveryMaxDepth: 15,
                         projectDiscoveryExclude: undefined,
-                        logLevel: 'info'
+                        logLevel: 'info',
+                        projectActivationConcurrencyLimit: undefined
                     }
                 }
             ]);

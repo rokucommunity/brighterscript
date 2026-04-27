@@ -66,6 +66,12 @@ export class LanguageServer {
      * The default project discovery setting for the language server. Can be overridden by per-workspace settings
      */
     public static enableProjectDiscoveryDefault = true;
+
+    /**
+     * The default number of projects that are permitted to activate concurrently.
+     */
+    private static projectActivationConcurrencyLimitDefault = 3;
+
     /**
      * The language server protocol connection, used to send and receive all requests and responses
      */
@@ -245,6 +251,8 @@ export class LanguageServer {
         //set our logger to the most verbose logLevel found across any project
         await this.syncLogLevel();
 
+        this.syncProjectActivationConcurrencyLimit();
+
         try {
             if (this.hasConfigurationCapability) {
                 // register for when the user changes workspace or user settings
@@ -341,6 +349,25 @@ export class LanguageServer {
         //use a default level if no other level was found
         this.logger.logLevel = LogLevel.log;
     }
+
+    /**
+     * Get the project activation concurrency limit from all workspaces and set the project manager's concurrency limit to the lowest value found.
+     * This ensures that if the user has multiple workspaces open with different limits,
+     * we respect the most restrictive limit to avoid overwhelming the user's machine.
+     */
+    private syncProjectActivationConcurrencyLimit() {
+        const limits = [...this.workspaceConfigsCache]
+            .map(x => x?.[1]?.languageServer?.projectActivationConcurrencyLimit)
+            .filter(x => typeof x === 'number');
+
+        //if we don't have any limits defined, use our default value
+        if (limits.length === 0) {
+            limits.push(LanguageServer.projectActivationConcurrencyLimitDefault);
+        }
+
+        this.projectManager.projectActivationConcurrencyLimit = Math.min(...limits);
+    }
+
 
     @AddStackToErrorMessage
     private async onTextDocumentDidChangeContent(event: TextDocumentChangeEvent<TextDocument>) {
@@ -495,8 +522,8 @@ export class LanguageServer {
                         enableProjectDiscovery: brightscriptConfig?.languageServer?.enableProjectDiscovery ?? LanguageServer.enableProjectDiscoveryDefault,
                         projectDiscoveryMaxDepth: brightscriptConfig?.languageServer?.projectDiscoveryMaxDepth ?? 15,
                         projectDiscoveryExclude: brightscriptConfig?.languageServer?.projectDiscoveryExclude,
-                        logLevel: brightscriptConfig?.languageServer?.logLevel
-
+                        logLevel: brightscriptConfig?.languageServer?.logLevel,
+                        projectActivationConcurrencyLimit: brightscriptConfig?.languageServer?.projectActivationConcurrencyLimit
                     }
                 };
             })
@@ -531,11 +558,14 @@ export class LanguageServer {
         const configs = new Map(
             (await this.getWorkspaceConfigs()).map(x => [x.workspaceFolder, x])
         );
+
         //find any changed configs. This includes newly created workspaces, deleted workspaces, etc.
         //TODO: enhance this to only reload specific projects, depending on the change
         if (!isEqual(configs, this.workspaceConfigsCache)) {
             //now that we've processed any config diffs, update the cached copy of them
             this.workspaceConfigsCache = configs;
+
+            this.syncProjectActivationConcurrencyLimit();
 
             //if configuration changed, rebuild the path filterer
             await this.rebuildPathFilterer();
@@ -904,6 +934,7 @@ export interface BrightScriptClientConfiguration {
         projectDiscoveryExclude?: Record<string, boolean>;
         logLevel: LogLevel | string;
         projectDiscoveryMaxDepth?: number;
+        projectActivationConcurrencyLimit?: number;
     };
 }
 
