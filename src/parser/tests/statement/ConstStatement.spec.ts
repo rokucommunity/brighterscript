@@ -1,4 +1,4 @@
-import { expectCompletionsIncludes, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile } from '../../../testHelpers.spec';
+import { expectCompletionsIncludes, expectDiagnostics, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile } from '../../../testHelpers.spec';
 import { util } from '../../../util';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
@@ -8,6 +8,7 @@ import type { ConstStatement } from '../../Statement';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { LiteralExpression } from '../../Expression';
 import { CompletionItemKind } from 'vscode-languageserver-protocol';
+import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { rootDir } from '../../../testHelpers.spec';
 
 const sinon = createSandbox();
@@ -308,6 +309,8 @@ describe('ConstStatement', () => {
         });
 
         it('handles cyclical const references without infinite loop', () => {
+            //the cycle is also reported via a diagnostic; this test only verifies
+            //the transpile output doesn't recurse forever.
             testTranspile(`
                 const A = B
                 const B = C
@@ -319,7 +322,7 @@ describe('ConstStatement', () => {
                 sub main()
                     print A
                 end sub
-            `);
+            `, 'trim', 'source/main.bs', false);
         });
 
         it('resolves consts inside array literals', () => {
@@ -568,6 +571,7 @@ describe('ConstStatement', () => {
             //the inner-most cyclic ref is left as the original namespace path so
             //transpile completes without recursing forever. The runtime semantics
             //of the cyclic ref are inherently broken, but the compile must not hang.
+            //(A diagnostic is also emitted; see the dedicated cycle-diagnostic tests.)
             testTranspile(`
                 sub main()
                     print ns.A
@@ -580,7 +584,61 @@ describe('ConstStatement', () => {
                         })
                     })
                 end sub
+            `, 'trim', 'source/main.bs', false);
+        });
+
+        it('flags scalar circular const reference', () => {
+            program.setFile('source/main.bs', `
+                const A = B
+                const B = A
             `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.circularReferenceDetected(['A', 'B', 'A'], 'source').message
+            ]);
+        });
+
+        it('flags aggregate circular const reference', () => {
+            program.setFile('source/main.bs', `
+                namespace ns
+                    const A = { "x": ns.B }
+                    const B = { "y": ns.A }
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.circularReferenceDetected(['ns.A', 'ns.B', 'ns.A'], 'source').message
+            ]);
+        });
+
+        it('flags three-cycle const reference and reports it once', () => {
+            program.setFile('source/main.bs', `
+                namespace ns
+                    const A = { "x": ns.B }
+                    const B = { "y": ns.C }
+                    const C = { "z": ns.A }
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.circularReferenceDetected(['ns.A', 'ns.B', 'ns.C', 'ns.A'], 'source').message
+            ]);
+        });
+
+        it('does not flag diamond const reference graph', () => {
+            program.setFile('source/main.bs', `
+                namespace ns
+                    enum E
+                        X = "X"
+                    end enum
+                    const Base = { "c": ns.E.X }
+                    const A = { "a": ns.Base }
+                    const B = { "b": ns.Base }
+                    const Root = { "left": ns.A, "right": ns.B }
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
         });
 
         it('resolves complex multi-file const-enum chain', () => {
