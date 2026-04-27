@@ -593,8 +593,11 @@ describe('ConstStatement', () => {
                 const B = A
             `);
             program.validate();
+            //matches the class-hierarchy convention: one diagnostic per const in the cycle,
+            //each rotated so the diagnostic's const is at the head of the chain
             expectDiagnostics(program, [
-                DiagnosticMessages.circularReferenceDetected(['A', 'B', 'A'], 'source').message
+                DiagnosticMessages.circularReferenceDetected(['A', 'B', 'A'], 'source').message,
+                DiagnosticMessages.circularReferenceDetected(['B', 'A', 'B'], 'source').message
             ]);
         });
 
@@ -607,11 +610,12 @@ describe('ConstStatement', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.circularReferenceDetected(['ns.A', 'ns.B', 'ns.A'], 'source').message
+                DiagnosticMessages.circularReferenceDetected(['ns.A', 'ns.B', 'ns.A'], 'source').message,
+                DiagnosticMessages.circularReferenceDetected(['ns.B', 'ns.A', 'ns.B'], 'source').message
             ]);
         });
 
-        it('flags three-cycle const reference and reports it once', () => {
+        it('flags three-cycle const reference once per node', () => {
             program.setFile('source/main.bs', `
                 namespace ns
                     const A = { "x": ns.B }
@@ -621,7 +625,9 @@ describe('ConstStatement', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.circularReferenceDetected(['ns.A', 'ns.B', 'ns.C', 'ns.A'], 'source').message
+                DiagnosticMessages.circularReferenceDetected(['ns.A', 'ns.B', 'ns.C', 'ns.A'], 'source').message,
+                DiagnosticMessages.circularReferenceDetected(['ns.B', 'ns.C', 'ns.A', 'ns.B'], 'source').message,
+                DiagnosticMessages.circularReferenceDetected(['ns.C', 'ns.A', 'ns.B', 'ns.C'], 'source').message
             ]);
         });
 
