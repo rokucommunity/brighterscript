@@ -29,7 +29,8 @@ import { TokenKind } from './lexer/TokenKind';
 import { isAssignmentStatement, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isFunctionParameterExpression, isIndexedGetExpression, isNamespacedVariableNameExpression, isNewExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { CustomType } from './types/CustomType';
-import { SourceNode } from 'source-map';
+import { SourceNode, SourceMapConsumer } from 'source-map';
+import type { RawSourceMap, SourceMapGenerator } from 'source-map';
 import type { SGAttribute } from './parser/SGTypes';
 import * as requireRelative from 'require-relative';
 import type { BrsFile } from './files/BrsFile';
@@ -1747,6 +1748,53 @@ export class Util {
         // we can use a typecast rather than actually transforming the data because SourceNode
         // accepts a more permissive type than its typedef states
         return new SourceNode(line, column, source, chunks as any, name);
+    }
+
+    /**
+     * Parse the `sourceMappingURL` comment from file contents and resolve it to a RawSourceMap.
+     * Handles inline base64 data URIs, absolute paths, relative paths (resolved against srcPath's
+     * directory), and falls back to a co-located `<srcPath>.map` file.
+     * Supports both BrightScript-style comments (`'//# sourceMappingURL=...`) and XML-style
+     * comments (`<!--//# sourceMappingURL=... -->`).
+     * Returns undefined if no map can be found.
+     */
+    public async resolveInputSourceMap(fileContents: string, srcPath: string): Promise<RawSourceMap | undefined> {
+        // Match sourceMappingURL - [^\s]+ stops at whitespace (safe, no backtracking risk).
+        // Strip any trailing XML comment close (either --> or --!>) that may have been captured
+        // when the URL is not followed by a space in an XML comment like <!--//# ...=url-->.
+        const match = /['"]?\/\/# sourceMappingURL=([^\s]+)/m.exec(fileContents);
+        if (match) {
+            const url = match[1].replace(/--!?>$/, '').trim();
+            if (url.startsWith('data:')) {
+                // inline base64: data:application/json;base64,<b64>
+                const b64Match = /base64,([A-Za-z0-9+/=]+)$/.exec(url);
+                if (b64Match) {
+                    return JSON.parse(Buffer.from(b64Match[1], 'base64').toString('utf8')) as RawSourceMap;
+                }
+            } else {
+                const mapPath = path.isAbsolute(url) ? url : path.resolve(path.dirname(srcPath), url);
+                if (await fsExtra.pathExists(mapPath)) {
+                    return JSON.parse(await fsExtra.readFile(mapPath, 'utf8')) as RawSourceMap;
+                }
+            }
+        }
+
+        // no usable sourceMappingURL — try co-located <srcPath>.map
+        const colocated = `${srcPath}.map`;
+        if (await fsExtra.pathExists(colocated)) {
+            return JSON.parse(await fsExtra.readFile(colocated, 'utf8')) as RawSourceMap;
+        }
+        return undefined;
+    }
+
+    /**
+     * Apply an input sourcemap to a generated SourceMapGenerator, chaining mappings so the
+     * output traces back through the input map to the original source.
+     */
+    public async applySourceMap(generator: SourceMapGenerator, inputMap: RawSourceMap, sourceFile: string) {
+        await SourceMapConsumer.with(inputMap, null, (consumer) => {
+            generator.applySourceMap(consumer, sourceFile);
+        });
     }
 
     public isBuiltInType(typeName: string) {

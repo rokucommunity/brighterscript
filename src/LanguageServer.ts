@@ -26,7 +26,8 @@ import type {
     CompletionList,
     CancellationToken,
     DidChangeConfigurationParams,
-    DidChangeConfigurationRegistrationOptions
+    DidChangeConfigurationRegistrationOptions,
+    SelectionRangeParams
 } from 'vscode-languageserver/node';
 import {
     SemanticTokensRequest,
@@ -227,6 +228,7 @@ export class LanguageServer {
                 },
                 definitionProvider: true,
                 hoverProvider: true,
+                selectionRangeProvider: true,
                 executeCommandProvider: {
                     commands: [
                         CustomCommands.TranspileFile
@@ -591,6 +593,14 @@ export class LanguageServer {
 
         const result = await this.projectManager.getWorkspaceSymbol();
         return result;
+    }
+
+    @AddStackToErrorMessage
+    public async onSelectionRanges(params: SelectionRangeParams) {
+        this.logger.debug('onSelectionRanges', params);
+
+        const srcPath = util.uriToPath(params.textDocument.uri);
+        return this.projectManager.getSelectionRanges({ srcPath: srcPath, positions: params.positions });
     }
 
     @AddStackToErrorMessage

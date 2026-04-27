@@ -1,14 +1,14 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, DocumentSymbol, CancellationToken } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, DocumentSymbol, CancellationToken, SelectionRange } from 'vscode-languageserver';
 import { CancellationTokenSource, CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent } from './interfaces';
+import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, ProvideSelectionRangesEvent } from './interfaces';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -1065,6 +1065,28 @@ export class Program {
     }
 
     /**
+     * Get the selection ranges for the given positions in a file. Used for expand/shrink selection.
+     * @param srcPath path to the file
+     * @param positions the positions to get selection ranges for
+     */
+    public getSelectionRanges(srcPath: string, positions: Position[]): SelectionRange[] {
+        const file = this.getFile(srcPath);
+        if (file) {
+            const event: ProvideSelectionRangesEvent = {
+                program: this,
+                file: file,
+                positions: positions,
+                selectionRanges: []
+            };
+            this.plugins.emit('beforeProvideSelectionRanges', event);
+            this.plugins.emit('provideSelectionRanges', event);
+            this.plugins.emit('afterProvideSelectionRanges', event);
+            return event.selectionRanges;
+        }
+        return [];
+    }
+
+    /**
      * Compute code actions for the given file and range
      */
     public getCodeActions(srcPath: string, range: Range) {
@@ -1215,8 +1237,9 @@ export class Program {
         const result = this._getTranspiledFileContents(
             file
         );
+        await this._chainInputSourceMap(result, file);
         this.afterProgramTranspile(entries, astEditor);
-        return Promise.resolve(result);
+        return result;
     }
 
     /**
@@ -1268,6 +1291,20 @@ export class Program {
             map: event.map,
             typedef: event.typedef
         };
+    }
+
+    /**
+     * If the file has an incoming sourcemap (from a prebuild step), chain it into the
+     * generated sourcemap so the output map traces all the way back to the original source.
+     * This is async because SourceMapConsumer requires async initialisation in source-map v0.7.
+     */
+    private async _chainInputSourceMap(result: FileTranspileResult, file: BscFile): Promise<void> {
+        if (result.map) {
+            const inputMap = await util.resolveInputSourceMap(file.fileContents ?? '', file.srcPath);
+            if (inputMap) {
+                await util.applySourceMap(result.map, inputMap, file.srcPath);
+            }
+        }
     }
 
     private beforeProgramTranspile(fileEntries: FileObj[], stagingDir: string) {
@@ -1336,6 +1373,7 @@ export class Program {
                 }
 
                 const fileTranspileResult = this._getTranspiledFileContents(file, outputPath);
+                await this._chainInputSourceMap(fileTranspileResult, file);
 
                 //make sure the full dir path exists
                 await fsExtra.ensureDir(path.dirname(outputPath));
