@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { tempDir, rootDir, expectDiagnosticsAsync, expectDiagnostics, once } from '../testHelpers.spec';
+import { tempDir, rootDir, expectDiagnosticsAsync, expectDiagnostics } from '../testHelpers.spec';
 import * as fsExtra from 'fs-extra';
 import { standardizePath as s } from '../util';
 import { Deferred } from '../deferred';
@@ -55,13 +55,8 @@ describe('Project', () => {
                 enableThreading: false
             });
 
-            //wait for the first validate to finish
-            await new Promise<void>((resolve) => {
-                const off = project.on('validate-end', () => {
-                    off();
-                    resolve();
-                });
-            });
+            //explicitly trigger and wait for the first validation
+            await project.validate();
 
             let validationCount = 0;
             let maxValidationCount = 0;
@@ -98,6 +93,31 @@ describe('Project', () => {
         });
     });
 
+    describe('dispose', () => {
+        it('cancels in-flight validation on dispose', async () => {
+            await project.activate({
+                projectKey: rootDir,
+                projectDir: rootDir,
+                bsconfigPath: undefined,
+                workspaceFolder: rootDir,
+                enableThreading: false
+            });
+
+            const cancelSpy = sinon.spy(project, 'cancelValidate');
+
+            //start a validation (don't await it)
+            const validatePromise = project.validate();
+
+            //dispose mid-validation
+            project.dispose();
+
+            expect(cancelSpy.called).to.be.true;
+
+            //the validate promise should still resolve (not hang)
+            await validatePromise;
+        });
+    });
+
     describe('activate', () => {
         it('uses `files` from bsconfig.json', async () => {
             fsExtra.outputJsonSync(`${rootDir}/bsconfig.json`, {
@@ -119,7 +139,7 @@ describe('Project', () => {
                 bsconfigPath: undefined
             });
 
-            await once(project, 'diagnostics');
+            await project.validate();
 
             expectDiagnostics(project, [
                 DiagnosticMessages.cannotFindName('alpha').message
@@ -240,7 +260,7 @@ describe('Project', () => {
                 bsconfigPath: undefined
             });
 
-            await once(project, 'diagnostics');
+            await project.validate();
 
             await expectDiagnosticsAsync(project, [
                 DiagnosticMessages.cannotFindName('varNotThere').message
