@@ -30,7 +30,7 @@ import { isAssignmentStatement, isBrsFile, isCallExpression, isCallfuncExpressio
 import { WalkMode } from './astUtils/visitors';
 import { CustomType } from './types/CustomType';
 import { SourceNode, SourceMapConsumer } from 'source-map';
-import type { RawSourceMap } from 'source-map';
+import type { RawSourceMap, SourceMapGenerator } from 'source-map';
 import type { SGAttribute } from './parser/SGTypes';
 import * as requireRelative from 'require-relative';
 import type { BrsFile } from './files/BrsFile';
@@ -1791,7 +1791,7 @@ export class Util {
      * Apply an input sourcemap to a generated SourceMapGenerator, chaining mappings so the
      * output traces back through the input map to the original source.
      */
-    public async applySourceMap(generator: import('source-map').SourceMapGenerator, inputMap: RawSourceMap, sourceFile: string) {
+    public async applySourceMap(generator: SourceMapGenerator, inputMap: RawSourceMap, sourceFile: string) {
         await SourceMapConsumer.with(inputMap, null, (consumer) => {
             generator.applySourceMap(consumer, sourceFile);
         });
