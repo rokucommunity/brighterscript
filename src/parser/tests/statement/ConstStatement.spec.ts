@@ -421,6 +421,54 @@ describe('ConstStatement', () => {
             `);
         });
 
+        it('resolves enum refs inside an aa-literal const used cross-file (issue #1618)', () => {
+            program.setFile('source/map.bs', `
+                namespace name.space
+                    enum someEnum
+                        one = "val1"
+                        two = "val2"
+                        three = "val3"
+                    end enum
+
+                    const myMap = {
+                        "key1": someEnum.one
+                        "key2": someEnum.two
+                        "key3": someEnum.three
+                    }
+                end namespace
+            `);
+            testTranspile(`
+                namespace name.space
+                    class someClass
+                        public function someFunc(key as dynamic) as object
+                            return name.space.myMap[key]
+                        end function
+                    end class
+                end namespace
+            `, `
+                sub __name_space_someClass_method_new()
+                end sub
+                function __name_space_someClass_method_someFunc(key as dynamic) as object
+                    return ({
+                        "key1": "val1"
+                        "key2": "val2"
+                        "key3": "val3"
+                    })[key]
+                end function
+                function __name_space_someClass_builder()
+                    instance = {}
+                    instance.new = __name_space_someClass_method_new
+                    instance.someFunc = __name_space_someClass_method_someFunc
+                    return instance
+                end function
+                function name_space_someClass()
+                    instance = __name_space_someClass_builder()
+                    instance.new()
+                    return instance
+                end function
+            `);
+        });
+
         it('resolves complex multi-file const-enum chain', () => {
             program.setFile('source/colors.bs', `
                 namespace Theme
