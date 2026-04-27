@@ -213,6 +213,16 @@ export interface BsConfig {
      * scripts inside `source` that depend on bslib.brs.  Defaults to `source`.
      */
     bslibDestinationDir?: string;
+
+    /**
+     * The minimum Roku firmware version required to run this project.
+     * When set, both BrightScript (.brs) and BrighterScript (.bs) files will be validated to
+     * ensure they only use language features available in that firmware version or earlier.
+     * Note that some features (such as optional chaining) are emitted as-is and not transpiled,
+     * so the version restriction applies to all file types.
+     * Should be a semver-compatible string (e.g. "11.0.0").
+     */
+    minFirmwareVersion?: string;
 }
 
 type OptionalBsConfigFields =
@@ -228,7 +238,8 @@ type OptionalBsConfigFields =
     | 'stagingFolderPath'
     | 'diagnosticLevel'
     | 'rootDir'
-    | 'stagingDir';
+    | 'stagingDir'
+    | 'minFirmwareVersion';
 
 export type FinalizedBsConfig =
     Omit<Required<BsConfig>, OptionalBsConfigFields>

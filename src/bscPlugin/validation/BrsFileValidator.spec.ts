@@ -490,4 +490,122 @@ describe('BrsFileValidator', () => {
             }]);
         });
     });
+
+    describe('minFirmwareVersion', () => {
+        describe('optional chaining', () => {
+            it('allows optional chaining in .brs files when minFirmwareVersion is not set', () => {
+                program.setFile('source/main.brs', `
+                    sub main()
+                        obj = {}
+                        value = obj?.name
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows optional chaining in .bs files when minFirmwareVersion is not set', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        obj = {}
+                        value = obj?.name
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows optional chaining in .brs files when minFirmwareVersion is 11.0.0', () => {
+                program = new Program({ minFirmwareVersion: '11.0.0' });
+                program.setFile('source/main.brs', `
+                    sub main()
+                        obj = {}
+                        value = obj?.name
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows optional chaining in .bs files when minFirmwareVersion is 11.0.0', () => {
+                program = new Program({ minFirmwareVersion: '11.0.0' });
+                program.setFile('source/main.bs', `
+                    sub main()
+                        obj = {}
+                        value = obj?.name
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows optional chaining in .brs files when minFirmwareVersion is above 11.0.0', () => {
+                program = new Program({ minFirmwareVersion: '12.0.0' });
+                program.setFile('source/main.brs', `
+                    sub main()
+                        obj = {}
+                        value = obj?.name
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('flags optional chaining (dotted get) in .brs files when minFirmwareVersion is below 11.0.0', () => {
+                program = new Program({ minFirmwareVersion: '10.0.0' });
+                program.setFile('source/main.brs', `
+                    sub main()
+                        obj = {}
+                        value = obj?.name
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.featureRequiresMinFirmwareVersion('optional chaining', '11.0.0', '10.0.0')
+                }]);
+            });
+
+            it('flags optional chaining (dotted get) in .bs files when minFirmwareVersion is below 11.0.0', () => {
+                program = new Program({ minFirmwareVersion: '10.0.0' });
+                program.setFile('source/main.bs', `
+                    sub main()
+                        obj = {}
+                        value = obj?.name
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.featureRequiresMinFirmwareVersion('optional chaining', '11.0.0', '10.0.0')
+                }]);
+            });
+
+            it('flags optional chaining (indexed get) in .brs files when minFirmwareVersion is below 11.0.0', () => {
+                program = new Program({ minFirmwareVersion: '10.0.0' });
+                program.setFile('source/main.brs', `
+                    sub main()
+                        arr = []
+                        value = arr?[0]
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.featureRequiresMinFirmwareVersion('optional chaining', '11.0.0', '10.0.0')
+                }]);
+            });
+
+            it('flags optional chaining (call expression) in .brs files when minFirmwareVersion is below 11.0.0', () => {
+                program = new Program({ minFirmwareVersion: '10.0.0' });
+                program.setFile('source/main.brs', `
+                    sub main()
+                        obj = {}
+                        obj.doSomething?()
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.featureRequiresMinFirmwareVersion('optional chaining', '11.0.0', '10.0.0')
+                }]);
+            });
+        });
+    });
 });

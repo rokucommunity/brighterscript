@@ -16,6 +16,7 @@ While a minimal `bsconfig.json` file is sufficient for getting started, `bsc` su
 - [extends](#extends)
 - [files](#files)
 - [host](#host)
+- [minFirmwareVersion](#minFirmwareVersion)
 - [outFile](#outFile)
 - [password](#password)
 - [plugins](#plugins)
@@ -354,6 +355,32 @@ For example, if you have a base project and a child project that wants to overri
 Type: `string`
 
 The host of the Roku that this project will deploy to when the [`deploy`](#deploy) field is set to `true`. Defaults to `undefined`.
+
+## `minFirmwareVersion`
+
+Type: `string`
+
+The minimum Roku firmware version required to run this project. When set, both BrightScript (`.brs`) and BrighterScript (`.bs`) files will be validated to ensure they only use language features available in that firmware version or earlier. Note that some BrighterScript features (such as optional chaining) are emitted as-is and not transpiled down, so the version restriction applies to all file types.
+
+Should be a semver-compatible string (e.g. `"11.0.0"` or `"11.0"`). Defaults to `undefined` (no version restriction).
+
+**Example:**
+
+```json
+{
+    "minFirmwareVersion": "11.0.0"
+}
+```
+
+With this setting, using optional chaining (`?.`) without the version requirement being met will produce an error like:
+
+> BrightScript feature 'optional chaining' requires Roku firmware version 11.0.0 or higher, but 'minFirmwareVersion' is set to 10.0.0
+
+**Features gated by firmware version:**
+
+| Feature | Minimum Version |
+|---------|----------------|
+| Optional chaining (`?.`, `?[`, `?(`) | 11.0.0 |
 
 ## `outFile`
 

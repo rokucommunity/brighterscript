@@ -12,6 +12,7 @@ import { DynamicType } from '../../types/DynamicType';
 import { InterfaceType } from '../../types/InterfaceType';
 import util from '../../util';
 import type { Range } from 'vscode-languageserver';
+import * as semver from 'semver';
 
 export class BrsFileValidator {
     constructor(
@@ -44,6 +45,22 @@ export class BrsFileValidator {
                         ...DiagnosticMessages.callfuncHasToManyArgs(node.args.length),
                         range: node.methodName.range
                     });
+                }
+            },
+            DottedGetExpression: (node) => {
+                if (node.dot?.kind === TokenKind.QuestionDot) {
+                    this.validateMinFirmwareVersionForOptionalChaining(node.dot.range);
+                }
+            },
+            IndexedGetExpression: (node) => {
+                if (node.questionDotToken || node.openingSquare?.kind === TokenKind.QuestionLeftSquare) {
+                    const range = node.questionDotToken?.range ?? node.openingSquare?.range;
+                    this.validateMinFirmwareVersionForOptionalChaining(range);
+                }
+            },
+            CallExpression: (node) => {
+                if (node.openingParen?.kind === TokenKind.QuestionLeftParen) {
+                    this.validateMinFirmwareVersionForOptionalChaining(node.openingParen.range);
                 }
             },
             EnumStatement: (node) => {
@@ -445,6 +462,37 @@ export class BrsFileValidator {
             } else {
                 nodes.push(node.parent);
             }
+        }
+    }
+
+    /**
+     * The minimum Roku firmware version that introduced optional chaining support (Roku OS 11).
+     * Optional chaining is NOT transpiled by BrighterScript, so this restriction applies to both
+     * .brs and .bs files.
+     */
+    private static readonly OPTIONAL_CHAINING_MIN_VERSION = '11.0.0';
+
+    /**
+     * Add a diagnostic if the configured minFirmwareVersion is lower than the version that
+     * introduced optional chaining support (Roku OS 11).
+     * This applies to both .brs and .bs files because optional chaining is not transpiled —
+     * it is emitted as-is, so the target device must natively support it.
+     */
+    private validateMinFirmwareVersionForOptionalChaining(range: Range | undefined) {
+        const minFirmwareVersion = this.event.file.program.options.minFirmwareVersion;
+        if (!minFirmwareVersion) {
+            return;
+        }
+        const coercedMinVersion = semver.coerce(minFirmwareVersion);
+        if (coercedMinVersion && semver.lt(coercedMinVersion, BrsFileValidator.OPTIONAL_CHAINING_MIN_VERSION)) {
+            this.event.file.addDiagnostic({
+                ...DiagnosticMessages.featureRequiresMinFirmwareVersion(
+                    'optional chaining',
+                    BrsFileValidator.OPTIONAL_CHAINING_MIN_VERSION,
+                    minFirmwareVersion
+                ),
+                range: range
+            });
         }
     }
 }
