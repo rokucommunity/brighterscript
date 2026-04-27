@@ -469,6 +469,36 @@ describe('ConstStatement', () => {
             `);
         });
 
+        it('resolves enum refs in computed keys of an aa-literal const used cross-file', () => {
+            program.setFile('source/map.bs', `
+                namespace name.space
+                    enum someEnum
+                        one = "key1"
+                        two = "key2"
+                    end enum
+
+                    const myMap = {
+                        [someEnum.one]: "val1"
+                        [someEnum.two]: "val2"
+                    }
+                end namespace
+            `);
+            testTranspile(`
+                namespace name.space
+                    sub useMap(key as dynamic) as object
+                        return name.space.myMap[key]
+                    end sub
+                end namespace
+            `, `
+                sub name_space_useMap(key as dynamic) as object
+                    return ({
+                        "key1": "val1"
+                        "key2": "val2"
+                    })[key]
+                end sub
+            `);
+        });
+
         it('resolves complex multi-file const-enum chain', () => {
             program.setFile('source/colors.bs', `
                 namespace Theme
