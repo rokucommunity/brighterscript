@@ -28,9 +28,9 @@ export function getDocumentSymbolsFromBrsFile(file: BrsFile) {
     }
 }
 
-export function getWorkspaceSymbolsFromBrsFile(file: BrsFile) {
+export function getWorkspaceSymbolsFromBrsFile(file: BrsFile, uriOverride?: string) {
     const result: WorkspaceSymbol[] = [];
-    const uri = util.pathToUri(file.srcPath);
+    const uri = uriOverride ?? util.pathToUri(file.srcPath);
     let symbolsToProcess = getSymbolsFromAstNode(file.ast);
     while (symbolsToProcess.length > 0) {
         //get the symbol

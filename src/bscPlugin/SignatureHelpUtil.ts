@@ -113,7 +113,11 @@ export class SignatureHelpUtil {
 
         const documentation = functionComments.join('').trim();
 
-        const lines = util.splitIntoLines(file.fileContents);
+        // Synthetic BrsFiles (inline CDATA blocks) store only the raw CDATA text, so their
+        // fileContents cannot be indexed by XML-space line numbers. Use the parent XML file's
+        // contents instead — it has the correct text at every XML-coordinate line number.
+        const contentsForLines = file.parentXmlFile?.fileContents ?? file.fileContents;
+        const lines = util.splitIntoLines(contentsForLines);
         let key = statement.name.text + documentation;
         const params = [] as ParameterInformation[];
         for (const param of func.parameters) {

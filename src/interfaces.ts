@@ -319,17 +319,27 @@ export interface Plugin {
     afterScopeValidate?: ValidateHandler;
     //file events
     beforeFileParse?: (source: SourceObj) => void;
+    /**
+     * Called after each file has been parsed. When a SceneGraph XML file contains inline
+     * `<![CDATA[...]]>` script blocks, this event is also fired once per CDATA block with a
+     * synthetic `BrsFile` as the argument (`file.isSynthetic === true`). The synthetic file's
+     * positions are already in the parent XML file's coordinate space.
+     */
     afterFileParse?: (file: BscFile) => void;
     /**
-     * Called before each file is validated
+     * Called before each file is validated. For SceneGraph XML files with inline CDATA script
+     * blocks, this is also called for each synthetic `BrsFile` (`file.isSynthetic === true`).
      */
     beforeFileValidate?: PluginHandler<BeforeFileValidateEvent>;
     /**
      * Called during the file validation process. If your plugin contributes file validations, this is a good place to contribute them.
+     * For SceneGraph XML files with inline CDATA script blocks, this is also called for each
+     * synthetic `BrsFile` (`event.file.isSynthetic === true`).
      */
     onFileValidate?: PluginHandler<OnFileValidateEvent>;
     /**
-     * Called after each file is validated
+     * Called after each file is validated. For SceneGraph XML files with inline CDATA script
+     * blocks, this is also called for each synthetic `BrsFile` (`file.isSynthetic === true`).
      */
     afterFileValidate?: (file: BscFile) => void;
     beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
@@ -341,6 +351,11 @@ export type PluginHandler<T, R = void> = (event: T) => R;
 
 export interface OnGetCodeActionsEvent {
     program: Program;
+    /**
+     * The file the code action request was invoked in. When the range falls inside a
+     * `<![CDATA[...]]>` block of an XML file, this will be the synthetic `BrsFile` for that
+     * block (`file.isSynthetic === true`) rather than the `XmlFile` itself.
+     */
     file: BscFile;
     range: Range;
     scopes: Scope[];
@@ -350,6 +365,11 @@ export interface OnGetCodeActionsEvent {
 
 export interface ProvideCompletionsEvent<TFile extends BscFile = BscFile> {
     program: Program;
+    /**
+     * The file the completion request was invoked in. When the cursor position falls inside a
+     * `<![CDATA[...]]>` block of an XML file, this will be the synthetic `BrsFile` for that
+     * block (`file.isSynthetic === true`) rather than the `XmlFile` itself.
+     */
     file: TFile;
     scopes: Scope[];
     position: Position;
@@ -360,6 +380,11 @@ export type AfterProvideCompletionsEvent<TFile extends BscFile = BscFile> = Prov
 
 export interface ProvideHoverEvent {
     program: Program;
+    /**
+     * The file the hover request was invoked in. When the cursor position falls inside a
+     * `<![CDATA[...]]>` block of an XML file, this will be the synthetic `BrsFile` for that
+     * block (`file.isSynthetic === true`) rather than the `XmlFile` itself.
+     */
     file: BscFile;
     position: Position;
     scopes: Scope[];
@@ -386,7 +411,9 @@ export type AfterProvideHoverEvent = ProvideHoverEvent;
 export interface ProvideDefinitionEvent<TFile = BscFile> {
     program: Program;
     /**
-     * The file that the getDefinition request was invoked in
+     * The file that the getDefinition request was invoked in. When the cursor position falls inside
+     * a `<![CDATA[...]]>` block of an XML file, this will be the synthetic `BrsFile` for that
+     * block (`file.isSynthetic === true`) rather than the `XmlFile` itself.
      */
     file: TFile;
     /**
@@ -404,7 +431,9 @@ export type AfterProvideDefinitionEvent<TFile = BscFile> = ProvideDefinitionEven
 export interface ProvideReferencesEvent<TFile = BscFile> {
     program: Program;
     /**
-     * The file that the getDefinition request was invoked in
+     * The file that the getReferences request was invoked in. When the cursor position falls inside
+     * a `<![CDATA[...]]>` block of an XML file, this will be the synthetic `BrsFile` for that
+     * block (`file.isSynthetic === true`) rather than the `XmlFile` itself.
      */
     file: TFile;
     /**
@@ -423,7 +452,10 @@ export type AfterProvideReferencesEvent<TFile = BscFile> = ProvideReferencesEven
 export interface ProvideDocumentSymbolsEvent<TFile = BscFile> {
     program: Program;
     /**
-     * The file that the `documentSymbol` request was invoked in
+     * The file that the `documentSymbol` request was invoked in. For SceneGraph XML files with
+     * inline CDATA script blocks, this event is also emitted once per block with the synthetic
+     * `BrsFile` (`file.isSynthetic === true`). Symbol ranges are already in the parent XML
+     * coordinate space.
      */
     file: TFile;
     /**
@@ -452,7 +484,9 @@ export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
      */
     program: Program;
     /**
-     * The file to get semantic tokens for
+     * The file to get semantic tokens for. For SceneGraph XML files with inline CDATA script
+     * blocks, this event is also emitted once per block with the synthetic `BrsFile`
+     * (`file.isSynthetic === true`). Token ranges are already in the parent XML coordinate space.
      */
     file: T;
     /**

@@ -16,6 +16,8 @@ import { Parser, ParseMode } from '../parser/Parser';
 import type { FunctionExpression, VariableExpression } from '../parser/Expression';
 import type { ClassStatement, NamespaceStatement, AssignmentStatement, MethodStatement, FieldStatement } from '../parser/Statement';
 import type { Program } from '../Program';
+import type { XmlFile } from './XmlFile';
+import type { SGScript } from '../parser/SGTypes';
 import { DynamicType } from '../types/DynamicType';
 import { FunctionType } from '../types/FunctionType';
 import { VoidType } from '../types/VoidType';
@@ -78,6 +80,28 @@ export class BrsFile {
     public set pathAbsolute(value) {
         this.srcPath = value;
     }
+
+    /**
+     * When true, this file was generated from inline CDATA content in an XML file and is not backed by a file on disk.
+     * The file watcher should ignore change events for paths that match a synthetic file.
+     */
+    public isSynthetic = false;
+
+    /**
+     * The XML file this synthetic BrsFile was extracted from. Only set when `isSynthetic` is true.
+     */
+    public parentXmlFile: XmlFile | undefined;
+
+    /**
+     * The SGScript AST node whose CDATA block this file was extracted from. Only set when `isSynthetic` is true.
+     * Provides access to the CDATA range (`cdataScript.cdata.range`), raw text, and script type.
+     */
+    public cdataScript: SGScript | undefined;
+
+    /**
+     * When true, this file will not be written as a standalone output file during transpile.
+     */
+    public excludeFromOutput = false;
 
     /**
      * Will this file result in only comment or whitespace output? If so, it can be excluded from the output if that bsconfig setting is enabled.
@@ -309,9 +333,13 @@ export class BrsFile {
 
     /**
      * Calculate the AST for this file
-     * @param fileContents the raw source code to parse
+     * @param fileContents the raw source to parse and store
+     * @param options optional scan options forwarded to the lexer
+     * @param options.startLine the zero-indexed line to start position tracking from (used for
+     *   inline CDATA fragments so token ranges are in parent XML coordinate space)
+     * @param options.startCharacter the zero-indexed character offset on the first line
      */
-    public parse(fileContents: string) {
+    public parse(fileContents: string, options?: { startLine?: number; startCharacter?: number }) {
         try {
             this.fileContents = fileContents;
             this.diagnostics = [];
@@ -326,7 +354,9 @@ export class BrsFile {
             //tokenize the input file
             let lexer = this.program.logger.time('debug', ['lexer.lex', chalk.green(this.srcPath)], () => {
                 return Lexer.scan(fileContents, {
-                    includeWhitespace: false
+                    includeWhitespace: false,
+                    startLine: options?.startLine,
+                    startCharacter: options?.startCharacter
                 });
             });
 

@@ -1,19 +1,20 @@
 import { assert, expect } from '../chai-config.spec';
+import { SourceMapConsumer } from 'source-map';
 import * as path from 'path';
 import * as sinonImport from 'sinon';
 import type { CompletionItem } from 'vscode-languageserver';
-import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
+import { CompletionItemKind, Position, Range, SymbolKind } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { BsDiagnostic, FileReference } from '../interfaces';
 import { Program } from '../Program';
 import { BrsFile } from './BrsFile';
 import { XmlFile } from './XmlFile';
-import { standardizePath as s } from '../util';
+import util, { standardizePath as s } from '../util';
 import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 import { ProgramBuilder } from '../ProgramBuilder';
 import { LogLevel } from '../logging';
-import { isXmlFile } from '../astUtils/reflection';
+import { isBrsFile, isXmlFile } from '../astUtils/reflection';
 import { tempDir, rootDir, stagingDir } from '../testHelpers.spec';
 
 describe('XmlFile', () => {
@@ -1324,4 +1325,854 @@ describe('XmlFile', () => {
             expect(program.getComponent('comp1')!.file.pkgPath).to.equal(comp2.pkgPath);
         });
     });
+
+    describe('inline CDATA scripts', () => {
+
+        it('registers a synthetic BrsFile for a brightscript CDATA block', () => {
+            const xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        function init()
+                        end function
+                    ]]></script>
+                </component>
+            `);
+            expect(xmlFile.inlineScriptPkgPaths).to.eql(['components/MyComp.cdata-0.script.brs']);
+            const syntheticFile = program.getFile<BrsFile>('components/MyComp.cdata-0.script.brs');
+            expect(syntheticFile).to.exist;
+            expect(syntheticFile.isSynthetic).to.be.true;
+        });
+
+        it('registers a synthetic .bs file when type is text/brighterscript', () => {
+            const xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brighterscript"><![CDATA[
+                        function init()
+                        end function
+                    ]]></script>
+                </component>
+            `);
+            expect(xmlFile.inlineScriptPkgPaths).to.eql(['components/MyComp.cdata-0.script.bs']);
+            expect(program.getFile('components/MyComp.cdata-0.script.bs')).to.exist;
+        });
+
+        it('registers a synthetic .bs file when type is text/bs', () => {
+            const xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/bs"><![CDATA[
+                        function init()
+                        end function
+                    ]]></script>
+                </component>
+            `);
+            expect(xmlFile.inlineScriptPkgPaths).to.eql(['components/MyComp.cdata-0.script.bs']);
+            expect(program.getFile('components/MyComp.cdata-0.script.bs')).to.exist;
+        });
+
+        it('does NOT treat text/brightscript as brighterscript', () => {
+            const xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        function init()
+                        end function
+                    ]]></script>
+                </component>
+            `);
+            expect(xmlFile.inlineScriptPkgPaths[0]).to.equal('components/MyComp.cdata-0.script.brs');
+        });
+
+        it('indexes multiple CDATA blocks independently', () => {
+            const xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        function a()
+                        end function
+                    ]]></script>
+                    <script type="text/brighterscript"><![CDATA[
+                        function b()
+                        end function
+                    ]]></script>
+                </component>
+            `);
+            expect(xmlFile.inlineScriptPkgPaths).to.eql([
+                'components/MyComp.cdata-0.script.brs',
+                'components/MyComp.cdata-1.script.bs'
+            ]);
+            expect(program.getFile('components/MyComp.cdata-0.script.brs')).to.exist;
+            expect(program.getFile('components/MyComp.cdata-1.script.bs')).to.exist;
+        });
+
+        it('synthetic BrsFile token ranges start at the CDATA position in the XML file', () => {
+            // The <![CDATA[ is on line 2 of the XML. All tokens produced by the lexer must have
+            // ranges that start at line 2 or later — there should be no spurious Newline tokens
+            // at lines 0 or 1 from the padding that was previously prepended to the source.
+            const xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        sub init()
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            const brsFile = program.getFile<BrsFile>(xmlFile.inlineScriptPkgPaths[0]);
+            // line 2 is where <![CDATA[ lives — the leading \n in cdataText lands there.
+            // No token should be at line 0 or 1 (those would be spurious padding tokens).
+            for (const token of brsFile.parser.tokens) {
+                expect(token.range.start.line).to.be.at.least(2,
+                    `token "${token.text}" (${token.kind}) should not appear before the CDATA block`
+                );
+            }
+        });
+
+        it('synthetic BrsFile fileContents is the raw CDATA text (not padded)', () => {
+            // fileContents stores only the raw CDATA text. Consumers that need line-indexed
+            // access at XML-space coordinates (e.g. SignatureHelpUtil) use parentXmlFile.fileContents.
+            const xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        sub greet(name as string)
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            const brsFile = program.getFile<BrsFile>(xmlFile.inlineScriptPkgPaths[0]);
+            // fileContents is the raw CDATA source, not padded with leading newlines
+            expect(brsFile.fileContents).to.include('sub greet');
+            expect(brsFile.fileContents.split(/\r?\n/g)[0]).to.equal(''); // first "line" is the \n right after <![CDATA[
+            // parentXmlFile.fileContents is where XML-space line lookups should go
+            const xmlLines = xmlFile.fileContents.split(/\r?\n/g);
+            expect(xmlLines[3]).to.include('sub greet');
+        });
+
+        it('getSignatureHelp returns correct label for a CDATA function called from a uri-based script', () => {
+            // Tests that SignatureHelpUtil correctly extracts the function label from the parent
+            // XML file's contents when the callee is defined in a CDATA block (synthetic BrsFile).
+            program.setFile('components/MyComp.brs', trim`
+                sub main()
+                    greet("world")
+                end sub
+            `);
+            program.setFile<XmlFile>('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript" uri="MyComp.brs" />
+                    <script type="text/brightscript"><![CDATA[
+                        sub greet(name as string)
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            // line 1 of MyComp.brs is "    greet("world")" — col 10 is inside the arg list
+            const help = program.getSignatureHelp('components/MyComp.brs', util.createPosition(1, 10));
+            expect(help).to.have.length.greaterThan(0);
+            expect(help[0].signature.label).to.equal('sub greet(name as string)');
+        });
+
+        it('transpile preserves CDATA blocks inline in the xml output', () => {
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        function init()
+                        end function
+                    ]]></script>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        function init()
+                        end function
+                    ]]></script>
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/MyComp.xml');
+        });
+
+        it('transpile preserves mixed uri and CDATA scripts inline preserving order', () => {
+            program.setFile('components/helper.brs', '');
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript" uri="./helper.brs" />
+                    <script type="text/brightscript"><![CDATA[
+                        function init()
+                        end function
+                    ]]></script>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript" uri="./helper.brs" />
+                    <script type="text/brightscript"><![CDATA[
+                        function init()
+                        end function
+                    ]]></script>
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/MyComp.xml');
+        });
+
+        it('transpile transforms ternary expressions in brighterscript CDATA', () => {
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brighterscript"><![CDATA[
+                        sub init()
+                            x = true ? "yes" : "no"
+                        end sub
+                    ]]></script>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[sub init()
+                    if true then
+                        x = "yes"
+                    else
+                        x = "no"
+                    end if
+                end sub]]></script>
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/MyComp.xml');
+        });
+
+        it('transpile inlines enum values in brighterscript CDATA', () => {
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brighterscript"><![CDATA[
+                        enum Direction
+                            up = "up"
+                            down = "down"
+                        end enum
+                        sub init()
+                            d = Direction.up
+                        end sub
+                    ]]></script>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+
+                sub init()
+                    d = "up"
+                end sub]]></script>
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/MyComp.xml');
+        });
+
+        it('transpile flattens namespaces in brighterscript CDATA', () => {
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brighterscript"><![CDATA[
+                        namespace util
+                            sub greet(name as string)
+                                print "Hello " + name
+                            end sub
+                        end namespace
+                        sub init()
+                            util.greet("world")
+                        end sub
+                    ]]></script>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[sub util_greet(name as string)
+                    print "Hello " + name
+                end sub
+
+                sub init()
+                    util_greet("world")
+                end sub]]></script>
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/MyComp.xml');
+        });
+
+        it('transpile inlines const values in brighterscript CDATA', () => {
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brighterscript"><![CDATA[
+                        const MAX_RETRIES = 3
+                        sub init()
+                            print MAX_RETRIES
+                        end sub
+                    ]]></script>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+
+                sub init()
+                    print 3
+                end sub]]></script>
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/MyComp.xml');
+        });
+
+        it('transpile transforms null coalescing in brighterscript CDATA', () => {
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brighterscript"><![CDATA[
+                        sub init()
+                            x = m.value ?? "default"
+                        end sub
+                    ]]></script>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[sub init()
+                    x = (function(m)
+                            __bsConsequent = m.value
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return "default"
+                            end if
+                        end function)(m)
+                end sub]]></script>
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/MyComp.xml');
+        });
+
+        it('source map points back to original xml positions for plain brs CDATA', async () => {
+            // Generated output (1-based lines):
+            //   3: "    <script type="text/brightscript"><![CDATA["
+            //   4: "        sub init()"   ← col 0 → source line 4, col 0
+            //   5: "        end sub"      ← col 0 → source line 5, col 0
+            const xmlFile = program.setFile<XmlFile>({ src: s`${rootDir}/components/MyComp.xml`, dest: 'components/MyComp.xml' }, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        sub init()
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            program.options.sourceMap = true;
+            program.validate();
+            const result = xmlFile.transpile();
+            expect(result.map).to.exist;
+
+            await SourceMapConsumer.with(result.map.toJSON(), null, (consumer) => {
+                // raw CDATA lines map at col 0 back to the same line in the xml source
+                const subPos = consumer.originalPositionFor({ line: 4, column: 0 });
+                expect(subPos.source).to.include('MyComp.xml');
+                expect(subPos.line).to.equal(4);
+                expect(subPos.column).to.equal(0);
+
+                const endSubPos = consumer.originalPositionFor({ line: 5, column: 0 });
+                expect(endSubPos.source).to.include('MyComp.xml');
+                expect(endSubPos.line).to.equal(5);
+                expect(endSubPos.column).to.equal(0);
+            });
+        });
+
+        it('source map points back to xml positions for transpiled brighterscript CDATA', async () => {
+            // Generated output (1-based lines):
+            //   3: "    <script ...><![CDATA[sub init()"  ← 'sub' at col 46 → source (4, 8)
+            //   4: "    if true then"                     ← col 4           → source (5, 21) (ternary)
+            //   5: "        x = \"yes\""                  ← col 8           → source (5, 12)
+            const xmlFile = program.setFile<XmlFile>({ src: s`${rootDir}/components/MyComp.xml`, dest: 'components/MyComp.xml' }, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brighterscript"><![CDATA[
+                        sub init()
+                            x = true ? "yes" : "no"
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            program.options.sourceMap = true;
+            program.validate();
+            const result = xmlFile.transpile();
+            expect(result.map).to.exist;
+            // only the xml file should appear in sources — not the synthetic brs file
+            expect(result.map.toJSON().sources).to.eql([s`${rootDir}/components/MyComp.xml`]);
+
+            await SourceMapConsumer.with(result.map.toJSON(), null, (consumer) => {
+                // 'sub' is on gen line 3 right after '<![CDATA[' at col 46
+                const subPos = consumer.originalPositionFor({ line: 3, column: 46 });
+                expect(subPos.source).to.include('MyComp.xml');
+                expect(subPos.line).to.equal(4); // source line 4 (1-based) in the xml
+                expect(subPos.column).to.equal(8);
+
+                // the true branch 'x = "yes"' is on gen line 5 col 8, maps back to the ternary 'x' at source (5, 12)
+                const xPos = consumer.originalPositionFor({ line: 5, column: 8 });
+                expect(xPos.source).to.include('MyComp.xml');
+                expect(xPos.line).to.equal(5);
+                expect(xPos.column).to.equal(12);
+            });
+        });
+
+        it('source map points back to xml positions for transpiled enum values in CDATA', async () => {
+            // Generated output (1-based lines):
+            //   5: "sub init()"       ← col 0 → source (7, 8)
+            //   6: "    d = \"up\""   ← col 4 → source (8, 12)
+            //   7: "end sub]]>..."    ← col 0 → source (9, 8)
+            const xmlFile = program.setFile<XmlFile>({ src: s`${rootDir}/components/MyComp.xml`, dest: 'components/MyComp.xml' }, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brighterscript"><![CDATA[
+                        enum Direction
+                            up = "up"
+                        end enum
+                        sub init()
+                            d = Direction.up
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            program.options.sourceMap = true;
+            program.validate();
+            const result = xmlFile.transpile();
+            expect(result.map).to.exist;
+            expect(result.map.toJSON().sources).to.eql([s`${rootDir}/components/MyComp.xml`]);
+
+            await SourceMapConsumer.with(result.map.toJSON(), null, (consumer) => {
+                // 'sub' on gen line 5 col 0 → source (7, 8)
+                const subPos = consumer.originalPositionFor({ line: 5, column: 0 });
+                expect(subPos.source).to.include('MyComp.xml');
+                expect(subPos.line).to.equal(7);
+                expect(subPos.column).to.equal(8);
+
+                // 'd' on gen line 6 col 4 → source (8, 12)
+                const dPos = consumer.originalPositionFor({ line: 6, column: 4 });
+                expect(dPos.source).to.include('MyComp.xml');
+                expect(dPos.line).to.equal(8);
+                expect(dPos.column).to.equal(12);
+            });
+        });
+
+        it('cleans up synthetic files when the xml file is removed', () => {
+            program.setFile('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        function init()
+                        end function
+                    ]]></script>
+                </component>
+            `);
+            expect(program.getFile('components/MyComp.cdata-0.script.brs')).to.exist;
+            program.removeFile(s`${rootDir}/components/MyComp.xml`);
+            expect(program.getFile('components/MyComp.cdata-0.script.brs')).to.not.exist;
+        });
+
+        it('replaces old synthetic files when the xml file is re-parsed', () => {
+            program.setFile('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        function init()
+                        end function
+                    ]]></script>
+                </component>
+            `);
+            const firstFile = program.getFile('components/MyComp.cdata-0.script.brs');
+            expect(firstFile).to.exist;
+
+            //re-set with different cdata content
+            program.setFile('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        function init()
+                            print "updated"
+                        end function
+                    ]]></script>
+                </component>
+            `);
+            const secondFile = program.getFile<BrsFile>('components/MyComp.cdata-0.script.brs');
+            expect(secondFile).to.exist;
+            //a new BrsFile object should have been created
+            expect(secondFile).to.not.equal(firstFile);
+        });
+
+        it('includes the synthetic file in scope dependencies', () => {
+            const xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        function init()
+                        end function
+                    ]]></script>
+                </component>
+            `);
+            const deps = xmlFile.getOwnDependencies();
+            expect(deps.some(d => d.includes('cdata-0.script.brs'))).to.be.true;
+        });
+
+        it('validates code inside CDATA blocks and remaps diagnostics to the xml file', () => {
+            const xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        function init()
+                            undeclaredVar = unknownFunction()
+                        end function
+                    ]]></script>
+                </component>
+            `);
+            program.validate();
+            const allDiagnostics = program.getDiagnostics();
+            //diagnostics from the CDATA block should be remapped to the parent xml file, not the synthetic file
+            expect(allDiagnostics.some(d => d.file.pkgPath === xmlFile.pkgPath)).to.be.true;
+            expect(allDiagnostics.every(d => d.file.pkgPath !== 'components/MyComp.cdata-0.script.brs')).to.be.true;
+            //the reported position should be within the xml file's line range (not line 1 of a standalone brs file)
+            const cdataDiagnostics = allDiagnostics.filter(d => d.file.pkgPath === xmlFile.pkgPath);
+            expect(cdataDiagnostics.every(d => d.range.start.line > 2)).to.be.true;
+        });
+
+        it('sets needsTranspiled on the xml file when CDATA is present', () => {
+            const xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MyComp" extends="Scene">
+                    <script type="text/brightscript"><![CDATA[
+                        function init()
+                        end function
+                    ]]></script>
+                </component>
+            `);
+            expect(xmlFile.needsTranspiled).to.be.true;
+        });
+
+        describe('LSP event remapping', () => {
+            // After trim, the file looks like:
+            //   line 0: <?xml version="1.0" encoding="utf-8" ?>
+            //   line 1: <component name="MyComp" extends="Scene">
+            //   line 2:     <script type="text/brightscript"><![CDATA[   <- cdataStartLine=2, cdataStartChar=37
+            //   line 3:         sub greet(name as string)
+            //   line 4:             print name
+            //   line 5:         end sub
+            //   line 6:         function getCount() as integer
+            //   line 7:             return 42
+            //   line 8:         end function
+            //   line 9:     ]]></script>
+            //   line 10: </component>
+            const cdataStartLine = 2;
+
+            let xmlFile: XmlFile;
+            beforeEach(() => {
+                xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="MyComp" extends="Scene">
+                        <script type="text/brightscript"><![CDATA[
+                            sub greet(name as string)
+                                print name
+                            end sub
+                            function getCount() as integer
+                                return 42
+                            end function
+                        ]]></script>
+                    </component>
+                `);
+                program.validate();
+            });
+
+            it('getCompletions returns BrightScript completions inside CDATA', () => {
+                // position cursor at `name` usage on line 4 col 20 (inside "name")
+                const completions = program.getCompletions(xmlFile.srcPath, Position.create(4, 20));
+                expect(completions.map(c => c.label)).to.include('name');
+            });
+
+            it('getCompletions returns empty outside CDATA', () => {
+                // position inside the <component> tag (line 1), not in CDATA
+                const completions = program.getCompletions(xmlFile.srcPath, Position.create(1, 5));
+                expect(completions).to.be.empty;
+            });
+
+            it('getHover returns hover info for a function inside CDATA', () => {
+                // hover over `greet` at line 3 col 12
+                const hovers = program.getHover(xmlFile.srcPath, Position.create(3, 12));
+                expect(hovers).to.have.length.greaterThan(0);
+            });
+
+            it('getHover remaps the hover range to XML coordinates', () => {
+                // hover over `greet` at line 3 col 12
+                const hovers = program.getHover(xmlFile.srcPath, Position.create(3, 12));
+                for (const hover of hovers) {
+                    if (hover.range) {
+                        // range must be within the CDATA block in XML coordinates, not synthetic line 0
+                        expect(hover.range.start.line).to.be.at.least(cdataStartLine);
+                    }
+                }
+            });
+
+            it('getDefinition returns a location inside the XML file for a symbol in CDATA', () => {
+                // go-to-definition on `greet` reference (line 3, col 12 is the definition site itself)
+                // use getCount call from synthetic line 0 edge case — instead hover greet on its def line
+                const locations = program.getDefinition(xmlFile.srcPath, Position.create(3, 12));
+                expect(locations).to.have.length.greaterThan(0);
+                for (const loc of locations) {
+                    // all returned locations must use the xml file URI
+                    expect(loc.uri).to.include('MyComp.xml');
+                    // and be within the CDATA block line range
+                    expect(loc.range.start.line).to.be.at.least(cdataStartLine);
+                }
+            });
+
+            it('getReferences returns locations in XML coordinates', () => {
+                // find references of the `name` parameter — position inside the word (not at the start)
+                // line 3: `        sub greet(name as string)` — `name` starts at col 18, use col 20 (inside)
+                const refs = program.getReferences(xmlFile.srcPath, Position.create(3, 20));
+                expect(refs).to.have.length.greaterThan(0);
+                for (const ref of refs) {
+                    expect(ref.uri).to.include('MyComp.xml');
+                    expect(ref.range.start.line).to.be.at.least(cdataStartLine);
+                }
+            });
+
+            it('getSemanticTokens returns tokens with XML-file coordinates', () => {
+                // Use a .bs CDATA block with namespace+class to generate semantic tokens
+                const bsXmlFile = program.setFile<XmlFile>('components/BsComp.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="BsComp" extends="Scene">
+                        <script type="text/brighterscript"><![CDATA[
+                            namespace MyNs
+                                class Greeter
+                                end class
+                            end namespace
+                            sub init()
+                                x = new MyNs.Greeter()
+                            end sub
+                        ]]></script>
+                    </component>
+                `);
+                program.validate();
+                const tokens = program.getSemanticTokens(bsXmlFile.srcPath);
+                expect(tokens).to.exist;
+                expect(tokens).to.have.length.greaterThan(0);
+                for (const token of tokens) {
+                    // all tokens must be inside the CDATA block (line 2+ in XML)
+                    expect(token.range.start.line).to.be.at.least(cdataStartLine + 1);
+                }
+            });
+
+            it('getDocumentSymbols returns function symbols with XML-file coordinates', () => {
+                const symbols = program.getDocumentSymbols(xmlFile.srcPath);
+                expect(symbols).to.exist;
+                const names = symbols.map(s => s.name);
+                expect(names).to.include('greet');
+                expect(names).to.include('getCount');
+                for (const sym of symbols) {
+                    if (sym.name === 'greet' || sym.name === 'getCount') {
+                        expect(sym.kind).to.equal(SymbolKind.Function);
+                        // symbol range must start inside the CDATA block
+                        expect(sym.range.start.line).to.be.at.least(cdataStartLine + 1);
+                    }
+                }
+            });
+
+            it('getSignatureHelp returns signature for a function call inside CDATA', () => {
+                // Add a call site so we can test signature help
+                xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="MyComp" extends="Scene">
+                        <script type="text/brightscript"><![CDATA[
+                            sub greet(name as string)
+                            end sub
+                            sub init()
+                                greet(
+                            end sub
+                        ]]></script>
+                    </component>
+                `);
+                program.validate();
+                // line 6 is `            greet(` — `(` is at col 17, col 18 is inside the arg list
+                const sigHelp = program.getSignatureHelp(xmlFile.srcPath, Position.create(6, 18));
+                expect(sigHelp).to.have.length.greaterThan(0);
+                expect(sigHelp[0].signature.label).to.include('greet');
+            });
+
+            it('getCodeActions workspace edits reference the XML file URI', () => {
+                // use a range inside the CDATA block (line 3 = `sub greet(name as string)`)
+                const actions = program.getCodeActions(xmlFile.srcPath, Range.create(3, 8, 3, 30));
+                // if any code action has workspace edits, they must target the xml file
+                for (const action of actions) {
+                    if (action.edit?.changes) {
+                        for (const uri of Object.keys(action.edit.changes)) {
+                            expect(uri).to.include('MyComp.xml');
+                        }
+                    }
+                    if (action.edit?.documentChanges) {
+                        for (const change of action.edit.documentChanges) {
+                            if ('textDocument' in change) {
+                                expect(change.textDocument.uri).to.include('MyComp.xml');
+                            }
+                        }
+                    }
+                }
+            });
+
+            it('hover works when CDATA content starts on the same line as the opening marker', () => {
+                // The synthetic BrsFile is padded so its positions match XML coordinates directly.
+                // When content starts inline with <![CDATA[, the first token sits at the same
+                // line/column as in the XML file — no coordinate transformation needed.
+                const inlineFile = program.setFile<XmlFile>('components/Inline.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Inline" extends="Scene">
+                        <script type="text/brightscript"><![CDATA[sub init()
+                        end sub]]></script>
+                    </component>
+                `);
+                program.validate();
+                // `<![CDATA[` starts at col 37, so content starts at col 46.
+                // `init` is after `sub `, so at col 46 + 4 = 50 on XML line 2.
+                const hovers = program.getHover(inlineFile.srcPath, Position.create(2, 50));
+                expect(hovers).to.have.length.greaterThan(0);
+                for (const hover of hovers) {
+                    if (hover.range) {
+                        expect(hover.range.start.line).to.equal(cdataStartLine);
+                    }
+                }
+            });
+        });
+
+        describe('synthetic file plugin context', () => {
+            // Verifies that emitWithSyntheticFileContext sets _cdataDiagnosticsContext for
+            // every plugin event that fires with a synthetic BrsFile as event.file, so that
+            // plugins calling program.getDiagnostics() from inside the handler get results
+            // where x.file === event.file holds (diagnostics not yet remapped to the XmlFile).
+
+            let xmlFile: XmlFile;
+
+            beforeEach(() => {
+                xmlFile = program.setFile<XmlFile>('components/MyComp.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="MyComp" extends="Scene">
+                        <script type="text/brightscript"><![CDATA[
+                            function init()
+                                undeclaredVar = unknownFunction()
+                            end function
+                        ]]></script>
+                    </component>
+                `);
+                program.validate();
+            });
+
+            // Note: afterFileParse cannot be covered here because isSynthetic is set on the
+            // BrsFile *after* setFile() returns, which is after afterFileParse fires. So the
+            // emitWithSyntheticFileContext wrapper cannot identify the file as synthetic at
+            // that point. This is a known limitation.
+
+            it('onFileValidate: _cdataDiagnosticsContext is set to the synthetic BrsFile during the event', () => {
+                // onFileValidate fires during the validation pass, before scope diagnostics are
+                // produced. We verify the context flag is set so getDiagnostics() would scope
+                // correctly if called by a plugin.
+                let contextFileInsideHandler: BrsFile | undefined;
+                program.plugins.add({
+                    name: 'test',
+                    onFileValidate: function(event) {
+                        if (isBrsFile(event.file) && event.file.isSynthetic) {
+                            contextFileInsideHandler = (program as any)._cdataDiagnosticsContext;
+                        }
+                    }
+                });
+                program.setFile('components/MyComp.xml', xmlFile.fileContents);
+                program.validate();
+                expect(contextFileInsideHandler).to.exist;
+                expect((contextFileInsideHandler as BrsFile).isSynthetic).to.be.true;
+            });
+
+            it('provideDocumentSymbols: program.getDiagnostics() inside handler associates diagnostics with the synthetic BrsFile', () => {
+                let fileIdentityWorked = false;
+                program.plugins.add({
+                    name: 'test',
+                    provideDocumentSymbols: function(event) {
+                        if (isBrsFile(event.file) && (event.file as BrsFile).isSynthetic) {
+                            const diags = program.getDiagnostics()
+                                .filter(x => x.file === event.file);
+                            if (diags.length > 0) {
+                                fileIdentityWorked = true;
+                            }
+                        }
+                    }
+                });
+                program.getDocumentSymbols(xmlFile.srcPath);
+                expect(fileIdentityWorked).to.be.true;
+            });
+
+            it('onGetSemanticTokens: program.getDiagnostics() inside handler associates diagnostics with the synthetic BrsFile', () => {
+                let fileIdentityWorked = false;
+                program.plugins.add({
+                    name: 'test',
+                    onGetSemanticTokens: function(event) {
+                        if (isBrsFile(event.file) && (event.file as BrsFile).isSynthetic) {
+                            const diags = program.getDiagnostics()
+                                .filter(x => x.file === event.file);
+                            if (diags.length > 0) {
+                                fileIdentityWorked = true;
+                            }
+                        }
+                    }
+                });
+                program.getSemanticTokens(xmlFile.srcPath);
+                expect(fileIdentityWorked).to.be.true;
+            });
+
+            it('onGetCodeActions: program.getDiagnostics() inside handler supports "fix all" pattern across multiple CDATA diagnostics', () => {
+                // Two `then` violations in one CDATA block — simulate the bslint "fix all" pattern
+                const twoThenFile = program.setFile<XmlFile>('components/TwoThen.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="TwoThen" extends="Scene">
+                        <script type="text/brightscript"><![CDATA[
+                            function a() : end function
+                            function b() : end function
+                        ]]></script>
+                    </component>
+                `);
+                program.validate();
+                const twoThenSynthetic = program.getFile<BrsFile>('components/TwoThen.cdata-0.script.brs');
+
+                // Simulate plugin calling getDiagnostics() filtered by event.file identity
+                const fixAllDiagsFoundBySyntheticIdentity: BsDiagnostic[][] = [];
+                program.plugins.add({
+                    name: 'test',
+                    onGetCodeActions: function(event) {
+                        if (event.file === twoThenSynthetic) {
+                            // This is exactly the pattern a "fix all" plugin would use
+                            const allInFile = program.getDiagnostics()
+                                .filter(x => x.file === event.file);
+                            fixAllDiagsFoundBySyntheticIdentity.push(allInFile);
+                        }
+                    }
+                });
+
+                // trigger inside first function range
+                program.getCodeActions(twoThenFile.srcPath, Range.create(3, 12, 3, 12));
+
+                // the plugin must have seen diagnostics associated with the synthetic BrsFile
+                expect(fixAllDiagsFoundBySyntheticIdentity.length).to.be.greaterThan(0);
+                // and all returned diagnostics must reference the synthetic file, not the xml file
+                for (const group of fixAllDiagsFoundBySyntheticIdentity) {
+                    for (const d of group) {
+                        expect(d.file).to.equal(twoThenSynthetic, 'expected diagnostic.file to be the synthetic BrsFile, not the XmlFile');
+                    }
+                }
+            });
+        });
+    });
 });
+

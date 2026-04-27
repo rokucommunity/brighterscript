@@ -93,10 +93,10 @@ export class Lexer {
         this.options = this.sanitizeOptions(options);
         this.start = 0;
         this.current = 0;
-        this.lineBegin = 0;
-        this.lineEnd = 0;
-        this.columnBegin = 0;
-        this.columnEnd = 0;
+        this.lineBegin = this.options.startLine ?? 0;
+        this.lineEnd = this.options.startLine ?? 0;
+        this.columnBegin = this.options.startCharacter ?? 0;
+        this.columnEnd = this.options.startCharacter ?? 0;
         this.tokens = [];
         this.diagnostics = [];
         while (!this.isAtEnd()) {
@@ -1102,4 +1102,17 @@ export interface ScanOptions {
      * @default true
      */
     trackLocations?: boolean;
+    /**
+     * The zero-indexed line number to start position tracking from.
+     * Useful when scanning a fragment of a larger file (e.g. an inline CDATA block)
+     * so that all token ranges are in the coordinate space of the parent file.
+     * @default 0
+     */
+    startLine?: number;
+    /**
+     * The zero-indexed character offset to start position tracking from on the first line.
+     * Only applies to the first line; subsequent lines always start at column 0.
+     * @default 0
+     */
+    startCharacter?: number;
 }

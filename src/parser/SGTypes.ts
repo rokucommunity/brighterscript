@@ -164,8 +164,36 @@ export class SGScript extends SGTag {
         this.setAttribute('uri', value);
     }
 
+    /**
+     * The raw text content of the CDATA block, with the `<![CDATA[` and `]]>` wrappers stripped.
+     * Returns undefined if this script tag has no CDATA content.
+     */
+    get cdataText(): string | undefined {
+        // Use a capture group with [\s\S]*? so multiline content and edge cases
+        // (e.g. trailing whitespace after ]]>, or > characters inside the content) are handled
+        // correctly without relying on ^ / $ anchors that can misbehave at string boundaries.
+        const match = /^<!\[CDATA\[([\s\S]*?)\]\]>/.exec(this.cdata?.text);
+        return match?.[1];
+    }
+
+    /**
+     * When set, called during transpile to produce a SourceNode for this CDATA block's content.
+     * Returns undefined if the BrsFile does not need transpiling (raw cdata is used as-is).
+     * Set by Program when the synthetic BrsFile is registered; lives for the lifetime of the file.
+     */
+    public cdataTranspile?: (state: TranspileState) => SourceNode | undefined;
+
     protected transpileBody(state: TranspileState): (string | SourceNode)[] {
-        if (this.cdata) {
+        const cdataSourceNode = this.cdataTranspile?.(state);
+        if (cdataSourceNode) {
+            return [
+                '>',
+                '<![CDATA[',
+                cdataSourceNode,
+                ']]>',
+                '</', this.tag.text, '>\n'
+            ];
+        } else if (this.cdata) {
             return [
                 '>',
                 state.transpileToken(this.cdata),

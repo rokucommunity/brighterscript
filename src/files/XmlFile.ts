@@ -6,6 +6,7 @@ import { DiagnosticCodeMap, diagnosticCodes } from '../DiagnosticMessages';
 import type { FunctionScope } from '../FunctionScope';
 import type { Callable, BsDiagnostic, File, FileReference, FunctionCall, CommentFlag } from '../interfaces';
 import type { Program } from '../Program';
+import type { BrsFile } from './BrsFile';
 import util from '../util';
 import SGParser, { rangeFromTokenValue } from '../parser/SGParser';
 import chalk from 'chalk';
@@ -74,6 +75,17 @@ export class XmlFile {
      * Will this file result in only comment or whitespace output? If so, it can be excluded from the output if that bsconfig setting is enabled.
      */
     readonly canBePruned = false;
+
+    /**
+     * XML files are never synthetically generated; this is always false.
+     * Exists to satisfy the BscFile union type alongside BrsFile.isSynthetic.
+     */
+    readonly isSynthetic = false;
+
+    /**
+     * When true, this file will not be written as a standalone output file during transpile.
+     */
+    public excludeFromOutput = false;
 
     /**
      * The list of script imports delcared in the XML of this file.
@@ -168,6 +180,24 @@ export class XmlFile {
     //TODO implement the xml CDATA parsing, which would populate this list
     public functionCalls = [] as FunctionCall[];
 
+    /**
+     * The pkg paths of synthetic BrsFiles generated from inline CDATA script blocks in this file.
+     * Populated during `parse()`. Used by Program.setFile() to register the files, by
+     * attachDependencyGraph() to add them as dependencies, by transpile() to replace CDATA
+     * with uri script tags, and by dispose() to clean them up.
+     */
+    public inlineScriptPkgPaths: string[] = [];
+
+    /**
+     * Derive the pkg path for a synthetic file extracted from a CDATA block.
+     * Format: `components/MyComp.cdata-0.script.brs` (or `.bs` for brighterscript type).
+     */
+    private getInlineScriptPkgPath(cdataIndex: number, scriptType: string | undefined): string {
+        const isBrighterScript = /brighterscript|text\/bs\b/i.test(scriptType ?? '');
+        const ext = isBrighterScript ? '.bs' : '.brs';
+        return this.pkgPath.replace(/\\/g, '/').replace(/\.xml$/i, `.cdata-${cdataIndex}.script${ext}`);
+    }
+
     public functionScopes = [] as FunctionScope[];
 
     /**
@@ -209,6 +239,7 @@ export class XmlFile {
      */
     public parse(fileContents: string) {
         this.fileContents = fileContents;
+        this.inlineScriptPkgPaths = [];
 
         this.parser.parse(this.pkgPath, fileContents);
         this.diagnostics = this.parser.diagnostics.map(diagnostic => ({
@@ -222,6 +253,16 @@ export class XmlFile {
         this.needsTranspiled = this.needsTranspiled || this.ast.component?.scripts?.some(
             script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
         );
+
+        //collect inline CDATA scripts and assign them synthetic pkg paths
+        let cdataIndex = 0;
+        for (const script of this.ast.component?.scripts ?? []) {
+            if (script.cdata) {
+                this.inlineScriptPkgPaths.push(this.getInlineScriptPkgPath(cdataIndex++, script.type));
+                //any CDATA script requires the XML to be rewritten (CDATA → uri tag)
+                this.needsTranspiled = true;
+            }
+        }
     }
 
     /**
@@ -270,7 +311,8 @@ export class XmlFile {
         });
 
         let dependencies = [
-            ...this.scriptTagImports.map(x => x.pkgPath.toLowerCase())
+            ...this.scriptTagImports.map(x => x.pkgPath.toLowerCase()),
+            ...this.inlineScriptPkgPaths.map(p => util.standardizePath(p).toLowerCase())
         ];
         //if autoImportComponentScript is enabled, add the .bs and .brs files with the same name
         if (this.program.options.autoImportComponentScript) {
@@ -434,11 +476,17 @@ export class XmlFile {
             return map;
         }, {});
 
-        //if the XML already has this import, skip this one
-        let alreadyThereScriptImportMap = this.scriptTagImports.reduce((map, fileReference) => {
+        //if the XML already has this import (either a uri script tag or an inline CDATA script), skip this one
+        let alreadyThereScriptImportMap = this.scriptTagImports.reduce<Record<string, boolean>>((map, fileReference) => {
             map[fileReference.pkgPath.toLowerCase()] = true;
             return map;
         }, {});
+        for (const pkgPath of this.inlineScriptPkgPaths) {
+            const normalizedPkgPath = util.standardizePath(pkgPath).toLowerCase();
+            alreadyThereScriptImportMap[normalizedPkgPath] = true;
+            //also mark the .brs variant so a .bs inline script doesn't get added as an extra import
+            alreadyThereScriptImportMap[normalizedPkgPath.replace(/\.bs$/, '.brs')] = true;
+        }
 
         let resultMap = {};
         let result = [] as string[];
@@ -489,6 +537,11 @@ export class XmlFile {
         const state = new TranspileState(this.srcPath, this.program.options);
 
         const originalScripts = this.ast.component?.scripts ?? [];
+
+        const anySyntheticNeedsTranspiled = this.inlineScriptPkgPaths.some(
+            pkgPath => this.program.getFile<BrsFile>(pkgPath)?.needsTranspiled
+        );
+
         const extraImportScripts = this.getMissingImportsForTranspile().map(uri => {
             const script = new SGScript();
             script.uri = util.getRokuPkgPath(uri.replace(/\.bs$/, '.brs'));
@@ -501,10 +554,9 @@ export class XmlFile {
         ]);
 
         let transpileResult: SourceNode | undefined;
-        if (this.needsTranspiled || extraImportScripts.length > 0 || scriptsHaveChanged) {
+        if (this.needsTranspiled || anySyntheticNeedsTranspiled || extraImportScripts.length > 0 || scriptsHaveChanged) {
             //temporarily add the missing imports as script tags
             this.ast.component.scripts = publishableScripts;
-
 
             transpileResult = util.sourceNodeFromTranspileResult(null, null, state.srcPath, this.parser.ast.transpile(state));
 
@@ -537,5 +589,9 @@ export class XmlFile {
     public dispose() {
         //unsubscribe from any DependencyGraph subscriptions
         this.unsubscribeFromDependencyGraph?.();
+        //clean up any synthetic BrsFiles that were generated from CDATA blocks in this file
+        for (const pkgPath of this.inlineScriptPkgPaths) {
+            this.program.removeFile(pkgPath);
+        }
     }
 }

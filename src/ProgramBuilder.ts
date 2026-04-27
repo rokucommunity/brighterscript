@@ -250,6 +250,11 @@ export class ProgramBuilder {
                 throw new Error('Internal invariant exception: somehow file watcher ran before `ProgramBuilder.run()`');
             }
             thePath = s`${path.resolve(this.rootDir, thePath)}`;
+            //ignore file events for synthetic files (e.g. extracted CDATA scripts) — they are managed
+            //programmatically by XmlFile and don't exist on disk in the source directory
+            if (this.program.getFile(thePath)?.isSynthetic) {
+                return;
+            }
             if (event === 'add' || event === 'change') {
                 const fileObj = {
                     src: thePath,
