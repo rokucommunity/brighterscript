@@ -499,6 +499,90 @@ describe('ConstStatement', () => {
             `);
         });
 
+        it('inlines a const aa-literal at multiple consumer call sites in the same file', () => {
+            program.setFile('source/consts.bs', `
+                namespace ns
+                    enum E
+                        X = "X"
+                    end enum
+                    const M = { "x": ns.E.X }
+                end namespace
+            `);
+            testTranspile(`
+                sub main()
+                    a = ns.M
+                    b = ns.M
+                end sub
+            `, `
+                sub main()
+                    a = ({
+                        "x": "X"
+                    })
+                    b = ({
+                        "x": "X"
+                    })
+                end sub
+            `);
+        });
+
+        it('handles diamond const reference graph (one base const reached via two paths)', () => {
+            program.setFile('source/consts.bs', `
+                namespace ns
+                    enum E
+                        X = "X"
+                    end enum
+                    const C = { "c": ns.E.X }
+                    const A = { "a": ns.C }
+                    const B = { "b": ns.C }
+                end namespace
+            `);
+            testTranspile(`
+                sub main()
+                    print ns.A
+                    print ns.B
+                end sub
+            `, `
+                sub main()
+                    print ({
+                        "a": ({
+                            "c": "X"
+                        })
+                    })
+                    print ({
+                        "b": ({
+                            "c": "X"
+                        })
+                    })
+                end sub
+            `);
+        });
+
+        it('does not infinite-loop on circular const-of-aa references', function() {
+            this.timeout(2000);
+            program.setFile('source/consts.bs', `
+                namespace ns
+                    const A = { "x": ns.B }
+                    const B = { "y": ns.A }
+                end namespace
+            `);
+            //the inner-most cyclic ref is left as the original namespace path so
+            //transpile completes without recursing forever. The runtime semantics
+            //of the cyclic ref are inherently broken, but the compile must not hang.
+            testTranspile(`
+                sub main()
+                    print ns.A
+                end sub
+            `, `
+                sub main()
+                    print ({
+                        "x": ({
+                            "y": ns_A
+                        })
+                    })
+                end sub
+            `);
+        });
+
         it('resolves complex multi-file const-enum chain', () => {
             program.setFile('source/colors.bs', `
                 namespace Theme
