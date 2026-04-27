@@ -417,6 +417,13 @@ export class Project implements LspProject {
         }
     }
 
+    public async getSelectionRanges(options: { srcPath: string; positions: Position[] }) {
+        await this.onIdle();
+        if (this.builder.program.hasFile(options.srcPath)) {
+            return this.builder.program.getSelectionRanges(options.srcPath, options.positions);
+        }
+    }
+
     public async getCodeActions(options: { srcPath: string; range: Range }) {
         await this.onIdle();
 
