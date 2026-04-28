@@ -638,36 +638,39 @@ export class Scope {
                     loopName = loopName === null ? part : `${loopName}.${part}`;
                     let lowerLoopName = loopName.toLowerCase();
                     if (!namespaceLookup.has(lowerLoopName)) {
+                        //only the always-needed fields are allocated up front; statement collections
+                        //and the aggregate symbolTable are lazy-initialized below when a leaf
+                        //declaration actually has something to put in them.
                         namespaceLookup.set(lowerLoopName, {
                             file: file,
                             fullName: loopName,
                             nameRange: namespaceStatement.nameExpression.range,
                             lastPartName: part,
-                            namespaces: new Map(),
-                            classStatements: {},
-                            functionStatements: {},
-                            enumStatements: new Map(),
-                            constStatements: new Map(),
-                            statements: [],
-                            symbolTable: new SymbolTable(`Namespace Aggregate: '${loopName}'`, () => this.symbolTable)
+                            namespaces: new Map()
                         });
                     }
                 }
                 let ns = namespaceLookup.get(name.toLowerCase());
-                ns.statements.push(...namespaceStatement.body.statements);
+                if (namespaceStatement.body.statements.length > 0) {
+                    (ns.statements ??= []).push(...namespaceStatement.body.statements);
+                }
                 for (let statement of namespaceStatement.body.statements) {
                     if (isClassStatement(statement) && statement.name) {
-                        ns.classStatements[statement.name.text.toLowerCase()] = statement;
+                        (ns.classStatements ??= {})[statement.name.text.toLowerCase()] = statement;
                     } else if (isFunctionStatement(statement) && statement.name) {
-                        ns.functionStatements[statement.name.text.toLowerCase()] = statement;
+                        (ns.functionStatements ??= {})[statement.name.text.toLowerCase()] = statement;
                     } else if (isEnumStatement(statement) && statement.fullName) {
-                        ns.enumStatements.set(statement.fullName.toLowerCase(), statement);
+                        (ns.enumStatements ??= new Map()).set(statement.fullName.toLowerCase(), statement);
                     } else if (isConstStatement(statement) && statement.fullName) {
-                        ns.constStatements.set(statement.fullName.toLowerCase(), statement);
+                        (ns.constStatements ??= new Map()).set(statement.fullName.toLowerCase(), statement);
                     }
                 }
                 // Merges all the symbol tables of the namespace statements into the new symbol table created above.
-                // Set those symbol tables to have this new merged table as a parent
+                // Set those symbol tables to have this new merged table as a parent.
+                // The aggregate symbolTable is allocated here so every leaf gets one;
+                // pure-intermediate containers (a name that's only a dotted prefix and never
+                // a leaf of any namespaceStatement) will not have one allocated.
+                ns.symbolTable ??= new SymbolTable(`Namespace Aggregate: '${ns.fullName}'`, () => this.symbolTable);
                 ns.symbolTable.mergeSymbolTable(namespaceStatement.body.getSymbolTable());
             }
 
@@ -816,12 +819,16 @@ export class Scope {
             if (isBrsFile(file)) {
                 file.parser.symbolTable.pushParentProvider(() => this.symbolTable);
 
-                //link each NamespaceStatement's SymbolTable with the aggregate NamespaceLookup SymbolTable
+                //link each NamespaceStatement's SymbolTable with the aggregate NamespaceLookup SymbolTable.
+                //Leaf containers always have symbolTable populated (buildNamespaceLookup allocates one
+                //before the merge step), so the lookup below is safe; the null guard exists only to
+                //tolerate edge cases like a namespace that failed to register.
                 for (const namespace of file.parser.references.namespaceStatements) {
                     const namespaceNameLower = namespace.getName(ParseMode.BrighterScript).toLowerCase();
-                    namespace.getSymbolTable().addSibling(
-                        this.namespaceLookup.get(namespaceNameLower).symbolTable
-                    );
+                    const aggregate = this.namespaceLookup.get(namespaceNameLower)?.symbolTable;
+                    if (aggregate) {
+                        namespace.getSymbolTable().addSibling(aggregate);
+                    }
                 }
             }
         }
@@ -834,9 +841,10 @@ export class Scope {
 
                 for (const namespace of file.parser.references.namespaceStatements) {
                     const namespaceNameLower = namespace.getName(ParseMode.BrighterScript).toLowerCase();
-                    namespace.getSymbolTable().removeSibling(
-                        this.namespaceLookup.get(namespaceNameLower).symbolTable
-                    );
+                    const aggregate = this.namespaceLookup.get(namespaceNameLower)?.symbolTable;
+                    if (aggregate) {
+                        namespace.getSymbolTable().removeSibling(aggregate);
+                    }
                 }
             }
         }
@@ -1330,18 +1338,28 @@ export class Scope {
     }
 }
 
+/**
+ * A node in the per-scope namespace tree.
+ *
+ * `namespaces` is always allocated so parent-child wiring works for every container.
+ * The remaining collections are lazily allocated by `buildNamespaceLookup` only when
+ * a corresponding declaration is encountered, so pure-intermediate containers and
+ * sparsely-populated leaves do not pay the cost of empty Maps/Records they will never use.
+ *
+ * Consumers must handle these fields being undefined.
+ */
 export interface NamespaceContainer {
     file: BscFile;
     fullName: string;
     nameRange: Range;
     lastPartName: string;
-    statements: Statement[];
-    classStatements: Record<string, ClassStatement>;
-    functionStatements: Record<string, FunctionStatement>;
-    enumStatements: Map<string, EnumStatement>;
-    constStatements: Map<string, ConstStatement>;
     namespaces: Map<string, NamespaceContainer>;
-    symbolTable: SymbolTable;
+    statements?: Statement[];
+    classStatements?: Record<string, ClassStatement>;
+    functionStatements?: Record<string, FunctionStatement>;
+    enumStatements?: Map<string, EnumStatement>;
+    constStatements?: Map<string, ConstStatement>;
+    symbolTable?: SymbolTable;
 }
 
 interface AugmentedNewExpression extends NewExpression {

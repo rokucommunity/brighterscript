@@ -1091,7 +1091,7 @@ export class BrsFile {
             if (namespace.fullName.toLowerCase() === closestParentNamespaceName) {
                 //add all of this namespace's immediate child namespaces, bearing in mind if we are after a new keyword
                 for (let [, ns] of namespace.namespaces) {
-                    if (!newToken || ns.statements.find((s) => isClassStatement(s))) {
+                    if (!newToken || ns.statements?.find((s) => isClassStatement(s))) {
                         if (!result.has(ns.lastPartName)) {
                             result.set(ns.lastPartName, {
                                 label: ns.lastPartName,
@@ -1102,7 +1102,7 @@ export class BrsFile {
                 }
 
                 //add function and class statement completions
-                for (let stmt of namespace.statements) {
+                for (let stmt of namespace.statements ?? []) {
                     if (isClassStatement(stmt)) {
                         result.set(stmt.name.text, {
                             label: stmt.name.text,
@@ -1253,7 +1253,7 @@ export class BrsFile {
                 }
 
                 let namespace = scope.namespaceLookup.get(namespaceName.toLowerCase());
-                if (namespace?.functionStatements[lowerCalleeName]) {
+                if (namespace?.functionStatements?.[lowerCalleeName]) {
                     return true;
                 }
             }
