@@ -1531,18 +1531,20 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
      * points directly at the contribution's pre-built data.
      */
     private wrapSingleContribution(contribution: NamespaceFileContribution, nameLower: string): NamespaceContainer {
+        //field order matches the NamespaceContainer interface declaration so the
+        //fast-path and slow-path containers share a single V8 hidden class.
         return {
             file: contribution.file,
             fullName: contribution.fullName,
-            lastPartName: contribution.lastPartName,
             nameRange: contribution.nameRange,
+            lastPartName: contribution.lastPartName,
+            namespaces: this.buildScopedChildren(nameLower),
             statements: contribution.statements,
             classStatements: contribution.classStatements,
             functionStatements: contribution.functionStatements,
             enumStatements: contribution.enumStatements,
             constStatements: contribution.constStatements,
-            symbolTable: contribution.symbolTable,
-            namespaces: this.buildScopedChildren(nameLower)
+            symbolTable: contribution.symbolTable
         };
     }
 
@@ -1553,12 +1555,22 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
      */
     private aggregateContributions(contributions: NamespaceFileContribution[], nameLower: string): NamespaceContainer {
         const first = contributions[0];
+        //field order matches the NamespaceContainer interface declaration so the
+        //fast-path and slow-path containers share a single V8 hidden class.
+        //Optional fields are assigned `undefined` rather than omitted so subsequent
+        //`??=` mutations don't grow the object shape.
         const container: NamespaceContainer = {
             file: first.file,
             fullName: first.fullName,
-            lastPartName: first.lastPartName,
             nameRange: first.nameRange,
-            namespaces: this.buildScopedChildren(nameLower)
+            lastPartName: first.lastPartName,
+            namespaces: this.buildScopedChildren(nameLower),
+            statements: undefined,
+            classStatements: undefined,
+            functionStatements: undefined,
+            enumStatements: undefined,
+            constStatements: undefined,
+            symbolTable: undefined
         };
         for (const contribution of contributions) {
             if (contribution.statements?.length) {

@@ -186,11 +186,21 @@ export class BrsFile {
                     loopName = loopName === null ? part : `${loopName}.${part}`;
                     const lowerLoopName = loopName.toLowerCase();
                     if (!contributions.has(lowerLoopName)) {
+                        //explicitly assign every optional field as undefined so all
+                        //NamespaceFileContribution instances share a single V8 hidden
+                        //class. Subsequent `??=` assignments mutate values without
+                        //changing the object shape, which keeps property access fast.
                         contributions.set(lowerLoopName, {
                             file: this,
                             fullName: loopName,
                             lastPartName: part,
-                            nameRange: namespaceStatement.nameExpression.range
+                            nameRange: namespaceStatement.nameExpression.range,
+                            statements: undefined,
+                            classStatements: undefined,
+                            functionStatements: undefined,
+                            enumStatements: undefined,
+                            constStatements: undefined,
+                            symbolTable: undefined
                         });
                     }
                 }
