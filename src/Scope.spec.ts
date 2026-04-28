@@ -1677,7 +1677,9 @@ describe('Scope', () => {
             `);
             program.validate();
             const sourceLookup = program['scopes']['source'].buildNamespaceLookup();
-            const xmlLookup = program['scopes']['components/Comp.xml'].buildNamespaceLookup();
+            //XmlScope's key in `program.scopes` is its `xmlFile.pkgPath`, which is path-normalized
+            //(backslashes on Windows). Use `s` to match.
+            const xmlLookup = program['scopes'][s`components/Comp.xml`].buildNamespaceLookup();
             const fromSource = sourceLookup.get('shared.lib');
             const fromXml = xmlLookup.get('shared.lib');
             expect(fromSource).to.exist;
