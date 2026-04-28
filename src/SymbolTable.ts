@@ -127,9 +127,7 @@ export class SymbolTable {
                 destSymbols = [];
                 this.symbolMap.set(key, destSymbols);
             }
-            // for (const symbol of sourceSymbols) {
             destSymbols.push(...sourceSymbols);
-            // }
         }
     }
 
