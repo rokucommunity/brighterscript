@@ -158,6 +158,53 @@ export class Program {
     public files = {} as Record<string, BscFile>;
     private pkgMap = {} as Record<string, BscFile>;
 
+    /**
+     * Reverse index from a lower-cased namespace name part to the set of `BrsFile`s that
+     * contribute to it. Built lazily, invalidated whenever any file is added, removed,
+     * or re-parsed (`setFile` and `removeFile` both clear it).
+     *
+     * Used by `ScopeNamespaceLookup` to resolve a namespace name to its contributing
+     * files in O(1), then intersect against the scope's file set.
+     */
+    private _namespaceFileIndex: Map<string, Set<BrsFile>> | undefined;
+
+    /**
+     * Look up the set of `BrsFile`s that declare any part of the given namespace name
+     * (lowercased). Returns `undefined` when no file contributes.
+     */
+    public getFilesContributingToNamespace(namespaceNameLower: string): Set<BrsFile> | undefined {
+        if (!this._namespaceFileIndex) {
+            this._namespaceFileIndex = this.buildNamespaceFileIndex();
+        }
+        return this._namespaceFileIndex.get(namespaceNameLower);
+    }
+
+    private buildNamespaceFileIndex(): Map<string, Set<BrsFile>> {
+        const index = new Map<string, Set<BrsFile>>();
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                for (const nameLower of file.getNamespaceContributions().keys()) {
+                    let set = index.get(nameLower);
+                    if (!set) {
+                        set = new Set<BrsFile>();
+                        index.set(nameLower, set);
+                    }
+                    set.add(file);
+                }
+            }
+        }
+        return index;
+    }
+
+    /**
+     * Invalidate the program-level namespace-to-file index. Called by `setFile` and
+     * `removeFile`; downstream scope namespace lookups already rebuild via the
+     * dependency-graph invalidation chain, so this only needs to drop the cached index.
+     */
+    public invalidateNamespaceIndex() {
+        this._namespaceFileIndex = undefined;
+    }
+
     private scopes = {} as Record<string, Scope>;
 
     protected addScope(scope: Scope) {
@@ -402,6 +449,10 @@ export class Program {
         //normalize the file paths
         const { srcPath, pkgPath } = this.getPaths(fileParam, this.options.rootDir);
 
+        //namespace contributions for the new/replaced file may differ; force the
+        //program-level index to rebuild on next query
+        this.invalidateNamespaceIndex();
+
         let file = this.logger.time(LogLevel.debug, ['Program.setFile()', chalk.green(srcPath)], () => {
             //if the file is already loaded, remove it
             if (this.hasFile(srcPath)) {
@@ -623,6 +674,10 @@ export class Program {
      */
     public removeFile(filePath: string, normalizePath = true) {
         this.logger.debug('Program.removeFile()', filePath);
+
+        //namespace contributions may have included this file; force the program-level
+        //index to rebuild on next query
+        this.invalidateNamespaceIndex();
 
         let file = this.getFile(filePath, normalizePath);
         if (file) {

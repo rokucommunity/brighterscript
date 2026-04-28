@@ -1659,6 +1659,83 @@ describe('Scope', () => {
             //leaves always get a symbolTable allocated for sibling-linking during validation
             expect(leaf.symbolTable).to.exist;
         });
+
+        it('shares per-file contribution data across scopes that pull in the same file (fast path)', () => {
+            //a single .bs file declares the namespace; both source scope and an xml scope
+            //pull it in. The two scopes should produce containers whose heavy fields point
+            //at the same NamespaceFileContribution instances (no per-scope re-allocation).
+            program.setFile<BrsFile>('source/shared.bs', `
+                namespace shared.lib
+                    function helper()
+                    end function
+                end namespace
+            `);
+            program.setFile('components/Comp.xml', `
+                <component name="Comp" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/shared.bs" />
+                </component>
+            `);
+            program.validate();
+            const sourceLookup = program['scopes']['source'].buildNamespaceLookup();
+            const xmlLookup = program['scopes']['components/Comp.xml'].buildNamespaceLookup();
+            const fromSource = sourceLookup.get('shared.lib');
+            const fromXml = xmlLookup.get('shared.lib');
+            expect(fromSource).to.exist;
+            expect(fromXml).to.exist;
+            //heavy fields share refs (the wrapper objects themselves are per-scope so
+            //their `namespaces` field can differ, but the inner data is shared)
+            expect(fromSource.functionStatements).to.equal(fromXml.functionStatements);
+            expect(fromSource.symbolTable).to.equal(fromXml.symbolTable);
+        });
+
+        it('aggregates contributions from multiple in-scope files (slow path)', () => {
+            //"shared" namespace is split across two files that both end up in the source scope
+            program.setFile<BrsFile>('source/sharedA.bs', `
+                namespace shared
+                    function fromA()
+                    end function
+                end namespace
+            `);
+            program.setFile<BrsFile>('source/sharedB.bs', `
+                namespace shared
+                    function fromB()
+                    end function
+                end namespace
+            `);
+            const lookup = program['scopes']['source'].buildNamespaceLookup();
+            const merged = lookup.get('shared');
+            expect(merged).to.exist;
+            expect(merged.functionStatements).to.exist;
+            expect(merged.functionStatements.froma).to.exist;
+            expect(merged.functionStatements.fromb).to.exist;
+            //the slow-path symbolTable is freshly allocated and contains both files' symbols
+            expect(merged.symbolTable).to.exist;
+        });
+
+        it('rebuilds the program-level index when a file is replaced', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                namespace alpha
+                    function originalFn()
+                    end function
+                end namespace
+            `);
+            const beforeLookup = program['scopes']['source'].buildNamespaceLookup();
+            const before = beforeLookup.get('alpha');
+            expect(before.functionStatements?.originalfn).to.exist;
+            //replace the file with a different namespace declaration
+            program.setFile<BrsFile>('source/main.bs', `
+                namespace alpha
+                    function replacementFn()
+                    end function
+                end namespace
+            `);
+            //the source scope's cache invalidates via the dependency-graph chain, so
+            //a fresh lookup reflects the new contributions
+            const afterLookup = program['scopes']['source'].buildNamespaceLookup();
+            const after = afterLookup.get('alpha');
+            expect(after.functionStatements?.replacementfn).to.exist;
+            expect(after.functionStatements?.originalfn).to.be.undefined;
+        });
     });
 
     describe('buildEnumLookup', () => {

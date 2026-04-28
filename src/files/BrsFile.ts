@@ -6,6 +6,8 @@ import { CompletionItemKind, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
 import { Scope } from '../Scope';
+import type { NamespaceFileContribution } from '../Scope';
+import { SymbolTable } from '../SymbolTable';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink, BscFile } from '../interfaces';
@@ -158,6 +160,64 @@ export class BrsFile {
     private get cache() {
         // eslint-disable-next-line @typescript-eslint/dot-notation
         return this._parser?.references['cache'];
+    }
+
+    /**
+     * Return this file's per-namespace contributions. Cached on the file's parser-level
+     * cache, so the result is invalidated automatically when the file re-parses.
+     *
+     * Each entry covers a single dotted name part (so a `namespace A.B.C` declaration
+     * produces entries for `A`, `A.B`, and `A.B.C`). Intermediates carry only structural
+     * fields; leaves populate the relevant statement collections plus a single-file
+     * symbolTable. The symbolTable has no parent provider (see Phase 4 design notes).
+     *
+     * The returned Map is shared across every Scope that pulls in this file, which is
+     * the core sharing primitive Phase 4 relies on.
+     */
+    public getNamespaceContributions(): Map<string, NamespaceFileContribution> {
+        return this.cache?.getOrAdd('BrsFile_namespaceContributions', () => {
+            const contributions = new Map<string, NamespaceFileContribution>();
+            for (const namespaceStatement of this.parser.references.namespaceStatements) {
+                const name = namespaceStatement.getName(ParseMode.BrighterScript);
+                const nameParts = name.split('.');
+                let loopName: string | null = null;
+                //ensure each dotted prefix has a contribution entry
+                for (const part of nameParts) {
+                    loopName = loopName === null ? part : `${loopName}.${part}`;
+                    const lowerLoopName = loopName.toLowerCase();
+                    if (!contributions.has(lowerLoopName)) {
+                        contributions.set(lowerLoopName, {
+                            file: this,
+                            fullName: loopName,
+                            lastPartName: part,
+                            nameRange: namespaceStatement.nameExpression.range
+                        });
+                    }
+                }
+                //populate the leaf contribution from this namespaceStatement's body
+                const ns = contributions.get(name.toLowerCase())!;
+                if (namespaceStatement.body.statements.length > 0) {
+                    (ns.statements ??= []).push(...namespaceStatement.body.statements);
+                }
+                for (const statement of namespaceStatement.body.statements) {
+                    if (isClassStatement(statement) && statement.name) {
+                        (ns.classStatements ??= {})[statement.name.text.toLowerCase()] = statement;
+                    } else if (isFunctionStatement(statement) && statement.name) {
+                        (ns.functionStatements ??= {})[statement.name.text.toLowerCase()] = statement;
+                    } else if (isEnumStatement(statement) && statement.fullName) {
+                        (ns.enumStatements ??= new Map()).set(statement.fullName.toLowerCase(), statement);
+                    } else if (isConstStatement(statement) && statement.fullName) {
+                        (ns.constStatements ??= new Map()).set(statement.fullName.toLowerCase(), statement);
+                    }
+                }
+                //single-file aggregate; NO parent provider (sibling resolution does not
+                //walk into a sibling's parent, so the previous scope-coupled provider
+                //was dead code)
+                ns.symbolTable ??= new SymbolTable(`Namespace File Contribution: '${ns.fullName}' in ${this.pkgPath}`);
+                ns.symbolTable.mergeSymbolTable(namespaceStatement.body.getSymbolTable());
+            }
+            return contributions;
+        }) ?? new Map<string, NamespaceFileContribution>();
     }
 
     /**
