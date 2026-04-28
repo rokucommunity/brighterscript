@@ -175,63 +175,70 @@ export class BrsFile {
      * the core sharing primitive Phase 4 relies on.
      */
     public getNamespaceContributions(): Map<string, NamespaceFileContribution> {
-        return this.cache?.getOrAdd('namespaceContributions', () => {
-            const contributions = new Map<string, NamespaceFileContribution>();
-            this.ast.walk(createVisitor({
-                NamespaceStatement: namespaceStatement => {
-                    const name = namespaceStatement.getName(ParseMode.BrighterScript);
-                    const nameParts = name.split('.');
-                    let loopName: string | null = null;
-                    //ensure each dotted prefix has a contribution entry
-                    for (const part of nameParts) {
-                        loopName = loopName === null ? part : `${loopName}.${part}`;
-                        const lowerLoopName = loopName.toLowerCase();
-                        if (!contributions.has(lowerLoopName)) {
-                            //explicitly assign every optional field as undefined so all
-                            //NamespaceFileContribution instances share a single V8 hidden
-                            //class. Subsequent `??=` assignments mutate values without
-                            //changing the object shape, which keeps property access fast.
-                            contributions.set(lowerLoopName, {
-                                file: this,
-                                fullName: loopName,
-                                lastPartName: part,
-                                nameRange: namespaceStatement.nameExpression.range,
-                                statements: undefined,
-                                classStatements: undefined,
-                                functionStatements: undefined,
-                                enumStatements: undefined,
-                                constStatements: undefined,
-                                symbolTable: undefined
-                            });
-                        }
-                    }
-                    //populate the leaf contribution from this namespaceStatement's body
-                    const ns = contributions.get(name.toLowerCase())!;
-                    if (namespaceStatement.body.statements.length > 0) {
-                        (ns.statements ??= []).push(...namespaceStatement.body.statements);
-                    }
-                    for (const statement of namespaceStatement.body.statements) {
-                        if (isClassStatement(statement) && statement.name) {
-                            (ns.classStatements ??= {})[statement.name.text.toLowerCase()] = statement;
-                        } else if (isFunctionStatement(statement) && statement.name) {
-                            (ns.functionStatements ??= {})[statement.name.text.toLowerCase()] = statement;
-                        } else if (isEnumStatement(statement) && statement.fullName) {
-                            (ns.enumStatements ??= new Map()).set(statement.fullName.toLowerCase(), statement);
-                        } else if (isConstStatement(statement) && statement.fullName) {
-                            (ns.constStatements ??= new Map()).set(statement.fullName.toLowerCase(), statement);
-                        }
-                    }
-                    //single-file aggregate; NO parent provider (sibling resolution does not
-                    //walk into a sibling's parent, so the previous scope-coupled provider
-                    //was dead code)
-                    ns.symbolTable ??= new SymbolTable(`Namespace File Contribution: '${ns.fullName}' in ${this.pkgPath}`);
-                    ns.symbolTable.mergeSymbolTable(namespaceStatement.body.getSymbolTable());
-                }
-            }), {
-                walkMode: WalkMode.visitStatements
-            });
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        let contributions = this.parser.references['namespaceContributions'];
+        if (contributions) {
             return contributions;
-        }) ?? new Map<string, NamespaceFileContribution>();
+        }
+
+        contributions = new Map<string, NamespaceFileContribution>();
+        this.ast.walk(createVisitor({
+            NamespaceStatement: namespaceStatement => {
+                const name = namespaceStatement.getName(ParseMode.BrighterScript);
+                const nameParts = name.split('.');
+                let loopName: string | null = null;
+                //ensure each dotted prefix has a contribution entry
+                for (const part of nameParts) {
+                    loopName = loopName === null ? part : `${loopName}.${part}`;
+                    const lowerLoopName = loopName.toLowerCase();
+                    if (!contributions.has(lowerLoopName)) {
+                        //explicitly assign every optional field as undefined so all
+                        //NamespaceFileContribution instances share a single V8 hidden
+                        //class. Subsequent `??=` assignments mutate values without
+                        //changing the object shape, which keeps property access fast.
+                        contributions.set(lowerLoopName, {
+                            file: this,
+                            fullName: loopName,
+                            lastPartName: part,
+                            nameRange: namespaceStatement.nameExpression.range,
+                            statements: undefined,
+                            classStatements: undefined,
+                            functionStatements: undefined,
+                            enumStatements: undefined,
+                            constStatements: undefined,
+                            symbolTable: undefined
+                        });
+                    }
+                }
+                //populate the leaf contribution from this namespaceStatement's body
+                const ns = contributions.get(name.toLowerCase())!;
+                if (namespaceStatement.body.statements.length > 0) {
+                    (ns.statements ??= []).push(...namespaceStatement.body.statements);
+                }
+                for (const statement of namespaceStatement.body.statements) {
+                    if (isClassStatement(statement) && statement.name) {
+                        (ns.classStatements ??= {})[statement.name.text.toLowerCase()] = statement;
+                    } else if (isFunctionStatement(statement) && statement.name) {
+                        (ns.functionStatements ??= {})[statement.name.text.toLowerCase()] = statement;
+                    } else if (isEnumStatement(statement) && statement.fullName) {
+                        (ns.enumStatements ??= new Map()).set(statement.fullName.toLowerCase(), statement);
+                    } else if (isConstStatement(statement) && statement.fullName) {
+                        (ns.constStatements ??= new Map()).set(statement.fullName.toLowerCase(), statement);
+                    }
+                }
+                //single-file aggregate; NO parent provider (sibling resolution does not
+                //walk into a sibling's parent, so the previous scope-coupled provider
+                //was dead code)
+                ns.symbolTable ??= new SymbolTable(`Namespace File Contribution: '${ns.fullName}' in ${this.pkgPath}`);
+                ns.symbolTable.mergeSymbolTable(namespaceStatement.body.getSymbolTable());
+            }
+        }), {
+            walkMode: WalkMode.visitStatements
+        });
+
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        this.parser.references['namespaceContributions'] = contributions;
+        return contributions;
     }
 
     /**
