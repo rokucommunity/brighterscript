@@ -5,6 +5,8 @@ import type { CodeAction, CompletionItem, Position, Range, SignatureInformation,
 import { CancellationTokenSource, CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
+import type { NamespaceContainer, NamespaceFileContribution } from './Scope';
+import { SymbolTable } from './SymbolTable';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
@@ -197,12 +199,97 @@ export class Program {
     }
 
     /**
-     * Invalidate the program-level namespace-to-file index. Called by `setFile` and
-     * `removeFile`; downstream scope namespace lookups already rebuild via the
-     * dependency-graph invalidation chain, so this only needs to drop the cached index.
+     * Cached slow-path namespace aggregates, keyed by `(nameLower, sorted-contributor-pkgPaths)`.
+     * Two scopes with the same in-scope file set for a multi-contributor namespace share
+     * the same aggregate object (and therefore the same merged statement collections and
+     * symbolTable instance). Built lazily, invalidated alongside `_namespaceFileIndex`.
+     *
+     * The aggregate is stored as a `NamespaceContainer` whose `namespaces` field is an
+     * empty Map: scopes always wrap the aggregate before returning to plugins, and the
+     * wrapper supplies its own scope-filtered children. Plugins never see the aggregate
+     * directly.
+     */
+    private _slowPathAggregates: Map<string, NamespaceContainer> | undefined;
+
+    /**
+     * Get or build the shared aggregate for a namespace whose in-scope contributors
+     * include more than one file. The aggregate's heavy fields are computed once per
+     * unique `(nameLower, contributing-files-set)` and reused across every scope that
+     * sees the same set.
+     */
+    public getSlowPathAggregate(nameLower: string, contributions: NamespaceFileContribution[]): NamespaceContainer {
+        if (!this._slowPathAggregates) {
+            this._slowPathAggregates = new Map<string, NamespaceContainer>();
+        }
+        //sorted pkgPaths ensure two scopes with the same contributor set hit the same key
+        const key = nameLower + '|' + contributions
+            .map(c => c.file.pkgPath.toLowerCase())
+            .sort()
+            .join('|');
+        let aggregate = this._slowPathAggregates.get(key);
+        if (!aggregate) {
+            aggregate = this.buildSlowPathAggregate(contributions);
+            this._slowPathAggregates.set(key, aggregate);
+        }
+        return aggregate;
+    }
+
+    private buildSlowPathAggregate(contributions: NamespaceFileContribution[]): NamespaceContainer {
+        const first = contributions[0];
+        //field order matches the NamespaceContainer interface declaration so aggregates
+        //share a single V8 hidden class with the per-scope wrapper containers
+        const aggregate: NamespaceContainer = {
+            file: first.file,
+            fullName: first.fullName,
+            nameRange: first.nameRange,
+            lastPartName: first.lastPartName,
+            namespaces: new Map(),
+            statements: undefined,
+            classStatements: undefined,
+            functionStatements: undefined,
+            enumStatements: undefined,
+            constStatements: undefined,
+            symbolTable: undefined
+        };
+        for (const contribution of contributions) {
+            if (contribution.statements?.length) {
+                (aggregate.statements ??= []).push(...contribution.statements);
+            }
+            if (contribution.classStatements) {
+                aggregate.classStatements = { ...(aggregate.classStatements ?? {}), ...contribution.classStatements };
+            }
+            if (contribution.functionStatements) {
+                aggregate.functionStatements = { ...(aggregate.functionStatements ?? {}), ...contribution.functionStatements };
+            }
+            if (contribution.enumStatements) {
+                aggregate.enumStatements ??= new Map();
+                for (const [key, value] of contribution.enumStatements) {
+                    aggregate.enumStatements.set(key, value);
+                }
+            }
+            if (contribution.constStatements) {
+                aggregate.constStatements ??= new Map();
+                for (const [key, value] of contribution.constStatements) {
+                    aggregate.constStatements.set(key, value);
+                }
+            }
+            if (contribution.symbolTable) {
+                aggregate.symbolTable ??= new SymbolTable(`Namespace Multi-File Aggregate: '${first.fullName}'`);
+                aggregate.symbolTable.mergeSymbolTable(contribution.symbolTable);
+            }
+        }
+        return aggregate;
+    }
+
+    /**
+     * Invalidate the program-level namespace-to-file index and the slow-path aggregate
+     * cache. Called by `setFile` and `removeFile`; downstream scope namespace lookups
+     * already rebuild via the dependency-graph invalidation chain, so this only needs
+     * to drop the cached indexes.
      */
     public invalidateNamespaceIndex() {
         this._namespaceFileIndex = undefined;
+        this._slowPathAggregates = undefined;
     }
 
     private scopes = {} as Record<string, Scope>;

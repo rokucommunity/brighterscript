@@ -1549,57 +1549,32 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
     }
 
     /**
-     * Slow path: multiple in-scope contributors. Statement collections and the
-     * symbolTable are merged per-scope. Rare in practice; covers cases where a
-     * namespace is genuinely split across multiple files in the same scope.
+     * Slow path: multiple in-scope contributors. The merged statement collections and
+     * symbolTable live at the program level (`Program.getSlowPathAggregate`), keyed by
+     * `(nameLower, sorted-contributor-pkgPaths)`. Two scopes with the same in-scope file
+     * set for this namespace share the same aggregate object, just like the fast path
+     * shares the per-file contribution.
+     *
+     * The wrapper container itself is per-scope so its `namespaces` (children) field can
+     * reflect the querying scope's file set.
      */
     private aggregateContributions(contributions: NamespaceFileContribution[], nameLower: string): NamespaceContainer {
-        const first = contributions[0];
-        //field order matches the NamespaceContainer interface declaration so the
-        //fast-path and slow-path containers share a single V8 hidden class.
-        //Optional fields are assigned `undefined` rather than omitted so subsequent
-        //`??=` mutations don't grow the object shape.
-        const container: NamespaceContainer = {
-            file: first.file,
-            fullName: first.fullName,
-            nameRange: first.nameRange,
-            lastPartName: first.lastPartName,
+        const aggregate = this.scope.program.getSlowPathAggregate(nameLower, contributions);
+        //field order matches the NamespaceContainer interface declaration so fast-path
+        //and slow-path containers share a single V8 hidden class
+        return {
+            file: aggregate.file,
+            fullName: aggregate.fullName,
+            nameRange: aggregate.nameRange,
+            lastPartName: aggregate.lastPartName,
             namespaces: this.buildScopedChildren(nameLower),
-            statements: undefined,
-            classStatements: undefined,
-            functionStatements: undefined,
-            enumStatements: undefined,
-            constStatements: undefined,
-            symbolTable: undefined
+            statements: aggregate.statements,
+            classStatements: aggregate.classStatements,
+            functionStatements: aggregate.functionStatements,
+            enumStatements: aggregate.enumStatements,
+            constStatements: aggregate.constStatements,
+            symbolTable: aggregate.symbolTable
         };
-        for (const contribution of contributions) {
-            if (contribution.statements?.length) {
-                (container.statements ??= []).push(...contribution.statements);
-            }
-            if (contribution.classStatements) {
-                container.classStatements = { ...(container.classStatements ?? {}), ...contribution.classStatements };
-            }
-            if (contribution.functionStatements) {
-                container.functionStatements = { ...(container.functionStatements ?? {}), ...contribution.functionStatements };
-            }
-            if (contribution.enumStatements) {
-                container.enumStatements ??= new Map();
-                for (const [key, value] of contribution.enumStatements) {
-                    container.enumStatements.set(key, value);
-                }
-            }
-            if (contribution.constStatements) {
-                container.constStatements ??= new Map();
-                for (const [key, value] of contribution.constStatements) {
-                    container.constStatements.set(key, value);
-                }
-            }
-            if (contribution.symbolTable) {
-                container.symbolTable ??= new SymbolTable(`Namespace Multi-File Aggregate: '${first.fullName}'`);
-                container.symbolTable.mergeSymbolTable(contribution.symbolTable);
-            }
-        }
-        return container;
     }
 
     /**
