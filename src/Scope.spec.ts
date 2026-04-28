@@ -1618,6 +1618,47 @@ describe('Scope', () => {
             program.validate();
             program['scopes']['source'].buildNamespaceLookup();
         });
+
+        it('skips allocating statement collections and symbolTable for pure-intermediate containers', () => {
+            //"NameA" is only a dotted prefix here, never a leaf of any namespace declaration
+            program.setFile<BrsFile>('source/main.bs', `
+                namespace NameA.NameB
+                    function doSomething()
+                    end function
+                end namespace
+            `);
+            const lookup = program['scopes']['source'].buildNamespaceLookup();
+            const intermediate = lookup.get('namea');
+            expect(intermediate).to.exist;
+            expect(intermediate.statements).to.be.undefined;
+            expect(intermediate.classStatements).to.be.undefined;
+            expect(intermediate.functionStatements).to.be.undefined;
+            expect(intermediate.enumStatements).to.be.undefined;
+            expect(intermediate.constStatements).to.be.undefined;
+            expect(intermediate.symbolTable).to.be.undefined;
+            //namespaces is always allocated so parent-child wiring works
+            expect(intermediate.namespaces).to.be.instanceOf(Map);
+            expect(intermediate.namespaces.get('nameb')).to.exist;
+        });
+
+        it('only allocates the statement collections that the leaf actually populates', () => {
+            //a leaf with only constants should leave classStatements/functionStatements/enumStatements undefined
+            program.setFile<BrsFile>('source/main.bs', `
+                namespace OnlyConsts
+                    const PI = 3.14
+                end namespace
+            `);
+            const lookup = program['scopes']['source'].buildNamespaceLookup();
+            const leaf = lookup.get('onlyconsts');
+            expect(leaf).to.exist;
+            expect(leaf.constStatements).to.be.instanceOf(Map);
+            expect(leaf.constStatements.has('onlyconsts.pi')).to.be.true;
+            expect(leaf.classStatements).to.be.undefined;
+            expect(leaf.functionStatements).to.be.undefined;
+            expect(leaf.enumStatements).to.be.undefined;
+            //leaves always get a symbolTable allocated for sibling-linking during validation
+            expect(leaf.symbolTable).to.exist;
+        });
     });
 
     describe('buildEnumLookup', () => {
