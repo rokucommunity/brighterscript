@@ -410,18 +410,44 @@ export class FunctionStatement extends Statement implements TypedefProvider {
 
     public readonly range: Range | undefined;
 
+    private _cachedNameBrighterScript: string | undefined;
+    private _cachedNameBrightScript: string | undefined;
+
     /**
-     * Get the name of this expression based on the parse mode
+     * Get the name of this expression based on the parse mode.
+     *
+     * Memoized per `ParseMode` because validators call this per-reference per-scope and
+     * the underlying work (`findAncestor` + recursive `namespace.getName`) is O(depth) per
+     * call. The AST is treated as readonly post-parse, so the cached string remains valid
+     * for the lifetime of the statement.
      */
     public getName(parseMode: ParseMode) {
-        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
-        if (namespace) {
-            let delimiter = parseMode === ParseMode.BrighterScript ? '.' : '_';
-            let namespaceName = namespace.getName(parseMode);
-            return namespaceName + delimiter + this.name?.text;
-        } else {
-            return this.name.text;
+        if (parseMode === ParseMode.BrighterScript) {
+            if (this._cachedNameBrighterScript !== undefined) {
+                return this._cachedNameBrighterScript;
+            }
+        } else if (this._cachedNameBrightScript !== undefined) {
+            return this._cachedNameBrightScript;
         }
+        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        let result: string | undefined;
+        if (namespace) {
+            const delimiter = parseMode === ParseMode.BrighterScript ? '.' : '_';
+            const namespaceName = namespace.getName(parseMode);
+            result = namespaceName + delimiter + this.name?.text;
+        } else {
+            result = this.name.text;
+        }
+        //only cache once parent linking is in place (set during AST walk). Caching
+        //before walk could lock in a parentless result.
+        if (this.parent) {
+            if (parseMode === ParseMode.BrighterScript) {
+                this._cachedNameBrighterScript = result;
+            } else {
+                this._cachedNameBrightScript = result;
+            }
+        }
+        return result;
     }
 
     /**
@@ -1463,18 +1489,37 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         return this._range;
     }
 
+    private _cachedNameBrighterScript: string | undefined;
+    private _cachedNameBrightScript: string | undefined;
+
     public getName(parseMode: ParseMode) {
+        if (parseMode === ParseMode.BrighterScript) {
+            if (this._cachedNameBrighterScript !== undefined) {
+                return this._cachedNameBrighterScript;
+            }
+        } else if (this._cachedNameBrightScript !== undefined) {
+            return this._cachedNameBrightScript;
+        }
         const parentNamespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
         let name = this.nameExpression?.getName?.(parseMode);
         if (!name) {
             return name;
         }
-
         if (parentNamespace) {
             const sep = parseMode === ParseMode.BrighterScript ? '.' : '_';
             name = parentNamespace.getName(parseMode) + sep + name;
         }
-
+        //only cache once parent linking is in place (set during AST walk). The
+        //NamespaceStatement constructor calls `this.name` to build a SymbolTable
+        //label before walk runs; caching that pre-walk value would lock in the
+        //wrong (parentless) name forever.
+        if (this.parent) {
+            if (parseMode === ParseMode.BrighterScript) {
+                this._cachedNameBrighterScript = name;
+            } else {
+                this._cachedNameBrightScript = name;
+            }
+        }
         return name;
     }
 
@@ -1669,15 +1714,35 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
     /**
      * Get the name of this expression based on the parse mode
      */
+    private _cachedNameBrighterScript: string | undefined;
+    private _cachedNameBrightScript: string | undefined;
+
     public getName(parseMode: ParseMode) {
-        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
-        if (namespace) {
-            let delimiter = parseMode === ParseMode.BrighterScript ? '.' : '_';
-            let namespaceName = namespace.getName(parseMode);
-            return namespaceName + delimiter + this.name;
-        } else {
-            return this.name;
+        if (parseMode === ParseMode.BrighterScript) {
+            if (this._cachedNameBrighterScript !== undefined) {
+                return this._cachedNameBrighterScript;
+            }
+        } else if (this._cachedNameBrightScript !== undefined) {
+            return this._cachedNameBrightScript;
         }
+        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        let result: string;
+        if (namespace) {
+            const delimiter = parseMode === ParseMode.BrighterScript ? '.' : '_';
+            const namespaceName = namespace.getName(parseMode);
+            result = namespaceName + delimiter + this.name;
+        } else {
+            result = this.name;
+        }
+        //only cache once parent linking is in place (set during AST walk).
+        if (this.parent) {
+            if (parseMode === ParseMode.BrighterScript) {
+                this._cachedNameBrighterScript = result;
+            } else {
+                this._cachedNameBrightScript = result;
+            }
+        }
+        return result;
     }
 
     public transpile(state: BrsTranspileState): TranspileResult {
@@ -2017,21 +2082,40 @@ export class ClassStatement extends Statement implements TypedefProvider {
     }
 
 
+    private _cachedNameBrighterScript: string | undefined;
+    private _cachedNameBrightScript: string | undefined;
+
     public getName(parseMode: ParseMode) {
-        const name = this.name?.text;
-        if (name) {
-            const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
-            if (namespace) {
-                let namespaceName = namespace.getName(parseMode);
-                let separator = parseMode === ParseMode.BrighterScript ? '.' : '_';
-                return namespaceName + separator + name;
-            } else {
-                return name;
+        if (parseMode === ParseMode.BrighterScript) {
+            if (this._cachedNameBrighterScript !== undefined) {
+                return this._cachedNameBrighterScript;
             }
-        } else {
+        } else if (this._cachedNameBrightScript !== undefined) {
+            return this._cachedNameBrightScript;
+        }
+        const name = this.name?.text;
+        if (!name) {
             //return undefined which will allow outside callers to know that this class doesn't have a name
             return undefined;
         }
+        let result: string;
+        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        if (namespace) {
+            const namespaceName = namespace.getName(parseMode);
+            const separator = parseMode === ParseMode.BrighterScript ? '.' : '_';
+            result = namespaceName + separator + name;
+        } else {
+            result = name;
+        }
+        //only cache once parent linking is in place (set during AST walk).
+        if (this.parent) {
+            if (parseMode === ParseMode.BrighterScript) {
+                this._cachedNameBrighterScript = result;
+            } else {
+                this._cachedNameBrightScript = result;
+            }
+        }
+        return result;
     }
 
     public memberMap = {} as Record<string, MemberStatement>;

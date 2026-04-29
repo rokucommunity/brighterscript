@@ -504,6 +504,15 @@ export class NamespacedVariableNameExpression extends Expression {
     }
     range: Range | undefined;
 
+    //memoized name results. The AST is treated as readonly post-parse, so once these
+    //are computed they remain valid for the lifetime of the expression. Validators
+    //call `getName` per potential namespace reference per scope, often dozens of
+    //times against the same expression — memoization here was the single biggest
+    //wall-time win surfaced by Phase 6 CPU profiling.
+    private _cachedNameParts: string[] | undefined;
+    private _cachedNameBrighterScript: string | undefined;
+    private _cachedNameBrightScript: string | undefined;
+
     transpile(state: BrsTranspileState) {
         return [
             state.sourceNode(this, this.getName(ParseMode.BrightScript))
@@ -517,7 +526,17 @@ export class NamespacedVariableNameExpression extends Expression {
     }
 
     public getNameParts() {
-        let parts = [] as string[];
+        //return a fresh copy so callers can mutate (some use `.pop()` / `.shift()`)
+        //without disturbing the cache
+        return this.computeNameParts().slice();
+    }
+
+    private computeNameParts(): string[] {
+        let parts = this._cachedNameParts;
+        if (parts) {
+            return parts;
+        }
+        parts = [];
         if (isVariableExpression(this.expression)) {
             parts.push(this.expression.name.text);
         } else {
@@ -530,15 +549,23 @@ export class NamespacedVariableNameExpression extends Expression {
                 parts.unshift(expr.name.text);
             }
         }
+        this._cachedNameParts = parts;
         return parts;
     }
 
     getName(parseMode: ParseMode) {
         if (parseMode === ParseMode.BrighterScript) {
-            return this.getNameParts().join('.');
-        } else {
-            return this.getNameParts().join('_');
+            if (this._cachedNameBrighterScript !== undefined) {
+                return this._cachedNameBrighterScript;
+            }
+            this._cachedNameBrighterScript = this.computeNameParts().join('.');
+            return this._cachedNameBrighterScript;
         }
+        if (this._cachedNameBrightScript !== undefined) {
+            return this._cachedNameBrightScript;
+        }
+        this._cachedNameBrightScript = this.computeNameParts().join('_');
+        return this._cachedNameBrightScript;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {

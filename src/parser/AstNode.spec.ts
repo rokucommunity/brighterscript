@@ -217,6 +217,9 @@ describe('AstNode', () => {
                     //skip these properties
                     if (
                         ['parent', 'symbolTable', 'range'].includes(key) ||
+                        //internal memoization slots are populated lazily and need not match between
+                        //a node and its clone — they'll repopulate independently on first read
+                        key.startsWith('_cached') ||
                         //this is a circular reference property or the `returnType` prop, skip it
                         (isFunctionExpression(original) && (key === 'functionStatement' || key === 'returnType')) ||
                         //circular reference property for annotations
