@@ -789,6 +789,102 @@ describe('ProjectManager', () => {
         });
     });
 
+    describe('getFileRenameEdits', () => {
+        const mainUri = util.pathToUri(s`${rootDir}/source/main.bs`);
+
+        function fakeProject(getFileRenameEdits: (options: { oldSrcPath: string; newSrcPath: string }) => any) {
+            return {
+                projectNumber: 0,
+                whenActivated: () => Promise.resolve(),
+                getFileRenameEdits: getFileRenameEdits
+            } as any;
+        }
+
+        function fileRenameEdit(uri: string, newText: string, range = util.createRange(0, 8, 0, 14)) {
+            return { uri: uri, range: range, newText: newText };
+        }
+
+        beforeEach(() => {
+            //these tests exercise the cross-project consensus logic; bypass the project-sync wait so we don't need a real project setup
+            sinon.stub(manager, 'onIdle').callsFake(() => Promise.resolve());
+        });
+
+        it('passes through edits from a single project', async () => {
+            manager.projects = [
+                fakeProject(() => [fileRenameEdit(mainUri, 'lib2.bs')])
+            ];
+
+            const result = await manager.getFileRenameEdits({
+                oldSrcPath: s`${rootDir}/source/lib.bs`,
+                newSrcPath: s`${rootDir}/source/lib2.bs`
+            });
+
+            expect(result).to.have.lengthOf(1);
+            expect(result[0].uri).to.eql(mainUri);
+            expect(result[0].newText).to.eql('lib2.bs');
+        });
+
+        it('keeps edits when every project that produced an edit at the same range agrees', async () => {
+            manager.projects = [
+                fakeProject(() => [fileRenameEdit(mainUri, 'lib2.bs')]),
+                fakeProject(() => [fileRenameEdit(mainUri, 'lib2.bs')])
+            ];
+
+            const result = await manager.getFileRenameEdits({
+                oldSrcPath: s`${rootDir}/source/lib.bs`,
+                newSrcPath: s`${rootDir}/source/lib2.bs`
+            });
+
+            expect(result).to.have.lengthOf(1);
+            expect(result[0].newText).to.eql('lib2.bs');
+        });
+
+        it('drops edits when projects disagree on the replacement text for the same range', async () => {
+            manager.projects = [
+                fakeProject(() => [fileRenameEdit(mainUri, 'lib2.bs')]),
+                fakeProject(() => [fileRenameEdit(mainUri, 'pkg:/source/lib2.bs')])
+            ];
+
+            const result = await manager.getFileRenameEdits({
+                oldSrcPath: s`${rootDir}/source/lib.bs`,
+                newSrcPath: s`${rootDir}/source/lib2.bs`
+            });
+
+            expect(result).to.be.empty;
+        });
+
+        it('keeps edits unique to one project when others have nothing to say at that range', async () => {
+            manager.projects = [
+                fakeProject(() => [fileRenameEdit(mainUri, 'lib2.bs')]),
+                fakeProject(() => [])
+            ];
+
+            const result = await manager.getFileRenameEdits({
+                oldSrcPath: s`${rootDir}/source/lib.bs`,
+                newSrcPath: s`${rootDir}/source/lib2.bs`
+            });
+
+            expect(result).to.have.lengthOf(1);
+        });
+
+        it('still emits edits from healthy projects when one project throws', async () => {
+            manager.projects = [
+                fakeProject(() => {
+                    throw new Error('boom');
+                }),
+                fakeProject(() => [fileRenameEdit(mainUri, 'lib2.bs')])
+            ];
+
+            const result = await manager.getFileRenameEdits({
+                oldSrcPath: s`${rootDir}/source/lib.bs`,
+                newSrcPath: s`${rootDir}/source/lib2.bs`
+            });
+
+            expect(result).to.have.lengthOf(1);
+            expect(result[0].newText).to.eql('lib2.bs');
+        });
+    });
+
     describe('flushDocumentChanges', () => {
         it('reuses cached PathCollection across multiple flushes', async () => {
             fsExtra.outputFileSync(`${rootDir}/source/main.brs`, ``);
