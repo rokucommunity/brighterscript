@@ -231,13 +231,13 @@ export class Program {
             .join('|');
         let aggregate = this.aggregateNamespaceContainerCache.get(key);
         if (!aggregate) {
-            aggregate = this.buildSlowPathAggregate(contributions);
+            aggregate = this.buildAggregateNamespaceContainer(contributions);
             this.aggregateNamespaceContainerCache.set(key, aggregate);
         }
         return aggregate;
     }
 
-    private buildSlowPathAggregate(contributions: NamespaceFileContribution[]): NamespaceContainer {
+    private buildAggregateNamespaceContainer(contributions: NamespaceFileContribution[]): NamespaceContainer {
         const first = contributions[0];
         //field order matches the NamespaceContainer interface declaration so aggregates
         //share a single V8 hidden class with the per-scope wrapper containers
