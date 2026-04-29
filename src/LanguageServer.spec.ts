@@ -2166,6 +2166,59 @@ describe('LanguageServer', () => {
             });
         });
     });
+
+    describe('onCodeAction', () => {
+        beforeEach(async () => {
+            server.run();
+            await server['onInitialized']();
+        });
+
+        async function callOnCodeAction(only: string[], kinds: (string | undefined)[]) {
+            sinon.stub(server['projectManager'], 'getCodeActions').resolves(
+                kinds.map(kind => ({ kind: kind, title: kind }))
+            );
+            return server['onCodeAction']({
+                textDocument: { uri: URI.file(`${rootDir}/source/main.bs`).toString() },
+                range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+                context: { diagnostics: [], only: only }
+            });
+        }
+
+        it('returns all code actions when context.only is empty', async () => {
+            const result = await callOnCodeAction([], ['quickfix', 'refactor']);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix', 'refactor']);
+        });
+
+        it('returns kindless code actions when context.only is empty', async () => {
+            const result = await callOnCodeAction([], ['quickfix', undefined]);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix', undefined]);
+        });
+
+        it('filters to exact kind match', async () => {
+            const result = await callOnCodeAction(['quickfix'], ['quickfix', 'refactor']);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix']);
+        });
+
+        it('includes child kinds using startsWith hierarchy', async () => {
+            const result = await callOnCodeAction(['quickfix'], ['quickfix', 'quickfix.foo', 'quickfix.foo.bar', 'refactor']);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix', 'quickfix.foo', 'quickfix.foo.bar']);
+        });
+
+        it('does not match unrelated kinds that share a prefix', async () => {
+            const result = await callOnCodeAction(['quickfix'], ['quickfix', 'quickfixFoo', 'refactor']);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix']);
+        });
+
+        it('excludes kindless actions when context.only is set (kind is required to match)', async () => {
+            const result = await callOnCodeAction(['quickfix'], ['quickfix', undefined]);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix']);
+        });
+
+        it('matches across multiple requested kinds', async () => {
+            const result = await callOnCodeAction(['quickfix', 'refactor'], ['quickfix', 'quickfix.foo', 'refactor.extract', 'source']);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix', 'quickfix.foo', 'refactor.extract']);
+        });
+    });
 });
 
 export function getFileProtocolPath(fullPath: string) {

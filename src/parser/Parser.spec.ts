@@ -1786,6 +1786,124 @@ describe('parser', () => {
         });
     });
 
+    describe('line continuation', () => {
+        describe('binary operator continuation', () => {
+            it('is allowed after arithmetic operators in BrighterScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        a = x +
+                            y
+                        b = x -
+                            y
+                        c = x *
+                            y
+                        d = x /
+                            y
+                        e = x \\
+                            y
+                        f = x mod
+                            y
+                        g = x ^
+                            y
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('is allowed after boolean operators in BrighterScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        a = isValid and
+                            isEnabled
+                        b = isValid or
+                            isEnabled
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('is allowed after relational operators in BrighterScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        a = x =
+                            y
+                        b = x <>
+                            y
+                        c = x >
+                            y
+                        d = x >=
+                            y
+                        e = x <
+                            y
+                        f = x <=
+                            y
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('is not allowed in BrightScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        result = value1 +
+                                 value2
+                    end sub
+                `, ParseMode.BrightScript);
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.unexpectedToken('\n'),
+                    DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+                ]);
+            });
+        });
+
+        describe('function call argument continuation', () => {
+            it('is not allowed in BrightScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        result = foo(
+                            arg1,
+                            arg2
+                        )
+                    end sub
+                    sub foo(a, b)
+                    end sub
+                `, ParseMode.BrightScript);
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.unexpectedToken('\n'),
+                    DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                    DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+                ]);
+            });
+
+            it('is allowed in BrighterScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        result = foo(
+                            arg1,
+                            arg2
+                        )
+                    end sub
+                    sub foo(a, b)
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('does not affect inline objects passed as arguments in BrightScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        foo({
+                            key: "value"
+                        })
+                    end sub
+                    sub foo(a)
+                    end sub
+                `, ParseMode.BrightScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+        });
+    });
+
     describe('typed functions as types', () => {
         it('disallowed in brightscript mode', () => {
             let { diagnostics } = parse(`

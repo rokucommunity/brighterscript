@@ -1336,6 +1336,8 @@ describe('EnumStatement', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
+                DiagnosticMessages.circularReferenceDetected(['A', 'B', 'A'], 'source').message,
+                DiagnosticMessages.circularReferenceDetected(['B', 'A', 'B'], 'source').message,
                 DiagnosticMessages.computedAAKeyMustBeStringExpression()
             ]);
         });

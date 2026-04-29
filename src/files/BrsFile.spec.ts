@@ -16,7 +16,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import util, { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
-import { expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
+import { expectCompletionsIncludes, expectDiagnostics, expectDiagnosticsIncludes, expectHasDiagnostics, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 import { ParseMode, Parser } from '../parser/Parser';
 import { createLogger } from '../logging';
 import { ImportStatement } from '../parser/Statement';
@@ -74,6 +74,159 @@ describe('BrsFile', () => {
             program.setFile('source/main.brs', `
                 namespace CustomApp
                 end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
+
+    describe('line continuation', () => {
+        it('does not allow binary operator continuation in .brs files by default', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.unexpectedToken('\n'),
+                DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+            ]);
+        });
+
+        it('allows binary operator continuation in .bs files', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('transpiles binary operator continuation in .bs files to a single line', () => {
+            testTranspile(`
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `, `
+                sub main()
+                    result = 1 + 2
+                end sub
+            `);
+        });
+
+        it('allows binary operator continuation in .brs files when allowBrighterScriptInBrightScript is enabled', () => {
+            program.options.allowBrighterScriptInBrightScript = true;
+            program.setFile('source/main.brs', `
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not allow multi-line function call args in .brs files by default', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+                sub foo(a, b)
+                end sub
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.unexpectedToken('\n'),
+                DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+            ]);
+        });
+
+        it('allows multi-line array literals as function call args in .brs files by default', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo([
+                        1,
+                        2
+                    ])
+                end sub
+                sub foo(arg)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows multi-line associative array literals as function call args in .brs files by default', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo({
+                        name: "bob",
+                        age: 1
+                    })
+                end sub
+                sub foo(arg)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows multi-line function call args in .bs files', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+                sub foo(a, b)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('transpiles multi-line function call args in .bs files to a single line', () => {
+            testTranspile(`
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+
+                sub foo(a, b)
+                end sub
+            `, `
+                sub main()
+                    foo(1, 2)
+                end sub
+
+                sub foo(a, b)
+                end sub
+            `);
+        });
+
+        it('allows multi-line function call args in .brs files when allowBrighterScriptInBrightScript is enabled', () => {
+            program.options.allowBrighterScriptInBrightScript = true;
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+                sub foo(a, b)
+                end sub
             `);
             program.validate();
             expectZeroDiagnostics(program);
@@ -1551,10 +1704,8 @@ describe('BrsFile', () => {
             `);
             expectDiagnostics(file.parser.diagnostics, [
                 DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
-                DiagnosticMessages.expectedNewlineOrColon(),
-                DiagnosticMessages.unexpectedToken('end function'),
                 DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
-                DiagnosticMessages.expectedNewlineOrColon()
+                DiagnosticMessages.unexpectedToken('\n')
             ]);
             expect(file.functionCalls.length).to.equal(2);
 

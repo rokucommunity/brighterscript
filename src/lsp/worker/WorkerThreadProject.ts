@@ -10,7 +10,7 @@ import type { Hover, MaybePromise, SemanticToken } from '../../interfaces';
 import type { DocumentAction, DocumentActionWithStatus } from '../DocumentManager';
 import { Deferred } from '../../deferred';
 import type { FileTranspileResult, SignatureInfoObj } from '../../Program';
-import type { Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList } from 'vscode-languageserver-protocol';
+import type { Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList, SelectionRange } from 'vscode-languageserver-protocol';
 import type { Logger } from '../../logging';
 import { createLogger } from '../../logging';
 import * as fsExtra from 'fs-extra';
@@ -245,7 +245,11 @@ export class WorkerThreadProject implements LspProject {
     }
 
     public async getSourceFixAllCodeActions(options: { srcPath: string }): Promise<CodeAction[]> {
-        return this.sendStandardRequest<CodeAction[]>('getFixAllCodeActions', options);
+        return this.sendStandardRequest<CodeAction[]>('getSourceFixAllCodeActions', options);
+    }
+
+    public async getSelectionRanges(options: { srcPath: string; positions: Position[] }): Promise<SelectionRange[]> {
+        return this.sendStandardRequest<SelectionRange[]>('getSelectionRanges', options);
     }
 
     public async getCompletions(options: { srcPath: string; position: Position }): Promise<CompletionList> {

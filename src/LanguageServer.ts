@@ -26,7 +26,8 @@ import type {
     CompletionList,
     CancellationToken,
     DidChangeConfigurationParams,
-    DidChangeConfigurationRegistrationOptions
+    DidChangeConfigurationRegistrationOptions,
+    SelectionRangeParams
 } from 'vscode-languageserver/node';
 import {
     SemanticTokensRequest,
@@ -216,6 +217,7 @@ export class LanguageServer {
                 codeActionProvider: {
                     codeActionKinds: [
                         CodeActionKind.QuickFix,
+                        CodeActionKind.Refactor,
                         CodeActionKind.SourceFixAll
                     ]
                 },
@@ -224,6 +226,7 @@ export class LanguageServer {
                 },
                 definitionProvider: true,
                 hoverProvider: true,
+                selectionRangeProvider: true,
                 executeCommandProvider: {
                     commands: [
                         CustomCommands.TranspileFile
@@ -567,6 +570,14 @@ export class LanguageServer {
     }
 
     @AddStackToErrorMessage
+    public async onSelectionRanges(params: SelectionRangeParams) {
+        this.logger.debug('onSelectionRanges', params);
+
+        const srcPath = util.uriToPath(params.textDocument.uri);
+        return this.projectManager.getSelectionRanges({ srcPath: srcPath, positions: params.positions });
+    }
+
+    @AddStackToErrorMessage
     public async onDocumentSymbol(params: DocumentSymbolParams) {
         this.logger.debug('onDocumentSymbol', params);
 
@@ -631,22 +642,30 @@ export class LanguageServer {
 
         const srcPath = util.uriToPath(params.textDocument.uri);
         const requestedKinds = params.context?.only ?? [];
+        const wantsAnyKind = requestedKinds.length === 0;
 
-        // In LSP, kinds are hierarchical: 'source' matches 'source.fixAll.*', 'quickfix' matches 'quickfix.*'.
-        // A requested kind K matches an action kind A if A.startsWith(K) or K.startsWith(A).
-        // When context.only is absent the client wants everything, so we fetch both.
-        const matchesKind = (actionKind: string) => requestedKinds.length === 0 ||
-            requestedKinds.some(kind => actionKind.startsWith(kind) || kind.startsWith(actionKind));
+        // Fix-all is opt-in and expensive, so only fetch when the client asks for it.
+        const fixAllKind = CodeActionKind.SourceFixAll;
+        const wantsFixAll = wantsAnyKind ||
+            requestedKinds.some(kind => kind.startsWith(fixAllKind) || fixAllKind.startsWith(kind));
 
-        const wantsQuickFix = matchesKind(CodeActionKind.QuickFix);
-        const wantsFixAll = matchesKind(CodeActionKind.SourceFixAll);
+        // Standard actions (quickfix, refactor, etc.) all come through getCodeActions,
+        // so only skip that pipeline when the client explicitly asked for fix-all only.
+        const wantsStandardActions = wantsAnyKind ||
+            requestedKinds.some(kind => !kind.startsWith(fixAllKind));
 
-        const [quickFixes, fixAllActions] = await Promise.all([
-            wantsQuickFix ? this.projectManager.getCodeActions({ srcPath: srcPath, range: params.range }) : [],
+        const [standardActions, fixAllActions] = await Promise.all([
+            wantsStandardActions ? this.projectManager.getCodeActions({ srcPath: srcPath, range: params.range }) : [],
             wantsFixAll ? this.projectManager.getFixAllCodeActions({ srcPath: srcPath }) : []
         ]);
 
-        return [...(quickFixes ?? []), ...(fixAllActions ?? [])];
+        const result = [...(standardActions ?? []), ...(fixAllActions ?? [])];
+
+        // filter out any code actions with a kind that the client did not ask for (if the client specified any kinds at all)
+        if (!wantsAnyKind) {
+            return result.filter(x => x.kind && requestedKinds.some(only => x.kind === only || x.kind.startsWith(only + '.')));
+        }
+        return result;
     }
 
 

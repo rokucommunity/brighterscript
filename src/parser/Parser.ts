@@ -184,6 +184,22 @@ export class Parser {
      */
     public options: ParseOptions;
 
+    /**
+     * Whether line continuation after binary operators is allowed.
+     * Enabled only in BrighterScript mode.
+     */
+    private allowLineContinuation: boolean;
+
+    /**
+     * If line continuation is enabled, consumes all immediately following Newline tokens.
+     * Call this after matching a binary operator to allow the right-hand operand on the next line.
+     */
+    private consumeNewlinesIfAllowed() {
+        if (this.allowLineContinuation) {
+            while (this.match(TokenKind.Newline)) { }
+        }
+    }
+
     private globalTerminators = [] as TokenKind[][];
 
     /**
@@ -220,6 +236,7 @@ export class Parser {
         this.logger = options?.logger ?? createLogger();
         options = this.sanitizeParseOptions(options);
         this.options = options;
+        this.allowLineContinuation = options.mode === ParseMode.BrighterScript;
 
         let tokens: Token[];
         if (typeof toParse === 'string') {
@@ -2521,6 +2538,7 @@ export class Parser {
 
         while (this.matchAny(TokenKind.And, TokenKind.Or)) {
             let operator = this.previous();
+            this.consumeNewlinesIfAllowed();
             let right = this.relational();
             this.addExpressionsToReferences(expr, right);
             expr = new BinaryExpression(expr, operator, right);
@@ -2543,6 +2561,7 @@ export class Parser {
             )
         ) {
             let operator = this.previous();
+            this.consumeNewlinesIfAllowed();
             let right = this.additive();
             this.addExpressionsToReferences(expr, right);
             expr = new BinaryExpression(expr, operator, right);
@@ -2566,6 +2585,7 @@ export class Parser {
 
         while (this.matchAny(TokenKind.Plus, TokenKind.Minus)) {
             let operator = this.previous();
+            this.consumeNewlinesIfAllowed();
             let right = this.multiplicative();
             this.addExpressionsToReferences(expr, right);
             expr = new BinaryExpression(expr, operator, right);
@@ -2586,6 +2606,7 @@ export class Parser {
             TokenKind.RightShift
         )) {
             let operator = this.previous();
+            this.consumeNewlinesIfAllowed();
             let right = this.exponential();
             this.addExpressionsToReferences(expr, right);
             expr = new BinaryExpression(expr, operator, right);
@@ -2599,6 +2620,7 @@ export class Parser {
 
         while (this.match(TokenKind.Caret)) {
             let operator = this.previous();
+            this.consumeNewlinesIfAllowed();
             let right = this.prefixUnary();
             this.addExpressionsToReferences(expr, right);
             expr = new BinaryExpression(expr, operator, right);
@@ -2763,11 +2785,11 @@ export class Parser {
 
     private finishCall(openingParen: Token, callee: Expression, addToCallExpressionList = true) {
         let args = [] as Expression[];
-        while (this.match(TokenKind.Newline)) { }
+        this.consumeNewlinesIfAllowed();
 
         if (!this.check(TokenKind.RightParen)) {
             do {
-                while (this.match(TokenKind.Newline)) { }
+                this.consumeNewlinesIfAllowed();
 
                 if (args.length >= CallExpression.MaximumArguments) {
                     this.diagnostics.push({
@@ -2786,7 +2808,7 @@ export class Parser {
             } while (this.match(TokenKind.Comma));
         }
 
-        while (this.match(TokenKind.Newline)) { }
+        this.consumeNewlinesIfAllowed();
 
         const closingParen = this.tryConsume(
             DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
