@@ -213,6 +213,24 @@ export interface BsConfig {
      * scripts inside `source` that depend on bslib.brs.  Defaults to `source`.
      */
     bslibDestinationDir?: string;
+
+    /**
+     * Configuration for how bslib functions should be handled during transpilation
+     */
+    bslibHandling?: {
+        /**
+         * How bslib functions should be handled.
+         * - "shared": Generate a single shared bslib.brs file (default behavior)
+         * - "unique-per-file": Inline bslib functions directly into each file with unique suffixes
+         */
+        mode?: 'shared' | 'unique-per-file';
+        /**
+         * Strategy for generating unique suffixes when mode is "unique-per-file".
+         * - "md5": Use MD5 hash of file.srcPath (default)
+         * - "guid": Use a generated GUID
+         */
+        uniqueStrategy?: 'md5' | 'guid';
+    };
 }
 
 type OptionalBsConfigFields =
