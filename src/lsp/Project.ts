@@ -112,9 +112,6 @@ export class Project implements LspProject {
             });
         }
 
-        //trigger a validation (but don't wait for it. That way we can cancel it sooner if we get new incoming data or requests)
-        void this.validate();
-
         this.activationDeferred.resolve();
 
         return {
@@ -529,6 +526,14 @@ export class Project implements LspProject {
         }
     }
 
+    public async getSourceFixAllCodeActions(options: { srcPath: string }) {
+        await this.onIdle();
+
+        if (this.builder.program.hasFile(options.srcPath)) {
+            return this.builder.program.getSourceFixAllCodeActions(options.srcPath);
+        }
+    }
+
     public async getCompletions(options: { srcPath: string; position: Position }): Promise<CompletionList> {
         await this.onIdle();
 
@@ -653,6 +658,7 @@ export class Project implements LspProject {
     public disposables: LspProject['disposables'] = [];
 
     public dispose() {
+        this.cancelValidate();
         for (let disposable of this.disposables ?? []) {
             disposable?.dispose?.();
         }

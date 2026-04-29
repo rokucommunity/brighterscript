@@ -248,6 +248,10 @@ export class WorkerThreadProject implements LspProject {
         return this.sendStandardRequest<CodeAction[]>('getCodeActions', options);
     }
 
+    public async getSourceFixAllCodeActions(options: { srcPath: string }): Promise<CodeAction[]> {
+        return this.sendStandardRequest<CodeAction[]>('getSourceFixAllCodeActions', options);
+    }
+
     public async getSelectionRanges(options: { srcPath: string; positions: Position[] }): Promise<SelectionRange[]> {
         return this.sendStandardRequest<SelectionRange[]>('getSelectionRanges', options);
     }

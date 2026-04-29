@@ -299,6 +299,14 @@
             "description": "Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.",
             "type": "boolean",
             "default": false
+        },
+        "minFirmwareVersion": {
+            "description": "The minimum Roku firmware version required to run this project. When set, BrightScript (.brs) files will be validated to ensure they only use language features available in that firmware version or earlier. BrighterScript (.bs) files are always allowed to use all features since they are transpiled. Should be a semver-compatible string (e.g. \"11.0.0\").",
+            "type": "string",
+            "examples": [
+                "11.0.0",
+                "12.0.0"
+            ]
         }
     }
 }
