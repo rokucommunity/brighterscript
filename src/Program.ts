@@ -1394,20 +1394,41 @@ export class Program {
     }
 
     /**
-     * Serialize a source map to a JSON string, optionally converting absolute
-     * source paths to paths relative to the map file location.
+     * Serialize a source map to a JSON string, handling relativeSourceMaps and sourceRoot options.
+     *
+     * When relativeSourceMaps is false (legacy): sources[] contains absolute paths with rootDir
+     * swapped for sourceRoot (if set); no sourceRoot field is written to the map.
+     *
+     * When relativeSourceMaps is true, sourceRoot undefined: sources[] is relative to the map file dir.
+     *
+     * When relativeSourceMaps is true, sourceRoot defined: the map's sourceRoot field is set, and
+     * sources[] is relative to sourceRoot (per the sourcemap spec — consumers prepend sourceRoot to
+     * each sources[] entry to reconstruct the full path).
      */
     private serializeSourceMap(sourceMap: SourceMapGenerator, outputPath: string): string {
-        if (!this.options.relativeSourceMaps) {
+        const { relativeSourceMaps, sourceRoot } = this.options;
+
+        if (!relativeSourceMaps) {
             return sourceMap.toString();
         }
+
         const mapJson = sourceMap.toJSON();
-        const mapDir = path.dirname(outputPath);
-        mapJson.sources = mapJson.sources.map((source: string) => {
-            return path.isAbsolute(source)
-                ? s`${path.relative(mapDir, source)}`
-                : source;
-        });
+
+        if (sourceRoot) {
+            mapJson.sourceRoot = sourceRoot;
+            mapJson.sources = mapJson.sources.map((source: string) => {
+                const absolute = path.isAbsolute(source) ? source : path.resolve(path.dirname(outputPath), source);
+                return path.relative(sourceRoot, absolute).replace(/\\/g, '/');
+            });
+        } else {
+            const mapDir = path.dirname(outputPath);
+            mapJson.sources = mapJson.sources.map((source: string) => {
+                return path.isAbsolute(source)
+                    ? path.relative(mapDir, source).replace(/\\/g, '/')
+                    : source;
+            });
+        }
+
         return JSON.stringify(mapJson);
     }
 
