@@ -360,7 +360,7 @@ The host of the Roku that this project will deploy to when the [`deploy`](#deplo
 
 Type: `string`
 
-The minimum Roku firmware version required to run this project. When set, both BrightScript (`.brs`) and BrighterScript (`.bs`) files will be validated to ensure they only use language features available in that firmware version or earlier. Note that some BrighterScript features (such as optional chaining) are emitted as-is and not transpiled down, so the version restriction applies to all file types.
+The minimum Roku firmware version required to run this project. When set, files are validated to ensure they only use language features available in that firmware version or earlier. BrightScript (`.brs`) files are always validated against the version restriction. BrighterScript (`.bs`) files are only validated for features that BrighterScript does not transpile — for example, optional chaining is emitted as-is rather than transpiled down, so it is subject to the version restriction. BrighterScript features that are fully transpiled (such as classes) are not restricted, since the transpiled output is compatible with older firmware.
 
 Should be a semver-compatible string (e.g. `"11.0.0"` or `"11.0"`). Defaults to `undefined` (no version restriction).
 
