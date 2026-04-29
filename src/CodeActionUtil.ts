@@ -57,6 +57,24 @@ export interface CodeActionShorthand {
     changes: Array<InsertChange | ReplaceChange | DeleteChange>;
 }
 
+/**
+ * Represents a single named "source fix all" action that a plugin contributes.
+ * Each action becomes a separate entry in VS Code's Source Actions menu.
+ * Plugins are responsible for merging all their changes into the `changes` array.
+ */
+export interface SourceFixAllCodeAction {
+    title: string;
+    /**
+     * The LSP code action kind. Should start with `source.fixAll`.
+     * Use a sub-kind like `source.fixAll.brighterscript.imports` to create
+     * a distinct named entry in the Source Actions menu.
+     * Defaults to `source.fixAll.brighterscript`.
+     */
+    kind?: string;
+    isPreferred?: boolean;
+    changes: Array<InsertChange | ReplaceChange | DeleteChange>;
+}
+
 export interface InsertChange {
     filePath: string;
     newText: string;

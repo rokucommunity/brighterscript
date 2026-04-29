@@ -1,14 +1,18 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, DocumentSymbol, CancellationToken } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, DocumentSymbol, CancellationToken, SelectionRange } from 'vscode-languageserver';
 import { CancellationTokenSource, CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
+import type { NamespaceContainer, NamespaceFileContribution } from './Scope';
+import { SymbolTable } from './SymbolTable';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent } from './interfaces';
+import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, ProvideSelectionRangesEvent, OnGetSourceFixAllCodeActionsEvent } from './interfaces';
+import type { SourceFixAllCodeAction } from './CodeActionUtil';
+import { codeActionUtil } from './CodeActionUtil';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -157,6 +161,141 @@ export class Program {
      */
     public files = {} as Record<string, BscFile>;
     private pkgMap = {} as Record<string, BscFile>;
+
+    /**
+     * Map from a lower-cased namespace name part to the set of `BrsFile`s that contribute
+     * to it. Built lazily, invalidated whenever any file is added, removed, or re-parsed
+     * (`setFile` and `removeFile` both clear it).
+     *
+     * Used by `ScopeNamespaceLookup` to resolve a namespace name to its contributing
+     * files in O(1), then intersect against the scope's file set.
+     */
+    private namespaceContributors: Map<string, Set<BrsFile>> | undefined;
+
+    /**
+     * Look up the set of `BrsFile`s that declare any part of the given namespace name
+     * (lowercased). Returns `undefined` when no file contributes.
+     * @internal
+     */
+    protected getNamespaceContributors(namespaceNameLower: string): Set<BrsFile> | undefined {
+        if (!this.namespaceContributors) {
+            this.namespaceContributors = this.buildNamespaceContributors();
+        }
+        return this.namespaceContributors.get(namespaceNameLower);
+    }
+
+    private buildNamespaceContributors(): Map<string, Set<BrsFile>> {
+        const contributors = new Map<string, Set<BrsFile>>();
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                // eslint-disable-next-line @typescript-eslint/dot-notation
+                for (const nameLower of file['getNamespaceContributions']().keys()) {
+                    let set = contributors.get(nameLower);
+                    if (!set) {
+                        set = new Set<BrsFile>();
+                        contributors.set(nameLower, set);
+                    }
+                    set.add(file);
+                }
+            }
+        }
+        return contributors;
+    }
+
+    /**
+     * Cached slow-path namespace aggregates, keyed by `(nameLower, sorted-contributor-pkgPaths)`.
+     * Two scopes with the same in-scope file set for a multi-contributor namespace share
+     * the same aggregate object (and therefore the same merged statement collections and
+     * symbolTable instance). Built lazily, invalidated alongside `namespaceContributors`.
+     *
+     * The aggregate is stored as a `NamespaceContainer` whose `namespaces` field is an
+     * empty Map: scopes always wrap the aggregate before returning to plugins, and the
+     * wrapper supplies its own scope-filtered children. Plugins never see the aggregate
+     * directly.
+     */
+    private aggregateNamespaceContainerCache: Map<string, NamespaceContainer> | undefined;
+
+    /**
+     * Get or build the shared aggregate for a namespace whose in-scope contributors
+     * include more than one file. The aggregate's heavy fields are computed once per
+     * unique `(nameLower, contributing-files-set)` and reused across every scope that
+     * sees the same set.
+     * @internal
+     */
+    protected getAggregateNamespaceContainer(nameLower: string, contributions: NamespaceFileContribution[]): NamespaceContainer {
+        if (!this.aggregateNamespaceContainerCache) {
+            this.aggregateNamespaceContainerCache = new Map<string, NamespaceContainer>();
+        }
+        //sorted pkgPaths ensure two scopes with the same contributor set hit the same key
+        const key = nameLower + '|' + contributions
+            .map(c => c.file.pkgPath.toLowerCase())
+            .sort()
+            .join('|');
+        let aggregate = this.aggregateNamespaceContainerCache.get(key);
+        if (!aggregate) {
+            aggregate = this.buildAggregateNamespaceContainer(contributions);
+            this.aggregateNamespaceContainerCache.set(key, aggregate);
+        }
+        return aggregate;
+    }
+
+    private buildAggregateNamespaceContainer(contributions: NamespaceFileContribution[]): NamespaceContainer {
+        const first = contributions[0];
+        //field order matches the NamespaceContainer interface declaration so aggregates
+        //share a single V8 hidden class with the per-scope wrapper containers
+        const aggregate: NamespaceContainer = {
+            file: first.file,
+            fullName: first.fullName,
+            nameRange: first.nameRange,
+            lastPartName: first.lastPartName,
+            namespaces: new Map(),
+            statements: undefined,
+            classStatements: undefined,
+            functionStatements: undefined,
+            enumStatements: undefined,
+            constStatements: undefined,
+            symbolTable: undefined
+        };
+        for (const contribution of contributions) {
+            if (contribution.statements?.length) {
+                (aggregate.statements ??= []).push(...contribution.statements);
+            }
+            if (contribution.classStatements) {
+                aggregate.classStatements = { ...(aggregate.classStatements ?? {}), ...contribution.classStatements };
+            }
+            if (contribution.functionStatements) {
+                aggregate.functionStatements = { ...(aggregate.functionStatements ?? {}), ...contribution.functionStatements };
+            }
+            if (contribution.enumStatements) {
+                aggregate.enumStatements ??= new Map();
+                for (const [key, value] of contribution.enumStatements) {
+                    aggregate.enumStatements.set(key, value);
+                }
+            }
+            if (contribution.constStatements) {
+                aggregate.constStatements ??= new Map();
+                for (const [key, value] of contribution.constStatements) {
+                    aggregate.constStatements.set(key, value);
+                }
+            }
+            if (contribution.symbolTable) {
+                aggregate.symbolTable ??= new SymbolTable(`Namespace Multi-File Aggregate: '${first.fullName}'`);
+                aggregate.symbolTable.mergeSymbolTable(contribution.symbolTable);
+            }
+        }
+        return aggregate;
+    }
+
+    /**
+     * Invalidate the program-level namespace contributors map and the slow-path aggregate
+     * cache. Called by `setFile` and `removeFile`; downstream scope namespace lookups
+     * already rebuild via the dependency-graph invalidation chain, so this only needs
+     * to drop the cached maps.
+     */
+    private invalidateNamespaceContributorCache() {
+        this.namespaceContributors = undefined;
+        this.aggregateNamespaceContainerCache = undefined;
+    }
 
     private scopes = {} as Record<string, Scope>;
 
@@ -402,6 +541,10 @@ export class Program {
         //normalize the file paths
         const { srcPath, pkgPath } = this.getPaths(fileParam, this.options.rootDir);
 
+        //namespace contributions for the new/replaced file may differ; force the
+        //program-level contributors map to rebuild on next query
+        this.invalidateNamespaceContributorCache();
+
         let file = this.logger.time(LogLevel.debug, ['Program.setFile()', chalk.green(srcPath)], () => {
             //if the file is already loaded, remove it
             if (this.hasFile(srcPath)) {
@@ -623,6 +766,10 @@ export class Program {
      */
     public removeFile(filePath: string, normalizePath = true) {
         this.logger.debug('Program.removeFile()', filePath);
+
+        //namespace contributions may have included this file; force the program-level
+        //contributors map to rebuild on next query
+        this.invalidateNamespaceContributorCache();
 
         let file = this.getFile(filePath, normalizePath);
         if (file) {
@@ -1065,6 +1212,28 @@ export class Program {
     }
 
     /**
+     * Get the selection ranges for the given positions in a file. Used for expand/shrink selection.
+     * @param srcPath path to the file
+     * @param positions the positions to get selection ranges for
+     */
+    public getSelectionRanges(srcPath: string, positions: Position[]): SelectionRange[] {
+        const file = this.getFile(srcPath);
+        if (file) {
+            const event: ProvideSelectionRangesEvent = {
+                program: this,
+                file: file,
+                positions: positions,
+                selectionRanges: []
+            };
+            this.plugins.emit('beforeProvideSelectionRanges', event);
+            this.plugins.emit('provideSelectionRanges', event);
+            this.plugins.emit('afterProvideSelectionRanges', event);
+            return event.selectionRanges;
+        }
+        return [];
+    }
+
+    /**
      * Compute code actions for the given file and range
      */
     public getCodeActions(srcPath: string, range: Range) {
@@ -1091,6 +1260,33 @@ export class Program {
             });
         }
         return codeActions;
+    }
+
+    /**
+     * Compute "source fix all" code actions for the given file.
+     * Fires the `onGetSourceFixAllCodeActions` plugin event with all diagnostics for the file (no range filter),
+     * then converts each contributed SourceFixAllCodeAction into an LSP CodeAction.
+     */
+    public getSourceFixAllCodeActions(srcPath: string): CodeAction[] {
+        const actions: SourceFixAllCodeAction[] = [];
+        const file = this.getFile(srcPath);
+        if (file) {
+            const diagnostics = this
+                .getDiagnostics()
+                .filter(x => x.file === file);
+            const scopes = this.getScopesForFile(file);
+            this.plugins.emit('onGetSourceFixAllCodeActions', {
+                program: this,
+                file: file,
+                diagnostics: diagnostics,
+                scopes: scopes,
+                actions: actions
+            } as OnGetSourceFixAllCodeActionsEvent);
+        }
+        return actions.map(action => codeActionUtil.createCodeAction({
+            ...action,
+            kind: action.kind ?? 'source.fixAll.brighterscript' as any
+        }));
     }
 
     /**
@@ -1215,8 +1411,9 @@ export class Program {
         const result = this._getTranspiledFileContents(
             file
         );
+        await this._chainInputSourceMap(result, file);
         this.afterProgramTranspile(entries, astEditor);
-        return Promise.resolve(result);
+        return result;
     }
 
     /**
@@ -1268,6 +1465,20 @@ export class Program {
             map: event.map,
             typedef: event.typedef
         };
+    }
+
+    /**
+     * If the file has an incoming sourcemap (from a prebuild step), chain it into the
+     * generated sourcemap so the output map traces all the way back to the original source.
+     * This is async because SourceMapConsumer requires async initialisation in source-map v0.7.
+     */
+    private async _chainInputSourceMap(result: FileTranspileResult, file: BscFile): Promise<void> {
+        if (result.map) {
+            const inputMap = await util.resolveInputSourceMap(file.fileContents ?? '', file.srcPath);
+            if (inputMap) {
+                await util.applySourceMap(result.map, inputMap, file.srcPath);
+            }
+        }
     }
 
     private beforeProgramTranspile(fileEntries: FileObj[], stagingDir: string) {
@@ -1336,6 +1547,7 @@ export class Program {
                 }
 
                 const fileTranspileResult = this._getTranspiledFileContents(file, outputPath);
+                await this._chainInputSourceMap(fileTranspileResult, file);
 
                 //make sure the full dir path exists
                 await fsExtra.ensureDir(path.dirname(outputPath));

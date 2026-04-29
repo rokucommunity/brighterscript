@@ -26,7 +26,11 @@ import type {
     CompletionList,
     CancellationToken,
     DidChangeConfigurationParams,
-    DidChangeConfigurationRegistrationOptions
+    DidChangeConfigurationRegistrationOptions,
+    SelectionRangeParams,
+    RenameFilesParams,
+    WorkspaceEdit,
+    TextEdit
 } from 'vscode-languageserver/node';
 import {
     SemanticTokensRequest,
@@ -66,6 +70,12 @@ export class LanguageServer {
      * The default project discovery setting for the language server. Can be overridden by per-workspace settings
      */
     public static enableProjectDiscoveryDefault = true;
+
+    /**
+     * The default number of projects that are permitted to activate concurrently.
+     */
+    private static projectActivationConcurrencyLimitDefault = 3;
+
     /**
      * The language server protocol connection, used to send and receive all requests and responses
      */
@@ -167,6 +177,9 @@ export class LanguageServer {
         //Register semantic token requests. TODO switch to a more specific connection function call once they actually add it
         this.connection.onRequest(SemanticTokensRequest.method, this.onFullSemanticTokens.bind(this));
 
+        //file-operation requests live under connection.workspace, so they aren't picked up by the on* auto-bind loop above
+        this.connection.workspace.onWillRenameFiles(this.onWillRenameFiles.bind(this));
+
         // The content of a text document has changed. This event is emitted
         // when the text document is first opened, when its content has changed,
         // or when document is closed without saving (original contents are sent as a change)
@@ -214,17 +227,34 @@ export class LanguageServer {
                 } as SemanticTokensOptions,
                 referencesProvider: true,
                 codeActionProvider: {
-                    codeActionKinds: [CodeActionKind.QuickFix, CodeActionKind.Refactor]
+                    codeActionKinds: [
+                        CodeActionKind.QuickFix,
+                        CodeActionKind.Refactor,
+                        CodeActionKind.SourceFixAll
+                    ]
                 },
                 signatureHelpProvider: {
                     triggerCharacters: ['(', ',']
                 },
                 definitionProvider: true,
                 hoverProvider: true,
+                selectionRangeProvider: true,
                 executeCommandProvider: {
                     commands: [
                         CustomCommands.TranspileFile
                     ]
+                },
+                workspace: {
+                    fileOperations: {
+                        willRename: {
+                            filters: [{
+                                pattern: {
+                                    glob: '**/*.{bs,brs,xml}',
+                                    matches: 'file'
+                                }
+                            }]
+                        }
+                    }
                 }
             } as ServerCapabilities
         };
@@ -244,6 +274,8 @@ export class LanguageServer {
 
         //set our logger to the most verbose logLevel found across any project
         await this.syncLogLevel();
+
+        this.syncProjectActivationConcurrencyLimit();
 
         try {
             if (this.hasConfigurationCapability) {
@@ -341,6 +373,31 @@ export class LanguageServer {
         //use a default level if no other level was found
         this.logger.logLevel = LogLevel.log;
     }
+
+    /**
+     * Get the project activation concurrency limit from all workspaces and set the project manager's concurrency limit to the lowest value found.
+     * This ensures that if the user has multiple workspaces open with different limits,
+     * we respect the most restrictive limit to avoid overwhelming the user's machine.
+     */
+    private syncProjectActivationConcurrencyLimit() {
+        const limits = [...this.workspaceConfigsCache]
+            .map(x => x?.[1]?.languageServer?.projectActivationConcurrencyLimit)
+            .filter(x => typeof x === 'number');
+
+        //if we don't have any limits defined, use our default value
+        if (limits.length === 0) {
+            limits.push(LanguageServer.projectActivationConcurrencyLimitDefault);
+        }
+
+        let concurrencyLimit = Math.min(...limits);
+        //we must always at least support 1 project activating at a time, otherwise no projects would ever activate
+        if (!(concurrencyLimit >= 1)) {
+            this.logger.log(`projectActivationConcurrencyLimit was set to ${concurrencyLimit}, which is not a valid value. Defaulting to 1.`);
+            concurrencyLimit = 1;
+        }
+        this.projectManager.projectActivationConcurrencyLimit = concurrencyLimit;
+    }
+
 
     @AddStackToErrorMessage
     private async onTextDocumentDidChangeContent(event: TextDocumentChangeEvent<TextDocument>) {
@@ -495,8 +552,8 @@ export class LanguageServer {
                         enableProjectDiscovery: brightscriptConfig?.languageServer?.enableProjectDiscovery ?? LanguageServer.enableProjectDiscoveryDefault,
                         projectDiscoveryMaxDepth: brightscriptConfig?.languageServer?.projectDiscoveryMaxDepth ?? 15,
                         projectDiscoveryExclude: brightscriptConfig?.languageServer?.projectDiscoveryExclude,
-                        logLevel: brightscriptConfig?.languageServer?.logLevel
-
+                        logLevel: brightscriptConfig?.languageServer?.logLevel,
+                        projectActivationConcurrencyLimit: brightscriptConfig?.languageServer?.projectActivationConcurrencyLimit
                     }
                 };
             })
@@ -531,11 +588,14 @@ export class LanguageServer {
         const configs = new Map(
             (await this.getWorkspaceConfigs()).map(x => [x.workspaceFolder, x])
         );
+
         //find any changed configs. This includes newly created workspaces, deleted workspaces, etc.
         //TODO: enhance this to only reload specific projects, depending on the change
         if (!isEqual(configs, this.workspaceConfigsCache)) {
             //now that we've processed any config diffs, update the cached copy of them
             this.workspaceConfigsCache = configs;
+
+            this.syncProjectActivationConcurrencyLimit();
 
             //if configuration changed, rebuild the path filterer
             await this.rebuildPathFilterer();
@@ -561,6 +621,14 @@ export class LanguageServer {
 
         const result = await this.projectManager.getWorkspaceSymbol();
         return result;
+    }
+
+    @AddStackToErrorMessage
+    public async onSelectionRanges(params: SelectionRangeParams) {
+        this.logger.debug('onSelectionRanges', params);
+
+        const srcPath = util.uriToPath(params.textDocument.uri);
+        return this.projectManager.getSelectionRanges({ srcPath: srcPath, positions: params.positions });
     }
 
     @AddStackToErrorMessage
@@ -609,6 +677,29 @@ export class LanguageServer {
         return result ?? [];
     }
 
+    @AddStackToErrorMessage
+    public async onWillRenameFiles(params: RenameFilesParams): Promise<WorkspaceEdit | null> {
+        this.logger.debug('onWillRenameFiles', params);
+
+        const changes: Record<string, TextEdit[]> = {};
+        for (const file of params.files ?? []) {
+            const oldSrcPath = util.uriToPath(file.oldUri);
+            const newSrcPath = util.uriToPath(file.newUri);
+            const edits = await this.projectManager.getFileRenameEdits({ oldSrcPath: oldSrcPath, newSrcPath: newSrcPath });
+            for (const edit of edits) {
+                (changes[edit.uri] ??= []).push({
+                    range: edit.range,
+                    newText: edit.newText
+                });
+            }
+        }
+
+        if (Object.keys(changes).length === 0) {
+            return null;
+        }
+        return { changes: changes };
+    }
+
 
     @AddStackToErrorMessage
     private async onFullSemanticTokens(params: SemanticTokensParams) {
@@ -627,11 +718,29 @@ export class LanguageServer {
         this.logger.debug('onCodeAction', params);
 
         const srcPath = util.uriToPath(params.textDocument.uri);
-        const result = await this.projectManager.getCodeActions({ srcPath: srcPath, range: params.range });
+        const requestedKinds = params.context?.only ?? [];
+        const wantsAnyKind = requestedKinds.length === 0;
+
+        // Fix-all is opt-in and expensive, so only fetch when the client asks for it.
+        const fixAllKind = CodeActionKind.SourceFixAll;
+        const wantsFixAll = wantsAnyKind ||
+            requestedKinds.some(kind => kind.startsWith(fixAllKind) || fixAllKind.startsWith(kind));
+
+        // Standard actions (quickfix, refactor, etc.) all come through getCodeActions,
+        // so only skip that pipeline when the client explicitly asked for fix-all only.
+        const wantsStandardActions = wantsAnyKind ||
+            requestedKinds.some(kind => !kind.startsWith(fixAllKind));
+
+        const [standardActions, fixAllActions] = await Promise.all([
+            wantsStandardActions ? this.projectManager.getCodeActions({ srcPath: srcPath, range: params.range }) : [],
+            wantsFixAll ? this.projectManager.getFixAllCodeActions({ srcPath: srcPath }) : []
+        ]);
+
+        const result = [...(standardActions ?? []), ...(fixAllActions ?? [])];
 
         // filter out any code actions with a kind that the client did not ask for (if the client specified any kinds at all)
-        if (params.context?.only && params.context.only.length > 0) {
-            return result?.filter(x => x.kind && params.context.only.some(only => x.kind === only || x.kind.startsWith(only + '.')));
+        if (!wantsAnyKind) {
+            return result.filter(x => x.kind && requestedKinds.some(only => x.kind === only || x.kind.startsWith(only + '.')));
         }
         return result;
     }
@@ -904,6 +1013,7 @@ export interface BrightScriptClientConfiguration {
         projectDiscoveryExclude?: Record<string, boolean>;
         logLevel: LogLevel | string;
         projectDiscoveryMaxDepth?: number;
+        projectActivationConcurrencyLimit?: number;
     };
 }
 
