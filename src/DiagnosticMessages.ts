@@ -765,6 +765,11 @@ export let DiagnosticMessages = {
         message: `Computed associative array keys must resolve to a string value`,
         code: 1145,
         severity: DiagnosticSeverity.Error
+    }),
+    featureRequiresMinFirmwareVersion: (featureName: string, minimumVersion: string, configuredVersion: string) => ({
+        message: `'${featureName}' requires Roku firmware version ${minimumVersion} or higher (current target is ${configuredVersion})`,
+        code: 1146,
+        severity: DiagnosticSeverity.Error
     })
 };
 
