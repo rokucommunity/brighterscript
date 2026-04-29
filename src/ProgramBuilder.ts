@@ -106,14 +106,7 @@ export class ProgramBuilder {
         ];
     }
 
-    public async run(options: BsConfig & {
-        /**
-         * Should validation run? Default is `true`. You must set explicitly to `false` to disable.
-         * @deprecated this is an experimental flag, and its behavior may change in a future release
-         * @default true
-         */
-        validate?: boolean;
-    }) {
+    public async run(options: BsConfig) {
         if (options?.logLevel) {
             this.logger.logLevel = options.logLevel;
         }
@@ -162,14 +155,10 @@ export class ProgramBuilder {
 
         if (this.options.watch) {
             this.logger.log('Starting compilation in watch mode...');
-            await this.runOnce({
-                validate: options?.validate
-            });
+            await this.runOnce();
             this.enableWatchMode();
         } else {
-            await this.runOnce({
-                validate: options?.validate
-            });
+            await this.runOnce();
         }
     }
 
@@ -293,7 +282,7 @@ export class ProgramBuilder {
     /**
      * Run the entire process exactly one time.
      */
-    private runOnce(options?: { validate?: boolean }) {
+    private runOnce() {
         //clear the console
         this.clearConsole();
         let cancellationToken = { isCanceled: false };
@@ -301,8 +290,7 @@ export class ProgramBuilder {
         let runPromise = this.cancelLastRun().then(() => {
             //start the new run
             return this._runOnce({
-                cancellationToken: cancellationToken,
-                validate: options?.validate
+                cancellationToken: cancellationToken
             });
         }) as any;
 
@@ -379,7 +367,7 @@ export class ProgramBuilder {
      * Run the process once, allowing it to be cancelled.
      * NOTE: This should only be called by `runOnce`.
      */
-    private async _runOnce(options: { cancellationToken: { isCanceled: any }; validate: boolean }) {
+    private async _runOnce(options: { cancellationToken: { isCanceled: any } }) {
         let wereDiagnosticsPrinted = false;
         try {
             //maybe cancel?
@@ -387,7 +375,7 @@ export class ProgramBuilder {
                 return -1;
             }
             //validate program. false means no, everything else (including missing) means true
-            if (options?.validate !== false) {
+            if (this.options.validate !== false) {
                 this.validateProject();
             }
 

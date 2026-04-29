@@ -224,6 +224,15 @@ export interface BsConfig {
      * Should be a semver-compatible string (e.g. "11.0.0").
      */
     minFirmwareVersion?: string;
+
+    /**
+     * When set to false, validation is skipped entirely. This can speed up builds when diagnostics
+     * are not needed (e.g. when using the VSCode extension which already surfaces diagnostics in the
+     * editor). Note that skipping validation may cause transpilation to fail or produce incorrect
+     * output if the project contains errors that would normally be caught during validation.
+     * @default true
+     */
+    validate?: boolean;
 }
 
 type OptionalBsConfigFields =
