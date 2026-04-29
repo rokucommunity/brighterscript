@@ -143,6 +143,11 @@ export interface LspProject {
     getCodeActions(options: { srcPath: string; range: Range }): Promise<CodeAction[]>;
 
     /**
+     * Get all "fix all" source actions for the specified file
+     */
+    getSourceFixAllCodeActions(options: { srcPath: string }): Promise<CodeAction[]>;
+
+    /**
      * Get the selection ranges for the given positions in the specified file
      */
     getSelectionRanges(options: { srcPath: string; positions: Position[] }): MaybePromise<SelectionRange[]>;

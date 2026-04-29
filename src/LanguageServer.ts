@@ -221,7 +221,11 @@ export class LanguageServer {
                 } as SemanticTokensOptions,
                 referencesProvider: true,
                 codeActionProvider: {
-                    codeActionKinds: [CodeActionKind.QuickFix, CodeActionKind.Refactor]
+                    codeActionKinds: [
+                        CodeActionKind.QuickFix,
+                        CodeActionKind.Refactor,
+                        CodeActionKind.SourceFixAll
+                    ]
                 },
                 signatureHelpProvider: {
                     triggerCharacters: ['(', ',']
@@ -673,11 +677,29 @@ export class LanguageServer {
         this.logger.debug('onCodeAction', params);
 
         const srcPath = util.uriToPath(params.textDocument.uri);
-        const result = await this.projectManager.getCodeActions({ srcPath: srcPath, range: params.range });
+        const requestedKinds = params.context?.only ?? [];
+        const wantsAnyKind = requestedKinds.length === 0;
+
+        // Fix-all is opt-in and expensive, so only fetch when the client asks for it.
+        const fixAllKind = CodeActionKind.SourceFixAll;
+        const wantsFixAll = wantsAnyKind ||
+            requestedKinds.some(kind => kind.startsWith(fixAllKind) || fixAllKind.startsWith(kind));
+
+        // Standard actions (quickfix, refactor, etc.) all come through getCodeActions,
+        // so only skip that pipeline when the client explicitly asked for fix-all only.
+        const wantsStandardActions = wantsAnyKind ||
+            requestedKinds.some(kind => !kind.startsWith(fixAllKind));
+
+        const [standardActions, fixAllActions] = await Promise.all([
+            wantsStandardActions ? this.projectManager.getCodeActions({ srcPath: srcPath, range: params.range }) : [],
+            wantsFixAll ? this.projectManager.getFixAllCodeActions({ srcPath: srcPath }) : []
+        ]);
+
+        const result = [...(standardActions ?? []), ...(fixAllActions ?? [])];
 
         // filter out any code actions with a kind that the client did not ask for (if the client specified any kinds at all)
-        if (params.context?.only && params.context.only.length > 0) {
-            return result?.filter(x => x.kind && params.context.only.some(only => x.kind === only || x.kind.startsWith(only + '.')));
+        if (!wantsAnyKind) {
+            return result.filter(x => x.kind && requestedKinds.some(only => x.kind === only || x.kind.startsWith(only + '.')));
         }
         return result;
     }

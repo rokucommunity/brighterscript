@@ -720,6 +720,18 @@ export class ProjectManager {
     }
 
     @TrackBusyStatus
+    public async getFixAllCodeActions(options: { srcPath: string }) {
+        //wait for all pending syncs to finish
+        await this.onIdle();
+
+        let result = await util.promiseRaceMatch(
+            this.projects.map(x => x.getSourceFixAllCodeActions(options)),
+            (result) => !!result
+        );
+        return result;
+    }
+
+    @TrackBusyStatus
     public async getSelectionRanges(options: { srcPath: string; positions: Position[] }): Promise<SelectionRange[]> {
         //wait for all pending syncs to finish
         await this.onIdle();

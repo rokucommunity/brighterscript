@@ -10,7 +10,9 @@ import { SymbolTable } from './SymbolTable';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, ProvideSelectionRangesEvent } from './interfaces';
+import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, ProvideSelectionRangesEvent, OnGetSourceFixAllCodeActionsEvent } from './interfaces';
+import type { SourceFixAllCodeAction } from './CodeActionUtil';
+import { codeActionUtil } from './CodeActionUtil';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -1258,6 +1260,33 @@ export class Program {
             });
         }
         return codeActions;
+    }
+
+    /**
+     * Compute "source fix all" code actions for the given file.
+     * Fires the `onGetSourceFixAllCodeActions` plugin event with all diagnostics for the file (no range filter),
+     * then converts each contributed SourceFixAllCodeAction into an LSP CodeAction.
+     */
+    public getSourceFixAllCodeActions(srcPath: string): CodeAction[] {
+        const actions: SourceFixAllCodeAction[] = [];
+        const file = this.getFile(srcPath);
+        if (file) {
+            const diagnostics = this
+                .getDiagnostics()
+                .filter(x => x.file === file);
+            const scopes = this.getScopesForFile(file);
+            this.plugins.emit('onGetSourceFixAllCodeActions', {
+                program: this,
+                file: file,
+                diagnostics: diagnostics,
+                scopes: scopes,
+                actions: actions
+            } as OnGetSourceFixAllCodeActionsEvent);
+        }
+        return actions.map(action => codeActionUtil.createCodeAction({
+            ...action,
+            kind: action.kind ?? 'source.fixAll.brighterscript' as any
+        }));
     }
 
     /**

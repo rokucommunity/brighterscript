@@ -14,6 +14,7 @@ import type { FunctionExpression } from '../../parser/Expression';
 import type { MethodStatement } from '../../parser/Statement';
 import { WalkMode } from '../../astUtils/visitors';
 import { TokenKind } from '../../lexer/TokenKind';
+import { getMissingExtendsInsertPosition } from './codeActionHelpers';
 
 export class CodeActionsProcessor {
     public constructor(
@@ -281,9 +282,7 @@ export class CodeActionsProcessor {
      */
     private suggestMissingExtendsQuickFix(diagnostic: DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>) {
         const srcPath = this.event.file.srcPath;
-        const { component } = (this.event.file as XmlFile).parser.ast;
-        //inject new attribute after the final attribute, or after the `<component` if there are no attributes
-        const pos = (component.attributes[component.attributes.length - 1] ?? component.tag).range.end;
+        const pos = getMissingExtendsInsertPosition(this.event.file as XmlFile);
         this.event.codeActions.push(
             codeActionUtil.createCodeAction({
                 title: `Extend "Group"`,
