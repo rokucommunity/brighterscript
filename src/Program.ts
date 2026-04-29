@@ -33,7 +33,6 @@ import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
 import { Sequencer } from './common/Sequencer';
 import { Deferred } from './deferred';
-import internal from 'stream';
 
 const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
