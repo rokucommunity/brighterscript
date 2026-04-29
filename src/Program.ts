@@ -1398,7 +1398,7 @@ export class Program {
      * source paths to paths relative to the map file location.
      */
     private serializeSourceMap(sourceMap: SourceMapGenerator, outputPath: string): string {
-        if (!this.options.sourceMapRelativePaths) {
+        if (!this.options.relativeSourceMaps) {
             return sourceMap.toString();
         }
         const mapJson = sourceMap.toJSON();

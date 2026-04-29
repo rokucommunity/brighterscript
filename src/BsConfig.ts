@@ -196,7 +196,7 @@ export interface BsConfig {
      * instead of absolute. This makes source maps portable across different machines and environments.
      * @default false
      */
-    sourceMapRelativePaths?: boolean;
+    relativeSourceMaps?: boolean;
     /**
      * Excludes empty files from being included in the output. Some Brighterscript files
      * are left empty or with only comments after transpilation to Brightscript.

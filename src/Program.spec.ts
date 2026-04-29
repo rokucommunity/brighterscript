@@ -2088,7 +2088,7 @@ describe('Program', () => {
         expect(path.isAbsolute(mapContent.sources[0])).to.be.true;
     });
 
-    it('sourcemap contains relative source paths when sourceMapRelativePaths is true', async () => {
+    it('sourcemap contains relative source paths when relativeSourceMaps is true', async () => {
         fsExtra.ensureDirSync(program.options.stagingDir!);
         program.setFile('source/main.bs', `
             sub main()
@@ -2097,7 +2097,7 @@ describe('Program', () => {
         program.validate();
 
         program.options.sourceMap = true;
-        program.options.sourceMapRelativePaths = true;
+        program.options.relativeSourceMaps = true;
         await program.transpile([{
             src: s`${rootDir}/source/main.bs`,
             dest: 'source/main.brs'
@@ -2120,7 +2120,7 @@ describe('Program', () => {
         program.validate();
 
         program.options.sourceMap = true;
-        program.options.sourceMapRelativePaths = true;
+        program.options.relativeSourceMaps = true;
         program.options.sourceRoot = s`${rootDir}/../customRoot`;
         await program.transpile([{
             src: s`${rootDir}/source/main.bs`,

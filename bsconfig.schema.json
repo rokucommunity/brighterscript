@@ -99,7 +99,7 @@
             "type": "boolean",
             "default": false
         },
-        "sourceMapRelativePaths": {
+        "relativeSourceMaps": {
             "description": "If true, source file paths in generated sourcemaps will be relative to the map file location instead of absolute. This makes sourcemaps portable across different machines and environments.",
             "type": "boolean",
             "default": false

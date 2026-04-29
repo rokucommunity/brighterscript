@@ -26,7 +26,7 @@ While a minimal `bsconfig.json` file is sufficient for getting started, `bsc` su
 - [retainStagingDir](#retainStagingDir)
 - [rootDir](#rootDir)
 - [sourceMap](#sourceMap)
-- [sourceMapRelativePaths](#sourceMapRelativePaths)
+- [relativeSourceMaps](#relativeSourceMaps)
 - [sourceRoot](#sourceRoot)
 - [stagingDir](#stagingDir)
 - [username](#username)
@@ -421,7 +421,7 @@ Type: `boolean`
 
 Enables generating sourcemap files (`.map`), which allow debugging tools to show the original source code while running the emitted files. Defaults to `false`.
 
-## `sourceMapRelativePaths`
+## `relativeSourceMaps`
 
 Type: `boolean`
 
