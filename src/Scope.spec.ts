@@ -1659,6 +1659,657 @@ describe('Scope', () => {
             //leaves always get a symbolTable allocated for sibling-linking during validation
             expect(leaf.symbolTable).to.exist;
         });
+
+        it('shares per-file contribution data across scopes that pull in the same file (fast path)', () => {
+            //a single .bs file declares the namespace; both source scope and an xml scope
+            //pull it in. The two scopes should produce containers whose heavy fields point
+            //at the same NamespaceFileContribution instances (no per-scope re-allocation).
+            program.setFile<BrsFile>('source/shared.bs', `
+                namespace shared.lib
+                    function helper()
+                    end function
+                end namespace
+            `);
+            program.setFile('components/Comp.xml', `
+                <component name="Comp" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/shared.bs" />
+                </component>
+            `);
+            program.validate();
+            const sourceLookup = program['scopes']['source'].buildNamespaceLookup();
+            //XmlScope's key in `program.scopes` is its `xmlFile.pkgPath`, which is path-normalized
+            //(backslashes on Windows). Use `s` to match.
+            const xmlLookup = program['scopes'][s`components/Comp.xml`].buildNamespaceLookup();
+            const fromSource = sourceLookup.get('shared.lib');
+            const fromXml = xmlLookup.get('shared.lib');
+            expect(fromSource).to.exist;
+            expect(fromXml).to.exist;
+            //heavy fields share refs (the wrapper objects themselves are per-scope so
+            //their `namespaces` field can differ, but the inner data is shared)
+            expect(fromSource.functionStatements).to.equal(fromXml.functionStatements);
+            expect(fromSource.symbolTable).to.equal(fromXml.symbolTable);
+        });
+
+        it('aggregates contributions from multiple in-scope files (slow path)', () => {
+            //"shared" namespace is split across two files that both end up in the source scope
+            program.setFile<BrsFile>('source/sharedA.bs', `
+                namespace shared
+                    function fromA()
+                    end function
+                end namespace
+            `);
+            program.setFile<BrsFile>('source/sharedB.bs', `
+                namespace shared
+                    function fromB()
+                    end function
+                end namespace
+            `);
+            const lookup = program['scopes']['source'].buildNamespaceLookup();
+            const merged = lookup.get('shared');
+            expect(merged).to.exist;
+            expect(merged.functionStatements).to.exist;
+            expect(merged.functionStatements.froma).to.exist;
+            expect(merged.functionStatements.fromb).to.exist;
+            //the slow-path symbolTable is freshly allocated and contains both files' symbols
+            expect(merged.symbolTable).to.exist;
+        });
+
+        it('shares slow-path aggregates across scopes with the same in-scope file set', () => {
+            //two files contribute to the same namespace
+            program.setFile<BrsFile>('source/sharedA.bs', `
+                namespace shared.lib
+                    function fromA()
+                    end function
+                end namespace
+            `);
+            program.setFile<BrsFile>('source/sharedB.bs', `
+                namespace shared.lib
+                    function fromB()
+                    end function
+                end namespace
+            `);
+            //two XML components both pull in both files, so each scope sees the multi-contribution slow path
+            program.setFile('components/Comp1.xml', `
+                <component name="Comp1" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/sharedA.bs" />
+                    <script type="text/brightscript" uri="pkg:/source/sharedB.bs" />
+                </component>
+            `);
+            program.setFile('components/Comp2.xml', `
+                <component name="Comp2" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/sharedA.bs" />
+                    <script type="text/brightscript" uri="pkg:/source/sharedB.bs" />
+                </component>
+            `);
+            program.validate();
+            const comp1Lookup = program['scopes'][s`components/Comp1.xml`].buildNamespaceLookup();
+            const comp2Lookup = program['scopes'][s`components/Comp2.xml`].buildNamespaceLookup();
+            const fromComp1 = comp1Lookup.get('shared.lib');
+            const fromComp2 = comp2Lookup.get('shared.lib');
+            expect(fromComp1).to.exist;
+            expect(fromComp2).to.exist;
+            //heavy fields share refs across scopes via the program-level slow-path aggregate
+            expect(fromComp1.functionStatements).to.equal(fromComp2.functionStatements);
+            expect(fromComp1.symbolTable).to.equal(fromComp2.symbolTable);
+            //the merged data still contains both files' contributions
+            expect(fromComp1.functionStatements.froma).to.exist;
+            expect(fromComp1.functionStatements.fromb).to.exist;
+        });
+
+        it('rebuilds the program-level index when a file is replaced', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                namespace alpha
+                    function originalFn()
+                    end function
+                end namespace
+            `);
+            const beforeLookup = program['scopes']['source'].buildNamespaceLookup();
+            const before = beforeLookup.get('alpha');
+            expect(before.functionStatements?.originalfn).to.exist;
+            //replace the file with a different namespace declaration
+            program.setFile<BrsFile>('source/main.bs', `
+                namespace alpha
+                    function replacementFn()
+                    end function
+                end namespace
+            `);
+            //the source scope's cache invalidates via the dependency-graph chain, so
+            //a fresh lookup reflects the new contributions
+            const afterLookup = program['scopes']['source'].buildNamespaceLookup();
+            const after = afterLookup.get('alpha');
+            expect(after.functionStatements?.replacementfn).to.exist;
+            expect(after.functionStatements?.originalfn).to.be.undefined;
+        });
+
+        describe('fast path correctness', () => {
+            it('populates only classStatements for a class-only namespace', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    namespace shapes
+                        class Circle
+                        end class
+                        class Square
+                        end class
+                    end namespace
+                `);
+                const leaf = program['scopes']['source'].buildNamespaceLookup().get('shapes');
+                expect(leaf.classStatements).to.exist;
+                expect(leaf.classStatements.circle).to.exist;
+                expect(leaf.classStatements.square).to.exist;
+                expect(leaf.functionStatements).to.be.undefined;
+                expect(leaf.enumStatements).to.be.undefined;
+                expect(leaf.constStatements).to.be.undefined;
+            });
+
+            it('populates only functionStatements for a function-only namespace', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    namespace utils
+                        function helper()
+                        end function
+                    end namespace
+                `);
+                const leaf = program['scopes']['source'].buildNamespaceLookup().get('utils');
+                expect(leaf.functionStatements).to.exist;
+                expect(leaf.functionStatements.helper).to.exist;
+                expect(leaf.classStatements).to.be.undefined;
+                expect(leaf.enumStatements).to.be.undefined;
+                expect(leaf.constStatements).to.be.undefined;
+            });
+
+            it('populates only enumStatements for an enum-only namespace', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    namespace status
+                        enum Active
+                            on = "on"
+                            off = "off"
+                        end enum
+                    end namespace
+                `);
+                const leaf = program['scopes']['source'].buildNamespaceLookup().get('status');
+                expect(leaf.enumStatements).to.exist;
+                expect(leaf.enumStatements.has('status.active')).to.be.true;
+                expect(leaf.classStatements).to.be.undefined;
+                expect(leaf.functionStatements).to.be.undefined;
+                expect(leaf.constStatements).to.be.undefined;
+            });
+
+            it('populates only constStatements for a const-only namespace', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    namespace settings
+                        const MAX = 100
+                    end namespace
+                `);
+                const leaf = program['scopes']['source'].buildNamespaceLookup().get('settings');
+                expect(leaf.constStatements).to.exist;
+                expect(leaf.constStatements.has('settings.max')).to.be.true;
+                expect(leaf.classStatements).to.be.undefined;
+                expect(leaf.functionStatements).to.be.undefined;
+                expect(leaf.enumStatements).to.be.undefined;
+            });
+
+            it('populates all four collections when present', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    namespace mixed
+                        class Cls
+                        end class
+                        function fn()
+                        end function
+                        enum Enm
+                            a = "a"
+                        end enum
+                        const C = 1
+                    end namespace
+                `);
+                const leaf = program['scopes']['source'].buildNamespaceLookup().get('mixed');
+                expect(leaf.classStatements?.cls).to.exist;
+                expect(leaf.functionStatements?.fn).to.exist;
+                expect(leaf.enumStatements?.has('mixed.enm')).to.be.true;
+                expect(leaf.constStatements?.has('mixed.c')).to.be.true;
+            });
+
+            it('shares classStatements across two scopes pulling in the same single-contributor file', () => {
+                program.setFile<BrsFile>('source/utils.bs', `
+                    namespace util
+                        class Helper
+                        end class
+                    end namespace
+                `);
+                program.setFile('components/A.xml', `
+                    <component name="A" extends="Group">
+                        <script type="text/brightscript" uri="pkg:/source/utils.bs" />
+                    </component>
+                `);
+                program.setFile('components/B.xml', `
+                    <component name="B" extends="Group">
+                        <script type="text/brightscript" uri="pkg:/source/utils.bs" />
+                    </component>
+                `);
+                program.validate();
+                const fromA = program['scopes'][s`components/A.xml`].buildNamespaceLookup().get('util');
+                const fromB = program['scopes'][s`components/B.xml`].buildNamespaceLookup().get('util');
+                expect(fromA.classStatements).to.equal(fromB.classStatements);
+                expect(fromA.symbolTable).to.equal(fromB.symbolTable);
+            });
+
+            it('still works with deeply nested namespace declarations', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    namespace a.b.c.d.e
+                        function deep()
+                        end function
+                    end namespace
+                `);
+                const lookup = program['scopes']['source'].buildNamespaceLookup();
+                expect(lookup.get('a').namespaces.has('b')).to.be.true;
+                expect(lookup.get('a.b').namespaces.has('c')).to.be.true;
+                expect(lookup.get('a.b.c').namespaces.has('d')).to.be.true;
+                expect(lookup.get('a.b.c.d').namespaces.has('e')).to.be.true;
+                expect(lookup.get('a.b.c.d.e').functionStatements?.deep).to.exist;
+            });
+
+            it('treats namespace names case-insensitively', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    namespace MyNamespace
+                        function fn()
+                        end function
+                    end namespace
+                `);
+                const lookup = program['scopes']['source'].buildNamespaceLookup();
+                expect(lookup.get('mynamespace')).to.exist;
+                expect(lookup.get('MYNAMESPACE')).to.exist;
+                expect(lookup.get('MyNamespace')).to.exist;
+                //all three lookups return the same container (cached on first access)
+                expect(lookup.get('mynamespace')).to.equal(lookup.get('MYNAMESPACE'));
+            });
+        });
+
+        describe('slow path correctness', () => {
+            it('merges classStatements from two contributors', () => {
+                program.setFile<BrsFile>('source/a.bs', `
+                    namespace lib
+                        class FromA
+                        end class
+                    end namespace
+                `);
+                program.setFile<BrsFile>('source/b.bs', `
+                    namespace lib
+                        class FromB
+                        end class
+                    end namespace
+                `);
+                const lib = program['scopes']['source'].buildNamespaceLookup().get('lib');
+                expect(lib.classStatements?.froma).to.exist;
+                expect(lib.classStatements?.fromb).to.exist;
+            });
+
+            it('merges only the field types each contributor populates', () => {
+                program.setFile<BrsFile>('source/a.bs', `
+                    namespace lib
+                        class OnlyClass
+                        end class
+                    end namespace
+                `);
+                program.setFile<BrsFile>('source/b.bs', `
+                    namespace lib
+                        function onlyFunc()
+                        end function
+                    end namespace
+                `);
+                const lib = program['scopes']['source'].buildNamespaceLookup().get('lib');
+                expect(lib.classStatements?.onlyclass).to.exist;
+                expect(lib.functionStatements?.onlyfunc).to.exist;
+                //fields not contributed by either file stay undefined
+                expect(lib.enumStatements).to.be.undefined;
+                expect(lib.constStatements).to.be.undefined;
+            });
+
+            it('merges three contributors correctly', () => {
+                program.setFile<BrsFile>('source/a.bs', `
+                    namespace lib
+                        function fa()
+                        end function
+                    end namespace
+                `);
+                program.setFile<BrsFile>('source/b.bs', `
+                    namespace lib
+                        function fb()
+                        end function
+                    end namespace
+                `);
+                program.setFile<BrsFile>('source/c.bs', `
+                    namespace lib
+                        function fc()
+                        end function
+                    end namespace
+                `);
+                const lib = program['scopes']['source'].buildNamespaceLookup().get('lib');
+                expect(lib.functionStatements?.fa).to.exist;
+                expect(lib.functionStatements?.fb).to.exist;
+                expect(lib.functionStatements?.fc).to.exist;
+            });
+
+            it('aggregate symbolTable contains symbols from every contributor', () => {
+                program.setFile<BrsFile>('source/a.bs', `
+                    namespace lib
+                        function fromA()
+                        end function
+                    end namespace
+                `);
+                program.setFile<BrsFile>('source/b.bs', `
+                    namespace lib
+                        function fromB()
+                        end function
+                    end namespace
+                `);
+                //BrsFileValidator populates each body's symbolTable during validate; the
+                //namespace contribution's symbolTable is built from those bodies.
+                program.validate();
+                const lib = program['scopes']['source'].buildNamespaceLookup().get('lib');
+                expect(lib.symbolTable).to.exist;
+                expect(lib.symbolTable.hasSymbol('fromA')).to.be.true;
+                expect(lib.symbolTable.hasSymbol('fromB')).to.be.true;
+            });
+
+            it('produces different aggregates for scopes with different contributor sets', () => {
+                program.setFile<BrsFile>('source/a.bs', `
+                    namespace lib
+                        function fromA()
+                        end function
+                    end namespace
+                `);
+                program.setFile<BrsFile>('source/b.bs', `
+                    namespace lib
+                        function fromB()
+                        end function
+                    end namespace
+                `);
+                program.setFile<BrsFile>('source/c.bs', `
+                    namespace lib
+                        function fromC()
+                        end function
+                    end namespace
+                `);
+                program.setFile('components/AB.xml', `
+                    <component name="AB" extends="Group">
+                        <script type="text/brightscript" uri="pkg:/source/a.bs" />
+                        <script type="text/brightscript" uri="pkg:/source/b.bs" />
+                    </component>
+                `);
+                program.setFile('components/BC.xml', `
+                    <component name="BC" extends="Group">
+                        <script type="text/brightscript" uri="pkg:/source/b.bs" />
+                        <script type="text/brightscript" uri="pkg:/source/c.bs" />
+                    </component>
+                `);
+                program.validate();
+                const ab = program['scopes'][s`components/AB.xml`].buildNamespaceLookup().get('lib');
+                const bc = program['scopes'][s`components/BC.xml`].buildNamespaceLookup().get('lib');
+                expect(ab.functionStatements?.froma).to.exist;
+                expect(ab.functionStatements?.fromb).to.exist;
+                expect(ab.functionStatements?.fromc).to.be.undefined;
+                expect(bc.functionStatements?.froma).to.be.undefined;
+                expect(bc.functionStatements?.fromb).to.exist;
+                expect(bc.functionStatements?.fromc).to.exist;
+                //different file sets → different cached aggregates → different references
+                expect(ab.functionStatements).to.not.equal(bc.functionStatements);
+            });
+
+            it('walks pure-intermediate multi-contributor case without crashing', () => {
+                //"prefix" is intermediate-only across multiple files (no leaf body anywhere)
+                program.setFile<BrsFile>('source/a.bs', `
+                    namespace prefix.alpha
+                        function fa()
+                        end function
+                    end namespace
+                `);
+                program.setFile<BrsFile>('source/b.bs', `
+                    namespace prefix.beta
+                        function fb()
+                        end function
+                    end namespace
+                `);
+                const prefix = program['scopes']['source'].buildNamespaceLookup().get('prefix');
+                expect(prefix).to.exist;
+                expect(prefix.namespaces.has('alpha')).to.be.true;
+                expect(prefix.namespaces.has('beta')).to.be.true;
+                expect(prefix.statements).to.be.undefined;
+                expect(prefix.classStatements).to.be.undefined;
+                expect(prefix.functionStatements).to.be.undefined;
+                //pure intermediates have no symbolTable
+                expect(prefix.symbolTable).to.be.undefined;
+            });
+        });
+
+        describe('cache invalidation', () => {
+            it('removes a namespace from the lookup when the only contributing file is removed', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    namespace will_be_gone
+                        function fn()
+                        end function
+                    end namespace
+                `);
+                expect(program['scopes']['source'].buildNamespaceLookup().get('will_be_gone')).to.exist;
+                program.removeFile('source/main.bs');
+                expect(program['scopes']['source'].buildNamespaceLookup().get('will_be_gone')).to.be.undefined;
+            });
+
+            it('updates the slow-path aggregate when one contributor changes its content', () => {
+                program.setFile<BrsFile>('source/a.bs', `
+                    namespace lib
+                        function originalA()
+                        end function
+                    end namespace
+                `);
+                program.setFile<BrsFile>('source/b.bs', `
+                    namespace lib
+                        function fromB()
+                        end function
+                    end namespace
+                `);
+                let lib = program['scopes']['source'].buildNamespaceLookup().get('lib');
+                expect(lib.functionStatements?.originala).to.exist;
+                expect(lib.functionStatements?.fromb).to.exist;
+                //replace one contributor
+                program.setFile<BrsFile>('source/a.bs', `
+                    namespace lib
+                        function newA()
+                        end function
+                    end namespace
+                `);
+                lib = program['scopes']['source'].buildNamespaceLookup().get('lib');
+                expect(lib.functionStatements?.newa).to.exist;
+                expect(lib.functionStatements?.originala).to.be.undefined;
+                expect(lib.functionStatements?.fromb).to.exist;
+            });
+
+            it('handles a namespace gaining a new contributor (single -> multi)', () => {
+                program.setFile<BrsFile>('source/a.bs', `
+                    namespace lib
+                        function fromA()
+                        end function
+                    end namespace
+                `);
+                let lib = program['scopes']['source'].buildNamespaceLookup().get('lib');
+                expect(lib.functionStatements?.froma).to.exist;
+                expect(lib.functionStatements?.fromb).to.be.undefined;
+                program.setFile<BrsFile>('source/b.bs', `
+                    namespace lib
+                        function fromB()
+                        end function
+                    end namespace
+                `);
+                lib = program['scopes']['source'].buildNamespaceLookup().get('lib');
+                //both contributions now present
+                expect(lib.functionStatements?.froma).to.exist;
+                expect(lib.functionStatements?.fromb).to.exist;
+            });
+
+            it('handles a namespace losing a contributor (multi -> single)', () => {
+                program.setFile<BrsFile>('source/a.bs', `
+                    namespace lib
+                        function fromA()
+                        end function
+                    end namespace
+                `);
+                program.setFile<BrsFile>('source/b.bs', `
+                    namespace lib
+                        function fromB()
+                        end function
+                    end namespace
+                `);
+                let lib = program['scopes']['source'].buildNamespaceLookup().get('lib');
+                expect(lib.functionStatements?.froma).to.exist;
+                expect(lib.functionStatements?.fromb).to.exist;
+                program.removeFile('source/b.bs');
+                lib = program['scopes']['source'].buildNamespaceLookup().get('lib');
+                expect(lib.functionStatements?.froma).to.exist;
+                expect(lib.functionStatements?.fromb).to.be.undefined;
+            });
+        });
+
+        describe('Map interface', () => {
+            beforeEach(() => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    namespace one
+                        function f1()
+                        end function
+                    end namespace
+                    namespace two.three
+                        function f2()
+                        end function
+                    end namespace
+                `);
+            });
+
+            it('responds to .has() for in-scope namespaces', () => {
+                const lookup = program['scopes']['source'].buildNamespaceLookup();
+                expect(lookup.has('one')).to.be.true;
+                expect(lookup.has('two')).to.be.true;
+                expect(lookup.has('two.three')).to.be.true;
+                expect(lookup.has('not_a_namespace')).to.be.false;
+            });
+
+            it('returns undefined for .get() of a missing namespace', () => {
+                const lookup = program['scopes']['source'].buildNamespaceLookup();
+                expect(lookup.get('not_a_namespace')).to.be.undefined;
+            });
+
+            it('reports correct .size', () => {
+                const lookup = program['scopes']['source'].buildNamespaceLookup();
+                //three name parts: one, two, two.three
+                expect(lookup.size).to.equal(3);
+            });
+
+            it('iterates entries() and produces all in-scope namespaces', () => {
+                const lookup = program['scopes']['source'].buildNamespaceLookup();
+                const keys = [...lookup.entries()].map(([key]) => key).sort();
+                expect(keys).to.eql(['one', 'two', 'two.three']);
+            });
+
+            it('iterates keys() and values()', () => {
+                const lookup = program['scopes']['source'].buildNamespaceLookup();
+                const keys = [...lookup.keys()].sort();
+                expect(keys).to.eql(['one', 'two', 'two.three']);
+                const values = [...lookup.values()];
+                expect(values.length).to.equal(3);
+                expect(values.every(value => value !== undefined && value !== null)).to.be.true;
+            });
+
+            it('supports for...of iteration via Symbol.iterator', () => {
+                const lookup = program['scopes']['source'].buildNamespaceLookup();
+                const seenKeys = [];
+                for (const [key] of lookup) {
+                    seenKeys.push(key);
+                }
+                expect(seenKeys.sort()).to.eql(['one', 'two', 'two.three']);
+            });
+
+            it('supports forEach', () => {
+                const lookup = program['scopes']['source'].buildNamespaceLookup();
+                const seenKeys = [];
+                lookup.forEach((_, key) => {
+                    seenKeys.push(key);
+                });
+                expect(seenKeys.sort()).to.eql(['one', 'two', 'two.three']);
+            });
+        });
+
+        describe('scope filtering of children', () => {
+            it('only includes children whose contributors are in scope', () => {
+                program.setFile<BrsFile>('source/colors.bs', `
+                    namespace ds.colors
+                        function getRed()
+                        end function
+                    end namespace
+                `);
+                program.setFile<BrsFile>('source/icons.bs', `
+                    namespace ds.icons
+                        function getStar()
+                        end function
+                    end namespace
+                `);
+                //a component that only imports colors.bs should see ds.colors but not ds.icons
+                program.setFile('components/ColorOnly.xml', `
+                    <component name="ColorOnly" extends="Group">
+                        <script type="text/brightscript" uri="pkg:/source/colors.bs" />
+                    </component>
+                `);
+                //a component that imports both should see both children
+                program.setFile('components/Both.xml', `
+                    <component name="Both" extends="Group">
+                        <script type="text/brightscript" uri="pkg:/source/colors.bs" />
+                        <script type="text/brightscript" uri="pkg:/source/icons.bs" />
+                    </component>
+                `);
+                program.validate();
+                const colorOnly = program['scopes'][s`components/ColorOnly.xml`].buildNamespaceLookup().get('ds');
+                const both = program['scopes'][s`components/Both.xml`].buildNamespaceLookup().get('ds');
+                expect(colorOnly.namespaces.has('colors')).to.be.true;
+                expect(colorOnly.namespaces.has('icons')).to.be.false;
+                expect(both.namespaces.has('colors')).to.be.true;
+                expect(both.namespaces.has('icons')).to.be.true;
+            });
+        });
+
+        describe('edge cases', () => {
+            it('does not crash on an empty namespace body', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    namespace empty
+                    end namespace
+                `);
+                const empty = program['scopes']['source'].buildNamespaceLookup().get('empty');
+                expect(empty).to.exist;
+                expect(empty.statements).to.be.undefined;
+                expect(empty.classStatements).to.be.undefined;
+                expect(empty.functionStatements).to.be.undefined;
+            });
+
+            it('merges multiple `namespace X` blocks within the same file', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    namespace dual
+                        function fromFirstBlock()
+                        end function
+                    end namespace
+                    namespace dual
+                        function fromSecondBlock()
+                        end function
+                    end namespace
+                `);
+                const dual = program['scopes']['source'].buildNamespaceLookup().get('dual');
+                expect(dual.functionStatements?.fromfirstblock).to.exist;
+                expect(dual.functionStatements?.fromsecondblock).to.exist;
+            });
+
+            it('returns a namespaces Map (not undefined) even for namespaces with no children', () => {
+                program.setFile<BrsFile>('source/main.bs', `
+                    namespace lonely
+                        function fn()
+                        end function
+                    end namespace
+                `);
+                const lonely = program['scopes']['source'].buildNamespaceLookup().get('lonely');
+                expect(lonely.namespaces).to.be.instanceOf(Map);
+                expect(lonely.namespaces.size).to.equal(0);
+            });
+        });
     });
 
     describe('buildEnumLookup', () => {
