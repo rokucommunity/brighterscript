@@ -138,6 +138,13 @@ export interface LspProject {
     getReferences(options: { srcPath: string; position: Position }): MaybePromise<Location[]>;
 
     /**
+     * Compute the text edits required to keep `import` statements and `<script uri>` tags pointing
+     * at a source file when that source file is being renamed. Each project answers independently;
+     * the ProjectManager is responsible for reconciling agreement across projects.
+     */
+    getFileRenameEdits(options: { oldSrcPath: string; newSrcPath: string }): MaybePromise<FileRenameEdit[]>;
+
+    /**
      * Get all of the code actions for the specified file and range
      */
     getCodeActions(options: { srcPath: string; range: Range }): Promise<CodeAction[]>;
@@ -226,6 +233,17 @@ export interface ProjectConfig {
 
 export interface LspDiagnostic extends Diagnostic {
     uri: string;
+}
+
+/**
+ * A single text edit produced by a project in response to a file rename.
+ * Each edit replaces the contents of `range` (an import-path token or `<script uri>` attribute value, quotes excluded)
+ * inside the file at `srcPath` with `newText`.
+ */
+export interface FileRenameEdit {
+    srcPath: string;
+    range: Range;
+    newText: string;
 }
 
 export interface ActivateResponse {

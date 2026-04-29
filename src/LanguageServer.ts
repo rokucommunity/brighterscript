@@ -27,7 +27,10 @@ import type {
     CancellationToken,
     DidChangeConfigurationParams,
     DidChangeConfigurationRegistrationOptions,
-    SelectionRangeParams
+    SelectionRangeParams,
+    RenameFilesParams,
+    WorkspaceEdit,
+    TextEdit
 } from 'vscode-languageserver/node';
 import {
     SemanticTokensRequest,
@@ -168,6 +171,9 @@ export class LanguageServer {
         //Register semantic token requests. TODO switch to a more specific connection function call once they actually add it
         this.connection.onRequest(SemanticTokensRequest.method, this.onFullSemanticTokens.bind(this));
 
+        //file-operation requests live under connection.workspace, so they aren't picked up by the on* auto-bind loop above
+        this.connection.workspace.onWillRenameFiles(this.onWillRenameFiles.bind(this));
+
         // The content of a text document has changed. This event is emitted
         // when the text document is first opened, when its content has changed,
         // or when document is closed without saving (original contents are sent as a change)
@@ -227,6 +233,18 @@ export class LanguageServer {
                     commands: [
                         CustomCommands.TranspileFile
                     ]
+                },
+                workspace: {
+                    fileOperations: {
+                        willRename: {
+                            filters: [{
+                                pattern: {
+                                    glob: '**/*.{bs,brs,xml}',
+                                    matches: 'file'
+                                }
+                            }]
+                        }
+                    }
                 }
             } as ServerCapabilities
         };
@@ -617,6 +635,30 @@ export class LanguageServer {
         const srcPath = util.uriToPath(params.textDocument.uri);
         const result = await this.projectManager.getReferences({ srcPath: srcPath, position: params.position });
         return result ?? [];
+    }
+
+    @AddStackToErrorMessage
+    public async onWillRenameFiles(params: RenameFilesParams): Promise<WorkspaceEdit | null> {
+        this.logger.debug('onWillRenameFiles', params);
+
+        const changes: Record<string, TextEdit[]> = {};
+        for (const file of params.files ?? []) {
+            const oldSrcPath = util.uriToPath(file.oldUri);
+            const newSrcPath = util.uriToPath(file.newUri);
+            const edits = await this.projectManager.getFileRenameEdits({ oldSrcPath: oldSrcPath, newSrcPath: newSrcPath });
+            for (const edit of edits) {
+                const uri = util.pathToUri(edit.srcPath);
+                (changes[uri] ??= []).push({
+                    range: edit.range,
+                    newText: edit.newText
+                });
+            }
+        }
+
+        if (Object.keys(changes).length === 0) {
+            return null;
+        }
+        return { changes: changes };
     }
 
 

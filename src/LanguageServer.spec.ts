@@ -75,7 +75,8 @@ describe('LanguageServer', () => {
             getConfiguration: () => {
                 return {};
             },
-            onDidChangeWorkspaceFolders: () => { }
+            onDidChangeWorkspaceFolders: () => { },
+            onWillRenameFiles: () => null
         },
         tracer: {
             log: () => { }
@@ -1507,6 +1508,50 @@ describe('LanguageServer', () => {
             } as any);
 
             expect(references).to.be.empty;
+        });
+    });
+
+    describe('onWillRenameFiles', () => {
+        it('advertises the willRename capability in onInitialize', () => {
+            const result: any = server.onInitialize({ capabilities: {} } as any);
+            expect(result.capabilities.workspace?.fileOperations?.willRename).to.exist;
+            const filters = result.capabilities.workspace.fileOperations.willRename.filters;
+            expect(filters).to.be.an('array').with.length.greaterThan(0);
+            expect(filters[0].pattern.glob).to.contain('bs');
+        });
+
+        it('returns null when no project knows about the renamed file', async () => {
+            server['connection'] = server['establishConnection']();
+            await server['syncProjects']();
+
+            const result = await server['onWillRenameFiles']({
+                files: [{
+                    oldUri: util.pathToUri(s`${rootDir}/source/old.bs`),
+                    newUri: util.pathToUri(s`${rootDir}/source/new.bs`)
+                }]
+            });
+
+            expect(result).to.be.null;
+        });
+
+        it('produces a WorkspaceEdit that rewrites import statements pointing at the renamed file', async () => {
+            fsExtra.outputFileSync(s`${rootDir}/source/lib.bs`, '');
+            fsExtra.outputFileSync(s`${rootDir}/source/main.bs`, `import "pkg:/source/lib.bs"`);
+
+            server['connection'] = server['establishConnection']();
+            await server['syncProjects']();
+
+            const mainUri = util.pathToUri(s`${rootDir}/source/main.bs`);
+            const result = await server['onWillRenameFiles']({
+                files: [{
+                    oldUri: util.pathToUri(s`${rootDir}/source/lib.bs`),
+                    newUri: util.pathToUri(s`${rootDir}/source/lib2.bs`)
+                }]
+            });
+
+            expect(result).to.not.be.null;
+            expect(result.changes[mainUri]).to.have.lengthOf(1);
+            expect(result.changes[mainUri][0].newText).to.eql('pkg:/source/lib2.bs');
         });
     });
 

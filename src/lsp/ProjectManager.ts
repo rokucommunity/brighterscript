@@ -2,7 +2,7 @@ import { standardizePath as s, util } from '../util';
 import { rokuDeploy } from 'roku-deploy';
 import * as path from 'path';
 import * as EventEmitter from 'eventemitter3';
-import type { LspDiagnostic, LspProject, ProjectConfig } from './LspProject';
+import type { FileRenameEdit, LspDiagnostic, LspProject, ProjectConfig } from './LspProject';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
 import { FileChangeType } from 'vscode-languageserver-protocol';
@@ -652,6 +652,51 @@ export class ProjectManager {
             (result) => !!result
         );
         return result ?? [];
+    }
+
+    /**
+     * Collect file-rename text edits from every project and reconcile them.
+     * If two projects produce different replacement text for the same (srcPath, range), drop that edit
+     * to avoid mangling source. Otherwise emit the agreed-upon edit once.
+     */
+    @TrackBusyStatus
+    public async getFileRenameEdits(options: { oldSrcPath: string; newSrcPath: string }): Promise<FileRenameEdit[]> {
+        await this.onIdle();
+
+        const perProjectEdits = await Promise.all(
+            this.projects.map(async project => {
+                try {
+                    return await project.getFileRenameEdits(options);
+                } catch (error) {
+                    this.logger.debug(`[${util.getProjectLogName(project)}] getFileRenameEdits failed`, error);
+                    return [] as FileRenameEdit[];
+                }
+            })
+        );
+
+        const editsByKey = new Map<string, { edit: FileRenameEdit; agreedNewText: string | null }>();
+        for (const projectEdits of perProjectEdits) {
+            for (const edit of projectEdits ?? []) {
+                const key = `${edit.srcPath.toLowerCase()}|${edit.range.start.line}:${edit.range.start.character}-${edit.range.end.line}:${edit.range.end.character}`;
+                const existing = editsByKey.get(key);
+                if (!existing) {
+                    editsByKey.set(key, { edit: edit, agreedNewText: edit.newText });
+                } else if (existing.agreedNewText !== null && existing.agreedNewText !== edit.newText) {
+                    //projects disagree on the replacement — drop the edit rather than risk corrupting source
+                    existing.agreedNewText = null;
+                }
+            }
+        }
+
+        const result: FileRenameEdit[] = [];
+        for (const { edit, agreedNewText } of editsByKey.values()) {
+            if (agreedNewText !== null) {
+                result.push({ srcPath: edit.srcPath, range: edit.range, newText: agreedNewText });
+            } else {
+                this.logger.debug('Dropping file-rename edit due to cross-project disagreement', edit);
+            }
+        }
+        return result;
     }
 
     @TrackBusyStatus

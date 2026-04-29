@@ -2,7 +2,8 @@ import { ProgramBuilder } from '../ProgramBuilder';
 import * as EventEmitter from 'eventemitter3';
 import util, { standardizePath as s } from '../util';
 import * as path from 'path';
-import type { ProjectConfig, ActivateResponse, LspDiagnostic, LspProject } from './LspProject';
+import type { ProjectConfig, ActivateResponse, LspDiagnostic, LspProject, FileRenameEdit } from './LspProject';
+import { isBrsFile, isXmlFile } from '../astUtils/reflection';
 import type { Plugin, Hover, MaybePromise } from '../interfaces';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { URI } from 'vscode-uri';
@@ -415,6 +416,95 @@ export class Project implements LspProject {
         if (this.builder.program.hasFile(options.srcPath)) {
             return this.builder.program.getReferences(options.srcPath, options.position);
         }
+    }
+
+    public async getFileRenameEdits(options: { oldSrcPath: string; newSrcPath: string }): Promise<FileRenameEdit[]> {
+        await this.onIdle();
+
+        const oldFile = this.builder.program.getFile(options.oldSrcPath);
+        if (!oldFile) {
+            return [];
+        }
+
+        const programOptions = this.builder.program.options;
+        const newPkgPath = this.computePkgPathForNewSrcPath(options.newSrcPath, programOptions);
+        if (!newPkgPath) {
+            return [];
+        }
+
+        const oldPkgPath = util.standardizePath(oldFile.pkgPath).toLowerCase();
+
+        //if the rename doesn't change the pkg path, nothing to do
+        if (oldPkgPath === newPkgPath.toLowerCase()) {
+            return [];
+        }
+
+        const edits: FileRenameEdit[] = [];
+        for (const file of Object.values(this.builder.program.files)) {
+            if (isBrsFile(file)) {
+                for (const importStatement of file.parser?.references?.importStatements ?? []) {
+                    if (!importStatement.filePathToken || !importStatement.filePath) {
+                        continue;
+                    }
+                    const resolvedPkgPath = util.getPkgPathFromTarget(file.pkgPath, importStatement.filePath);
+                    if (!resolvedPkgPath || util.standardizePath(resolvedPkgPath).toLowerCase() !== oldPkgPath) {
+                        continue;
+                    }
+                    const newText = util.computeRenamedReferencePath(importStatement.filePath, file.pkgPath, newPkgPath);
+                    if (newText === null) {
+                        continue;
+                    }
+                    edits.push({
+                        srcPath: file.srcPath,
+                        range: importStatement.filePathToken.range,
+                        newText: newText
+                    });
+                }
+            } else if (isXmlFile(file)) {
+                for (const scriptTag of file.parser?.references?.scriptTagImports ?? []) {
+                    if (!scriptTag.filePathRange || !scriptTag.text) {
+                        continue;
+                    }
+                    const resolvedPkgPath = util.getPkgPathFromTarget(file.pkgPath, scriptTag.text);
+                    if (!resolvedPkgPath || util.standardizePath(resolvedPkgPath).toLowerCase() !== oldPkgPath) {
+                        continue;
+                    }
+                    const newText = util.computeRenamedReferencePath(scriptTag.text, file.pkgPath, newPkgPath);
+                    if (newText === null) {
+                        continue;
+                    }
+                    edits.push({
+                        srcPath: file.srcPath,
+                        range: scriptTag.filePathRange,
+                        newText: newText
+                    });
+                }
+            }
+        }
+        return edits;
+    }
+
+    /**
+     * Determine the pkg path for a (not-yet-existing) renamed file. Tries the project's `files` glob first
+     * so custom dest mappings keep working, and falls back to a plain rootDir-relative path so renames into
+     * folders that aren't yet in the glob still get their imports rewritten.
+     * Returns undefined if the new path is outside this project's rootDir.
+     */
+    private computePkgPathForNewSrcPath(newSrcPath: string, programOptions: { files?: BsConfig['files']; rootDir?: string }): string | undefined {
+        if (!programOptions.rootDir) {
+            return undefined;
+        }
+        const destFromGlob = rokuDeploy.getDestPath(newSrcPath, programOptions.files, programOptions.rootDir);
+        if (destFromGlob) {
+            return util.standardizePath(destFromGlob);
+        }
+        const rootDir = util.standardizePath(programOptions.rootDir);
+        const newSrc = util.standardizePath(newSrcPath);
+        const rootPrefix = rootDir.endsWith(path.sep) ? rootDir : rootDir + path.sep;
+        if (!newSrc.toLowerCase().startsWith(rootPrefix.toLowerCase())) {
+            return undefined;
+        }
+        return newSrc.substring(rootPrefix.length);
     }
 
     public async getSelectionRanges(options: { srcPath: string; positions: Position[] }) {

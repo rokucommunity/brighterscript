@@ -214,6 +214,157 @@ describe('Project', () => {
         });
     });
 
+    describe('getFileRenameEdits', () => {
+        async function activateBareProject() {
+            await project.activate({
+                projectDir: rootDir,
+                projectKey: undefined,
+                workspaceFolder: undefined,
+                bsconfigPath: undefined
+            });
+        }
+
+        it('rewrites a pkg:/ import that points at the renamed file', async () => {
+            fsExtra.outputFileSync(s`${rootDir}/source/lib.bs`, '');
+            fsExtra.outputFileSync(s`${rootDir}/source/main.bs`, `import "pkg:/source/lib.bs"`);
+            await activateBareProject();
+
+            const edits = await project.getFileRenameEdits({
+                oldSrcPath: s`${rootDir}/source/lib.bs`,
+                newSrcPath: s`${rootDir}/source/lib2.bs`
+            });
+
+            expect(edits).to.have.lengthOf(1);
+            expect(edits[0].srcPath).to.eql(s`${rootDir}/source/main.bs`);
+            expect(edits[0].newText).to.eql('pkg:/source/lib2.bs');
+        });
+
+        it('rewrites a relative import to a same-folder rename', async () => {
+            fsExtra.outputFileSync(s`${rootDir}/source/lib.bs`, '');
+            fsExtra.outputFileSync(s`${rootDir}/source/main.bs`, `import "lib.bs"`);
+            await activateBareProject();
+
+            const edits = await project.getFileRenameEdits({
+                oldSrcPath: s`${rootDir}/source/lib.bs`,
+                newSrcPath: s`${rootDir}/source/lib2.bs`
+            });
+
+            expect(edits).to.have.lengthOf(1);
+            expect(edits[0].newText).to.eql('lib2.bs');
+        });
+
+        it('rewrites a relative import that crosses folders', async () => {
+            fsExtra.outputFileSync(s`${rootDir}/source/lib.bs`, '');
+            fsExtra.outputFileSync(s`${rootDir}/components/main.bs`, `import "../source/lib.bs"`);
+            await activateBareProject();
+
+            const edits = await project.getFileRenameEdits({
+                oldSrcPath: s`${rootDir}/source/lib.bs`,
+                newSrcPath: s`${rootDir}/utils/lib.bs`
+            });
+
+            expect(edits).to.have.lengthOf(1);
+            expect(edits[0].newText).to.eql('../utils/lib.bs');
+        });
+
+        it('returns no edits when no file imports the renamed file', async () => {
+            fsExtra.outputFileSync(s`${rootDir}/source/lib.bs`, '');
+            fsExtra.outputFileSync(s`${rootDir}/source/main.bs`, `sub main():end sub`);
+            await activateBareProject();
+
+            const edits = await project.getFileRenameEdits({
+                oldSrcPath: s`${rootDir}/source/lib.bs`,
+                newSrcPath: s`${rootDir}/source/lib2.bs`
+            });
+
+            expect(edits).to.be.empty;
+        });
+
+        it('returns no edits when the renamed file is not in this project', async () => {
+            fsExtra.outputFileSync(s`${rootDir}/source/main.bs`, `import "pkg:/source/lib.bs"`);
+            await activateBareProject();
+
+            const edits = await project.getFileRenameEdits({
+                oldSrcPath: s`${rootDir}/source/notInProject.bs`,
+                newSrcPath: s`${rootDir}/source/notInProject2.bs`
+            });
+
+            expect(edits).to.be.empty;
+        });
+
+        it('produces an edit range that excludes the surrounding quotes', async () => {
+            fsExtra.outputFileSync(s`${rootDir}/source/lib.bs`, '');
+            fsExtra.outputFileSync(s`${rootDir}/source/main.bs`, `import "lib.bs"`);
+            await activateBareProject();
+
+            const edits = await project.getFileRenameEdits({
+                oldSrcPath: s`${rootDir}/source/lib.bs`,
+                newSrcPath: s`${rootDir}/source/lib2.bs`
+            });
+
+            expect(edits).to.have.lengthOf(1);
+            //the file content is exactly: import "lib.bs"
+            //the path token starts at character 8 (the `l`) and ends at character 14 (after the `s` of `bs`)
+            expect(edits[0].range.start.character).to.eql(8);
+            expect(edits[0].range.end.character).to.eql(14);
+        });
+
+        it('rewrites a relative <script uri> tag in an xml file', async () => {
+            fsExtra.outputFileSync(s`${rootDir}/components/widget.brs`, '');
+            fsExtra.outputFileSync(s`${rootDir}/components/widget.xml`, `<?xml version="1.0" encoding="utf-8"?>
+                <component name="Widget" extends="Group">
+                    <script type="text/brightscript" uri="widget.brs" />
+                </component>`);
+            await activateBareProject();
+
+            const edits = await project.getFileRenameEdits({
+                oldSrcPath: s`${rootDir}/components/widget.brs`,
+                newSrcPath: s`${rootDir}/components/widget2.brs`
+            });
+
+            expect(edits).to.have.lengthOf(1);
+            expect(edits[0].srcPath).to.eql(s`${rootDir}/components/widget.xml`);
+            expect(edits[0].newText).to.eql('widget2.brs');
+        });
+
+        it('rewrites a pkg:/ <script uri> tag in an xml file', async () => {
+            fsExtra.outputFileSync(s`${rootDir}/source/util.brs`, '');
+            fsExtra.outputFileSync(s`${rootDir}/components/widget.xml`, `<?xml version="1.0" encoding="utf-8"?>
+                <component name="Widget" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/util.brs" />
+                </component>`);
+            await activateBareProject();
+
+            const edits = await project.getFileRenameEdits({
+                oldSrcPath: s`${rootDir}/source/util.brs`,
+                newSrcPath: s`${rootDir}/source/utility.brs`
+            });
+
+            expect(edits).to.have.lengthOf(1);
+            expect(edits[0].newText).to.eql('pkg:/source/utility.brs');
+        });
+
+        it('emits both the import-statement edit and the xml script-tag edit when both reference the renamed file', async () => {
+            fsExtra.outputFileSync(s`${rootDir}/source/lib.bs`, '');
+            fsExtra.outputFileSync(s`${rootDir}/source/main.bs`, `import "pkg:/source/lib.bs"`);
+            fsExtra.outputFileSync(s`${rootDir}/components/widget.xml`, `<?xml version="1.0" encoding="utf-8"?>
+                <component name="Widget" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/lib.bs" />
+                </component>`);
+            await activateBareProject();
+
+            const edits = await project.getFileRenameEdits({
+                oldSrcPath: s`${rootDir}/source/lib.bs`,
+                newSrcPath: s`${rootDir}/source/lib2.bs`
+            });
+
+            expect(edits).to.have.lengthOf(2);
+            const editsByFile = new Map(edits.map(e => [e.srcPath, e.newText]));
+            expect(editsByFile.get(s`${rootDir}/source/main.bs`)).to.eql('pkg:/source/lib2.bs');
+            expect(editsByFile.get(s`${rootDir}/components/widget.xml`)).to.eql('pkg:/source/lib2.bs');
+        });
+    });
+
     describe('activate', () => {
         it('finds bsconfig.json at root', async () => {
             fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, '');

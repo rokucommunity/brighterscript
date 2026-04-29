@@ -3,7 +3,7 @@ import { Worker } from 'worker_threads';
 import type { WorkerMessage } from './MessageHandler';
 import { MessageHandler } from './MessageHandler';
 import util from '../../util';
-import type { LspDiagnostic, ActivateResponse, ProjectConfig } from '../LspProject';
+import type { LspDiagnostic, ActivateResponse, ProjectConfig, FileRenameEdit } from '../LspProject';
 import { type LspProject } from '../LspProject';
 import { WorkerPool } from './WorkerPool';
 import type { Hover, MaybePromise, SemanticToken } from '../../interfaces';
@@ -238,6 +238,10 @@ export class WorkerThreadProject implements LspProject {
 
     public async getReferences(options: { srcPath: string; position: Position }): Promise<Location[]> {
         return this.sendStandardRequest<Location[]>('getReferences', options);
+    }
+
+    public async getFileRenameEdits(options: { oldSrcPath: string; newSrcPath: string }): Promise<FileRenameEdit[]> {
+        return this.sendStandardRequest<FileRenameEdit[]>('getFileRenameEdits', options);
     }
 
     public async getCodeActions(options: { srcPath: string; range: Range }): Promise<CodeAction[]> {
