@@ -230,6 +230,70 @@ describe('ProgramBuilder', () => {
             //validate was not called
             expect(stub.callCount).to.eql(0);
         });
+
+        it('skips validation when validate:false is set in bsconfig.json', async () => {
+            sinon.restore();
+            fsExtra.outputFileSync(`${rootDir}/source/lib1.brs`, 'sub doSomething()\nprint "lib1"\nend sub');
+            fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, JSON.stringify({ validate: false }));
+
+            const stub = sinon.stub(builder as any, 'validateProject').callsFake(() => { });
+
+            await builder.run({
+                project: `${rootDir}/bsconfig.json`,
+                rootDir: rootDir,
+                createPackage: false,
+                deploy: false,
+                copyToStaging: false,
+                files: ['source/**/*']
+            });
+            //validate was not called
+            expect(stub.callCount).to.eql(0);
+        });
+
+        it('prop-drilled validate:false takes precedence over this.options.validate:true', async () => {
+            sinon.restore();
+            fsExtra.outputFileSync(`${rootDir}/source/lib1.brs`, 'sub doSomething()\nprint "lib1"\nend sub');
+
+            const stub = sinon.stub(builder as any, 'validateProject').callsFake(() => { });
+
+            //pass validate:false explicitly - this should override even if the config would otherwise say true
+            await builder.run({
+                rootDir: rootDir,
+                createPackage: false,
+                deploy: false,
+                copyToStaging: false,
+                validate: false,
+                files: ['source/**/*']
+            });
+            //validate was not called because the explicit false took precedence
+            expect(stub.callCount).to.eql(0);
+        });
+
+        it('language-server mode always skips validation on initial run and validates separately', async () => {
+            sinon.restore();
+            fsExtra.outputFileSync(`${rootDir}/source/lib1.brs`, 'sub doSomething()\nprint "lib1"\nend sub');
+
+            const validateStub = sinon.stub(builder as any, 'validateProject').callsFake(() => { });
+
+            //Simulate how the LSP Project.ts activates the builder: always passes validate:false for
+            //the initial run, then calls program.validate() directly in its own validate() method
+            await builder.run({
+                rootDir: rootDir,
+                createPackage: false,
+                deploy: false,
+                copyToStaging: false,
+                validate: false,
+                showDiagnosticsInConsole: false,
+                files: ['source/**/*']
+            });
+            //the initial run should have skipped validation
+            expect(validateStub.callCount).to.eql(0);
+
+            //the lsp can still call program.validate() directly to do a cancellable async validation
+            const programValidateStub = sinon.stub(builder.program, 'validate').callsFake(() => { });
+            builder.program.validate();
+            expect(programValidateStub.callCount).to.eql(1);
+        });
     });
 
     it('uses a unique logger for each builder', async () => {

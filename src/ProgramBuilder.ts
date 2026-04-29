@@ -155,10 +155,14 @@ export class ProgramBuilder {
 
         if (this.options.watch) {
             this.logger.log('Starting compilation in watch mode...');
-            await this.runOnce();
+            await this.runOnce({
+                validate: options?.validate
+            });
             this.enableWatchMode();
         } else {
-            await this.runOnce();
+            await this.runOnce({
+                validate: options?.validate
+            });
         }
     }
 
@@ -282,7 +286,7 @@ export class ProgramBuilder {
     /**
      * Run the entire process exactly one time.
      */
-    private runOnce() {
+    private runOnce(options?: { validate?: boolean }) {
         //clear the console
         this.clearConsole();
         let cancellationToken = { isCanceled: false };
@@ -290,7 +294,8 @@ export class ProgramBuilder {
         let runPromise = this.cancelLastRun().then(() => {
             //start the new run
             return this._runOnce({
-                cancellationToken: cancellationToken
+                cancellationToken: cancellationToken,
+                validate: options?.validate
             });
         }) as any;
 
@@ -367,15 +372,16 @@ export class ProgramBuilder {
      * Run the process once, allowing it to be cancelled.
      * NOTE: This should only be called by `runOnce`.
      */
-    private async _runOnce(options: { cancellationToken: { isCanceled: any } }) {
+    private async _runOnce(options: { cancellationToken: { isCanceled: any }; validate?: boolean }) {
         let wereDiagnosticsPrinted = false;
         try {
             //maybe cancel?
             if (options?.cancellationToken?.isCanceled === true) {
                 return -1;
             }
-            //validate program. false means no, everything else (including missing) means true
-            if (this.options.validate !== false) {
+            //the prop-drilled validate value takes precedence over this.options.validate.
+            //false means no, everything else (including missing) means true
+            if ((options?.validate ?? this.options.validate) !== false) {
                 this.validateProject();
             }
 
