@@ -2,7 +2,7 @@ import { standardizePath as s, util } from '../util';
 import { rokuDeploy } from 'roku-deploy';
 import * as path from 'path';
 import * as EventEmitter from 'eventemitter3';
-import type { FileRenameEdit, LspDiagnostic, LspProject, ProjectConfig } from './LspProject';
+import type { FileRenameTextEdit, LspDiagnostic, LspProject, ProjectConfig } from './LspProject';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
 import { FileChangeType } from 'vscode-languageserver-protocol';
@@ -707,11 +707,11 @@ export class ProjectManager {
 
     /**
      * Collect file-rename text edits from every project and reconcile them.
-     * If two projects produce different replacement text for the same (srcPath, range), drop that edit
+     * If two projects produce different replacement text for the same (uri, range), drop that edit
      * to avoid mangling source. Otherwise emit the agreed-upon edit once.
      */
     @TrackBusyStatus
-    public async getFileRenameEdits(options: { oldSrcPath: string; newSrcPath: string }): Promise<FileRenameEdit[]> {
+    public async getFileRenameEdits(options: { oldSrcPath: string; newSrcPath: string }): Promise<FileRenameTextEdit[]> {
         await this.onIdle();
 
         const perProjectEdits = await Promise.all(
@@ -720,15 +720,15 @@ export class ProjectManager {
                     return await project.getFileRenameEdits(options);
                 } catch (error) {
                     this.logger.debug(`[${util.getProjectLogName(project)}] getFileRenameEdits failed`, error);
-                    return [] as FileRenameEdit[];
+                    return [] as FileRenameTextEdit[];
                 }
             })
         );
 
-        const editsByKey = new Map<string, { edit: FileRenameEdit; agreedNewText: string | null }>();
+        const editsByKey = new Map<string, { edit: FileRenameTextEdit; agreedNewText: string | null }>();
         for (const projectEdits of perProjectEdits) {
             for (const edit of projectEdits ?? []) {
-                const key = `${edit.srcPath.toLowerCase()}|${edit.range.start.line}:${edit.range.start.character}-${edit.range.end.line}:${edit.range.end.character}`;
+                const key = `${edit.uri.toLowerCase()}|${edit.range.start.line}:${edit.range.start.character}-${edit.range.end.line}:${edit.range.end.character}`;
                 const existing = editsByKey.get(key);
                 if (!existing) {
                     editsByKey.set(key, { edit: edit, agreedNewText: edit.newText });
@@ -739,13 +739,13 @@ export class ProjectManager {
             }
         }
 
-        const result: FileRenameEdit[] = [];
+        const result: FileRenameTextEdit[] = [];
         for (const { edit, agreedNewText } of editsByKey.values()) {
-            if (agreedNewText !== null) {
-                result.push({ srcPath: edit.srcPath, range: edit.range, newText: agreedNewText });
-            } else {
+            if (agreedNewText === null) {
                 this.logger.debug('Dropping file-rename edit due to cross-project disagreement', edit);
+                continue;
             }
+            result.push({ uri: edit.uri, range: edit.range, newText: agreedNewText });
         }
         return result;
     }

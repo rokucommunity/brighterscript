@@ -687,8 +687,7 @@ export class LanguageServer {
             const newSrcPath = util.uriToPath(file.newUri);
             const edits = await this.projectManager.getFileRenameEdits({ oldSrcPath: oldSrcPath, newSrcPath: newSrcPath });
             for (const edit of edits) {
-                const uri = util.pathToUri(edit.srcPath);
-                (changes[uri] ??= []).push({
+                (changes[edit.uri] ??= []).push({
                     range: edit.range,
                     newText: edit.newText
                 });

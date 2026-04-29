@@ -1,4 +1,4 @@
-import type { Diagnostic, Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList, SelectionRange } from 'vscode-languageserver-protocol';
+import type { Diagnostic, Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList, SelectionRange, TextEdit } from 'vscode-languageserver-protocol';
 import type { Hover, MaybePromise, SemanticToken } from '../interfaces';
 import type { DocumentAction, DocumentActionWithStatus } from './DocumentManager';
 import type { FileTranspileResult, SignatureInfoObj } from '../Program';
@@ -142,7 +142,7 @@ export interface LspProject {
      * at a source file when that source file is being renamed. Each project answers independently;
      * the ProjectManager is responsible for reconciling agreement across projects.
      */
-    getFileRenameEdits(options: { oldSrcPath: string; newSrcPath: string }): MaybePromise<FileRenameEdit[]>;
+    getFileRenameEdits(options: { oldSrcPath: string; newSrcPath: string }): MaybePromise<FileRenameTextEdit[]>;
 
     /**
      * Get all of the code actions for the specified file and range
@@ -241,14 +241,11 @@ export interface LspDiagnostic extends Diagnostic {
 }
 
 /**
- * A single text edit produced by a project in response to a file rename.
- * Each edit replaces the contents of `range` (an import-path token or `<script uri>` attribute value, quotes excluded)
- * inside the file at `srcPath` with `newText`.
+ * A LSP TextEdit augmented with the URI of the document the edit applies to. Used for cross-file
+ * edits where each entry stands alone (e.g. file-rename edits collected across projects).
  */
-export interface FileRenameEdit {
-    srcPath: string;
-    range: Range;
-    newText: string;
+export interface FileRenameTextEdit extends TextEdit {
+    uri: string;
 }
 
 export interface ActivateResponse {

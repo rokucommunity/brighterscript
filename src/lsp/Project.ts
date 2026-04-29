@@ -2,7 +2,7 @@ import { ProgramBuilder } from '../ProgramBuilder';
 import * as EventEmitter from 'eventemitter3';
 import util, { standardizePath as s } from '../util';
 import * as path from 'path';
-import type { ProjectConfig, ActivateResponse, LspDiagnostic, LspProject, FileRenameEdit } from './LspProject';
+import type { ProjectConfig, ActivateResponse, LspDiagnostic, LspProject, FileRenameTextEdit } from './LspProject';
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
 import type { Plugin, Hover, MaybePromise } from '../interfaces';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -415,7 +415,7 @@ export class Project implements LspProject {
         }
     }
 
-    public async getFileRenameEdits(options: { oldSrcPath: string; newSrcPath: string }): Promise<FileRenameEdit[]> {
+    public async getFileRenameEdits(options: { oldSrcPath: string; newSrcPath: string }): Promise<FileRenameTextEdit[]> {
         await this.onIdle();
 
         const oldFile = this.builder.program.getFile(options.oldSrcPath);
@@ -436,7 +436,7 @@ export class Project implements LspProject {
             return [];
         }
 
-        const edits: FileRenameEdit[] = [];
+        const result: FileRenameTextEdit[] = [];
         for (const file of Object.values(this.builder.program.files)) {
             if (isBrsFile(file)) {
                 for (const importStatement of file.parser?.references?.importStatements ?? []) {
@@ -451,8 +451,8 @@ export class Project implements LspProject {
                     if (newText === null) {
                         continue;
                     }
-                    edits.push({
-                        srcPath: file.srcPath,
+                    result.push({
+                        uri: util.pathToUri(file.srcPath),
                         range: importStatement.filePathToken.range,
                         newText: newText
                     });
@@ -470,15 +470,15 @@ export class Project implements LspProject {
                     if (newText === null) {
                         continue;
                     }
-                    edits.push({
-                        srcPath: file.srcPath,
+                    result.push({
+                        uri: util.pathToUri(file.srcPath),
                         range: scriptTag.filePathRange,
                         newText: newText
                     });
                 }
             }
         }
-        return edits;
+        return result;
     }
 
     /**

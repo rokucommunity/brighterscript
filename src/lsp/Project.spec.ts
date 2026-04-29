@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { tempDir, rootDir, expectDiagnosticsAsync, expectDiagnostics } from '../testHelpers.spec';
 import * as fsExtra from 'fs-extra';
-import { standardizePath as s } from '../util';
+import util, { standardizePath as s } from '../util';
 import { Deferred } from '../deferred';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { Project } from './Project';
@@ -255,7 +255,7 @@ describe('Project', () => {
             });
 
             expect(edits).to.have.lengthOf(1);
-            expect(edits[0].srcPath).to.eql(s`${rootDir}/source/main.bs`);
+            expect(edits[0].uri).to.eql(util.pathToUri(s`${rootDir}/source/main.bs`));
             expect(edits[0].newText).to.eql('pkg:/source/lib2.bs');
         });
 
@@ -343,7 +343,7 @@ describe('Project', () => {
             });
 
             expect(edits).to.have.lengthOf(1);
-            expect(edits[0].srcPath).to.eql(s`${rootDir}/components/widget.xml`);
+            expect(edits[0].uri).to.eql(util.pathToUri(s`${rootDir}/components/widget.xml`));
             expect(edits[0].newText).to.eql('widget2.brs');
         });
 
@@ -379,9 +379,9 @@ describe('Project', () => {
             });
 
             expect(edits).to.have.lengthOf(2);
-            const editsByFile = new Map(edits.map(e => [e.srcPath, e.newText]));
-            expect(editsByFile.get(s`${rootDir}/source/main.bs`)).to.eql('pkg:/source/lib2.bs');
-            expect(editsByFile.get(s`${rootDir}/components/widget.xml`)).to.eql('pkg:/source/lib2.bs');
+            const editsByUri = new Map(edits.map(e => [e.uri, e.newText]));
+            expect(editsByUri.get(util.pathToUri(s`${rootDir}/source/main.bs`))).to.eql('pkg:/source/lib2.bs');
+            expect(editsByUri.get(util.pathToUri(s`${rootDir}/components/widget.xml`))).to.eql('pkg:/source/lib2.bs');
         });
     });
 
