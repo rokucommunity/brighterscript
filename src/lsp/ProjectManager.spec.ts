@@ -1122,7 +1122,7 @@ describe('ProjectManager', () => {
 
     describe('threading', () => {
         before(async function workerThreadWarmup() {
-            this.timeout(20_000);
+            this.timeout(60_000);
             await getWakeWorkerThreadPromise();
         });
 
