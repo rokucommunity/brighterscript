@@ -161,55 +161,55 @@ export class Program {
     private pkgMap = {} as Record<string, BscFile>;
 
     /**
-     * Reverse index from a lower-cased namespace name part to the set of `BrsFile`s that
-     * contribute to it. Built lazily, invalidated whenever any file is added, removed,
-     * or re-parsed (`setFile` and `removeFile` both clear it).
+     * Map from a lower-cased namespace name part to the set of `BrsFile`s that contribute
+     * to it. Built lazily, invalidated whenever any file is added, removed, or re-parsed
+     * (`setFile` and `removeFile` both clear it).
      *
      * Used by `ScopeNamespaceLookup` to resolve a namespace name to its contributing
      * files in O(1), then intersect against the scope's file set.
      */
-    private _namespaceFileIndex: Map<string, Set<BrsFile>> | undefined;
+    private namespaceContributors: Map<string, Set<BrsFile>> | undefined;
 
     /**
      * Look up the set of `BrsFile`s that declare any part of the given namespace name
      * (lowercased). Returns `undefined` when no file contributes.
      */
-    public getFilesContributingToNamespace(namespaceNameLower: string): Set<BrsFile> | undefined {
-        if (!this._namespaceFileIndex) {
-            this._namespaceFileIndex = this.buildNamespaceFileIndex();
+    private getNamespaceContributors(namespaceNameLower: string): Set<BrsFile> | undefined {
+        if (!this.namespaceContributors) {
+            this.namespaceContributors = this.buildNamespaceContributors();
         }
-        return this._namespaceFileIndex.get(namespaceNameLower);
+        return this.namespaceContributors.get(namespaceNameLower);
     }
 
-    private buildNamespaceFileIndex(): Map<string, Set<BrsFile>> {
-        const index = new Map<string, Set<BrsFile>>();
+    private buildNamespaceContributors(): Map<string, Set<BrsFile>> {
+        const contributors = new Map<string, Set<BrsFile>>();
         for (const file of Object.values(this.files)) {
             if (isBrsFile(file)) {
                 for (const nameLower of file.getNamespaceContributions().keys()) {
-                    let set = index.get(nameLower);
+                    let set = contributors.get(nameLower);
                     if (!set) {
                         set = new Set<BrsFile>();
-                        index.set(nameLower, set);
+                        contributors.set(nameLower, set);
                     }
                     set.add(file);
                 }
             }
         }
-        return index;
+        return contributors;
     }
 
     /**
      * Cached slow-path namespace aggregates, keyed by `(nameLower, sorted-contributor-pkgPaths)`.
      * Two scopes with the same in-scope file set for a multi-contributor namespace share
      * the same aggregate object (and therefore the same merged statement collections and
-     * symbolTable instance). Built lazily, invalidated alongside `_namespaceFileIndex`.
+     * symbolTable instance). Built lazily, invalidated alongside `namespaceContributors`.
      *
      * The aggregate is stored as a `NamespaceContainer` whose `namespaces` field is an
      * empty Map: scopes always wrap the aggregate before returning to plugins, and the
      * wrapper supplies its own scope-filtered children. Plugins never see the aggregate
      * directly.
      */
-    private _slowPathAggregates: Map<string, NamespaceContainer> | undefined;
+    private aggregateNamespaceContainerCache: Map<string, NamespaceContainer> | undefined;
 
     /**
      * Get or build the shared aggregate for a namespace whose in-scope contributors
@@ -217,19 +217,19 @@ export class Program {
      * unique `(nameLower, contributing-files-set)` and reused across every scope that
      * sees the same set.
      */
-    public getSlowPathAggregate(nameLower: string, contributions: NamespaceFileContribution[]): NamespaceContainer {
-        if (!this._slowPathAggregates) {
-            this._slowPathAggregates = new Map<string, NamespaceContainer>();
+    private getAggregateNamespaceContainer(nameLower: string, contributions: NamespaceFileContribution[]): NamespaceContainer {
+        if (!this.aggregateNamespaceContainerCache) {
+            this.aggregateNamespaceContainerCache = new Map<string, NamespaceContainer>();
         }
         //sorted pkgPaths ensure two scopes with the same contributor set hit the same key
         const key = nameLower + '|' + contributions
             .map(c => c.file.pkgPath.toLowerCase())
             .sort()
             .join('|');
-        let aggregate = this._slowPathAggregates.get(key);
+        let aggregate = this.aggregateNamespaceContainerCache.get(key);
         if (!aggregate) {
             aggregate = this.buildSlowPathAggregate(contributions);
-            this._slowPathAggregates.set(key, aggregate);
+            this.aggregateNamespaceContainerCache.set(key, aggregate);
         }
         return aggregate;
     }
@@ -282,14 +282,14 @@ export class Program {
     }
 
     /**
-     * Invalidate the program-level namespace-to-file index and the slow-path aggregate
+     * Invalidate the program-level namespace contributors map and the slow-path aggregate
      * cache. Called by `setFile` and `removeFile`; downstream scope namespace lookups
      * already rebuild via the dependency-graph invalidation chain, so this only needs
-     * to drop the cached indexes.
+     * to drop the cached maps.
      */
-    public invalidateNamespaceIndex() {
-        this._namespaceFileIndex = undefined;
-        this._slowPathAggregates = undefined;
+    private invalidateNamespaceContributorCache() {
+        this.namespaceContributors = undefined;
+        this.aggregateNamespaceContainerCache = undefined;
     }
 
     private scopes = {} as Record<string, Scope>;
@@ -537,8 +537,8 @@ export class Program {
         const { srcPath, pkgPath } = this.getPaths(fileParam, this.options.rootDir);
 
         //namespace contributions for the new/replaced file may differ; force the
-        //program-level index to rebuild on next query
-        this.invalidateNamespaceIndex();
+        //program-level contributors map to rebuild on next query
+        this.invalidateNamespaceContributorCache();
 
         let file = this.logger.time(LogLevel.debug, ['Program.setFile()', chalk.green(srcPath)], () => {
             //if the file is already loaded, remove it
@@ -763,8 +763,8 @@ export class Program {
         this.logger.debug('Program.removeFile()', filePath);
 
         //namespace contributions may have included this file; force the program-level
-        //index to rebuild on next query
-        this.invalidateNamespaceIndex();
+        //contributors map to rebuild on next query
+        this.invalidateNamespaceContributorCache();
 
         let file = this.getFile(filePath, normalizePath);
         if (file) {

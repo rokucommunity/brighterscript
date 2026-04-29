@@ -624,7 +624,7 @@ export class Scope {
      * Build the namespace lookup for this scope.
      *
      * The lookup is now backed by `ScopeNamespaceLookup`, which queries the
-     * Program-level `getFilesContributingToNamespace` index lazily on each
+     * Program-level `getNamespaceContributors` map lazily on each
      * `.get(name)` call. Per-file contributions are pre-built by
      * `BrsFile.getNamespaceContributions` and shared across every scope that
      * pulls in the file, so single-contribution containers reuse the file's
@@ -1502,7 +1502,8 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
     }
 
     private buildContainer(nameLower: string): NamespaceContainer | undefined {
-        const candidateFiles = this.scope.program.getFilesContributingToNamespace(nameLower);
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        const candidateFiles = this.scope.program['getNamespaceContributors'](nameLower);
         if (!candidateFiles || candidateFiles.size === 0) {
             return undefined;
         }
@@ -1559,7 +1560,8 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
      * reflect the querying scope's file set.
      */
     private aggregateContributions(contributions: NamespaceFileContribution[], nameLower: string): NamespaceContainer {
-        const aggregate = this.scope.program.getSlowPathAggregate(nameLower, contributions);
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        const aggregate = this.scope.program['getAggregateNamespaceContainer'](nameLower, contributions);
         //field order matches the NamespaceContainer interface declaration so fast-path
         //and slow-path containers share a single V8 hidden class
         return {
