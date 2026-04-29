@@ -174,7 +174,7 @@ export class Program {
      * Look up the set of `BrsFile`s that declare any part of the given namespace name
      * (lowercased). Returns `undefined` when no file contributes.
      */
-    private getNamespaceContributors(namespaceNameLower: string): Set<BrsFile> | undefined {
+    public getNamespaceContributors(namespaceNameLower: string): Set<BrsFile> | undefined {
         if (!this.namespaceContributors) {
             this.namespaceContributors = this.buildNamespaceContributors();
         }
@@ -217,7 +217,7 @@ export class Program {
      * unique `(nameLower, contributing-files-set)` and reused across every scope that
      * sees the same set.
      */
-    private getAggregateNamespaceContainer(nameLower: string, contributions: NamespaceFileContribution[]): NamespaceContainer {
+    public getAggregateNamespaceContainer(nameLower: string, contributions: NamespaceFileContribution[]): NamespaceContainer {
         if (!this.aggregateNamespaceContainerCache) {
             this.aggregateNamespaceContainerCache = new Map<string, NamespaceContainer>();
         }
