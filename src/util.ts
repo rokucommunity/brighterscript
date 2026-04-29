@@ -507,6 +507,29 @@ export class Util {
     }
 
     /**
+     * Compute the replacement text for a file-path string (used in `import` statements and XML `<script uri>` attributes)
+     * when the target file is being renamed. Preserves the original path style: `pkg:/...` stays `pkg:/...`,
+     * relative paths stay relative (recomputed from the containing file's pkg path).
+     *
+     * @param originalText the path string as it appears in source (no surrounding quotes)
+     * @param containingFilePkgPath pkg path of the file containing the reference
+     * @param newTargetPkgPath pkg path of the renamed file (path-separator agnostic)
+     * @returns the new path string, or `null` if the original style is unsupported
+     */
+    public computeRenamedReferencePath(originalText: string, containingFilePkgPath: string, newTargetPkgPath: string): string | null {
+        if (!originalText) {
+            return null;
+        }
+        const newPkgPathForwardSlash = path.normalize(newTargetPkgPath).split(path.sep).join('/');
+        const schemeMatch = /^(pkg|libpkg):\//i.exec(originalText);
+        if (schemeMatch) {
+            return `${schemeMatch[1]}:/${newPkgPathForwardSlash}`;
+        }
+        const relative = this.getRelativePath(containingFilePkgPath, newTargetPkgPath);
+        return relative.split(path.sep).join('/');
+    }
+
+    /**
      * Compute the relative path from the source file to the target file
      * @param pkgSrcPath  - the absolute path to the source, where cwd is the package location
      * @param pkgTargetPath  - the absolute path to the target, where cwd is the package location
