@@ -111,9 +111,6 @@ export class Project implements LspProject {
             });
         }
 
-        //trigger a validation (but don't wait for it. That way we can cancel it sooner if we get new incoming data or requests)
-        void this.validate();
-
         this.activationDeferred.resolve();
 
         return {
@@ -563,6 +560,7 @@ export class Project implements LspProject {
     public disposables: LspProject['disposables'] = [];
 
     public dispose() {
+        this.cancelValidate();
         for (let disposable of this.disposables ?? []) {
             disposable?.dispose?.();
         }
