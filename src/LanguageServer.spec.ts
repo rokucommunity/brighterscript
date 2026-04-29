@@ -364,6 +364,30 @@ describe('LanguageServer', () => {
             expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(3);
         });
 
+        it('defaults to 1 when projectActivationConcurrencyLimit is NaN', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, NaN)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(1);
+        });
+
+        it('defaults to 1 when projectActivationConcurrencyLimit is less than 1', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 0)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(1);
+        });
+
+        it('defaults to 1 when projectActivationConcurrencyLimit is a negative number', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, -5)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(1);
+        });
+
         it('is called on startup (onInitialized) and reads the configured limit', async () => {
             server['connection'] = connection as any;
             const spy = sinon.spy(server as any, 'syncProjectActivationConcurrencyLimit');

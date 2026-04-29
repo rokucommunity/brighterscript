@@ -367,7 +367,13 @@ export class LanguageServer {
             limits.push(LanguageServer.projectActivationConcurrencyLimitDefault);
         }
 
-        this.projectManager.projectActivationConcurrencyLimit = Math.min(...limits);
+        let concurrencyLimit = Math.min(...limits);
+        //we must always at least support 1 project activating at a time, otherwise no projects would ever activate
+        if (!(concurrencyLimit >= 1)) {
+            this.logger.log(`projectActivationConcurrencyLimit was set to ${concurrencyLimit}, which is not a valid value. Defaulting to 1.`);
+            concurrencyLimit = 1;
+        }
+        this.projectManager.projectActivationConcurrencyLimit = concurrencyLimit;
     }
 
 
