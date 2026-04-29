@@ -1394,16 +1394,15 @@ export class Program {
     }
 
     /**
-     * Serialize a source map to a JSON string, handling relativeSourceMaps and sourceRoot options.
+     * Serialize a source map to a JSON string, handling relativeSourceMaps and sourceRoot.
      *
-     * When relativeSourceMaps is false (legacy): sources[] contains absolute paths with rootDir
-     * swapped for sourceRoot (if set); no sourceRoot field is written to the map.
+     * relativeSourceMaps:false — legacy: sources[] has absolute paths (rootDir swapped for sourceRoot
+     * if set); map's sourceRoot field is never written.
      *
-     * When relativeSourceMaps is true, sourceRoot undefined: sources[] is relative to the map file dir.
+     * relativeSourceMaps:true, no sourceRoot — sources[] is relative to the map file directory.
      *
-     * When relativeSourceMaps is true, sourceRoot defined: the map's sourceRoot field is set, and
-     * sources[] is relative to sourceRoot (per the sourcemap spec — consumers prepend sourceRoot to
-     * each sources[] entry to reconstruct the full path).
+     * relativeSourceMaps:true, sourceRoot set — map's sourceRoot field is written; sources[] is
+     * relative to sourceRoot so that path.resolve(sourceRoot, sources[0]) gives the source file.
      */
     private serializeSourceMap(sourceMap: SourceMapGenerator, outputPath: string): string {
         const { relativeSourceMaps, sourceRoot } = this.options;

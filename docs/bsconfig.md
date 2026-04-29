@@ -425,13 +425,52 @@ Enables generating sourcemap files (`.map`), which allow debugging tools to show
 
 Type: `boolean`
 
-If `true`, file paths in sourcemap `sources` will be relative to the map file location instead of absolute. This makes sourcemaps portable across different machines and environments -- for example when build output is published as an npm package and consumed on another machine. Defaults to `false`.
+If `true`, file paths in the sourcemap `sources` array will be written as relative paths instead of absolute paths, and the behavior of [`sourceRoot`](#sourceroot) changes. Defaults to `false`.
+
+This option only has an effect when [`sourceMap`](#sourcemap) is `true`.
+
+### `relativeSourceMaps: false` (default)
+
+This is the legacy behavior. Each entry in `sources[]` is an absolute path. If [`sourceRoot`](#sourceroot) is set, the `rootDir` portion of the path is replaced with `sourceRoot` directly inside `sources[]`. The map file's `sourceRoot` field is never written.
+
+```jsonc
+// sources[] with relativeSourceMaps: false, sourceRoot: undefined
+"sources": ["/absolute/path/to/rootDir/source/main.bs"]
+
+// sources[] with relativeSourceMaps: false, sourceRoot: "/my/source/server"
+"sources": ["/my/source/server/source/main.bs"]  // rootDir swapped for sourceRoot
+```
+
+### `relativeSourceMaps: true`
+
+Each entry in `sources[]` is a path relative to the map file's location. This makes sourcemaps portable across machines — useful when publishing build output as an npm package or sharing artifacts across CI environments.
+
+If [`sourceRoot`](#sourceroot) is also set, the map file's `sourceRoot` field is written, and `sources[]` entries are made relative to `sourceRoot` instead of relative to the map file. Per the sourcemap spec, consumers reconstruct the full source path as `path.resolve(sourceRoot, sources[0])`.
+
+```jsonc
+// sources[] with relativeSourceMaps: true, sourceRoot: undefined
+// map is at stagingDir/source/main.brs.map
+"sources": ["../../rootDir/source/main.bs"]  // relative to the map file
+
+// sources[] with relativeSourceMaps: true, sourceRoot: "/my/source/server"
+"sourceRoot": "/my/source/server",
+"sources": ["source/main.bs"]  // relative to sourceRoot; resolves to /my/source/server/source/main.bs
+```
 
 ## `sourceRoot`
 
 Type: `string`
 
-Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within [`rootDir`](#rootdir). This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.
+Overrides where source files appear to live, both in sourcemaps and in the `SOURCE_FILE_PATH` / `SOURCE_LOCATION` runtime literals. Only applies to files within [`rootDir`](#rootdir) — files outside `rootDir` are unaffected.
+
+The primary use case is preprocessing: if you transform files before passing them to BrighterScript, `sourceRoot` lets you point debuggers and runtime literals back to the original pre-processed sources.
+
+The exact behavior depends on whether [`relativeSourceMaps`](#relativesourcemaps) is set:
+
+- **`relativeSourceMaps: false` (default):** The `rootDir` portion of each source path is replaced with `sourceRoot` directly in `sources[]`. The map file's `sourceRoot` field is not written.
+- **`relativeSourceMaps: true`:** The map file's `sourceRoot` field is set to this value, and `sources[]` entries are relative to `sourceRoot`. The `rootDir` portion of each source path is still replaced with `sourceRoot` when computing the relative path.
+
+In both cases, `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals embedded in the transpiled output will reflect the `sourceRoot`-substituted path at runtime.
 
 ## `stagingDir`
 
