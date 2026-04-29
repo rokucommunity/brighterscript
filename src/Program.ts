@@ -1555,7 +1555,7 @@ export class Program {
                 if (await fsExtra.pathExists(outputPath)) {
                     throw new Error(`Error while transpiling "${file.srcPath}". A file already exists at "${outputPath}" and will not be overwritten.`);
                 }
-                const writeMapPromise = fileTranspileResult.map ? fsExtra.writeFile(`${outputPath}.map`, fileTranspileResult.map.toString()) : null;
+                const writeMapPromise = fileTranspileResult.map ? fsExtra.writeFile(`${outputPath}.map`, this.serializeSourceMap(fileTranspileResult.map, outputPath)) : null;
                 await Promise.all([
                     fsExtra.writeFile(outputPath, fileTranspileResult.code),
                     writeMapPromise
@@ -1603,6 +1603,44 @@ export class Program {
     private afterProgramTranspile(entries: TranspileObj[], astEditor: AstEditor) {
         this.plugins.emit('afterProgramTranspile', this, entries, astEditor);
         astEditor.undoAll();
+    }
+
+    /**
+     * Serialize a source map to a JSON string, handling relativeSourceMaps and sourceRoot.
+     *
+     * relativeSourceMaps:false — legacy: sources[] has absolute paths (rootDir swapped for sourceRoot
+     * if set); map's sourceRoot field is never written.
+     *
+     * relativeSourceMaps:true, no sourceRoot — sources[] is relative to the map file directory.
+     *
+     * relativeSourceMaps:true, sourceRoot set — map's sourceRoot field is written; sources[] is
+     * relative to sourceRoot so that path.resolve(sourceRoot, sources[0]) gives the source file.
+     */
+    private serializeSourceMap(sourceMap: SourceMapGenerator, outputPath: string): string {
+        const { relativeSourceMaps, sourceRoot } = this.options;
+
+        if (!relativeSourceMaps) {
+            return sourceMap.toString();
+        }
+
+        const mapJson = sourceMap.toJSON();
+
+        if (sourceRoot) {
+            mapJson.sourceRoot = sourceRoot;
+            mapJson.sources = mapJson.sources.map((source: string) => {
+                const absolute = path.isAbsolute(source) ? source : path.resolve(path.dirname(outputPath), source);
+                return path.relative(sourceRoot, absolute).replace(/\\/g, '/');
+            });
+        } else {
+            const mapDir = path.dirname(outputPath);
+            mapJson.sources = mapJson.sources.map((source: string) => {
+                return path.isAbsolute(source)
+                    ? path.relative(mapDir, source).replace(/\\/g, '/')
+                    : source;
+            });
+        }
+
+        return JSON.stringify(mapJson);
     }
 
     /**

@@ -175,10 +175,16 @@ export interface BsConfig {
      */
     logLevel?: LogLevel | 'error' | 'warn' | 'log' | 'info' | 'debug' | 'trace' | 'off';
     /**
-     * Override the path to source files in source maps. Use this if you have a preprocess step and want
-     * to ensure the source maps point to the original location.
-     * This will only alter source maps for files within rootDir. Any files found outside of rootDir will not
-     * have their source maps changed. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.
+     * Overrides where source files appear to live, in both sourcemaps and the `SOURCE_FILE_PATH` /
+     * `SOURCE_LOCATION` runtime literals. Only applies to files within `rootDir`.
+     *
+     * When `relativeSourceMaps` is false (default): the `rootDir` portion of each source path is
+     * replaced with `sourceRoot` directly in `sources[]`. The map's `sourceRoot` field is not written.
+     *
+     * When `relativeSourceMaps` is true: the map's `sourceRoot` field is set to this value, and
+     * `sources[]` entries are relative to `sourceRoot` (per the sourcemap spec).
+     *
+     * In both modes, `SOURCE_FILE_PATH` and `SOURCE_LOCATION` reflect the `sourceRoot`-substituted path.
      */
     sourceRoot?: string;
     /**
@@ -191,6 +197,20 @@ export interface BsConfig {
      * @default true
      */
     sourceMap?: boolean;
+    /**
+     * If true, file paths in sourcemap `sources[]` will be written as relative paths instead of absolute.
+     * Only has an effect when `sourceMap` is true.
+     *
+     * When false (default): `sources[]` contains absolute paths. If `sourceRoot` is set, the `rootDir`
+     * portion is replaced with `sourceRoot` in-place; the map's `sourceRoot` field is never written.
+     *
+     * When true: `sources[]` entries are relative to the map file's directory, making sourcemaps
+     * portable across machines. If `sourceRoot` is also set, the map's `sourceRoot` field is written
+     * and `sources[]` entries are instead relative to `sourceRoot` (per the sourcemap spec — consumers
+     * reconstruct the full path as `path.resolve(sourceRoot, sources[0])`).
+     * @default false
+     */
+    relativeSourceMaps?: boolean;
     /**
      * Excludes empty files from being included in the output. Some Brighterscript files
      * are left empty or with only comments after transpilation to Brightscript.

@@ -1,4 +1,5 @@
 import { assert, expect } from './chai-config.spec';
+import * as path from 'path';
 import * as pick from 'object.pick';
 import * as sinonImport from 'sinon';
 import { CancellationTokenSource, CompletionItemKind, Position, Range } from 'vscode-languageserver';
@@ -6,6 +7,7 @@ import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
+import type { BsConfig } from './BsConfig';
 import type { TranspileObj } from './Program';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
@@ -2069,6 +2071,142 @@ describe('Program', () => {
         expect(fsExtra.pathExistsSync(s`${stagingDir}/components/comp1.xml.map`)).is.true;
     });
 
+    describe('sourcemap source paths', () => {
+        async function transpileFile(options: BsConfig, pkgPath = 'source/main.bs') {
+            fsExtra.ensureDirSync(program.options.stagingDir!);
+            program = new Program({
+                rootDir: rootDir,
+                stagingDir: stagingDir,
+                sourceMap: true,
+                ...options
+            });
+            program.setFile(pkgPath, `
+                sub main()
+                end sub
+            `);
+            program.validate();
+            const src = s`${rootDir}/${pkgPath}`;
+            const dest = pkgPath.replace(/\.bs$/, '.brs');
+            await program.transpile([{ src: src, dest: dest }], stagingDir);
+            const mapPath = s`${stagingDir}/${dest}.map`;
+            return JSON.parse(fsExtra.readFileSync(mapPath, 'utf8'));
+        }
+
+        it('sources[] contains an absolute path by default', async () => {
+            const map = await transpileFile({});
+            expect(map.sources).to.have.lengthOf(1);
+            expect(path.isAbsolute(map.sources[0])).to.be.true;
+            expect(s`${map.sources[0]}`).to.eql(s`${rootDir}/source/main.bs`);
+        });
+
+        it('does not write a sourceRoot field to the map by default', async () => {
+            const map = await transpileFile({});
+            expect(map.sourceRoot).to.be.undefined;
+        });
+
+        describe('relativeSourceMaps: true', () => {
+            it('sources[] contains a path relative to the map file', async () => {
+                const map = await transpileFile({ relativeSourceMaps: true });
+                expect(map.sources).to.have.lengthOf(1);
+                expect(path.isAbsolute(map.sources[0])).to.be.false;
+            });
+
+            it('sources[] relative path resolves back to the original source file', async () => {
+                const map = await transpileFile({ relativeSourceMaps: true });
+                // map is written to stagingDir/source/main.brs.map
+                const mapDir = s`${stagingDir}/source`;
+                const resolved = s`${path.resolve(mapDir, map.sources[0])}`;
+                expect(resolved).to.eql(s`${rootDir}/source/main.bs`);
+            });
+
+            it('does not write a sourceRoot field to the map when sourceRoot is not set', async () => {
+                const map = await transpileFile({ relativeSourceMaps: true });
+                expect(map.sourceRoot).to.be.undefined;
+            });
+
+            it('works for deeply nested files — relative path still resolves correctly', async () => {
+                const map = await transpileFile({ relativeSourceMaps: true }, 'source/deeply/nested/main.bs');
+                expect(path.isAbsolute(map.sources[0])).to.be.false;
+                const mapDir = s`${stagingDir}/source/deeply/nested`;
+                const resolved = s`${path.resolve(mapDir, map.sources[0])}`;
+                expect(resolved).to.eql(s`${rootDir}/source/deeply/nested/main.bs`);
+            });
+
+            describe('with sourceRoot', () => {
+                it('writes sourceRoot field to the map', async () => {
+                    const customRoot = s`${rootDir}/../customRoot`;
+                    const map = await transpileFile({ relativeSourceMaps: true, sourceRoot: customRoot });
+                    expect(s`${map.sourceRoot}`).to.eql(customRoot);
+                });
+
+                it('sources[] entries are not absolute', async () => {
+                    const customRoot = s`${rootDir}/../customRoot`;
+                    const map = await transpileFile({ relativeSourceMaps: true, sourceRoot: customRoot });
+                    expect(path.isAbsolute(map.sources[0])).to.be.false;
+                });
+
+                it('sources[] entry is the path of the source file relative to sourceRoot', async () => {
+                    const customRoot = s`${rootDir}/../customRoot`;
+                    const map = await transpileFile({ relativeSourceMaps: true, sourceRoot: customRoot });
+                    // TranspileState swaps rootDir→sourceRoot, so the embedded srcPath is
+                    // customRoot/source/main.bs. Relative to customRoot that is 'source/main.bs'.
+                    expect(s`${map.sources[0]}`).to.eql(s`source/main.bs`);
+                });
+
+                it('sourceRoot + sources[0] reconstructs the source file path (the consumer contract)', async () => {
+                    const customRoot = s`${rootDir}/../customRoot`;
+                    const map = await transpileFile({ relativeSourceMaps: true, sourceRoot: customRoot });
+                    // A sourcemap consumer resolves: path.resolve(sourceRoot, sources[0])
+                    const reconstructed = s`${path.resolve(map.sourceRoot, map.sources[0])}`;
+                    expect(reconstructed).to.eql(s`${customRoot}/source/main.bs`);
+                });
+            });
+        });
+
+        describe('relativeSourceMaps: false (legacy)', () => {
+            it('sources[] contains an absolute path even when sourceRoot is set', async () => {
+                const sourceRoot = s`${rootDir}/../sourceRootFolder`;
+                const map = await transpileFile({ sourceRoot: sourceRoot });
+                expect(path.isAbsolute(map.sources[0])).to.be.true;
+            });
+
+            it('sources[] path has rootDir replaced with sourceRoot', async () => {
+                const sourceRoot = s`${rootDir}/../sourceRootFolder`;
+                const map = await transpileFile({ sourceRoot: sourceRoot });
+                // rootDir portion is swapped for sourceRoot; rest of the path is preserved
+                expect(s`${map.sources[0]}`).to.eql(s`${sourceRoot}/source/main.bs`);
+            });
+
+            it('does not write a sourceRoot field to the map even when sourceRoot is set', async () => {
+                const sourceRoot = s`${rootDir}/../sourceRootFolder`;
+                const map = await transpileFile({ sourceRoot: sourceRoot });
+                expect(map.sourceRoot).to.be.undefined;
+            });
+
+            it('sources[] is unaffected for files outside rootDir', async () => {
+                // a file whose srcPath doesn't start with rootDir should not be rewritten
+                fsExtra.ensureDirSync(stagingDir);
+                program = new Program({
+                    rootDir: rootDir,
+                    stagingDir: stagingDir,
+                    sourceMap: true,
+                    sourceRoot: s`${rootDir}/../sourceRootFolder`
+                });
+                const outsidePath = s`${rootDir}/../outside/main.brs`;
+                fsExtra.outputFileSync(outsidePath, 'sub main()\nend sub\n');
+                program.setFile({ src: outsidePath, dest: 'source/main.brs' }, fsExtra.readFileSync(outsidePath, 'utf8'));
+                program.validate();
+                await program.transpile([{
+                    src: outsidePath,
+                    dest: 'source/main.brs'
+                }], stagingDir);
+                const map = JSON.parse(fsExtra.readFileSync(s`${stagingDir}/source/main.brs.map`, 'utf8'));
+                // path outside rootDir is left as-is (absolute, under its real location)
+                expect(s`${map.sources[0]}`).to.eql(outsidePath);
+            });
+        });
+    });
+
     describe('prebuild sourcemap chaining', () => {
         // A prebuild step produced an intermediate file with a map pointing back to original source.
         // BrighterScript must apply that incoming map so the final output traces all the
@@ -2625,11 +2763,9 @@ describe('Program', () => {
 
             let contents = fsExtra.readFileSync(s`${stagingDir}/source/main.brs.map`).toString();
             let map = JSON.parse(contents);
-            expect(
-                s`${map.sources[0]}`
-            ).to.eql(
-                s`${sourceRoot}/source/main.brs`
-            );
+            // legacy behavior: sources[] contains the absolute path with rootDir swapped for sourceRoot
+            expect(s`${map.sources[0]}`).to.eql(s`${sourceRoot}/source/main.brs`);
+            expect(map.sourceRoot).to.be.undefined;
         });
 
         it('uses sourceRoot when provided for bs files', async () => {
@@ -2651,11 +2787,9 @@ describe('Program', () => {
 
             let contents = fsExtra.readFileSync(s`${stagingDir}/source/main.brs.map`).toString();
             let map = JSON.parse(contents);
-            expect(
-                s`${map.sources[0]}`
-            ).to.eql(
-                s`${sourceRoot}/source/main.bs`
-            );
+            // legacy behavior: sources[] contains the absolute path with rootDir swapped for sourceRoot
+            expect(s`${map.sources[0]}`).to.eql(s`${sourceRoot}/source/main.bs`);
+            expect(map.sourceRoot).to.be.undefined;
         });
 
         it('does not publish files that are empty', async () => {
