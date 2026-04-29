@@ -173,8 +173,9 @@ export class BrsFile {
      *
      * The returned Map is shared across every Scope that pulls in this file, which is
      * the core sharing primitive Phase 4 relies on.
+     * @internal
      */
-    public getNamespaceContributions(): Map<string, NamespaceFileContribution> {
+    protected getNamespaceContributions(): Map<string, NamespaceFileContribution> {
         // eslint-disable-next-line @typescript-eslint/dot-notation
         let contributions = this.parser.references['namespaceContributions'];
         if (contributions) {

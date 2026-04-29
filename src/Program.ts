@@ -33,6 +33,7 @@ import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
 import { Sequencer } from './common/Sequencer';
 import { Deferred } from './deferred';
+import internal from 'stream';
 
 const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
@@ -173,8 +174,9 @@ export class Program {
     /**
      * Look up the set of `BrsFile`s that declare any part of the given namespace name
      * (lowercased). Returns `undefined` when no file contributes.
+     * @internal
      */
-    public getNamespaceContributors(namespaceNameLower: string): Set<BrsFile> | undefined {
+    protected getNamespaceContributors(namespaceNameLower: string): Set<BrsFile> | undefined {
         if (!this.namespaceContributors) {
             this.namespaceContributors = this.buildNamespaceContributors();
         }
@@ -185,7 +187,8 @@ export class Program {
         const contributors = new Map<string, Set<BrsFile>>();
         for (const file of Object.values(this.files)) {
             if (isBrsFile(file)) {
-                for (const nameLower of file.getNamespaceContributions().keys()) {
+                // eslint-disable-next-line @typescript-eslint/dot-notation
+                for (const nameLower of file['getNamespaceContributions']().keys()) {
                     let set = contributors.get(nameLower);
                     if (!set) {
                         set = new Set<BrsFile>();
@@ -216,8 +219,9 @@ export class Program {
      * include more than one file. The aggregate's heavy fields are computed once per
      * unique `(nameLower, contributing-files-set)` and reused across every scope that
      * sees the same set.
+     * @internal
      */
-    public getAggregateNamespaceContainer(nameLower: string, contributions: NamespaceFileContribution[]): NamespaceContainer {
+    protected getAggregateNamespaceContainer(nameLower: string, contributions: NamespaceFileContribution[]): NamespaceContainer {
         if (!this.aggregateNamespaceContainerCache) {
             this.aggregateNamespaceContainerCache = new Map<string, NamespaceContainer>();
         }

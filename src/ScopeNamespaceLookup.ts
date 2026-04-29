@@ -49,7 +49,8 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
         const childrenByParent = new Map<string, string[]>();
         for (const file of this.scope.getAllFiles()) {
             if (isBrsFile(file)) {
-                for (const nameLower of file.getNamespaceContributions().keys()) {
+                // eslint-disable-next-line @typescript-eslint/dot-notation
+                for (const nameLower of file['getNamespaceContributions']().keys()) {
                     nameSet.add(nameLower);
                 }
             }
@@ -164,7 +165,8 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
     }
 
     private buildContainer(nameLower: string): NamespaceContainer | undefined {
-        const candidateFiles = this.scope.program.getNamespaceContributors(nameLower);
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        const candidateFiles = this.scope.program['getNamespaceContributors'](nameLower);
         if (!candidateFiles || candidateFiles.size === 0) {
             return undefined;
         }
@@ -172,7 +174,8 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
         const inScopeContributions: NamespaceFileContribution[] = [];
         for (const file of candidateFiles) {
             if (inScopeFiles.has(file)) {
-                const contribution = file.getNamespaceContributions().get(nameLower);
+                // eslint-disable-next-line @typescript-eslint/dot-notation
+                const contribution = file['getNamespaceContributions']().get(nameLower);
                 if (contribution) {
                     inScopeContributions.push(contribution);
                 }
@@ -221,7 +224,8 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
      * reflect the querying scope's file set.
      */
     private aggregateContributions(contributions: NamespaceFileContribution[], nameLower: string): NamespaceContainer {
-        const aggregate = this.scope.program.getAggregateNamespaceContainer(nameLower, contributions);
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        const aggregate = this.scope.program['getAggregateNamespaceContainer'](nameLower, contributions);
         //field order matches the NamespaceContainer interface declaration so fast-path
         //and slow-path containers share a single V8 hidden class
         return {
