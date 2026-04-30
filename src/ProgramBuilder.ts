@@ -108,7 +108,7 @@ export class ProgramBuilder {
 
     public async run(options: BsConfig & {
         /**
-         * Should validation run? Default is `true`. You must set exlicitly to `false` to disable.
+         * Should validation run? Default is `true`. You must set explicitly to `false` to disable.
          * @deprecated this is an experimental flag, and its behavior may change in a future release
          * @default true
          */

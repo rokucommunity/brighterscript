@@ -1306,6 +1306,154 @@ describe('parser', () => {
         });
     });
 
+    describe('grouped type expressions', () => {
+        it('is not allowed in brightscript mode', () => {
+            let parser = parse(`
+                sub main(param as (string or integer))
+                    print param
+                end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.functionParameterTypeIsInvalid('param', '(')]);
+        });
+
+        it('allows group type expressions in parameters', () => {
+            let { diagnostics } = parse(`
+                sub main(param as (string or integer))
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows group type expressions in type casts', () => {
+            let { diagnostics } = parse(`
+                sub main(val)
+                    printThing(val as (string or integer))
+                end sub
+                sub printThing(thing as (string or integer))
+                    print thing
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows union of grouped type expressions', () => {
+            let { diagnostics } = parse(`
+                sub main(param as (string or integer) or (float or dynamic))
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows nested grouped type expressions', () => {
+            let { diagnostics } = parse(`
+                sub main(param as ((string or integer) or (float or dynamic)))
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+
+        it('allows complicated grouped type expression', () => {
+            let { diagnostics } = parse(`
+                sub main(param as (({name as string} and {age as integer}) or (string and SomeInterface) or Klass and roAssociativeArray) )
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+    });
+
+    describe('union types', () => {
+
+        it('is not allowed in brightscript mode', () => {
+            let parser = parse(`
+                sub main(param as string or integer)
+                    print param
+                end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()]);
+        });
+
+        it('allows union types in parameters', () => {
+            let { diagnostics } = parse(`
+                sub main(param as string or integer)
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows union types in type casts', () => {
+            let { diagnostics } = parse(`
+                sub main(val)
+                    printThing(val as string or integer)
+                end sub
+                sub printThing(thing as string or integer)
+                    print thing
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+    });
+
+
+    describe('intersection types', () => {
+
+        it('is not allowed in brightscript mode', () => {
+            let parser = parse(`
+                sub main(param as string and integer)
+                    print param
+                end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()]);
+        });
+
+        it('allows intersection types in parameters', () => {
+            let { diagnostics } = parse(`
+                sub main(param as string and integer)
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows intersection types in type casts', () => {
+            let { diagnostics } = parse(`
+                sub main(val)
+                    printThing(val as string and integer)
+                end sub
+                sub printThing(thing as string and integer)
+                    print thing
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        describe('invalid syntax', () => {
+
+            it('flags union type with missing sides', () => {
+                let { diagnostics } = parse(`
+                    sub main(param as Thing or )
+                        print param
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.expectedIdentifierAfterKeyword('or').message]);
+            });
+
+            it('flags missing type inside binary type', () => {
+                let { diagnostics } = parse(`
+                    sub main(param as string or and float)
+                        print param
+                    end sub
+                `, ParseMode.BrighterScript);
+                expect(diagnostics[0]?.message).to.exist;
+            });
+        });
+    });
+
     describe('typecast statement', () => {
         it('allows typecast statement ', () => {
             let { ast, diagnostics } = parse(`
@@ -1610,6 +1758,250 @@ describe('parser', () => {
                     return z["this is a stringliteral"]
                 end function
             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+    });
+
+    describe('for each with types', () => {
+        it('parses without errors', () => {
+            let { diagnostics } = parse(`
+                function main()
+                    for each item as string in ["a", "b", "c"]
+                        print item
+                    end for
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows complicated expressions', () => {
+            let { diagnostics } = parse(`
+                function main(data)
+                    for each item as {a as integer or boolean, b as SomeInterface[], c as {id as string} } or string in data
+                        print item
+                    end for
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+    });
+
+    describe('line continuation', () => {
+        describe('binary operator continuation', () => {
+            it('is allowed after arithmetic operators in BrighterScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        a = x +
+                            y
+                        b = x -
+                            y
+                        c = x *
+                            y
+                        d = x /
+                            y
+                        e = x \\
+                            y
+                        f = x mod
+                            y
+                        g = x ^
+                            y
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('is allowed after boolean operators in BrighterScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        a = isValid and
+                            isEnabled
+                        b = isValid or
+                            isEnabled
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('is allowed after relational operators in BrighterScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        a = x =
+                            y
+                        b = x <>
+                            y
+                        c = x >
+                            y
+                        d = x >=
+                            y
+                        e = x <
+                            y
+                        f = x <=
+                            y
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('is not allowed in BrightScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        result = value1 +
+                                 value2
+                    end sub
+                `, ParseMode.BrightScript);
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.unexpectedToken('\n'),
+                    DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+                ]);
+            });
+        });
+
+        describe('function call argument continuation', () => {
+            it('is not allowed in BrightScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        result = foo(
+                            arg1,
+                            arg2
+                        )
+                    end sub
+                    sub foo(a, b)
+                    end sub
+                `, ParseMode.BrightScript);
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.unexpectedToken('\n'),
+                    DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                    DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+                ]);
+            });
+
+            it('is allowed in BrighterScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        result = foo(
+                            arg1,
+                            arg2
+                        )
+                    end sub
+                    sub foo(a, b)
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('does not affect inline objects passed as arguments in BrightScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        foo({
+                            key: "value"
+                        })
+                    end sub
+                    sub foo(a)
+                    end sub
+                `, ParseMode.BrightScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+        });
+    });
+
+    describe('typed functions as types', () => {
+        it('disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                function test(func as function())
+                    return func()
+                end function
+             `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.unexpectedToken(')')
+            ]);
+        });
+
+        it('can be passed as param types', () => {
+            let { diagnostics } = parse(`
+                function test(func as function())
+                    return func()
+                end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have a return type', () => {
+            let { diagnostics } = parse(`
+                function test(func as sub() as integer) as integer
+                    return func()
+                end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can use sub or function', () => {
+            let { diagnostics } = parse(`
+                function test(func as sub() as integer) as integer
+                    return func()
+                end function
+
+                function test2(func as function() as integer) as integer
+                    return func()
+                 end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have primitive parameters', () => {
+            let { diagnostics } = parse(`
+                function test(func as function(name as string, num as integer) as integer) as integer
+                    return func("hello", 123)
+                end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have complex parameters', () => {
+            let { diagnostics } = parse(`
+                interface IFace
+                    name as string
+                end interface
+
+                function test(func as function(thing as IFace) as integer) as integer
+                    return func({name: "hello"})
+                end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have compound parameters', () => {
+            let { diagnostics } = parse(`
+                interface IFace
+                    name as string
+                end interface
+
+                function test(func as function(arg1 as string or integer, arg2 as IFace) as integer) as integer
+                    return func("hello", {name: "hello"})
+                end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can be used as return types', () => {
+            let { diagnostics } = parse(`
+                function test() as function() as integer
+                    return function() as integer
+                        return 123
+                    end function
+                end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have a union as return type', () => {
+            let { diagnostics } = parse(`
+                type foo = function() as integer or string
+                function test() as foo
+                    return function() as integer
+                        return 123
+                    end function
+                end function
+             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(diagnostics);
         });
     });
