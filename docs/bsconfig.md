@@ -383,6 +383,28 @@ With this setting, using optional chaining (`?.`) without the version requiremen
 | Feature | Minimum Version |
 |---------|----------------|
 | Optional chaining (`?.`, `?[`, `?(`) | 11.0.0 |
+| Multi-line expressions / line continuation in `.brs` files | 15.3.0 |
+
+### Line continuation in `.brs` files
+
+BrighterScript has always supported multi-line expressions (splitting an expression across multiple lines after a binary operator, or spreading function call arguments across multiple lines) in `.bs` files, because those constructs are transpiled away before reaching the device. In plain BrightScript (`.brs`) files, Roku OS 15.3 added native support for the same feature.
+
+When `minFirmwareVersion` is set to `15.3` or higher, line continuation is enabled for `.brs` files as well:
+
+```brs
+' allowed in .brs files when minFirmwareVersion >= 15.3
+sub main()
+    result = firstValue +
+             secondValue
+
+    someFunction(
+        arg1,
+        arg2
+    )
+end sub
+```
+
+When `minFirmwareVersion` is below `15.3` (or is not set), line continuation in `.brs` files is still a parse error, while `.bs` files continue to support it regardless of the firmware version setting (because the output is transpiled).
 
 ## `outFile`
 
