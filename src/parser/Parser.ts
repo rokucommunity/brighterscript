@@ -109,7 +109,7 @@ export class Parser {
      * The minimum Roku firmware version that added native support for multi-line expressions
      * (line continuation) in plain BrightScript (`.brs`) files.
      */
-    public static readonly LINE_CONTINUATION_MIN_FIRMWARE_VERSION = '15.3.0';
+    private static readonly LINE_CONTINUATION_MIN_FIRMWARE_VERSION = '15.3.0';
 
     /**
      * The array of tokens passed to `parse()`
@@ -207,17 +207,6 @@ export class Parser {
         }
     }
 
-    /**
-     * Returns true if `version` is a valid semver string and is at or above `minimumVersion`.
-     */
-    private isMinFirmwareVersionAtLeast(version: string | undefined, minimumVersion: string): boolean {
-        if (!version) {
-            return false;
-        }
-        const coerced = semver.coerce(version);
-        return coerced !== null && semver.gte(coerced, minimumVersion);
-    }
-
     private globalTerminators = [] as TokenKind[][];
 
     /**
@@ -254,7 +243,8 @@ export class Parser {
         this.logger = options?.logger ?? createLogger();
         options = this.sanitizeParseOptions(options);
         this.options = options;
-        this.allowLineContinuation = options.mode === ParseMode.BrighterScript || this.isMinFirmwareVersionAtLeast(options.minFirmwareVersion, Parser.LINE_CONTINUATION_MIN_FIRMWARE_VERSION);
+        const coercedMinFirmwareVersion = semver.coerce(this.options.minFirmwareVersion);
+        this.allowLineContinuation = options.mode === ParseMode.BrighterScript || (!!coercedMinFirmwareVersion && semver.gte(coercedMinFirmwareVersion, Parser.LINE_CONTINUATION_MIN_FIRMWARE_VERSION));
 
         let tokens: Token[];
         if (typeof toParse === 'string') {

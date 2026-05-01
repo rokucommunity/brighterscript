@@ -387,7 +387,7 @@ With this setting, using optional chaining (`?.`) without the version requiremen
 
 ### Line continuation in `.brs` files
 
-BrighterScript has always supported multi-line expressions (splitting an expression across multiple lines after a binary operator, or spreading function call arguments across multiple lines) in `.bs` files, because those constructs are transpiled away before reaching the device. In plain BrightScript (`.brs`) files, Roku OS 15.3 added native support for the same feature.
+In BrighterScript (`.bs`) files, multi-line expressions are supported because those constructs are transpiled away before reaching the device. In plain BrightScript (`.brs`) files, Roku OS 15.3 added native support for the same feature.
 
 When `minFirmwareVersion` is set to `15.3` or higher, line continuation is enabled for `.brs` files as well:
 
