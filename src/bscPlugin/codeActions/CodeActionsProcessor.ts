@@ -9,12 +9,14 @@ import type { XmlFile } from '../../files/XmlFile';
 import type { BscFile, BsDiagnostic, OnGetCodeActionsEvent } from '../../interfaces';
 import { ParseMode } from '../../parser/Parser';
 import { util } from '../../util';
-import { isBrsFile, isFunctionExpression, isMethodStatement } from '../../astUtils/reflection';
+import { isBrsFile, isFunctionExpression, isMethodStatement, isXmlFile } from '../../astUtils/reflection';
 import type { FunctionExpression } from '../../parser/Expression';
 import type { MethodStatement } from '../../parser/Statement';
 import { WalkMode } from '../../astUtils/visitors';
 import { TokenKind } from '../../lexer/TokenKind';
 import { getMissingExtendsInsertPosition } from './codeActionHelpers';
+import { rangeFromTokenValue } from '../../parser/SGParser';
+import type { Range } from 'vscode-languageserver';
 
 export class CodeActionsProcessor {
     public constructor(
@@ -91,7 +93,197 @@ export class CodeActionsProcessor {
             this.suggestMissingImportsFixAllQuickFix();
         }
 
+        // Suppression actions appear last so real fixes are surfaced first
+        for (const diagnostic of this.event.diagnostics) {
+            this.suggestDisableDiagnosticQuickFixes(diagnostic);
+        }
+
         this.suggestedImports.clear();
+    }
+
+    /**
+     * For any diagnostic with a code, offers two quick-fix actions:
+     *   - "Disable {code} for this line" — adds the code to an existing `bs:disable-line` /
+     *     `bs:disable-next-line` directive on/above the diagnostic if present, otherwise inserts
+     *     a new `bs:disable-next-line: {code}` comment on the line above.
+     *   - "Disable {code} for this file" — adds the code to an existing `bs:disable-file`
+     *     directive in the file's header if present, otherwise inserts a new one at the top.
+     *
+     * Comment placement and the line-vs-next-line preference are centralized here so they can be
+     * revisited without touching the directive parser.
+     */
+    private suggestDisableDiagnosticQuickFixes(diagnostic: BsDiagnostic) {
+        const code = diagnostic.code;
+        if (code === undefined || code === null) {
+            return;
+        }
+        const file = this.event.file;
+        if (!isBrsFile(file) && !isXmlFile(file)) {
+            return;
+        }
+        const codeStr = String(code);
+        const isXml = isXmlFile(file);
+        const existing = this.findExistingDisableDirectives(file, diagnostic.range.start.line);
+
+        const formatDirective = (token: 'line' | 'next-line' | 'file', codes: string[]) => {
+            const body = `bs:disable-${token}: ${codes.join(' ')}`;
+            return isXml ? `<!-- ${body} -->` : `' ${body}`;
+        };
+
+        // ---- "disable for this line" ----
+        //if extending an existing directive, preserve its type (line vs next-line); otherwise we always insert a new next-line directive
+        const indent = ' '.repeat(diagnostic.range.start.character);
+        const lineAction = this.buildAppendOrInsertAction(
+            existing.forLine,
+            codeStr,
+            () => formatDirective(existing.forLine!.type as 'line' | 'next-line', this.mergeCodes(existing.forLine?.codes, codeStr)),
+            () => ({
+                position: util.createPosition(diagnostic.range.start.line, 0),
+                newText: `${indent}${formatDirective('next-line', [codeStr])}\n`
+            })
+        );
+        if (lineAction) {
+            this.event.codeActions.push(
+                codeActionUtil.createCodeAction({
+                    title: `Disable ${code} for this line: ${diagnostic.message}`,
+                    diagnostics: [diagnostic],
+                    kind: CodeActionKind.QuickFix,
+                    changes: [lineAction]
+                })
+            );
+        }
+
+        // ---- "disable for this file" ----
+        const fileAction = this.buildAppendOrInsertAction(
+            existing.forFile,
+            codeStr,
+            () => formatDirective('file', this.mergeCodes(existing.forFile?.codes, codeStr)),
+            () => {
+                const headerInsert = this.getDisableFileInsertion(file);
+                return {
+                    position: headerInsert.position,
+                    newText: headerInsert.prefix + formatDirective('file', [codeStr]) + headerInsert.suffix
+                };
+            }
+        );
+        if (fileAction) {
+            this.event.codeActions.push(
+                codeActionUtil.createCodeAction({
+                    title: `Disable ${code} for this file: ${diagnostic.message}`,
+                    diagnostics: [diagnostic],
+                    kind: CodeActionKind.QuickFix,
+                    changes: [fileAction]
+                })
+            );
+        }
+    }
+
+    /**
+     * If `existing` is set, returns a replace edit that swaps the existing directive comment for a
+     * rebuilt version (with the new code merged in). Otherwise returns an insert edit using
+     * `buildInsert`. Returns null when the existing directive already covers the code (so nothing
+     * needs to change).
+     */
+    private buildAppendOrInsertAction(
+        existing: ExistingDirective | null,
+        codeStr: string,
+        buildReplacementText: () => string,
+        buildInsert: () => { position: ReturnType<typeof util.createPosition>; newText: string }
+    ): InsertChange | ReplaceChange | null {
+        if (existing) {
+            //existing directive without specific codes already suppresses everything — no-op
+            if (existing.codes.length === 0) {
+                return null;
+            }
+            //the new code is already in the directive — no-op
+            if (existing.codes.some(c => c.toLowerCase() === codeStr.toLowerCase())) {
+                return null;
+            }
+            return {
+                type: 'replace',
+                filePath: this.event.file.srcPath,
+                range: existing.range,
+                newText: buildReplacementText()
+            };
+        }
+        const insert = buildInsert();
+        return {
+            type: 'insert',
+            filePath: this.event.file.srcPath,
+            position: insert.position,
+            newText: insert.newText
+        };
+    }
+
+    private mergeCodes(existingCodes: string[] | undefined, newCode: string): string[] {
+        return [...(existingCodes ?? []), newCode];
+    }
+
+    /**
+     * Walks the file's tokens and returns existing `bs:disable-{line,next-line}` and
+     * `bs:disable-file` directives that would cover the diagnostic on `diagLine`. Used so
+     * the suppression quick fixes can extend an existing directive instead of stacking new ones.
+     */
+    private findExistingDisableDirectives(file: BscFile, diagLine: number): { forLine: ExistingDirective | null; forFile: ExistingDirective | null } {
+        const isXml = isXmlFile(file);
+        const tokens: any[] = (file as any).parser?.tokens ?? [];
+        let inHeader = true;
+        let forLine: ExistingDirective | null = null;
+        let forFile: ExistingDirective | null = null;
+        for (const token of tokens) {
+            const isComment = isXml ? token.tokenType?.name === 'Comment' : token.kind === TokenKind.Comment;
+            if (!isComment) {
+                if (isXml) {
+                    if (token.tokenType?.name === 'OPEN') {
+                        inHeader = false;
+                    }
+                } else if (token.kind !== TokenKind.Newline && token.kind !== TokenKind.Whitespace && token.kind !== TokenKind.Eof) {
+                    inHeader = false;
+                }
+                continue;
+            }
+            const tokenRange: Range = isXml ? rangeFromTokenValue(token) : token.range;
+            const tokenText: string = isXml ? token.image : token.text;
+            const parsed = parseDisableComment(tokenText);
+            if (!parsed) {
+                continue;
+            }
+            const directive: ExistingDirective = { type: parsed.disableType, codes: parsed.codes, range: tokenRange };
+            if (!forLine && parsed.disableType === 'line' && tokenRange.start.line === diagLine) {
+                forLine = directive;
+            } else if (!forLine && parsed.disableType === 'next-line' && tokenRange.start.line === diagLine - 1) {
+                forLine = directive;
+            } else if (!forFile && parsed.disableType === 'file' && inHeader) {
+                forFile = directive;
+            }
+        }
+        return { forLine: forLine, forFile: forFile };
+    }
+
+    /**
+     * Decides where in the file a `bs:disable-file` directive should be inserted, returning
+     * the position plus any prefix/suffix needed so the directive lands on its own line in
+     * the header (before the first executable statement / root XML element).
+     */
+    private getDisableFileInsertion(file: BscFile): { position: ReturnType<typeof util.createPosition>; prefix: string; suffix: string } {
+        if (isXmlFile(file)) {
+            //insert after the `<?xml ?>` declaration if present, otherwise at the very top
+            const declCloseToken = file.parser.tokens?.find(t => (t as any).tokenType?.name === 'SPECIAL_CLOSE');
+            if (declCloseToken) {
+                const endLine = (declCloseToken as any).endLine - 1;
+                const endColumn = (declCloseToken as any).endColumn;
+                return {
+                    position: util.createPosition(endLine, endColumn),
+                    prefix: '\n',
+                    suffix: ''
+                };
+            }
+        }
+        return {
+            position: util.createPosition(0, 0),
+            prefix: '',
+            suffix: '\n'
+        };
     }
 
     /**
@@ -653,4 +845,50 @@ export class CodeActionsProcessor {
             );
         }
     }
+}
+
+interface ExistingDirective {
+    type: 'line' | 'next-line' | 'file';
+    codes: string[];
+    range: Range;
+}
+
+/**
+ * Parses a comment's text and returns the disable directive details if it is one. Recognizes
+ * `'`, `rem`, and `<!-- -->` comment styles. Returns `null` for comments that aren't directives.
+ */
+function parseDisableComment(text: string): { disableType: 'line' | 'next-line' | 'file'; codes: string[] } | null {
+    let inner = text;
+    if (inner.startsWith('<!--')) {
+        inner = inner.slice('<!--'.length);
+        if (inner.endsWith('-->')) {
+            inner = inner.slice(0, -('-->'.length));
+        }
+    } else if (inner.startsWith(`'`)) {
+        inner = inner.slice(1);
+    } else if (/^rem\b/i.test(inner)) {
+        inner = inner.slice('rem'.length);
+    }
+    inner = inner.trimStart();
+    const lower = inner.toLowerCase();
+    let disableType: 'line' | 'next-line' | 'file';
+    let prefixLength: number;
+    if (lower.startsWith('bs:disable-line')) {
+        disableType = 'line';
+        prefixLength = 'bs:disable-line'.length;
+    } else if (lower.startsWith('bs:disable-next-line')) {
+        disableType = 'next-line';
+        prefixLength = 'bs:disable-next-line'.length;
+    } else if (lower.startsWith('bs:disable-file')) {
+        disableType = 'file';
+        prefixLength = 'bs:disable-file'.length;
+    } else {
+        return null;
+    }
+    inner = inner.slice(prefixLength);
+    if (inner.startsWith(':')) {
+        inner = inner.slice(1);
+    }
+    const codes = inner.trim().length === 0 ? [] : inner.trim().split(/\s+/);
+    return { disableType: disableType, codes: codes };
 }

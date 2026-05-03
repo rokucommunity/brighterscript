@@ -1,6 +1,6 @@
 import { expect } from '../../chai-config.spec';
 import { URI } from 'vscode-uri';
-import type { Range } from 'vscode-languageserver';
+import type { CodeAction, Range } from 'vscode-languageserver';
 import type { BscFile, OnGetCodeActionsEvent } from '../../interfaces';
 import { Program } from '../../Program';
 import { expectCodeActions, trim } from '../../testHelpers.spec';
@@ -21,16 +21,28 @@ describe('CodeActionsProcessor', () => {
     });
 
     /**
-     * Helper function for testing code actions
+     * Helper function for testing code actions. By default it filters out the generic
+     * `Disable {code} for this line/file` quick fixes because every diagnostic gets them
+     * and the per-feature tests below only care about feature-specific actions.
      */
-    function testGetCodeActions(file: BscFile | string, range: Range, expected: string[]) {
+    function testGetCodeActions(file: BscFile | string, range: Range, expected: string[], options?: { includeDisableDirectives?: boolean }) {
         program.validate();
-        expect(
-            program.getCodeActions(
-                typeof file === 'string' ? file : file.srcPath,
-                range
-            ).map(x => x.title).sort()
-        ).to.eql(expected);
+        const titles = program.getCodeActions(
+            typeof file === 'string' ? file : file.srcPath,
+            range
+        ).map(x => x.title);
+        expect(filterDisableActions(titles, options).sort()).to.eql(expected);
+    }
+
+    /**
+     * Drops the generic `Disable {code} for this line/file` titles from a list so feature-level
+     * assertions can stay focused on their own actions.
+     */
+    function filterDisableActions(titles: string[], options?: { includeDisableDirectives?: boolean }) {
+        if (options?.includeDisableDirectives) {
+            return titles;
+        }
+        return titles.filter(t => !/^Disable .+ for this (line|file)/.test(t));
     }
 
     describe('getCodeActions', () => {
@@ -140,7 +152,7 @@ describe('CodeActionsProcessor', () => {
                 // doSome|thing()
                 util.createRange(2, 22, 2, 22)
             );
-            expect(codeActions.map(x => x.title).sort()).to.eql([
+            expect(filterDisableActions(codeActions.map(x => x.title)).sort()).to.eql([
                 `import "pkg:/components/lib1.brs"`,
                 `import "pkg:/components/lib2.brs"`
             ]);
@@ -169,13 +181,13 @@ describe('CodeActionsProcessor', () => {
 
             program.validate();
 
-            //there should be no code actions since this is a brs file
+            //there should be no import code actions since this is a brs file (disable directives still appear for any diagnostic)
             const codeActions = program.getCodeActions(
                 file.srcPath,
                 // DoSometh|ing()
                 util.createRange(2, 28, 2, 28)
             );
-            expect(codeActions).to.be.empty;
+            expect(filterDisableActions(codeActions.map(x => x.title))).to.be.empty;
         });
 
         it('suggests class imports', () => {
@@ -200,11 +212,11 @@ describe('CodeActionsProcessor', () => {
             program.validate();
 
             expect(
-                program.getCodeActions(
+                filterDisableActions(program.getCodeActions(
                     file.srcPath,
                     // new Per|son()
                     util.createRange(2, 34, 2, 34)
-                ).map(x => x.title).sort()
+                ).map(x => x.title)).sort()
             ).to.eql([
                 `import "pkg:/source/Person.bs"`
             ]);
@@ -234,11 +246,11 @@ describe('CodeActionsProcessor', () => {
             program.validate();
 
             expect(
-                program.getCodeActions(
+                filterDisableActions(program.getCodeActions(
                     file.srcPath,
                     // new Anim|als.Cat()
                     util.createRange(2, 36, 2, 36)
-                ).map(x => x.title).sort()
+                ).map(x => x.title)).sort()
             ).to.eql([
                 `import "pkg:/source/Animals.bs"`
             ]);
@@ -998,6 +1010,209 @@ describe('CodeActionsProcessor', () => {
             const changes = Object.values(fix!.edit!.changes!)[0];
             // range covers "override " (8 chars + 1 space)
             expect(changes[0].range.start.character).to.equal(changes[0].range.end.character - 9);
+        });
+    });
+
+    describe('disable diagnostic actions', () => {
+        const findLineAction = (actions: CodeAction[], code: string | number) => actions.find(a => a.title.startsWith(`Disable ${code} for this line`));
+        const findFileAction = (actions: CodeAction[], code: string | number) => actions.find(a => a.title.startsWith(`Disable ${code} for this file`));
+
+        it('emits disable-line and disable-file actions for any diagnostic with a code', () => {
+            const file = program.setFile('source/main.bs', `
+                sub init()
+                    doSomething()
+                end sub
+            `);
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(2, 22, 2, 22));
+            //the diagnostic for an undefined function — code is `cannotFindFunction` (1140)
+            expect(findLineAction(actions, 1140), 'expected a "Disable 1140 for this line: ..." action').to.exist;
+            expect(findFileAction(actions, 1140), 'expected a "Disable 1140 for this file: ..." action').to.exist;
+        });
+
+        it('includes the diagnostic message in the action title', () => {
+            const file = program.setFile('source/main.bs', `
+                sub init()
+                    doSomething()
+                end sub
+            `);
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(2, 22, 2, 22));
+            const action = findLineAction(actions, 1140);
+            expect(action!.title).to.match(/^Disable 1140 for this line: .+/);
+            //the message portion is the diagnostic's message, so it should mention the missing function name
+            expect(action!.title).to.include('doSomething');
+        });
+
+        it('inserts a bs:disable-next-line directive above the diagnostic, preserving indent', () => {
+            const file = program.setFile('source/main.bs', `
+                sub init()
+                    doSomething()
+                end sub
+            `);
+            program.validate();
+            const action = findLineAction(program.getCodeActions(file.srcPath, util.createRange(2, 22, 2, 22)), 1140);
+            expect(action).to.exist;
+            const edits = Object.values(action!.edit!.changes!)[0];
+            expect(edits).to.have.lengthOf(1);
+            //"                    doSomething()" — 20 spaces of indent on line 2
+            expect(edits[0].newText).to.equal(`                    ' bs:disable-next-line: 1140\n`);
+            expect(edits[0].range).to.eql(util.createRange(2, 0, 2, 0));
+        });
+
+        it('inserts a bs:disable-file directive at line 0 in a brs/bs file', () => {
+            const file = program.setFile('source/main.bs', `
+                sub init()
+                    doSomething()
+                end sub
+            `);
+            program.validate();
+            const action = findFileAction(program.getCodeActions(file.srcPath, util.createRange(2, 22, 2, 22)), 1140);
+            expect(action).to.exist;
+            const edits = Object.values(action!.edit!.changes!)[0];
+            expect(edits[0].newText).to.equal(`' bs:disable-file: 1140\n`);
+            expect(edits[0].range).to.eql(util.createRange(0, 0, 0, 0));
+        });
+
+        it('inserts an XML-style disable-file directive after the XML declaration', () => {
+            const file = program.setFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1">
+                </component>
+            `);
+            program.validate();
+            const action = program.getCodeActions(file.srcPath, util.createRange(1, 5, 1, 5))
+                .find(a => /^Disable .+ for this file/.test(a.title));
+            expect(action).to.exist;
+            const edits = Object.values(action!.edit!.changes!)[0];
+            //inserted right after `?>` on line 0 with a leading newline so the directive sits on its own line
+            expect(edits[0].newText.startsWith('\n<!-- bs:disable-file: ')).to.be.true;
+            expect(edits[0].newText.endsWith(' -->')).to.be.true;
+            expect(edits[0].range.start.line).to.equal(0);
+        });
+
+        it('does not emit disable actions for diagnostics without a code', () => {
+            const file = program.setFile('source/main.bs', `
+                sub init()
+                end sub
+            `);
+            program.validate();
+            //inject a diagnostic with no code into the event
+            const range = util.createRange(1, 16, 1, 16);
+            const event: OnGetCodeActionsEvent = {
+                program: program,
+                file: file as BscFile,
+                range: range,
+                scopes: program.getScopesForFile(file),
+                diagnostics: [{ code: undefined, message: 'no code', range: range, file: file } as any],
+                codeActions: []
+            };
+            new CodeActionsProcessor(event).process();
+            expect(event.codeActions.filter(a => /^Disable .+ for this/.test(a.title))).to.be.empty;
+        });
+
+        it('extends an existing bs:disable-next-line directive instead of inserting a new one', () => {
+            const file = program.setFile('source/main.bs', `
+                sub init()
+                    ' bs:disable-next-line: 9999
+                    doSomething()
+                end sub
+            `);
+            program.validate();
+            //the diagnostic is on line 3 (the doSomething call). The existing directive sits on line 2.
+            const action = findLineAction(program.getCodeActions(file.srcPath, util.createRange(3, 22, 3, 22)), 1140);
+            expect(action).to.exist;
+            const edits = Object.values(action!.edit!.changes!)[0];
+            expect(edits).to.have.lengthOf(1);
+            //replaces the existing comment with a merged version
+            expect(edits[0].newText).to.equal(`' bs:disable-next-line: 9999 1140`);
+        });
+
+        it('extends an existing trailing bs:disable-line directive', () => {
+            const file = program.setFile('source/main.bs', `
+                sub init()
+                    doSomething() ' bs:disable-line: 9999
+                end sub
+            `);
+            program.validate();
+            const action = findLineAction(program.getCodeActions(file.srcPath, util.createRange(2, 22, 2, 22)), 1140);
+            expect(action).to.exist;
+            const edits = Object.values(action!.edit!.changes!)[0];
+            expect(edits[0].newText).to.equal(`' bs:disable-line: 9999 1140`);
+        });
+
+        it('extends an existing bs:disable-file directive instead of inserting a new one', () => {
+            const file = program.setFile('source/main.bs', `' bs:disable-file: 9999
+                sub init()
+                    doSomething()
+                end sub
+            `);
+            program.validate();
+            const action = findFileAction(program.getCodeActions(file.srcPath, util.createRange(2, 22, 2, 22)), 1140);
+            expect(action).to.exist;
+            const edits = Object.values(action!.edit!.changes!)[0];
+            expect(edits[0].newText).to.equal(`' bs:disable-file: 9999 1140`);
+        });
+
+        it('extends an existing XML bs:disable-file directive', () => {
+            const file = program.setFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <!-- bs:disable-file: 9999 -->
+                <component name="comp1">
+                </component>
+            `);
+            program.validate();
+            const action = program.getCodeActions(file.srcPath, util.createRange(2, 5, 2, 5))
+                .find(a => /^Disable .+ for this file/.test(a.title));
+            expect(action).to.exist;
+            const edits = Object.values(action!.edit!.changes!)[0];
+            //the new code is appended to the existing space-separated list
+            expect(/^<!-- bs:disable-file: 9999 \d+ -->$/.test(edits[0].newText)).to.be.true;
+        });
+
+        it('does not duplicate the code when it is already in an existing directive', () => {
+            const file = program.setFile('source/main.bs', `
+                sub init()
+                    ' bs:disable-next-line: 9001
+                    print "hello"
+                end sub
+            `);
+            program.validate();
+            //inject a synthetic diagnostic so we can exercise the no-op path with a code that's already listed in the existing directive
+            const range = util.createRange(3, 22, 3, 22);
+            const event: OnGetCodeActionsEvent = {
+                program: program,
+                file: file as BscFile,
+                range: range,
+                scopes: program.getScopesForFile(file),
+                diagnostics: [{ code: 9001, message: 'fake diagnostic', range: range, file: file } as any],
+                codeActions: []
+            };
+            new CodeActionsProcessor(event).process();
+            //the line action should be skipped (already in directive); the file action should still be available
+            expect(findLineAction(event.codeActions, 9001)).to.be.undefined;
+            expect(findFileAction(event.codeActions, 9001)).to.exist;
+        });
+
+        it('skips the line action when an existing directive suppresses all codes', () => {
+            const file = program.setFile('source/main.bs', `
+                sub init()
+                    ' bs:disable-next-line
+                    print "hello"
+                end sub
+            `);
+            program.validate();
+            const range = util.createRange(3, 22, 3, 22);
+            const event: OnGetCodeActionsEvent = {
+                program: program,
+                file: file as BscFile,
+                range: range,
+                scopes: program.getScopesForFile(file),
+                diagnostics: [{ code: 9001, message: 'fake diagnostic', range: range, file: file } as any],
+                codeActions: []
+            };
+            new CodeActionsProcessor(event).process();
+            expect(findLineAction(event.codeActions, 9001)).to.be.undefined;
         });
     });
 });

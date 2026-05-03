@@ -42,18 +42,25 @@ export class CommentFlagProcessor {
      */
     public allCodesExceptIgnores: DiagnosticCode[];
 
-    public tryAdd(text: string, range: Range) {
+    public tryAdd(text: string, range: Range, options?: { allowFileLevel?: boolean }) {
         const tokenized = this.tokenize(text, range);
         if (!tokenized) {
+            return;
+        }
+
+        //file-level directives are gated by the caller (typically only honored at the top of the file)
+        if (tokenized.disableType === 'file' && options?.allowFileLevel === false) {
             return;
         }
 
         let affectedRange: Range;
         if (tokenized.disableType === 'line') {
             affectedRange = util.createRange(range.start.line, 0, range.start.line, range.start.character);
-        } else {
-            // tokenized.disableType must be 'next-line'
+        } else if (tokenized.disableType === 'next-line') {
             affectedRange = util.createRange(range.start.line + 1, 0, range.start.line + 1, Number.MAX_SAFE_INTEGER);
+        } else {
+            // tokenized.disableType must be 'file'
+            affectedRange = util.createRange(0, 0, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER);
         }
 
         let commentFlag: CommentFlag | null = null;
@@ -130,7 +137,7 @@ export class CommentFlagProcessor {
             }
         }
 
-        let disableType: 'line' | 'next-line';
+        let disableType: 'line' | 'next-line' | 'file';
         //trim leading/trailing whitespace
         let len = lowerText.length;
         lowerText = lowerText.trimLeft();
@@ -143,6 +150,10 @@ export class CommentFlagProcessor {
             lowerText = lowerText.substring('bs:disable-next-line'.length);
             offset += 'bs:disable-next-line'.length;
             disableType = 'next-line';
+        } else if (lowerText.startsWith('bs:disable-file')) {
+            lowerText = lowerText.substring('bs:disable-file'.length);
+            offset += 'bs:disable-file'.length;
+            disableType = 'file';
         } else {
             return null;
         }
@@ -216,7 +227,7 @@ interface Token {
 
 interface DisableToken {
     commentTokenText: string | null;
-    disableType: 'line' | 'next-line';
+    disableType: 'line' | 'next-line' | 'file';
     codes: {
         code: string;
         range: Range;

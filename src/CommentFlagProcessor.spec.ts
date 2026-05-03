@@ -3,6 +3,7 @@ import { Range } from 'vscode-languageserver';
 import { CommentFlagProcessor } from './CommentFlagProcessor';
 import { Lexer } from './lexer/Lexer';
 import type { BscFile } from '.';
+import util from './util';
 
 describe('CommentFlagProcessor', () => {
     let processor: CommentFlagProcessor;
@@ -88,6 +89,36 @@ describe('CommentFlagProcessor', () => {
             });
         });
 
+        it('tokenizes bs:disable-file comment', () => {
+            expect(
+                processor['tokenize'](`'bs:disable-file`, Range.create(0, 0, 0, 16))
+            ).to.eql({
+                commentTokenText: `'`,
+                disableType: 'file',
+                codes: []
+            });
+        });
+
+        it('tokenizes bs:disable-file comment with codes', () => {
+            const token = Lexer.scan(`'bs:disable-file:1 2 3`).tokens[0];
+            expect(
+                processor['tokenize'](token.text, token.range)
+            ).to.eql({
+                commentTokenText: `'`,
+                disableType: 'file',
+                codes: [{
+                    code: '1',
+                    range: Range.create(0, 17, 0, 18)
+                }, {
+                    code: '2',
+                    range: Range.create(0, 19, 0, 20)
+                }, {
+                    code: '3',
+                    range: Range.create(0, 21, 0, 22)
+                }]
+            });
+        });
+
         it('works for special case', () => {
             const token = Lexer.scan(`print "hi" 'bs:disable-line: 123456 999999   aaaab`).tokens[2];
             expect(
@@ -167,6 +198,36 @@ describe('CommentFlagProcessor', () => {
                 'lint2',
                 'some-textual-diagnostic'
             ]);
+        });
+
+        it('produces a whole-file affectedRange for bs:disable-file', () => {
+            processor = new CommentFlagProcessor(mockBscFile, [`'`]);
+            processor.tryAdd(`'bs:disable-file`, Range.create(0, 0, 0, 16));
+            expect(processor.commentFlags[0]).to.deep.include({
+                codes: null,
+                affectedRange: util.createRange(0, 0, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)
+            });
+        });
+
+        it('produces a whole-file affectedRange for bs:disable-file with codes', () => {
+            processor = new CommentFlagProcessor(mockBscFile, [`'`]);
+            processor.tryAdd(`'bs:disable-file: lint1 lint2`, Range.create(0, 0, 0, 29));
+            expect(processor.commentFlags[0]).to.deep.include({
+                codes: ['lint1', 'lint2'],
+                affectedRange: util.createRange(0, 0, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)
+            });
+        });
+
+        it('skips bs:disable-file when allowFileLevel is false', () => {
+            processor = new CommentFlagProcessor(mockBscFile, [`'`]);
+            processor.tryAdd(`'bs:disable-file`, Range.create(5, 0, 5, 16), { allowFileLevel: false });
+            expect(processor.commentFlags).to.be.empty;
+        });
+
+        it('still allows bs:disable-line when allowFileLevel is false', () => {
+            processor = new CommentFlagProcessor(mockBscFile, [`'`]);
+            processor.tryAdd(`'bs:disable-line`, Range.create(5, 8, 5, 24), { allowFileLevel: false });
+            expect(processor.commentFlags).not.to.be.empty;
         });
     });
 });

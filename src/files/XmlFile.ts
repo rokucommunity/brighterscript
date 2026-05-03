@@ -238,13 +238,18 @@ export class XmlFile {
         const processor = new CommentFlagProcessor(this, ['<!--'], diagnosticCodes, [DiagnosticCodeMap.unknownDiagnosticCode]);
 
         this.commentFlags = [];
+        let inHeader = true;
         for (let token of tokens) {
             if (token.tokenType.name === 'Comment') {
                 processor.tryAdd(
                     //remove the close comment symbol
                     token.image.replace(/\-\-\>$/, ''),
-                    rangeFromTokenValue(token)
+                    rangeFromTokenValue(token),
+                    { allowFileLevel: inHeader }
                 );
+            } else if (token.tokenType.name === 'OPEN') {
+                //first element open ends the header — anything past it is inside the document body
+                inHeader = false;
             }
         }
         this.commentFlags.push(...processor.commentFlags);

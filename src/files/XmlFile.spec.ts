@@ -1267,6 +1267,59 @@ describe('XmlFile', () => {
                 DiagnosticMessages.xmlComponentMissingExtendsAttribute()
             ]);
         });
+
+        describe('bs:disable-file', () => {
+            it('suppresses every diagnostic in the file when no codes are specified', () => {
+                program.setFile<XmlFile>('components/file.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <!--bs:disable-file-->
+                    <component>
+                    </component>
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('suppresses only the listed codes', () => {
+                program.setFile<XmlFile>('components/file.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <!--bs:disable-file 1007-->
+                    <component>
+                    </component>
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.xmlComponentMissingNameAttribute()
+                ]);
+            });
+
+            it('does not suppress unlisted codes', () => {
+                program.setFile<XmlFile>('components/file.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <!--bs:disable-file 1006-->
+                    <component name="Foo">
+                    </component>
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.xmlComponentMissingExtendsAttribute()
+                ]);
+            });
+
+            it('ignores the directive when it appears below the root element', () => {
+                program.setFile<XmlFile>('components/file.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component>
+                        <!--bs:disable-file-->
+                    </component>
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.xmlComponentMissingNameAttribute(),
+                    DiagnosticMessages.xmlComponentMissingExtendsAttribute()
+                ]);
+            });
+        });
     });
 
     describe('duplicate components', () => {

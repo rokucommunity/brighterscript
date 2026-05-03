@@ -931,6 +931,69 @@ describe('BrsFile', () => {
                 expectZeroDiagnostics(program);
             });
         });
+
+        describe('bs:disable-file', () => {
+            it('suppresses every diagnostic in the file when no codes are specified', () => {
+                let file = program.setFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                    'bs:disable-file
+                    sub Main()
+                        name = "bob
+                    end sub
+                `);
+                expect(file.commentFlags[0]).to.exist;
+                expect(file.commentFlags[0]).to.deep.include({
+                    codes: null,
+                    affectedRange: util.createRange(0, 0, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)
+                } as CommentFlag);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('suppresses only the listed codes', () => {
+                program.setFile('source/main.brs', `
+                    'bs:disable-file: 1083
+                    sub Main()
+                        name = "bob
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('does not suppress unlisted codes', () => {
+                program.setFile('source/main.brs', `
+                    'bs:disable-file: 9999
+                    sub Main()
+                        name = "bob
+                    end sub
+                `);
+                program.validate();
+                expectHasDiagnostics(program);
+            });
+
+            it('honors a directive that follows other comment-only lines and blank lines', () => {
+                program.setFile('source/main.brs', `
+                    'leading comment
+                    'bs:disable-file
+                    sub Main()
+                        name = "bob
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('ignores the directive when it appears below code', () => {
+                program.setFile('source/main.brs', `
+                    sub Main()
+                        name = "bob
+                    end sub
+                    'bs:disable-file
+                `);
+                program.validate();
+                expectHasDiagnostics(program);
+            });
+        });
     });
 
     describe('parse', () => {

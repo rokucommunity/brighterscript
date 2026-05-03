@@ -525,9 +525,12 @@ export class BrsFile {
         const processor = new CommentFlagProcessor(this, ['rem', `'`], diagnosticCodes, [DiagnosticCodeMap.unknownDiagnosticCode]);
 
         this.commentFlags = [];
+        let inHeader = true;
         for (let token of tokens) {
             if (token.kind === TokenKind.Comment) {
-                processor.tryAdd(token.text, token.range);
+                processor.tryAdd(token.text, token.range, { allowFileLevel: inHeader });
+            } else if (token.kind !== TokenKind.Newline && token.kind !== TokenKind.Whitespace && token.kind !== TokenKind.Eof) {
+                inHeader = false;
             }
         }
         this.commentFlags.push(...processor.commentFlags);
