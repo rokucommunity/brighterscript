@@ -1,4 +1,4 @@
-import { isAliasStatement, isBody, isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isTypecastStatement, isTypeStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isBody, isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isTypecastStatement, isTypeStatement, isUnaryExpression, isVariableExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -13,6 +13,7 @@ import { InterfaceType } from '../../types/InterfaceType';
 import util from '../../util';
 import type { Range } from 'vscode-languageserver';
 import * as semver from 'semver';
+import { EVAL_REMOVED_AT_RSG_VERSION, OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION } from '../../RokuConstants';
 
 export class BrsFileValidator {
     constructor(
@@ -62,6 +63,7 @@ export class BrsFileValidator {
                 if (node.openingParen?.kind === TokenKind.QuestionLeftParen) {
                     this.validateMinFirmwareVersionForOptionalChaining(node.openingParen.range);
                 }
+                this.validateEvalIsNotDeprecated(node);
             },
             EnumStatement: (node) => {
                 this.validateDeclarationLocations(node, 'enum', () => util.createBoundingRange(node.tokens.enum, node.tokens.name));
@@ -466,33 +468,48 @@ export class BrsFileValidator {
     }
 
     /**
-     * The minimum Roku firmware version that introduced optional chaining support (Roku OS 11).
-     * Optional chaining is NOT transpiled by BrighterScript, so this restriction applies to both
-     * .brs and .bs files.
-     */
-    private static readonly OPTIONAL_CHAINING_MIN_VERSION = '11.0.0';
-
-    /**
      * Add a diagnostic if the configured minFirmwareVersion is lower than the version that
      * introduced optional chaining support (Roku OS 11).
      * This applies to both .brs and .bs files because optional chaining is not transpiled —
      * it is emitted as-is, so the target device must natively support it.
      */
     private validateMinFirmwareVersionForOptionalChaining(range: Range | undefined) {
-        const minFirmwareVersion = this.event.file.program.options.minFirmwareVersion;
-        if (!minFirmwareVersion) {
-            return;
-        }
+        const minFirmwareVersion = this.event.file.program.getEffectiveMinFirmwareVersion();
         const coercedMinVersion = semver.coerce(minFirmwareVersion);
-        if (coercedMinVersion && semver.lt(coercedMinVersion, BrsFileValidator.OPTIONAL_CHAINING_MIN_VERSION)) {
+        if (coercedMinVersion && semver.lt(coercedMinVersion, OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION)) {
             this.event.file.addDiagnostic({
                 ...DiagnosticMessages.featureRequiresMinFirmwareVersion(
                     'optional chaining',
-                    BrsFileValidator.OPTIONAL_CHAINING_MIN_VERSION,
+                    OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION,
                     minFirmwareVersion
                 ),
                 range: range
             });
         }
+    }
+
+    /**
+     * Add a diagnostic if a CallExpression invokes the bare `eval` builtin under an effective
+     * rsg_version of 1.2 or higher. On device, this is a compile error (eval was deprecated in
+     * Roku OS 9.0 with rsg_version=1.2 and removed in 9.3).
+     * Skips method calls (`m.eval(x)`) and namespaced calls (`alpha.eval(x)`) — only flags the
+     * bare top-level builtin.
+     */
+    private validateEvalIsNotDeprecated(node: CallExpression) {
+        if (!isVariableExpression(node.callee)) {
+            return;
+        }
+        if (node.callee.name?.text?.toLowerCase() !== 'eval') {
+            return;
+        }
+        const rsgVersion = this.event.file.program.getRsgVersion();
+        const coercedRsgVersion = semver.coerce(rsgVersion);
+        if (!coercedRsgVersion || semver.lt(coercedRsgVersion, EVAL_REMOVED_AT_RSG_VERSION)) {
+            return;
+        }
+        this.event.file.addDiagnostic({
+            ...DiagnosticMessages.evalIsDeprecatedAtRsgVersion(rsgVersion),
+            range: node.callee.range
+        });
     }
 }

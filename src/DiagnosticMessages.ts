@@ -770,6 +770,31 @@ export let DiagnosticMessages = {
         message: `'${featureName}' requires Roku firmware version ${minimumVersion} or higher (current target is ${configuredVersion})`,
         code: 1146,
         severity: DiagnosticSeverity.Error
+    }),
+    evalIsDeprecatedAtRsgVersion: (rsgVersion: string) => ({
+        message: `'eval' is removed in rsg_version=${rsgVersion}`,
+        code: 1147,
+        severity: DiagnosticSeverity.Error
+    }),
+    rsgVersionRequiresMinFirmware: (rsgVersion: string, requiredFirmware: string, configuredFirmware: string) => ({
+        message: `rsg_version=${rsgVersion} requires Roku firmware version ${requiredFirmware} or higher (current target is ${configuredFirmware})`,
+        code: 1148,
+        severity: DiagnosticSeverity.Error
+    }),
+    invalidRsgVersionFormat: (value: string) => ({
+        message: `'${value}' is not a valid rsg_version (expected value like '1.2' or '1.3')`,
+        code: 1149,
+        severity: DiagnosticSeverity.Warning
+    }),
+    rsgVersionDeprecated: (rsgVersion: string, suggestedReplacement: string) => ({
+        message: `rsg_version=${rsgVersion} is deprecated; consider upgrading to rsg_version=${suggestedReplacement}`,
+        code: 1150,
+        severity: DiagnosticSeverity.Warning
+    }),
+    rsgVersionRemoved: (rsgVersion: string, removedAt: string, replacement: string) => ({
+        message: `rsg_version=${rsgVersion} was removed in firmware ${removedAt}; use rsg_version=${replacement}`,
+        code: 1151,
+        severity: DiagnosticSeverity.Error
     })
 };
 

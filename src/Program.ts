@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
+import * as semver from 'semver';
 import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, DocumentSymbol, CancellationToken, SelectionRange } from 'vscode-languageserver';
 import { CancellationTokenSource, CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
@@ -21,7 +22,9 @@ import type { Logger } from './logging';
 import { LogLevel, createLogger } from './logging';
 import chalk from 'chalk';
 import { globalFile } from './globalCallables';
-import { parseManifest, getBsConst } from './preprocessor/Manifest';
+import { parseManifest, parseManifestEntries, getBsConst } from './preprocessor/Manifest';
+import type { ManifestEntry } from './preprocessor/Manifest';
+import { DEFAULT_MIN_FIRMWARE_VERSION, RSG_VERSIONS } from './RokuConstants';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement } from './astUtils/reflection';
@@ -1718,6 +1721,7 @@ export class Program {
     }
 
     private _manifest: Map<string, string>;
+    private _manifestEntries: ManifestEntry[];
 
     /**
      * Modify a parsed manifest map by reading `bs_const` and injecting values from `options.manifest.bs_const`
@@ -1767,8 +1771,12 @@ export class Program {
             const parsedManifest = parseManifest(contents);
             this.buildBsConstsIntoParsedManifest(parsedManifest);
             this._manifest = parsedManifest;
+            this._manifestEntries = parseManifestEntries(contents);
+            this._manifestPath = manifestPath;
         } catch (e) {
             this._manifest = new Map();
+            this._manifestEntries = [];
+            this._manifestPath = undefined;
         }
     }
 
@@ -1780,6 +1788,82 @@ export class Program {
             this.loadManifest();
         }
         return this._manifest;
+    }
+
+    /**
+     * Get the manifest as a list of `{ key, value, range }` entries with line/column ranges
+     * suitable for attaching diagnostics to specific manifest lines.
+     *
+     * NOTE: protected for now. The shape of this data is likely to evolve as we build out
+     * more manifest-aware features (validation rules, autocomplete, etc.). External plugins
+     * shouldn't depend on this until we commit to a stable API.
+     */
+    protected getManifestEntries(): ManifestEntry[] {
+        if (!this._manifestEntries) {
+            this.loadManifest();
+        }
+        return this._manifestEntries;
+    }
+
+    private _manifestPath: string | undefined;
+
+    /**
+     * Returns the absolute path of the loaded manifest file, or undefined if no manifest was found.
+     *
+     * NOTE: protected for now. Once brighterscript treats the manifest as a proper file
+     * (with editor / BscFile integration) callers should consume that instead of poking at
+     * the Program. External plugins shouldn't depend on this in the meantime.
+     */
+    protected getManifestPath(): string | undefined {
+        if (!this._manifest) {
+            this.loadManifest();
+        }
+        return this._manifestPath;
+    }
+
+    /**
+     * The minimum Roku firmware version brighterscript should assume the user is targeting.
+     * If `options.minFirmwareVersion` is set AND parseable as semver, that wins; otherwise
+     * (unset or unparseable) falls back to {@link DEFAULT_MIN_FIRMWARE_VERSION}. This
+     * guarantees the return is always a coerceable version string, so downstream callers
+     * never have to handle malformed input.
+     */
+    public getEffectiveMinFirmwareVersion(): string {
+        const userValue = this.options.minFirmwareVersion;
+        if (userValue && semver.coerce(userValue)) {
+            return userValue;
+        }
+        return DEFAULT_MIN_FIRMWARE_VERSION;
+    }
+
+    /**
+     * Returns the effective `rsg_version` for this program. If the manifest declares a value
+     * explicitly, that's returned verbatim (including malformed values, so callers can validate
+     * format themselves). Otherwise, the highest known rsg_version whose `becameDefaultAt` is
+     * `<=` the effective minimum firmware version is returned — driven entirely by the data in
+     * {@link RSG_VERSIONS}.
+     */
+    public getRsgVersion(): string {
+        const explicit = this.getManifest().get('rsg_version');
+        if (explicit !== undefined) {
+            return explicit.trim();
+        }
+        //getEffectiveMinFirmwareVersion guarantees a coerceable return, so this never throws
+        const coercedFw = semver.coerce(this.getEffectiveMinFirmwareVersion())!;
+        //walk known rsg_versions in descending order (newest first) and return the first whose
+        //becameDefaultAt <= effective firmware. As long as some entry has becameDefaultAt: '0.0.0'
+        //(currently `1.1`), this loop always finds a match.
+        const candidates = Object.entries(RSG_VERSIONS)
+            .filter(([, info]) => info.becameDefaultAt !== undefined)
+            .sort(([a], [b]) => semver.rcompare(semver.coerce(a)!, semver.coerce(b)!));
+        for (const [version, info] of candidates) {
+            const coercedDefault = semver.coerce(info.becameDefaultAt!);
+            if (coercedDefault && semver.gte(coercedFw, coercedDefault)) {
+                return version;
+            }
+        }
+        //unreachable as long as RSG_VERSIONS contains an entry with becameDefaultAt: '0.0.0'
+        return DEFAULT_MIN_FIRMWARE_VERSION;
     }
 
     public dispose() {
