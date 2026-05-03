@@ -928,6 +928,264 @@ describe('parser', () => {
                 expect(diagnostics, `assigning to reserved word "${reservedWord}" should have been an error`).to.be.length.greaterThan(0);
             }
         });
+
+        describe('call-only builtins (`ObjFun`, `type`)', () => {
+            it('flags `x = ObjFun` (RHS value read)', () => {
+                let { diagnostics } = parse(`
+                    sub a()
+                        x = ObjFun
+                        print x
+                    end sub
+                `);
+                expectDiagnostics(diagnostics, [
+                    DiagnosticMessages.reservedBuiltinUsedAsValue('ObjFun')
+                ]);
+            });
+
+            it('flags `print type(ObjFun)` (passed as argument)', () => {
+                let { diagnostics } = parse(`
+                    sub a()
+                        print type(ObjFun)
+                    end sub
+                `);
+                expectDiagnostics(diagnostics, [
+                    DiagnosticMessages.reservedBuiltinUsedAsValue('ObjFun')
+                ]);
+            });
+
+            it('flags `f(ObjFun, 2)` (passed by value)', () => {
+                let { diagnostics } = parse(`
+                    sub a()
+                        f(ObjFun, 2)
+                    end sub
+                `);
+                expectDiagnostics(diagnostics, [
+                    DiagnosticMessages.reservedBuiltinUsedAsValue('ObjFun')
+                ]);
+            });
+
+            it('flags `x = type` (RHS value read)', () => {
+                let { diagnostics } = parse(`
+                    sub a()
+                        x = type
+                        print x
+                    end sub
+                `);
+                expectDiagnostics(diagnostics, [
+                    DiagnosticMessages.reservedBuiltinUsedAsValue('type')
+                ]);
+            });
+
+            it('does not flag `ObjFun()` (call site - falls through to scope validation)', () => {
+                let { diagnostics } = parse(`
+                    sub a()
+                        ObjFun()
+                    end sub
+                `);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('does not flag `type(123)` (canonical call)', () => {
+                let { diagnostics } = parse(`
+                    sub a()
+                        print type(123)
+                    end sub
+                `);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('does not flag `m.ObjFun = 1` (property assignment)', () => {
+                let { diagnostics } = parse(`
+                    sub a()
+                        m.ObjFun = 1
+                    end sub
+                `);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('does not flag `m.type = 1` (property assignment)', () => {
+                let { diagnostics } = parse(`
+                    sub a()
+                        m.type = 1
+                    end sub
+                `);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('does not flag `{ ObjFun: 1 }` (AA literal key)', () => {
+                let { diagnostics } = parse(`
+                    sub a()
+                        aa = { ObjFun: 1 }
+                    end sub
+                `);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('does not flag `{ type: 1 }` (AA literal key)', () => {
+                let { diagnostics } = parse(`
+                    sub a()
+                        aa = { type: 1 }
+                    end sub
+                `);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('does not flag a BrighterScript `type Name = ...` statement', () => {
+                let { diagnostics } = parse(`
+                    type MyAlias = string or integer
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('case-insensitive match for OBJFUN, ObjFun, objfun', () => {
+                let { diagnostics } = parse(`
+                    sub a()
+                        x = OBJFUN
+                        y = objfun
+                    end sub
+                `);
+                expectDiagnostics(diagnostics, [
+                    DiagnosticMessages.reservedBuiltinUsedAsValue('OBJFUN'),
+                    DiagnosticMessages.reservedBuiltinUsedAsValue('objfun')
+                ]);
+            });
+
+            //per-builtin coverage for each device-verified entry in CallOnlyBuiltins.
+            //each pair: (1) bare value read flags, (2) canonical call form does not flag.
+
+            it('flags `x = Box` (RHS value read)', () => {
+                let { diagnostics } = parse(`sub a()\nx = Box\nend sub`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.reservedBuiltinUsedAsValue('Box')]);
+            });
+
+            it('does not flag `Box(1)` (canonical call)', () => {
+                let { diagnostics } = parse(`sub a()\nx = Box(1)\nend sub`);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('flags `x = CreateObject` (RHS value read)', () => {
+                let { diagnostics } = parse(`sub a()\nx = CreateObject\nend sub`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.reservedBuiltinUsedAsValue('CreateObject')]);
+            });
+
+            it('does not flag `CreateObject("roSGNode", "Node")` (canonical call)', () => {
+                let { diagnostics } = parse(`sub a()\nx = CreateObject("roSGNode", "Node")\nend sub`);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('flags `x = GetGlobalAA` (RHS value read)', () => {
+                let { diagnostics } = parse(`sub a()\nx = GetGlobalAA\nend sub`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.reservedBuiltinUsedAsValue('GetGlobalAA')]);
+            });
+
+            it('does not flag `GetGlobalAA()` (canonical call)', () => {
+                let { diagnostics } = parse(`sub a()\nx = GetGlobalAA()\nend sub`);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('flags `x = GetLastRunCompileError` (RHS value read)', () => {
+                let { diagnostics } = parse(`sub a()\nx = GetLastRunCompileError\nend sub`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.reservedBuiltinUsedAsValue('GetLastRunCompileError')]);
+            });
+
+            it('does not flag `GetLastRunCompileError()` (canonical call)', () => {
+                let { diagnostics } = parse(`sub a()\nx = GetLastRunCompileError()\nend sub`);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('flags `x = GetLastRunRunTimeError` (RHS value read)', () => {
+                let { diagnostics } = parse(`sub a()\nx = GetLastRunRunTimeError\nend sub`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.reservedBuiltinUsedAsValue('GetLastRunRunTimeError')]);
+            });
+
+            it('does not flag `GetLastRunRunTimeError()` (canonical call)', () => {
+                let { diagnostics } = parse(`sub a()\nx = GetLastRunRunTimeError()\nend sub`);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('flags `x = Pos` (RHS value read)', () => {
+                let { diagnostics } = parse(`sub a()\nx = Pos\nend sub`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.reservedBuiltinUsedAsValue('Pos')]);
+            });
+
+            it('does not flag `Pos(0)` (canonical call)', () => {
+                let { diagnostics } = parse(`sub a()\nx = Pos(0)\nend sub`);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('flags `x = Run` (RHS value read)', () => {
+                let { diagnostics } = parse(`sub a()\nx = Run\nend sub`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.reservedBuiltinUsedAsValue('Run')]);
+            });
+
+            it('does not flag `Run("pkg:/source/foo.brs")` (canonical call)', () => {
+                let { diagnostics } = parse(`sub a()\nx = Run("pkg:/source/foo.brs")\nend sub`);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('flags `x = Tab` (RHS value read)', () => {
+                let { diagnostics } = parse(`sub a()\nx = Tab\nend sub`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.reservedBuiltinUsedAsValue('Tab')]);
+            });
+
+            it('does not flag `Tab(5)` (canonical call)', () => {
+                let { diagnostics } = parse(`sub a()\nx = Tab(5)\nend sub`);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            //parameter-name coverage. each of these is caught by the pre-existing
+            //`cannotUseReservedWordAsIdentifier` (code 1045), not the new 1147.
+
+            it('flags `function f(Box)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(Box)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('Box')]);
+            });
+
+            it('flags `function f(CreateObject)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(CreateObject)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('CreateObject')]);
+            });
+
+            it('flags `function f(GetGlobalAA)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(GetGlobalAA)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('GetGlobalAA')]);
+            });
+
+            it('flags `function f(GetLastRunCompileError)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(GetLastRunCompileError)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('GetLastRunCompileError')]);
+            });
+
+            it('flags `function f(GetLastRunRunTimeError)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(GetLastRunRunTimeError)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('GetLastRunRunTimeError')]);
+            });
+
+            it('flags `function f(ObjFun)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(ObjFun)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('ObjFun')]);
+            });
+
+            it('flags `function f(Pos)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(Pos)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('Pos')]);
+            });
+
+            it('flags `function f(Run)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(Run)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('Run')]);
+            });
+
+            it('flags `function f(Tab)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(Tab)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('Tab')]);
+            });
+
+            it('flags `function f(type)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(type)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('type')]);
+            });
+        });
     });
 
     describe('import keyword', () => {
@@ -1611,7 +1869,10 @@ describe('parser', () => {
                 end function
             `, ParseMode.BrighterScript);
             expectDiagnostics(diagnostics, [
-                DiagnosticMessages.cannotUseReservedWordAsIdentifier('type').message
+                //type = 1 -> assignment LHS
+                DiagnosticMessages.cannotUseReservedWordAsIdentifier('type'),
+                //return type -> non-call value read, on-device compile error
+                DiagnosticMessages.reservedBuiltinUsedAsValue('type')
             ]);
         });
 
