@@ -587,6 +587,7 @@ export const DisallowedLocalIdentifiersText = new Set([
 export const CallOnlyBuiltins = new Set([
     'box',
     'createobject',
+    'eval',
     'getglobalaa',
     'getlastruncompileerror',
     'getlastrunruntimeerror',

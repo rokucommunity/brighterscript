@@ -1133,6 +1133,16 @@ describe('parser', () => {
                 expectZeroDiagnostics(diagnostics);
             });
 
+            it('flags `x = eval` (RHS value read)', () => {
+                let { diagnostics } = parse(`sub a()\nx = eval\nend sub`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.reservedBuiltinUsedAsValue('eval')]);
+            });
+
+            it('does not flag `eval("print 1")` (call site - device may still error but the parser shouldn\'t flag the call form here)', () => {
+                let { diagnostics } = parse(`sub a()\neval("print 1")\nend sub`);
+                expectZeroDiagnostics(diagnostics);
+            });
+
             //parameter-name coverage. each of these is caught by the pre-existing
             //`cannotUseReservedWordAsIdentifier` (code 1045), not the new 1147.
 
@@ -1184,6 +1194,11 @@ describe('parser', () => {
             it('flags `function f(type)` (parameter name)', () => {
                 let { diagnostics } = parse(`function f(type)\nend function`);
                 expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('type')]);
+            });
+
+            it('flags `function f(eval)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(eval)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('eval')]);
             });
         });
     });
