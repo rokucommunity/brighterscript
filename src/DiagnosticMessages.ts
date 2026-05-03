@@ -770,6 +770,16 @@ export let DiagnosticMessages = {
         message: `'${featureName}' requires Roku firmware version ${minimumVersion} or higher (current target is ${configuredVersion})`,
         code: 1146,
         severity: DiagnosticSeverity.Error
+    }),
+    whileLoopTerminatedWithNext: () => ({
+        message: `Expected 'end while' but found 'next'`,
+        code: 1147,
+        severity: DiagnosticSeverity.Error
+    }),
+    forLoopTerminatedWithEndWhile: () => ({
+        message: `Expected 'end for' or 'next' but found 'end while'`,
+        code: 1148,
+        severity: DiagnosticSeverity.Error
     })
 };
 

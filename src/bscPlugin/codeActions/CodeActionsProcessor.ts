@@ -51,6 +51,10 @@ export class CodeActionsProcessor {
                 this.suggestMissingOverrideQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.cannotUseOverrideKeywordOnConstructorFunction) {
                 this.suggestRemoveOverrideFromConstructorQuickFixes([diagnostic]);
+            } else if (diagnostic.code === DiagnosticCodeMap.whileLoopTerminatedWithNext) {
+                this.suggestWhileTerminatorQuickFixes([diagnostic]);
+            } else if (diagnostic.code === DiagnosticCodeMap.forLoopTerminatedWithEndWhile) {
+                this.suggestForTerminatorQuickFixes([diagnostic]);
             }
         }
 
@@ -78,6 +82,10 @@ export class CodeActionsProcessor {
                     this.suggestScriptImportCasingQuickFixes(allInFile as DiagnosticMessageType<'scriptImportCaseMismatch'>[]);
                 } else if (code === DiagnosticCodeMap.missingOverrideKeyword) {
                     this.suggestMissingOverrideQuickFixes(allInFile);
+                } else if (code === DiagnosticCodeMap.whileLoopTerminatedWithNext) {
+                    this.suggestWhileTerminatorQuickFixes(allInFile);
+                } else if (code === DiagnosticCodeMap.forLoopTerminatedWithEndWhile) {
+                    this.suggestForTerminatorQuickFixes(allInFile);
                 }
             }
         }
@@ -561,6 +569,52 @@ export class CodeActionsProcessor {
     }
 
     /**
+     * Builds a list of replace-changes that replace each diagnostic's range with `newText`.
+     */
+    private buildTerminatorReplaceChanges(diagnostics: Diagnostic[], newText: string): ReplaceChange[] {
+        return diagnostics.map<ReplaceChange>(d => ({
+            type: 'replace',
+            filePath: this.event.file.srcPath,
+            range: d.range,
+            newText: newText
+        }));
+    }
+
+    /**
+     * Adds a code action to convert a bogus `next` (closing a `while`) into `end while`.
+     * `end while` is the only valid terminator for a `while` loop, so this offers a single fix.
+     */
+    private suggestWhileTerminatorQuickFixes(diagnostics: Diagnostic[]) {
+        this.emitOrFixAll(
+            `Convert 'next' to 'end while'`,
+            `Fix all: Convert 'next' to 'end while'`,
+            this.buildTerminatorReplaceChanges(diagnostics, 'end while'),
+            diagnostics[0],
+            true
+        );
+    }
+
+    /**
+     * Adds two code actions to convert a bogus `end while` (closing a `for`/`for each`) into either
+     * `end for` (preferred) or `next`. Both are valid terminators for a `for`/`for each` loop.
+     */
+    private suggestForTerminatorQuickFixes(diagnostics: Diagnostic[]) {
+        this.emitOrFixAll(
+            `Convert 'end while' to 'end for'`,
+            `Fix all: Convert 'end while' to 'end for'`,
+            this.buildTerminatorReplaceChanges(diagnostics, 'end for'),
+            diagnostics[0],
+            true
+        );
+        this.emitOrFixAll(
+            `Convert 'end while' to 'next'`,
+            `Fix all: Convert 'end while' to 'next'`,
+            this.buildTerminatorReplaceChanges(diagnostics, 'next'),
+            diagnostics[0]
+        );
+    }
+
+    /**
      * Adds code actions to remove the invalid `override` keyword from a constructor method.
      */
     private suggestRemoveOverrideFromConstructorQuickFixes(diagnostics: Diagnostic[]) {
@@ -629,7 +683,8 @@ export class CodeActionsProcessor {
         singleTitle: string,
         fixAllTitle: string,
         changes: Array<InsertChange | DeleteChange | ReplaceChange>,
-        diagnostic: Diagnostic
+        diagnostic: Diagnostic,
+        isPreferred?: boolean
     ) {
         if (changes.length === 0) {
             return;
@@ -639,6 +694,7 @@ export class CodeActionsProcessor {
                 codeActionUtil.createCodeAction({
                     title: singleTitle,
                     diagnostics: [diagnostic],
+                    ...(isPreferred ? { isPreferred: true } : {}),
                     kind: CodeActionKind.QuickFix,
                     changes: changes
                 })
@@ -647,6 +703,7 @@ export class CodeActionsProcessor {
             this.event.codeActions.push(
                 codeActionUtil.createCodeAction({
                     title: fixAllTitle,
+                    ...(isPreferred ? { isPreferred: true } : {}),
                     kind: CodeActionKind.QuickFix,
                     changes: changes
                 })
