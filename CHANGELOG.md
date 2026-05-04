@@ -6,6 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.72.0](https://github.com/rokucommunity/brighterscript/compare/0.71.1...v0.72.0) - 2026-04-30
+### Added
+ - Add `relativeSourceMaps` option for portable sourcemaps ([#1624](https://github.com/rokucommunity/brighterscript/pull/1624))
+ - added `source fix all` code action support ([#1659](https://github.com/rokucommunity/brighterscript/pull/1659))
+ - added selection range provider support to lsp capabilities ([#1657](https://github.com/rokucommunity/brighterscript/pull/1657))
+ - Add `minFirmwareVersion` setting in bsconfig.json ([#1678](https://github.com/rokucommunity/brighterscript/pull/1678))
+ - Support line continuation ([#1667](https://github.com/rokucommunity/brighterscript/pull/1667))
+### Changed
+ - Auto-update imports when files are renamed through LSP ([#1688](https://github.com/rokucommunity/brighterscript/pull/1688))
+ - Limit project activation concurrency to 3 and is user configurable ([#1627](https://github.com/rokucommunity/brighterscript/pull/1627))
+ - Chain prebuild sourcemaps through BrighterScript transpile ([#1676](https://github.com/rokucommunity/brighterscript/pull/1676))
+ - Report const cycle diagnostic per node to match class convention ([#1681](https://github.com/rokucommunity/brighterscript/pull/1681))
+ - upgrade to [roku-deploy@3.17.1](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3171---2026-04-27). Notable changes since 3.16.5:
+### Fixed
+ - performance: share per-file namespace data via lazy ScopeNamespaceLookup view ([#1684](https://github.com/rokucommunity/brighterscript/pull/1684))
+ - performance: share BscSymbol references in SymbolTable.mergeSymbolTable ([#1682](https://github.com/rokucommunity/brighterscript/pull/1682))
+ - performance: lazy-allocate NamespaceContainer's optional fields ([#1683](https://github.com/rokucommunity/brighterscript/pull/1683))
+ - Fix cross-file const inlining and flag const cycles ([#1680](https://github.com/rokucommunity/brighterscript/pull/1680))
+
+
+
 ## [0.71.1](https://github.com/rokucommunity/brighterscript/compare/0.71.0...v0.71.1) - 2026-04-14
 ### Changed
  - upgrade to [roku-deploy@3.16.5](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3165---2026-04-13). Notable changes since 3.16.3:
