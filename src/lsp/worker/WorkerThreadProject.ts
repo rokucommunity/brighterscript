@@ -80,10 +80,17 @@ export class WorkerThreadProject implements LspProject {
         this.rootDir = activateResponse.data.rootDir;
         this.filePatterns = activateResponse.data.filePatterns;
         this.logger.logLevel = activateResponse.data.logLevel;
+        this.manifestSrcPath = activateResponse.data.manifestSrcPath;
 
         //load the bsconfig file contents (used for performance optimizations externally)
         try {
             this.bsconfigFileContents = (await fsExtra.readFile(this.bsconfigPath)).toString();
+        } catch { }
+
+        //load the manifest file contents (used for change detection to trigger project reloads).
+        //use manifestSrcPath from the activation response which reflects the actual src path (respects {src;dest} mappings)
+        try {
+            this.manifestFileContents = (await fsExtra.readFile(this.manifestSrcPath)).toString();
         } catch { }
 
 
@@ -124,6 +131,22 @@ export class WorkerThreadProject implements LspProject {
      * @deprecated do not depend on this property. This will certainly be removed in a future release
      */
     bsconfigFileContents?: string;
+
+    /**
+     * The contents of the manifest file. This is used to detect when the manifest file has not actually been changed (even if the fs says it did).
+     *
+     * Only available after `.activate()` has completed.
+     * @deprecated do not depend on this property. This will certainly be removed in a future release
+     */
+    manifestFileContents?: string;
+
+    /**
+     * The absolute source path to the manifest file (the file that maps to dest 'manifest').
+     * May differ from rootDir/manifest if the project uses a custom {src; dest} mapping.
+     *
+     * Only available after `.activate()` has completed.
+     */
+    manifestSrcPath?: string;
 
     /**
      * The worker thread where the actual project will execute

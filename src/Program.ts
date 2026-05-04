@@ -1720,6 +1720,11 @@ export class Program {
     private _manifest: Map<string, string>;
 
     /**
+     * The absolute source path to the manifest file. Set when loadManifest is called.
+     */
+    public manifestPath: string;
+
+    /**
      * Modify a parsed manifest map by reading `bs_const` and injecting values from `options.manifest.bs_const`
      * @param parsedManifest The manifest map to read from and modify
      */
@@ -1760,6 +1765,9 @@ export class Program {
         let manifestPath = manifestFileObj
             ? manifestFileObj.src
             : path.join(this.options.rootDir, 'manifest');
+
+        //store the resolved manifest path so it can be used externally for change detection
+        this.manifestPath = util.standardizePath(manifestPath);
 
         try {
             // we only load this manifest once, so do it sync to improve speed downstream
