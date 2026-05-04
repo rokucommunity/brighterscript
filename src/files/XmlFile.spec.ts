@@ -1268,11 +1268,11 @@ describe('XmlFile', () => {
             ]);
         });
 
-        describe('bs:disable-file', () => {
-            it('suppresses every diagnostic in the file when no codes are specified', () => {
+        describe('bs:disable / bs:enable block directives', () => {
+            it('a bare bs:disable suppresses every diagnostic in the file', () => {
                 program.setFile<XmlFile>('components/file.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
-                    <!--bs:disable-file-->
+                    <!--bs:disable-->
                     <component>
                     </component>
                 `);
@@ -1283,7 +1283,7 @@ describe('XmlFile', () => {
             it('suppresses only the listed codes', () => {
                 program.setFile<XmlFile>('components/file.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
-                    <!--bs:disable-file 1007-->
+                    <!--bs:disable 1007-->
                     <component>
                     </component>
                 `);
@@ -1296,7 +1296,7 @@ describe('XmlFile', () => {
             it('does not suppress unlisted codes', () => {
                 program.setFile<XmlFile>('components/file.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
-                    <!--bs:disable-file 1006-->
+                    <!--bs:disable 1006-->
                     <component name="Foo">
                     </component>
                 `);
@@ -1306,11 +1306,12 @@ describe('XmlFile', () => {
                 ]);
             });
 
-            it('ignores the directive when it appears below the root element', () => {
+            it('a bs:enable closes the disable block', () => {
                 program.setFile<XmlFile>('components/file.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
+                    <!--bs:disable-->
+                    <!--bs:enable-->
                     <component>
-                        <!--bs:disable-file-->
                     </component>
                 `);
                 program.validate();

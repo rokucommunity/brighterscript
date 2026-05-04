@@ -84,37 +84,57 @@ describe('CommentFlagProcessor', () => {
                 processor['tokenize'](`'bs:disable-line`, null as any as Range)
             ).to.eql({
                 commentTokenText: `'`,
-                disableType: 'line',
+                directive: 'line',
                 codes: []
             });
         });
 
-        it('tokenizes bs:disable-file comment', () => {
+        it('tokenizes bs:disable comment as a block directive', () => {
             expect(
-                processor['tokenize'](`'bs:disable-file`, Range.create(0, 0, 0, 16))
+                processor['tokenize'](`'bs:disable`, Range.create(0, 0, 0, 11))
             ).to.eql({
                 commentTokenText: `'`,
-                disableType: 'file',
+                directive: 'disable',
                 codes: []
             });
         });
 
-        it('tokenizes bs:disable-file comment with codes', () => {
-            const token = Lexer.scan(`'bs:disable-file:1 2 3`).tokens[0];
+        it('tokenizes bs:enable comment as a block directive', () => {
+            expect(
+                processor['tokenize'](`'bs:enable`, Range.create(0, 0, 0, 10))
+            ).to.eql({
+                commentTokenText: `'`,
+                directive: 'enable',
+                codes: []
+            });
+        });
+
+        it('prefers the longer prefix so bs:disable-line is not parsed as bs:disable', () => {
+            expect(
+                processor['tokenize'](`'bs:disable-line`, Range.create(0, 0, 0, 16))
+            ).to.eql({
+                commentTokenText: `'`,
+                directive: 'line',
+                codes: []
+            });
+        });
+
+        it('tokenizes bs:disable comment with codes', () => {
+            const token = Lexer.scan(`'bs:disable:1 2 3`).tokens[0];
             expect(
                 processor['tokenize'](token.text, token.range)
             ).to.eql({
                 commentTokenText: `'`,
-                disableType: 'file',
+                directive: 'disable',
                 codes: [{
                     code: '1',
-                    range: Range.create(0, 17, 0, 18)
+                    range: Range.create(0, 12, 0, 13)
                 }, {
                     code: '2',
-                    range: Range.create(0, 19, 0, 20)
+                    range: Range.create(0, 14, 0, 15)
                 }, {
                     code: '3',
-                    range: Range.create(0, 21, 0, 22)
+                    range: Range.create(0, 16, 0, 17)
                 }]
             });
         });
@@ -125,7 +145,7 @@ describe('CommentFlagProcessor', () => {
                 processor['tokenize'](token.text, token.range)
             ).to.eql({
                 commentTokenText: `'`,
-                disableType: 'line',
+                directive: 'line',
                 codes: [{
                     code: '123456',
                     range: Range.create(0, 29, 0, 35)
@@ -145,7 +165,7 @@ describe('CommentFlagProcessor', () => {
                 processor['tokenize'](token.text, token.range)
             ).to.eql({
                 commentTokenText: `'`,
-                disableType: 'line',
+                directive: 'line',
                 codes: [{
                     code: '1',
                     range: Range.create(0, 17, 0, 18)
@@ -165,7 +185,7 @@ describe('CommentFlagProcessor', () => {
                 processor['tokenize'](token.text, token.range)
             ).to.eql({
                 commentTokenText: `'`,
-                disableType: 'line',
+                directive: 'line',
                 codes: [{
                     code: '1',
                     range: Range.create(0, 18, 0, 19)
@@ -179,7 +199,7 @@ describe('CommentFlagProcessor', () => {
                 processor['tokenize'](token.text, token.range)
             ).to.eql({
                 commentTokenText: `'`,
-                disableType: 'line',
+                directive: 'line',
                 codes: [{
                     code: '1',
                     range: Range.create(0, 18, 0, 19)
@@ -188,11 +208,18 @@ describe('CommentFlagProcessor', () => {
         });
     });
 
-    describe('tryAdd', () => {
-        it('supports non-numeric codes', () => {
-            processor.tryAdd(`'bs:disable-line lint123 LINT2 some-textual-diagnostic`, Range.create(0, 0, 0, 54));
+    describe('tryAdd + finalize', () => {
+        beforeEach(() => {
+            //seed the known-codes list so numeric codes used in the tests are accepted
+            processor = new CommentFlagProcessor(mockBscFile, [`'`], [1001, 1002]);
+        });
+
+        it('supports non-numeric codes on line directives', () => {
+            const fresh = new CommentFlagProcessor(mockBscFile, [`'`]);
+            fresh.tryAdd(`'bs:disable-line lint123 LINT2 some-textual-diagnostic`, Range.create(0, 0, 0, 54));
+            fresh.finalize();
             expect(
-                processor.commentFlags.flatMap(x => x.codes)
+                fresh.commentFlags.flatMap(flag => flag.codes)
             ).to.eql([
                 'lint123',
                 'lint2',
@@ -200,34 +227,83 @@ describe('CommentFlagProcessor', () => {
             ]);
         });
 
-        it('produces a whole-file affectedRange for bs:disable-file', () => {
-            processor = new CommentFlagProcessor(mockBscFile, [`'`]);
-            processor.tryAdd(`'bs:disable-file`, Range.create(0, 0, 0, 16));
-            expect(processor.commentFlags[0]).to.deep.include({
-                codes: null,
-                affectedRange: util.createRange(0, 0, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)
-            });
+        it('a bare bs:disable with no closing bs:enable suppresses the rest of the file', () => {
+            processor.tryAdd(`'bs:disable`, Range.create(0, 0, 0, 11));
+            processor.finalize();
+
+            const blockFlag = processor.commentFlags.find(flag => flag.codes === null && flag.affectedRange.end.line === Number.MAX_SAFE_INTEGER);
+            expect(blockFlag).to.exist;
+            expect(blockFlag.enableCodes).to.be.undefined;
+            expect(blockFlag.affectedRange).to.deep.equal(util.createRange(1, 0, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER));
         });
 
-        it('produces a whole-file affectedRange for bs:disable-file with codes', () => {
-            processor = new CommentFlagProcessor(mockBscFile, [`'`]);
-            processor.tryAdd(`'bs:disable-file: lint1 lint2`, Range.create(0, 0, 0, 29));
-            expect(processor.commentFlags[0]).to.deep.include({
-                codes: ['lint1', 'lint2'],
-                affectedRange: util.createRange(0, 0, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)
-            });
+        it('a bs:disable / bs:enable pair only suppresses lines between the two', () => {
+            processor.tryAdd(`'bs:disable`, Range.create(2, 0, 2, 11));
+            processor.tryAdd(`'bs:enable`, Range.create(5, 0, 5, 10));
+            processor.finalize();
+
+            const blockFlag = processor.commentFlags.find(flag => flag.codes === null && flag.affectedRange.end.line < Number.MAX_SAFE_INTEGER);
+            expect(blockFlag).to.exist;
+            expect(blockFlag.affectedRange).to.deep.equal(util.createRange(3, 0, 4, Number.MAX_SAFE_INTEGER));
+            expect(blockFlag.enableCodes).to.be.undefined;
         });
 
-        it('skips bs:disable-file when allowFileLevel is false', () => {
-            processor = new CommentFlagProcessor(mockBscFile, [`'`]);
-            processor.tryAdd(`'bs:disable-file`, Range.create(5, 0, 5, 16), { allowFileLevel: false });
-            expect(processor.commentFlags).to.be.empty;
+        it('bs:enable: <code> after a bare bs:disable carves out an exception via enableCodes', () => {
+            //         line 0: bs:disable
+            //         line 5: bs:enable: 1001
+            processor.tryAdd(`'bs:disable`, Range.create(0, 0, 0, 11));
+            processor.tryAdd(`'bs:enable: 1001`, Range.create(5, 0, 5, 16));
+            processor.finalize();
+
+            //first block flag (lines 1-4): all disabled, no carveouts
+            const firstBlock = processor.commentFlags.find(flag => flag.codes === null &&
+                flag.affectedRange.start.line === 1 &&
+                flag.affectedRange.end.line === 4
+            );
+            expect(firstBlock, 'first block flag').to.exist;
+            expect(firstBlock.enableCodes).to.be.undefined;
+
+            //second block flag (lines 6-EOF): all disabled except 1001
+            const secondBlock = processor.commentFlags.find(flag => flag.codes === null &&
+                flag.affectedRange.start.line === 6
+            );
+            expect(secondBlock, 'second block flag').to.exist;
+            expect(secondBlock.enableCodes).to.eql([1001]);
         });
 
-        it('still allows bs:disable-line when allowFileLevel is false', () => {
-            processor = new CommentFlagProcessor(mockBscFile, [`'`]);
-            processor.tryAdd(`'bs:disable-line`, Range.create(5, 8, 5, 24), { allowFileLevel: false });
-            expect(processor.commentFlags).not.to.be.empty;
+        it('bs:disable: <code> after a bare bs:enable starts suppressing only that code', () => {
+            //         line 0: bs:enable   (no-op state-wise; nothing to suppress yet)
+            //         line 3: bs:disable: 1001
+            processor.tryAdd(`'bs:enable`, Range.create(0, 0, 0, 10));
+            processor.tryAdd(`'bs:disable: 1001`, Range.create(3, 0, 3, 17));
+            processor.finalize();
+
+            //the bare bs:enable produces no flag (nothing is suppressed in lines 1-2)
+            const beforeDisable = processor.commentFlags.find(flag => flag.affectedRange.start.line === 1 && flag.affectedRange.end.line === 2
+            );
+            expect(beforeDisable, 'no flag emitted while nothing is suppressed').to.be.undefined;
+
+            //the disable: 1001 produces a flag covering lines 4-EOF
+            const afterDisable = processor.commentFlags.find(flag => Array.isArray(flag.codes) && flag.codes.length === 1 && flag.codes[0] === 1001
+            );
+            expect(afterDisable, 'disable: 1001 flag').to.exist;
+            expect(afterDisable.affectedRange.start.line).to.equal(4);
+            expect(afterDisable.enableCodes).to.be.undefined;
+        });
+
+        it('bs:disable: <code> while in disable-all mode subtracts the code from the carveouts', () => {
+            //         line 0: bs:disable               (disable everything)
+            //         line 3: bs:enable: 1001 1002    (carve out 1001, 1002)
+            //         line 6: bs:disable: 1001        (re-suppress 1001 by removing it from carveouts)
+            processor.tryAdd(`'bs:disable`, Range.create(0, 0, 0, 11));
+            processor.tryAdd(`'bs:enable: 1001 1002`, Range.create(3, 0, 3, 21));
+            processor.tryAdd(`'bs:disable: 1001`, Range.create(6, 0, 6, 17));
+            processor.finalize();
+
+            const finalBlock = processor.commentFlags.find(flag => flag.codes === null && flag.affectedRange.start.line === 7
+            );
+            expect(finalBlock, 'final block flag').to.exist;
+            expect(finalBlock.enableCodes).to.eql([1002]);
         });
     });
 });

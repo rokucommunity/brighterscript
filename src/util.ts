@@ -8,7 +8,7 @@ import type { Diagnostic, Position, Range, Location, DiagnosticRelatedInformatio
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
-import { DiagnosticMessages } from './DiagnosticMessages';
+import { DiagnosticCodeMap, DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, Plugin, ExpressionInfo, TranspileResult, MaybePromise, DisposableLike, PluginFactory } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
@@ -827,13 +827,21 @@ export class Util {
      */
     public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
         const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code;
+        //the "unknown diagnostic code" warning is always surfaced — otherwise typo'd codes in directive comments could silence themselves
+        if (diagnosticCode === DiagnosticCodeMap.unknownDiagnosticCode) {
+            return false;
+        }
         for (let flag of diagnostic.file?.commentFlags ?? []) {
-            //this diagnostic is affected by this flag
-            if (diagnostic.range && this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
-                //if the flag acts upon this diagnostic's code
-                if (flag.codes === null || (diagnosticCode !== undefined && flag.codes.includes(diagnosticCode))) {
-                    return true;
-                }
+            if (!diagnostic.range || !this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
+                continue;
+            }
+            const inDisable = flag.codes === null || (diagnosticCode !== undefined && flag.codes?.includes(diagnosticCode));
+            if (!inDisable) {
+                continue;
+            }
+            const inEnable = flag.enableCodes === null || (diagnosticCode !== undefined && flag.enableCodes?.includes(diagnosticCode));
+            if (!inEnable) {
+                return true;
             }
         }
     }

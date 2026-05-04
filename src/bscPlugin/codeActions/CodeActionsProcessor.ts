@@ -106,8 +106,8 @@ export class CodeActionsProcessor {
      *   - "Disable {code} for this line" — adds the code to an existing `bs:disable-line` /
      *     `bs:disable-next-line` directive on/above the diagnostic if present, otherwise inserts
      *     a new `bs:disable-next-line: {code}` comment on the line above.
-     *   - "Disable {code} for this file" — adds the code to an existing `bs:disable-file`
-     *     directive in the file's header if present, otherwise inserts a new one at the top.
+     *   - "Disable {code} for this file" — adds the code to an existing header-level `bs:disable`
+     *     directive if present, otherwise inserts a new `bs:disable: {code}` at the top of the file.
      *
      * Comment placement and the line-vs-next-line preference are centralized here so they can be
      * revisited without touching the directive parser.
@@ -125,8 +125,12 @@ export class CodeActionsProcessor {
         const isXml = isXmlFile(file);
         const existing = this.findExistingDisableDirectives(file, diagnostic.range.start.line);
 
-        const formatDirective = (token: 'line' | 'next-line' | 'file', codes: string[]) => {
+        const formatLineDirective = (token: 'line' | 'next-line', codes: string[]) => {
             const body = `bs:disable-${token}: ${codes.join(' ')}`;
+            return isXml ? `<!-- ${body} -->` : `' ${body}`;
+        };
+        const formatBlockDirective = (codes: string[]) => {
+            const body = `bs:disable: ${codes.join(' ')}`;
             return isXml ? `<!-- ${body} -->` : `' ${body}`;
         };
 
@@ -136,10 +140,10 @@ export class CodeActionsProcessor {
         const lineAction = this.buildAppendOrInsertAction(
             existing.forLine,
             codeStr,
-            () => formatDirective(existing.forLine!.type as 'line' | 'next-line', this.mergeCodes(existing.forLine?.codes, codeStr)),
+            () => formatLineDirective(existing.forLine!.type as 'line' | 'next-line', this.mergeCodes(existing.forLine?.codes, codeStr)),
             () => ({
                 position: util.createPosition(diagnostic.range.start.line, 0),
-                newText: `${indent}${formatDirective('next-line', [codeStr])}\n`
+                newText: `${indent}${formatLineDirective('next-line', [codeStr])}\n`
             })
         );
         if (lineAction) {
@@ -157,12 +161,12 @@ export class CodeActionsProcessor {
         const fileAction = this.buildAppendOrInsertAction(
             existing.forFile,
             codeStr,
-            () => formatDirective('file', this.mergeCodes(existing.forFile?.codes, codeStr)),
+            () => formatBlockDirective(this.mergeCodes(existing.forFile?.codes, codeStr)),
             () => {
                 const headerInsert = this.getDisableFileInsertion(file);
                 return {
                     position: headerInsert.position,
-                    newText: headerInsert.prefix + formatDirective('file', [codeStr]) + headerInsert.suffix
+                    newText: headerInsert.prefix + formatBlockDirective([codeStr]) + headerInsert.suffix
                 };
             }
         );
@@ -220,9 +224,9 @@ export class CodeActionsProcessor {
     }
 
     /**
-     * Walks the file's tokens and returns existing `bs:disable-{line,next-line}` and
-     * `bs:disable-file` directives that would cover the diagnostic on `diagLine`. Used so
-     * the suppression quick fixes can extend an existing directive instead of stacking new ones.
+     * Walks the file's tokens and returns existing `bs:disable-{line,next-line}` and header-level
+     * `bs:disable` directives that would cover the diagnostic on `diagLine`. Used so the suppression
+     * quick fixes can extend an existing directive instead of stacking new ones.
      */
     private findExistingDisableDirectives(file: BscFile, diagLine: number): { forLine: ExistingDirective | null; forFile: ExistingDirective | null } {
         const isXml = isXmlFile(file);
@@ -248,12 +252,13 @@ export class CodeActionsProcessor {
             if (!parsed) {
                 continue;
             }
-            const directive: ExistingDirective = { type: parsed.disableType, codes: parsed.codes, range: tokenRange };
-            if (!forLine && parsed.disableType === 'line' && tokenRange.start.line === diagLine) {
+            const directive: ExistingDirective = { type: parsed.directiveType, codes: parsed.codes, range: tokenRange };
+            if (!forLine && parsed.directiveType === 'line' && tokenRange.start.line === diagLine) {
                 forLine = directive;
-            } else if (!forLine && parsed.disableType === 'next-line' && tokenRange.start.line === diagLine - 1) {
+            } else if (!forLine && parsed.directiveType === 'next-line' && tokenRange.start.line === diagLine - 1) {
                 forLine = directive;
-            } else if (!forFile && parsed.disableType === 'file' && inHeader) {
+            } else if (!forFile && parsed.directiveType === 'block' && inHeader) {
+                //only header-level `bs:disable` directives are extended for the file-level quick fix
                 forFile = directive;
             }
         }
@@ -261,7 +266,7 @@ export class CodeActionsProcessor {
     }
 
     /**
-     * Decides where in the file a `bs:disable-file` directive should be inserted, returning
+     * Decides where in the file a header-level `bs:disable` directive should be inserted, returning
      * the position plus any prefix/suffix needed so the directive lands on its own line in
      * the header (before the first executable statement / root XML element).
      */
@@ -848,16 +853,18 @@ export class CodeActionsProcessor {
 }
 
 interface ExistingDirective {
-    type: 'line' | 'next-line' | 'file';
+    type: 'line' | 'next-line' | 'block';
     codes: string[];
     range: Range;
 }
 
 /**
- * Parses a comment's text and returns the disable directive details if it is one. Recognizes
+ * Parses a comment's text and returns the directive details if it is one. Recognizes
  * `'`, `rem`, and `<!-- -->` comment styles. Returns `null` for comments that aren't directives.
+ * `block` covers the ESLint-style `bs:disable` (the `bs:enable` partner is parsed but treated
+ * as not-a-quick-fix-target — only `bs:disable` directives are returned).
  */
-function parseDisableComment(text: string): { disableType: 'line' | 'next-line' | 'file'; codes: string[] } | null {
+function parseDisableComment(text: string): { directiveType: 'line' | 'next-line' | 'block'; codes: string[] } | null {
     let inner = text;
     if (inner.startsWith('<!--')) {
         inner = inner.slice('<!--'.length);
@@ -871,17 +878,18 @@ function parseDisableComment(text: string): { disableType: 'line' | 'next-line' 
     }
     inner = inner.trimStart();
     const lower = inner.toLowerCase();
-    let disableType: 'line' | 'next-line' | 'file';
+    //match longest-prefix first so `bs:disable-line` doesn't get parsed as `bs:disable`
+    let directiveType: 'line' | 'next-line' | 'block';
     let prefixLength: number;
-    if (lower.startsWith('bs:disable-line')) {
-        disableType = 'line';
-        prefixLength = 'bs:disable-line'.length;
-    } else if (lower.startsWith('bs:disable-next-line')) {
-        disableType = 'next-line';
+    if (lower.startsWith('bs:disable-next-line')) {
+        directiveType = 'next-line';
         prefixLength = 'bs:disable-next-line'.length;
-    } else if (lower.startsWith('bs:disable-file')) {
-        disableType = 'file';
-        prefixLength = 'bs:disable-file'.length;
+    } else if (lower.startsWith('bs:disable-line')) {
+        directiveType = 'line';
+        prefixLength = 'bs:disable-line'.length;
+    } else if (lower.startsWith('bs:disable')) {
+        directiveType = 'block';
+        prefixLength = 'bs:disable'.length;
     } else {
         return null;
     }
@@ -890,5 +898,5 @@ function parseDisableComment(text: string): { disableType: 'line' | 'next-line' 
         inner = inner.slice(1);
     }
     const codes = inner.trim().length === 0 ? [] : inner.trim().split(/\s+/);
-    return { disableType: disableType, codes: codes };
+    return { directiveType: directiveType, codes: codes };
 }

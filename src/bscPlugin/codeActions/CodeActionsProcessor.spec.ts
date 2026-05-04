@@ -1017,7 +1017,7 @@ describe('CodeActionsProcessor', () => {
         const findLineAction = (actions: CodeAction[], code: string | number) => actions.find(a => a.title.startsWith(`Disable ${code} for this line`));
         const findFileAction = (actions: CodeAction[], code: string | number) => actions.find(a => a.title.startsWith(`Disable ${code} for this file`));
 
-        it('emits disable-line and disable-file actions for any diagnostic with a code', () => {
+        it('emits "Disable for this line" and "Disable for this file" actions for any diagnostic with a code', () => {
             const file = program.setFile('source/main.bs', `
                 sub init()
                     doSomething()
@@ -1060,7 +1060,7 @@ describe('CodeActionsProcessor', () => {
             expect(edits[0].range).to.eql(util.createRange(2, 0, 2, 0));
         });
 
-        it('inserts a bs:disable-file directive at line 0 in a brs/bs file', () => {
+        it('inserts a bs:disable directive at line 0 in a brs/bs file', () => {
             const file = program.setFile('source/main.bs', `
                 sub init()
                     doSomething()
@@ -1070,11 +1070,11 @@ describe('CodeActionsProcessor', () => {
             const action = findFileAction(program.getCodeActions(file.srcPath, util.createRange(2, 22, 2, 22)), 1140);
             expect(action).to.exist;
             const edits = Object.values(action!.edit!.changes!)[0];
-            expect(edits[0].newText).to.equal(`' bs:disable-file: 1140\n`);
+            expect(edits[0].newText).to.equal(`' bs:disable: 1140\n`);
             expect(edits[0].range).to.eql(util.createRange(0, 0, 0, 0));
         });
 
-        it('inserts an XML-style disable-file directive after the XML declaration', () => {
+        it('inserts an XML-style bs:disable directive after the XML declaration', () => {
             const file = program.setFile('components/comp1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="comp1">
@@ -1086,7 +1086,7 @@ describe('CodeActionsProcessor', () => {
             expect(action).to.exist;
             const edits = Object.values(action!.edit!.changes!)[0];
             //inserted right after `?>` on line 0 with a leading newline so the directive sits on its own line
-            expect(edits[0].newText.startsWith('\n<!-- bs:disable-file: ')).to.be.true;
+            expect(edits[0].newText.startsWith('\n<!-- bs:disable: ')).to.be.true;
             expect(edits[0].newText.endsWith(' -->')).to.be.true;
             expect(edits[0].range.start.line).to.equal(0);
         });
@@ -1141,8 +1141,8 @@ describe('CodeActionsProcessor', () => {
             expect(edits[0].newText).to.equal(`' bs:disable-line: 9999 1140`);
         });
 
-        it('extends an existing bs:disable-file directive instead of inserting a new one', () => {
-            const file = program.setFile('source/main.bs', `' bs:disable-file: 9999
+        it('extends an existing header-level bs:disable directive instead of inserting a new one', () => {
+            const file = program.setFile('source/main.bs', `' bs:disable: 9999
                 sub init()
                     doSomething()
                 end sub
@@ -1151,13 +1151,13 @@ describe('CodeActionsProcessor', () => {
             const action = findFileAction(program.getCodeActions(file.srcPath, util.createRange(2, 22, 2, 22)), 1140);
             expect(action).to.exist;
             const edits = Object.values(action!.edit!.changes!)[0];
-            expect(edits[0].newText).to.equal(`' bs:disable-file: 9999 1140`);
+            expect(edits[0].newText).to.equal(`' bs:disable: 9999 1140`);
         });
 
-        it('extends an existing XML bs:disable-file directive', () => {
+        it('extends an existing XML header-level bs:disable directive', () => {
             const file = program.setFile('components/comp1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
-                <!-- bs:disable-file: 9999 -->
+                <!-- bs:disable: 9999 -->
                 <component name="comp1">
                 </component>
             `);
@@ -1167,7 +1167,7 @@ describe('CodeActionsProcessor', () => {
             expect(action).to.exist;
             const edits = Object.values(action!.edit!.changes!)[0];
             //the new code is appended to the existing space-separated list
-            expect(/^<!-- bs:disable-file: 9999 \d+ -->$/.test(edits[0].newText)).to.be.true;
+            expect(/^<!-- bs:disable: 9999 \d+ -->$/.test(edits[0].newText)).to.be.true;
         });
 
         it('does not duplicate the code when it is already in an existing directive', () => {

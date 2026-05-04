@@ -182,7 +182,16 @@ export interface CommentFlag {
      * The range that this flag applies to (i.e. the lines that should be suppressed/re-enabled)
      */
     affectedRange: Range;
+    /**
+     * Codes this flag suppresses. `null` means "all codes". An array means just those codes.
+     */
     codes: DiagnosticCode[] | null;
+    /**
+     * Codes that are explicitly re-enabled (carved out) within this flag's affected range.
+     * A diagnostic matched by `codes` is NOT suppressed if it is also matched by `enableCodes`.
+     * `null` means "all codes" (i.e. nothing is suppressed). Omitted/`undefined` means no carve-outs.
+     */
+    enableCodes?: DiagnosticCode[] | null;
 }
 
 type ValidateHandler = (scope: Scope, files: BscFile[], callables: CallableContainerMap) => void;

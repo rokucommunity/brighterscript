@@ -8,7 +8,7 @@ import * as path from 'path';
 import { Scope } from '../Scope';
 import type { NamespaceFileContribution } from '../Scope';
 import { SymbolTable } from '../SymbolTable';
-import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
+import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink, BscFile } from '../interfaces';
 import type { Token } from '../lexer/Token';
@@ -522,17 +522,15 @@ export class BrsFile {
      * @param tokens - an array of tokens of which to find `TokenKind.Comment` from
      */
     public getCommentFlags(tokens: Token[]) {
-        const processor = new CommentFlagProcessor(this, ['rem', `'`], diagnosticCodes, [DiagnosticCodeMap.unknownDiagnosticCode]);
+        const processor = new CommentFlagProcessor(this, ['rem', `'`], diagnosticCodes);
 
         this.commentFlags = [];
-        let inHeader = true;
         for (let token of tokens) {
             if (token.kind === TokenKind.Comment) {
-                processor.tryAdd(token.text, token.range, { allowFileLevel: inHeader });
-            } else if (token.kind !== TokenKind.Newline && token.kind !== TokenKind.Whitespace && token.kind !== TokenKind.Eof) {
-                inHeader = false;
+                processor.tryAdd(token.text, token.range);
             }
         }
+        processor.finalize();
         this.commentFlags.push(...processor.commentFlags);
         this.diagnostics.push(...processor.diagnostics);
     }

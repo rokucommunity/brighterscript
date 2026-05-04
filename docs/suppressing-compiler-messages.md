@@ -44,15 +44,17 @@ end sub
 
 The primary motivation for this feature was to provide a stopgap measure to hide incorrectly-thrown errors on legitimate BrightScript code due to parser bugs. It is recommended that you only use these comments when absolutely necessary.
 
-## Ignoring errors and warnings for an entire file
+## Ignoring errors and warnings for a block of code or whole file
 
-To suppress diagnostics across an entire file, place a `bs:disable-file` comment in the file's header. The directive only takes effect when it appears before any executable code (comment-only lines and blank lines above it are fine). For XML files, place the comment between the `<?xml ?>` declaration and the root component element.
+Use ESLint-style `bs:disable` / `bs:enable` directives to suppress diagnostics for a span of code. A `bs:disable` opens a suppression block; a matching `bs:enable` closes it. If no `bs:enable` follows, the block runs to the end of the file &mdash; so a bare `bs:disable` at the top of a file suppresses the whole file.
 
- - `bs:disable-file`
- - `bs:disable-file: code1 code2 code3`
+ - `bs:disable` &mdash; suppress all diagnostics from this line until the next `bs:enable`
+ - `bs:disable: code1 code2 code3` &mdash; suppress only the listed codes
+ - `bs:enable` &mdash; close any open `bs:disable` block
+ - `bs:enable: code1 code2 code3` &mdash; carve out specific codes from an open `bs:disable`
 
 ```BrightScript
-' bs:disable-file: 1001 1002
+' bs:disable: 1001 1002
 
 sub Main()
     DoSomething()
@@ -61,18 +63,28 @@ end sub
 
 ```xml
 <?xml version="1.0" encoding="utf-8" ?>
-<!-- bs:disable-file: 1006 -->
+<!-- bs:disable: 1006 -->
 <component name="Foo">
 </component>
 ```
 
-A `bs:disable-file` comment placed below the first line of code (or below the root XML element) is ignored.
+`bs:enable: <code>` after a bare `bs:disable` selectively re-enables one diagnostic while keeping the rest suppressed:
+
+```BrightScript
+' bs:disable
+'   1006 is still suppressed below, but 1001 reports normally
+' bs:enable: 1001
+
+sub Main()
+    DoSomething()
+end sub
+```
 
 ## Quick fixes
 
 The BrighterScript language server offers two quick-fix actions on every diagnostic so you can suppress the message without leaving your editor:
 
  - **Disable {code} for this line: {message}** &mdash; if a `bs:disable-line` or `bs:disable-next-line` directive already exists on/above the diagnostic line, the code is appended to it. Otherwise a new `bs:disable-next-line: {code}` comment is inserted above the diagnostic.
- - **Disable {code} for this file: {message}** &mdash; if a `bs:disable-file` directive already exists in the file's header, the code is appended to it. Otherwise a new `bs:disable-file: {code}` comment is inserted at the top of the file.
+ - **Disable {code} for this file: {message}** &mdash; if a header-level `bs:disable` directive already exists, the code is appended to it. Otherwise a new `bs:disable: {code}` comment is inserted at the top of the file.
 
 These actions appear after the standard quick fixes for a diagnostic.
