@@ -112,9 +112,11 @@ export class Project implements LspProject {
             });
         }
 
-        //load the manifest file contents (used for change detection to trigger project reloads)
+        //load the manifest file contents (used for change detection to trigger project reloads).
+        //use builder.program.manifestPath which reflects the actual src path (respects {src;dest} mappings)
+        this.manifestSrcPath = this.builder.program.manifestPath;
         try {
-            this.manifestFileContents = (await fsExtra.readFile(path.join(this.rootDir, 'manifest'))).toString();
+            this.manifestFileContents = (await fsExtra.readFile(this.manifestSrcPath)).toString();
         } catch { }
 
         this.activationDeferred.resolve();
@@ -123,7 +125,8 @@ export class Project implements LspProject {
             bsconfigPath: this.bsconfigPath,
             logLevel: this.builder.program.options.logLevel as LogLevel,
             rootDir: this.builder.program.options.rootDir,
-            filePatterns: this.filePatterns
+            filePatterns: this.filePatterns,
+            manifestSrcPath: this.manifestSrcPath
         };
     }
 
@@ -603,6 +606,14 @@ export class Project implements LspProject {
      * @deprecated do not depend on this property. This will certainly be removed in a future release
      */
     public manifestFileContents?: string;
+
+    /**
+     * The absolute source path to the manifest file (the file that maps to dest 'manifest').
+     * May differ from rootDir/manifest if the project uses a custom {src; dest} mapping.
+     *
+     * Only available after `.activate()` has completed.
+     */
+    public manifestSrcPath?: string;
 
     /**
      * Find the path to the bsconfig.json file for this project

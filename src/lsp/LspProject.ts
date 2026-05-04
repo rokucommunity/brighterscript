@@ -75,6 +75,14 @@ export interface LspProject {
     manifestFileContents?: string;
 
     /**
+     * The absolute source path to the manifest file (the file that maps to dest 'manifest').
+     * May differ from rootDir/manifest if the project uses a custom {src; dest} mapping.
+     *
+     * Only available after `.activate()` has completed.
+     */
+    manifestSrcPath?: string;
+
+    /**
      * Initialize and start running the project. This will scan for all files, and build a full project in memory, then validate the project
      * @param options
      */
@@ -273,4 +281,9 @@ export interface ActivateResponse {
      * The logLevel used for this project's logger
      */
     logLevel: LogLevel;
+    /**
+     * The absolute source path to the manifest file (the file that maps to dest 'manifest').
+     * May differ from rootDir/manifest if the project uses a custom {src; dest} mapping.
+     */
+    manifestSrcPath: string;
 }
