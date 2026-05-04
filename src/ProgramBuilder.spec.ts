@@ -291,7 +291,7 @@ describe('ProgramBuilder', () => {
 
             //the lsp can still call program.validate() directly to do a cancellable async validation
             const programValidateStub = sinon.stub(builder.program, 'validate').callsFake(() => Promise.resolve());
-            await builder.program.validate();
+            builder.program.validate();
             expect(programValidateStub.callCount).to.eql(1);
         });
     });
