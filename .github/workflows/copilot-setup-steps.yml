@@ -37,4 +37,4 @@ jobs:
           cache: "npm"
 
       - name: Install JavaScript dependencies
-        run: npm install
+        run: npm ci
