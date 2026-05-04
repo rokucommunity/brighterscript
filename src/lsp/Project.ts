@@ -112,6 +112,11 @@ export class Project implements LspProject {
             });
         }
 
+        //load the manifest file contents (used for change detection to trigger project reloads)
+        try {
+            this.manifestFileContents = (await fsExtra.readFile(path.join(this.rootDir, 'manifest'))).toString();
+        } catch { }
+
         this.activationDeferred.resolve();
 
         return {
@@ -590,6 +595,14 @@ export class Project implements LspProject {
      * @deprecated do not depend on this property. This will certainly be removed in a future release
      */
     public bsconfigFileContents?: string;
+
+    /**
+     * The contents of the manifest file. This is used to detect when the manifest file has not actually been changed (even if the fs says it did).
+     *
+     * Only available after `.activate()` has completed.
+     * @deprecated do not depend on this property. This will certainly be removed in a future release
+     */
+    public manifestFileContents?: string;
 
     /**
      * Find the path to the bsconfig.json file for this project

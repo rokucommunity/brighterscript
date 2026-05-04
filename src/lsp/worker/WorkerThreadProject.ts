@@ -86,6 +86,11 @@ export class WorkerThreadProject implements LspProject {
             this.bsconfigFileContents = (await fsExtra.readFile(this.bsconfigPath)).toString();
         } catch { }
 
+        //load the manifest file contents (used for change detection to trigger project reloads)
+        try {
+            this.manifestFileContents = (await fsExtra.readFile(path.join(this.rootDir, 'manifest'))).toString();
+        } catch { }
+
 
         this.activationDeferred.resolve();
         return activateResponse.data;
@@ -124,6 +129,14 @@ export class WorkerThreadProject implements LspProject {
      * @deprecated do not depend on this property. This will certainly be removed in a future release
      */
     bsconfigFileContents?: string;
+
+    /**
+     * The contents of the manifest file. This is used to detect when the manifest file has not actually been changed (even if the fs says it did).
+     *
+     * Only available after `.activate()` has completed.
+     * @deprecated do not depend on this property. This will certainly be removed in a future release
+     */
+    manifestFileContents?: string;
 
     /**
      * The worker thread where the actual project will execute

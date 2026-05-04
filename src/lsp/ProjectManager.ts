@@ -493,6 +493,17 @@ export class ProjectManager {
                     return true;
                 }
             }
+            //this is a path to a manifest file
+            if (project.rootDir && s`${path.join(project.rootDir, 'manifest')}`.toLowerCase() === change.srcPath.toLowerCase()) {
+                let manifestFileContents: string;
+                try {
+                    manifestFileContents = fsExtra.readFileSync(change.srcPath).toString();
+                } catch { }
+                //the manifest contents have changed since we last saw it, so reload this project
+                if (project.manifestFileContents !== manifestFileContents) {
+                    return true;
+                }
+            }
             return false;
         });
 
