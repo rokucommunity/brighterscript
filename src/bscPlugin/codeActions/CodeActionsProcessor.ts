@@ -123,8 +123,11 @@ export class CodeActionsProcessor {
         }
         const codeStr = String(code);
         const isXml = isXmlFile(file);
+        //existing.forLine: any line/next-line directive on or above the diagnostic line that the line action could extend
+        //existing.forFile: any header-level bs:disable that the file action could extend
         const existing = this.findExistingDisableDirectives(file, diagnostic.range.start.line);
 
+        //format helpers wrap the directive body in the right comment syntax (`'` for brs, `<!-- -->` for xml)
         const formatLineDirective = (token: 'line' | 'next-line', codes: string[]) => {
             const body = `bs:disable-${token}: ${codes.join(' ')}`;
             return isXml ? `<!-- ${body} -->` : `' ${body}`;
@@ -135,9 +138,11 @@ export class CodeActionsProcessor {
         };
 
         // ---- "disable for this line" ----
-        //if extending an existing directive, preserve its type (line vs next-line); otherwise we always insert a new next-line directive
+        //the two lambdas passed to getDiagnosticSuppressionChange are the "extend existing" and "insert fresh" branches:
+        //  1) rebuild the existing directive comment with the new code merged into its code list (preserving line vs next-line)
+        //  2) insert a fresh `bs:disable-next-line: {code}` on the line above the diagnostic, matching its indent
         const indent = ' '.repeat(diagnostic.range.start.character);
-        const lineAction = this.buildAppendOrInsertAction(
+        const lineAction = this.getDiagnosticSuppressionChange(
             existing.forLine,
             codeStr,
             () => formatLineDirective(existing.forLine!.type as 'line' | 'next-line', this.mergeCodes(existing.forLine?.codes, codeStr)),
@@ -158,7 +163,10 @@ export class CodeActionsProcessor {
         }
 
         // ---- "disable for this file" ----
-        const fileAction = this.buildAppendOrInsertAction(
+        //same pattern as above, but operating on the header-level bs:disable directive:
+        //  1) rebuild the existing header directive with the new code appended
+        //  2) insert a fresh `bs:disable: {code}` at the file header (top of brs, or after `<?xml ?>` for xml)
+        const fileAction = this.getDiagnosticSuppressionChange(
             existing.forFile,
             codeStr,
             () => formatBlockDirective(this.mergeCodes(existing.forFile?.codes, codeStr)),
@@ -183,12 +191,13 @@ export class CodeActionsProcessor {
     }
 
     /**
-     * If `existing` is set, returns a replace edit that swaps the existing directive comment for a
-     * rebuilt version (with the new code merged in). Otherwise returns an insert edit using
-     * `buildInsert`. Returns null when the existing directive already covers the code (so nothing
-     * needs to change).
+     * Returns the file change that suppresses `codeStr` via a directive comment, or `null` when no
+     * change is needed (the existing directive already covers the code, or already suppresses
+     * everything). When `existing` is set, the result is a replace that swaps the directive comment
+     * for the text from `buildReplacementText`. When `existing` is null, the result is an insert
+     * built from `buildInsert`.
      */
-    private buildAppendOrInsertAction(
+    private getDiagnosticSuppressionChange(
         existing: ExistingDirective | null,
         codeStr: string,
         buildReplacementText: () => string,
