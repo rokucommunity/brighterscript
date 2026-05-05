@@ -1324,7 +1324,7 @@ export class Parser {
             //recover: a stray `next` is a common mistake when the user means `end while`.
             //emit a targeted diagnostic and consume the `next` so the rest of the file parses cleanly.
             this.diagnostics.push({
-                ...DiagnosticMessages.whileLoopTerminatedWithNext(),
+                ...DiagnosticMessages.mismatchedEndingToken(['end while'], 'next'),
                 range: this.peek().range
             });
             endWhile = this.advance();
@@ -1378,7 +1378,7 @@ export class Parser {
         } else if (body && this.peek().kind === TokenKind.EndWhile) {
             //recover: a stray `end while` is a common mistake when the user means `end for`.
             this.diagnostics.push({
-                ...DiagnosticMessages.forLoopTerminatedWithEndWhile(),
+                ...DiagnosticMessages.mismatchedEndingToken(['end for', 'next'], 'end while'),
                 range: this.peek().range
             });
             endForToken = this.advance();
@@ -1446,7 +1446,7 @@ export class Parser {
         } else if (body && this.peek().kind === TokenKind.EndWhile) {
             //recover: a stray `end while` is a common mistake when the user means `end for`.
             this.diagnostics.push({
-                ...DiagnosticMessages.forLoopTerminatedWithEndWhile(),
+                ...DiagnosticMessages.mismatchedEndingToken(['end for', 'next'], 'end while'),
                 range: this.peek().range
             });
             endFor = this.advance();

@@ -124,7 +124,8 @@ describe('parser while statements', () => {
                 end sub
             `);
             expect(parser.diagnostics).to.be.lengthOf(1);
-            expect(parser.diagnostics[0].code).to.equal(DiagnosticMessages.whileLoopTerminatedWithNext().code);
+            expect(parser.diagnostics[0].code).to.equal(DiagnosticMessages.mismatchedEndingToken().code);
+            expect((parser.diagnostics[0] as any).data).to.eql({ expected: ['end while'], found: 'next' });
         });
 
         it('stores the bogus `next` token on the WhileStatement so a quick fix can target it', () => {

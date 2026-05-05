@@ -177,7 +177,8 @@ describe('parser for loops', () => {
                 end sub
             `);
             expect(parser.diagnostics).to.be.lengthOf(1);
-            expect(parser.diagnostics[0].code).to.equal(DiagnosticMessages.forLoopTerminatedWithEndWhile().code);
+            expect(parser.diagnostics[0].code).to.equal(DiagnosticMessages.mismatchedEndingToken().code);
+            expect((parser.diagnostics[0] as any).data).to.eql({ expected: ['end for', 'next'], found: 'end while' });
         });
 
         it('stores the bogus `end while` token on the ForStatement', () => {
