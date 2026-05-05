@@ -8,7 +8,7 @@ import * as path from 'path';
 import { Scope } from '../Scope';
 import type { NamespaceFileContribution } from '../Scope';
 import { SymbolTable } from '../SymbolTable';
-import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
+import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink, BscFile } from '../interfaces';
 import type { Token } from '../lexer/Token';
@@ -436,7 +436,8 @@ export class BrsFile {
             this.program.logger.time('debug', ['parser.parse', chalk.green(this.srcPath)], () => {
                 this._parser = Parser.parse(tokens, {
                     mode: this.parseMode,
-                    logger: this.program.logger
+                    logger: this.program.logger,
+                    minFirmwareVersion: this.program.options.minFirmwareVersion
                 });
             });
 
@@ -522,7 +523,7 @@ export class BrsFile {
      * @param tokens - an array of tokens of which to find `TokenKind.Comment` from
      */
     public getCommentFlags(tokens: Token[]) {
-        const processor = new CommentFlagProcessor(this, ['rem', `'`], diagnosticCodes, [DiagnosticCodeMap.unknownDiagnosticCode]);
+        const processor = new CommentFlagProcessor(this, ['rem', `'`], diagnosticCodes);
 
         this.commentFlags = [];
         for (let token of tokens) {
@@ -530,6 +531,7 @@ export class BrsFile {
                 processor.tryAdd(token.text, token.range);
             }
         }
+        processor.finalize();
         this.commentFlags.push(...processor.commentFlags);
         this.diagnostics.push(...processor.diagnostics);
     }

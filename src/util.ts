@@ -8,7 +8,7 @@ import type { Diagnostic, Position, Range, Location, DiagnosticRelatedInformatio
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
-import { DiagnosticMessages } from './DiagnosticMessages';
+import { DiagnosticCodeMap, DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, Plugin, ExpressionInfo, TranspileResult, MaybePromise, DisposableLike, PluginFactory } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
@@ -405,7 +405,8 @@ export class Util {
             emitDefinitions: config.emitDefinitions === true ? true : false,
             removeParameterTypes: config.removeParameterTypes === true ? true : false,
             logLevel: logLevel,
-            bslibDestinationDir: bslibDestinationDir
+            bslibDestinationDir: bslibDestinationDir,
+            validate: config.validate === false ? false : true
         };
 
         //mutate `config` in case anyone is holding a reference to the incomplete one
@@ -827,13 +828,23 @@ export class Util {
      */
     public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
         const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code;
+        //the "unknown diagnostic code" warning is always surfaced. Otherwise typo'd codes in directive comments could silence themselves.
+        if (diagnosticCode === DiagnosticCodeMap.unknownDiagnosticCode) {
+            return false;
+        }
         for (let flag of diagnostic.file?.commentFlags ?? []) {
-            //this diagnostic is affected by this flag
-            if (diagnostic.range && this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
-                //if the flag acts upon this diagnostic's code
-                if (flag.codes === null || (diagnosticCode !== undefined && flag.codes.includes(diagnosticCode))) {
-                    return true;
-                }
+            if (!diagnostic.range || !this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
+                continue;
+            }
+            //if this flag explicitly re-enables the code, it's not suppressed here, keep looking
+            const isEnabled = flag.enableCodes === null || (diagnosticCode !== undefined && flag.enableCodes?.includes(diagnosticCode));
+            if (isEnabled) {
+                continue;
+            }
+            //if this flag disables the code, it's suppressed
+            const isDisabled = flag.codes === null || (diagnosticCode !== undefined && flag.codes?.includes(diagnosticCode));
+            if (isDisabled) {
+                return true;
             }
         }
     }
@@ -1803,7 +1814,7 @@ export class Util {
             }
         }
 
-        // no usable sourceMappingURL — try co-located <srcPath>.map
+        // no usable sourceMappingURL; try co-located <srcPath>.map
         const colocated = `${srcPath}.map`;
         if (await fsExtra.pathExists(colocated)) {
             return JSON.parse(await fsExtra.readFile(colocated, 'utf8')) as RawSourceMap;
