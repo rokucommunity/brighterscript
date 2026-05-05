@@ -42,7 +42,7 @@ export class CommentFlagProcessor {
             return;
         }
 
-        //block directives — queue them with their raw code tokens; finalize() validates and resolves them
+        //queue block directives with their raw code tokens; finalize() validates and resolves them
         if (tokenized.directive === 'disable' || tokenized.directive === 'enable') {
             this.blockDirectives.push({
                 kind: tokenized.directive,
@@ -52,13 +52,13 @@ export class CommentFlagProcessor {
             return;
         }
 
-        //line-level directives — emit a flag inline
+        //line-level directives emit a flag inline
         const affectedRange = tokenized.directive === 'line'
             ? util.createRange(range.start.line, 0, range.start.line, range.start.character)
             : util.createRange(range.start.line + 1, 0, range.start.line + 1, Number.MAX_SAFE_INTEGER);
 
         if (tokenized.codes.length === 0) {
-            //bare `bs:disable-line` / `bs:disable-next-line` — suppress everything
+            //bare `bs:disable-line` / `bs:disable-next-line` suppresses everything
             this.commentFlags.push({
                 file: this.file,
                 codes: null,
@@ -112,7 +112,7 @@ export class CommentFlagProcessor {
                     }
                 }
             } else {
-                //'enable' with specific codes — symmetric inverse of the above
+                //'enable' with specific codes does the opposite of the disable branch above
                 for (const code of codes) {
                     if (allSuppressed) {
                         carveOuts.add(code);

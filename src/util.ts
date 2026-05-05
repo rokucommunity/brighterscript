@@ -827,7 +827,7 @@ export class Util {
      */
     public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
         const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code;
-        //the "unknown diagnostic code" warning is always surfaced — otherwise typo'd codes in directive comments could silence themselves
+        //the "unknown diagnostic code" warning is always surfaced. Otherwise typo'd codes in directive comments could silence themselves.
         if (diagnosticCode === DiagnosticCodeMap.unknownDiagnosticCode) {
             return false;
         }
@@ -1813,7 +1813,7 @@ export class Util {
             }
         }
 
-        // no usable sourceMappingURL — try co-located <srcPath>.map
+        // no usable sourceMappingURL; try co-located <srcPath>.map
         const colocated = `${srcPath}.map`;
         if (await fsExtra.pathExists(colocated)) {
             return JSON.parse(await fsExtra.readFile(colocated, 'utf8')) as RawSourceMap;

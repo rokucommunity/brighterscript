@@ -46,12 +46,12 @@ The primary motivation for this feature was to provide a stopgap measure to hide
 
 ## Ignoring errors and warnings for a block of code or whole file
 
-Use ESLint-style `bs:disable` / `bs:enable` directives to suppress diagnostics for a span of code. A `bs:disable` opens a suppression block; a matching `bs:enable` closes it. If no `bs:enable` follows, the block runs to the end of the file &mdash; so a bare `bs:disable` at the top of a file suppresses the whole file.
+Use `bs:disable` and `bs:enable` to suppress diagnostics for a span of code. A `bs:disable` opens a suppression block, and a matching `bs:enable` closes it. If no `bs:enable` follows, the block runs to the end of the file, so a bare `bs:disable` at the top of a file suppresses the whole file.
 
- - `bs:disable` &mdash; suppress all diagnostics from this line until the next `bs:enable`
- - `bs:disable: code1 code2 code3` &mdash; suppress only the listed codes
- - `bs:enable` &mdash; close any open `bs:disable` block
- - `bs:enable: code1 code2 code3` &mdash; carve out specific codes from an open `bs:disable`
+ - `bs:disable`: suppress all diagnostics from this line until the next `bs:enable`
+ - `bs:disable: code1 code2 code3`: suppress only the listed codes
+ - `bs:enable`: close any open `bs:disable` block
+ - `bs:enable: code1 code2 code3`: re-enable specific codes from an open `bs:disable`
 
 ```BrightScript
 ' bs:disable: 1001 1002
@@ -68,7 +68,7 @@ end sub
 </component>
 ```
 
-`bs:enable: <code>` after a bare `bs:disable` selectively re-enables one diagnostic while keeping the rest suppressed:
+`bs:enable: <code>` after a bare `bs:disable` re-enables one diagnostic while keeping the rest suppressed:
 
 ```BrightScript
 ' bs:disable
@@ -84,7 +84,7 @@ end sub
 
 The BrighterScript language server offers two quick-fix actions on every diagnostic so you can suppress the message without leaving your editor:
 
- - **Disable {code} for this line: {message}** &mdash; if a `bs:disable-line` or `bs:disable-next-line` directive already exists on/above the diagnostic line, the code is appended to it. Otherwise a new `bs:disable-next-line: {code}` comment is inserted above the diagnostic.
- - **Disable {code} for this file: {message}** &mdash; if a header-level `bs:disable` directive already exists, the code is appended to it. Otherwise a new `bs:disable: {code}` comment is inserted at the top of the file.
+ - **Disable {code} for this line: {message}**: if a `bs:disable-line` or `bs:disable-next-line` directive already exists on or above the diagnostic line, the code is appended to it. Otherwise a new `bs:disable-next-line: {code}` comment is inserted above the diagnostic.
+ - **Disable {code} for this file: {message}**: if a header-level `bs:disable` directive already exists, the code is appended to it. Otherwise a new `bs:disable: {code}` comment is inserted at the top of the file.
 
 These actions appear after the standard quick fixes for a diagnostic.

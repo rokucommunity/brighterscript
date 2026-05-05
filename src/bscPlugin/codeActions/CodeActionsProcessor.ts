@@ -103,10 +103,10 @@ export class CodeActionsProcessor {
 
     /**
      * For any diagnostic with a code, offers two quick-fix actions:
-     *   - "Disable {code} for this line" — adds the code to an existing `bs:disable-line` /
+     *   - "Disable {code} for this line": adds the code to an existing `bs:disable-line` or
      *     `bs:disable-next-line` directive on/above the diagnostic if present, otherwise inserts
      *     a new `bs:disable-next-line: {code}` comment on the line above.
-     *   - "Disable {code} for this file" — adds the code to an existing header-level `bs:disable`
+     *   - "Disable {code} for this file": adds the code to an existing header-level `bs:disable`
      *     directive if present, otherwise inserts a new `bs:disable: {code}` at the top of the file.
      *
      * Comment placement and the line-vs-next-line preference are centralized here so they can be
@@ -195,11 +195,11 @@ export class CodeActionsProcessor {
         buildInsert: () => { position: ReturnType<typeof util.createPosition>; newText: string }
     ): InsertChange | ReplaceChange | null {
         if (existing) {
-            //existing directive without specific codes already suppresses everything — no-op
+            //existing directive without specific codes already suppresses everything; no-op
             if (existing.codes.length === 0) {
                 return null;
             }
-            //the new code is already in the directive — no-op
+            //the new code is already in the directive; no-op
             if (existing.codes.some(c => c.toLowerCase() === codeStr.toLowerCase())) {
                 return null;
             }
@@ -445,7 +445,7 @@ export class CodeActionsProcessor {
                 }
             }
 
-            //skip ambiguous names — we can't choose a file automatically
+            //skip ambiguous names; we can't choose a file automatically
             if (files.length !== 1) {
                 continue;
             }
@@ -764,7 +764,7 @@ export class CodeActionsProcessor {
         const changes: DeleteChange[] = diagnostics.map(d => ({
             type: 'delete' as const,
             filePath: this.event.file.srcPath,
-            // delete "override " — the keyword token plus the trailing space before function/sub
+            // delete "override " (the keyword token plus the trailing space before function/sub)
             range: util.createRange(
                 d.range.start.line,
                 d.range.start.character,
@@ -861,8 +861,8 @@ interface ExistingDirective {
 /**
  * Parses a comment's text and returns the directive details if it is one. Recognizes
  * `'`, `rem`, and `<!-- -->` comment styles. Returns `null` for comments that aren't directives.
- * `block` covers the ESLint-style `bs:disable` (the `bs:enable` partner is parsed but treated
- * as not-a-quick-fix-target — only `bs:disable` directives are returned).
+ * `block` covers `bs:disable`. The `bs:enable` partner isn't surfaced since the quick fix only
+ * extends `bs:disable` directives.
  */
 function parseDisableComment(text: string): { directiveType: 'line' | 'next-line' | 'block'; codes: string[] } | null {
     let inner = text;
