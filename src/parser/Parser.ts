@@ -7,7 +7,6 @@ import {
     AllowedProperties,
     AssignmentOperators,
     BrighterScriptSourceLiterals,
-    CallOnlyBuiltins,
     DeclarableTypes,
     DisallowedFunctionIdentifiersText,
     DisallowedLocalIdentifiersText,
@@ -3027,20 +3026,7 @@ export class Parser {
                 return this.templateString(true);
 
             case this.matchAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers):
-                const ident = this.previous() as Identifier;
-                //flag reserved call-only builtins (e.g. `ObjFun`, `type`) used in non-call position.
-                //these compile cleanly as values today but are device compile errors
-                //(`Syntax Error. Builtin function call expected`).
-                if (
-                    CallOnlyBuiltins.has(ident.text.toLowerCase()) &&
-                    this.peek().kind !== TokenKind.LeftParen
-                ) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.reservedBuiltinUsedAsValue(ident.text),
-                        range: ident.range
-                    });
-                }
-                return new VariableExpression(ident);
+                return new VariableExpression(this.previous() as Identifier);
 
             case this.match(TokenKind.LeftParen):
                 let left = this.previous();
