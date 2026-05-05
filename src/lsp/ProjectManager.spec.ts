@@ -1482,4 +1482,51 @@ describe('ProjectManager', () => {
         //the project was not reloaded this time
         expect(stub.callCount).to.eql(1);
     });
+
+    it('properly handles reloading when manifest contents change', async () => {
+        fsExtra.outputFileSync(`${rootDir}/manifest`, 'title=MyApp\nbs_const=DEBUG=false');
+
+        //wait for the projects to finish syncing/loading
+        await manager.syncProjects([workspaceSettings]);
+
+        const stub = sinon.stub(manager as any, 'reloadProject').callThrough();
+
+        //change the manifest to new contents
+        fsExtra.outputFileSync(`${rootDir}/manifest`, 'title=MyApp\nbs_const=DEBUG=true');
+        await manager.handleFileChanges([{
+            srcPath: `${rootDir}/manifest`,
+            type: FileChangeType.Changed
+        }]);
+
+        //the project was reloaded
+        expect(stub.callCount).to.eql(1);
+
+        //change the manifest to the same contents
+        fsExtra.outputFileSync(`${rootDir}/manifest`, 'title=MyApp\nbs_const=DEBUG=true');
+        await manager.handleFileChanges([{
+            srcPath: `${rootDir}/manifest`,
+            type: FileChangeType.Changed
+        }]);
+        //the project was not reloaded this time
+        expect(stub.callCount).to.eql(1);
+    });
+
+    it('reloads project when manifest is deleted', async () => {
+        fsExtra.outputFileSync(`${rootDir}/manifest`, 'title=MyApp');
+
+        //wait for the projects to finish syncing/loading
+        await manager.syncProjects([workspaceSettings]);
+
+        const stub = sinon.stub(manager as any, 'reloadProject').callThrough();
+
+        //delete the manifest file
+        fsExtra.removeSync(`${rootDir}/manifest`);
+        await manager.handleFileChanges([{
+            srcPath: `${rootDir}/manifest`,
+            type: FileChangeType.Deleted
+        }]);
+
+        //the project was reloaded because the manifest is gone
+        expect(stub.callCount).to.eql(1);
+    });
 });

@@ -493,6 +493,19 @@ export class ProjectManager {
                     return true;
                 }
             }
+            //this is a path to a manifest file
+            if (project.manifestSrcPath?.toLowerCase() === change.srcPath.toLowerCase()) {
+                //try to read the manifest file contents. If this fails (e.g. the file was deleted), manifestFileContents stays undefined,
+                //which will still trigger a reload when compared against the previously loaded contents
+                let manifestFileContents: string;
+                try {
+                    manifestFileContents = fsExtra.readFileSync(change.srcPath).toString();
+                } catch { }
+                //the manifest contents have changed since we last saw it, so reload this project
+                if (project.manifestFileContents !== manifestFileContents) {
+                    return true;
+                }
+            }
             return false;
         });
 

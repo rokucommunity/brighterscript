@@ -349,6 +349,12 @@ describe('util', () => {
             expect(util.normalizeConfig({ pruneEmptyCodeFiles: false }).pruneEmptyCodeFiles).to.be.false;
         });
 
+        it('sets validate to true by default, or false if explicitly false', () => {
+            expect(util.normalizeConfig({}).validate).to.be.true;
+            expect(util.normalizeConfig({ validate: true }).validate).to.be.true;
+            expect(util.normalizeConfig({ validate: false }).validate).to.be.false;
+        });
+
         it('loads project from disc', () => {
             fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{ "outFile": "customOutDir/pkg.zip" }`);
             let config = util.normalizeAndResolveConfig({

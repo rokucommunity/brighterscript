@@ -2178,6 +2178,93 @@ describe('parser', () => {
                 expectZeroDiagnostics(diagnostics);
             });
         });
+
+        describe('minFirmwareVersion >= 15.3 in BrightScript mode', () => {
+            it('allows binary operator continuation in BrightScript mode when minFirmwareVersion is 15.3', () => {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        result = value1 +
+                                 value2
+                    end sub
+                `);
+                let { diagnostics } = Parser.parse(tokens, {
+                    mode: ParseMode.BrightScript,
+                    minFirmwareVersion: '15.3'
+                });
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('allows binary operator continuation in BrightScript mode when minFirmwareVersion is above 15.3', () => {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        result = value1 +
+                                 value2
+                    end sub
+                `);
+                let { diagnostics } = Parser.parse(tokens, {
+                    mode: ParseMode.BrightScript,
+                    minFirmwareVersion: '16.0.0'
+                });
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('does not allow binary operator continuation in BrightScript mode when minFirmwareVersion is below 15.3', () => {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        result = value1 +
+                                 value2
+                    end sub
+                `);
+                let { diagnostics } = Parser.parse(tokens, {
+                    mode: ParseMode.BrightScript,
+                    minFirmwareVersion: '11.0.0'
+                });
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.unexpectedToken('\n'),
+                    DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+                ]);
+            });
+
+            it('allows function call argument continuation in BrightScript mode when minFirmwareVersion is 15.3', () => {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        result = foo(
+                            arg1,
+                            arg2
+                        )
+                    end sub
+                    sub foo(a, b)
+                    end sub
+                `);
+                let { diagnostics } = Parser.parse(tokens, {
+                    mode: ParseMode.BrightScript,
+                    minFirmwareVersion: '15.3.0'
+                });
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('does not allow function call argument continuation in BrightScript mode when minFirmwareVersion is below 15.3', () => {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        result = foo(
+                            arg1,
+                            arg2
+                        )
+                    end sub
+                    sub foo(a, b)
+                    end sub
+                `);
+                let { diagnostics } = Parser.parse(tokens, {
+                    mode: ParseMode.BrightScript,
+                    minFirmwareVersion: '15.2.9'
+                });
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.unexpectedToken('\n'),
+                    DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                    DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+                ]);
+            });
+        });
     });
 
     describe('typed functions as types', () => {
