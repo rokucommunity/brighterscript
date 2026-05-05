@@ -1091,6 +1091,23 @@ describe('CodeActionsProcessor', () => {
             expect(edits[0].range.start.line).to.equal(0);
         });
 
+        it('inserts an XML-style bs:disable directive at line 0 when the <?xml ?> declaration is missing', () => {
+            //Roku permits XML component files without the optional `<?xml ?>` declaration
+            const file = program.setFile('components/comp1.xml', trim`
+                <component name="comp1">
+                </component>
+            `);
+            program.validate();
+            const action = program.getCodeActions(file.srcPath, util.createRange(0, 5, 0, 5))
+                .find(a => /^Disable .+ for this file/.test(a.title));
+            expect(action).to.exist;
+            const edits = Object.values(action!.edit!.changes!)[0];
+            //no declaration to anchor to, so insert at the very top with a trailing newline
+            expect(edits[0].newText.startsWith('<!-- bs:disable: ')).to.be.true;
+            expect(edits[0].newText.endsWith(' -->\n')).to.be.true;
+            expect(edits[0].range).to.eql(util.createRange(0, 0, 0, 0));
+        });
+
         it('does not emit disable actions for diagnostics without a code', () => {
             const file = program.setFile('source/main.bs', `
                 sub init()
