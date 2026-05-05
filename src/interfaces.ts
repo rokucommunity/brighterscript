@@ -183,13 +183,18 @@ export interface CommentFlag {
      */
     affectedRange: Range;
     /**
-     * Codes this flag suppresses. `null` means "all codes". An array means just those codes.
+     * Codes this flag suppresses.
+     * - `null`: every code (the flag suppresses everything in its `affectedRange`)
+     * - array: only those specific codes
+     * - `undefined` (or omitted): no codes (the flag suppresses nothing on its own; useful when the suppression decision is fully delegated to `enableCodes`)
      */
-    codes: DiagnosticCode[] | null;
+    codes?: DiagnosticCode[] | null;
     /**
-     * Codes that are explicitly re-enabled (carved out) within this flag's affected range.
+     * Codes explicitly re-enabled (carved out) within this flag's `affectedRange`.
      * A diagnostic matched by `codes` is NOT suppressed if it is also matched by `enableCodes`.
-     * `null` means "all codes" (i.e. nothing is suppressed). Omitted/`undefined` means no carve-outs.
+     * - `null`: every code is re-enabled (nothing in the range is suppressed)
+     * - array: only those specific codes are carved out
+     * - `undefined` (or omitted): no carve-outs; suppression is governed entirely by `codes`
      */
     enableCodes?: DiagnosticCode[] | null;
 }
