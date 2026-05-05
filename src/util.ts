@@ -835,12 +835,14 @@ export class Util {
             if (!diagnostic.range || !this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
                 continue;
             }
-            const inDisable = flag.codes === null || (diagnosticCode !== undefined && flag.codes?.includes(diagnosticCode));
-            if (!inDisable) {
+            //if this flag explicitly re-enables the code, it's not suppressed here, keep looking
+            const isEnabled = flag.enableCodes === null || (diagnosticCode !== undefined && flag.enableCodes?.includes(diagnosticCode));
+            if (isEnabled) {
                 continue;
             }
-            const inEnable = flag.enableCodes === null || (diagnosticCode !== undefined && flag.enableCodes?.includes(diagnosticCode));
-            if (!inEnable) {
+            //if this flag disables the code, it's suppressed
+            const isDisabled = flag.codes === null || (diagnosticCode !== undefined && flag.codes?.includes(diagnosticCode));
+            if (isDisabled) {
                 return true;
             }
         }
