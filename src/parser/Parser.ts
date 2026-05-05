@@ -102,8 +102,15 @@ import { Cache } from '../Cache';
 import type { Expression, Statement } from './AstNode';
 import { SymbolTable } from '../SymbolTable';
 import type { BscType } from '../types/BscType';
+import * as semver from 'semver';
 
 export class Parser {
+    /**
+     * The minimum Roku firmware version that added native support for multi-line expressions
+     * (line continuation) in plain BrightScript (`.brs`) files.
+     */
+    private static readonly LINE_CONTINUATION_MIN_FIRMWARE_VERSION = '15.3.0';
+
     /**
      * The array of tokens passed to `parse()`
      */
@@ -186,7 +193,7 @@ export class Parser {
 
     /**
      * Whether line continuation after binary operators is allowed.
-     * Enabled only in BrighterScript mode.
+     * Enabled in BrighterScript mode, or when minFirmwareVersion >= 15.3.
      */
     private allowLineContinuation: boolean;
 
@@ -236,7 +243,8 @@ export class Parser {
         this.logger = options?.logger ?? createLogger();
         options = this.sanitizeParseOptions(options);
         this.options = options;
-        this.allowLineContinuation = options.mode === ParseMode.BrighterScript;
+        const coercedMinFirmwareVersion = semver.coerce(this.options.minFirmwareVersion);
+        this.allowLineContinuation = options.mode === ParseMode.BrighterScript || (!!coercedMinFirmwareVersion && semver.gte(coercedMinFirmwareVersion, Parser.LINE_CONTINUATION_MIN_FIRMWARE_VERSION));
 
         let tokens: Token[];
         if (typeof toParse === 'string') {
@@ -3653,6 +3661,13 @@ export interface ParseOptions {
      * @default true
      */
     trackLocations?: boolean;
+    /**
+     * The minimum Roku firmware version required to run this project.
+     * When set to '15.3' or higher, line continuation (multi-line expressions in `.brs` files)
+     * is enabled even in BrightScript mode because Roku OS 15.3 added native support for it.
+     * Should be a semver-compatible string (e.g. '15.3.0').
+     */
+    minFirmwareVersion?: string;
 }
 
 export class References {
