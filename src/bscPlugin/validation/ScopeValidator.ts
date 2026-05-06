@@ -366,7 +366,10 @@ export class ScopeValidator {
             return;
         }
         const parts = util.getAllDottedGetParts(member.key);
-        if (parts.length === 0) {
+        //getAllDottedGetParts returns undefined for keys that aren't dotted-get / variable
+        //chains (e.g. arithmetic expressions like `[1 + 2]: "value"`). Those are not
+        //compile-time constants, so the diagnostic still applies.
+        if (!parts || parts.length === 0) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.computedPropertyKeyMustBeConstantExpression(),
                 location: member.key.location
