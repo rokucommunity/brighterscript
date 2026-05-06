@@ -1,27 +1,16 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-<<<<<<< HEAD
-import type { CodeAction, Position, Range, SignatureInformation, Location, DocumentSymbol, CancellationToken } from 'vscode-languageserver';
+import type { CodeAction, Position, Range, SignatureInformation, Location, DocumentSymbol, CancellationToken, SelectionRange } from 'vscode-languageserver';
 import { CancellationTokenSource } from 'vscode-languageserver';
-=======
-import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, DocumentSymbol, CancellationToken, SelectionRange } from 'vscode-languageserver';
-import { CancellationTokenSource, CompletionItemKind } from 'vscode-languageserver';
->>>>>>> master
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import type { NamespaceContainer, NamespaceFileContribution } from './Scope';
 import { SymbolTable } from './SymbolTable';
 import { DiagnosticMessages } from './DiagnosticMessages';
-<<<<<<< HEAD
-import type { FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeAddFileEvent, BeforeRemoveFileEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData } from './interfaces';
-=======
-import { BrsFile } from './files/BrsFile';
-import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, ProvideSelectionRangesEvent, OnGetSourceFixAllCodeActionsEvent } from './interfaces';
+import type { FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeAddFileEvent, BeforeRemoveFileEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData, ProvideSelectionRangesEvent, OnGetSourceFixAllCodeActionsEvent } from './interfaces';
 import type { SourceFixAllCodeAction } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
->>>>>>> master
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DependencyGraph } from './DependencyGraph';
@@ -66,7 +55,6 @@ import { DiagnosticManager } from './DiagnosticManager';
 import { ProgramValidatorDiagnosticsTag } from './bscPlugin/validation/ProgramValidator';
 import type { ProvidedSymbolInfo, BrsFile } from './files/BrsFile';
 import type { UnresolvedXMLSymbol, XmlFile } from './files/XmlFile';
-import { SymbolTable } from './SymbolTable';
 import type { BscType } from './types/BscType';
 import { ReferenceType } from './types/ReferenceType';
 import { TypesCreated } from './types/helpers';
@@ -450,6 +438,7 @@ export class Program {
             nameRange: first.nameRange,
             lastPartName: first.lastPartName,
             namespaces: new Map(),
+            namespaceStatements: undefined,
             statements: undefined,
             classStatements: undefined,
             functionStatements: undefined,
@@ -458,6 +447,9 @@ export class Program {
             symbolTable: undefined
         };
         for (const contribution of contributions) {
+            if (contribution.namespaceStatements?.length) {
+                (aggregate.namespaceStatements ??= []).push(...contribution.namespaceStatements);
+            }
             if (contribution.statements?.length) {
                 (aggregate.statements ??= []).push(...contribution.statements);
             }
@@ -1028,7 +1020,10 @@ export class Program {
         this.logger.debug('Program.removeFile()', filePath);
         const paths = this.getPaths(filePath, this.options.rootDir);
 
-<<<<<<< HEAD
+        //namespace contributions may have included this file; force the program-level
+        //contributors map to rebuild on next query
+        this.invalidateNamespaceContributorCache();
+
         //there can be one or more File entries for a single srcPath, so get all of them and remove them all
         const files = this.fileClusters.get(paths.srcPath?.toLowerCase()) ?? [this.getFile(filePath, normalizePath)];
 
@@ -1041,15 +1036,6 @@ export class Program {
 
             const event: BeforeRemoveFileEvent = { file: file, program: this };
             this.plugins.emit('beforeRemoveFile', event);
-=======
-        //namespace contributions may have included this file; force the program-level
-        //contributors map to rebuild on next query
-        this.invalidateNamespaceContributorCache();
-
-        let file = this.getFile(filePath, normalizePath);
-        if (file) {
-            this.plugins.emit('beforeFileDispose', file);
->>>>>>> master
 
             //if there is a scope named the same as this file's path, remove it (i.e. xml scopes)
             let scope = this.scopes[file.destPath];
@@ -1215,30 +1201,10 @@ export class Program {
                     program: this
                 });
             })
-<<<<<<< HEAD
             .once('get files to be validated', () => {
                 filesToProcess = Object.values(this.files).sort(firstBy(x => x.srcPath)).filter(x => !x.isValidated);
                 for (const file of filesToProcess) {
                     filesToBeValidatedInScopeContext.add(file);
-=======
-            .forEach(() => Object.values(this.files), (file) => {
-                if (!file.isValidated) {
-                    this.plugins.emit('beforeFileValidate', {
-                        program: this,
-                        file: file
-                    });
-
-                    //emit an event to allow plugins to contribute to the file validation process
-                    this.plugins.emit('onFileValidate', {
-                        program: this,
-                        file: file
-                    });
-                    //call file.validate() IF the file has that function defined
-                    file.validate?.();
-                    file.isValidated = true;
-
-                    this.plugins.emit('afterFileValidate', file);
->>>>>>> master
                 }
             })
             .once('add component reference types', () => {
@@ -1547,14 +1513,7 @@ export class Program {
                         location: xmlFile.componentName.location,
                         relatedInformation: xmlFiles.filter(x => x !== xmlFile).map(x => {
                             return {
-<<<<<<< HEAD
                                 location: x.componentName.location,
-=======
-                                location: util.createLocation(
-                                    URI.file(x.srcPath ?? xmlFile.srcPath).toString(),
-                                    x.componentName.range
-                                ),
->>>>>>> master
                                 message: 'Also defined here'
                             };
                         })
@@ -1951,9 +1910,10 @@ export class Program {
         const actions: SourceFixAllCodeAction[] = [];
         const file = this.getFile(srcPath);
         if (file) {
+            const fileUri = util.pathToUri(file.srcPath);
             const diagnostics = this
                 .getDiagnostics()
-                .filter(x => x.file === file);
+                .filter(x => x.location?.uri === fileUri);
             const scopes = this.getScopesForFile(file);
             this.plugins.emit('onGetSourceFixAllCodeActions', {
                 program: this,
@@ -2036,7 +1996,6 @@ export class Program {
      */
     public async getTranspiledFileContents(filePath: string): Promise<FileTranspileResult> {
         const file = this.getFile(filePath);
-<<<<<<< HEAD
 
         return this.getTranspiledFileContentsPipeline.run(async () => {
 
@@ -2102,18 +2061,6 @@ export class Program {
             result = rokuDeploy.getOptions(this.options as any).outDir;
         }
         result = s`${path.resolve(this.options.cwd ?? process.cwd(), result ?? '/')}`;
-=======
-        const fileMap: FileObj[] = [{
-            src: file.srcPath,
-            dest: file.pkgPath
-        }];
-        const { entries, astEditor } = this.beforeProgramTranspile(fileMap, this.options.stagingDir);
-        const result = this._getTranspiledFileContents(
-            file
-        );
-        await this._chainInputSourceMap(result, file);
-        this.afterProgramTranspile(entries, astEditor);
->>>>>>> master
         return result;
     }
 
@@ -2187,31 +2134,9 @@ export class Program {
     }
 
     /**
-<<<<<<< HEAD
      * Generate the contents of every file
      */
     private async serialize(files: BscFile[]) {
-=======
-     * If the file has an incoming sourcemap (from a prebuild step), chain it into the
-     * generated sourcemap so the output map traces all the way back to the original source.
-     * This is async because SourceMapConsumer requires async initialisation in source-map v0.7.
-     */
-    private async _chainInputSourceMap(result: FileTranspileResult, file: BscFile): Promise<void> {
-        if (result.map) {
-            const inputMap = await util.resolveInputSourceMap(file.fileContents ?? '', file.srcPath);
-            if (inputMap) {
-                await util.applySourceMap(result.map, inputMap, file.srcPath);
-            }
-        }
-    }
-
-    private beforeProgramTranspile(fileEntries: FileObj[], stagingDir: string) {
-        // map fileEntries using their path as key, to avoid excessive "find()" operations
-        const mappedFileEntries = fileEntries.reduce<Record<string, FileObj>>((collection, entry) => {
-            collection[s`${entry.src}`] = entry;
-            return collection;
-        }, {});
->>>>>>> master
 
         const allFiles = new Map<BscFile, SerializedFile[]>();
 
@@ -2320,45 +2245,11 @@ export class Program {
 
             await this.plugins.emitAsync('afterBuildProgram', event);
 
-<<<<<<< HEAD
             //undo all edits for the program
             this.editor.undoAll();
             //undo all edits for each file
             for (const file of event.files) {
                 file.editor.undoAll();
-=======
-        const transpileFile = async (srcPath: string, outputPath?: string) => {
-            //find the file in the program
-            const file = this.getFile(srcPath);
-            //mark this file as processed so we don't process it more than once
-            processedFiles.add(outputPath?.toLowerCase());
-
-            if (!this.options.pruneEmptyCodeFiles || !file.canBePruned) {
-                //skip transpiling typedef files
-                if (isBrsFile(file) && file.isTypedef) {
-                    return;
-                }
-
-                const fileTranspileResult = this._getTranspiledFileContents(file, outputPath);
-                await this._chainInputSourceMap(fileTranspileResult, file);
-
-                //make sure the full dir path exists
-                await fsExtra.ensureDir(path.dirname(outputPath));
-
-                if (await fsExtra.pathExists(outputPath)) {
-                    throw new Error(`Error while transpiling "${file.srcPath}". A file already exists at "${outputPath}" and will not be overwritten.`);
-                }
-                const writeMapPromise = fileTranspileResult.map ? fsExtra.writeFile(`${outputPath}.map`, this.serializeSourceMap(fileTranspileResult.map, outputPath)) : null;
-                await Promise.all([
-                    fsExtra.writeFile(outputPath, fileTranspileResult.code),
-                    writeMapPromise
-                ]);
-
-                if (fileTranspileResult.typedef) {
-                    const typedefPath = outputPath.replace(/\.brs$/i, '.d.bs');
-                    await fsExtra.writeFile(typedefPath, fileTranspileResult.typedef);
-                }
->>>>>>> master
             }
         });
 
@@ -2373,43 +2264,6 @@ export class Program {
         this.logger.info('Total Types Created', totalTypesCreated);
     }
 
-    /**
-     * Serialize a source map to a JSON string, handling relativeSourceMaps and sourceRoot.
-     *
-     * relativeSourceMaps:false — legacy: sources[] has absolute paths (rootDir swapped for sourceRoot
-     * if set); map's sourceRoot field is never written.
-     *
-     * relativeSourceMaps:true, no sourceRoot — sources[] is relative to the map file directory.
-     *
-     * relativeSourceMaps:true, sourceRoot set — map's sourceRoot field is written; sources[] is
-     * relative to sourceRoot so that path.resolve(sourceRoot, sources[0]) gives the source file.
-     */
-    private serializeSourceMap(sourceMap: SourceMapGenerator, outputPath: string): string {
-        const { relativeSourceMaps, sourceRoot } = this.options;
-
-        if (!relativeSourceMaps) {
-            return sourceMap.toString();
-        }
-
-        const mapJson = sourceMap.toJSON();
-
-        if (sourceRoot) {
-            mapJson.sourceRoot = sourceRoot;
-            mapJson.sources = mapJson.sources.map((source: string) => {
-                const absolute = path.isAbsolute(source) ? source : path.resolve(path.dirname(outputPath), source);
-                return path.relative(sourceRoot, absolute).replace(/\\/g, '/');
-            });
-        } else {
-            const mapDir = path.dirname(outputPath);
-            mapJson.sources = mapJson.sources.map((source: string) => {
-                return path.isAbsolute(source)
-                    ? path.relative(mapDir, source).replace(/\\/g, '/')
-                    : source;
-            });
-        }
-
-        return JSON.stringify(mapJson);
-    }
 
     /**
      * Find a list of files in the program that have a function with the given name (case INsensitive)

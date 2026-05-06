@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-import type { Range, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol, Disposable, FileChangeType, CodeDescription, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag } from 'vscode-languageserver-protocol';
-=======
-import type { Range, Diagnostic, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol, Disposable, FileChangeType, SelectionRange } from 'vscode-languageserver-protocol';
->>>>>>> master
+import type { Range, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol, Disposable, FileChangeType, CodeDescription, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, SelectionRange } from 'vscode-languageserver-protocol';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -10,15 +6,13 @@ import type { TypedFunctionType } from './types/TypedFunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
-import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
+import type { FunctionStatement } from './parser/Statement';
 import type { AstNode, Expression } from './parser/AstNode';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
-import type { Identifier, Token } from './lexer/Token';
+import type { Token } from './lexer/Token';
 import type { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-languageserver';
-<<<<<<< HEAD
-import type { SymbolTable } from './SymbolTable';
 import type { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { Editor } from './astUtils/Editor';
 import type { BscFile } from './files/BscFile';
@@ -27,9 +21,7 @@ import type { LazyFileData } from './files/LazyFileData';
 import { TokenKind } from './lexer/TokenKind';
 import type { BscTypeKind } from './types/BscTypeKind';
 import { createToken } from './astUtils/creators';
-=======
 import type { SourceFixAllCodeAction } from './CodeActionUtil';
->>>>>>> master
 
 export interface BsDiagnostic {
     /**
@@ -244,7 +236,6 @@ export type CompilerPlugin = Plugin;
 
 export interface Plugin {
     name: string;
-<<<<<<< HEAD
     /**
      * Called before a new program is created
      */
@@ -289,29 +280,14 @@ export interface Plugin {
     beforeRemoveProgram?(event: BeforeRemoveProgramEvent): any;
     removeProgram?(event: RemoveProgramEvent): any;
     afterRemoveProgram?(event: AfterRemoveProgramEvent): any;
-=======
-    //program events
-    beforeProgramCreate?: (builder: ProgramBuilder) => void;
-    beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
-    afterPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
-    beforePublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
-    afterPublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
-    afterProgramCreate?: (program: Program) => void;
-    beforeProgramValidate?: (program: Program) => void;
-    afterProgramValidate?: (program: Program, wasCancelled: boolean) => void;
-    beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
-    afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
-    beforeProgramDispose?: PluginHandler<BeforeProgramDisposeEvent>;
-    onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
+
     /**
      * Emitted when VS Code requests "source fix all" source actions for a file.
      * Plugins push one or more `SourceFixAllCodeAction` objects onto `event.actions`,
      * each representing a distinct named group that will appear in the Source Actions menu.
      * Plugins are responsible for assembling and merging all changes within each action.
      */
-    // For possible future use, but not currently implemented:
-    onGetSourceFixAllCodeActions?: PluginHandler<OnGetSourceFixAllCodeActionsEvent>;
->>>>>>> master
+    onGetSourceFixAllCodeActions?(event: OnGetSourceFixAllCodeActionsEvent): any;
 
     /**
      * Emitted before the program starts collecting completions
@@ -413,8 +389,6 @@ export interface Plugin {
      */
     afterProvideWorkspaceSymbols?(event: AfterProvideWorkspaceSymbolsEvent): any;
 
-<<<<<<< HEAD
-=======
 
     /**
      * Called before the `provideSelectionRanges` hook
@@ -429,9 +403,6 @@ export interface Plugin {
      */
     afterProvideSelectionRanges?(event: AfterProvideSelectionRangesEvent): any;
 
-
-    onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
->>>>>>> master
     //scope events
     beforeValidateScope?(event: BeforeValidateScopeEvent): any;
     validateScope?(event: ValidateScopeEvent): any;
@@ -597,7 +568,6 @@ export interface AfterProvideCodeActionsEvent<TFile extends BscFile = BscFile> {
     codeActions: CodeAction[];
 }
 
-<<<<<<< HEAD
 export interface BeforeProvideProgramEvent {
     builder: ProgramBuilder;
     program?: Program;
@@ -622,8 +592,6 @@ export interface AfterValidateProgramEvent extends BeforeValidateProgramEvent {
     wasCancelled: boolean;
 }
 
-
-=======
 export interface OnGetSourceFixAllCodeActionsEvent {
     program: Program;
     file: BscFile;
@@ -637,7 +605,7 @@ export interface OnGetSourceFixAllCodeActionsEvent {
     actions: SourceFixAllCodeAction[];
 }
 
->>>>>>> master
+
 export interface ProvideCompletionsEvent<TFile extends BscFile = BscFile> {
     program: Program;
     file: TFile;
@@ -790,7 +758,6 @@ export type BeforeProvideWorkspaceSymbolsEvent = ProvideWorkspaceSymbolsEvent;
 export type AfterProvideWorkspaceSymbolsEvent = ProvideWorkspaceSymbolsEvent;
 
 
-<<<<<<< HEAD
 export interface BeforeProvideSemanticTokensEvent<T extends BscFile = BscFile> {
     /**
      * The program this file is from
@@ -828,7 +795,24 @@ export interface ProvideSemanticTokensEvent<T extends BscFile = BscFile> {
     semanticTokens: SemanticToken[];
 }
 export interface AfterProvideSemanticTokensEvent<T extends BscFile = BscFile> {
-=======
+    /**
+     * The program this file is from
+     */
+    program: Program;
+    /**
+     * The file to get semantic tokens for
+     */
+    file: T;
+    /**
+     * The list of scopes that this file is a member of
+     */
+    scopes: Scope[];
+    /**
+     * The list of semantic tokens being produced during this event.
+     */
+    semanticTokens: SemanticToken[];
+}
+
 export interface ProvideSelectionRangesEvent<TFile = BscFile> {
     program: Program;
     /**
@@ -847,27 +831,6 @@ export interface ProvideSelectionRangesEvent<TFile = BscFile> {
 }
 export type BeforeProvideSelectionRangesEvent<TFile = BscFile> = ProvideSelectionRangesEvent<TFile>;
 export type AfterProvideSelectionRangesEvent<TFile = BscFile> = ProvideSelectionRangesEvent<TFile>;
-
-
-export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
->>>>>>> master
-    /**
-     * The program this file is from
-     */
-    program: Program;
-    /**
-     * The file to get semantic tokens for
-     */
-    file: T;
-    /**
-     * The list of scopes that this file is a member of
-     */
-    scopes: Scope[];
-    /**
-     * The list of semantic tokens being produced during this event.
-     */
-    semanticTokens: SemanticToken[];
-}
 
 export type BeforeValidateFileEvent = ValidateFileEvent;
 export interface ValidateFileEvent<T extends BscFile = BscFile> {
@@ -1307,26 +1270,6 @@ export interface TypeCompatibilityData {
     expectedType?: BscType;
     allowNameEquality?: boolean;
     unresolveableTarget?: string;
-}
-
-export interface NamespaceContainer {
-    file: BscFile;
-    fullName: string;
-    fullNameLower: string;
-    parentNameLower: string;
-    nameParts: Identifier[];
-    nameRange: Range;
-    lastPartName: string;
-    lastPartNameLower: string;
-    isTopLevel: boolean;
-    namespaceStatements?: NamespaceStatement[];
-    symbolTable: SymbolTable;
-}
-
-export interface ScopeNamespaceContainer {
-    namespaceContainers: NamespaceContainer[];
-    symbolTable: SymbolTable;
-    firstInstance: NamespaceContainer;
 }
 
 /**

@@ -2376,13 +2376,6 @@ export class Util {
             // NOTE: this is unsafe and only used to avoid validation errors in backported v1 type syntax
             return true;
         }
-        if (isBinaryExpression(expression?.parent)) {
-            let currentExpr: AstNode = expression.parent;
-            while (isBinaryExpression(currentExpr) && (currentExpr.tokens.operator.kind === TokenKind.Or || currentExpr.tokens.operator.kind === TokenKind.And)) {
-                currentExpr = currentExpr.parent;
-            }
-            return isTypeExpression(currentExpr) || isTypedArrayExpression(currentExpr);
-        }
         return false;
     }
 

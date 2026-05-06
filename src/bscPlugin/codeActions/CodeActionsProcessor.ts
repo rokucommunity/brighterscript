@@ -6,26 +6,18 @@ import { DiagnosticCodeMap } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile } from '../../files/BscFile';
 import type { XmlFile } from '../../files/XmlFile';
-<<<<<<< HEAD
 import type { BsDiagnostic, ProvideCodeActionsEvent } from '../../interfaces';
 import { ParseMode } from '../../parser/Parser';
 import { util } from '../../util';
-import { isBrsFile, isFunctionExpression, isVariableExpression, isVoidType } from '../../astUtils/reflection';
-=======
-import type { BscFile, BsDiagnostic, OnGetCodeActionsEvent } from '../../interfaces';
-import { ParseMode } from '../../parser/Parser';
-import { util } from '../../util';
-import { isBrsFile, isFunctionExpression, isMethodStatement } from '../../astUtils/reflection';
->>>>>>> master
+import { isBrsFile, isFunctionExpression, isMethodStatement, isVoidType, isXmlFile } from '../../astUtils/reflection';
 import type { FunctionExpression } from '../../parser/Expression';
 import type { MethodStatement } from '../../parser/Statement';
 import { WalkMode } from '../../astUtils/visitors';
 import { TokenKind } from '../../lexer/TokenKind';
-<<<<<<< HEAD
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
-=======
 import { getMissingExtendsInsertPosition } from './codeActionHelpers';
->>>>>>> master
+import { rangeFromTokenValue } from '../../parser/SGParser';
+import type { Range } from 'vscode-languageserver';
 
 export class CodeActionsProcessor {
     public constructor(
@@ -42,8 +34,6 @@ export class CodeActionsProcessor {
         for (const diagnostic of this.event.diagnostics) {
             if (diagnostic.code === DiagnosticCodeMap.cannotFindName || diagnostic.code === DiagnosticCodeMap.cannotFindFunction) {
                 this.suggestCannotFindNameQuickFix(diagnostic as any);
-            } else if (diagnostic.code === DiagnosticCodeMap.classCouldNotBeFound) {
-                this.suggestClassImportQuickFix(diagnostic as any);
             } else if (diagnostic.code === DiagnosticCodeMap.xmlComponentMissingExtendsAttribute) {
                 this.suggestMissingExtendsQuickFix(diagnostic as any);
             } else if (diagnostic.code === DiagnosticCodeMap.voidFunctionMayNotReturnValue) {
@@ -53,8 +43,6 @@ export class CodeActionsProcessor {
             } else if (diagnostic.code === DiagnosticCodeMap.referencedFileDoesNotExist) {
                 this.suggestRemoveScriptImportQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent) {
-                this.suggestRemoveScriptImportQuickFixes([diagnostic]);
-            } else if (diagnostic.code === DiagnosticCodeMap.unnecessaryCodebehindScriptImport) {
                 this.suggestRemoveScriptImportQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.scriptImportCaseMismatch) {
                 this.suggestScriptImportCasingQuickFixes([diagnostic as DiagnosticMessageType<'scriptImportCaseMismatch'>]);
@@ -77,8 +65,6 @@ export class CodeActionsProcessor {
                     this.suggestVoidFunctionReturnQuickFixes(allInFile);
                 } else if (code === DiagnosticCodeMap.nonVoidFunctionMustReturnValue) {
                     this.suggestNonVoidFunctionReturnQuickFixes(allInFile);
-                } else if (code === DiagnosticCodeMap.unnecessaryCodebehindScriptImport) {
-                    this.suggestRemoveScriptImportQuickFixes(allInFile);
                 } else if (code === DiagnosticCodeMap.cannotUseOverrideKeywordOnConstructorFunction) {
                     this.suggestRemoveOverrideFromConstructorQuickFixes(allInFile);
                 } else if (code === DiagnosticCodeMap.referencedFileDoesNotExist) {
@@ -96,13 +82,216 @@ export class CodeActionsProcessor {
         // Import fix-all aggregates across multiple codes so it runs as its own step
         if (
             eventCodes.has(DiagnosticCodeMap.cannotFindName) ||
-            eventCodes.has(DiagnosticCodeMap.cannotFindFunction) ||
-            eventCodes.has(DiagnosticCodeMap.classCouldNotBeFound)
+            eventCodes.has(DiagnosticCodeMap.cannotFindFunction)
         ) {
             this.suggestMissingImportsFixAllQuickFix();
         }
 
+        // Suppression actions appear last so real fixes are surfaced first
+        for (const diagnostic of this.event.diagnostics) {
+            this.suggestDisableDiagnosticQuickFixes(diagnostic);
+        }
+
         this.suggestedImports.clear();
+    }
+
+    /**
+     * For any diagnostic with a code, offers two quick-fix actions:
+     *   - "Disable {code} for this line": adds the code to an existing `bs:disable-line` or
+     *     `bs:disable-next-line` directive on/above the diagnostic if present, otherwise inserts
+     *     a new `bs:disable-next-line: {code}` comment on the line above.
+     *   - "Disable {code} for this file": adds the code to an existing header-level `bs:disable`
+     *     directive if present, otherwise inserts a new `bs:disable: {code}` at the top of the file.
+     *
+     * Comment placement and the line-vs-next-line preference are centralized here so they can be
+     * revisited without touching the directive parser.
+     */
+    private suggestDisableDiagnosticQuickFixes(diagnostic: BsDiagnostic) {
+        const code = diagnostic.code;
+        if (code === undefined || code === null) {
+            return;
+        }
+        const file = this.event.file;
+        if (!isBrsFile(file) && !isXmlFile(file)) {
+            return;
+        }
+        const codeStr = String(code);
+        const isXml = isXmlFile(file);
+        //existing.forLine: any line/next-line directive on or above the diagnostic line that the line action could extend
+        //existing.forFile: any header-level bs:disable that the file action could extend
+        const existing = this.findExistingDisableDirectives(file, diagnostic.location.range.start.line);
+
+        //format helpers wrap the directive body in the right comment syntax (`'` for brs, `<!-- -->` for xml)
+        const formatLineDirective = (token: 'line' | 'next-line', codes: string[]) => {
+            const body = `bs:disable-${token}: ${codes.join(' ')}`;
+            return isXml ? `<!-- ${body} -->` : `' ${body}`;
+        };
+        const formatBlockDirective = (codes: string[]) => {
+            const body = `bs:disable: ${codes.join(' ')}`;
+            return isXml ? `<!-- ${body} -->` : `' ${body}`;
+        };
+
+        // ---- "disable for this line" ----
+        //the two lambdas passed to getDiagnosticSuppressionChange are the "extend existing" and "insert fresh" branches:
+        //  1) rebuild the existing directive comment with the new code merged into its code list (preserving line vs next-line)
+        //  2) insert a fresh `bs:disable-next-line: {code}` on the line above the diagnostic, matching its indent
+        const indent = ' '.repeat(diagnostic.location.range.start.character);
+        const lineAction = this.getDiagnosticSuppressionChange(
+            existing.forLine,
+            codeStr,
+            () => formatLineDirective(existing.forLine!.type as 'line' | 'next-line', this.mergeCodes(existing.forLine?.codes, codeStr)),
+            () => ({
+                position: util.createPosition(diagnostic.location.range.start.line, 0),
+                newText: `${indent}${formatLineDirective('next-line', [codeStr])}\n`
+            })
+        );
+        if (lineAction) {
+            this.event.codeActions.push(
+                codeActionUtil.createCodeAction({
+                    title: `Disable ${code} for this line: ${diagnostic.message}`,
+                    diagnostics: [diagnostic],
+                    kind: CodeActionKind.QuickFix,
+                    changes: [lineAction]
+                })
+            );
+        }
+
+        // ---- "disable for this file" ----
+        //same pattern as above, but operating on the header-level bs:disable directive:
+        //  1) rebuild the existing header directive with the new code appended
+        //  2) insert a fresh `bs:disable: {code}` at the file header (top of brs, or after `<?xml ?>` for xml)
+        const fileAction = this.getDiagnosticSuppressionChange(
+            existing.forFile,
+            codeStr,
+            () => formatBlockDirective(this.mergeCodes(existing.forFile?.codes, codeStr)),
+            () => {
+                const headerInsert = this.getDisableFileInsertion(file);
+                return {
+                    position: headerInsert.position,
+                    newText: headerInsert.prefix + formatBlockDirective([codeStr]) + headerInsert.suffix
+                };
+            }
+        );
+        if (fileAction) {
+            this.event.codeActions.push(
+                codeActionUtil.createCodeAction({
+                    title: `Disable ${code} for this file: ${diagnostic.message}`,
+                    diagnostics: [diagnostic],
+                    kind: CodeActionKind.QuickFix,
+                    changes: [fileAction]
+                })
+            );
+        }
+    }
+
+    /**
+     * Returns the file change that suppresses `codeStr` via a directive comment, or `null` when no
+     * change is needed (the existing directive already covers the code, or already suppresses
+     * everything). When `existing` is set, the result is a replace that swaps the directive comment
+     * for the text from `buildReplacementText`. When `existing` is null, the result is an insert
+     * built from `buildInsert`.
+     */
+    private getDiagnosticSuppressionChange(
+        existing: ExistingDirective | null,
+        codeStr: string,
+        buildReplacementText: () => string,
+        buildInsert: () => { position: ReturnType<typeof util.createPosition>; newText: string }
+    ): InsertChange | ReplaceChange | null {
+        if (existing) {
+            //existing directive without specific codes already suppresses everything; no-op
+            if (existing.codes.length === 0) {
+                return null;
+            }
+            //the new code is already in the directive; no-op
+            if (existing.codes.some(c => c.toLowerCase() === codeStr.toLowerCase())) {
+                return null;
+            }
+            return {
+                type: 'replace',
+                filePath: this.event.file.srcPath,
+                range: existing.range,
+                newText: buildReplacementText()
+            };
+        }
+        const insert = buildInsert();
+        return {
+            type: 'insert',
+            filePath: this.event.file.srcPath,
+            position: insert.position,
+            newText: insert.newText
+        };
+    }
+
+    private mergeCodes(existingCodes: string[] | undefined, newCode: string): string[] {
+        return [...(existingCodes ?? []), newCode];
+    }
+
+    /**
+     * Walks the file's tokens and returns existing `bs:disable-{line,next-line}` and header-level
+     * `bs:disable` directives that would cover the diagnostic on `diagLine`. Used so the suppression
+     * quick fixes can extend an existing directive instead of stacking new ones.
+     */
+    private findExistingDisableDirectives(file: BscFile, diagLine: number): { forLine: ExistingDirective | null; forFile: ExistingDirective | null } {
+        const isXml = isXmlFile(file);
+        const tokens: any[] = (file as any).parser?.tokens ?? [];
+        let inHeader = true;
+        let forLine: ExistingDirective | null = null;
+        let forFile: ExistingDirective | null = null;
+        for (const token of tokens) {
+            const isComment = isXml ? token.tokenType?.name === 'Comment' : token.kind === TokenKind.Comment;
+            if (!isComment) {
+                if (isXml) {
+                    if (token.tokenType?.name === 'OPEN') {
+                        inHeader = false;
+                    }
+                } else if (token.kind !== TokenKind.Newline && token.kind !== TokenKind.Whitespace && token.kind !== TokenKind.Eof) {
+                    inHeader = false;
+                }
+                continue;
+            }
+            const tokenRange: Range = isXml ? rangeFromTokenValue(token) : token.location.range;
+            const tokenText: string = isXml ? token.image : token.text;
+            const parsed = parseDisableComment(tokenText);
+            if (!parsed) {
+                continue;
+            }
+            const directive: ExistingDirective = { type: parsed.directiveType, codes: parsed.codes, range: tokenRange };
+            if (!forLine && parsed.directiveType === 'line' && tokenRange.start.line === diagLine) {
+                forLine = directive;
+            } else if (!forLine && parsed.directiveType === 'next-line' && tokenRange.start.line === diagLine - 1) {
+                forLine = directive;
+            } else if (!forFile && parsed.directiveType === 'block' && inHeader) {
+                //only header-level `bs:disable` directives are extended for the file-level quick fix
+                forFile = directive;
+            }
+        }
+        return { forLine: forLine, forFile: forFile };
+    }
+
+    /**
+     * Decides where in the file a header-level `bs:disable` directive should be inserted, returning
+     * the position plus any prefix/suffix needed so the directive lands on its own line in
+     * the header (before the first executable statement / root XML element).
+     */
+    private getDisableFileInsertion(file: BscFile): { position: ReturnType<typeof util.createPosition>; prefix: string; suffix: string } {
+        if (isXmlFile(file)) {
+            //insert after the `<?xml ?>` declaration if present, otherwise at the very top
+            const declCloseToken = file.parser.tokens?.find(t => (t as any).tokenType?.name === 'SPECIAL_CLOSE');
+            if (declCloseToken) {
+                const endLine = (declCloseToken as any).endLine - 1;
+                const endColumn = (declCloseToken as any).endColumn;
+                return {
+                    position: util.createPosition(endLine, endColumn),
+                    prefix: '\n',
+                    suffix: ''
+                };
+            }
+        }
+        return {
+            position: util.createPosition(0, 0),
+            prefix: '',
+            suffix: '\n'
+        };
     }
 
     /**
@@ -111,32 +300,22 @@ export class CodeActionsProcessor {
      * are sourced from `program.getDiagnostics()` (fetched lazily, only when needed).
      */
     private collectFixAllDiagnostics(eventCodes: Set<number | string>): Map<number | string, BsDiagnostic[]> {
-        const scopeLevelCodes = new Set<number | string>([
-            DiagnosticCodeMap.referencedFileDoesNotExist,
-            DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent,
-            DiagnosticCodeMap.scriptImportCaseMismatch,
-            DiagnosticCodeMap.missingOverrideKeyword
-        ]);
+        const fileUri = util.pathToUri(this.event.file.srcPath);
+        const fileDiagnostics = this.event.program.getDiagnostics().filter(d => d.location?.uri === fileUri) as BsDiagnostic[];
 
         const fileDiagsByCode = new Map<number | string, BsDiagnostic[]>();
-        for (const d of this.event.file.getDiagnostics()) {
+        for (const d of fileDiagnostics) {
             if (!fileDiagsByCode.has(d.code)) {
                 fileDiagsByCode.set(d.code, []);
             }
             fileDiagsByCode.get(d.code).push(d);
         }
 
-        const allScopeFileDiags: BsDiagnostic[] = [...eventCodes].some(c => scopeLevelCodes.has(c))
-            ? this.event.program.getDiagnostics().filter(d => (d as BsDiagnostic).file === this.event.file) as BsDiagnostic[]
-            : [];
-
         const result = new Map<number | string, BsDiagnostic[]>();
         for (const code of eventCodes) {
             result.set(
                 code,
-                scopeLevelCodes.has(code)
-                    ? allScopeFileDiags.filter(d => d.code === code)
-                    : fileDiagsByCode.get(code) ?? []
+                fileDiagsByCode.get(code) ?? []
             );
         }
         return result;
@@ -147,24 +326,23 @@ export class CodeActionsProcessor {
     /**
      * Generic import suggestion function. Shouldn't be called directly from the main loop, but instead called by more specific diagnostic handlers
      */
-    private suggestImportQuickFix(diagnostic: Diagnostic, key: string, files: BscFile[]) {
+    private suggestImportQuickFix(diagnostic: BsDiagnostic, key: string, files: BscFile[]) {
         //skip if we already have this suggestion
-        if (this.suggestedImports.has(key) || !isBrsFile(this.event.file)) {
+        if (this.suggestedImports.has(key)) {
             return;
         }
 
         this.suggestedImports.add(key);
-        // eslint-disable-next-line @typescript-eslint/dot-notation
-        const importStatements = this.event.file['_cachedLookups'].importStatements;
+        const importStatements = (this.event.file as BrsFile).parser["_cachedLookups"].importStatements;
         //find the position of the first import statement, or the top of the file if there is none
-        const insertPosition = importStatements[importStatements.length - 1]?.tokens.import?.location?.range?.start ?? util.createPosition(0, 0);
+        const insertPosition = importStatements[importStatements.length - 1]?.tokens.import.location.range?.start ?? util.createPosition(0, 0);
 
         //find all files that reference this function
         for (const file of files) {
-            const destPath = util.sanitizePkgPath(file.destPath);
+            const pkgPath = util.sanitizePkgPath(file.pkgPath);
             this.event.codeActions.push(
                 codeActionUtil.createCodeAction({
-                    title: `import "${destPath}"`,
+                    title: `import "${pkgPath}"`,
                     diagnostics: [diagnostic],
                     isPreferred: false,
                     kind: CodeActionKind.QuickFix,
@@ -172,7 +350,7 @@ export class CodeActionsProcessor {
                         type: 'insert',
                         filePath: this.event.file.srcPath,
                         position: insertPosition,
-                        newText: `import "${destPath}"\n`
+                        newText: `import "${pkgPath}"\n`
                     }]
                 })
             );
@@ -184,8 +362,7 @@ export class CodeActionsProcessor {
      */
     private suggestCannotFindNameQuickFix(diagnostic: DiagnosticMessageType<'cannotFindName'>) {
         //skip if not a BrighterScript file
-        const file = this.event.program.getFile(diagnostic.location?.uri);
-        if (!file || (file as BrsFile).parseMode !== ParseMode.BrighterScript) {
+        if (!isBrsFile(this.event.file) || (this.event.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
             return;
         }
         const lowerName = (diagnostic.data.fullName ?? diagnostic.data.name).toLowerCase();
@@ -203,22 +380,6 @@ export class CodeActionsProcessor {
     }
 
     /**
-     * Suggests import statements for an unresolved class name.
-     */
-    private suggestClassImportQuickFix(diagnostic: DiagnosticMessageType<'classCouldNotBeFound'>) {
-        //skip if not a BrighterScript file
-        if ((diagnostic.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
-            return;
-        }
-        const lowerClassName = diagnostic.data.className.toLowerCase();
-        this.suggestImportQuickFix(
-            diagnostic,
-            lowerClassName,
-            this.event.file.program.findFilesForClass(lowerClassName)
-        );
-    }
-
-    /**
      * Scans all import-related diagnostics in the file and emits a single composite
      * "Fix all: Add missing imports" action when 2+ unambiguous imports are needed.
      * Ambiguous names (multiple possible source files) are excluded since we cannot
@@ -229,15 +390,16 @@ export class CodeActionsProcessor {
             return;
         }
         const file = this.event.file;
-        const importStatements = file.parser.references.importStatements;
-        const insertPosition = importStatements[importStatements.length - 1]?.importToken.range?.start ?? util.createPosition(0, 0);
+        const importStatements = file.parser["_cachedLookups"].importStatements;
+        const insertPosition = importStatements[importStatements.length - 1]?.tokens.import.location.range?.start ?? util.createPosition(0, 0);
 
         const changes: InsertChange[] = [];
         const addedPaths = new Set<string>();
 
         // cannotFindName/classCouldNotBeFound are scope-level diagnostics, so we must
         // use program.getDiagnostics() (filtered by file) rather than file.getDiagnostics().
-        const allFileDiagnostics = this.event.program.getDiagnostics().filter(d => d.file === file);
+        const fileUri = util.pathToUri(file.srcPath);
+        const allFileDiagnostics = this.event.program.getDiagnostics().filter(d => d.location?.uri === fileUri);
 
         for (const diagnostic of allFileDiagnostics) {
             let files: BscFile[] = [];
@@ -247,26 +409,20 @@ export class CodeActionsProcessor {
                 const lowerName = (cannotFindNameDiagnostic.data?.fullName ?? cannotFindNameDiagnostic.data?.name)?.toLowerCase();
                 if (lowerName) {
                     files = [
-                        ...file.program.findFilesForFunction(lowerName),
-                        ...file.program.findFilesForClass(lowerName),
-                        ...file.program.findFilesForNamespace(lowerName),
-                        ...file.program.findFilesForEnum(lowerName)
+                        ...this.event.program.findFilesForFunction(lowerName),
+                        ...this.event.program.findFilesForClass(lowerName),
+                        ...this.event.program.findFilesForNamespace(lowerName),
+                        ...this.event.program.findFilesForEnum(lowerName)
                     ];
-                }
-            } else if (diagnostic.code === DiagnosticCodeMap.classCouldNotBeFound) {
-                const classCouldNotBeFoundDiagnostic = diagnostic as DiagnosticMessageType<'classCouldNotBeFound'>;
-                const lowerClassName = classCouldNotBeFoundDiagnostic.data?.className?.toLowerCase();
-                if (lowerClassName) {
-                    files = file.program.findFilesForClass(lowerClassName);
                 }
             }
 
-            //skip ambiguous names — we can't choose a file automatically
+            //skip ambiguous names; we can't choose a file automatically
             if (files.length !== 1) {
                 continue;
             }
 
-            const pkgPath = util.getRokuPkgPath(files[0].pkgPath);
+            const pkgPath = util.sanitizePkgPath(files[0].pkgPath);
             if (!addedPaths.has(pkgPath)) {
                 addedPaths.add(pkgPath);
                 changes.push({
@@ -338,41 +494,18 @@ export class CodeActionsProcessor {
         );
     }
 
-<<<<<<< HEAD
-    private addVoidFunctionReturnActions(diagnostic: BsDiagnostic) {
-        this.event.codeActions.push(
-            codeActionUtil.createCodeAction({
-                title: `Remove return value`,
-                diagnostics: [diagnostic],
-                kind: CodeActionKind.QuickFix,
-                changes: [{
-                    type: 'delete',
-                    filePath: this.event.file.srcPath,
-                    range: util.createRange(
-                        diagnostic.location.range.start.line,
-                        diagnostic.location.range.start.character + 'return'.length,
-                        diagnostic.location.range.end.line,
-                        diagnostic.location.range.end.character
-                    )
-                }]
-            })
-        );
-        if (isBrsFile(this.event.file)) {
-            const expression = this.event.file.getClosestExpression(diagnostic.location.range.start);
-=======
     /**
      * Adds code actions to resolve a `voidFunctionMayNotReturnValue` diagnostic.
      * Offers removing the return value, converting sub→function, or removing an `as void` return type.
      */
-    private suggestVoidFunctionReturnQuickFixes(diagnostics: Diagnostic[]) {
+    private suggestVoidFunctionReturnQuickFixes(diagnostics: BsDiagnostic[]) {
         const changes = diagnostics.map(d => this.getRemoveReturnValueChange(d));
         this.emitOrFixAll(`Remove return value`, `Fix all: Remove void return values`, changes, diagnostics[0]);
 
         //contextual BrsFile actions only apply to the individual (single-violation) case
         if (changes.length === 1 && isBrsFile(this.event.file)) {
             const diagnostic = diagnostics[0];
-            const expression = this.event.file.getClosestExpression(diagnostic.range.start);
->>>>>>> master
+            const expression = this.event.file.getClosestExpression(diagnostic.location.range.start);
             const func = expression.findAncestor<FunctionExpression>(isFunctionExpression);
 
             //if we're in a sub and we do not have a return type, suggest converting to a function
@@ -390,96 +523,33 @@ export class CodeActionsProcessor {
                         kind: CodeActionKind.QuickFix,
                         changes: [
                             //function
-<<<<<<< HEAD
-                            {
-                                type: 'replace',
-                                filePath: this.event.file.srcPath,
-                                range: func.tokens.functionType.location.range,
-                                newText: functionTypeText
-                            },
+                            { type: 'replace', filePath: this.event.file.srcPath, range: func.tokens.functionType.location.range, newText: functionTypeText },
                             //end function
-                            {
-                                type: 'replace',
-                                filePath: this.event.file.srcPath,
-                                range: func.tokens.endFunctionType.location.range,
-                                newText: endFunctionTypeText
-                            }
-=======
-                            { type: 'replace', filePath: this.event.file.srcPath, range: func.functionType.range, newText: functionTypeText },
-                            //end function
-                            { type: 'replace', filePath: this.event.file.srcPath, range: func.end.range, newText: endFunctionTypeText }
->>>>>>> master
+                            { type: 'replace', filePath: this.event.file.srcPath, range: func.tokens.endFunctionType.location.range, newText: endFunctionTypeText }
                         ]
                     })
                 );
             }
 
             //function `as void` return type. Suggest removing the return type
-            if (func.tokens.functionType.kind === TokenKind.Function && isVoidType(func.returnTypeExpression.getType({ flags: SymbolTypeFlag.typetime }))) {
+            if (func.tokens.functionType.kind === TokenKind.Function && func.returnTypeExpression && isVoidType(func.returnTypeExpression.getType({ flags: SymbolTypeFlag.typetime }))) {
                 this.event.codeActions.push(
                     codeActionUtil.createCodeAction({
                         title: `Remove return type from function declaration`,
                         diagnostics: [diagnostic],
                         kind: CodeActionKind.QuickFix,
-<<<<<<< HEAD
-                        changes: [{
-                            type: 'delete',
-                            filePath: this.event.file.srcPath,
-                            // )| as void|
-                            range: util.createRange(
-                                func.tokens.rightParen.location.range.start.line,
-                                func.tokens.rightParen.location.range.start.character + 1,
-                                func.returnTypeExpression.location.range.end.line,
-                                func.returnTypeExpression.location.range.end.character
-                            )
-                        }]
-=======
                         changes: [this.getRemoveFunctionReturnTypeChange(func)]
->>>>>>> master
                     })
                 );
             }
         }
     }
 
-<<<<<<< HEAD
-    private addNonVoidFunctionReturnActions(diagnostic: BsDiagnostic) {
-        if (isBrsFile(this.event.file)) {
-            const expression = this.event.file.getClosestExpression(diagnostic.location.range.start);
-            const func = expression.findAncestor<FunctionExpression>(isFunctionExpression);
-
-            //`sub as <non-void type>`, suggest removing the return type
-            if (
-                func.tokens.functionType.kind === TokenKind.Sub &&
-                //has a return type
-                func.returnTypeExpression &&
-                //is not `as void`
-                !(isVariableExpression(func.returnTypeExpression.expression) && func.returnTypeExpression.expression.tokens.name.text?.toLowerCase() === 'void')
-            ) {
-                this.event.codeActions.push(
-                    codeActionUtil.createCodeAction({
-                        title: `Remove return type from sub declaration`,
-                        diagnostics: [diagnostic],
-                        kind: CodeActionKind.QuickFix,
-                        changes: [{
-                            type: 'delete',
-                            filePath: this.event.file.srcPath,
-                            // )| as void|
-                            range: util.createRange(
-                                func.tokens.rightParen.location.range.start.line,
-                                func.tokens.rightParen.location.range.start.character + 1,
-                                func.returnTypeExpression.location.range.end.line,
-                                func.returnTypeExpression.location.range.end.character
-                            )
-                        }]
-                    })
-                );
-=======
     /**
      * Adds code actions to resolve a `nonVoidFunctionMustReturnValue` diagnostic.
      * Offers removing the return type from a sub, adding `as void` to a function, or converting function→sub.
      */
-    private suggestNonVoidFunctionReturnQuickFixes(diagnostics: Diagnostic[]) {
+    private suggestNonVoidFunctionReturnQuickFixes(diagnostics: BsDiagnostic[]) {
         if (!isBrsFile(this.event.file)) {
             return;
         }
@@ -493,7 +563,6 @@ export class CodeActionsProcessor {
         for (const token of file.parser.tokens) {
             if (asText && voidText && subText && endSubText) {
                 break;
->>>>>>> master
             }
             if (token?.kind === TokenKind.As) {
                 asText = token?.text;
@@ -506,28 +575,6 @@ export class CodeActionsProcessor {
             }
         }
 
-<<<<<<< HEAD
-        //function with no return type.
-        if (func.tokens.functionType.kind === TokenKind.Function && !func.returnTypeExpression) {
-            //find tokens for `as` and `void` in the file if possible
-            let asText: string;
-            let voidText: string;
-            let subText: string;
-            let endSubText: string;
-            for (const token of this.event.file.parser.tokens) {
-                if (asText && voidText && subText && endSubText) {
-                    break;
-                }
-                if (token?.kind === TokenKind.As) {
-                    asText = token?.text;
-                } else if (token?.kind === TokenKind.Void) {
-                    voidText = token?.text;
-                } else if (token?.kind === TokenKind.Sub) {
-                    subText = token?.text;
-                } else if (token?.kind === TokenKind.EndSub) {
-                    endSubText = token?.text;
-                }
-=======
         // Build per-fix-type change arrays, deduplicating by enclosing function so that one
         // function with multiple bare returns only contributes one change.
         const removeReturnTypeChanges: DeleteChange[] = [];
@@ -535,24 +582,24 @@ export class CodeActionsProcessor {
         const seenFunctions = new Set<string>();
 
         for (const d of diagnostics) {
-            const expr = file.getClosestExpression(d.range.start);
+            const expr = file.getClosestExpression(d.location.range.start);
             const fn = expr?.findAncestor<FunctionExpression>(isFunctionExpression);
             if (!fn) {
                 continue;
             }
-            const fnKey = `${fn.range.start.line}:${fn.range.start.character}`;
+            const fnKey = `${fn.location.range.start.line}:${fn.location.range.start.character}`;
             if (seenFunctions.has(fnKey)) {
                 continue;
             }
             seenFunctions.add(fnKey);
 
-            if (fn.functionType.kind === TokenKind.Sub && fn.returnTypeToken && fn.returnTypeToken.kind !== TokenKind.Void) {
+            if (fn.tokens.functionType.kind === TokenKind.Sub && fn.returnTypeExpression && !isVoidType(fn.returnTypeExpression.getType({ flags: SymbolTypeFlag.typetime }))) {
                 removeReturnTypeChanges.push(this.getRemoveFunctionReturnTypeChange(fn));
-            } else if (fn.functionType.kind === TokenKind.Function && !fn.returnTypeToken) {
+            } else if (fn.tokens.functionType.kind === TokenKind.Function && !fn.returnTypeExpression) {
                 addVoidChanges.push({
                     type: 'insert',
                     filePath: this.event.file.srcPath,
-                    position: fn.rightParen.range.end,
+                    position: fn.tokens.rightParen.location.range.end,
                     newText: ` ${asText ?? 'as'} ${voidText ?? 'void'}`
                 });
             }
@@ -574,15 +621,15 @@ export class CodeActionsProcessor {
 
         //'Convert function to sub' has no fix-all variant; only add it for the individual case
         if (addVoidChanges.length === 1 && diagnostics.length === 1) {
-            const func = file.getClosestExpression(diagnostics[0].range.start).findAncestor<FunctionExpression>(isFunctionExpression);
+            const func = file.getClosestExpression(diagnostics[0].location.range.start).findAncestor<FunctionExpression>(isFunctionExpression);
             this.event.codeActions.push(
                 codeActionUtil.createCodeAction({
                     title: `Convert function to sub`,
                     diagnostics: [diagnostics[0]],
                     kind: CodeActionKind.QuickFix,
                     changes: [
-                        { type: 'replace', filePath: file.srcPath, range: func.functionType.range, newText: subText ?? 'sub' },
-                        { type: 'replace', filePath: file.srcPath, range: func.end.range, newText: endSubText ?? 'end sub' }
+                        { type: 'replace', filePath: file.srcPath, range: func.tokens.functionType.location.range, newText: subText ?? 'sub' },
+                        { type: 'replace', filePath: file.srcPath, range: func.tokens.endFunctionType.location.range, newText: endSubText ?? 'end sub' }
                     ]
                 })
             );
@@ -594,10 +641,9 @@ export class CodeActionsProcessor {
     /**
      * Adds code actions to delete one or more unnecessary or broken script import lines.
      */
-    private suggestRemoveScriptImportQuickFixes(diagnostics: Diagnostic[]) {
-        const titles: Record<number, [string, string]> = {
-            [DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent]: ['Remove redundant script import', 'Fix all: Remove redundant script imports'],
-            [DiagnosticCodeMap.unnecessaryCodebehindScriptImport]: ['Remove unnecessary codebehind import', 'Fix all: Remove unnecessary codebehind imports']
+    private suggestRemoveScriptImportQuickFixes(diagnostics: BsDiagnostic[]) {
+        const titles: Record<string, [string, string]> = {
+            [DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent]: ['Remove redundant script import', 'Fix all: Remove redundant script imports']
         };
         const [singleTitle, fixAllTitle] = titles[diagnostics[0]?.code] ?? ['Remove script import', 'Fix all: Remove script imports'];
         const changes = diagnostics.map<DeleteChange>(diagnostic => {
@@ -605,9 +651,9 @@ export class CodeActionsProcessor {
                 type: 'delete',
                 filePath: this.event.file.srcPath,
                 range: util.createRange(
-                    diagnostic.range.start.line,
+                    diagnostic.location.range.start.line,
                     0,
-                    diagnostic.range.start.line + 1,
+                    diagnostic.location.range.start.line + 1,
                     0
                 )
             };
@@ -628,7 +674,7 @@ export class CodeActionsProcessor {
             changes.push({
                 type: 'replace',
                 filePath: this.event.file.srcPath,
-                range: diagnostic.range,
+                range: diagnostic.location.range,
                 newText: correctFilePath
             });
         }
@@ -645,7 +691,7 @@ export class CodeActionsProcessor {
     /**
      * Adds code actions to insert the missing `override` keyword before a method declaration.
      */
-    private suggestMissingOverrideQuickFixes(diagnostics: Diagnostic[]) {
+    private suggestMissingOverrideQuickFixes(diagnostics: BsDiagnostic[]) {
         if (!isBrsFile(this.event.file)) {
             return;
         }
@@ -657,49 +703,13 @@ export class CodeActionsProcessor {
             file.ast.walk((node) => {
                 if (
                     isMethodStatement(node) &&
-                    node.range?.start?.line === diagnostic.range.start.line &&
-                    node.range?.start?.character === diagnostic.range.start.character
+                    node.location?.range?.start?.line === diagnostic.location.range.start.line &&
+                    node.location?.range?.start?.character === diagnostic.location.range.start.character
                 ) {
-                    insertPosition = (node as MethodStatement).func.functionType?.range?.start;
->>>>>>> master
-            }
-        }, { walkMode: WalkMode.visitStatementsRecursive });
+                    insertPosition = (node as MethodStatement).func.tokens.functionType?.location?.range?.start;
+                }
+            }, { walkMode: WalkMode.visitStatementsRecursive });
 
-<<<<<<< HEAD
-        //suggest converting to `as void`
-        this.event.codeActions.push(
-            codeActionUtil.createCodeAction({
-                title: `Add void return type to function declaration`,
-                diagnostics: [diagnostic],
-                kind: CodeActionKind.QuickFix,
-                changes: [{
-                    type: 'insert',
-                    filePath: this.event.file.srcPath,
-                    position: func.tokens.rightParen.location.range.end,
-                    newText: ` ${asText ?? 'as'} ${voidText ?? 'void'}`
-                }]
-            })
-        );
-        //suggest converting to sub
-        this.event.codeActions.push(
-            codeActionUtil.createCodeAction({
-                title: `Convert function to sub`,
-                diagnostics: [diagnostic],
-                kind: CodeActionKind.QuickFix,
-                changes: [{
-                    type: 'replace',
-                    filePath: this.event.file.srcPath,
-                    range: func.tokens.functionType.location.range,
-                    newText: subText ?? 'sub'
-                }, {
-                    type: 'replace',
-                    filePath: this.event.file.srcPath,
-                    range: func.tokens.endFunctionType.location.range,
-                    newText: endSubText ?? 'end sub'
-                }]
-            })
-        );
-=======
             if (insertPosition) {
                 changes.push({
                     type: 'insert',
@@ -707,40 +717,39 @@ export class CodeActionsProcessor {
                     position: insertPosition,
                     newText: 'override '
                 });
->>>>>>> master
-    }
-}
+            }
+        }
 
-this.emitOrFixAll(
-    `Add missing 'override' keyword`,
-    `Fix all: Add missing 'override' keywords`,
-    changes,
-    diagnostics[0]
-);
+        this.emitOrFixAll(
+            `Add missing 'override' keyword`,
+            `Fix all: Add missing 'override' keywords`,
+            changes,
+            diagnostics[0]
+        );
     }
 
     /**
      * Adds code actions to remove the invalid `override` keyword from a constructor method.
      */
-    private suggestRemoveOverrideFromConstructorQuickFixes(diagnostics: Diagnostic[]) {
-    const changes: DeleteChange[] = diagnostics.map(d => ({
-        type: 'delete' as const,
-        filePath: this.event.file.srcPath,
-        // delete "override " — the keyword token plus the trailing space before function/sub
-        range: util.createRange(
-            d.range.start.line,
-            d.range.start.character,
-            d.range.end.line,
-            d.range.end.character + 1
-        )
-    }));
-    this.emitOrFixAll(
-        `Remove 'override' from constructor`,
-        `Fix all: Remove 'override' from constructors`,
-        changes,
-        diagnostics[0]
-    );
-}
+    private suggestRemoveOverrideFromConstructorQuickFixes(diagnostics: BsDiagnostic[]) {
+        const changes: DeleteChange[] = diagnostics.map(d => ({
+            type: 'delete' as const,
+            filePath: this.event.file.srcPath,
+            // delete "override " (the keyword token plus the trailing space before function/sub)
+            range: util.createRange(
+                d.location.range.start.line,
+                d.location.range.start.character,
+                d.location.range.end.line,
+                d.location.range.end.character + 1
+            )
+        }));
+        this.emitOrFixAll(
+            `Remove 'override' from constructor`,
+            `Fix all: Remove 'override' from constructors`,
+            changes,
+            diagnostics[0]
+        );
+    }
 
     // ---- change helpers ----
 
@@ -748,36 +757,36 @@ this.emitOrFixAll(
      * Builds a delete change that removes the return value from a `return <expr>` statement,
      * leaving just a bare `return`.
      */
-    private getRemoveReturnValueChange(diagnostic: Diagnostic): DeleteChange {
-    return {
-        type: 'delete',
-        filePath: this.event.file.srcPath,
-        range: util.createRange(
-            diagnostic.range.start.line,
-            diagnostic.range.start.character + 'return'.length,
-            diagnostic.range.end.line,
-            diagnostic.range.end.character
-        )
-    };
-}
+    private getRemoveReturnValueChange(diagnostic: BsDiagnostic): DeleteChange {
+        return {
+            type: 'delete',
+            filePath: this.event.file.srcPath,
+            range: util.createRange(
+                diagnostic.location.range.start.line,
+                diagnostic.location.range.start.character + 'return'.length,
+                diagnostic.location.range.end.line,
+                diagnostic.location.range.end.character
+            )
+        };
+    }
 
     /**
      * Builds the change that deletes `) as <type>` from a function/sub declaration.
      * Used for both `as void` on a function and any return type on a sub.
      */
     private getRemoveFunctionReturnTypeChange(func: FunctionExpression): DeleteChange {
-    return {
-        type: 'delete',
-        filePath: this.event.file.srcPath,
-        // )| as <type>|
-        range: util.createRange(
-            func.rightParen.range.start.line,
-            func.rightParen.range.start.character + 1,
-            func.returnTypeToken.range.end.line,
-            func.returnTypeToken.range.end.character
-        )
-    };
-}
+        return {
+            type: 'delete',
+            filePath: this.event.file.srcPath,
+            // )| as <type>|
+            range: util.createRange(
+                func.tokens.rightParen.location.range.start.line,
+                func.tokens.rightParen.location.range.start.character + 1,
+                func.returnTypeExpression.location.range.end.line,
+                func.returnTypeExpression.location.range.end.character
+            )
+        };
+    }
 
     /**
      * Emits a single code action when there is exactly one change, or a "fix all" composite
@@ -785,31 +794,80 @@ this.emitOrFixAll(
      * Does nothing when the changes array is empty.
      */
     private emitOrFixAll(
-    singleTitle: string,
-    fixAllTitle: string,
-    changes: Array<InsertChange | DeleteChange | ReplaceChange>,
-    diagnostic: Diagnostic
-) {
-    if (changes.length === 0) {
-        return;
-    }
-    if (changes.length === 1) {
-        this.event.codeActions.push(
-            codeActionUtil.createCodeAction({
-                title: singleTitle,
-                diagnostics: [diagnostic],
-                kind: CodeActionKind.QuickFix,
-                changes: changes
-            })
-        );
-    } else {
-        this.event.codeActions.push(
-            codeActionUtil.createCodeAction({
-                title: fixAllTitle,
-                kind: CodeActionKind.QuickFix,
-                changes: changes
-            })
-        );
+        singleTitle: string,
+        fixAllTitle: string,
+        changes: Array<InsertChange | DeleteChange | ReplaceChange>,
+        diagnostic: BsDiagnostic
+    ) {
+        if (changes.length === 0) {
+            return;
+        }
+        if (changes.length === 1) {
+            this.event.codeActions.push(
+                codeActionUtil.createCodeAction({
+                    title: singleTitle,
+                    diagnostics: [diagnostic],
+                    kind: CodeActionKind.QuickFix,
+                    changes: changes
+                })
+            );
+        } else {
+            this.event.codeActions.push(
+                codeActionUtil.createCodeAction({
+                    title: fixAllTitle,
+                    kind: CodeActionKind.QuickFix,
+                    changes: changes
+                })
+            );
+        }
     }
 }
+
+interface ExistingDirective {
+    type: 'line' | 'next-line' | 'block';
+    codes: string[];
+    range: Range;
+}
+
+/**
+ * Parses a comment's text and returns the directive details if it is one. Recognizes
+ * `'`, `rem`, and `<!-- -->` comment styles. Returns `null` for comments that aren't directives.
+ * `block` covers `bs:disable`. The `bs:enable` partner isn't surfaced since the quick fix only
+ * extends `bs:disable` directives.
+ */
+function parseDisableComment(text: string): { directiveType: 'line' | 'next-line' | 'block'; codes: string[] } | null {
+    let inner = text;
+    if (inner.startsWith('<!--')) {
+        inner = inner.slice('<!--'.length);
+        if (inner.endsWith('-->')) {
+            inner = inner.slice(0, -('-->'.length));
+        }
+    } else if (inner.startsWith(`'`)) {
+        inner = inner.slice(1);
+    } else if (/^rem\b/i.test(inner)) {
+        inner = inner.slice('rem'.length);
+    }
+    inner = inner.trimStart();
+    const lower = inner.toLowerCase();
+    //match longest-prefix first so `bs:disable-line` doesn't get parsed as `bs:disable`
+    let directiveType: 'line' | 'next-line' | 'block';
+    let prefixLength: number;
+    if (lower.startsWith('bs:disable-next-line')) {
+        directiveType = 'next-line';
+        prefixLength = 'bs:disable-next-line'.length;
+    } else if (lower.startsWith('bs:disable-line')) {
+        directiveType = 'line';
+        prefixLength = 'bs:disable-line'.length;
+    } else if (lower.startsWith('bs:disable')) {
+        directiveType = 'block';
+        prefixLength = 'bs:disable'.length;
+    } else {
+        return null;
+    }
+    inner = inner.slice(prefixLength);
+    if (inner.startsWith(':')) {
+        inner = inner.slice(1);
+    }
+    const codes = inner.trim().length === 0 ? [] : inner.trim().split(/\s+/);
+    return { directiveType: directiveType, codes: codes };
 }

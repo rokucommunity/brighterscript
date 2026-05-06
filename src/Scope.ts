@@ -1,25 +1,18 @@
 /* eslint-disable @typescript-eslint/dot-notation */
 import * as path from 'path';
 import chalk from 'chalk';
-import type { CallableContainer, FileReference, FileLink, Callable, NamespaceContainer, ScopeValidationOptions, ScopeNamespaceContainer } from './interfaces';
+import type { Range } from 'vscode-languageserver-protocol';
+import type { CallableContainer, FileReference, FileLink, Callable, ScopeValidationOptions } from './interfaces';
 import type { Program } from './Program';
-<<<<<<< HEAD
-import { type NamespaceStatement, type ClassStatement, type EnumStatement, type InterfaceStatement, type EnumMemberStatement, type ConstStatement } from './parser/Statement';
-=======
-import { BsClassValidator } from './validators/ClassValidator';
 import type { NamespaceStatement, FunctionStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement, ConstStatement, TypeStatement } from './parser/Statement';
-import type { NewExpression } from './parser/Expression';
->>>>>>> master
 import { ParseMode } from './parser/Parser';
 import { util } from './util';
 import { Cache } from './Cache';
 import type { BrsFile } from './files/BrsFile';
+import type { Identifier } from './lexer/Token';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-<<<<<<< HEAD
-import { isBrsFile, isXmlFile, isEnumMemberStatement, isXmlScope } from './astUtils/reflection';
-=======
-import { isBrsFile, isMethodStatement, isCustomType, isFunctionType, isXmlFile, isNamespaceStatement, isEnumMemberStatement } from './astUtils/reflection';
->>>>>>> master
+import { isBrsFile, isXmlFile, isEnumMemberStatement, isNamespaceStatement, isTypeStatement, isXmlScope } from './astUtils/reflection';
+import { WalkMode } from './astUtils/visitors';
 import { SymbolTable } from './SymbolTable';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscFile } from './files/BscFile';
@@ -29,11 +22,8 @@ import { AssociativeArrayType } from './types/AssociativeArrayType';
 import type { Statement } from './parser/AstNode';
 import { performance } from 'perf_hooks';
 import { LogLevel } from './logging';
-<<<<<<< HEAD
 import { uninitializedTypeFactory } from './types/UninitializedType';
-=======
 import { ScopeNamespaceLookup } from './ScopeNamespaceLookup';
->>>>>>> master
 
 /**
  * Assign some few factories to the SymbolTable to prevent cyclical imports. This file seems like the most intuitive place to do the linking
@@ -120,11 +110,11 @@ export class Scope {
 
         let ns: NamespaceContainer;
         if (containingNamespace) {
-            ns = lookup.get(`${containingNamespace?.toLowerCase()}.${nameLower}`)?.firstInstance;
+            ns = lookup.get(`${containingNamespace?.toLowerCase()}.${nameLower}`);
         }
         //if we couldn't find the namespace by its full namespaced name, look for a global version
         if (!ns) {
-            ns = lookup.get(nameLower)?.firstInstance;
+            ns = lookup.get(nameLower);
         }
         return ns;
     }
@@ -155,7 +145,7 @@ export class Scope {
         if (containingNamespace) {
             lookupName = `${containingNamespace?.toLowerCase()}.${nameLower}`;
         }
-        return this.namespaceLookup.get(lookupName)?.firstInstance;
+        return this.namespaceLookup.get(lookupName);
     }
 
     /**
@@ -185,7 +175,6 @@ export class Scope {
         return this.getEnumFileLink(enumName, containingNamespace)?.item;
     }
 
-<<<<<<< HEAD
     private useFileCachesForFileLinkLookups = false;
 
     private getFileLinkFromFileMap<T>(cachedMapName: string, itemName: string, containingNamespace?: string): FileLink<T> {
@@ -211,10 +200,10 @@ export class Scope {
             });
         }
         return result;
-=======
+    }
+
     public getTypeStatement(typeName: string, containingNamespace?: string): Statement {
         return this.getTypeStatementFileLink(typeName, containingNamespace)?.item;
->>>>>>> master
     }
 
     /**
@@ -507,8 +496,6 @@ export class Scope {
         });
     }
 
-<<<<<<< HEAD
-=======
     /**
      * A dictionary of all TypeStatements in this scope. This includes namespaced types always with their full name.
      * The key is stored in lower case
@@ -517,24 +504,21 @@ export class Scope {
         return this.cache.getOrAdd('typeStatementMap', () => {
             const map = new Map<string, FileLink<TypeStatement>>();
             this.enumerateBrsFiles((file) => {
-                for (let stmt of file.parser.references.typeStatements) {
-                    const lowerTypeName = stmt.fullName.toLowerCase();
-                    //only track enums with a defined name (i.e. exclude nameless malformed enums)
-                    if (lowerTypeName) {
-                        map.set(lowerTypeName, { item: stmt, file: file });
+                file.ast.walk((node) => {
+                    if (isTypeStatement(node)) {
+                        const namespaceName = node.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+                        const typeName = node.tokens.name?.text;
+                        if (typeName) {
+                            const fullName = (namespaceName ? `${namespaceName}.${typeName}` : typeName).toLowerCase();
+                            map.set(fullName, { item: node, file: file });
+                        }
                     }
-                }
+                }, { walkMode: WalkMode.visitAllRecursive });
             });
             return map;
         });
     }
 
-    /**
-     * The list of diagnostics found specifically for this scope. Individual file diagnostics are stored on the files themselves.
-     */
-    protected diagnostics = [] as BsDiagnostic[];
-
->>>>>>> master
     protected onDependenciesChanged(event: DependencyChangedEvent) {
         this.logDebug('invalidated because dependency graph said [', event.sourceKey, '] changed');
         this.invalidate();
@@ -813,32 +797,8 @@ export class Scope {
      * The return type is `Map<string, NamespaceContainer>` for backward
      * compatibility with plugins that consume the public API.
      */
-<<<<<<< HEAD
-    public buildNamespaceLookup() {
-        let namespaceLookup = new Map<string, ScopeNamespaceContainer>();
-        this.enumerateBrsFiles((file) => {
-            const fileNamespaceLookup = file.getNamespaceLookupObject();
-
-            for (const [lowerNamespaceName, nsContainer] of fileNamespaceLookup) {
-                if (!namespaceLookup.has(lowerNamespaceName)) {
-                    const newScopeNsContainer: ScopeNamespaceContainer = {
-                        namespaceContainers: [],
-                        symbolTable: new SymbolTable(`Namespace Scope Aggregate: '${nsContainer.fullName}'`),
-                        firstInstance: nsContainer
-                    };
-                    namespaceLookup.set(lowerNamespaceName, newScopeNsContainer);
-                }
-
-                const scopeNsContainer = namespaceLookup.get(lowerNamespaceName);
-                scopeNsContainer.symbolTable.mergeSymbolTable(nsContainer.symbolTable);
-                scopeNsContainer.namespaceContainers.push(nsContainer);
-            }
-        });
-        return namespaceLookup;
-=======
     public buildNamespaceLookup(): Map<string, NamespaceContainer> {
         return new ScopeNamespaceLookup(this);
->>>>>>> master
     }
 
     public getAllNamespaceStatements() {
@@ -989,7 +949,18 @@ export class Scope {
                     file.parser.symbolTable.pushParentProvider(() => this.symbolTable)
                 );
 
-<<<<<<< HEAD
+                //link each NamespaceStatement's SymbolTable with the aggregate NamespaceLookup SymbolTable.
+                //Leaf containers always have symbolTable populated, so the lookup below is safe; the null
+                //guard tolerates edge cases like a namespace that failed to register.
+                for (const namespace of file['_cachedLookups'].namespaceStatements) {
+                    const namespaceNameLower = namespace.getName(ParseMode.BrighterScript).toLowerCase();
+                    const aggregate = this.namespaceLookup.get(namespaceNameLower)?.symbolTable;
+                    if (aggregate) {
+                        this.linkSymbolTableDisposables.push(
+                            namespace.getSymbolTable().addSibling(aggregate)
+                        );
+                    }
+                }
             }
         }
         this.enumerateBrsFiles((file) => {
@@ -999,50 +970,14 @@ export class Scope {
                 ...this._allNamespaceTypeTable.mergeNamespaceSymbolTables(namespaceTypes)
             );
         });
-        for (const [_, scopeNsContainer] of this.namespaceLookup) {
-            for (let nsContainer of scopeNsContainer.namespaceContainers) {
-                for (let nsStmt of nsContainer.namespaceStatements) {
-                    this.linkSymbolTableDisposables.push(
-                        nsStmt?.getSymbolTable().addSibling(scopeNsContainer.symbolTable)
-                    );
-=======
-                //link each NamespaceStatement's SymbolTable with the aggregate NamespaceLookup SymbolTable.
-                //Leaf containers always have symbolTable populated (buildNamespaceLookup allocates one
-                //before the merge step), so the lookup below is safe; the null guard exists only to
-                //tolerate edge cases like a namespace that failed to register.
-                for (const namespace of file.parser.references.namespaceStatements) {
-                    const namespaceNameLower = namespace.getName(ParseMode.BrighterScript).toLowerCase();
-                    const aggregate = this.namespaceLookup.get(namespaceNameLower)?.symbolTable;
-                    if (aggregate) {
-                        namespace.getSymbolTable().addSibling(aggregate);
-                    }
->>>>>>> master
-                }
-            }
-        }
         this.linkSymbolTableDisposables.push(
             this.symbolTable.addSibling(this._allNamespaceTypeTable)
         );
     }
 
     public unlinkSymbolTable() {
-<<<<<<< HEAD
         for (const symbolToRemove of this.symbolsAddedDuringLinking) {
             this.symbolTable.removeSymbol(symbolToRemove.name);
-=======
-        for (let file of this.getOwnFiles()) {
-            if (isBrsFile(file)) {
-                file.parser?.symbolTable.popParentProvider();
-
-                for (const namespace of file.parser.references.namespaceStatements) {
-                    const namespaceNameLower = namespace.getName(ParseMode.BrighterScript).toLowerCase();
-                    const aggregate = this.namespaceLookup.get(namespaceNameLower)?.symbolTable;
-                    if (aggregate) {
-                        namespace.getSymbolTable().removeSibling(aggregate);
-                    }
-                }
-            }
->>>>>>> master
         }
         this.symbolsAddedDuringLinking = [];
         for (const dispose of this.linkSymbolTableDisposables) {
@@ -1050,298 +985,7 @@ export class Scope {
         }
         this.linkSymbolTableDisposables = [];
 
-<<<<<<< HEAD
         this.cache.delete('namespaceLookup');
-=======
-        for (let assignment of file.parser.references.assignmentStatements) {
-            let lowerAssignmentName = assignment.name.text.toLowerCase();
-            let namespace = this.getNamespace(lowerAssignmentName, assignment.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase());
-            //see if the param matches any starting namespace part
-            if (namespace) {
-                this.diagnostics.push({
-                    file: file,
-                    ...DiagnosticMessages.variableMayNotHaveSameNameAsNamespace(assignment.name.text),
-                    range: assignment.name.range,
-                    relatedInformation: [{
-                        message: 'Namespace declared here',
-                        location: util.createLocation(
-                            URI.file(namespace.file.srcPath).toString(),
-                            namespace.nameRange
-                        )
-                    }]
-                });
-            }
-        }
-    }
-
-    /**
-     * Find various function collisions
-     */
-    private diagnosticDetectFunctionCollisions(file: BscFile) {
-        for (let func of file?.callables ?? []) {
-            const funcName = func.getName(ParseMode.BrighterScript);
-            const lowerFuncName = funcName?.toLowerCase();
-            if (lowerFuncName) {
-
-                //find function declarations with the same name as a stdlib function
-                if (globalCallableMap.has(lowerFuncName)) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.scopeFunctionShadowedByBuiltInFunction(),
-                        range: func.nameRange,
-                        file: file
-                    });
-                }
-
-                //find any functions that have the same name as a class
-                if (this.hasClass(lowerFuncName)) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.functionCannotHaveSameNameAsClass(funcName),
-                        range: func.nameRange,
-                        file: file
-                    });
-                }
-            }
-        }
-    }
-
-    /**
-     * Find function parameters and function return types that are neither built-in types or known Class references
-     */
-    private diagnosticDetectInvalidFunctionExpressionTypes(file: BrsFile) {
-        for (let func of file.parser.references.functionExpressions) {
-            // lazy-compute the namespace name only if a custom type is actually encountered
-            let namespaceFetched = false;
-            let currentNamespaceName: string;
-            const getNamespaceName = () => {
-                if (!namespaceFetched) {
-                    namespaceFetched = true;
-                    currentNamespaceName = func.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
-                }
-                return currentNamespaceName;
-            };
-
-            if (isCustomType(func.returnType) && func.returnTypeToken) {
-                // check if this custom type is in our class map
-                const returnTypeName = func.returnType.name;
-                // check for built in types
-                const isBuiltInType = util.isBuiltInType(returnTypeName);
-                if (!isBuiltInType && !this.hasClass(returnTypeName, getNamespaceName()) && !this.hasInterface(returnTypeName) && !this.hasEnum(returnTypeName) && !this.hasTypeStatementType(returnTypeName)) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.invalidFunctionReturnType(returnTypeName),
-                        range: func.returnTypeToken.range,
-                        file: file
-                    });
-                }
-            }
-
-            for (let param of func.parameters) {
-                if (isCustomType(param.type) && param.typeToken) {
-                    const paramTypeName = param.type.name;
-                    // check for built in types
-                    const isBuiltInType = util.isBuiltInType(paramTypeName);
-
-                    if (!isBuiltInType && !this.hasClass(paramTypeName, getNamespaceName()) && !this.hasInterface(paramTypeName) && !this.hasEnum(paramTypeName) && !this.hasTypeStatementType(paramTypeName)) {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.functionParameterTypeIsInvalid(param.name.text, paramTypeName),
-                            range: param.typeToken.range,
-                            file: file
-                        });
-
-                    }
-                }
-            }
-        }
-    }
-
-    public getNewExpressions() {
-        let result = [] as AugmentedNewExpression[];
-        this.enumerateBrsFiles((file) => {
-            let expressions = file.parser.references.newExpressions as AugmentedNewExpression[];
-            for (let expression of expressions) {
-                expression.file = file;
-                result.push(expression);
-            }
-        });
-        return result;
-    }
-
-    private validateClasses() {
-        let validator = new BsClassValidator(this);
-        validator.validate();
-        this.diagnostics.push(...validator.diagnostics);
-    }
-
-    /**
-     * Detect calls to functions with the incorrect number of parameters
-     */
-    private diagnosticDetectFunctionCallsWithWrongParamCount(file: BscFile, callableContainersByLowerName: CallableContainerMap) {
-        //validate all function calls
-        for (let expCall of file?.functionCalls ?? []) {
-            let callableContainersWithThisName = callableContainersByLowerName.get(expCall.name.toLowerCase());
-
-            //use the first item from callablesByLowerName, because if there are more, that's a separate error
-            let knownCallableContainer = callableContainersWithThisName ? callableContainersWithThisName[0] : undefined;
-
-            if (knownCallableContainer) {
-                //get min/max parameter count for callable
-                let minParams = 0;
-                let maxParams = 0;
-                for (let param of knownCallableContainer.callable.params) {
-                    maxParams++;
-                    //optional parameters must come last, so we can assume that minParams won't increase once we hit
-                    //the first isOptional
-                    if (param.isOptional !== true) {
-                        minParams++;
-                    }
-                }
-                let expCallArgCount = expCall.args.length;
-                if (expCall.args.length > maxParams || expCall.args.length < minParams) {
-                    let minMaxParamsText = minParams === maxParams ? maxParams : `${minParams}-${maxParams}`;
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.mismatchArgumentCount(minMaxParamsText, expCallArgCount),
-                        range: expCall.nameRange,
-                        //TODO detect end of expression call
-                        file: file
-                    });
-                }
-            }
-        }
-    }
-
-    /**
-     * Detect local variables (function scope) that have the same name as scope calls
-     */
-    private diagnosticDetectShadowedLocalVars(file: BscFile, callableContainerMap: CallableContainerMap) {
-        const classMap = this.getClassMap();
-        //loop through every function scope
-        for (let scope of file.functionScopes) {
-            //every var declaration in this function scope
-            for (let varDeclaration of scope.variableDeclarations) {
-                const varName = varDeclaration.name;
-                const lowerVarName = varName.toLowerCase();
-
-                //if the var is a function
-                if (isFunctionType(varDeclaration.type)) {
-                    //local var function with same name as stdlib function
-                    if (
-                        //has same name as stdlib
-                        globalCallableMap.has(lowerVarName)
-                    ) {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib'),
-                            range: varDeclaration.nameRange,
-                            file: file
-                        });
-
-                        //this check needs to come after the stdlib one, because the stdlib functions are included
-                        //in the scope function list
-                    } else if (
-                        //has same name as scope function
-                        callableContainerMap.has(lowerVarName)
-                    ) {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.localVarFunctionShadowsParentFunction('scope'),
-                            range: varDeclaration.nameRange,
-                            file: file
-                        });
-                    }
-
-                    //var is not a function
-                } else if (
-                    //is NOT a callable from stdlib (because non-function local vars can have same name as stdlib names)
-                    !globalCallableMap.has(lowerVarName)
-                ) {
-
-                    //is same name as a callable
-                    if (callableContainerMap.has(lowerVarName)) {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.localVarShadowedByScopedFunction(),
-                            range: varDeclaration.nameRange,
-                            file: file
-                        });
-                        //has the same name as an in-scope class
-                    } else if (classMap.has(lowerVarName)) {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.localVarSameNameAsClass(classMap.get(lowerVarName)?.item.getName(ParseMode.BrighterScript)),
-                            range: varDeclaration.nameRange,
-                            file: file
-                        });
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * Create diagnostics for any duplicate function declarations
-     */
-    private diagnosticFindDuplicateFunctionDeclarations(callableContainersByLowerName: CallableContainerMap) {
-        //for each list of callables with the same name
-        for (let [lowerName, callableContainers] of callableContainersByLowerName) {
-
-            let globalCallables = [] as CallableContainer[];
-            let nonGlobalCallables = [] as CallableContainer[];
-            let ownCallables = [] as CallableContainer[];
-            let ancestorNonGlobalCallables = [] as CallableContainer[];
-
-            for (let container of callableContainers) {
-                if (container.scope === this.program.globalScope) {
-                    globalCallables.push(container);
-                } else {
-                    nonGlobalCallables.push(container);
-                    if (container.scope === this) {
-                        ownCallables.push(container);
-                    } else {
-                        ancestorNonGlobalCallables.push(container);
-                    }
-                }
-            }
-
-            //add info diagnostics about child shadowing parent functions
-            if (ownCallables.length > 0 && ancestorNonGlobalCallables.length > 0) {
-                for (let container of ownCallables) {
-                    //skip the init function (because every component will have one of those){
-                    if (lowerName !== 'init') {
-                        let shadowedCallable = ancestorNonGlobalCallables[ancestorNonGlobalCallables.length - 1];
-                        if (!!shadowedCallable && shadowedCallable.callable.file === container.callable.file) {
-                            //same file: skip redundant imports
-                            continue;
-                        }
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.overridesAncestorFunction(
-                                container.callable.name,
-                                container.scope.name,
-                                shadowedCallable.callable.file.pkgPath,
-                                //grab the last item in the list, which should be the closest ancestor's version
-                                shadowedCallable.scope.name
-                            ),
-                            range: container.callable.nameRange,
-                            file: container.callable.file
-                        });
-                    }
-                }
-            }
-
-            //add error diagnostics about duplicate functions in the same scope
-            if (ownCallables.length > 1) {
-
-                for (let callableContainer of ownCallables) {
-                    let callable = callableContainer.callable;
-
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.duplicateFunctionImplementation(callable.name, callableContainer.scope.name),
-                        range: util.createRange(
-                            callable.nameRange.start.line,
-                            callable.nameRange.start.character,
-                            callable.nameRange.start.line,
-                            callable.nameRange.end.character
-                        ),
-                        file: callable.file
-                    });
-                }
-            }
-        }
->>>>>>> master
     }
 
     /**
@@ -1359,51 +1003,6 @@ export class Scope {
         return result;
     }
 
-<<<<<<< HEAD
-=======
-    /**
-     * Verify that all of the scripts imported by each file in this scope actually exist
-     */
-    private diagnosticValidateScriptImportPaths() {
-        let scriptImports = this.getOwnScriptImports();
-        //verify every script import
-        for (let scriptImport of scriptImports) {
-            let referencedFile = this.getFileByRelativePath(scriptImport.pkgPath);
-            //if we can't find the file
-            if (!referencedFile) {
-                //skip the default bslib file, it will exist at transpile time but should not show up in the program during validation cycle
-                if (scriptImport.pkgPath === `source${path.sep}bslib.brs`) {
-                    continue;
-                }
-                let dInfo: DiagnosticInfo;
-                if (scriptImport.text.trim().length === 0) {
-                    dInfo = DiagnosticMessages.scriptSrcCannotBeEmpty();
-                } else {
-                    dInfo = DiagnosticMessages.referencedFileDoesNotExist();
-                }
-
-                this.diagnostics.push({
-                    ...dInfo,
-                    range: scriptImport.filePathRange,
-                    file: scriptImport.sourceFile
-                });
-                //if the character casing of the script import path does not match that of the actual path
-            } else if (scriptImport.pkgPath !== referencedFile.pkgPath) {
-                const correctUri = scriptImport.text.startsWith('pkg:/')
-                    ? util.getRokuPkgPath(referencedFile.pkgPath)
-                    : path.posix.relative(
-                        path.dirname(scriptImport.sourceFile.pkgPath).replace(/\\/g, '/'),
-                        referencedFile.pkgPath.replace(/\\/g, '/')
-                    );
-                this.diagnostics.push({
-                    ...DiagnosticMessages.scriptImportCaseMismatch(referencedFile.pkgPath, correctUri),
-                    range: scriptImport.filePathRange,
-                    file: scriptImport.sourceFile
-                });
-            }
-        }
-    }
->>>>>>> master
 
     /**
      * Find the file with the specified relative path
@@ -1444,8 +1043,6 @@ export class Scope {
         return items;
     }
 }
-<<<<<<< HEAD
-=======
 
 /**
  * A single file's contribution to a namespace name. Cached on `BrsFile` and shared
@@ -1465,6 +1062,7 @@ export interface NamespaceFileContribution {
     fullName: string;
     lastPartName: string;
     nameRange: Range;
+    namespaceStatements?: NamespaceStatement[];
     statements?: Statement[];
     classStatements?: Record<string, ClassStatement>;
     functionStatements?: Record<string, FunctionStatement>;
@@ -1488,17 +1086,19 @@ export interface NamespaceContainer {
     fullName: string;
     nameRange: Range;
     lastPartName: string;
-    namespaces: Map<string, NamespaceContainer>;
+    namespaces?: Map<string, NamespaceContainer>;
+    namespaceStatements?: NamespaceStatement[];
     statements?: Statement[];
     classStatements?: Record<string, ClassStatement>;
     functionStatements?: Record<string, FunctionStatement>;
     enumStatements?: Map<string, EnumStatement>;
     constStatements?: Map<string, ConstStatement>;
     symbolTable?: SymbolTable;
+    //fields used by per-file namespace lookups; optional so scope-level callers don't have to populate them
+    fullNameLower?: string;
+    parentNameLower?: string;
+    nameParts?: Identifier[];
+    lastPartNameLower?: string;
+    isTopLevel?: boolean;
 }
 
-interface AugmentedNewExpression extends NewExpression {
-    file: BscFile;
-}
-
->>>>>>> master

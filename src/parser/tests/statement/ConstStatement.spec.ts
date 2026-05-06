@@ -1,10 +1,5 @@
-<<<<<<< HEAD
-import { expectCompletionsIncludes, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile } from '../../../testHelpers.spec';
-import { util, standardizePath as s } from '../../../util';
-=======
 import { expectCompletionsIncludes, expectDiagnostics, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile } from '../../../testHelpers.spec';
-import { util } from '../../../util';
->>>>>>> master
+import { util, standardizePath as s } from '../../../util';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
 import { ParseMode, Parser } from '../../Parser';
@@ -12,11 +7,7 @@ import { expect } from '../../../chai-config.spec';
 import type { ConstStatement } from '../../Statement';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { LiteralExpression } from '../../Expression';
-<<<<<<< HEAD
-=======
-import { CompletionItemKind } from 'vscode-languageserver-protocol';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
->>>>>>> master
 import { rootDir } from '../../../testHelpers.spec';
 import { CompletionItemKind } from 'vscode-languageserver';
 
@@ -614,8 +605,8 @@ describe('ConstStatement', () => {
             //matches the class-hierarchy convention: one diagnostic per const in the cycle,
             //each rotated so the diagnostic's const is at the head of the chain
             expectDiagnostics(program, [
-                DiagnosticMessages.circularReferenceDetected(['A', 'B', 'A'], 'source').message,
-                DiagnosticMessages.circularReferenceDetected(['B', 'A', 'B'], 'source').message
+                DiagnosticMessages.circularReferenceDetected(['A', 'B', 'A']).message,
+                DiagnosticMessages.circularReferenceDetected(['B', 'A', 'B']).message
             ]);
         });
 
@@ -628,8 +619,8 @@ describe('ConstStatement', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.circularReferenceDetected(['ns.A', 'ns.B', 'ns.A'], 'source').message,
-                DiagnosticMessages.circularReferenceDetected(['ns.B', 'ns.A', 'ns.B'], 'source').message
+                DiagnosticMessages.circularReferenceDetected(['ns.A', 'ns.B', 'ns.A']).message,
+                DiagnosticMessages.circularReferenceDetected(['ns.B', 'ns.A', 'ns.B']).message
             ]);
         });
 
@@ -643,9 +634,9 @@ describe('ConstStatement', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.circularReferenceDetected(['ns.A', 'ns.B', 'ns.C', 'ns.A'], 'source').message,
-                DiagnosticMessages.circularReferenceDetected(['ns.B', 'ns.C', 'ns.A', 'ns.B'], 'source').message,
-                DiagnosticMessages.circularReferenceDetected(['ns.C', 'ns.A', 'ns.B', 'ns.C'], 'source').message
+                DiagnosticMessages.circularReferenceDetected(['ns.A', 'ns.B', 'ns.C', 'ns.A']).message,
+                DiagnosticMessages.circularReferenceDetected(['ns.B', 'ns.C', 'ns.A', 'ns.B']).message,
+                DiagnosticMessages.circularReferenceDetected(['ns.C', 'ns.A', 'ns.B', 'ns.C']).message
             ]);
         });
 

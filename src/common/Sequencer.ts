@@ -39,7 +39,6 @@ export class Sequencer {
         func: (...args: any[]) => any;
     }> = [];
 
-<<<<<<< HEAD
     public forEach<T>(label: string, itemsOrFactory: Iterable<T> | (() => Iterable<T>), func: (item: T) => any) {
         //register a single action for now, we will fetch the full list and register their actions later
         const primaryAction = {
@@ -53,17 +52,6 @@ export class Sequencer {
                     actions.push({
                         label: label + `[${i++}]`,
                         groupLabel: label,
-=======
-    public forEach<T>(itemsOrFactory: Iterable<T> | (() => Iterable<T>), func: (item: T) => any) {
-        //register a single action for now, we will fetch the full list and register their actions later
-        const primaryAction = {
-            args: [],
-            func: (data) => {
-                const items = typeof itemsOrFactory === 'function' ? itemsOrFactory() : itemsOrFactory;
-                const actions: Sequencer['actions'] = [];
-                for (const item of items) {
-                    actions.push({
->>>>>>> master
                         args: [item],
                         func: func
                     });

@@ -9,7 +9,8 @@ import { DiagnosticCodeMap, diagnosticCodes, DiagnosticLegacyCodeMap, Diagnostic
 import type { NamespaceFileContribution } from '../Scope';
 import { SymbolTable } from '../SymbolTable';
 import { FunctionScope } from '../FunctionScope';
-import type { Callable, CallableParam, CommentFlag, BsDiagnostic, FileReference, FileLink, SerializedCodeFile, NamespaceContainer } from '../interfaces';
+import type { Callable, CallableParam, CommentFlag, BsDiagnostic, FileReference, FileLink, SerializedCodeFile } from '../interfaces';
+import type { NamespaceContainer } from '../Scope';
 import type { Token } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers } from '../lexer/TokenKind';
@@ -213,6 +214,7 @@ export class BrsFile implements BscFile {
                                 fullName: loopName,
                                 lastPartName: part,
                                 nameRange: namespaceStatement.nameExpression.location?.range,
+                                namespaceStatements: undefined,
                                 statements: undefined,
                                 classStatements: undefined,
                                 functionStatements: undefined,
@@ -224,6 +226,7 @@ export class BrsFile implements BscFile {
                     }
                     //populate the leaf contribution from this namespaceStatement's body
                     const ns = contributions.get(name.toLowerCase())!;
+                    (ns.namespaceStatements ??= []).push(namespaceStatement);
                     if (namespaceStatement.body.statements.length > 0) {
                         (ns.statements ??= []).push(...namespaceStatement.body.statements);
                     }

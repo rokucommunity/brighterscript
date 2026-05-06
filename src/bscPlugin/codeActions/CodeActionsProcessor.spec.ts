@@ -1,13 +1,10 @@
 import { expect } from '../../chai-config.spec';
 import type { Range } from 'vscode-languageserver';
-<<<<<<< HEAD
-=======
-import type { BscFile, OnGetCodeActionsEvent } from '../../interfaces';
->>>>>>> master
 import { Program } from '../../Program';
 import { expectCodeActions, trim } from '../../testHelpers.spec';
 import { standardizePath as s, util } from '../../util';
 import type { BscFile } from '../../files/BscFile';
+import type { ProvideCodeActionsEvent } from '../../interfaces';
 import { rootDir } from '../../testHelpers.spec';
 import { CodeActionsProcessor } from './CodeActionsProcessor';
 
@@ -293,12 +290,13 @@ describe('CodeActionsProcessor', () => {
             program.validate();
 
             const range = util.createRange(2, 24, 2, 24);
-            const event: OnGetCodeActionsEvent = {
+            const fileUri = util.pathToUri(file.srcPath);
+            const event: ProvideCodeActionsEvent = {
                 program: program,
                 file: file,
                 range: range,
                 scopes: program.getScopesForFile(file),
-                diagnostics: program.getDiagnostics().filter(d => d.file === file && util.rangesIntersectOrTouch(d.range, range)),
+                diagnostics: program.getDiagnostics().filter(d => d.location?.uri === fileUri && util.rangesIntersectOrTouch(d.location.range, range)),
                 codeActions: []
             };
 
@@ -611,9 +609,6 @@ describe('CodeActionsProcessor', () => {
             testGetCodeActions(file, util.createRange(3, 23, 3, 23), [`Add void return type to function declaration`, `Convert function to sub`]);
         });
 
-<<<<<<< HEAD
-        it('suggests removing the return type from sub with return type', () => {
-=======
         it('suggests adding void return type to function with inline body', () => {
             const file = program.setFile('source/main.brs', `
                 function test() : print "onItemContentChange"
@@ -634,8 +629,7 @@ describe('CodeActionsProcessor', () => {
             expect(changes[0].newText).to.eql(' as void');
         });
 
-        it('suggests deleting the return type from void function', () => {
->>>>>>> master
+        it('suggests removing the return type from sub with return type', () => {
             const file = program.setFile('source/main.brs', `
                 sub test() as integer
                     'need a return value here...
