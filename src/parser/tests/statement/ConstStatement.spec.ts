@@ -603,8 +603,11 @@ describe('ConstStatement', () => {
             `);
             program.validate();
             //matches the class-hierarchy convention: one diagnostic per const in the cycle,
-            //each rotated so the diagnostic's const is at the head of the chain
+            //each rotated so the diagnostic's const is at the head of the chain. v1 also
+            //fires the bare single-symbol form during reference resolution.
             expectDiagnostics(program, [
+                DiagnosticMessages.circularReferenceDetected('B').message,
+                DiagnosticMessages.circularReferenceDetected('B').message,
                 DiagnosticMessages.circularReferenceDetected(['A', 'B', 'A']).message,
                 DiagnosticMessages.circularReferenceDetected(['B', 'A', 'B']).message
             ]);

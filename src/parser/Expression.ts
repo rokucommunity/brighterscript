@@ -2812,7 +2812,9 @@ export class TypedArrayExpression extends Expression {
     public readonly location: Location;
 
     public transpile(state: BrsTranspileState): TranspileResult {
-        return [this.getType({ flags: SymbolTypeFlag.typetime }).toTypeString()];
+        //typed arrays (e.g. `float[]`, `float[][][]`) collapse to `dynamic` since
+        //BrightScript has no array-of-T type at the language level.
+        return ['dynamic'];
     }
 
     public walk(visitor: WalkVisitor, options: WalkOptions) {

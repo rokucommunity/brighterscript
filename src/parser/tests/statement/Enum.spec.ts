@@ -1096,7 +1096,12 @@ describe('EnumStatement', () => {
                 end sub
             `);
             program.validate();
+            //v1 also fires the bare single-symbol "Circular reference detected 'B'" form
+            //during reference resolution (in addition to the rotated chain diagnostics).
             expectDiagnostics(program, [
+                DiagnosticMessages.circularReferenceDetected('B').message,
+                DiagnosticMessages.circularReferenceDetected('B').message,
+                DiagnosticMessages.circularReferenceDetected('B').message,
                 DiagnosticMessages.circularReferenceDetected(['A', 'B', 'A']).message,
                 DiagnosticMessages.circularReferenceDetected(['B', 'A', 'B']).message,
                 DiagnosticMessages.computedAAKeyMustBeStringExpression()

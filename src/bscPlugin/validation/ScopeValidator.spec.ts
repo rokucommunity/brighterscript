@@ -5127,10 +5127,16 @@ describe('ScopeValidator', () => {
                 end sub
             `);
             program.validate();
+            //v1's circular detection reports both the full 3-cycle (A->B->C->A and its
+            //rotations) and the pair-wise B<->C cycle that emerges once each const is
+            //resolved through the next.
             expectDiagnostics(program, [
+                DiagnosticMessages.circularReferenceDetected(['A', 'B', 'C', 'A']).message,
+                DiagnosticMessages.circularReferenceDetected(['B', 'C', 'A', 'B']).message,
                 DiagnosticMessages.circularReferenceDetected(['B', 'C', 'B']).message,
                 DiagnosticMessages.circularReferenceDetected(['B', 'C', 'B']).message,
                 DiagnosticMessages.circularReferenceDetected(['B', 'C', 'B']).message,
+                DiagnosticMessages.circularReferenceDetected(['C', 'A', 'B', 'C']).message,
                 DiagnosticMessages.circularReferenceDetected(['C', 'B', 'C']).message
             ]);
         });
