@@ -216,7 +216,7 @@ describe('parser call expressions', () => {
                 end sub
             `);
 
-            expect(diagnostics).to.be.lengthOf(1);
+            expect(diagnostics).to.be.lengthOf(2);
             expectDiagnostics(diagnostics, [
                 DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments'),
                 DiagnosticMessages.expectedNewlineOrColon()

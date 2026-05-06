@@ -3082,6 +3082,21 @@ export class Parser {
                     });
                     throw this.lastDiagnosticAsError();
                 }
+                //if a newline appears where we'd next read an argument and line continuation isn't
+                //allowed in this mode, peek past the newlines: if the following token can't begin an
+                //argument expression (e.g. `end function`, `end sub`, EOF), this is clearly an
+                //unclosed-paren situation and we swallow the newlines so the diagnostic from
+                //expression() reports the surprising token rather than the newline itself.
+                if (!this.allowLineContinuation && this.check(TokenKind.Newline)) {
+                    let lookahead = this.current;
+                    while (this.tokens[lookahead]?.kind === TokenKind.Newline) {
+                        lookahead++;
+                    }
+                    const followingKind = this.tokens[lookahead]?.kind;
+                    if (followingKind === TokenKind.EndFunction || followingKind === TokenKind.EndSub || followingKind === TokenKind.Eof) {
+                        while (this.match(TokenKind.Newline)) { }
+                    }
+                }
                 try {
                     args.push(this.expression());
                 } catch (error) {
@@ -3093,6 +3108,16 @@ export class Parser {
         }
 
         this.consumeNewlinesIfAllowed();
+
+        //if no closing `)` is in sight (e.g. we hit a newline that line-continuation is not allowed
+        //to swallow), consume newlines anyway as part of error recovery so the unmatched-left-token
+        //diagnostic points at the surprising token (e.g. `end sub`) rather than the `\n`. This also
+        //ensures the surrounding block sees a non-separator next token and emits its own
+        //`expectedNewlineOrColon` diagnostic.
+        const recoveredFromMissingRightParen = !this.check(TokenKind.RightParen);
+        if (recoveredFromMissingRightParen) {
+            while (this.match(TokenKind.Newline)) { }
+        }
 
         const closingParen = this.tryConsume(
             DiagnosticMessages.unmatchedLeftToken(openingParen.text, 'function call arguments'),
