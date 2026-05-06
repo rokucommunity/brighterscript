@@ -333,13 +333,13 @@ export class CodeActionsProcessor {
         }
 
         this.suggestedImports.add(key);
-        const importStatements = (this.event.file as BrsFile).parser["_cachedLookups"].importStatements;
+        const importStatements = (this.event.file as BrsFile)["_cachedLookups"].importStatements;
         //find the position of the first import statement, or the top of the file if there is none
         const insertPosition = importStatements[importStatements.length - 1]?.tokens.import.location.range?.start ?? util.createPosition(0, 0);
 
         //find all files that reference this function
         for (const file of files) {
-            const pkgPath = util.sanitizePkgPath(file.pkgPath);
+            const pkgPath = util.sanitizePkgPath(file.destPath);
             this.event.codeActions.push(
                 codeActionUtil.createCodeAction({
                     title: `import "${pkgPath}"`,
@@ -390,7 +390,7 @@ export class CodeActionsProcessor {
             return;
         }
         const file = this.event.file;
-        const importStatements = file.parser["_cachedLookups"].importStatements;
+        const importStatements = file["_cachedLookups"].importStatements;
         const insertPosition = importStatements[importStatements.length - 1]?.tokens.import.location.range?.start ?? util.createPosition(0, 0);
 
         const changes: InsertChange[] = [];
@@ -422,7 +422,7 @@ export class CodeActionsProcessor {
                 continue;
             }
 
-            const pkgPath = util.sanitizePkgPath(files[0].pkgPath);
+            const pkgPath = util.sanitizePkgPath(files[0].destPath);
             if (!addedPaths.has(pkgPath)) {
                 addedPaths.add(pkgPath);
                 changes.push({
