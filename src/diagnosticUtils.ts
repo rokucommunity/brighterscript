@@ -129,9 +129,10 @@ function normalizeOneDiagnosticReporter(value: DiagnosticReporter): NormalizedDi
  *   - missing/null value → default `[{ type: 'detailed' }]`
  *   - explicit empty array → preserved (caller has opted out of all output)
  *   - invalid entry inside a non-empty input → warned via `logger`, skipped
+ *   - duplicate entry (same preset type, or same custom-template format string) → warned, skipped
  *   - all entries invalid → warned, falls back to `[{ type: 'detailed' }]`
  *
- * Bad reporters never throw — surfacing a typo shouldn't be able to abort a build.
+ * Bad reporters never throw, surfacing a typo shouldn't be able to abort a build.
  */
 export function normalizeDiagnosticReporters(
     value: DiagnosticReporter | DiagnosticReporter[] | undefined,
@@ -145,13 +146,26 @@ export function normalizeDiagnosticReporters(
         return [];
     }
     const warn = (message: string) => (logger ? logger.warn(message) : console.warn(message));
+    //presets are deduped by `type`; custom templates are deduped by their format string. running the
+    //same reporter twice would only produce duplicate output, so it's almost always a config mistake.
+    const seen = new Set<string>();
     const result: NormalizedDiagnosticReporter[] = [];
     for (const input of inputs) {
+        let reporter: NormalizedDiagnosticReporter;
         try {
-            result.push(normalizeOneDiagnosticReporter(input));
+            reporter = normalizeOneDiagnosticReporter(input);
         } catch (e: any) {
             warn(`Ignoring invalid diagnostic reporter: ${e?.message ?? String(e)}`);
+            continue;
         }
+        const key = reporter.type === 'custom' ? `custom:${reporter.format}` : reporter.type;
+        if (seen.has(key)) {
+            const description = reporter.type === 'custom' ? `custom template "${reporter.format}"` : `"${reporter.type}"`;
+            warn(`Ignoring duplicate diagnostic reporter: ${description}`);
+            continue;
+        }
+        seen.add(key);
+        result.push(reporter);
     }
     if (result.length === 0) {
         warn(`No valid diagnostic reporters configured; falling back to "detailed".`);

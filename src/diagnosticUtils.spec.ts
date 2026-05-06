@@ -352,6 +352,44 @@ describe('diagnosticUtils', () => {
             expect(warnings.some(w => w.includes('Unknown diagnostic reporter type'))).to.be.true;
         });
 
+        it('dedupes preset entries by type and warns about each duplicate', () => {
+            const { logger, warnings } = makeLogger();
+            expect(diagnosticUtils.normalizeDiagnosticReporters(['detailed', 'github-actions', 'detailed', 'github-actions'], logger))
+                .to.eql([
+                    { type: 'detailed' },
+                    { type: 'github-actions' }
+                ]);
+            expect(warnings).to.have.length(2);
+            expect(warnings[0]).to.match(/duplicate diagnostic reporter: "detailed"/);
+            expect(warnings[1]).to.match(/duplicate diagnostic reporter: "github-actions"/);
+        });
+
+        it('dedupes custom templates by their format string', () => {
+            const { logger, warnings } = makeLogger();
+            expect(diagnosticUtils.normalizeDiagnosticReporters(
+                [
+                    '{file}: {message}',
+                    { type: 'custom', format: '{file}: {message}' },
+                    { type: 'custom', format: '{file}:{line} {message}' }
+                ],
+                logger
+            )).to.eql([
+                { type: 'custom', format: '{file}: {message}' },
+                { type: 'custom', format: '{file}:{line} {message}' }
+            ]);
+            expect(warnings).to.have.length(1);
+            expect(warnings[0]).to.match(/duplicate diagnostic reporter: custom template "\{file\}: \{message\}"/);
+        });
+
+        it('does not consider custom templates with different formats as duplicates', () => {
+            const { logger, warnings } = makeLogger();
+            expect(diagnosticUtils.normalizeDiagnosticReporters(
+                ['{file}: {message}', '{file}:{line} {message}'],
+                logger
+            )).to.have.length(2);
+            expect(warnings).to.have.length(0);
+        });
+
         it('falls back silently to console.warn when no logger is provided', () => {
             //we just want to confirm it doesn't throw and still returns the fallback
             const stub = sinon.stub(console, 'warn').callsFake(() => { });
