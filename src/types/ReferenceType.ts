@@ -16,6 +16,7 @@ export function referenceTypeFactory(memberKey: string, fullName, flags: SymbolT
 
 export class ReferenceType extends BscType {
 
+
     /**
      * ReferenceTypes are used when the actual type may be resolved later from a Symbol table
      * @param memberKey which key do we use to look up this type in the given table?
