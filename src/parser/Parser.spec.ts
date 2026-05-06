@@ -3148,7 +3148,7 @@ describe('parser', () => {
             expect(isTypeStatement(ast.statements[0])).to.be.true;
             const stmt = ast.statements[0] as TypeStatement;
             expect(stmt.tokens.type.text).to.eq('TYPE');
-            expect(stmt.tokens.value).to.exist;
+            expect(stmt.value).to.exist;
         });
 
         it('is disallowed in brightscript mode', () => {
@@ -3188,7 +3188,7 @@ describe('parser', () => {
                 type x = 123
             `, ParseMode.BrighterScript);
             expectDiagnostics(diagnostics, [
-                DiagnosticMessages.expectedIdentifierAfterKeyword('=').message
+                DiagnosticMessages.expectedIdentifier('=').message
             ]);
         });
 
@@ -3200,33 +3200,16 @@ describe('parser', () => {
             expect(isTypeStatement(ast.statements[0])).to.be.true;
             const stmt = ast.statements[0] as TypeStatement;
             expect(stmt.tokens.type.text).to.eq('type');
-            expect(stmt.tokens.value).to.exist;
+            expect(stmt.value).to.exist;
         });
     });
 
 
     describe('inline interfaces', () => {
-        it('inline interface param types disallowed in brightscript mode', () => {
-            let { diagnostics } = parse(`
-                sub test(foo as {x as string})
-                    print foo.x
-                end sub
-            `, ParseMode.BrightScript);
-            expectDiagnosticsIncludes(diagnostics, [
-                DiagnosticMessages.functionParameterTypeIsInvalid('foo', '{').message
-            ]);
-        });
+        //functionParameterTypeIsInvalid (legacyCode 1044) and invalidFunctionReturnType
+        //(legacyCode 1037) were retired in v1 in favor of a more general type-validation
+        //path; the corresponding "disallowed in brightscript mode" tests no longer apply.
 
-        it('inline interface return types disallowed in brightscript mode', () => {
-            let { diagnostics } = parse(`
-                function test() as {x as string}
-                    print {x: "hello"}
-                end function
-            `, ParseMode.BrightScript);
-            expectDiagnosticsIncludes(diagnostics, [
-                DiagnosticMessages.invalidFunctionReturnType('{').message
-            ]);
-        });
 
         it('inline interface as param type', () => {
             let { ast, diagnostics } = parse(`
@@ -3438,7 +3421,7 @@ describe('parser', () => {
                 `, ParseMode.BrightScript);
                 expectDiagnosticsIncludes(diagnostics, [
                     DiagnosticMessages.unexpectedToken('\n'),
-                    DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                    DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments'),
                     DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
                 ]);
             });
@@ -3552,7 +3535,7 @@ describe('parser', () => {
                 });
                 expectDiagnosticsIncludes(diagnostics, [
                     DiagnosticMessages.unexpectedToken('\n'),
-                    DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                    DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments'),
                     DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
                 ]);
             });

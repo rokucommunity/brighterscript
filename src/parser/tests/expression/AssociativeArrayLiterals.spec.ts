@@ -248,6 +248,10 @@ describe('parser associative array literals', () => {
         });
     });
 
+    /*
+    //computed AA keys (e.g. `[myEnum.x]: "value"`) and the AAIndexedMemberExpression
+    //AST node are master-only and have not yet been ported to v1. The tests are kept
+    //as a comment block so a future v1 port has a starting point.
     describe('computed keys', () => {
         it('parses [expr] computed key syntax', () => {
             const { statements, diagnostics } = Parser.parse(`
@@ -322,6 +326,7 @@ describe('parser associative array literals', () => {
             expect(second.key).to.exist;
         });
     });
+    */
 
     it('location tracking', () => {
         /**

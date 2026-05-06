@@ -295,9 +295,8 @@ describe('ProgramBuilder', () => {
             await builder.run({
                 project: `${rootDir}/bsconfig.json`,
                 rootDir: rootDir,
-                createPackage: false,
-                deploy: false,
-                copyToStaging: false,
+
+
                 files: ['source/**/*']
             });
             //validate was not called
@@ -313,9 +312,8 @@ describe('ProgramBuilder', () => {
             //pass validate:false explicitly - this should override even if the config would otherwise say true
             await builder.run({
                 rootDir: rootDir,
-                createPackage: false,
-                deploy: false,
-                copyToStaging: false,
+
+
                 validate: false,
                 files: ['source/**/*']
             });
@@ -333,9 +331,8 @@ describe('ProgramBuilder', () => {
             //the initial run, then calls program.validate() directly in its own validate() method
             await builder.run({
                 rootDir: rootDir,
-                createPackage: false,
-                deploy: false,
-                copyToStaging: false,
+
+
                 validate: false,
                 showDiagnosticsInConsole: false,
                 files: ['source/**/*']

@@ -1332,6 +1332,9 @@ describe('AstNode', () => {
             testClone(original);
         });
 
+        //AAIndexedMemberExpression (computed AA keys) is master-only and has not been
+        //ported to v1; this clone test is kept commented for the future port.
+        /*
         it('clones AAIndexedMemberExpression with undefined value', () => {
             const original = Parser.parse(`
                 sub test()
@@ -1344,6 +1347,7 @@ describe('AstNode', () => {
 
             testClone(original);
         });
+        */
 
         it('clones AALiteralExpression', () => {
             const original = Parser.parse(`

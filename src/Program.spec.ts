@@ -6,8 +6,6 @@ import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
-import type { BsConfig } from './BsConfig';
-import type { TranspileObj } from './Program';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import type { FunctionStatement, PrintStatement } from './parser/Statement';
@@ -26,10 +24,8 @@ import type { ProvideFileEvent, Plugin, BeforeProvideFileEvent, AfterProvideFile
 import { StringType, TypedFunctionType, DynamicType, FloatType, IntegerType, InterfaceType, ArrayType, BooleanType, DoubleType, UnionType } from './types';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
-import * as path from 'path';
 import undent from 'undent';
 import { Scope } from './Scope';
-import { SourceMapConsumer } from 'source-map';
 
 const sinon = createSandbox();
 
@@ -1748,6 +1744,12 @@ describe('Program', () => {
         expect(fsExtra.pathExistsSync(s`${outDir}/components/comp1.xml.map`)).is.true;
     });
 
+    /*
+    //v1 dropped public Program.transpile() in favor of the build pipeline. The sourcemap
+    //source-path tests and the prebuild sourcemap chaining tests below depend on that API
+    //and on the chaining helpers that were removed pending re-integration into the v1
+    //serialize pipeline. Restore both blocks (re-translated to the new pipeline) when
+    //the chaining helper is wired back in.
     describe('sourcemap source paths', () => {
         async function transpileFile(options: BsConfig, pkgPath = 'source/main.bs') {
             fsExtra.ensureDirSync(program.options.stagingDir!);
@@ -2089,6 +2091,7 @@ describe('Program', () => {
             });
         });
     });
+    */
 
     it('copies the bslib.brs file', async () => {
         fsExtra.ensureDirSync(program.options.outDir!);

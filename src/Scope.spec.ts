@@ -2898,8 +2898,8 @@ describe('Scope', () => {
                 program.validate();
                 const lib = program['scopes']['source'].buildNamespaceLookup().get('lib');
                 expect(lib.symbolTable).to.exist;
-                expect(lib.symbolTable.hasSymbol('fromA')).to.be.true;
-                expect(lib.symbolTable.hasSymbol('fromB')).to.be.true;
+                expect(lib.symbolTable.hasSymbol('fromA', SymbolTypeFlag.runtime)).to.be.true;
+                expect(lib.symbolTable.hasSymbol('fromB', SymbolTypeFlag.runtime)).to.be.true;
             });
 
             it('produces different aggregates for scopes with different contributor sets', () => {

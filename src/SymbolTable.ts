@@ -487,10 +487,9 @@ export class SymbolTable implements SymbolTypeGetter {
                 destSymbols = [];
                 this.symbolMap.set(key, destSymbols);
             }
-            //destSymbols.push(...sourceSymbols);
+            destSymbols.push(...sourceSymbols);
         }
 
-        // mergeTables(this, symbolTable);
         for (let pocketTable of symbolTable.pocketTables) {
             this.mergeSymbolTable(pocketTable.table);
         }

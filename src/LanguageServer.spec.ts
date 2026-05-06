@@ -8,6 +8,7 @@ import type { BrightScriptClientConfiguration } from './LanguageServer';
 import { CustomCommands, LanguageServer } from './LanguageServer';
 import { createSandbox } from 'sinon';
 import { standardizePath as s, util } from './util';
+import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import type { Program } from './Program';
 import * as assert from 'assert';
