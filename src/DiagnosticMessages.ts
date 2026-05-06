@@ -465,16 +465,11 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'unexpected-tag'
     }),
-    __unused20: () => ({
-        message: `Expected statement or function call but instead found expression`,
-        legacyCode: 1066,
-        severity: DiagnosticSeverity.Error,
-        code: 'expected-statement-not-expression'
-    }),
     expectedStatementOrFunctionCallButReceivedExpression: (expressionType = 'expression') => ({
         message: `Expected statement or function call but instead found ${expressionType}`,
-        code: 1066,
-        severity: DiagnosticSeverity.Error
+        legacyCode: 1066,
+        severity: DiagnosticSeverity.Error,
+        code: 'expected-statement-or-function-call-not-expression'
     }),
     xmlFunctionNotFound: (name: string) => ({
         message: `Cannot find function with name '${name}' in component scope`,

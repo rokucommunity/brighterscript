@@ -1,3 +1,4 @@
+import * as path from 'path';
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
 import { isAliasStatement, isArrayType, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallFuncableTypeLike, isCallableType, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isIterableType, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypeStatementType, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
@@ -1455,8 +1456,16 @@ export class ScopeValidator {
                 }, ScopeValidatorDiagnosticTag.Imports);
                 //if the character casing of the script import path does not match that of the actual path
             } else if (scriptImport.destPath !== referencedFile.destPath) {
+                //preserve the original import shape (pkg:/... vs relative) when reporting the
+                //correct path so the quick-fix replacement matches what the user authored.
+                const correctUri = scriptImport.text.startsWith('pkg:/')
+                    ? util.sanitizePkgPath(referencedFile.destPath)
+                    : path.posix.relative(
+                        path.dirname(scriptImport.sourceFile.destPath).replace(/\\/g, '/'),
+                        referencedFile.destPath.replace(/\\/g, '/')
+                    );
                 this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.scriptImportCaseMismatch(referencedFile.destPath),
+                    ...DiagnosticMessages.scriptImportCaseMismatch(referencedFile.destPath, correctUri),
                     location: util.createLocationFromFileRange(scriptImport.sourceFile, scriptImport.filePathRange)
                 }, ScopeValidatorDiagnosticTag.Imports);
             }

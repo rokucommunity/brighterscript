@@ -292,7 +292,11 @@ export function expectCodeActions(test: () => any, expected: CodeActionShorthand
         sinon.restore();
     }
 
-    const args = stub.getCalls().map(x => x.args[0]);
+    const args = stub.getCalls().map(x => x.args[0])
+        //the bs:disable-{line,file} suggestions fire for every diagnostic with a `code`
+        //(see CodeActionsProcessor.suggestDisableDiagnosticQuickFixes); the legacy specs
+        //predate that feature, so filter them out here.
+        .filter(arg => !arg.title?.startsWith('Disable '));
     //delete any `diagnostics` arrays to help with testing performance (since it's circular...causes all sorts of issues)
     for (let arg of args) {
         delete arg.diagnostics;

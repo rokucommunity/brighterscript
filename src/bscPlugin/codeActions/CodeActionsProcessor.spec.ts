@@ -29,7 +29,13 @@ describe('CodeActionsProcessor', () => {
             program.getCodeActions(
                 typeof file === 'string' ? file : file.srcPath,
                 range
-            ).map(x => x.title).sort()
+            )
+                //the bs:disable-{line,file} suggestions fire for every diagnostic with a `code`,
+                //which is most of them. The legacy code-action specs predate that feature; filter
+                //the disable suggestions out so each spec can focus on the fix it cares about.
+                .map(x => x.title)
+                .filter(title => !title.startsWith('Disable '))
+                .sort()
         ).to.eql(expected);
     }
 
@@ -132,15 +138,9 @@ describe('CodeActionsProcessor', () => {
                 </component>
             `);
 
-            program.validate();
-
             //we should only get each file import suggestion exactly once
-            const codeActions = program.getCodeActions(
-                componentCommonFile.srcPath,
-                // doSome|thing()
-                util.createRange(2, 22, 2, 22)
-            );
-            expect(codeActions.map(x => x.title).sort()).to.eql([
+            // doSome|thing()
+            testGetCodeActions(componentCommonFile, util.createRange(2, 22, 2, 22), [
                 `import "pkg:/components/lib1.brs"`,
                 `import "pkg:/components/lib2.brs"`
             ]);
@@ -169,12 +169,13 @@ describe('CodeActionsProcessor', () => {
 
             program.validate();
 
-            //there should be no code actions since this is a brs file
+            //there should be no code actions since this is a brs file (other than the
+            //bs:disable suggestions, which fire on every diagnostic with a `code`)
             const codeActions = program.getCodeActions(
                 file.srcPath,
                 // DoSometh|ing()
                 util.createRange(2, 28, 2, 28)
-            );
+            ).filter(action => !action.title?.startsWith('Disable '));
             expect(codeActions).to.be.empty;
         });
 
@@ -197,15 +198,8 @@ describe('CodeActionsProcessor', () => {
                 end class
             `);
 
-            program.validate();
-
-            expect(
-                program.getCodeActions(
-                    file.srcPath,
-                    // new Per|son()
-                    util.createRange(2, 34, 2, 34)
-                ).map(x => x.title).sort()
-            ).to.eql([
+            // new Per|son()
+            testGetCodeActions(file, util.createRange(2, 34, 2, 34), [
                 `import "pkg:/source/Person.bs"`
             ]);
         });
@@ -231,15 +225,8 @@ describe('CodeActionsProcessor', () => {
                 end namespace
             `);
 
-            program.validate();
-
-            expect(
-                program.getCodeActions(
-                    file.srcPath,
-                    // new Anim|als.Cat()
-                    util.createRange(2, 36, 2, 36)
-                ).map(x => x.title).sort()
-            ).to.eql([
+            // new Anim|als.Cat()
+            testGetCodeActions(file, util.createRange(2, 36, 2, 36), [
                 `import "pkg:/source/Animals.bs"`
             ]);
         });
@@ -816,7 +803,10 @@ describe('CodeActionsProcessor', () => {
         });
     });
 
-    describe('unnecessaryCodebehindScriptImport', () => {
+    //the unnecessaryCodebehindScriptImport diagnostic was deprecated in v1
+    //(now __unused45 in DiagnosticMessages); v1 doesn't fire it, so the quick
+    //fix is unreachable. Re-enable if v1 restores the diagnostic.
+    describe.skip('unnecessaryCodebehindScriptImport', () => {
         it('offers to remove the unnecessary codebehind import', () => {
             const file = program.setFile('components/comp1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>

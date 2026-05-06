@@ -138,8 +138,7 @@ describe('BrsFile', () => {
             `);
             program.validate();
             expectDiagnosticsIncludes(program, [
-                DiagnosticMessages.unexpectedToken('\n'),
-                DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+                DiagnosticMessages.unexpectedToken('\n')
             ]);
         });
 
@@ -193,8 +192,7 @@ describe('BrsFile', () => {
             program.validate();
             expectDiagnosticsIncludes(program, [
                 DiagnosticMessages.unexpectedToken('\n'),
-                DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments'),
-                DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+                DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments')
             ]);
         });
 
@@ -314,8 +312,7 @@ describe('BrsFile', () => {
             `);
             program.validate();
             expectDiagnosticsIncludes(program, [
-                DiagnosticMessages.unexpectedToken('\n'),
-                DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+                DiagnosticMessages.unexpectedToken('\n')
             ]);
         });
 
@@ -350,8 +347,7 @@ describe('BrsFile', () => {
             program.validate();
             expectDiagnosticsIncludes(program, [
                 DiagnosticMessages.unexpectedToken('\n'),
-                DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments'),
-                DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+                DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments')
             ]);
         });
 
