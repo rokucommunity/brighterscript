@@ -90,11 +90,17 @@ export class Project implements LspProject {
             showDiagnosticsInConsole: false
         });
 
-        //flush diagnostics every time the program finishes validating
-        //this plugin must be added LAST to the program to ensure we can see all diagnostics
+        //flush diagnostics every time the program FINISHES validating.
+        //this plugin must be added LAST to the program to ensure we can see all diagnostics.
+        //skip cancelled validations: those fire afterValidateProgram with whatever partial
+        //state was reached, and downstream consumers (e.g. test specs awaiting
+        //onNextDiagnostics) end up reading the partial emit instead of the completed one.
         this.builder.plugins.add({
             name: 'bsc-language-server',
-            afterValidateProgram: () => {
+            afterValidateProgram: (event) => {
+                if (event?.wasCancelled) {
+                    return;
+                }
                 const diagnostics = this.getDiagnostics();
                 this.emit('diagnostics', {
                     diagnostics: diagnostics
