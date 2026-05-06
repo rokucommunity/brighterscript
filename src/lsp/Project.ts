@@ -434,15 +434,19 @@ export class Project implements LspProject {
         }
 
         const programOptions = this.builder.program.options;
-        const newPkgPath = this.computePkgPathForNewSrcPath(options.newSrcPath, programOptions);
-        if (!newPkgPath) {
+        const newDestPath = this.computeDestPathForNewSrcPath(options.newSrcPath, programOptions);
+        if (!newDestPath) {
             return [];
         }
 
-        const oldPkgPath = util.standardizePath(oldFile.pkgPath).toLowerCase();
+        //rename comparisons happen at the source-extension level (destPath), since import
+        //statements reference source paths (e.g. "pkg:/source/lib.bs"), not the transpiled
+        //pkgPath (e.g. "source/lib.brs"). A new file at "source/lib2.bs" needs to be
+        //identified by its destPath, not its pkgPath.
+        const oldDestPath = util.standardizePath(oldFile.destPath).toLowerCase();
 
-        //if the rename doesn't change the pkg path, nothing to do
-        if (oldPkgPath === newPkgPath.toLowerCase()) {
+        //if the rename doesn't change the dest path, nothing to do
+        if (oldDestPath === newDestPath.toLowerCase()) {
             return [];
         }
 
@@ -453,11 +457,11 @@ export class Project implements LspProject {
                     if (!importStatement.tokens.path || !importStatement.filePath) {
                         continue;
                     }
-                    const resolvedPkgPath = util.getPkgPathFromTarget(file.pkgPath, importStatement.filePath);
-                    if (!resolvedPkgPath || util.standardizePath(resolvedPkgPath).toLowerCase() !== oldPkgPath) {
+                    const resolvedPkgPath = util.getPkgPathFromTarget(file.destPath, importStatement.filePath);
+                    if (!resolvedPkgPath || util.standardizePath(resolvedPkgPath).toLowerCase() !== oldDestPath) {
                         continue;
                     }
-                    const newText = util.computeRenamedReferencePath(importStatement.filePath, file.pkgPath, newPkgPath);
+                    const newText = util.computeRenamedReferencePath(importStatement.filePath, file.destPath, newDestPath);
                     if (newText === null) {
                         continue;
                     }
@@ -472,11 +476,11 @@ export class Project implements LspProject {
                     if (!scriptTag.filePathRange || !scriptTag.text) {
                         continue;
                     }
-                    const resolvedPkgPath = util.getPkgPathFromTarget(file.pkgPath, scriptTag.text);
-                    if (!resolvedPkgPath || util.standardizePath(resolvedPkgPath).toLowerCase() !== oldPkgPath) {
+                    const resolvedPkgPath = util.getPkgPathFromTarget(file.destPath, scriptTag.text);
+                    if (!resolvedPkgPath || util.standardizePath(resolvedPkgPath).toLowerCase() !== oldDestPath) {
                         continue;
                     }
-                    const newText = util.computeRenamedReferencePath(scriptTag.text, file.pkgPath, newPkgPath);
+                    const newText = util.computeRenamedReferencePath(scriptTag.text, file.destPath, newDestPath);
                     if (newText === null) {
                         continue;
                     }
@@ -497,7 +501,7 @@ export class Project implements LspProject {
      * folders that aren't yet in the glob still get their imports rewritten.
      * Returns undefined if the new path is outside this project's rootDir.
      */
-    private computePkgPathForNewSrcPath(newSrcPath: string, programOptions: { files?: BsConfig['files']; rootDir?: string }): string | undefined {
+    private computeDestPathForNewSrcPath(newSrcPath: string, programOptions: { files?: BsConfig['files']; rootDir?: string }): string | undefined {
         if (!programOptions.rootDir) {
             return undefined;
         }
