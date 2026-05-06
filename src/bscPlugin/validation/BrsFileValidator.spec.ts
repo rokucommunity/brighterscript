@@ -644,7 +644,7 @@ describe('BrsFileValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [{
-                ...DiagnosticMessages.evalIsDeprecatedAtRsgVersion('1.2')
+                ...DiagnosticMessages.globalCallableRemoved('eval', 'rsg', '1.2.0', '1.2.0')
             }]);
         });
 
@@ -656,7 +656,7 @@ describe('BrsFileValidator', () => {
                 end sub
             `);
             program.validate();
-            const evalDiags = program.getDiagnostics().filter(d => d.code === DiagnosticMessages.evalIsDeprecatedAtRsgVersion('1.2').code
+            const evalDiags = program.getDiagnostics().filter(d => d.code === DiagnosticMessages.globalCallableRemoved('eval', 'rsg', '1.2.0').code
             );
             expect(evalDiags).to.be.lengthOf(1);
         });
@@ -669,12 +669,15 @@ describe('BrsFileValidator', () => {
                 end sub
             `);
             program.validate();
-            const evalDiags = program.getDiagnostics().filter(d => d.code === DiagnosticMessages.evalIsDeprecatedAtRsgVersion('1.3').code
+            const evalDiags = program.getDiagnostics().filter(d => d.code === DiagnosticMessages.globalCallableRemoved('eval', 'rsg', '1.2.0').code
             );
             expect(evalDiags).to.be.lengthOf(1);
         });
 
-        it('does NOT flag `eval(...)` when manifest declares rsg_version=1.1', () => {
+        it('flags `eval(...)` via os axis when manifest declares rsg_version=1.1 on modern firmware', () => {
+            //rsg=1.1 explicit on default firmware (15.0) is an invalid manifest entry — rsg=1.1
+            //was removed at OS 14.5. The manifest validator separately flags that. With rsg axis
+            //silent (1.1 < 1.2), the os.deprecated fallback fires as a secondary nudge.
             setupProgram({ rsgVersion: '1.1' });
             program.setFile('source/main.brs', `
                 sub main()
@@ -682,9 +685,10 @@ describe('BrsFileValidator', () => {
                 end sub
             `);
             program.validate();
-            const evalDiags = program.getDiagnostics().filter(d => d.code === DiagnosticMessages.evalIsDeprecatedAtRsgVersion('1.1').code
+            const evalDiags = program.getDiagnostics().filter(d => d.code === DiagnosticMessages.globalCallableDeprecated().code
             );
-            expect(evalDiags).to.be.lengthOf(0);
+            expect(evalDiags).to.be.lengthOf(1);
+            expect((evalDiags[0] as any).data?.axis).to.equal('os');
         });
 
         it('does NOT flag `eval(...)` when minFirmwareVersion is set below 9.3.0 and manifest is silent', () => {
@@ -695,7 +699,7 @@ describe('BrsFileValidator', () => {
                 end sub
             `);
             program.validate();
-            const evalDiags = program.getDiagnostics().filter(d => d.code === DiagnosticMessages.evalIsDeprecatedAtRsgVersion('1.1').code
+            const evalDiags = program.getDiagnostics().filter(d => d.code === DiagnosticMessages.globalCallableRemoved('eval', 'rsg', '1.2.0').code
             );
             expect(evalDiags).to.be.lengthOf(0);
         });
@@ -719,7 +723,7 @@ describe('BrsFileValidator', () => {
                 end sub
             `);
             program.validate();
-            const evalDiags = program.getDiagnostics().filter(d => d.code === DiagnosticMessages.evalIsDeprecatedAtRsgVersion('1.2').code
+            const evalDiags = program.getDiagnostics().filter(d => d.code === DiagnosticMessages.globalCallableRemoved('eval', 'rsg', '1.2.0').code
             );
             expect(evalDiags).to.be.lengthOf(0);
         });
@@ -732,7 +736,7 @@ describe('BrsFileValidator', () => {
                 end sub
             `);
             program.validate();
-            const evalDiags = program.getDiagnostics().filter(d => d.code === DiagnosticMessages.evalIsDeprecatedAtRsgVersion('1.2').code
+            const evalDiags = program.getDiagnostics().filter(d => d.code === DiagnosticMessages.globalCallableRemoved('eval', 'rsg', '1.2.0').code
             );
             expect(evalDiags).to.be.lengthOf(1);
         });

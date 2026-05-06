@@ -13,7 +13,9 @@ import { InterfaceType } from '../../types/InterfaceType';
 import util from '../../util';
 import type { Range } from 'vscode-languageserver';
 import * as semver from 'semver';
-import { EVAL_REMOVED_AT_RSG_VERSION, OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION } from '../../RokuConstants';
+import { OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION } from '../../RokuConstants';
+import type { AvailabilityAxis } from '../../DiagnosticMessages';
+import { globalCallableMap } from '../../globalCallables';
 
 export class BrsFileValidator {
     constructor(
@@ -63,7 +65,7 @@ export class BrsFileValidator {
                 if (node.openingParen?.kind === TokenKind.QuestionLeftParen) {
                     this.validateMinFirmwareVersionForOptionalChaining(node.openingParen.range);
                 }
-                this.validateEvalIsNotDeprecated(node);
+                this.validateGlobalCallableAvailability(node);
             },
             EnumStatement: (node) => {
                 this.validateDeclarationLocations(node, 'enum', () => util.createBoundingRange(node.tokens.enum, node.tokens.name));
@@ -474,9 +476,8 @@ export class BrsFileValidator {
      * it is emitted as-is, so the target device must natively support it.
      */
     private validateMinFirmwareVersionForOptionalChaining(range: Range | undefined) {
-        const minFirmwareVersion = this.event.file.program.getEffectiveMinFirmwareVersion();
-        const coercedMinVersion = semver.coerce(minFirmwareVersion);
-        if (coercedMinVersion && semver.lt(coercedMinVersion, OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION)) {
+        const minFirmwareVersion = this.event.file.program.getMinFirmwareVersion();
+        if (semver.lt(minFirmwareVersion, OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION)) {
             this.event.file.addDiagnostic({
                 ...DiagnosticMessages.featureRequiresMinFirmwareVersion(
                     'optional chaining',
@@ -489,27 +490,57 @@ export class BrsFileValidator {
     }
 
     /**
-     * Add a diagnostic if a CallExpression invokes the bare `eval` builtin under an effective
-     * rsg_version of 1.2 or higher. On device, this is a compile error (eval was deprecated in
-     * Roku OS 9.0 with rsg_version=1.2 and removed in 9.3).
-     * Skips method calls (`m.eval(x)`) and namespaced calls (`alpha.eval(x)`) — only flags the
-     * bare top-level builtin.
+     * For a bare top-level call to a known global callable, fire one deprecation/removal
+     * diagnostic driven by `callable.availability`. The rsg axis takes precedence: if it
+     * fires, the os axis is skipped entirely. The os axis is only consulted when rsg is
+     * silent (rsg axis not configured, or effective rsg below its thresholds).
+     *
+     * Skips method calls (`m.foo()`) and namespaced calls (`alpha.foo()`) — only the bare
+     * top-level builtin form resolves to a global callable.
      */
-    private validateEvalIsNotDeprecated(node: CallExpression) {
+    private validateGlobalCallableAvailability(node: CallExpression) {
         if (!isVariableExpression(node.callee)) {
             return;
         }
-        if (node.callee.name?.text?.toLowerCase() !== 'eval') {
+        const calleeName = node.callee.name?.text;
+        if (!calleeName) {
             return;
         }
-        const rsgVersion = this.event.file.program.getRsgVersion();
-        const coercedRsgVersion = semver.coerce(rsgVersion);
-        if (!coercedRsgVersion || semver.lt(coercedRsgVersion, EVAL_REMOVED_AT_RSG_VERSION)) {
+        const callable = globalCallableMap.get(calleeName.toLowerCase());
+        const availability = callable?.availability;
+        if (!availability) {
             return;
         }
-        this.event.file.addDiagnostic({
-            ...DiagnosticMessages.evalIsDeprecatedAtRsgVersion(rsgVersion),
-            range: node.callee.range
-        });
+        const rsgDiagnostic = this.computeAvailabilityDiagnostic(calleeName, 'rsg', availability.rsg, this.event.file.program.getRsgVersion());
+        const diagnostic = rsgDiagnostic ??
+            this.computeAvailabilityDiagnostic(calleeName, 'os', availability.os, this.event.file.program.getMinFirmwareVersion());
+        if (diagnostic) {
+            this.event.file.addDiagnostic({
+                ...diagnostic,
+                range: node.callee.range
+            });
+        }
+    }
+
+    /**
+     * Compute (but don't emit) the diagnostic for one axis of {@link Availability}: returns
+     * `globalCallableRemoved` if the project's effective version is at/past the axis's
+     * `removed` threshold, otherwise `globalCallableDeprecated` if it's at/past `deprecated`,
+     * otherwise `undefined`.
+     *
+     * `effectiveVersion` is expected in canonical semver form (program getters guarantee this);
+     * availability constants are authored in canonical form too, so no coercion is needed here.
+     */
+    private computeAvailabilityDiagnostic(calleeName: string, axis: AvailabilityAxis, info: { added?: string; deprecated?: string; removed?: string } | undefined, effectiveVersion: string) {
+        if (!info) {
+            return undefined;
+        }
+        if (info.removed && semver.gte(effectiveVersion, info.removed)) {
+            return DiagnosticMessages.globalCallableRemoved(calleeName, axis, info.removed, effectiveVersion);
+        }
+        if (info.deprecated && semver.gte(effectiveVersion, info.deprecated)) {
+            return DiagnosticMessages.globalCallableDeprecated(calleeName, axis, info.deprecated, effectiveVersion);
+        }
+        return undefined;
     }
 }

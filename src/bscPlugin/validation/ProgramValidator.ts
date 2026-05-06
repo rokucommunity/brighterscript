@@ -43,7 +43,7 @@ export class ProgramValidator {
      * from those fields:
      * - format must be parseable as semver
      * - cross-check `introducedAt` against effective `minFirmwareVersion`
-     * - flag versions with a `deprecatedAt` lifecycle field (e.g. 1.0)
+     * - flag versions with a `deprecatedAt` availability field (e.g. 1.0)
      * Versions not in the map are treated as "unknown but valid" — no diagnostic.
      */
     private validateManifest() {
@@ -61,8 +61,7 @@ export class ProgramValidator {
             return;
         }
         const value = rsgEntry.value.trim();
-        const coercedRsg = semver.coerce(value);
-        if (!coercedRsg) {
+        if (!semver.coerce(value)) {
             this.program.addDiagnostics([{
                 ...DiagnosticMessages.invalidRsgVersionFormat(value),
                 file: { srcPath: manifestPath, pkgPath: 'manifest' } as any,
@@ -78,34 +77,29 @@ export class ProgramValidator {
             return;
         }
 
-        const effectiveFw = this.program.getEffectiveMinFirmwareVersion();
-        const coercedFw = semver.coerce(effectiveFw);
+        //getMinFirmwareVersion returns canonical coerced semver; constants in RSG_VERSIONS are
+        //hand-written valid semver. No re-coercion needed at this site.
+        const effectiveFw = this.program.getMinFirmwareVersion();
 
         //removal takes precedence over deprecation. If `removedAt <= effectiveFw`, fire the
         //removal error and skip the deprecation warning — the manifest entry is no longer honored.
-        const coercedRemoved = info.removedAt ? semver.coerce(info.removedAt) : undefined;
-        const removedFiresHere = coercedFw && coercedRemoved && semver.gte(coercedFw, coercedRemoved);
-        if (removedFiresHere && info.replacement) {
+        if (info.removedAt && semver.gte(effectiveFw, info.removedAt) && info.replacement) {
             this.program.addDiagnostics([{
-                ...DiagnosticMessages.rsgVersionRemoved(value, info.removedAt!, info.replacement),
+                ...DiagnosticMessages.rsgVersionRemoved(value, info.removedAt, info.replacement),
                 file: { srcPath: manifestPath, pkgPath: 'manifest' } as any,
                 range: rsgEntry.range
             }]);
-        } else if (info.deprecatedAt && info.replacement) {
+        } else if (info.deprecatedAt && info.replacement && semver.gte(effectiveFw, info.deprecatedAt)) {
             //fire deprecation only when the effective firmware is >= the deprecation point — projects
             //targeting pre-deprecation firmware can legitimately keep using the old version.
-            const coercedDeprecated = semver.coerce(info.deprecatedAt);
-            if (coercedFw && coercedDeprecated && semver.gte(coercedFw, coercedDeprecated)) {
-                this.program.addDiagnostics([{
-                    ...DiagnosticMessages.rsgVersionDeprecated(value, info.replacement),
-                    file: { srcPath: manifestPath, pkgPath: 'manifest' } as any,
-                    range: rsgEntry.range
-                }]);
-            }
+            this.program.addDiagnostics([{
+                ...DiagnosticMessages.rsgVersionDeprecated(value, info.replacement),
+                file: { srcPath: manifestPath, pkgPath: 'manifest' } as any,
+                range: rsgEntry.range
+            }]);
         }
 
-        const coercedRequired = semver.coerce(info.introducedAt);
-        if (coercedFw && coercedRequired && semver.lt(coercedFw, coercedRequired)) {
+        if (semver.lt(effectiveFw, info.introducedAt)) {
             this.program.addDiagnostics([{
                 ...DiagnosticMessages.rsgVersionRequiresMinFirmware(value, info.introducedAt, effectiveFw),
                 file: { srcPath: manifestPath, pkgPath: 'manifest' } as any,

@@ -1,4 +1,31 @@
 /**
+ * Availability markers for a feature on a single version axis (firmware OS, or rsg_version).
+ * All fields are version strings — coerced to semver at the point of comparison.
+ *
+ * Combine with the {@link Availability} container when a feature has availability info on both
+ * axes (e.g. a callable that was added at firmware X.Y AND removed at rsg_version Z.W).
+ */
+export interface AvailabilityInfo {
+    /** First version on this axis at which the feature exists. */
+    added?: string;
+    /** First version on this axis at which use of the feature is discouraged. */
+    deprecated?: string;
+    /** First version on this axis at which the feature stops working as declared. */
+    removed?: string;
+}
+
+/**
+ * Per-axis availability info for a feature. Either side may be absent. A diagnostic fires for
+ * each axis whose threshold is met by the user's effective values.
+ */
+export interface Availability {
+    /** Availability relative to Roku OS firmware versions. */
+    os?: AvailabilityInfo;
+    /** Availability relative to manifest `rsg_version` values. */
+    rsg?: AvailabilityInfo;
+}
+
+/**
  * Lifecycle metadata for a single `rsg_version` value.
  *
  * Sources: Roku's developer release notes and channel-manifest documentation. When adding a new
@@ -100,10 +127,3 @@ export const DEFAULT_MIN_FIRMWARE_VERSION = '15.0.0';
  * Source: Roku OS 11 release notes.
  */
 export const OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION = '11.0.0';
-
-/**
- * The rsg_version at which `eval()` becomes a compile error on device.
- * Source: Roku OS 9.0 release notes — `eval()` deprecated when rsg_version=1.2 is set;
- * sunset entirely in Roku OS 9.3.
- */
-export const EVAL_REMOVED_AT_RSG_VERSION = '1.2.0';

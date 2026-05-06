@@ -3816,35 +3816,35 @@ describe('Program', () => {
         }
     });
 
-    describe('getEffectiveMinFirmwareVersion', () => {
+    describe('getMinFirmwareVersion', () => {
         it(`returns DEFAULT_MIN_FIRMWARE_VERSION when minFirmwareVersion is unset`, () => {
             program.dispose();
             program = new Program({});
-            expect(program.getEffectiveMinFirmwareVersion()).to.equal(DEFAULT_MIN_FIRMWARE_VERSION);
+            expect(program.getMinFirmwareVersion()).to.equal(DEFAULT_MIN_FIRMWARE_VERSION);
         });
 
         it(`returns the user's value when minFirmwareVersion is set`, () => {
             program.dispose();
             program = new Program({ minFirmwareVersion: '11.5.0' });
-            expect(program.getEffectiveMinFirmwareVersion()).to.equal('11.5.0');
+            expect(program.getMinFirmwareVersion()).to.equal('11.5.0');
         });
 
         it('returns DEFAULT when minFirmwareVersion is set to garbage', () => {
             program.dispose();
             program = new Program({ minFirmwareVersion: 'banana' });
-            expect(program.getEffectiveMinFirmwareVersion()).to.equal(DEFAULT_MIN_FIRMWARE_VERSION);
+            expect(program.getMinFirmwareVersion()).to.equal(DEFAULT_MIN_FIRMWARE_VERSION);
         });
 
         it('returns DEFAULT when minFirmwareVersion is an empty string', () => {
             program.dispose();
             program = new Program({ minFirmwareVersion: '' });
-            expect(program.getEffectiveMinFirmwareVersion()).to.equal(DEFAULT_MIN_FIRMWARE_VERSION);
+            expect(program.getMinFirmwareVersion()).to.equal(DEFAULT_MIN_FIRMWARE_VERSION);
         });
 
-        it(`returns the user's value when it parses as semver`, () => {
+        it(`returns the canonical coerced semver form when the user's value parses but is non-strict`, () => {
             program.dispose();
             program = new Program({ minFirmwareVersion: '11.5' });
-            expect(program.getEffectiveMinFirmwareVersion()).to.equal('11.5');
+            expect(program.getMinFirmwareVersion()).to.equal('11.5.0');
         });
     });
 
@@ -3860,49 +3860,49 @@ describe('Program', () => {
             });
         }
 
-        it(`returns the manifest's explicit value when set`, () => {
+        it(`returns the manifest's explicit value coerced to canonical semver`, () => {
             setupWith(trim`
                 title=t
                 rsg_version=1.1
             `);
-            expect(program.getRsgVersion()).to.equal('1.1');
+            expect(program.getRsgVersion()).to.equal('1.1.0');
         });
 
-        it(`returns '1.2' when manifest is silent and effective firmware >= 9.3.0 (the default)`, () => {
+        it(`returns '1.2.0' when manifest is silent and effective firmware >= 9.3.0 (the default)`, () => {
             setupWith(trim`title=t`);
-            expect(program.getRsgVersion()).to.equal('1.2');
+            expect(program.getRsgVersion()).to.equal('1.2.0');
         });
 
-        it(`returns '1.1' when manifest is silent and minFirmwareVersion is between 7.5.0 and 9.3.0`, () => {
+        it(`returns '1.1.0' when manifest is silent and minFirmwareVersion is between 7.5.0 and 9.3.0`, () => {
             setupWith(trim`title=t`, '8.0.0');
-            expect(program.getRsgVersion()).to.equal('1.1');
+            expect(program.getRsgVersion()).to.equal('1.1.0');
         });
 
-        it(`returns '1.0' when manifest is silent and minFirmwareVersion is below 7.5.0 (pre-1.1 firmware)`, () => {
+        it(`returns '1.0.0' when manifest is silent and minFirmwareVersion is below 7.5.0 (pre-1.1 firmware)`, () => {
             setupWith(trim`title=t`, '7.0.0');
-            expect(program.getRsgVersion()).to.equal('1.0');
+            expect(program.getRsgVersion()).to.equal('1.0.0');
         });
 
-        it(`returns '1.3' when manifest is silent and minFirmwareVersion is >= 15.1.0`, () => {
+        it(`returns '1.3.0' when manifest is silent and minFirmwareVersion is >= 15.1.0`, () => {
             //1.3.becameDefaultAt is 15.1.0 (Roku's cert-policy "expected default" for new development at this firmware)
             setupWith(trim`title=t`, '15.1.0');
-            expect(program.getRsgVersion()).to.equal('1.3');
+            expect(program.getRsgVersion()).to.equal('1.3.0');
         });
 
-        it(`is data-driven: a forward-compat unknown rsg_version is returned verbatim from the manifest`, () => {
+        it(`is data-driven: a forward-compat unknown rsg_version from the manifest is coerced and returned`, () => {
             //we don't know about 1.5 in RSG_VERSIONS, but the manifest's explicit value still wins
             setupWith(trim`
                 title=t
                 rsg_version=1.5
             `);
-            expect(program.getRsgVersion()).to.equal('1.5');
+            expect(program.getRsgVersion()).to.equal('1.5.0');
         });
 
         it(`falls back to the default firmware (and its rsg_version) when minFirmwareVersion is unparseable garbage`, () => {
-            //getEffectiveMinFirmwareVersion sanitizes garbage input → DEFAULT (15.0.0)
-            //→ getRsgVersion picks the highest matching default → '1.2'
+            //getMinFirmwareVersion sanitizes garbage input → DEFAULT (15.0.0)
+            //→ getRsgVersion picks the highest matching default → '1.2.0'
             setupWith(trim`title=t`, 'not-a-version');
-            expect(program.getRsgVersion()).to.equal('1.2');
+            expect(program.getRsgVersion()).to.equal('1.2.0');
         });
     });
 

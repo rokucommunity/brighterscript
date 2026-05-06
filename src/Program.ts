@@ -1829,49 +1829,63 @@ export class Program {
         return this._manifestPath;
     }
 
-    /**
-     * The minimum Roku firmware version brighterscript should assume the user is targeting.
-     * If `options.minFirmwareVersion` is set AND parseable as semver, that wins; otherwise
-     * (unset or unparseable) falls back to {@link DEFAULT_MIN_FIRMWARE_VERSION}. This
-     * guarantees the return is always a coerceable version string, so downstream callers
-     * never have to handle malformed input.
-     */
-    public getEffectiveMinFirmwareVersion(): string {
-        const userValue = this.options.minFirmwareVersion;
-        if (userValue && semver.coerce(userValue)) {
-            return userValue;
-        }
-        return DEFAULT_MIN_FIRMWARE_VERSION;
-    }
+    private _minFirmwareVersion: string | undefined;
 
     /**
-     * Returns the effective `rsg_version` for this program. If the manifest declares a value
-     * explicitly, that's returned verbatim (including malformed values, so callers can validate
-     * format themselves). Otherwise, the highest known rsg_version whose `becameDefaultAt` is
-     * `<=` the effective minimum firmware version is returned — driven entirely by the data in
-     * {@link RSG_VERSIONS}.
+     * The minimum Roku firmware version brighterscript should assume the user is targeting.
+     * If `options.minFirmwareVersion` is set AND parseable as semver, the canonical coerced
+     * form ("15.0" → "15.0.0") wins; otherwise (unset or unparseable) falls back to
+     * {@link DEFAULT_MIN_FIRMWARE_VERSION}. The return is always a valid semver string so
+     * downstream callers can pass it directly to `semver.gte`/`semver.lt` without re-coercing.
+     * Cached after first call.
+     */
+    public getMinFirmwareVersion(): string {
+        if (this._minFirmwareVersion === undefined) {
+            const userValue = this.options.minFirmwareVersion;
+            const coerced = userValue ? semver.coerce(userValue) : undefined;
+            this._minFirmwareVersion = coerced ? coerced.version : DEFAULT_MIN_FIRMWARE_VERSION;
+        }
+        return this._minFirmwareVersion;
+    }
+
+    private _rsgVersion: string | undefined;
+
+    /**
+     * Returns the effective `rsg_version` for this program in canonical semver form (e.g. "1.2"
+     * → "1.2.0"). If the manifest declares a value explicitly and it's parseable, the canonical
+     * form wins; otherwise (manifest silent OR value is malformed) we fall back to the highest
+     * known rsg_version whose `becameDefaultAt` is `<=` the effective minimum firmware version,
+     * driven by {@link RSG_VERSIONS}. Cached after first call.
+     *
+     * Manifest validation (format errors, etc.) happens in `ProgramValidator` against the raw
+     * entry — that path doesn't go through this method.
      */
     public getRsgVersion(): string {
-        const explicit = this.getManifest().get('rsg_version');
-        if (explicit !== undefined) {
-            return explicit.trim();
+        if (this._rsgVersion !== undefined) {
+            return this._rsgVersion;
         }
-        //getEffectiveMinFirmwareVersion guarantees a coerceable return, so this never throws
-        const coercedFw = semver.coerce(this.getEffectiveMinFirmwareVersion())!;
+        const explicit = this.getManifest().get('rsg_version');
+        const explicitCoerced = explicit !== undefined ? semver.coerce(explicit.trim()) : undefined;
+        if (explicitCoerced) {
+            this._rsgVersion = explicitCoerced.version;
+            return this._rsgVersion;
+        }
         //walk known rsg_versions in descending order (newest first) and return the first whose
         //becameDefaultAt <= effective firmware. As long as some entry has becameDefaultAt: '0.0.0'
         //(currently `1.1`), this loop always finds a match.
+        const minFirmwareVersion = this.getMinFirmwareVersion();
         const candidates = Object.entries(RSG_VERSIONS)
             .filter(([, info]) => info.becameDefaultAt !== undefined)
             .sort(([a], [b]) => semver.rcompare(semver.coerce(a)!, semver.coerce(b)!));
         for (const [version, info] of candidates) {
-            const coercedDefault = semver.coerce(info.becameDefaultAt!);
-            if (coercedDefault && semver.gte(coercedFw, coercedDefault)) {
-                return version;
+            if (semver.gte(minFirmwareVersion, info.becameDefaultAt!)) {
+                this._rsgVersion = semver.coerce(version)!.version;
+                return this._rsgVersion;
             }
         }
         //unreachable as long as RSG_VERSIONS contains an entry with becameDefaultAt: '0.0.0'
-        return DEFAULT_MIN_FIRMWARE_VERSION;
+        this._rsgVersion = DEFAULT_MIN_FIRMWARE_VERSION;
+        return this._rsgVersion;
     }
 
     public dispose() {

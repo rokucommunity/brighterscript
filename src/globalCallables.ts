@@ -14,7 +14,7 @@ import util from './util';
 export let globalFile = new BrsFile('global', 'global', null);
 globalFile.parse('');
 
-type GlobalCallable = Pick<Callable, 'name' | 'shortDescription' | 'type' | 'file' | 'params' | 'documentation' | 'isDeprecated' | 'nameRange'>;
+type GlobalCallable = Pick<Callable, 'name' | 'shortDescription' | 'type' | 'file' | 'params' | 'documentation' | 'isDeprecated' | 'nameRange' | 'availability'>;
 
 let mathFunctions: GlobalCallable[] = [{
     name: 'Abs',
@@ -284,7 +284,10 @@ let runtimeFunctions: GlobalCallable[] = [{
     shortDescription: `Eval can be used to run a code snippet in the context of the current function. It performs a compile, and then the bytecode execution.\nIf a compilation error occurs, no bytecode execution is performed, and Eval returns an roList with one or more compile errors. Each list entry is an roAssociativeArray with ERRNO and ERRSTR keys describing the error.\nIf compilation succeeds, bytecode execution is performed and the integer runtime error code is returned. These are the same error codes as returned by GetLastRunRuntimeError().\nEval() can be usefully in two cases. The first is when you need to dynamically generate code at runtime.\nThe other is if you need to execute a statement that could result in a runtime error, but you don't want code execution to stop. '`,
     type: new FunctionType(new DynamicType()),
     file: globalFile,
-    isDeprecated: true,
+    availability: {
+        os: { deprecated: '9.0.0' },
+        rsg: { removed: '1.2.0' }
+    },
     params: [{
         name: 'code',
         type: new StringType(),
