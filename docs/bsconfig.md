@@ -121,6 +121,58 @@ Type: `"hint" | "info" | "warn" | "error"`
 
 Specify what diagnostic levels are printed to the console. This has no effect on what diagnostics are reported in the LanguageServer. Defaults to `"warn"`.
 
+## `diagnosticReporter`
+
+Type: `string | { type: string; format?: string } | Array<string | { type: string; format?: string }>`
+
+Specify how diagnostics are reported to the console. Accepts a single value or an array; when given an array, each diagnostic is rendered once per entry (so you can, for example, emit detailed terminal output and GitHub Actions PR annotations from a single run). Defaults to `"detailed"`.
+
+Each value can be:
+
+- A **preset name**: `"detailed"` (the default rich, multi-line, colored output) or `"github-actions"` (one-line workflow commands like `::error file=...,line=...::message` so the GitHub Actions runner surfaces them as PR annotations).
+- A **custom template string** containing at least one of the known placeholders. The placeholders supported are:
+
+  | Placeholder      | Value |
+  |------------------|---|
+  | `{file}`         | file path (respects `emitFullPaths`) |
+  | `{line}` / `{col}` | 1-based start line / column |
+  | `{endLine}` / `{endCol}` | 1-based end line / column |
+  | `{severity}`     | `error` / `warning` / `info` / `hint` |
+  | `{severityCode}` | numeric LSP severity (1=error, 2=warning, 3=info, 4=hint) |
+  | `{code}`         | diagnostic code (e.g. `1001`) |
+  | `{message}`      | diagnostic message |
+  | `{source}`       | diagnostic source (e.g. `brs`) |
+
+  Unknown placeholders pass through unchanged so typos surface visually.
+- An **explicit object** with `type`: `{ "type": "detailed" }`, `{ "type": "github-actions" }`, or `{ "type": "custom", "format": "<template>" }`.
+
+Examples:
+
+```jsonc
+"diagnosticReporter": "detailed"
+
+"diagnosticReporter": "github-actions"
+
+// custom template
+"diagnosticReporter": "{file}:{line}:{col} {severity} BS{code}: {message}"
+
+// emit detailed terminal output AND github-actions annotations from the same run
+"diagnosticReporter": ["detailed", "github-actions"]
+
+// explicit object form (also accepts the same shapes inside an array)
+"diagnosticReporter": { "type": "custom", "format": "{file}:{line}: {message}" }
+```
+
+If a value is invalid (typo'd preset, custom template with no known placeholders, etc.) it is logged as a warning and skipped. If every configured reporter is invalid, the build falls back to `"detailed"` rather than failing.
+
+The CLI accepts the same value (single or repeated):
+
+```bash
+bsc --diagnostic-reporter detailed
+bsc --diagnostic-reporter detailed github-actions
+bsc --diagnostic-reporter '{file}:{line}: {message}'
+```
+
 ## `diagnosticSeverityOverrides`
 
 Type: `Record<string | number, 'hint' | 'info' | 'warn' | 'error'>`

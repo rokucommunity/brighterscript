@@ -21,6 +21,19 @@ describe('diagnosticUtils', () => {
         sinon.restore();
     });
 
+    function makeCtx(
+        severity: DiagnosticSeverity,
+        filePath: string | undefined,
+        diagnostic: BsDiagnostic
+    ): diagnosticUtils.DiagnosticPrintContext {
+        return {
+            options: options,
+            severity: severity,
+            filePath: filePath,
+            diagnostic: diagnostic
+        };
+    }
+
     describe('printDiagnostic', () => {
         it('does not crash when range is undefined', () => {
             //print a diagnostic that doesn't have a range...it should not explode
@@ -236,6 +249,262 @@ describe('diagnosticUtils', () => {
             ).to.equal('            ~~~~');
         });
     });
+
+    describe('normalizeDiagnosticReporters', () => {
+        function makeLogger() {
+            const warnings: string[] = [];
+            return {
+                warnings: warnings,
+                logger: { warn: (...messages: any[]) => warnings.push(messages.join(' ')) }
+            };
+        }
+
+        it('returns [detailed] when value is missing', () => {
+            expect(diagnosticUtils.normalizeDiagnosticReporters(undefined)).to.eql([{ type: 'detailed' }]);
+            expect(diagnosticUtils.normalizeDiagnosticReporters(null as any)).to.eql([{ type: 'detailed' }]);
+        });
+
+        it('resolves preset string shorthands', () => {
+            expect(diagnosticUtils.normalizeDiagnosticReporters('detailed')).to.eql([{ type: 'detailed' }]);
+            expect(diagnosticUtils.normalizeDiagnosticReporters('github-actions')).to.eql([{ type: 'github-actions' }]);
+        });
+
+        it('treats a string with at least one known placeholder as a custom template', () => {
+            expect(diagnosticUtils.normalizeDiagnosticReporters('{file}:{line}: {message}')).to.eql([{
+                type: 'custom',
+                format: '{file}:{line}: {message}'
+            }]);
+        });
+
+        it('passes through explicit object form', () => {
+            expect(diagnosticUtils.normalizeDiagnosticReporters({ type: 'detailed' })).to.eql([{ type: 'detailed' }]);
+            expect(diagnosticUtils.normalizeDiagnosticReporters({ type: 'github-actions' })).to.eql([{ type: 'github-actions' }]);
+            expect(diagnosticUtils.normalizeDiagnosticReporters({ type: 'custom', format: '{file}' })).to.eql([{
+                type: 'custom',
+                format: '{file}'
+            }]);
+        });
+
+        it('normalizes each entry of an array, in order', () => {
+            expect(diagnosticUtils.normalizeDiagnosticReporters(['detailed', 'github-actions', '{file}: {message}'])).to.eql([
+                { type: 'detailed' },
+                { type: 'github-actions' },
+                { type: 'custom', format: '{file}: {message}' }
+            ]);
+        });
+
+        it('preserves an empty array (caller has opted out of all output)', () => {
+            expect(diagnosticUtils.normalizeDiagnosticReporters([])).to.eql([]);
+        });
+
+        it('warns and skips invalid entries while keeping valid ones', () => {
+            const { logger, warnings } = makeLogger();
+            expect(diagnosticUtils.normalizeDiagnosticReporters(['detailed', 'github_actions', '{file}: {message}'], logger))
+                .to.eql([
+                    { type: 'detailed' },
+                    { type: 'custom', format: '{file}: {message}' }
+                ]);
+            expect(warnings).to.have.length(1);
+            expect(warnings[0]).to.match(/Ignoring invalid diagnostic reporter/);
+            expect(warnings[0]).to.match(/Unknown diagnostic reporter/);
+        });
+
+        it('falls back to [detailed] (and warns) when every entry is invalid', () => {
+            const { logger, warnings } = makeLogger();
+            expect(diagnosticUtils.normalizeDiagnosticReporters(['github_actions', 'frindly{'], logger))
+                .to.eql([{ type: 'detailed' }]);
+            //one warning per bad entry, plus the fallback warning
+            expect(warnings).to.have.length(3);
+            expect(warnings[0]).to.match(/Ignoring invalid diagnostic reporter/);
+            expect(warnings[1]).to.match(/Ignoring invalid diagnostic reporter/);
+            expect(warnings[2]).to.match(/falling back to "detailed"/);
+        });
+
+        it('falls back to [detailed] (and warns) when a single invalid value is given', () => {
+            const { logger, warnings } = makeLogger();
+            expect(diagnosticUtils.normalizeDiagnosticReporters('github_actions', logger))
+                .to.eql([{ type: 'detailed' }]);
+            expect(warnings).to.have.length(2);
+        });
+
+        it('warning for invalid preset includes the full supported-options list', () => {
+            const { logger, warnings } = makeLogger();
+            diagnosticUtils.normalizeDiagnosticReporters('github_actions', logger);
+            expect(warnings.join('\n')).to.match(/"detailed"/);
+            expect(warnings.join('\n')).to.match(/\{file\}/);
+        });
+
+        it('warns when a custom object is missing or has empty format', () => {
+            const { logger, warnings } = makeLogger();
+            diagnosticUtils.normalizeDiagnosticReporters([{ type: 'custom', format: '' } as any, { type: 'custom' } as any], logger);
+            expect(warnings.filter(w => w.includes('non-empty'))).to.have.length(2);
+        });
+
+        it('warns when a custom object has no known placeholders', () => {
+            const { logger, warnings } = makeLogger();
+            diagnosticUtils.normalizeDiagnosticReporters({ type: 'custom', format: 'no placeholders here' } as any, logger);
+            expect(warnings.some(w => w.includes('does not contain any known placeholders'))).to.be.true;
+        });
+
+        it('warns on unknown object type', () => {
+            const { logger, warnings } = makeLogger();
+            diagnosticUtils.normalizeDiagnosticReporters({ type: 'bogus' } as any, logger);
+            expect(warnings.some(w => w.includes('Unknown diagnostic reporter type'))).to.be.true;
+        });
+
+        it('falls back silently to console.warn when no logger is provided', () => {
+            //we just want to confirm it doesn't throw and still returns the fallback
+            const stub = sinon.stub(console, 'warn').callsFake(() => { });
+            expect(diagnosticUtils.normalizeDiagnosticReporters('totally-bogus')).to.eql([{ type: 'detailed' }]);
+            expect(stub.called).to.be.true;
+        });
+    });
+
+    describe('applyDiagnosticTemplate', () => {
+        it('substitutes known placeholders', () => {
+            expect(diagnosticUtils.applyDiagnosticTemplate('{file}:{line}:{col} {message}', {
+                file: 'src/main.bs',
+                line: '10',
+                col: '5',
+                message: 'Bad thing'
+            })).to.equal('src/main.bs:10:5 Bad thing');
+        });
+
+        it('passes unknown placeholders through unchanged so typos surface', () => {
+            expect(diagnosticUtils.applyDiagnosticTemplate('{file} {nope}', { file: 'a.bs' })).to.equal('a.bs {nope}');
+        });
+
+        it('does not match braces with non-identifier contents', () => {
+            expect(diagnosticUtils.applyDiagnosticTemplate('{} {1file} {file-path}', { file: 'a.bs' })).to.equal('{} {1file} {file-path}');
+        });
+    });
+
+    describe('printDiagnosticGithubActions', () => {
+        function capture(severity: DiagnosticSeverity, filePath: string | undefined, diagnostic: BsDiagnostic): string {
+            //restore any prior stub from a previous capture() in the same test
+            sinon.restore();
+            let captured = '';
+            sinon.stub(console, 'log').callsFake((line: string) => {
+                captured += line;
+            });
+            diagnosticUtils.printDiagnosticGithubActions(makeCtx(severity, filePath, diagnostic));
+            return captured;
+        }
+
+        it('emits the canonical workflow command for an error', () => {
+            const out = capture(DiagnosticSeverity.Error, 'src/source/main.bs', {
+                message: 'Cannot find name',
+                range: Range.create(9, 4, 9, 11),
+                code: 1001
+            } as any);
+            expect(out).to.equal('::error file=src/source/main.bs,line=10,col=5,endLine=10,endColumn=12,title=BS1001::Cannot find name');
+        });
+
+        it('maps Warning -> ::warning and Information/Hint -> ::notice', () => {
+            //info/hint are below the default 'warn' threshold, so opt them in for this test
+            options = diagnosticUtils.getPrintDiagnosticOptions({ diagnosticLevel: 'info' });
+            const range = Range.create(0, 0, 0, 1);
+            expect(capture(DiagnosticSeverity.Warning, 'a.bs', { message: 'w', range: range, code: 1 } as any))
+                .to.match(/^::warning /);
+            expect(capture(DiagnosticSeverity.Information, 'a.bs', { message: 'i', range: range, code: 1 } as any))
+                .to.match(/^::notice /);
+            expect(capture(DiagnosticSeverity.Hint, 'a.bs', { message: 'h', range: range, code: 1 } as any))
+                .to.match(/^::notice /);
+        });
+
+        it('escapes property values (commas, colons, percents) and message data (newlines)', () => {
+            const out = capture(DiagnosticSeverity.Error, 'C:\\path,with,commas\\file.bs', {
+                message: 'line one\nline two\rwith % literal',
+                range: Range.create(0, 0, 0, 1),
+                code: 99
+            } as any);
+            expect(out).to.equal(
+                '::error file=C%3A\\path%2Cwith%2Ccommas\\file.bs,line=1,col=1,endLine=1,endColumn=2,title=BS99::line one%0Aline two%0Dwith %25 literal'
+            );
+        });
+
+        it('omits file= when filePath is missing and omits title= when code is missing', () => {
+            const out = capture(DiagnosticSeverity.Error, undefined, {
+                message: 'no file no code',
+                range: Range.create(2, 3, 2, 4)
+            } as any);
+            expect(out).to.equal('::error line=3,col=4,endLine=3,endColumn=5::no file no code');
+        });
+
+        it('falls back to 1:1 when range is missing', () => {
+            const out = capture(DiagnosticSeverity.Error, 'a.bs', {
+                message: 'no range',
+                range: undefined,
+                code: 1
+            } as any);
+            expect(out).to.equal('::error file=a.bs,line=1,col=1,endLine=1,endColumn=1,title=BS1::no range');
+        });
+
+        it('respects diagnosticLevel filter', () => {
+            options = diagnosticUtils.getPrintDiagnosticOptions({ diagnosticLevel: 'error' });
+            let logged = 0;
+            sinon.stub(console, 'log').callsFake(() => {
+                logged++;
+            });
+            diagnosticUtils.printDiagnosticGithubActions(makeCtx(DiagnosticSeverity.Warning, 'a.bs', {
+                message: 'filtered',
+                range: Range.create(0, 0, 0, 1),
+                code: 1
+            } as any));
+            expect(logged).to.equal(0);
+        });
+    });
+
+    describe('createCustomDiagnosticReporter', () => {
+        function capture(template: string, severity: DiagnosticSeverity, filePath: string | undefined, diagnostic: BsDiagnostic): string {
+            //restore any prior stub from a previous capture() in the same test
+            sinon.restore();
+            let captured = '';
+            sinon.stub(console, 'log').callsFake((line: string) => {
+                captured += line;
+            });
+            diagnosticUtils.createCustomDiagnosticReporter(template)(makeCtx(severity, filePath, diagnostic));
+            return captured;
+        }
+
+        it('substitutes the standard placeholders with 1-based positions', () => {
+            const out = capture(
+                '{file}:{line}:{col}-{endLine}:{endCol} {severity} {code}: {message} ({source})',
+                DiagnosticSeverity.Warning,
+                'src/main.bs',
+                {
+                    message: 'maybe bad',
+                    range: Range.create(4, 0, 4, 6),
+                    code: 42,
+                    source: 'brs'
+                } as any
+            );
+            expect(out).to.equal('src/main.bs:5:1-5:7 warning 42: maybe bad (brs)');
+        });
+
+        it('emits empty strings for missing optional fields', () => {
+            const out = capture(
+                '[{file}][{code}][{source}] {message}',
+                DiagnosticSeverity.Error,
+                undefined,
+                { message: 'oops', range: Range.create(0, 0, 0, 1) } as any
+            );
+            expect(out).to.equal('[][][] oops');
+        });
+
+        it('respects diagnosticLevel filter', () => {
+            options = diagnosticUtils.getPrintDiagnosticOptions({ diagnosticLevel: 'error' });
+            let logged = 0;
+            sinon.stub(console, 'log').callsFake(() => {
+                logged++;
+            });
+            diagnosticUtils.createCustomDiagnosticReporter('{message}')(
+                makeCtx(DiagnosticSeverity.Warning, 'a.bs', { message: 'filtered', range: Range.create(0, 0, 0, 1), code: 1 } as any)
+            );
+            expect(logged).to.equal(0);
+        });
+    });
+
 
     describe('getDiagnosticLine', () => {
         const color = ((text: string) => text) as any;
