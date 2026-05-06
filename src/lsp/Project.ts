@@ -111,12 +111,12 @@ export class Project implements LspProject {
 
         this.manifestSrcPath = this.builder.program.manifestPath;
 
-
-        //load the manifest file contents (used for change detection to trigger project reloads).
-        //use builder.program.manifestPath which reflects the actual src path (respects {src;dest} mappings)
-        //try {
-        //    this.manifestFileContents = (await fsExtra.readFile(this.manifestSrcPath)).toString();
-        //} catch { }
+        //load the manifest file contents (used for change detection to trigger project reloads)
+        if (this.manifestSrcPath) {
+            try {
+                this.manifestFileContents = (await fsExtra.readFile(this.manifestSrcPath)).toString();
+            } catch { }
+        }
 
         //trigger a validation (but don't wait for it. That way we can cancel it sooner if we get new incoming data or requests)
         void this.validate();

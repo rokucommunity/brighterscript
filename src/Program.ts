@@ -1417,6 +1417,15 @@ export class Program {
 
             })
             .onCancel(() => {
+                //roll back per-file `isValidated` for files we marked during this run. Otherwise a
+                //subsequent validation will skip them in the file-validation phase, and any
+                //diagnostics emitted only via that phase would be lost.
+                for (const file of brsFilesValidated) {
+                    file.isValidated = false;
+                }
+                for (const file of xmlFilesValidated) {
+                    file.isValidated = false;
+                }
                 logValidateEnd('cancelled');
             })
             .onSuccess(() => {
