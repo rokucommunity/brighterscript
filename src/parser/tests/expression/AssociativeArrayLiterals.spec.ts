@@ -5,8 +5,8 @@ import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import type { AssignmentStatement } from '../../Statement';
-import type { AALiteralExpression, AAMemberExpression } from '../../Expression';
-import { isAALiteralExpression, isAssignmentStatement, isDottedGetExpression, isLiteralExpression } from '../../../astUtils/reflection';
+import type { AAIndexedMemberExpression, AALiteralExpression, AAMemberExpression } from '../../Expression';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isAssignmentStatement, isDottedGetExpression, isLiteralExpression } from '../../../astUtils/reflection';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics } from '../../../testHelpers.spec';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { util } from '../../../util';
@@ -248,19 +248,15 @@ describe('parser associative array literals', () => {
         });
     });
 
-    /*
-    //computed AA keys (e.g. `[myEnum.x]: "value"`) and the AAIndexedMemberExpression
-    //AST node are master-only and have not yet been ported to v1. The tests are kept
-    //as a comment block so a future v1 port has a starting point.
     describe('computed keys', () => {
         it('parses [expr] computed key syntax', () => {
-            const { statements, diagnostics } = Parser.parse(`
+            const { ast, diagnostics } = Parser.parse(`
                 _ = {
                     [someEnum.key]: "value"
                 }
             `);
             expectZeroDiagnostics(diagnostics);
-            const aaLit = (statements[0] as AssignmentStatement).value as AALiteralExpression;
+            const aaLit = (ast.statements[0] as AssignmentStatement).value as AALiteralExpression;
             expect(isAALiteralExpression(aaLit)).to.be.true;
             const member = aaLit.elements[0] as AAIndexedMemberExpression;
             expect(isAAIndexedMemberExpression(member)).to.be.true;
@@ -271,13 +267,13 @@ describe('parser associative array literals', () => {
         });
 
         it('parses [literal] computed key syntax', () => {
-            const { statements, diagnostics } = Parser.parse(`
+            const { ast, diagnostics } = Parser.parse(`
                 _ = {
                     ["my-key"]: "value"
                 }
             `);
             expectZeroDiagnostics(diagnostics);
-            const aaLit = (statements[0] as AssignmentStatement).value as AALiteralExpression;
+            const aaLit = (ast.statements[0] as AssignmentStatement).value as AALiteralExpression;
             const member = aaLit.elements[0] as AAIndexedMemberExpression;
             expect(isAAIndexedMemberExpression(member)).to.be.true;
             expect(member.key).to.exist;
@@ -296,37 +292,36 @@ describe('parser associative array literals', () => {
         });
 
         it('supports multiple computed keys in one AA', () => {
-            const { statements, diagnostics } = Parser.parse(`
+            const { ast, diagnostics } = Parser.parse(`
                 _ = {
                     [myEnum.a]: 1,
                     [myEnum.b]: 2
                 }
             `);
             expectZeroDiagnostics(diagnostics);
-            const aaLit = (statements[0] as AssignmentStatement).value as AALiteralExpression;
+            const aaLit = (ast.statements[0] as AssignmentStatement).value as AALiteralExpression;
             expect(aaLit.elements).to.have.lengthOf(2);
             expect(isAAIndexedMemberExpression(aaLit.elements[0])).to.be.true;
             expect(isAAIndexedMemberExpression(aaLit.elements[1])).to.be.true;
         });
 
         it('supports mixing computed and non-computed keys', () => {
-            const { statements, diagnostics } = Parser.parse(`
+            const { ast, diagnostics } = Parser.parse(`
                 _ = {
                     normalKey: 1,
                     [myEnum.computed]: 2
                 }
             `);
             expectZeroDiagnostics(diagnostics);
-            const aaLit = (statements[0] as AssignmentStatement).value as AALiteralExpression;
+            const aaLit = (ast.statements[0] as AssignmentStatement).value as AALiteralExpression;
             const first = aaLit.elements[0] as AAMemberExpression;
             const second = aaLit.elements[1] as AAIndexedMemberExpression;
             expect(isAAMemberExpression(first)).to.be.true;
-            expect(first.keyToken).to.exist;
+            expect(first.tokens.key).to.exist;
             expect(isAAIndexedMemberExpression(second)).to.be.true;
             expect(second.key).to.exist;
         });
     });
-    */
 
     it('location tracking', () => {
         /**

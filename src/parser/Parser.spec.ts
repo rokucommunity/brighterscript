@@ -2864,7 +2864,7 @@ describe('parser', () => {
                 end sub
             `, ParseMode.BrightScript);
             expectDiagnosticsIncludes(diagnostics, [
-                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types')
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('inline interface')
             ]);
         });
 
@@ -2875,7 +2875,7 @@ describe('parser', () => {
                 end function
             `, ParseMode.BrightScript);
             expectDiagnosticsIncludes(diagnostics, [
-                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types')
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('inline interface')
             ]);
         });
 
@@ -3205,22 +3205,7 @@ describe('parser', () => {
     });
 
 
-    describe('inline interfaces', () => {
-        //functionParameterTypeIsInvalid (legacyCode 1044) and invalidFunctionReturnType
-        //(legacyCode 1037) were retired in v1 in favor of a more general type-validation
-        //path; the corresponding "disallowed in brightscript mode" tests no longer apply.
-
-
-        it('inline interface as param type', () => {
-            let { ast, diagnostics } = parse(`
-                sub test(foo as {x as string})
-                    print foo.x
-                end sub
-            `, ParseMode.BrighterScript);
-            expectZeroDiagnostics(diagnostics);
-            expect(ast.statements.length).to.eq(1);
-        });
-
+    describe('inline interfaces (more)', () => {
         it('inline interface as return type', () => {
             let { ast, diagnostics } = parse(`
                function test() as {x as string}
@@ -3538,107 +3523,6 @@ describe('parser', () => {
         });
     });
 
-    describe('typed functions as types', () => {
-        it('disallowed in brightscript mode', () => {
-            let { diagnostics } = parse(`
-                function test(func as function())
-                    return func()
-                end function
-             `, ParseMode.BrightScript);
-            expectDiagnosticsIncludes(diagnostics, [
-                DiagnosticMessages.unexpectedToken(')')
-            ]);
-        });
-
-        it('can be passed as param types', () => {
-            let { diagnostics } = parse(`
-                function test(func as function())
-                    return func()
-                end function
-             `, ParseMode.BrighterScript);
-            expectZeroDiagnostics(diagnostics);
-        });
-
-        it('can have a return type', () => {
-            let { diagnostics } = parse(`
-                function test(func as sub() as integer) as integer
-                    return func()
-                end function
-             `, ParseMode.BrighterScript);
-            expectZeroDiagnostics(diagnostics);
-        });
-
-        it('can use sub or function', () => {
-            let { diagnostics } = parse(`
-                function test(func as sub() as integer) as integer
-                    return func()
-                end function
-
-                function test2(func as function() as integer) as integer
-                    return func()
-                 end function
-             `, ParseMode.BrighterScript);
-            expectZeroDiagnostics(diagnostics);
-        });
-
-        it('can have primitive parameters', () => {
-            let { diagnostics } = parse(`
-                function test(func as function(name as string, num as integer) as integer) as integer
-                    return func("hello", 123)
-                end function
-             `, ParseMode.BrighterScript);
-            expectZeroDiagnostics(diagnostics);
-        });
-
-        it('can have complex parameters', () => {
-            let { diagnostics } = parse(`
-                interface IFace
-                    name as string
-                end interface
-
-                function test(func as function(thing as IFace) as integer) as integer
-                    return func({name: "hello"})
-                end function
-             `, ParseMode.BrighterScript);
-            expectZeroDiagnostics(diagnostics);
-        });
-
-        it('can have compound parameters', () => {
-            let { diagnostics } = parse(`
-                interface IFace
-                    name as string
-                end interface
-
-                function test(func as function(arg1 as string or integer, arg2 as IFace) as integer) as integer
-                    return func("hello", {name: "hello"})
-                end function
-             `, ParseMode.BrighterScript);
-            expectZeroDiagnostics(diagnostics);
-        });
-
-        it('can be used as return types', () => {
-            let { diagnostics } = parse(`
-                function test() as function() as integer
-                    return function() as integer
-                        return 123
-                    end function
-                end function
-             `, ParseMode.BrighterScript);
-            expectZeroDiagnostics(diagnostics);
-        });
-
-        it('can have a union as return type', () => {
-            let { diagnostics } = parse(`
-                type foo = function() as integer or string
-                function test() as foo
-                    return function() as integer
-                        return 123
-                    end function
-                end function
-             `, ParseMode.BrighterScript);
-            expectZeroDiagnostics(diagnostics);
-        });
-    });
 });
 
 export function parse(text: string, mode?: ParseMode, bsConsts: Record<string, boolean> = {}) {

@@ -3183,10 +3183,14 @@ export class Parser {
             expr = new VariableExpression({ name: this.advance() as Identifier });
         } else {
             if (this.options.mode === ParseMode.BrightScript && !declarableTypesLower.includes(this.peek()?.text?.toLowerCase())) {
-                // custom types arrays not allowed in Brightscript
-                this.warnIfNotBrighterScriptMode('custom types');
-                this.advance(); // skip custom type token
-                return expr;
+                //inline interfaces have their own diagnostic ('inline interface'); let `{`
+                //flow through to the matcher below so it fires the more-specific warning.
+                if (!this.check(TokenKind.LeftCurlyBrace)) {
+                    // custom types arrays not allowed in Brightscript
+                    this.warnIfNotBrighterScriptMode('custom types');
+                    this.advance(); // skip custom type token
+                    return expr;
+                }
             }
 
             if (this.match(TokenKind.LeftCurlyBrace)) {
@@ -3278,6 +3282,7 @@ export class Parser {
     private inlineInterface() {
         let expr: InlineInterfaceExpression;
         const openToken = this.previous();
+        this.warnIfNotBrighterScriptMode('inline interface');
         const members: InlineInterfaceMemberExpression[] = [];
         while (this.match(TokenKind.Newline)) { }
         while (this.checkAny(TokenKind.Identifier, ...AllowedProperties, TokenKind.StringLiteral, TokenKind.Optional)) {
