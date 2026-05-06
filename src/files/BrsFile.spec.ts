@@ -5815,7 +5815,7 @@ describe('BrsFile', () => {
                     end interface
                 end namespace
 
-                sub main(x as (alpha.beta.IFace and alpha.beta.IFaceB)[] or ifStringOps)
+                sub main(x as (alpha.beta.IFaceA and alpha.beta.IFaceB)[] or ifStringOps)
                 end sub
             `, `
                 sub main(x as dynamic)

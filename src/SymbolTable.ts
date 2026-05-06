@@ -482,12 +482,19 @@ export class SymbolTable implements SymbolTypeGetter {
      */
     mergeSymbolTable(symbolTable: SymbolTable) {
         for (const [key, sourceSymbols] of symbolTable.symbolMap) {
+            //skip symbols flagged `doNotMerge` (e.g. typecast/alias bindings) so they stay
+            //local to their declaring block instead of bleeding into sibling tables that
+            //share the same merge target (e.g. the per-namespace aggregate symbol table).
+            const symbolsToMerge = sourceSymbols.filter(symbol => !symbol.data?.doNotMerge);
+            if (symbolsToMerge.length === 0) {
+                continue;
+            }
             let destSymbols = this.symbolMap.get(key);
             if (!destSymbols) {
                 destSymbols = [];
                 this.symbolMap.set(key, destSymbols);
             }
-            destSymbols.push(...sourceSymbols);
+            destSymbols.push(...symbolsToMerge);
         }
 
         for (let pocketTable of symbolTable.pocketTables) {
