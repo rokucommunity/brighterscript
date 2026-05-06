@@ -94,7 +94,8 @@ export class Project implements LspProject {
         //this plugin must be added LAST to the program to ensure we can see all diagnostics.
         //skip cancelled validations: those fire afterValidateProgram with whatever partial
         //state was reached, and downstream consumers (e.g. test specs awaiting
-        //onNextDiagnostics) end up reading the partial emit instead of the completed one.
+        //onNextDiagnostics) end up reading the partial emit instead of the completed one
+        //that follows.
         this.builder.plugins.add({
             name: 'bsc-language-server',
             afterValidateProgram: (event) => {
