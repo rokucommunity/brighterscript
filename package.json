@@ -7,7 +7,8 @@
     "build": "rimraf out && tsc",
     "watch": "rimraf out && tsc --watch",
     "prepublishOnly": "npm run build",
-    "lint": "eslint \"src/**\"",
+    "lint": "eslint \"src/**\" && npm run check-eol",
+    "check-eol": "check-eol --eol platform './*' 'src/**/*' 'scripts/**/*' 'TestRokuApp/**/*' 'docs/**/*' 'benchmarks/**/*' '.vscode/*' '.github/**/*' '!**/node_modules/**/*'",
     "format": "tsfmt -r",
     "test": "nyc mocha",
     "test:nocover": "mocha",
@@ -24,16 +25,7 @@
     "package": "npm run build && npm pack"
   },
   "mocha": {
-    "spec": "src/**/*.spec.ts",
-    "require": [
-      "source-map-support/register",
-      "ts-node/register"
-    ],
-    "fullTrace": true,
-    "timeout": 2000,
-    "watchExtensions": [
-      "ts"
-    ]
+    "config": ".mocharc.cjs"
   },
   "files": [
     "dist/**/!(*.spec.*)*",
@@ -93,6 +85,7 @@
     "@types/node": "^16.11.6",
     "@types/require-relative": "^0.8.0",
     "@types/safe-json-stringify": "^1.1.5",
+    "@types/semver": "^7.7.1",
     "@types/sinon": "^9.0.4",
     "@types/turndown": "^5.0.1",
     "@types/yargs": "^15.0.5",
@@ -102,6 +95,7 @@
     "benchmark": "^2.1.4",
     "chai": "^4.2.0",
     "chai-files": "^1.4.0",
+    "check-eol": "^0.2.0",
     "clipboardy": "^2.3.0",
     "coveralls-next": "^4.2.0",
     "deepmerge": "^4.2.2",
@@ -163,8 +157,13 @@
     "parse-ms": "^2.1.0",
     "readline": "^1.3.0",
     "require-relative": "^0.8.7",
+<<<<<<< HEAD
     "roku-deploy": "^3.16.1",
+=======
+    "roku-deploy": "^3.17.1",
+>>>>>>> master
     "safe-json-stringify": "^1.2.0",
+    "semver": "^7.7.3",
     "serialize-error": "^7.0.1",
     "source-map": "^0.7.4",
     "thenby": "^1.3.4",

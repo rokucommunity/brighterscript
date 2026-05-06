@@ -137,14 +137,7 @@ export class ProgramBuilder {
         await this.loadFiles();
     }
 
-    public async run(options: BsConfig & {
-        /**
-         * Should validation run? Default is `true`. You must set exlicitly to `false` to disable.
-         * @deprecated this is an experimental flag, and its behavior may change in a future release
-         * @default true
-         */
-        validate?: boolean;
-    }) {
+    public async run(options: BsConfig) {
         if (options?.logLevel) {
             this.logger.logLevel = options.logLevel;
         }
@@ -396,8 +389,9 @@ export class ProgramBuilder {
             if (options?.cancellationToken?.isCanceled === true) {
                 return -1;
             }
-            //validate program. false means no, everything else (including missing) means true
-            if (options?.validate !== false) {
+            //the prop-drilled validate value takes precedence over this.options.validate.
+            //false means no, everything else (including missing) means true
+            if ((options?.validate ?? this.options.validate) !== false) {
                 this.validateProject();
             }
 

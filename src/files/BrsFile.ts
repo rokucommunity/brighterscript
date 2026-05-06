@@ -6,6 +6,8 @@ import { CompletionItemKind } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
 import { DiagnosticCodeMap, diagnosticCodes, DiagnosticLegacyCodeMap, DiagnosticMessages } from '../DiagnosticMessages';
+import type { NamespaceFileContribution } from '../Scope';
+import { SymbolTable } from '../SymbolTable';
 import { FunctionScope } from '../FunctionScope';
 import type { Callable, CallableParam, CommentFlag, BsDiagnostic, FileReference, FileLink, SerializedCodeFile, NamespaceContainer } from '../interfaces';
 import type { Token } from '../lexer/Token';
@@ -18,7 +20,7 @@ import type { Program } from '../Program';
 import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { serializeError } from 'serialize-error';
-import { isDottedGetExpression, isFunctionExpression, isNamespaceStatement, isVariableExpression, isImportStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType } from '../astUtils/reflection';
+import { isClassStatement, isDottedGetExpression, isFunctionExpression, isNamespaceStatement, isVariableExpression, isImportStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType, isFunctionStatement, isEnumStatement, isConstStatement } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyChangedEvent, DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -30,7 +32,6 @@ import type { UnresolvedSymbol, AssignedSymbol } from '../AstValidationSegmenter
 import { AstValidationSegmenter } from '../AstValidationSegmenter';
 import { LogLevel } from '../Logger';
 import type { BscSymbol } from '../SymbolTable';
-import { SymbolTable } from '../SymbolTable';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import type { BscFileLike } from '../astUtils/CachedLookups';
 import { CachedLookups } from '../astUtils/CachedLookups';
@@ -178,10 +179,84 @@ export class BrsFile implements BscFile {
     }
 
     /**
+     * Return this file's per-namespace contributions. Cached on the file's parser-level
+     * cache, so the result is invalidated automatically when the file re-parses.
+     *
+     * Each entry covers a single dotted name part (so a `namespace A.B.C` declaration
+     * produces entries for `A`, `A.B`, and `A.B.C`). Intermediates carry only structural
+     * fields; leaves populate the relevant statement collections plus a single-file
+     * symbolTable. The symbolTable has no parent provider (see Phase 4 design notes).
+     *
+     * The returned Map is shared across every Scope that pulls in this file, which is
+     * the core sharing primitive Phase 4 relies on.
+     * @internal
+     */
+    protected getNamespaceContributions(): Map<string, NamespaceFileContribution> {
+        return this.cache.getOrAdd('namespaceContributions', () => {
+            let contributions = new Map<string, NamespaceFileContribution>();
+            this.ast.walk(createVisitor({
+                NamespaceStatement: namespaceStatement => {
+                    const name = namespaceStatement.getName(ParseMode.BrighterScript);
+                    const nameParts = name.split('.');
+                    let loopName: string | null = null;
+                    //ensure each dotted prefix has a contribution entry
+                    for (const part of nameParts) {
+                        loopName = loopName === null ? part : `${loopName}.${part}`;
+                        const lowerLoopName = loopName.toLowerCase();
+                        if (!contributions.has(lowerLoopName)) {
+                            //explicitly assign every optional field as undefined so all
+                            //NamespaceFileContribution instances share a single V8 hidden
+                            //class. Subsequent `??=` assignments mutate values without
+                            //changing the object shape, which keeps property access fast.
+                            contributions.set(lowerLoopName, {
+                                file: this,
+                                fullName: loopName,
+                                lastPartName: part,
+                                nameRange: namespaceStatement.nameExpression.location?.range,
+                                statements: undefined,
+                                classStatements: undefined,
+                                functionStatements: undefined,
+                                enumStatements: undefined,
+                                constStatements: undefined,
+                                symbolTable: undefined
+                            });
+                        }
+                    }
+                    //populate the leaf contribution from this namespaceStatement's body
+                    const ns = contributions.get(name.toLowerCase())!;
+                    if (namespaceStatement.body.statements.length > 0) {
+                        (ns.statements ??= []).push(...namespaceStatement.body.statements);
+                    }
+                    for (const statement of namespaceStatement.body.statements) {
+                        if (isClassStatement(statement) && statement.tokens.name) {
+                            (ns.classStatements ??= {})[statement.tokens.name.text.toLowerCase()] = statement;
+                        } else if (isFunctionStatement(statement) && statement.tokens.name) {
+                            (ns.functionStatements ??= {})[statement.tokens.name.text.toLowerCase()] = statement;
+                        } else if (isEnumStatement(statement) && statement.fullName) {
+                            (ns.enumStatements ??= new Map()).set(statement.fullName.toLowerCase(), statement);
+                        } else if (isConstStatement(statement) && statement.fullName) {
+                            (ns.constStatements ??= new Map()).set(statement.fullName.toLowerCase(), statement);
+                        }
+                    }
+                    //single-file aggregate; NO parent provider (sibling resolution does not
+                    //walk into a sibling's parent, so the previous scope-coupled provider
+                    //was dead code)
+                    ns.symbolTable ??= new SymbolTable(`Namespace File Contribution: '${ns.fullName}' in ${this.pkgPath}`);
+                    ns.symbolTable.mergeSymbolTable(namespaceStatement.body.getSymbolTable());
+                }
+            }), {
+                walkMode: WalkMode.visitStatements
+            });
+
+            return contributions;
+        });
+    }
+
+    /**
      * files referenced by import statements
      */
     public get ownScriptImports() {
-        const result = this.cache?.getOrAdd('BrsFile_ownScriptImports', () => {
+        const result = this.cache?.getOrAdd('ownScriptImports', () => {
             const result = [] as FileReference[];
             for (const statement of this._cachedLookups?.importStatements ?? []) {
                 //register import statements
@@ -375,7 +450,8 @@ export class BrsFile implements BscFile {
                     srcPath: this.srcPath,
                     mode: this.parseMode,
                     logger: this.program.logger,
-                    bsConsts: getBsConst(this.program.getManifest())
+                    bsConsts: getBsConst(this.program.getManifest()),
+                    minFirmwareVersion: this.program.options.minFirmwareVersion
                 });
             });
 

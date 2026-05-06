@@ -1,6 +1,6 @@
 import { expect } from '../../../chai-config.spec';
 
-import { Parser } from '../../Parser';
+import { ParseMode, Parser } from '../../Parser';
 import { Lexer } from '../../../lexer/Lexer';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
@@ -63,7 +63,7 @@ describe('parser call expressions', () => {
         expect(diagnostics[0].location.range.end.character).to.be.lessThan(25);
     });
 
-    it('allows closing parentheses on separate line', () => {
+    it('allows closing parentheses on separate line in BrighterScript mode', () => {
         const { ast, diagnostics } = Parser.parse([
             identifier('RebootSystem'),
             { kind: TokenKind.LeftParen, text: '(', location: null as any, leadingTrivia: [] },
@@ -71,7 +71,7 @@ describe('parser call expressions', () => {
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.RightParen, ')'),
             EOF
-        ]);
+        ], { mode: ParseMode.BrighterScript });
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(ast.statements).to.be.length.greaterThan(0);
@@ -216,7 +216,7 @@ describe('parser call expressions', () => {
                 end sub
             `);
 
-            expect(diagnostics).to.be.lengthOf(2);
+            expect(diagnostics).to.be.lengthOf(1);
             expectDiagnostics(diagnostics, [
                 DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments'),
                 DiagnosticMessages.expectedNewlineOrColon()

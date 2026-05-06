@@ -11179,6 +11179,21 @@
                     "returnType": "string"
                 },
                 {
+                    "description": "Returns the localized date of the device.",
+                    "name": "asDateStringLoc",
+                    "params": [
+                        {
+                            "default": null,
+                            "description": "Specify the format of the date string to be returned:  *   full *   long *   medium *   short *   custom formatting string using date symbols (for example, \"MMM d, y\")",
+                            "isRequired": true,
+                            "name": "format",
+                            "type": "String"
+                        }
+                    ],
+                    "returnDescription": "A date string corresponding to the specified format:",
+                    "returnType": "String"
+                },
+                {
                     "description": "Returns the date/time in long-date format.",
                     "name": "AsDateStringNoParam",
                     "params": [],
@@ -11222,6 +11237,28 @@
                     "returnType": "string"
                 },
                 {
+                    "description": "Returns a LongInteger representing the date/time as the number of seconds from the Unix epoch (00:00:00 1/1/1970 GMT).",
+                    "name": "AsSecondsLong",
+                    "params": [],
+                    "returnDescription": "Number of seconds as a LongInteger.",
+                    "returnType": "Object"
+                },
+                {
+                    "description": "Returns the localized time of the device.",
+                    "name": "asTimeStringLoc",
+                    "params": [
+                        {
+                            "default": null,
+                            "description": "Specify the format of the time string to be returned:  *   short *   short-h12 *   short-h24 *   custom formatting string using time symbols (for example, \"h:mm a\")",
+                            "isRequired": true,
+                            "name": "format",
+                            "type": "String"
+                        }
+                    ],
+                    "returnDescription": "A time string corresponding to the specified format:",
+                    "returnType": "String"
+                },
+                {
                     "description": "Sets the date/time using a string in the ISO 8601 format. For example \"YYYY-MM-DD HH:MM:SS\" e.g \"2009-01-01 01:00:00.000\" or \"2009-01-01T01:00:00.000\".",
                     "name": "FromISO8601String",
                     "params": [
@@ -11261,6 +11298,19 @@
                         }
                     ],
                     "returnType": "void"
+                },
+                {
+                    "description": "Sets the date/time value using the number of seconds from the Unix epoch.",
+                    "name": "FromSecondsLong",
+                    "params": [
+                        {
+                            "default": null,
+                            "isRequired": true,
+                            "name": "numSeconds",
+                            "type": "LongInteger"
+                        }
+                    ],
+                    "returnType": "Void"
                 },
                 {
                     "description": "Returns the date/time value's day of the month.",
@@ -11588,6 +11638,21 @@
                     "returnType": "dynamic"
                 },
                 {
+                    "description": "Notifies the app when the device's system clock becomes valid.",
+                    "name": "EnableValidClockEvent",
+                    "params": [
+                        {
+                            "default": null,
+                            "description": "A flag specifying whether to enable valid system clock events.",
+                            "isRequired": true,
+                            "name": "enable",
+                            "type": "Boolean"
+                        }
+                    ],
+                    "returnDescription": "A flag indicating whether valid system clock events are enabled (true) or disabled (false).",
+                    "returnType": "Dynamic"
+                },
+                {
                     "description": "Forces a new internet connection check. A new check will only be initiated if the cached internet status is older than 10 seconds.",
                     "name": "ForceInternetStatusCheck",
                     "params": [],
@@ -11778,6 +11843,13 @@
                     "params": [],
                     "returnDescription": "An associative array containing the following key/value pairs:",
                     "returnType": "object"
+                },
+                {
+                    "description": "Checks the graphics features supported by the device.",
+                    "name": "GetGraphicsFeatures",
+                    "params": [],
+                    "returnDescription": "An associative array containing the following key/value pairs:",
+                    "returnType": "Object"
                 },
                 {
                     "description": "Checks the graphics platform of the device.",
@@ -11997,6 +12069,13 @@
                     "params": [],
                     "returnDescription": "A flag indicating whether the passthrough device is rendering audio.",
                     "returnType": "boolean"
+                },
+                {
+                    "description": "Indicates whether a passthrough device that owns the codec (a TV, audio receiver, or soundbar connected to a Roku device via HDMI) is rendering audio.",
+                    "name": "IsPassthruCodecActive",
+                    "params": [],
+                    "returnDescription": "A flag indicating whether the passthrough device is rendering audio.",
+                    "returnType": "Boolean"
                 },
                 {
                     "description": "Indicates whether tracking via Roku's ID for Advertisers (RIDA) is disabled on the device.",
@@ -12449,6 +12528,63 @@
                     ],
                     "returnDescription": "A flag indicating whether the object was successfully drawn.",
                     "returnType": "boolean"
+                },
+                {
+                    "description": "**OVERLOADED METHOD**\n\nDraws and then scales and rotates the source object, where src is an [roBitmap](https://developer.roku.com/docs/references/brightscript/components/robitmap.md\"roBitmap\") or an [roRegion](https://developer.roku.com/docs/references/brightscript/components/roregion.md\"roRegion\") object; at position x,y; scaled in the x direction by scaleX and in the y direction by scaleY; and rotated by angle theta degrees.",
+                    "name": "DrawTransformedObject",
+                    "params": [
+                        {
+                            "default": null,
+                            "description": "The x-coordinate of the source object.",
+                            "isRequired": true,
+                            "name": "x",
+                            "type": "Integer"
+                        },
+                        {
+                            "default": null,
+                            "description": "The y-coordinate of the source object.",
+                            "isRequired": true,
+                            "name": "y",
+                            "type": "Integer"
+                        },
+                        {
+                            "default": null,
+                            "description": "The position which to rotate the source object. This may be 0, 90, 180, and 270 degrees.",
+                            "isRequired": true,
+                            "name": "theta",
+                            "type": "Float"
+                        },
+                        {
+                            "default": null,
+                            "description": "The x direction in which the source object is to be scaled.",
+                            "isRequired": true,
+                            "name": "scaleX",
+                            "type": "Float"
+                        },
+                        {
+                            "default": null,
+                            "description": "The y direction in which the source object is to be scaled.",
+                            "isRequired": true,
+                            "name": "scaleY",
+                            "type": "Float"
+                        },
+                        {
+                            "default": null,
+                            "description": "The [roBitmap](https://developer.roku.com/docs/references/brightscript/components/robitmap.md\"roBitmap\") or an [roRegion](https://developer.roku.com/docs/references/brightscript/components/roregion.md\"roRegion\") object to be drawn.",
+                            "isRequired": true,
+                            "name": "src",
+                            "type": "Object"
+                        },
+                        {
+                            "default": null,
+                            "description": "The RGBA color of the source object.",
+                            "isRequired": false,
+                            "name": "rgba",
+                            "type": "Integer"
+                        }
+                    ],
+                    "returnDescription": "A flag indicating whether the object was successfully drawn.",
+                    "returnType": "Boolean"
                 },
                 {
                     "description": "Realizes the bitmap by finishing all queued draw calls. Until Finish() is called, prior graphics operations may not be user visible. For example, they may be in the graphics display pipeline, or in a server queue.",
@@ -16128,10 +16264,10 @@
                         },
                         {
                             "default": null,
-                            "description": "The [roMessagePort](https://developer.roku.com/docs/references/brightscript/components/romessageport.md\"roMessagePort\") to receive a [roSGNodeEvent](https://developer.roku.com/docs/references/brightscript/components/rosgnode.md\"roSGNodeEvent\") message when the value of the field changes.",
+                            "description": "The name of the method to be executed when the value of the field changes. OR The [roMessagePort](https://developer.roku.com/docs/references/brightscript/components/romessageport.md\"roMessagePort\") to receive a [roSGNodeEvent](https://developer.roku.com/docs/references/brightscript/components/rosgnode.md\"roSGNodeEvent\") message when the value of the field changes.",
                             "isRequired": true,
-                            "name": "port",
-                            "type": "Object"
+                            "name": "functionNameOrPort",
+                            "type": "String or Object"
                         },
                         {
                             "default": null,
@@ -16748,6 +16884,13 @@
                     "returnType": "Object"
                 },
                 {
+                    "description": "Returns the message port (if any) currently associated with the object",
+                    "name": "GetMessagePort",
+                    "params": [],
+                    "returnDescription": "The message port.",
+                    "returnType": "Object"
+                },
+                {
                     "description": "Checks whether underlying select determines non-blocking read of OOB data is possible.",
                     "name": "IsException",
                     "params": [],
@@ -16809,6 +16952,20 @@
                         }
                     ],
                     "returnType": "void"
+                },
+                {
+                    "description": "Sets the roMessagePort to be used to receive events.",
+                    "name": "SetMessagePort",
+                    "params": [
+                        {
+                            "default": null,
+                            "description": "The port to be used to receive events.",
+                            "isRequired": true,
+                            "name": "port",
+                            "type": "Object"
+                        }
+                    ],
+                    "returnType": "Void"
                 },
                 {
                     "description": "Sets the roMessagePort to be used to receive events.",
@@ -17722,6 +17879,13 @@
                     "returnType": "boolean"
                 },
                 {
+                    "description": "Checks whether a string is empty.",
+                    "name": "IsEmpty",
+                    "params": [],
+                    "returnDescription": "A flag indicating whether the string is empty (true), or contains characters (false).",
+                    "returnType": "Boolean"
+                },
+                {
                     "description": "Sets the calling String object to the specified string value.",
                     "name": "SetString",
                     "params": [
@@ -17834,6 +17998,14 @@
                     "params": [],
                     "returnDescription": "The formatted string.",
                     "returnType": "string"
+                },
+                {
+                    "description": "Returns a format conversion using the specified printf-like [format string](https://developer.roku.com/docs/references/brightscript/language/global-string-functions.mdformat-strings) and matching dynamic parameters.",
+                    "isVariadic": true,
+                    "name": "Format",
+                    "params": [],
+                    "returnDescription": "The formatted string.",
+                    "returnType": "String"
                 },
                 {
                     "description": "Returns the string with the following characters replaced with their corresponding HTML entity encoding sequences below:",
@@ -18072,6 +18244,27 @@
                         }
                     ],
                     "returnType": "void"
+                },
+                {
+                    "description": "Returns the message port (if any) currently associated with the object",
+                    "name": "GetMessagePort",
+                    "params": [],
+                    "returnDescription": "The message port.",
+                    "returnType": "Object"
+                },
+                {
+                    "description": "Sets the roMessagePort to be used to receive events.",
+                    "name": "SetMessagePort",
+                    "params": [
+                        {
+                            "default": null,
+                            "description": "The port to be used to receive events.",
+                            "isRequired": true,
+                            "name": "port",
+                            "type": "Object"
+                        }
+                    ],
+                    "returnType": "Void"
                 },
                 {
                     "description": "Returns the message port (if any) currently associated with the object",
@@ -18451,6 +18644,13 @@
                     "returnType": "integer"
                 },
                 {
+                    "description": "Returns the total number of microseconds from the \"Mark\" point to the current time.",
+                    "name": "TotalMicroseconds",
+                    "params": [],
+                    "returnDescription": "The number of microseconds.",
+                    "returnType": "Integer"
+                },
+                {
                     "description": "Returns the total number of milliseconds from the \"Mark\" point to the current time.",
                     "name": "TotalMilliseconds",
                     "params": [],
@@ -18773,6 +18973,13 @@
                     "params": [],
                     "returnDescription": "The device user agent, which has the following syntax: \"Roku/DVP-major.minor (major.minor.revision.build-plid)\". For example, Roku/DVP‑12.0 (12.0.0.4171‑29).",
                     "returnType": "string"
+                },
+                {
+                    "description": "Returns the user agent of the device, which can then be passed into server-side ad requests.",
+                    "name": "GetUserAgent",
+                    "params": [],
+                    "returnDescription": "The device user agent, which has the following syntax: \"Roku/DVP-major.minor (major.minor.revision.build-plid)\". For example, Roku/DVP‑12.0 (12.0.0.4171‑29).",
+                    "returnType": "String"
                 },
                 {
                     "description": "Synchronously performs an HTTP HEAD request and returns an [roUrlTransfer](https://developer.roku.com/docs/references/brightscript/interfaces/ifurltransfer.md\"roUrlTransfer\") object.",

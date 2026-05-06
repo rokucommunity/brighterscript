@@ -459,7 +459,7 @@ export class SymbolTable implements SymbolTypeGetter {
      * Adds all the symbols from another table to this one
      * It will overwrite any existing symbols in this table
      */
-    mergeSymbolTable(symbolTable: SymbolTable) {
+    /*mergeSymbolTable(symbolTable: SymbolTable) {
         function mergeTables(intoTable: SymbolTable, fromTable: SymbolTable) {
             for (let [, value] of fromTable.symbolMap) {
                 for (const symbol of value) {
@@ -472,13 +472,27 @@ export class SymbolTable implements SymbolTypeGetter {
                         symbol.type,
                         symbol.flags
                     );
-                }
+                }*/
+
+    /**
+     * * Adds all the symbols from another table to this one.
+     * Source symbols are shared by reference (not cloned) since BscSymbol is treated as immutable.
+     * The destination still owns its own array per key, so subsequent addSymbol calls on either
+     * table do not leak across.
+     */
+    mergeSymbolTable(symbolTable: SymbolTable) {
+        for (const [key, sourceSymbols] of symbolTable.symbolMap) {
+            let destSymbols = this.symbolMap.get(key);
+            if (!destSymbols) {
+                destSymbols = [];
+                this.symbolMap.set(key, destSymbols);
             }
+            //destSymbols.push(...sourceSymbols);
         }
 
-        mergeTables(this, symbolTable);
+        // mergeTables(this, symbolTable);
         for (let pocketTable of symbolTable.pocketTables) {
-            mergeTables(this, pocketTable.table);
+            this.mergeSymbolTable(pocketTable.table);
         }
     }
 
@@ -695,6 +709,11 @@ export class SymbolTable implements SymbolTypeGetter {
     }
 }
 
+/**
+ * A symbol entry stored in a SymbolTable.
+ * Treated as immutable once added: range and type must not be reassigned, and the object
+ * may be shared by reference across multiple symbol tables (e.g. via mergeSymbolTable).
+ */
 export interface BscSymbol {
     name: string;
     data: ExtraSymbolData;

@@ -1,6 +1,6 @@
 import { expect } from '../../../chai-config.spec';
 
-import { Parser } from '../../Parser';
+import { ParseMode, Parser } from '../../Parser';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
@@ -344,7 +344,7 @@ describe('parser', () => {
     });
 
     describe('usage', () => {
-        it('allows sub expressions in call arguments', () => {
+        it('allows sub expressions in call arguments in BrighterScript mode', () => {
             const { ast, diagnostics } = Parser.parse([
                 identifier('acceptsCallback'),
                 token(TokenKind.LeftParen, '('),
@@ -362,7 +362,7 @@ describe('parser', () => {
 
                 token(TokenKind.RightParen, ')'),
                 EOF
-            ]);
+            ], { mode: ParseMode.BrighterScript });
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(ast.statements).to.be.length.greaterThan(0);

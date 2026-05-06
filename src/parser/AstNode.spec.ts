@@ -1320,6 +1320,31 @@ describe('AstNode', () => {
             testClone(original);
         });
 
+        it('clones AAIndexedMemberExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    movie = {
+                        [someEnum.key]: 20
+                    }
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones AAIndexedMemberExpression with undefined value', () => {
+            const original = Parser.parse(`
+                sub test()
+                    movie = {
+                        [someEnum.key]: 20
+                    }
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<AAIndexedMemberExpression>>(isAAIndexedMemberExpression).value = undefined;
+
+            testClone(original);
+        });
+
         it('clones AALiteralExpression', () => {
             const original = Parser.parse(`
                 sub test()

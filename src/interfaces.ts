@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import type { Range, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol, Disposable, FileChangeType, CodeDescription, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag } from 'vscode-languageserver-protocol';
+=======
+import type { Range, Diagnostic, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol, Disposable, FileChangeType, SelectionRange } from 'vscode-languageserver-protocol';
+>>>>>>> master
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -13,6 +17,7 @@ import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
 import type { Identifier, Token } from './lexer/Token';
 import type { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-languageserver';
+<<<<<<< HEAD
 import type { SymbolTable } from './SymbolTable';
 import type { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { Editor } from './astUtils/Editor';
@@ -22,6 +27,9 @@ import type { LazyFileData } from './files/LazyFileData';
 import { TokenKind } from './lexer/TokenKind';
 import type { BscTypeKind } from './types/BscTypeKind';
 import { createToken } from './astUtils/creators';
+=======
+import type { SourceFixAllCodeAction } from './CodeActionUtil';
+>>>>>>> master
 
 export interface BsDiagnostic {
     /**
@@ -236,6 +244,7 @@ export type CompilerPlugin = Plugin;
 
 export interface Plugin {
     name: string;
+<<<<<<< HEAD
     /**
      * Called before a new program is created
      */
@@ -280,6 +289,29 @@ export interface Plugin {
     beforeRemoveProgram?(event: BeforeRemoveProgramEvent): any;
     removeProgram?(event: RemoveProgramEvent): any;
     afterRemoveProgram?(event: AfterRemoveProgramEvent): any;
+=======
+    //program events
+    beforeProgramCreate?: (builder: ProgramBuilder) => void;
+    beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    afterPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    beforePublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    afterPublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    afterProgramCreate?: (program: Program) => void;
+    beforeProgramValidate?: (program: Program) => void;
+    afterProgramValidate?: (program: Program, wasCancelled: boolean) => void;
+    beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
+    afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
+    beforeProgramDispose?: PluginHandler<BeforeProgramDisposeEvent>;
+    onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
+    /**
+     * Emitted when VS Code requests "source fix all" source actions for a file.
+     * Plugins push one or more `SourceFixAllCodeAction` objects onto `event.actions`,
+     * each representing a distinct named group that will appear in the Source Actions menu.
+     * Plugins are responsible for assembling and merging all changes within each action.
+     */
+    // For possible future use, but not currently implemented:
+    onGetSourceFixAllCodeActions?: PluginHandler<OnGetSourceFixAllCodeActionsEvent>;
+>>>>>>> master
 
     /**
      * Emitted before the program starts collecting completions
@@ -381,6 +413,25 @@ export interface Plugin {
      */
     afterProvideWorkspaceSymbols?(event: AfterProvideWorkspaceSymbolsEvent): any;
 
+<<<<<<< HEAD
+=======
+
+    /**
+     * Called before the `provideSelectionRanges` hook
+     */
+    beforeProvideSelectionRanges?(event: BeforeProvideSelectionRangesEvent): any;
+    /**
+     * Provide the selection ranges for the given positions in a file. Used for expand/shrink selection.
+     */
+    provideSelectionRanges?(event: ProvideSelectionRangesEvent): any;
+    /**
+     * Called after `provideSelectionRanges`. Use this if you want to intercept or sanitize the selection range data provided by bsc or other plugins.
+     */
+    afterProvideSelectionRanges?(event: AfterProvideSelectionRangesEvent): any;
+
+
+    onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
+>>>>>>> master
     //scope events
     beforeValidateScope?(event: BeforeValidateScopeEvent): any;
     validateScope?(event: ValidateScopeEvent): any;
@@ -546,6 +597,7 @@ export interface AfterProvideCodeActionsEvent<TFile extends BscFile = BscFile> {
     codeActions: CodeAction[];
 }
 
+<<<<<<< HEAD
 export interface BeforeProvideProgramEvent {
     builder: ProgramBuilder;
     program?: Program;
@@ -571,6 +623,21 @@ export interface AfterValidateProgramEvent extends BeforeValidateProgramEvent {
 }
 
 
+=======
+export interface OnGetSourceFixAllCodeActionsEvent {
+    program: Program;
+    file: BscFile;
+    /** All diagnostics for this file (not range-filtered) */
+    diagnostics: BsDiagnostic[];
+    scopes: Scope[];
+    /**
+     * Plugins push one or more SourceFixAllCodeAction objects here.
+     * Each becomes a distinct named entry in VS Code's Source Actions menu.
+     */
+    actions: SourceFixAllCodeAction[];
+}
+
+>>>>>>> master
 export interface ProvideCompletionsEvent<TFile extends BscFile = BscFile> {
     program: Program;
     file: TFile;
@@ -723,6 +790,7 @@ export type BeforeProvideWorkspaceSymbolsEvent = ProvideWorkspaceSymbolsEvent;
 export type AfterProvideWorkspaceSymbolsEvent = ProvideWorkspaceSymbolsEvent;
 
 
+<<<<<<< HEAD
 export interface BeforeProvideSemanticTokensEvent<T extends BscFile = BscFile> {
     /**
      * The program this file is from
@@ -760,6 +828,29 @@ export interface ProvideSemanticTokensEvent<T extends BscFile = BscFile> {
     semanticTokens: SemanticToken[];
 }
 export interface AfterProvideSemanticTokensEvent<T extends BscFile = BscFile> {
+=======
+export interface ProvideSelectionRangesEvent<TFile = BscFile> {
+    program: Program;
+    /**
+     * The file that the `selectionRange` request was invoked in
+     */
+    file: TFile;
+    /**
+     * The list of positions for which selection ranges are requested
+     */
+    positions: Position[];
+    /**
+     * The result list of selection ranges. One entry per position in `positions`.
+     * Each SelectionRange is a linked list from innermost to outermost via the `.parent` property.
+     */
+    selectionRanges: SelectionRange[];
+}
+export type BeforeProvideSelectionRangesEvent<TFile = BscFile> = ProvideSelectionRangesEvent<TFile>;
+export type AfterProvideSelectionRangesEvent<TFile = BscFile> = ProvideSelectionRangesEvent<TFile>;
+
+
+export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
+>>>>>>> master
     /**
      * The program this file is from
      */

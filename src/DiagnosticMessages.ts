@@ -99,9 +99,12 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Warning,
         code: 'variable-shadows-function'
     }),
-    scriptImportCaseMismatch: (correctFilePath: string) => ({
+    scriptImportCaseMismatch: (correctFilePath: string, correctUri?: string) => ({
         message: `Script import path does not match casing of actual file path '${correctFilePath}'.`,
         legacyCode: 1012,
+        data: {
+            correctFilePath: correctUri ?? correctFilePath
+        },
         severity: DiagnosticSeverity.Warning,
         code: 'import-case-mismatch'
     }),
@@ -467,6 +470,11 @@ export let DiagnosticMessages = {
         legacyCode: 1066,
         severity: DiagnosticSeverity.Error,
         code: 'expected-statement-not-expression'
+    }),
+    expectedStatementOrFunctionCallButReceivedExpression: (expressionType = 'expression') => ({
+        message: `Expected statement or function call but instead found ${expressionType}`,
+        code: 1066,
+        severity: DiagnosticSeverity.Error
     }),
     xmlFunctionNotFound: (name: string) => ({
         message: `Cannot find function with name '${name}' in component scope`,
@@ -976,19 +984,16 @@ export let DiagnosticMessages = {
     assignmentTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
         message: `Type '${actualTypeString}' is not compatible with type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)}`,
         data: data,
-        legacyCode: 1143,
         severity: DiagnosticSeverity.Error,
         code: 'assignment-type-mismatch'
     }),
     operatorTypeMismatch: (operatorString: string, firstType: string, secondType = '') => ({
         message: `Operator '${operatorString}' cannot be applied to type${secondType ? 's' : ''} '${firstType}'${secondType ? ` and '${secondType}'` : ''}`,
-        legacyCode: 1144,
         severity: DiagnosticSeverity.Error,
         code: 'operator-type-mismatch'
     }),
     incompatibleSymbolDefinition: (symbol: string, options: { scopes?: string[]; isUnion?: boolean; types?: BscType[]; data?: TypeCompatibilityData } = {}) => ({
         message: `'${symbol}' is incompatible${incompatibleSymbolMessage(symbol, options)}`,
-        legacyCode: 1145,
         severity: DiagnosticSeverity.Error,
         code: 'incompatible-definition'
     }),
@@ -1014,46 +1019,39 @@ export let DiagnosticMessages = {
 
         return {
             message: `Member '${memberName}' is ${accessModName}${accessAdditionalInfo}`, // TODO: Add scopes where it was defined
-            legacyCode: 1146,
             severity: DiagnosticSeverity.Error,
             code: 'member-access-violation'
         };
     },
     invalidTypecastStatementApplication: (foundApplication: string, isInFunctionBlock: boolean) => ({
         message: `'typecast' statement can only be applied to ${!isInFunctionBlock ? '\'m\'' : 'variables'}, but was applied to '${foundApplication}'`,
-        legacyCode: 1148,
         severity: DiagnosticSeverity.Error,
         code: 'invalid-typecast-target'
     }),
     itemCannotBeUsedAsType: (typeText: string) => ({
         message: `'${typeText}' cannot be used as a type`,
-        legacyCode: 1149,
         severity: DiagnosticSeverity.Error,
         code: 'invalid-type-reference'
     }),
     unsafeUnmatchedTerminatorInConditionalCompileBlock: (terminator: string) => ({
         message: `Unsafe unmatched terminator '${terminator}' in conditional compilation block`,
-        legacyCode: 1150,
         severity: DiagnosticSeverity.Error,
         code: 'inconsistent-conditional-compile-nesting'
     }),
     returnTypeCoercionMismatch: (returnType = 'string') => ({
         message: `Function has no return statement and will return 'invalid': '${returnType}' cannot be coerced into 'invalid'`,
-        legacyCode: 1151,
         severity: DiagnosticSeverity.Error,
         code: 'return-type-coercion-mismatch'
     }),
     argumentTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
         message: `Argument of type '${actualTypeString}' is not compatible with parameter of type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)} `,
         data: data,
-        legacyCode: 1152,
         severity: DiagnosticSeverity.Error,
         code: 'argument-type-mismatch'
     }),
     returnTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
         message: `Type '${actualTypeString}' is not compatible with declared return type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)} '`,
         data: data,
-        legacyCode: 1153,
         severity: DiagnosticSeverity.Error,
         code: 'return-type-mismatch'
     }),
@@ -1065,7 +1063,6 @@ export let DiagnosticMessages = {
             typeName: typeName,
             isCallfunc: true
         },
-        legacyCode: 1154,
         severity: DiagnosticSeverity.Error,
         code: 'cannot-find-callfunc'
     }),
@@ -1078,6 +1075,30 @@ export let DiagnosticMessages = {
         message: `Type '${typeName}' is not iterable`,
         severity: DiagnosticSeverity.Error,
         code: 'not-iterable'
+    }),
+    propAccessNotPermittedAfterFunctionCallInExpressionStatement: (accessDescription: string) => ({
+        message: `${accessDescription} access not permitted after a function call when used in an expression statement`,
+        legacyCode: 1143,
+        severity: DiagnosticSeverity.Error,
+        code: 'invalid-access'
+    }),
+    computedPropertyKeyMustBeConstantExpression: () => ({
+        message: `Computed property keys must be a compile-time constant (enum member or const value)`,
+        legacyCode: 1144,
+        severity: DiagnosticSeverity.Error,
+        code: 'computed-property-key-not-constant'
+    }),
+    computedAAKeyMustBeStringExpression: () => ({
+        message: `Computed associative array keys must resolve to a string value`,
+        legacyCode: 1145,
+        severity: DiagnosticSeverity.Error,
+        code: 'computed-property-key-not-string'
+    }),
+    featureRequiresMinFirmwareVersion: (featureName: string, minimumVersion: string, configuredVersion: string) => ({
+        message: `'${featureName}' requires Roku firmware version ${minimumVersion} or higher (current target is ${configuredVersion})`,
+        legacyCode: 1146,
+        severity: DiagnosticSeverity.Error,
+        code: 'requires-min-firmware-version'
     })
 };
 export const defaultMaximumTruncationLength = 160;

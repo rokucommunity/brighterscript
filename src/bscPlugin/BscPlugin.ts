@@ -1,6 +1,12 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
+<<<<<<< HEAD
 import type { Plugin, ValidateFileEvent, ProvideCodeActionsEvent, ProvideHoverEvent, ProvideSemanticTokensEvent, ValidateScopeEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, AfterProvideFileEvent, AfterValidateFileEvent, AfterValidateProgramEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, OnPrepareFileEvent, WriteFileEvent } from '../interfaces';
+=======
+import type { BeforeFileTranspileEvent, Plugin, OnFileValidateEvent, OnGetCodeActionsEvent, OnGetSourceFixAllCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, ProvideSelectionRangesEvent } from '../interfaces';
+import type { Program } from '../Program';
+>>>>>>> master
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
+import { FixAllCodeActionsProcessor } from './codeActions/FixAllCodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
 import { DefinitionProvider } from './definition/DefinitionProvider';
 import { DocumentSymbolProcessor } from './symbols/DocumentSymbolProcessor';
@@ -12,6 +18,7 @@ import { ProgramValidator } from './validation/ProgramValidator';
 import { ScopeValidator } from './validation/ScopeValidator';
 import { XmlFileValidator } from './validation/XmlFileValidator';
 import { WorkspaceSymbolProcessor } from './symbols/WorkspaceSymbolProcessor';
+<<<<<<< HEAD
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
 import { FileWriter } from './FileWriter';
@@ -21,6 +28,9 @@ import { FileSerializer } from './serialize/FileSerializer';
 import { BrsFilePreTranspileProcessor } from './transpile/BrsFileTranspileProcessor';
 import { XmlFilePreTranspileProcessor } from './transpile/XmlFilePreTranspileProcessor';
 import { BrsFileAfterValidator } from './validation/BrsFileAfterValidator';
+=======
+import { SelectionRangesProcessor } from './selectionRanges/SelectionRangesProcessor';
+>>>>>>> master
 
 export class BscPlugin implements Plugin {
     public name = 'BscPlugin';
@@ -31,6 +41,10 @@ export class BscPlugin implements Plugin {
 
     public provideCodeActions(event: ProvideCodeActionsEvent) {
         new CodeActionsProcessor(event).process();
+    }
+
+    public onGetSourceFixAllCodeActions(event: OnGetSourceFixAllCodeActionsEvent) {
+        new FixAllCodeActionsProcessor(event).process();
     }
 
     public provideHover(event: ProvideHoverEvent) {
@@ -57,7 +71,15 @@ export class BscPlugin implements Plugin {
         new ReferencesProvider(event).process();
     }
 
+<<<<<<< HEAD
     public provideSemanticTokens(event: ProvideSemanticTokensEvent) {
+=======
+    public provideSelectionRanges(event: ProvideSelectionRangesEvent) {
+        new SelectionRangesProcessor(event).process();
+    }
+
+    public onGetSemanticTokens(event: OnGetSemanticTokensEvent) {
+>>>>>>> master
         if (isBrsFile(event.file)) {
             return new BrsFileSemanticTokensProcessor(event as any).process();
         }

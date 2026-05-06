@@ -103,6 +103,11 @@
             "type": "boolean",
             "default": false
         },
+        "relativeSourceMaps": {
+            "description": "If true, source file paths in generated sourcemaps will be relative to the map file location instead of absolute. This makes sourcemaps portable across different machines and environments.",
+            "type": "boolean",
+            "default": false
+        },
         "copyToStaging": {
             "description": "If true, the files are copied to staging. This setting is ignored when deploy is enabled or if createPackage is enabled",
             "deprecated": true,
@@ -336,6 +341,14 @@
             "description": "Legacy RokuOS versions required at least one argument in callfunc() invocations. Previous brighterscript versions handled this by inserting invalid as an argument when no other args are present. This is not necessary in modern RokuOS versions.",
             "type": "boolean",
             "default": false
+        },
+        "minFirmwareVersion": {
+            "description": "The minimum Roku firmware version required to run this project. When set, BrightScript (.brs) files will be validated to ensure they only use language features available in that firmware version or earlier. BrighterScript (.bs) files are always allowed to use all features since they are transpiled. Should be a semver-compatible string (e.g. \"11.0.0\").",
+            "type": "string",
+            "examples": [
+                "11.0.0",
+                "12.0.0"
+            ]
         }
     }
 }

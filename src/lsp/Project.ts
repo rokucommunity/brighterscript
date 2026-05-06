@@ -2,7 +2,8 @@ import { ProgramBuilder } from '../ProgramBuilder';
 import * as EventEmitter from 'eventemitter3';
 import util, { standardizePath as s } from '../util';
 import * as path from 'path';
-import type { ProjectConfig, ActivateResponse, LspDiagnostic, LspProject } from './LspProject';
+import type { ProjectConfig, ActivateResponse, LspDiagnostic, LspProject, FileRenameTextEdit } from './LspProject';
+import { isBrsFile, isXmlFile } from '../astUtils/reflection';
 import type { Plugin, Hover, MaybePromise } from '../interfaces';
 import { Deferred } from '../deferred';
 import type { StandardizedFileEntry } from 'roku-deploy';
@@ -101,6 +102,15 @@ export class Project implements LspProject {
             }
         } as Plugin);
 
+        this.manifestSrcPath = this.builder.program.manifestPath;
+
+
+        //load the manifest file contents (used for change detection to trigger project reloads).
+        //use builder.program.manifestPath which reflects the actual src path (respects {src;dest} mappings)
+        //try {
+        //    this.manifestFileContents = (await fsExtra.readFile(this.manifestSrcPath)).toString();
+        //} catch { }
+
         //trigger a validation (but don't wait for it. That way we can cancel it sooner if we get new incoming data or requests)
         void this.validate();
 
@@ -110,7 +120,8 @@ export class Project implements LspProject {
             bsconfigPath: this.bsconfigPath,
             logLevel: this.builder.program.options.logLevel as LogLevel,
             rootDir: this.builder.program.options.rootDir,
-            filePatterns: this.filePatterns
+            filePatterns: this.filePatterns,
+            manifestSrcPath: this.manifestSrcPath
         };
     }
 
@@ -414,6 +425,102 @@ export class Project implements LspProject {
         }
     }
 
+    public async getFileRenameEdits(options: { oldSrcPath: string; newSrcPath: string }): Promise<FileRenameTextEdit[]> {
+        await this.onIdle();
+
+        const oldFile = this.builder.program.getFile(options.oldSrcPath);
+        if (!oldFile) {
+            return [];
+        }
+
+        const programOptions = this.builder.program.options;
+        const newPkgPath = this.computePkgPathForNewSrcPath(options.newSrcPath, programOptions);
+        if (!newPkgPath) {
+            return [];
+        }
+
+        const oldPkgPath = util.standardizePath(oldFile.pkgPath).toLowerCase();
+
+        //if the rename doesn't change the pkg path, nothing to do
+        if (oldPkgPath === newPkgPath.toLowerCase()) {
+            return [];
+        }
+
+        const result: FileRenameTextEdit[] = [];
+        for (const file of Object.values(this.builder.program.files)) {
+            if (isBrsFile(file)) {
+                for (const importStatement of file['_cachedLookups']?.importStatements ?? []) {
+                    if (!importStatement.tokens.path || !importStatement.filePath) {
+                        continue;
+                    }
+                    const resolvedPkgPath = util.getPkgPathFromTarget(file.pkgPath, importStatement.filePath);
+                    if (!resolvedPkgPath || util.standardizePath(resolvedPkgPath).toLowerCase() !== oldPkgPath) {
+                        continue;
+                    }
+                    const newText = util.computeRenamedReferencePath(importStatement.filePath, file.pkgPath, newPkgPath);
+                    if (newText === null) {
+                        continue;
+                    }
+                    result.push({
+                        uri: util.pathToUri(file.srcPath),
+                        range: importStatement.tokens.path.location.range,
+                        newText: newText
+                    });
+                }
+            } else if (isXmlFile(file)) {
+                for (const scriptTag of file.parser?.references?.scriptTagImports ?? []) {
+                    if (!scriptTag.filePathRange || !scriptTag.text) {
+                        continue;
+                    }
+                    const resolvedPkgPath = util.getPkgPathFromTarget(file.pkgPath, scriptTag.text);
+                    if (!resolvedPkgPath || util.standardizePath(resolvedPkgPath).toLowerCase() !== oldPkgPath) {
+                        continue;
+                    }
+                    const newText = util.computeRenamedReferencePath(scriptTag.text, file.pkgPath, newPkgPath);
+                    if (newText === null) {
+                        continue;
+                    }
+                    result.push({
+                        uri: util.pathToUri(file.srcPath),
+                        range: scriptTag.filePathRange,
+                        newText: newText
+                    });
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Determine the pkg path for a (not-yet-existing) renamed file. Tries the project's `files` glob first
+     * so custom dest mappings keep working, and falls back to a plain rootDir-relative path so renames into
+     * folders that aren't yet in the glob still get their imports rewritten.
+     * Returns undefined if the new path is outside this project's rootDir.
+     */
+    private computePkgPathForNewSrcPath(newSrcPath: string, programOptions: { files?: BsConfig['files']; rootDir?: string }): string | undefined {
+        if (!programOptions.rootDir) {
+            return undefined;
+        }
+        const destFromGlob = rokuDeploy.getDestPath(newSrcPath, programOptions.files, programOptions.rootDir);
+        if (destFromGlob) {
+            return util.standardizePath(destFromGlob);
+        }
+        const rootDir = util.standardizePath(programOptions.rootDir);
+        const newSrc = util.standardizePath(newSrcPath);
+        const rootPrefix = rootDir.endsWith(path.sep) ? rootDir : rootDir + path.sep;
+        if (!newSrc.toLowerCase().startsWith(rootPrefix.toLowerCase())) {
+            return undefined;
+        }
+        return newSrc.substring(rootPrefix.length);
+    }
+
+    public async getSelectionRanges(options: { srcPath: string; positions: Position[] }) {
+        await this.onIdle();
+        if (this.builder.program.hasFile(options.srcPath)) {
+            return this.builder.program.getSelectionRanges(options.srcPath, options.positions);
+        }
+    }
+
     public async getCodeActions(options: { srcPath: string; range: Range }) {
         await this.onIdle();
 
@@ -426,6 +533,14 @@ export class Project implements LspProject {
                 }
             }
             return codeActions;
+        }
+    }
+
+    public async getSourceFixAllCodeActions(options: { srcPath: string }) {
+        await this.onIdle();
+
+        if (this.builder.program.hasFile(options.srcPath)) {
+            return this.builder.program.getSourceFixAllCodeActions(options.srcPath);
         }
     }
 
@@ -485,6 +600,22 @@ export class Project implements LspProject {
      * @deprecated do not depend on this property. This will certainly be removed in a future release
      */
     public bsconfigFileContents?: string;
+
+    /**
+     * The contents of the manifest file. This is used to detect when the manifest file has not actually been changed (even if the fs says it did).
+     *
+     * Only available after `.activate()` has completed.
+     * @deprecated do not depend on this property. This will certainly be removed in a future release
+     */
+    public manifestFileContents?: string;
+
+    /**
+     * The absolute source path to the manifest file (the file that maps to dest 'manifest').
+     * May differ from rootDir/manifest if the project uses a custom {src; dest} mapping.
+     *
+     * Only available after `.activate()` has completed.
+     */
+    public manifestSrcPath?: string;
 
     /**
      * Find the path to the bsconfig.json file for this project
@@ -553,6 +684,7 @@ export class Project implements LspProject {
     public disposables: LspProject['disposables'] = [];
 
     public dispose() {
+        this.cancelValidate();
         for (let disposable of this.disposables ?? []) {
             disposable?.dispose?.();
         }

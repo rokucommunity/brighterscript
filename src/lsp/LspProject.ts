@@ -1,4 +1,4 @@
-import type { Diagnostic, Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList } from 'vscode-languageserver-protocol';
+import type { Diagnostic, Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList, SelectionRange, TextEdit } from 'vscode-languageserver-protocol';
 import type { Hover, MaybePromise, SemanticToken } from '../interfaces';
 import type { DocumentAction, DocumentActionWithStatus } from './DocumentManager';
 import type { FileTranspileResult, SignatureInfoObj } from '../Program';
@@ -65,6 +65,22 @@ export interface LspProject {
      * @deprecated do not depend on this property. This will certainly be removed in a future release
      */
     bsconfigFileContents?: string;
+
+    /**
+     * The contents of the manifest file. This is used to detect when the manifest file has not actually been changed (even if the fs says it did).
+     *
+     * Only available after `.activate()` has completed.
+     * @deprecated do not depend on this property. This will certainly be removed in a future release
+     */
+    manifestFileContents?: string;
+
+    /**
+     * The absolute source path to the manifest file (the file that maps to dest 'manifest').
+     * May differ from rootDir/manifest if the project uses a custom {src; dest} mapping.
+     *
+     * Only available after `.activate()` has completed.
+     */
+    manifestSrcPath?: string;
 
     /**
      * Initialize and start running the project. This will scan for all files, and build a full project in memory, then validate the project
@@ -138,9 +154,26 @@ export interface LspProject {
     getReferences(options: { srcPath: string; position: Position }): MaybePromise<Location[]>;
 
     /**
+     * Compute the text edits required to keep `import` statements and `<script uri>` tags pointing
+     * at a source file when that source file is being renamed. Each project answers independently;
+     * the ProjectManager is responsible for reconciling agreement across projects.
+     */
+    getFileRenameEdits(options: { oldSrcPath: string; newSrcPath: string }): MaybePromise<FileRenameTextEdit[]>;
+
+    /**
      * Get all of the code actions for the specified file and range
      */
     getCodeActions(options: { srcPath: string; range: Range }): Promise<CodeAction[]>;
+
+    /**
+     * Get all "fix all" source actions for the specified file
+     */
+    getSourceFixAllCodeActions(options: { srcPath: string }): Promise<CodeAction[]>;
+
+    /**
+     * Get the selection ranges for the given positions in the specified file
+     */
+    getSelectionRanges(options: { srcPath: string; positions: Position[] }): MaybePromise<SelectionRange[]>;
 
     /**
      * Get the completions for the specified file and position
@@ -223,6 +256,14 @@ export interface LspDiagnostic extends Diagnostic {
     uri: string;
 }
 
+/**
+ * A LSP TextEdit augmented with the URI of the document the edit applies to. Used for cross-file
+ * edits where each entry stands alone (e.g. file-rename edits collected across projects).
+ */
+export interface FileRenameTextEdit extends TextEdit {
+    uri: string;
+}
+
 export interface ActivateResponse {
     /**
      * The root directory of the project
@@ -240,4 +281,9 @@ export interface ActivateResponse {
      * The logLevel used for this project's logger
      */
     logLevel: LogLevel;
+    /**
+     * The absolute source path to the manifest file (the file that maps to dest 'manifest').
+     * May differ from rootDir/manifest if the project uses a custom {src; dest} mapping.
+     */
+    manifestSrcPath: string;
 }
