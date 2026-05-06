@@ -10,7 +10,8 @@ import { util } from '../../util';
 export function getMissingExtendsInsertPosition(file: XmlFile) {
     const componentElement = file.parser.ast.componentElement;
     const lastAttribute = componentElement.attributes[componentElement.attributes.length - 1];
-    return (lastAttribute?.location?.range ?? componentElement.tokens.startTagName?.location?.range).end;
+    const range = lastAttribute?.location?.range ?? componentElement.tokens.startTagName?.location?.range;
+    return range?.end;
 }
 
 /**

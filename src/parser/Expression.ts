@@ -1329,9 +1329,9 @@ export class AAIndexedMemberExpression extends Expression {
 
 export class AALiteralExpression extends Expression {
     constructor(options: {
-        readonly elements: Array<AAMemberExpression | AAIndexedMemberExpression>,
-        readonly open?: Token,
-        readonly close?: Token
+        readonly elements: Array<AAMemberExpression | AAIndexedMemberExpression>;
+        readonly open?: Token;
+        readonly close?: Token;
     }
     ) {
         super();

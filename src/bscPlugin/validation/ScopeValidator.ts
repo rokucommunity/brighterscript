@@ -38,7 +38,7 @@ import { LogLevel } from '../../Logger';
 import { Stopwatch } from '../../Stopwatch';
 import chalk from 'chalk';
 import { IntegerType } from '../../types/IntegerType';
-import { Scope } from '../../Scope';
+import type { Scope } from '../../Scope';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -406,7 +406,6 @@ export class ScopeValidator {
             location: member.key.location
         });
     }
-
 
 
     /**

@@ -858,8 +858,8 @@ describe('EnumStatement', () => {
     });
 
     describe('computed AA keys', () => {
-        it('transpiles enum member as AA key', () => {
-            testTranspile(`
+        it('transpiles enum member as AA key', async () => {
+            await testTranspile(`
                 enum MyKey
                     first = "key1"
                 end enum
@@ -894,8 +894,8 @@ describe('EnumStatement', () => {
             ]);
         });
 
-        it('transpiles const as AA key', () => {
-            testTranspile(`
+        it('transpiles const as AA key', async () => {
+            await testTranspile(`
                 const MY_KEY = "myKey"
                 sub main()
                     myAA = {
@@ -911,8 +911,8 @@ describe('EnumStatement', () => {
             `);
         });
 
-        it('transpiles namespaced enum member as AA key', () => {
-            testTranspile(`
+        it('transpiles namespaced enum member as AA key', async () => {
+            await testTranspile(`
                 namespace Keys
                     enum MyKey
                         first = "key1"
@@ -932,8 +932,8 @@ describe('EnumStatement', () => {
             `);
         });
 
-        it('transpiles literal string as AA key', () => {
-            testTranspile(`
+        it('transpiles literal string as AA key', async () => {
+            await testTranspile(`
                 sub main()
                     myAA = {
                         ["my-hyphenated-key"]: "value1"
@@ -948,8 +948,8 @@ describe('EnumStatement', () => {
             `);
         });
 
-        it('transpiles multiple computed keys in one AA', () => {
-            testTranspile(`
+        it('transpiles multiple computed keys in one AA', async () => {
+            await testTranspile(`
                 enum Keys
                     a = "keyA"
                     b = "keyB"
@@ -970,8 +970,8 @@ describe('EnumStatement', () => {
             `);
         });
 
-        it('transpiles mixed computed and normal keys', () => {
-            testTranspile(`
+        it('transpiles mixed computed and normal keys', async () => {
+            await testTranspile(`
                 enum Keys
                     first = "key1"
                 end enum
@@ -991,8 +991,8 @@ describe('EnumStatement', () => {
             `);
         });
 
-        it('transpiles const from enum', () => {
-            testTranspile(`
+        it('transpiles const from enum', async () => {
+            await testTranspile(`
                 enum Keys
                     first = "key1"
                 end enum

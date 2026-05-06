@@ -3981,8 +3981,8 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
     }
 
     /**
-    * Get the value of this enum. Requires that `.parent` is set
-    */
+     * Get the value of this enum. Requires that `.parent` is set
+     */
     public getValue() {
         if (isEnumStatement(this.parent)) {
             return (this.parent as EnumStatement)?.getMemberValue(this.name);
@@ -4646,16 +4646,8 @@ export class TypeStatement extends Statement {
     public readonly location: Location;
 
     transpile(state: BrsTranspileState) {
-        //transpile to a comment just for debugging purposes
-        return [
-            state.transpileToken(this.tokens.type, 'type', true),
-            ' ',
-            state.transpileToken(this.tokens.name),
-            ' ',
-            state.transpileToken(this.tokens.equals, '='),
-            ' ',
-            this.value.transpile(state)
-        ];
+        //type statements have no runtime representation, so they're stripped entirely
+        return [];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {

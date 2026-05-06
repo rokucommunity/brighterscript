@@ -153,8 +153,8 @@ describe('BrsFile', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('transpiles binary operator continuation in .bs files to a single line', () => {
-            testTranspile(`
+        it('transpiles binary operator continuation in .bs files to a single line', async () => {
+            await testTranspile(`
                 sub main()
                     result = 1 +
                              2
@@ -241,8 +241,8 @@ describe('BrsFile', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('transpiles multi-line function call args in .bs files to a single line', () => {
-            testTranspile(`
+        it('transpiles multi-line function call args in .bs files to a single line', async () => {
+            await testTranspile(`
                 sub main()
                     foo(
                         1,
@@ -6870,8 +6870,8 @@ describe('BrsFile', () => {
         });
 
         describe('inline interfaces', () => {
-            it('transpiles to "dynamic"', () => {
-                testTranspile(`
+            it('transpiles to "dynamic"', async () => {
+                await testTranspile(`
                     function foo(input as {name as string}) as {id as string}
                         output as {id as string} = {id: input.name}
                         return output
@@ -6888,8 +6888,8 @@ describe('BrsFile', () => {
         });
 
         describe('type statements interfaces', () => {
-            it('transpiles statement to nothing', () => {
-                testTranspile(`
+            it('transpiles statement to nothing', async () => {
+                await testTranspile(`
                      type number = integer or float
 
                     sub foo()
@@ -6902,15 +6902,17 @@ describe('BrsFile', () => {
                 `);
             });
 
-            it('transpiles type statement to object', () => {
-                testTranspile(`
+            it('transpiles type statement to dynamic', async () => {
+                //v1 transpiles unknown / composite types to `dynamic` (master used `object`)
+                //(see "allows union types for primitives" earlier in this file)
+                await testTranspile(`
                      type number = integer or float
 
                     sub foo(node as number)
                         print node[m.keyProp]
                     end sub
                 `, `
-                    sub foo(node as object)
+                    sub foo(node as dynamic)
                         print node[m.keyProp]
                     end sub
                 `);
@@ -6918,8 +6920,8 @@ describe('BrsFile', () => {
         });
 
         describe('for each loop with types', () => {
-            it('transpiles to untyped for each', () => {
-                testTranspile(`
+            it('transpiles to untyped for each', async () => {
+                await testTranspile(`
                     sub foo(items as string[])
                         for each item as string in items
                             print item
@@ -6936,8 +6938,8 @@ describe('BrsFile', () => {
         });
 
         describe('typed functions in type expressions', () => {
-            it('transpiles to function', () => {
-                testTranspile(`
+            it('transpiles to function', async () => {
+                await testTranspile(`
                     function test(func as function(name as string, num as integer) as integer) as integer
                         return func("hello", 123)
                     end function

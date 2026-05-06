@@ -2324,7 +2324,8 @@ export class Util {
     }
 
 
-    /** Parse the `sourceMappingURL` comment from file contents and resolve it to a RawSourceMap.
+    /**
+     * Parse the `sourceMappingURL` comment from file contents and resolve it to a RawSourceMap.
      * Handles inline base64 data URIs, absolute paths, relative paths (resolved against srcPath's
      * directory), and falls back to a co-located `<srcPath>.map` file.
      * Supports both BrightScript-style comments (`'//# sourceMappingURL=...`) and XML-style

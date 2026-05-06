@@ -210,9 +210,9 @@ export class SymbolTable implements SymbolTypeGetter {
         //(i.e., we walked up to a parent table). Returning the original reference for own-table
         //hits keeps identity stable, which downstream consumers (and one symbol-table spec)
         //rely on.
-        const addAncestorInfo = (symbol: BscSymbol) => memberOfAncestor
+        const addAncestorInfo = (symbol: BscSymbol) => (memberOfAncestor
             ? { ...symbol, data: { ...symbol.data, memberOfAncestor: true } }
-            : symbol;
+            : symbol);
         let maxStatementIndex = Number.isInteger(additionalOptions?.maxStatementIndex) ? additionalOptions.maxStatementIndex : Number.MAX_SAFE_INTEGER;
         do {
 
@@ -481,7 +481,7 @@ export class SymbolTable implements SymbolTypeGetter {
                 }*/
 
     /**
-     * * Adds all the symbols from another table to this one.
+     * Adds all the symbols from another table to this one.
      * Source symbols are shared by reference (not cloned) since BscSymbol is treated as immutable.
      * The destination still owns its own array per key, so subsequent addSymbol calls on either
      * table do not leak across.
