@@ -5629,11 +5629,15 @@ describe('BrsFile', () => {
         });
 
         it('allows built in objects as type names', async () => {
+            //v1 transpiles unknown / built-in roku types to `dynamic` instead of `object`
+            //so the typed-assignment story stays consistent (see "allows types on lhs of
+            //assignments" earlier in this file). Master used `object` here, but v1's design
+            //is `dynamic`.
             await testTranspile(`
                 sub main(x as roSGNode, y as roSGNodeEvent, z as ifArray)
                 end sub
             `, `
-                sub main(x as object, y as object, z as object)
+                sub main(x as dynamic, y as dynamic, z as dynamic)
                 end sub
             `);
         });
@@ -5643,7 +5647,7 @@ describe('BrsFile', () => {
                 sub main(x as roSGNodeGroup, y as roSGNodeRowList, z as roSGNodeCustomComponent)
                 end sub
             `, `
-                sub main(x as object, y as object, z as object)
+                sub main(x as dynamic, y as dynamic, z as dynamic)
                 end sub
             `);
         });

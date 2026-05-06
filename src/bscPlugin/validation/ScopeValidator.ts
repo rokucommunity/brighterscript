@@ -1087,6 +1087,12 @@ export class ScopeValidator {
             // This is used in a TypeExpression - only look up types from SymbolTable
             symbolType = SymbolTypeFlag.typetime;
             oppositeSymbolType = SymbolTypeFlag.runtime;
+
+            //roku built-in type names (rosgnode*, ifArray, etc.) aren't tracked in any
+            //symbol table; skip cannot-find-name validation when used as a type.
+            if (isVariableExpression(expression) && util.isBuiltInType(expression.tokens.name.text)) {
+                return;
+            }
         }
 
         // Do a complete type check on all DottedGet and Variable expressions

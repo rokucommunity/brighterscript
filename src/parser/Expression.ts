@@ -2668,6 +2668,13 @@ export class TypeExpression extends Expression implements TypedefProvider {
     public readonly location: Location;
 
     public transpile(state: BrsTranspileState): TranspileResult {
+        //roku built-in names (rosgnode*, etc.) collapse to `dynamic` at transpile.
+        //Check before isNativeType, since unresolved built-ins resolve to DynamicType
+        //(a native type) which would otherwise pass-through their original text.
+        const name = this.getName(ParseMode.BrighterScript);
+        if (name && util.isBuiltInType(name)) {
+            return ['dynamic'];
+        }
         const exprType = this.getType({ flags: SymbolTypeFlag.typetime });
         if (isNativeType(exprType)) {
             return this.expression.transpile(state);

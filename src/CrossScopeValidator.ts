@@ -632,6 +632,12 @@ export class CrossScopeValidator {
         for (const [symbol, scopeList] of missingSymbolInScope.entries()) {
             const typeChainResult = util.processTypeChain(symbol.typeChain);
 
+            //roku built-in type names (rosgnode*, etc.) aren't tracked in any symbol table;
+            //skip cannot-find-name when the symbol's name is one of those built-ins.
+            if (typeChainResult.itemName && util.isBuiltInType(typeChainResult.itemName)) {
+                continue;
+            }
+
             for (const scope of scopeList) {
                 this.program.diagnostics.register({
                     ...this.getCannotFindDiagnostic(scope, symbol, typeChainResult),
