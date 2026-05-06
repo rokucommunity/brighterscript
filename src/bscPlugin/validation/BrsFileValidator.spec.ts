@@ -3,10 +3,11 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { AALiteralExpression, DottedGetExpression } from '../../parser/Expression';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
-import { expectDiagnostics, expectZeroDiagnostics } from '../../testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics, tempDir, trim } from '../../testHelpers.spec';
 import { Program } from '../../Program';
 import { isClassStatement, isNamespaceStatement } from '../../astUtils/reflection';
 import util from '../../util';
+import * as fsExtra from 'fs-extra';
 
 describe('BrsFileValidator', () => {
     let program: Program;
@@ -606,6 +607,138 @@ describe('BrsFileValidator', () => {
                     ...DiagnosticMessages.featureRequiresMinFirmwareVersion('optional chaining', '11.0.0', '10.0.0')
                 }]);
             });
+        });
+    });
+
+    describe('eval deprecation', () => {
+        beforeEach(() => {
+            fsExtra.ensureDirSync(tempDir);
+            fsExtra.emptyDirSync(tempDir);
+        });
+        afterEach(() => {
+            fsExtra.emptyDirSync(tempDir);
+        });
+
+        function setupProgram(opts: { rsgVersion?: string; minFirmwareVersion?: string }) {
+            const manifestContents = opts.rsgVersion
+                ? trim`
+                    title=t
+                    rsg_version=${opts.rsgVersion}
+                `
+                : trim`title=t`;
+            fsExtra.writeFileSync(`${tempDir}/manifest`, manifestContents);
+            program.dispose();
+            program = new Program({
+                rootDir: tempDir,
+                minFirmwareVersion: opts.minFirmwareVersion
+            });
+        }
+
+        it('flags `eval(...)` under default settings (no manifest rsg_version, default minFirmwareVersion)', () => {
+            //default minFirmwareVersion is 15.0.0, so effective rsg_version is 1.2
+            setupProgram({});
+            program.setFile('source/main.brs', `
+                sub main()
+                    eval("print 1")
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.globalCallableRemoved('eval', 'rsg', '1.2.0', '1.2.0')
+            }]);
+        });
+
+        it('flags `eval(...)` when manifest declares rsg_version=1.2', () => {
+            setupProgram({ rsgVersion: '1.2' });
+            program.setFile('source/main.brs', `
+                sub main()
+                    eval("print 1")
+                end sub
+            `);
+            program.validate();
+            const evalDiags = program.getDiagnostics().filter(d => d.code === DiagnosticMessages.globalCallableRemoved('eval', 'rsg', '1.2.0').code
+            );
+            expect(evalDiags).to.be.lengthOf(1);
+        });
+
+        it('flags `eval(...)` when manifest declares rsg_version=1.3', () => {
+            setupProgram({ rsgVersion: '1.3' });
+            program.setFile('source/main.brs', `
+                sub main()
+                    eval("print 1")
+                end sub
+            `);
+            program.validate();
+            const evalDiags = program.getDiagnostics().filter(d => d.code === DiagnosticMessages.globalCallableRemoved('eval', 'rsg', '1.2.0').code
+            );
+            expect(evalDiags).to.be.lengthOf(1);
+        });
+
+        it('flags `eval(...)` via os axis when manifest declares rsg_version=1.1 on modern firmware', () => {
+            //rsg=1.1 explicit on default firmware (15.0) is an invalid manifest entry — rsg=1.1
+            //was removed at OS 14.5. The manifest validator separately flags that. With rsg axis
+            //silent (1.1 < 1.2), the os.deprecated fallback fires as a secondary nudge.
+            setupProgram({ rsgVersion: '1.1' });
+            program.setFile('source/main.brs', `
+                sub main()
+                    eval("print 1")
+                end sub
+            `);
+            program.validate();
+            const evalDiags = program.getDiagnostics().filter(d => d.code === DiagnosticMessages.globalCallableDeprecated().code
+            );
+            expect(evalDiags).to.be.lengthOf(1);
+            expect((evalDiags[0] as any).data?.axis).to.equal('os');
+        });
+
+        it('does NOT flag `eval(...)` when minFirmwareVersion is set below 9.3.0 and manifest is silent', () => {
+            setupProgram({ minFirmwareVersion: '8.0.0' });
+            program.setFile('source/main.brs', `
+                sub main()
+                    eval("print 1")
+                end sub
+            `);
+            program.validate();
+            const evalDiags = program.getDiagnostics().filter(d => d.code === DiagnosticMessages.globalCallableRemoved('eval', 'rsg', '1.2.0').code
+            );
+            expect(evalDiags).to.be.lengthOf(0);
+        });
+
+        it('does NOT flag `m.eval(...)` (method call on object)', () => {
+            setupProgram({});
+            program.setFile('source/main.brs', `
+                sub main()
+                    m.eval("print 1")
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does NOT flag `alpha.eval(...)` (namespaced call via dotted-get)', () => {
+            setupProgram({});
+            program.setFile('source/main.brs', `
+                sub main()
+                    alpha.eval("print 1")
+                end sub
+            `);
+            program.validate();
+            const evalDiags = program.getDiagnostics().filter(d => d.code === DiagnosticMessages.globalCallableRemoved('eval', 'rsg', '1.2.0').code
+            );
+            expect(evalDiags).to.be.lengthOf(0);
+        });
+
+        it('flags eval case-insensitively (Eval, EVAL)', () => {
+            setupProgram({});
+            program.setFile('source/main.brs', `
+                sub main()
+                    Eval("print 1")
+                end sub
+            `);
+            program.validate();
+            const evalDiags = program.getDiagnostics().filter(d => d.code === DiagnosticMessages.globalCallableRemoved('eval', 'rsg', '1.2.0').code
+            );
+            expect(evalDiags).to.be.lengthOf(1);
         });
     });
 });
