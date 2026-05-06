@@ -86,11 +86,7 @@ describe('SymbolTable', () => {
             st.mergeSymbolTable(otherTable);
         });
 
-        //v1's getSymbol always wraps results through addAncestorInfo (clones each
-        //symbol with a new `data.memberOfAncestor` field). This master assertion
-        //expects raw reference identity, which the wrapping breaks. Skipping until
-        //getSymbol's wrapping is reconsidered.
-        it.skip('shares symbol object references with the source rather than cloning', () => {
+        it('shares symbol object references with the source rather than cloning', () => {
             const source = new SymbolTable('Source');
             source.addSymbol('foo', null as any, new StringType(), SymbolTypeFlag.runtime);
             const destination = new SymbolTable('Destination');

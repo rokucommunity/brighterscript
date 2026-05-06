@@ -742,11 +742,11 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'local-var-same-name-as-class'
     }),
-    __unused45: () => ({
+    unnecessaryCodebehindScriptImport: () => ({
         message: `This import is unnecessary because compiler option 'autoImportComponentScript' is enabled`,
         legacyCode: 1107,
         severity: DiagnosticSeverity.Warning,
-        code: 'unnecessary-import'
+        code: 'unnecessary-codebehind-script-import'
     }),
     __unused37: () => ({
         message: `Expected '(' to follow callfunc identifier`,

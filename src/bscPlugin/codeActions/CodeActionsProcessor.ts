@@ -44,6 +44,8 @@ export class CodeActionsProcessor {
                 this.suggestRemoveScriptImportQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent) {
                 this.suggestRemoveScriptImportQuickFixes([diagnostic]);
+            } else if (diagnostic.code === DiagnosticCodeMap.unnecessaryCodebehindScriptImport) {
+                this.suggestRemoveScriptImportQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.scriptImportCaseMismatch) {
                 this.suggestScriptImportCasingQuickFixes([diagnostic as DiagnosticMessageType<'scriptImportCaseMismatch'>]);
             } else if (diagnostic.code === DiagnosticCodeMap.missingOverrideKeyword) {
@@ -70,6 +72,8 @@ export class CodeActionsProcessor {
                 } else if (code === DiagnosticCodeMap.referencedFileDoesNotExist) {
                     this.suggestRemoveScriptImportQuickFixes(allInFile);
                 } else if (code === DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent) {
+                    this.suggestRemoveScriptImportQuickFixes(allInFile);
+                } else if (code === DiagnosticCodeMap.unnecessaryCodebehindScriptImport) {
                     this.suggestRemoveScriptImportQuickFixes(allInFile);
                 } else if (code === DiagnosticCodeMap.scriptImportCaseMismatch) {
                     this.suggestScriptImportCasingQuickFixes(allInFile as DiagnosticMessageType<'scriptImportCaseMismatch'>[]);
@@ -333,7 +337,8 @@ export class CodeActionsProcessor {
         }
 
         this.suggestedImports.add(key);
-        const importStatements = (this.event.file as BrsFile)["_cachedLookups"].importStatements;
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        const importStatements = (this.event.file as BrsFile)['_cachedLookups'].importStatements;
         //find the position of the first import statement, or the top of the file if there is none
         const insertPosition = importStatements[importStatements.length - 1]?.tokens.import.location.range?.start ?? util.createPosition(0, 0);
 
@@ -390,7 +395,8 @@ export class CodeActionsProcessor {
             return;
         }
         const file = this.event.file;
-        const importStatements = file["_cachedLookups"].importStatements;
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        const importStatements = file['_cachedLookups'].importStatements;
         const insertPosition = importStatements[importStatements.length - 1]?.tokens.import.location.range?.start ?? util.createPosition(0, 0);
 
         const changes: InsertChange[] = [];
@@ -643,7 +649,8 @@ export class CodeActionsProcessor {
      */
     private suggestRemoveScriptImportQuickFixes(diagnostics: BsDiagnostic[]) {
         const titles: Record<string, [string, string]> = {
-            [DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent]: ['Remove redundant script import', 'Fix all: Remove redundant script imports']
+            [DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent]: ['Remove redundant script import', 'Fix all: Remove redundant script imports'],
+            [DiagnosticCodeMap.unnecessaryCodebehindScriptImport]: ['Remove unnecessary codebehind import', 'Fix all: Remove unnecessary codebehind imports']
         };
         const [singleTitle, fixAllTitle] = titles[diagnostics[0]?.code] ?? ['Remove script import', 'Fix all: Remove script imports'];
         const changes = diagnostics.map<DeleteChange>(diagnostic => {

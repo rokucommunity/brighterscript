@@ -206,7 +206,13 @@ export class SymbolTable implements SymbolTypeGetter {
         const key = name?.toLowerCase();
         let result: BscSymbol[];
         let memberOfAncestor = false;
-        const addAncestorInfo = (symbol: BscSymbol) => ({ ...symbol, data: { ...symbol.data, memberOfAncestor: memberOfAncestor } });
+        //only clone the symbol when we actually need to attach the `memberOfAncestor` flag
+        //(i.e., we walked up to a parent table). Returning the original reference for own-table
+        //hits keeps identity stable, which downstream consumers (and one symbol-table spec)
+        //rely on.
+        const addAncestorInfo = (symbol: BscSymbol) => memberOfAncestor
+            ? { ...symbol, data: { ...symbol.data, memberOfAncestor: true } }
+            : symbol;
         let maxStatementIndex = Number.isInteger(additionalOptions?.maxStatementIndex) ? additionalOptions.maxStatementIndex : Number.MAX_SAFE_INTEGER;
         do {
 

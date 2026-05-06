@@ -3692,10 +3692,7 @@ describe('BrsFile', () => {
             expect(file.transpile().map.toJSON().file).to.eql('main.brs');
         });
 
-        //v1 dropped the public BscFile.transpile() in favor of the build pipeline
-        //(see Program.getTranspiledFileContents); restoring the equivalent assertion
-        //via that path is left as a follow-up alongside the sourcemap chain re-wire.
-        it.skip('sourcemap sources array contains absolute path by default', () => {
+        it('sourcemap sources array contains absolute path by default', () => {
             program.options.sourceMap = true;
             const file = program.setFile('source/main.bs', `
                 sub main()
@@ -5823,20 +5820,19 @@ describe('BrsFile', () => {
             `);
         });
 
-        //test references `mainFile` that is never declared in scope; the merge brought
-        //the `it(...)` body in but not the `const mainFile = ...` declaration. Skipping
-        //until a proper port is done.
-        it.skip('allows built-in types for return values', async () => {
+        it('allows built-in types for return values', async () => {
+            //v1 transpiles unknown / built-in roku types to `dynamic` instead of `object`
+            //(see "allows built in objects as type names" earlier in this file)
             await testTranspile(`
                 function makeLabel(text as string) as roSGNodeLabel
                    label = createObject("roSGNode", "Label")
                    label.text = text
                 end function
             `, `
-                function makeLabel(text as string) as object
+                function makeLabel(text as string) as dynamic
                     label = createObject("roSGNode", "Label")
                     label.text = text
-                end sub
+                end function
             `);
             const mainFile = program.getFile<BrsFile>('source/main.bs');
             const validateFileEvent = {

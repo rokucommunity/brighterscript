@@ -460,6 +460,7 @@ export class Project implements LspProject {
         const result: FileRenameTextEdit[] = [];
         for (const file of Object.values(this.builder.program.files)) {
             if (isBrsFile(file)) {
+                // eslint-disable-next-line @typescript-eslint/dot-notation
                 for (const importStatement of file['_cachedLookups']?.importStatements ?? []) {
                     if (!importStatement.tokens.path || !importStatement.filePath) {
                         continue;

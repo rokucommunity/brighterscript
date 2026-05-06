@@ -803,10 +803,7 @@ describe('CodeActionsProcessor', () => {
         });
     });
 
-    //the unnecessaryCodebehindScriptImport diagnostic was deprecated in v1
-    //(now __unused45 in DiagnosticMessages); v1 doesn't fire it, so the quick
-    //fix is unreachable. Re-enable if v1 restores the diagnostic.
-    describe.skip('unnecessaryCodebehindScriptImport', () => {
+    describe('unnecessaryCodebehindScriptImport', () => {
         it('offers to remove the unnecessary codebehind import', () => {
             const file = program.setFile('components/comp1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
