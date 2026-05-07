@@ -2511,7 +2511,7 @@ describe('Scope', () => {
                 ]);
             });
 
-            it.only('diagnostics in dependent files go away when a file is changed with a fix', () => {
+            it('diagnostics in dependent files go away when a file is changed with a fix', () => {
                 program.setFile('components/Comp.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="Comp" extends="Scene">
@@ -2544,8 +2544,6 @@ describe('Scope', () => {
 
                 program.validate();
                 expectZeroDiagnostics(program);
-
-
             });
         });
     });
