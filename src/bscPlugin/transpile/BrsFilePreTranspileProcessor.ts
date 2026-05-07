@@ -1,12 +1,12 @@
-import { createAssignmentStatement, createBlock, createDottedSetStatement, createIfStatement, createIndexedSetStatement, createToken } from '../../astUtils/creators';
-import { isAssignmentStatement, isBinaryExpression, isBlock, isBody, isBrsFile, isDottedGetExpression, isDottedSetStatement, isGroupingExpression, isIndexedGetExpression, isIndexedSetStatement, isLiteralExpression, isNamespaceStatement, isUnaryExpression, isVariableExpression } from '../../astUtils/reflection';
+import { createAssignmentStatement, createBlock, createDottedSetStatement, createIfStatement, createIndexedSetStatement, createInvalidLiteral, createToken } from '../../astUtils/creators';
+import { isAssignmentStatement, isBinaryExpression, isBlock, isBody, isBrsFile, isDottedGetExpression, isDottedSetStatement, isFunctionExpression, isGroupingExpression, isIndexedGetExpression, isIndexedSetStatement, isLiteralExpression, isNamedArgumentExpression, isNamespaceStatement, isUnaryExpression, isVariableExpression } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BeforeFileTranspileEvent } from '../../interfaces';
 import type { Token } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { Expression, Statement } from '../../parser/AstNode';
-import type { TernaryExpression } from '../../parser/Expression';
+import type { CallExpression, FunctionExpression, FunctionParameterExpression, NamedArgumentExpression, TernaryExpression } from '../../parser/Expression';
 import { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { ConstStatement, IfStatement, NamespaceStatement } from '../../parser/Statement';
@@ -21,8 +21,106 @@ export class BrsFilePreTranspileProcessor {
 
     public process() {
         if (isBrsFile(this.event.file)) {
+            this.processNamedArgumentCalls();
             this.iterateExpressions();
         }
+    }
+
+    /**
+     * Rewrite calls that use named arguments into positional calls.
+     * Named arguments are expected to already be validated to match function parameter order.
+     */
+    private processNamedArgumentCalls() {
+        const scope = this.event.program.getFirstScopeForFile(this.event.file);
+        if (!scope) {
+            return;
+        }
+        const callableContainerMap = util.getCallableContainersByLowerName(scope.getAllCallables());
+
+        for (const func of this.event.file.parser.references.functionExpressions) {
+            for (const callExpr of func.callExpressions) {
+                if (!callExpr.args.some(isNamedArgumentExpression)) {
+                    continue;
+                }
+
+                let params: FunctionParameterExpression[] | undefined;
+
+                if (isVariableExpression(callExpr.callee)) {
+                    const funcName = callExpr.callee.name.text;
+                    params = callableContainerMap.get(funcName.toLowerCase())?.[0]?.callable?.functionStatement?.func?.parameters;
+                } else if (isDottedGetExpression(callExpr.callee)) {
+                    // Namespace function call (e.g. MyNs.myFunc(a: 1))
+                    const brsName = util.resolveNamespaceCallableName(callExpr.callee, scope);
+                    if (brsName) {
+                        params = callableContainerMap.get(brsName.toLowerCase())?.[0]?.callable?.functionStatement?.func?.parameters;
+                    }
+                }
+
+                if (!params) {
+                    continue;
+                }
+
+                this.rewriteNamedArgCall(callExpr, params);
+            }
+
+            // Constructor CallExpressions are not in func.callExpressions, so handle them separately.
+            for (const newExpr of this.event.file.parser.references.newExpressions) {
+                const callExpr = newExpr.call;
+                if (!callExpr.args.some(isNamedArgumentExpression)) {
+                    continue;
+                }
+                // Only process constructor calls that belong to this function
+                if (newExpr.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
+                    continue;
+                }
+
+                const className = newExpr.className.getName(ParseMode.BrighterScript);
+                const containingNamespace = newExpr.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase();
+                const classLink = scope.getClassFileLink(className, containingNamespace);
+                if (!classLink) {
+                    continue;
+                }
+
+                const params = util.getClassConstructorParams(classLink.item, scope, containingNamespace);
+                this.rewriteNamedArgCall(callExpr, params);
+            }
+        }
+    }
+
+    /**
+     * Rewrite a single named-argument call expression in place.
+     * Leaves invalid calls unchanged (diagnostics are emitted during validation).
+     */
+    private rewriteNamedArgCall(callExpr: CallExpression, params: FunctionParameterExpression[]) {
+        const finalArgs = [] as Expression[];
+        let expectedParamIdx = 0;
+        let seenNamedArg = false;
+
+        for (const arg of callExpr.args) {
+            if (!isNamedArgumentExpression(arg)) {
+                if (seenNamedArg || expectedParamIdx >= params.length) {
+                    return;
+                }
+                finalArgs.push(arg);
+                expectedParamIdx++;
+                continue;
+            }
+
+            seenNamedArg = true;
+            const namedArg = arg as NamedArgumentExpression;
+            const paramIdx = params.findIndex(p => p.name.text.toLowerCase() === namedArg.name.text.toLowerCase());
+            if (paramIdx < expectedParamIdx) {
+                return;
+            }
+
+            for (let i = expectedParamIdx; i < paramIdx; i++) {
+                finalArgs.push(params[i]?.defaultValue?.clone() ?? createInvalidLiteral());
+            }
+            finalArgs.push(namedArg.value);
+            expectedParamIdx = paramIdx + 1;
+        }
+
+        this.event.editor.arraySplice(callExpr.args, 0, callExpr.args.length, ...finalArgs);
     }
 
     private iterateExpressions() {

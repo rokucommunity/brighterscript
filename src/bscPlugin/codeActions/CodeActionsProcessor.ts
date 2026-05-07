@@ -8,10 +8,11 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { BscFile, BsDiagnostic, OnGetCodeActionsEvent } from '../../interfaces';
 import { ParseMode } from '../../parser/Parser';
+import type { Expression } from '../../parser/AstNode';
 import { util } from '../../util';
-import { isBrsFile, isFunctionExpression, isMethodStatement, isXmlFile } from '../../astUtils/reflection';
-import type { FunctionExpression } from '../../parser/Expression';
-import type { MethodStatement } from '../../parser/Statement';
+import { isBrsFile, isCallExpression, isDottedGetExpression, isFunctionExpression, isMethodStatement, isNamedArgumentExpression, isNamespaceStatement, isNewExpression, isVariableExpression, isXmlFile } from '../../astUtils/reflection';
+import type { CallExpression, FunctionExpression } from '../../parser/Expression';
+import type { MethodStatement, NamespaceStatement } from '../../parser/Statement';
 import { WalkMode } from '../../astUtils/visitors';
 import { TokenKind } from '../../lexer/TokenKind';
 import { getMissingExtendsInsertPosition } from './codeActionHelpers';
@@ -53,6 +54,8 @@ export class CodeActionsProcessor {
                 this.suggestMissingOverrideQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.cannotUseOverrideKeywordOnConstructorFunction) {
                 this.suggestRemoveOverrideFromConstructorQuickFixes([diagnostic]);
+            } else if (diagnostic.code === DiagnosticCodeMap.namedArgOutOfOrder) {
+                this.suggestNamedArgOrderQuickFix(diagnostic as DiagnosticMessageType<'namedArgOutOfOrder'>);
             }
         }
 
@@ -480,6 +483,114 @@ export class CodeActionsProcessor {
                 })
             );
         }
+    }
+
+    /**
+     * Suggests reordering named arguments to declaration order.
+     */
+    private suggestNamedArgOrderQuickFix(diagnostic: DiagnosticMessageType<'namedArgOutOfOrder'>) {
+        if (!isBrsFile(this.event.file)) {
+            return;
+        }
+        const closestExpression = this.event.file.getClosestExpression(diagnostic.range.start);
+        const callExpression = (
+            isCallExpression(closestExpression)
+                ? closestExpression
+                : closestExpression?.findAncestor<CallExpression>(isCallExpression)
+        );
+        if (!callExpression || callExpression.args.length < 2) {
+            return;
+        }
+
+        const parameters = this.getCallExpressionParameters(callExpression);
+        if (!parameters) {
+            return;
+        }
+
+        const argsWithParamIndex = [] as Array<{ arg: Expression; paramIndex: number }>;
+        let expectedParamIndex = 0;
+        let hasNamedArg = false;
+
+        for (const arg of callExpression.args) {
+            if (!isNamedArgumentExpression(arg)) {
+                // Quick-fix can only reorder arguments; it cannot repair invalid syntax/shape such as
+                // positional args after named args or positional args beyond parameter count.
+                if (hasNamedArg || expectedParamIndex >= parameters.length) {
+                    return;
+                }
+                argsWithParamIndex.push({ arg: arg, paramIndex: expectedParamIndex });
+                expectedParamIndex++;
+                continue;
+            }
+
+            hasNamedArg = true;
+            const namedArg = arg;
+            const paramIndex = parameters.findIndex(p => p.name.text.toLowerCase() === namedArg.name.text.toLowerCase());
+            // Unknown names and duplicate parameter targets are invalid; do not offer a reorder fix.
+            if (paramIndex < 0 || argsWithParamIndex.some(x => x.paramIndex === paramIndex)) {
+                return;
+            }
+            argsWithParamIndex.push({ arg: namedArg, paramIndex: paramIndex });
+            expectedParamIndex = paramIndex + 1;
+        }
+
+        const sortedArgs = [...argsWithParamIndex].sort((a, b) => a.paramIndex - b.paramIndex);
+        const sortedArgText = sortedArgs.map(x => util.getTextForRange(this.event.file.fileContents, x.arg.range)).join(', ');
+        const firstArg = callExpression.args[0];
+        const lastArg = callExpression.args[callExpression.args.length - 1];
+        if (!firstArg?.range || !lastArg?.range) {
+            return;
+        }
+
+        this.event.codeActions.push(
+            codeActionUtil.createCodeAction({
+                title: 'Reorder named arguments to match function declaration',
+                diagnostics: [diagnostic],
+                kind: CodeActionKind.QuickFix,
+                changes: [{
+                    type: 'replace',
+                    filePath: this.event.file.srcPath,
+                    range: util.createRangeFromPositions(firstArg.range.start, lastArg.range.end),
+                    newText: sortedArgText
+                }]
+            })
+        );
+    }
+
+    private getCallExpressionParameters(callExpression: CallExpression) {
+        const scope = this.event.program.getFirstScopeForFile(this.event.file);
+        if (!scope) {
+            return undefined;
+        }
+        if (isNewExpression(callExpression.parent)) {
+            const newExpression = callExpression.parent;
+            const className = newExpression.className.getName(ParseMode.BrighterScript);
+            const containingNamespace = newExpression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase();
+            const classLink = scope.getClassFileLink(className, containingNamespace);
+            if (!classLink) {
+                return undefined;
+            }
+            return util.getClassConstructorParams(classLink.item, scope, containingNamespace);
+        }
+        if (isVariableExpression(callExpression.callee)) {
+            return this.getCallableParametersByName(callExpression.callee.name.text.toLowerCase());
+        }
+        if (isDottedGetExpression(callExpression.callee)) {
+            const brsName = util.resolveNamespaceCallableName(callExpression.callee, scope);
+            if (!brsName) {
+                return undefined;
+            }
+            return this.getCallableParametersByName(brsName.toLowerCase());
+        }
+    }
+
+    private getCallableParametersByName(lowerName: string) {
+        const scope = this.event.program.getFirstScopeForFile(this.event.file);
+        if (!scope) {
+            return undefined;
+        }
+        const callable = scope.getCallableByName(lowerName);
+        return callable?.functionStatement?.func?.parameters;
     }
 
     /**

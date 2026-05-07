@@ -22,7 +22,9 @@ import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
-import type { DottedGetExpression, VariableExpression } from './parser/Expression';
+import type { DottedGetExpression, FunctionParameterExpression, VariableExpression } from './parser/Expression';
+import type { ClassStatement, MethodStatement } from './parser/Statement';
+import type { Scope } from './Scope';
 import { LogLevel, createLogger } from './logging';
 import type { Identifier, Locatable, Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
@@ -1597,6 +1599,40 @@ export class Util {
             }
         }
         return parts.reverse();
+    }
+
+    /**
+     * If the callee is a dotted-get expression whose leftmost identifier is a known namespace in the
+     * given scope, returns the BrightScript-flattened name (e.g. "MyNs_myFunc"). Otherwise returns undefined.
+     */
+    public resolveNamespaceCallableName(callee: Expression, scope: Scope): string | undefined {
+        const parts = this.getAllDottedGetParts(callee);
+        if (!parts || !scope.namespaceLookup.has(parts[0].text.toLowerCase())) {
+            return undefined;
+        }
+        return parts.map(p => p.text).join('_');
+    }
+
+    /**
+     * Walk the class and its ancestor chain to find the first constructor's parameter list.
+     * Returns an empty array if no constructor is defined anywhere in the hierarchy.
+     */
+    public getClassConstructorParams(classStmt: ClassStatement, scope: Scope, containingNamespace: string | undefined): FunctionParameterExpression[] {
+        let stmt: ClassStatement | undefined = classStmt;
+        while (stmt) {
+            const ctor = stmt.body.find(
+                s => (s as MethodStatement)?.name?.text?.toLowerCase() === 'new'
+            ) as MethodStatement | undefined;
+            if (ctor) {
+                return ctor.func.parameters;
+            }
+            if (!stmt.parentClassName) {
+                break;
+            }
+            const parentName = stmt.parentClassName.getName(ParseMode.BrighterScript);
+            stmt = scope.getClassFileLink(parentName, containingNamespace)?.item;
+        }
+        return [];
     }
 
     /**

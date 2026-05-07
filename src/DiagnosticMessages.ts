@@ -770,6 +770,41 @@ export let DiagnosticMessages = {
         message: `'${featureName}' requires Roku firmware version ${minimumVersion} or higher (current target is ${configuredVersion})`,
         code: 1146,
         severity: DiagnosticSeverity.Error
+    }),
+    duplicateFunctionParameter: (paramName: string) => ({
+        message: `Duplicate parameter name '${paramName}'`,
+        code: 1147,
+        severity: DiagnosticSeverity.Warning
+    }),
+    unknownNamedArgument: (argName: string, funcName: string) => ({
+        message: `Unknown named argument '${argName}' for function '${funcName}'`,
+        code: 1148,
+        severity: DiagnosticSeverity.Error
+    }),
+    namedArgDuplicate: (argName: string) => ({
+        message: `Named argument '${argName}' was already provided`,
+        code: 1149,
+        severity: DiagnosticSeverity.Error
+    }),
+    positionalArgAfterNamedArg: () => ({
+        message: `Positional arguments cannot follow named arguments`,
+        code: 1150,
+        severity: DiagnosticSeverity.Error
+    }),
+    namedArgsNotAllowedForUnknownFunction: (funcName: string) => ({
+        message: `Cannot use named arguments when calling '${funcName}' because the function definition cannot be found`,
+        code: 1151,
+        severity: DiagnosticSeverity.Error
+    }),
+    namedArgsCrossScopeConflict: (funcName: string) => ({
+        message: `Named arguments for '${funcName}' are ambiguous: the function has different parameter signatures across component scopes that share this file. Named arguments cannot be safely transpiled.`,
+        code: 1152,
+        severity: DiagnosticSeverity.Error
+    }),
+    namedArgOutOfOrder: (argName: string) => ({
+        message: `Named argument '${argName}' is out of order`,
+        code: 1153,
+        severity: DiagnosticSeverity.Error
     })
 };
 

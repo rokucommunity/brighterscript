@@ -1,9 +1,9 @@
 import { URI } from 'vscode-uri';
-import { isBrsFile, isCallExpression, isDottedGetExpression, isLiteralExpression, isNamespaceStatement, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
+import { isBrsFile, isCallExpression, isDottedGetExpression, isLiteralExpression, isNamespaceStatement, isVariableExpression, isXmlScope, isNamedArgumentExpression } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { BscFile, BsDiagnostic, OnScopeValidateEvent } from '../../interfaces';
+import type { BscFile, BsDiagnostic, OnScopeValidateEvent, CallableContainerMap, Callable } from '../../interfaces';
 import type { ConstStatement, EnumStatement, NamespaceStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
@@ -13,7 +13,7 @@ import { TokenKind } from '../../lexer/TokenKind';
 import type { Scope } from '../../Scope';
 import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
 import type { Expression } from '../../parser/AstNode';
-import type { VariableExpression, DottedGetExpression } from '../../parser/Expression';
+import type { FunctionParameterExpression, VariableExpression, DottedGetExpression, NamedArgumentExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 
@@ -54,6 +54,7 @@ export class ScopeValidator {
                 this.iterateFileExpressions(file);
                 this.validateCreateObjectCalls(file);
                 this.validateComputedAAKeys(file);
+                this.validateNamedArgCalls(file);
             }
         });
     }
@@ -508,6 +509,257 @@ export class ScopeValidator {
             }
         }
         this.event.scope.addDiagnostics(diagnostics);
+    }
+
+    /**
+     * Validate calls that use named arguments.
+     * Supports: simple variable calls, namespace function calls, and constructor calls (new MyClass()).
+     */
+    private validateNamedArgCalls(file: BrsFile) {
+        const { scope } = this.event;
+        const callableContainerMap: CallableContainerMap = util.getCallableContainersByLowerName(scope.getAllCallables());
+
+        // Validate regular and namespace function calls
+        for (const func of file.parser.references.functionExpressions) {
+            for (const callExpr of func.callExpressions) {
+                if (!callExpr.args.some(isNamedArgumentExpression)) {
+                    continue;
+                }
+
+                let funcName: string;
+                let params: FunctionParameterExpression[];
+
+                if (isVariableExpression(callExpr.callee)) {
+                    funcName = callExpr.callee.name.text;
+                    const callable = callableContainerMap.get(funcName.toLowerCase())?.[0]?.callable;
+                    if (!callable) {
+                        this.addDiagnostic({
+                            ...DiagnosticMessages.namedArgsNotAllowedForUnknownFunction(funcName),
+                            range: callExpr.callee.range,
+                            file: file
+                        });
+                        continue;
+                    }
+                    params = callable.functionStatement.func.parameters;
+                    this.checkNamedArgCrossScopeConflict(funcName, callable, params, callExpr, file, scope);
+                } else if (isDottedGetExpression(callExpr.callee)) {
+                    // Namespace function call (e.g. MyNs.myFunc(a: 1))
+                    const brsName = util.resolveNamespaceCallableName(callExpr.callee, scope);
+                    if (!brsName) {
+                        this.addDiagnostic({
+                            ...DiagnosticMessages.namedArgsNotAllowedForUnknownFunction((callExpr.callee as DottedGetExpression).name.text),
+                            range: callExpr.callee.range,
+                            file: file
+                        });
+                        continue;
+                    }
+                    const callable = callableContainerMap.get(brsName.toLowerCase())?.[0]?.callable;
+                    if (!callable) {
+                        const displayName = brsName.replace(/_/g, '.');
+                        this.addDiagnostic({
+                            ...DiagnosticMessages.namedArgsNotAllowedForUnknownFunction(displayName),
+                            range: callExpr.callee.range,
+                            file: file
+                        });
+                        continue;
+                    }
+                    funcName = brsName;
+                    params = callable.functionStatement.func.parameters;
+                } else {
+                    this.addDiagnostic({
+                        ...DiagnosticMessages.namedArgsNotAllowedForUnknownFunction((callExpr.callee as any)?.name?.text ?? '?'),
+                        range: callExpr.openingParen.range,
+                        file: file
+                    });
+                    continue;
+                }
+
+                this.validateNamedArgCallArgs(callExpr, params, funcName, file);
+            }
+        }
+
+        // Validate constructor calls with named args (new MyClass(a: 1))
+        for (const newExpr of file.parser.references.newExpressions) {
+            const callExpr = newExpr.call;
+            if (!callExpr.args.some(isNamedArgumentExpression)) {
+                continue;
+            }
+
+            const className = newExpr.className.getName(ParseMode.BrighterScript);
+            const containingNamespace = callExpr.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase();
+            const classLink = scope.getClassFileLink(className, containingNamespace);
+            if (!classLink) {
+                this.addDiagnostic({
+                    ...DiagnosticMessages.namedArgsNotAllowedForUnknownFunction(className),
+                    range: callExpr.callee.range,
+                    file: file
+                });
+                continue;
+            }
+
+            const params = util.getClassConstructorParams(classLink.item, scope, containingNamespace);
+            this.validateNamedArgCallArgs(callExpr, params, className, file);
+        }
+    }
+
+    /**
+     * Validate the named argument list for a single call expression against the resolved parameter list.
+     */
+    private validateNamedArgCallArgs(callExpr: { args: Expression[]; callee: Expression; openingParen?: { range: any } }, params: FunctionParameterExpression[], funcName: string, file: BrsFile) {
+        const assignedParams = new Set<number>();
+        const minParams = params.filter(p => !p.defaultValue).length;
+        const maxParams = params.length;
+        const hasTooManyArgs = callExpr.args.length > maxParams;
+        let seenNamedArg = false;
+        let expectedParamIdx = 0;
+        let hasError = false;
+
+        for (const arg of callExpr.args) {
+            if (!isNamedArgumentExpression(arg)) {
+                if (seenNamedArg) {
+                    this.addDiagnostic({
+                        ...DiagnosticMessages.positionalArgAfterNamedArg(),
+                        range: arg.range,
+                        file: file
+                    });
+                    hasError = true;
+                    continue;
+                }
+                if (expectedParamIdx < params.length) {
+                    assignedParams.add(expectedParamIdx);
+                }
+                expectedParamIdx++;
+            } else {
+                seenNamedArg = true;
+                const namedArg = arg as NamedArgumentExpression;
+                const paramName = namedArg.name.text.toLowerCase();
+                const paramIdx = params.findIndex(p => p.name.text.toLowerCase() === paramName);
+
+                if (paramIdx < 0) {
+                    this.addDiagnostic({
+                        ...DiagnosticMessages.unknownNamedArgument(namedArg.name.text, funcName),
+                        range: namedArg.name.range,
+                        file: file
+                    });
+                    hasError = true;
+                    continue;
+                }
+
+                if (assignedParams.has(paramIdx)) {
+                    this.addDiagnostic({
+                        ...DiagnosticMessages.namedArgDuplicate(namedArg.name.text),
+                        range: namedArg.name.range,
+                        file: file
+                    });
+                    hasError = true;
+                    continue;
+                }
+
+                if (paramIdx < expectedParamIdx) {
+                    this.addDiagnostic({
+                        ...DiagnosticMessages.namedArgOutOfOrder(namedArg.name.text),
+                        range: namedArg.name.range,
+                        file: file
+                    });
+                    hasError = true;
+                    continue;
+                }
+
+                assignedParams.add(paramIdx);
+                expectedParamIdx = paramIdx + 1;
+            }
+        }
+
+        if (hasError) {
+            return;
+        }
+
+        if (hasTooManyArgs) {
+            this.addDiagnostic({
+                ...DiagnosticMessages.mismatchArgumentCount(
+                    minParams === maxParams ? maxParams : `${minParams}-${maxParams}`,
+                    callExpr.args.length
+                ),
+                range: callExpr.callee.range,
+                file: file
+            });
+            return;
+        }
+
+        // Validate all required params are provided
+        for (let i = 0; i < params.length; i++) {
+            if (!assignedParams.has(i) && !params[i].defaultValue) {
+                this.addDiagnostic({
+                    ...DiagnosticMessages.mismatchArgumentCount(
+                        minParams === maxParams ? maxParams : `${minParams}-${maxParams}`,
+                        callExpr.args.length
+                    ),
+                    range: callExpr.callee.range,
+                    file: file
+                });
+                break;
+            }
+        }
+    }
+
+    /**
+     * Emit a diagnostic if the same function name resolves to different parameter signatures
+     * in other component scopes that share this file. Named arg transpilation is per-file
+     * (using the first scope), so an ambiguous signature would produce incorrect output.
+     */
+    private checkNamedArgCrossScopeConflict(funcName: string, callable: Callable, params: FunctionParameterExpression[], callExpr: { callee: Expression }, file: BrsFile, scope: Scope) {
+        for (const otherScope of this.event.program.getScopesForFile(file)) {
+            if (otherScope === scope) {
+                continue;
+            }
+            const otherCallable = otherScope.getCallableByName(funcName);
+            if (!otherCallable) {
+                continue;
+            }
+            // Guard against namespace functions that share a short name with our target
+            if (otherCallable.getName(ParseMode.BrightScript).toLowerCase() !== funcName.toLowerCase()) {
+                continue;
+            }
+            const otherParams = otherCallable.functionStatement?.func?.parameters;
+            if (!otherParams) {
+                continue;
+            }
+            if (!this.haveSameParamSignature(params, otherParams)) {
+                const relatedInformation: DiagnosticRelatedInformation[] = [
+                    {
+                        message: `'${funcName}' defined in scope '${scope.name}'`,
+                        location: util.createLocation(
+                            URI.file(callable.file.srcPath).toString(),
+                            callable.nameRange ?? callable.range
+                        )
+                    },
+                    {
+                        message: `'${funcName}' defined in scope '${otherScope.name}'`,
+                        location: util.createLocation(
+                            URI.file(otherCallable.file.srcPath).toString(),
+                            otherCallable.nameRange ?? otherCallable.range
+                        )
+                    }
+                ];
+                this.addDiagnosticOnce({
+                    ...DiagnosticMessages.namedArgsCrossScopeConflict(funcName),
+                    range: callExpr.callee.range,
+                    file: file,
+                    relatedInformation: relatedInformation
+                });
+                break;
+            }
+        }
+    }
+
+    /**
+     * Returns true if both parameter lists have the same names in the same order.
+     */
+    private haveSameParamSignature(p1: FunctionParameterExpression[], p2: FunctionParameterExpression[]): boolean {
+        if (p1.length !== p2.length) {
+            return false;
+        }
+        return p1.every((p, i) => p.name.text.toLowerCase() === p2[i].name.text.toLowerCase());
     }
 
     /**

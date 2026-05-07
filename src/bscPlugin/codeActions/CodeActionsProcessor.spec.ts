@@ -473,6 +473,41 @@ describe('CodeActionsProcessor', () => {
         });
     });
 
+    describe('named argument ordering', () => {
+        it('offers quick fix for out-of-order named arguments', () => {
+            const file = program.setFile('source/main.bs', `
+                sub greet(name as string, excited as boolean)
+                end sub
+
+                sub main()
+                    greet(excited: true, name: "Bob")
+                end sub
+            `);
+
+            testGetCodeActions(file, util.createRange(5, 41, 5, 41), [
+                'Reorder named arguments to match function declaration'
+            ]);
+        });
+
+        it('reorders mixed positional and named args to declaration order', () => {
+            const file = program.setFile('source/main.bs', `
+                sub greet(name as string, title = "Mr" as string, excited = false as boolean)
+                end sub
+
+                sub main()
+                    greet("Bob", excited: true, title: "Dr")
+                end sub
+            `);
+
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(5, 50, 5, 50));
+            const action = actions.find(x => x.title === 'Reorder named arguments to match function declaration');
+            const edit = Object.values(action.edit.changes)[0][0];
+
+            expect(edit.newText).to.equal(`"Bob", title: "Dr", excited: true`);
+        });
+    });
+
     it('suggests imports at very start and very end of diagnostic', () => {
         program.setFile('source/first.bs', `
             namespace alpha
