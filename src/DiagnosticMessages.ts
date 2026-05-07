@@ -770,6 +770,11 @@ export let DiagnosticMessages = {
         message: `'${featureName}' requires Roku firmware version ${minimumVersion} or higher (current target is ${configuredVersion})`,
         code: 1146,
         severity: DiagnosticSeverity.Error
+    }),
+    reservedBuiltinUsedAsValue: (name: string) => ({
+        message: `'${name}' is a reserved builtin and can only be used as a function call (e.g. '${name}(...)')`,
+        code: 1147,
+        severity: DiagnosticSeverity.Error
     })
 };
 
