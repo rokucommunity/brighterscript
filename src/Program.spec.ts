@@ -994,7 +994,7 @@ describe('Program', () => {
             });
         });
 
-        it('includes files added during beforeProgramValidate in validation', () => {
+        it('includes files added during beforeValidateProgram in validation', () => {
             program.setFile('source/a.brs', `
                 sub a()
                     b()
@@ -1002,8 +1002,8 @@ describe('Program', () => {
             `);
 
             program.plugins.add({
-                name: 'add file in beforeProgramValidate',
-                beforeProgramValidate: () => {
+                name: 'add file in beforeValidateProgram',
+                beforeValidateProgram: () => {
                     program.setFile('source/b.brs', `
                         sub b()
                         end sub
