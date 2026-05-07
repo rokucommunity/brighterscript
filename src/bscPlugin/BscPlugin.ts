@@ -115,8 +115,8 @@ export class BscPlugin implements Plugin {
         }
     }
 
-    public afterSerializeFile(event: AfterSerializeFileEvent) {
-        new FileSerializer(event).process();
+    public async afterSerializeFile(event: AfterSerializeFileEvent) {
+        await new FileSerializer(event).process();
     }
 
     public async writeFile(event: WriteFileEvent) {

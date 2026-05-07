@@ -23,6 +23,8 @@ import { AssetFile } from './files/AssetFile';
 import type { ProvideFileEvent, Plugin, BeforeProvideFileEvent, AfterProvideFileEvent, BeforeAddFileEvent, AfterAddFileEvent, BeforeRemoveFileEvent, AfterRemoveFileEvent, ScopeValidationOptions, AfterValidateFileEvent, BeforeValidateScopeEvent, ValidateScopeEvent, BeforeValidateFileEvent, ValidateFileEvent, AfterValidateScopeEvent, CompilerPlugin } from './interfaces';
 import { StringType, TypedFunctionType, DynamicType, FloatType, IntegerType, InterfaceType, ArrayType, BooleanType, DoubleType, UnionType } from './types';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
+import { SourceMapConsumer } from 'source-map';
+import type { BsConfig } from './BsConfig';
 import { ComponentType } from './types/ComponentType';
 import undent from 'undent';
 import { Scope } from './Scope';
@@ -1744,30 +1746,24 @@ describe('Program', () => {
         expect(fsExtra.pathExistsSync(s`${outDir}/components/comp1.xml.map`)).is.true;
     });
 
-    /*
-    //v1 dropped public Program.transpile() in favor of the build pipeline. The sourcemap
-    //source-path tests and the prebuild sourcemap chaining tests below depend on that API
-    //and on the chaining helpers that were removed pending re-integration into the v1
-    //serialize pipeline. Restore both blocks (re-translated to the new pipeline) when
-    //the chaining helper is wired back in.
     describe('sourcemap source paths', () => {
-        async function transpileFile(options: BsConfig, pkgPath = 'source/main.bs') {
-            fsExtra.ensureDirSync(program.options.stagingDir!);
+        const stagingDir = outDir;
+        async function transpileFile(options: BsConfig, destPath = 'source/main.bs') {
+            fsExtra.ensureDirSync(stagingDir);
+            program.dispose();
             program = new Program({
                 rootDir: rootDir,
-                stagingDir: stagingDir,
+                outDir: stagingDir,
                 sourceMap: true,
                 ...options
             });
-            program.setFile(pkgPath, `
+            program.setFile(destPath, `
                 sub main()
                 end sub
             `);
             program.validate();
-            const src = s`${rootDir}/${pkgPath}`;
-            const dest = pkgPath.replace(/\.bs$/, '.brs');
-            await program.transpile([{ src: src, dest: dest }], stagingDir);
-            const mapPath = s`${stagingDir}/${dest}.map`;
+            await program.build({ outDir: stagingDir });
+            const mapPath = s`${stagingDir}/${destPath.replace(/\.bs$/, '.brs')}.map`;
             return JSON.parse(fsExtra.readFileSync(mapPath, 'utf8'));
         }
 
@@ -1865,9 +1861,10 @@ describe('Program', () => {
             it('sources[] is unaffected for files outside rootDir', async () => {
                 // a file whose srcPath doesn't start with rootDir should not be rewritten
                 fsExtra.ensureDirSync(stagingDir);
+                program.dispose();
                 program = new Program({
                     rootDir: rootDir,
-                    stagingDir: stagingDir,
+                    outDir: stagingDir,
                     sourceMap: true,
                     sourceRoot: s`${rootDir}/../sourceRootFolder`
                 });
@@ -1875,10 +1872,7 @@ describe('Program', () => {
                 fsExtra.outputFileSync(outsidePath, 'sub main()\nend sub\n');
                 program.setFile({ src: outsidePath, dest: 'source/main.brs' }, fsExtra.readFileSync(outsidePath, 'utf8'));
                 program.validate();
-                await program.transpile([{
-                    src: outsidePath,
-                    dest: 'source/main.brs'
-                }], stagingDir);
+                await program.build({ outDir: stagingDir });
                 const map = JSON.parse(fsExtra.readFileSync(s`${stagingDir}/source/main.brs.map`, 'utf8'));
                 // path outside rootDir is left as-is (absolute, under its real location)
                 expect(s`${map.sources[0]}`).to.eql(outsidePath);
@@ -1891,6 +1885,7 @@ describe('Program', () => {
         // BrighterScript must apply that incoming map so the final output traces all the
         // way to the original source — not just to the intermediate file.
 
+        const stagingDir = outDir;
         let prebuildBrsMapJson: string;
         let prebuildXmlMapJson: string;
         const brsSource = 'sub main()\n    print "hello"\nend sub';
@@ -1924,13 +1919,14 @@ describe('Program', () => {
 
         async function assertBrsOutputMapChainsToOriginal() {
             program.validate();
-            await program.transpile([{ src: s`${rootDir}/source/main.brs`, dest: s`source/main.brs` }], stagingDir);
+            await program.build({ outDir: stagingDir });
 
             const outputMapPath = s`${stagingDir}/source/main.brs.map`;
             expect(fsExtra.pathExistsSync(outputMapPath)).is.true;
             const outputMapJson = JSON.parse(fsExtra.readFileSync(outputMapPath, 'utf8'));
 
-            // Program._getTranspiledFileContents chains the input map via applySourceMap.
+            // FileSerializer.chainInputSourceMap loads the input map (co-located file or
+            // sourceMappingURL comment) and applies it onto the generated output map.
             await SourceMapConsumer.with(outputMapJson, null, (consumer) => {
                 const pos = consumer.originalPositionFor({ line: 2, column: 4 });
                 expect(pos.source, 'output map should chain back to original.bs').to.include('original.bs');
@@ -1940,7 +1936,7 @@ describe('Program', () => {
 
         async function assertXmlOutputMapChainsToOriginal() {
             program.validate();
-            await program.transpile([{ src: s`${rootDir}/components/comp1.xml`, dest: s`components/comp1.xml` }], stagingDir);
+            await program.build({ outDir: stagingDir });
 
             const outputMapPath = s`${stagingDir}/components/comp1.xml.map`;
             expect(fsExtra.pathExistsSync(outputMapPath)).is.true;
@@ -2020,7 +2016,7 @@ describe('Program', () => {
             program.validate();
             expectZeroDiagnostics(program);
             // Should complete without throwing
-            await program.transpile([{ src: s`${rootDir}/source/main.brs`, dest: 'source/main.brs' }], stagingDir);
+            await program.build({ outDir: stagingDir });
 
             const outputMapPath = s`${stagingDir}/source/main.brs.map`;
             expect(fsExtra.pathExistsSync(outputMapPath)).is.true;
@@ -2042,7 +2038,7 @@ describe('Program', () => {
 
             program.setFile({ src: s`${rootDir}/source/main.brs`, dest: 'source/main.brs' }, brsSource);
             program.validate();
-            await program.transpile([{ src: s`${rootDir}/source/main.brs`, dest: 'source/main.brs' }], stagingDir);
+            await program.build({ outDir: stagingDir });
 
             expect(fsExtra.pathExistsSync(s`${stagingDir}/source/main.brs.map`)).is.false;
         });
@@ -2091,7 +2087,6 @@ describe('Program', () => {
             });
         });
     });
-    */
 
     it('copies the bslib.brs file', async () => {
         fsExtra.ensureDirSync(program.options.outDir!);

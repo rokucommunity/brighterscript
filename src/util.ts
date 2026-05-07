@@ -2371,6 +2371,28 @@ export class Util {
         });
     }
 
+    /**
+     * Chain a prebuild input sourcemap (loaded from a co-located `.map` file or a
+     * `sourceMappingURL` comment in the file contents) onto an existing serialized output
+     * sourcemap. Returns the chained sourcemap as a JSON string. If no input map is found,
+     * the original output map JSON is returned unchanged.
+     */
+    public async chainInputSourceMap(outputMapJson: string, file: { fileContents?: string; srcPath: string }): Promise<string> {
+        const inputMap = await this.resolveInputSourceMap(file.fileContents ?? '', file.srcPath);
+        if (!inputMap) {
+            return outputMapJson;
+        }
+        const { SourceMapConsumer: Consumer, SourceMapGenerator: Generator } = await import('source-map');
+        const outputMap = JSON.parse(outputMapJson) as RawSourceMap;
+        return Consumer.with(outputMap, null, async (outputConsumer) => {
+            const generator = Generator.fromSourceMap(outputConsumer);
+            await Consumer.with(inputMap, null, (inputConsumer) => {
+                generator.applySourceMap(inputConsumer, file.srcPath);
+            });
+            return generator.toString();
+        });
+    }
+
     public isBuiltInType(typeName: string) {
         const typeNameLower = typeName.toLowerCase();
         if (typeNameLower.startsWith('rosgnode')) {

@@ -3,6 +3,7 @@ import type { AssetFile } from '../../files/AssetFile';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { SerializedFile, SerializeFileEvent } from '../../interfaces';
+import { util } from '../../util';
 
 export class FileSerializer {
     constructor(
@@ -11,23 +12,23 @@ export class FileSerializer {
 
     }
 
-    public process() {
+    public async process() {
         //if there's already a result for this file, do nothing
         if (this.event.result.has(this.event.file)) {
             return;
         }
         this.event.scope?.linkSymbolTable();
         if (isBrsFile(this.event.file)) {
-            this.serializeBrsFile(this.event.file);
+            await this.serializeBrsFile(this.event.file);
         } else if (isXmlFile(this.event.file)) {
-            this.serializeXmlFile(this.event.file);
+            await this.serializeXmlFile(this.event.file);
         } else if (isAssetFile(this.event.file)) {
             this.serializeAssetFile(this.event.file);
         }
         this.event.scope?.unlinkSymbolTable();
     }
 
-    private serializeBrsFile(file: BrsFile) {
+    private async serializeBrsFile(file: BrsFile) {
         const result: SerializedFile[] = [];
         const serialized = file.serialize();
 
@@ -38,9 +39,12 @@ export class FileSerializer {
             });
         }
         if (serialized.map) {
+            //chain a prebuild input map (co-located .map or sourceMappingURL comment) onto the
+            //output map so positions trace all the way back to the original source
+            const chainedMap = await util.chainInputSourceMap(serialized.map, file);
             result.push({
                 pkgPath: file.pkgPath + '.map',
-                data: Buffer.from(serialized.map.toString())
+                data: Buffer.from(chainedMap)
             });
         }
         if (typeof serialized.typedef === 'string') {
@@ -53,7 +57,7 @@ export class FileSerializer {
         this.event.result.set(file, result);
     }
 
-    private serializeXmlFile(file: XmlFile) {
+    private async serializeXmlFile(file: XmlFile) {
         const result: SerializedFile[] = [];
         const serialized = file.serialize();
         if (typeof serialized.code === 'string') {
@@ -63,9 +67,10 @@ export class FileSerializer {
             });
         }
         if (serialized.map) {
+            const chainedMap = await util.chainInputSourceMap(serialized.map, file);
             result.push({
                 pkgPath: file.pkgPath + '.map',
-                data: Buffer.from(serialized.map.toString())
+                data: Buffer.from(chainedMap)
             });
         }
         this.event.result.set(file, result);
