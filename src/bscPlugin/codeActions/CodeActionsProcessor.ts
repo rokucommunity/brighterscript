@@ -317,9 +317,6 @@ export class CodeActionsProcessor {
             hasNamedArg = true;
             const namedArg = arg as NamedArgumentExpression;
             const paramIndex = parameters.findIndex(p => p.name.text.toLowerCase() === namedArg.name.text.toLowerCase());
-            if (paramIndex < expectedParamIndex) {
-                // continue collecting so this action can fix all out-of-order named args in this call
-            }
             if (paramIndex < 0 || argsWithParamIndex.some(x => x.paramIndex === paramIndex)) {
                 return;
             }
@@ -366,17 +363,24 @@ export class CodeActionsProcessor {
             return this.getClassConstructorParams(classLink.item, containingNamespace);
         }
         if (isVariableExpression(callExpression.callee)) {
-            const callable = scope.getCallableByName(callExpression.callee.name.text.toLowerCase());
-            return callable?.functionStatement?.func?.parameters;
+            return this.getCallableParametersByName(callExpression.callee.name.text.toLowerCase());
         }
         if (isDottedGetExpression(callExpression.callee)) {
             const brsName = this.getNamespaceCallableBrsName(callExpression.callee);
             if (!brsName) {
                 return undefined;
             }
-            const callable = scope.getCallableByName(brsName.toLowerCase());
-            return callable?.functionStatement?.func?.parameters;
+            return this.getCallableParametersByName(brsName.toLowerCase());
         }
+    }
+
+    private getCallableParametersByName(lowerName: string) {
+        const scope = this.event.program.getFirstScopeForFile(this.event.file);
+        if (!scope) {
+            return undefined;
+        }
+        const callable = scope.getCallableByName(lowerName);
+        return callable?.functionStatement?.func?.parameters;
     }
 
     private getNamespaceCallableBrsName(callee: CallExpression['callee']) {
