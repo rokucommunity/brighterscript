@@ -710,6 +710,9 @@ export class ScopeValidator {
         }
         const methodToken = expression.tokens.methodName;
         const methodName = methodToken?.text ?? '';
+        if (!methodName) {
+            return;
+        }
         const functionFullname = `${callerType.toString()}@.${methodName}`;
         const callErrorLocation = expression.location;
         if (util.isGenericNodeType(callerType) || isObjectType(callerType) || isDynamicType(callerType)) {
