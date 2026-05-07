@@ -1013,6 +1013,146 @@ describe('CodeActionsProcessor', () => {
         });
     });
 
+    describe('mismatched loop terminator', () => {
+        it('offers a single quick fix for `while ... next`', () => {
+            const file = program.setFile('source/main.bs', `
+                sub a()
+                    while n <= 3
+                        n = n + 1
+                    next
+                end sub
+            `);
+            // cursor on the bogus `next` (line 4)
+            testGetCodeActions(file, util.createRange(4, 20, 4, 20), [`Convert 'next' to 'end while'`]);
+        });
+
+        it('replaces only the bogus `next` token, preserving indentation', () => {
+            const file = program.setFile('source/main.bs', `
+                sub a()
+                    while n <= 3
+                        n = n + 1
+                    next
+                end sub
+            `);
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(4, 20, 4, 20));
+            const fix = actions.find(a => a.title === `Convert 'next' to 'end while'`);
+            const changes = Object.values(fix!.edit!.changes!)[0];
+            expect(changes).to.be.lengthOf(1);
+            expect(changes[0].newText).to.equal('end while');
+            //the replace range is exactly the 4-character `next` token
+            expect(changes[0].range.end.character - changes[0].range.start.character).to.equal(4);
+        });
+
+        it('marks the `end while` quick fix as preferred for `while ... next`', () => {
+            const file = program.setFile('source/main.bs', `
+                sub a()
+                    while n <= 3
+                        n = n + 1
+                    next
+                end sub
+            `);
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(4, 20, 4, 20));
+            const fix = actions.find(a => a.title === `Convert 'next' to 'end while'`);
+            expect(fix!.isPreferred).to.equal(true);
+        });
+
+        it('offers a fix-all for multiple `while ... next` instances in the same file', () => {
+            const file = program.setFile('source/main.bs', `
+                sub a()
+                    while x
+                        x = false
+                    next
+                    while y
+                        y = false
+                    next
+                end sub
+            `);
+            //cursor on the first bogus `next`
+            testGetCodeActions(file, util.createRange(4, 20, 4, 20), [
+                `Convert 'next' to 'end while'`,
+                `Fix all: Convert 'next' to 'end while'`
+            ]);
+        });
+
+        it('offers two quick fixes (end for preferred, next) for `for ... end while`', () => {
+            const file = program.setFile('source/main.bs', `
+                sub a()
+                    for i = 0 to 3
+                        print i
+                    end while
+                end sub
+            `);
+            testGetCodeActions(file, util.createRange(4, 20, 4, 20), [
+                `Convert 'end while' to 'end for'`,
+                `Convert 'end while' to 'next'`
+            ]);
+        });
+
+        it('marks the `end for` quick fix as preferred and `next` as non-preferred', () => {
+            const file = program.setFile('source/main.bs', `
+                sub a()
+                    for i = 0 to 3
+                        print i
+                    end while
+                end sub
+            `);
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(4, 20, 4, 20));
+            const endForFix = actions.find(a => a.title === `Convert 'end while' to 'end for'`);
+            const nextFix = actions.find(a => a.title === `Convert 'end while' to 'next'`);
+            expect(endForFix!.isPreferred).to.equal(true);
+            expect(nextFix!.isPreferred).to.not.equal(true);
+        });
+
+        it('offers two quick fixes for `for each ... end while`', () => {
+            const file = program.setFile('source/main.bs', `
+                sub a()
+                    for each x in arr
+                        print x
+                    end while
+                end sub
+            `);
+            testGetCodeActions(file, util.createRange(4, 20, 4, 20), [
+                `Convert 'end while' to 'end for'`,
+                `Convert 'end while' to 'next'`
+            ]);
+        });
+
+        it('offers fix-all variants for both end for and next when there are multiple `for ... end while` instances', () => {
+            const file = program.setFile('source/main.bs', `
+                sub a()
+                    for i = 0 to 3
+                        print i
+                    end while
+                    for j = 0 to 3
+                        print j
+                    end while
+                end sub
+            `);
+            //cursor on the first bogus `end while`
+            testGetCodeActions(file, util.createRange(4, 20, 4, 20), [
+                `Convert 'end while' to 'end for'`,
+                `Convert 'end while' to 'next'`,
+                `Fix all: Convert 'end while' to 'end for'`,
+                `Fix all: Convert 'end while' to 'next'`
+            ]);
+        });
+
+        it('does not offer the quick fix for a valid `for ... next`', () => {
+            const file = program.setFile('source/main.bs', `
+                sub a()
+                    for i = 0 to 3
+                        print i
+                    next
+                end sub
+            `);
+            //cursor on the valid `next`
+            testGetCodeActions(file, util.createRange(4, 20, 4, 20), []);
+        });
+    });
+
     describe('disable diagnostic actions', () => {
         const findLineAction = (actions: CodeAction[], code: string | number) => actions.find(a => a.title.startsWith(`Disable ${code} for this line`));
         const findFileAction = (actions: CodeAction[], code: string | number) => actions.find(a => a.title.startsWith(`Disable ${code} for this file`));

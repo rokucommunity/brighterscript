@@ -775,7 +775,24 @@ export let DiagnosticMessages = {
         message: `'${name}' is a reserved builtin and can only be used as a function call (e.g. '${name}(...)')`,
         code: 1147,
         severity: DiagnosticSeverity.Error
-    })
+    }),
+    /**
+     * Emitted when a block recovers from a wrong terminator (e.g. `while ... next` or `for ... end while`).
+     * `expected` lists the legal terminators in preferred-first order; `found` is the actual text.
+     * Quick fixes consume the structured `data` to build "Convert '<found>' to '<expected[i]>'" actions.
+     */
+    mismatchedEndingToken: (expected: string[] = [], found = '') => {
+        const expectedList = Array.isArray(expected) ? expected : [];
+        return {
+            message: `Expected ${expectedList.map(text => `'${text}'`).join(' or ')} but found '${found}'`,
+            code: 1148,
+            data: {
+                expected: expectedList,
+                found: found
+            },
+            severity: DiagnosticSeverity.Error
+        };
+    }
 };
 
 export const DiagnosticCodeMap = {} as Record<keyof (typeof DiagnosticMessages), number>;
@@ -800,3 +817,14 @@ export type DiagnosticMessageType<K extends keyof D, D extends Record<string, (.
     ReturnType<D[K]> &
     //include the missing properties from BsDiagnostic
     Pick<BsDiagnostic, 'range' | 'file' | 'relatedInformation' | 'tags'>;
+
+/**
+ * Refines a diagnostic to its concrete `DiagnosticMessageType<K>` shape (including the typed `data`
+ * payload) when its code matches `DiagnosticCodeMap[key]`.
+ */
+export function isDiagnosticOfType<K extends keyof typeof DiagnosticMessages>(
+    diagnostic: { code?: number | string },
+    key: K
+): diagnostic is DiagnosticMessageType<K> {
+    return diagnostic.code === DiagnosticCodeMap[key];
+}

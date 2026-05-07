@@ -3,7 +3,7 @@ import { CodeActionKind } from 'vscode-languageserver';
 import { codeActionUtil } from '../../CodeActionUtil';
 import type { DeleteChange, InsertChange, ReplaceChange } from '../../CodeActionUtil';
 import type { DiagnosticMessageType } from '../../DiagnosticMessages';
-import { DiagnosticCodeMap } from '../../DiagnosticMessages';
+import { DiagnosticCodeMap, isDiagnosticOfType } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { BscFile, BsDiagnostic, OnGetCodeActionsEvent } from '../../interfaces';
@@ -53,6 +53,8 @@ export class CodeActionsProcessor {
                 this.suggestMissingOverrideQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.cannotUseOverrideKeywordOnConstructorFunction) {
                 this.suggestRemoveOverrideFromConstructorQuickFixes([diagnostic]);
+            } else if (isDiagnosticOfType(diagnostic, 'mismatchedEndingToken')) {
+                this.suggestMismatchedEndingTokenQuickFixes([diagnostic]);
             }
         }
 
@@ -80,6 +82,8 @@ export class CodeActionsProcessor {
                     this.suggestScriptImportCasingQuickFixes(allInFile as DiagnosticMessageType<'scriptImportCaseMismatch'>[]);
                 } else if (code === DiagnosticCodeMap.missingOverrideKeyword) {
                     this.suggestMissingOverrideQuickFixes(allInFile);
+                } else if (code === DiagnosticCodeMap.mismatchedEndingToken) {
+                    this.suggestMismatchedEndingTokenQuickFixes(allInFile as DiagnosticMessageType<'mismatchedEndingToken'>[]);
                 }
             }
         }
@@ -767,6 +771,30 @@ export class CodeActionsProcessor {
     }
 
     /**
+     * Adds one code action per legal terminator. The first entry of `expected` is marked
+     * `isPreferred`, matching the parser's convention of listing the canonical terminator first.
+     */
+    private suggestMismatchedEndingTokenQuickFixes(diagnostics: DiagnosticMessageType<'mismatchedEndingToken'>[]) {
+        const { expected, found } = diagnostics[0].data;
+        for (let index = 0; index < expected.length; index++) {
+            const replacement = expected[index];
+            const changes = diagnostics.map<ReplaceChange>(diagnostic => ({
+                type: 'replace',
+                filePath: this.event.file.srcPath,
+                range: diagnostic.range,
+                newText: replacement
+            }));
+            this.emitOrFixAll(
+                `Convert '${found}' to '${replacement}'`,
+                `Fix all: Convert '${found}' to '${replacement}'`,
+                changes,
+                diagnostics[0],
+                index === 0
+            );
+        }
+    }
+
+    /**
      * Adds code actions to remove the invalid `override` keyword from a constructor method.
      */
     private suggestRemoveOverrideFromConstructorQuickFixes(diagnostics: Diagnostic[]) {
@@ -835,7 +863,8 @@ export class CodeActionsProcessor {
         singleTitle: string,
         fixAllTitle: string,
         changes: Array<InsertChange | DeleteChange | ReplaceChange>,
-        diagnostic: Diagnostic
+        diagnostic: Diagnostic,
+        isPreferred?: boolean
     ) {
         if (changes.length === 0) {
             return;
@@ -845,6 +874,7 @@ export class CodeActionsProcessor {
                 codeActionUtil.createCodeAction({
                     title: singleTitle,
                     diagnostics: [diagnostic],
+                    ...(isPreferred ? { isPreferred: true } : {}),
                     kind: CodeActionKind.QuickFix,
                     changes: changes
                 })
@@ -853,6 +883,7 @@ export class CodeActionsProcessor {
             this.event.codeActions.push(
                 codeActionUtil.createCodeAction({
                     title: fixAllTitle,
+                    ...(isPreferred ? { isPreferred: true } : {}),
                     kind: CodeActionKind.QuickFix,
                     changes: changes
                 })
