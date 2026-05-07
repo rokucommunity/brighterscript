@@ -306,6 +306,8 @@ export class CodeActionsProcessor {
 
         for (const arg of callExpression.args) {
             if (!isNamedArgumentExpression(arg)) {
+                // Quick-fix can only reorder arguments; it cannot repair invalid syntax/shape such as
+                // positional args after named args or positional args beyond parameter count.
                 if (hasNamedArg || expectedParamIndex >= parameters.length) {
                     return;
                 }
@@ -317,6 +319,7 @@ export class CodeActionsProcessor {
             hasNamedArg = true;
             const namedArg = arg;
             const paramIndex = parameters.findIndex(p => p.name.text.toLowerCase() === namedArg.name.text.toLowerCase());
+            // Unknown names and duplicate parameter targets are invalid; do not offer a reorder fix.
             if (paramIndex < 0 || argsWithParamIndex.some(x => x.paramIndex === paramIndex)) {
                 return;
             }
@@ -383,9 +386,9 @@ export class CodeActionsProcessor {
         return callable?.functionStatement?.func?.parameters;
     }
 
-    private getNamespaceCallableBrsName(callee: CallExpression['callee']) {
+    private getNamespaceCallableBrsName(dottedGetExpression: CallExpression['callee']) {
         const scope = this.event.program.getFirstScopeForFile(this.event.file);
-        const parts = util.getAllDottedGetParts(callee);
+        const parts = util.getAllDottedGetParts(dottedGetExpression);
         if (!scope || !parts || !scope.namespaceLookup.has(parts[0].text.toLowerCase())) {
             return undefined;
         }
