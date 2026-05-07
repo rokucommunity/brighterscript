@@ -7,6 +7,8 @@ import { trim, expectZeroDiagnostics, expectDiagnostics, expectDiagnosticsInclud
 import { expect } from 'chai';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import util from './util';
+import { CancellationTokenSource } from 'vscode-languageserver';
+import type { Plugin } from './interfaces';
 
 describe('CrossScopeValidator', () => {
     let sinon = sinonImport.createSandbox();
@@ -1653,6 +1655,345 @@ describe('CrossScopeValidator', () => {
                 DiagnosticMessages.nameCollision('Type', 'Interface', 'alpha.myInt'),
                 DiagnosticMessages.nameCollision('Interface', 'Type', 'alpha.myInt')
             ]);
+        });
+    });
+
+    describe('common file change propagation across scopes', () => {
+        function setupCommonFileWithTwoWidgets(commonContents: string) {
+            program.setFile('source/common.bs', commonContents);
+            program.setFile('components/Widget1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget1" extends="Group">
+                    <script uri="Widget1.bs"/>
+                    <script uri="pkg:/source/common.bs"/>
+                </component>
+            `);
+            program.setFile('components/Widget1.bs', `
+                sub init()
+                    commonFunc()
+                end sub
+            `);
+            program.setFile('components/Widget2.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget2" extends="Group">
+                    <script uri="Widget2.bs"/>
+                    <script uri="pkg:/source/common.bs"/>
+                </component>
+            `);
+            program.setFile('components/Widget2.bs', `
+                sub init()
+                    commonFunc()
+                end sub
+            `);
+        }
+
+        it('renaming a function in a common file propagates errors to all consuming scopes', () => {
+            setupCommonFileWithTwoWidgets(`
+                sub commonFunc()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            program.setFile('source/common.bs', `
+                sub commonFuncRenamed()
+                end sub
+            `);
+            program.validate();
+
+            const widget1Issues = program.crossScopeValidation.getIssuesForScope(program.getScopeByName(`components${path.sep}Widget1.xml`));
+            const widget2Issues = program.crossScopeValidation.getIssuesForScope(program.getScopeByName(`components${path.sep}Widget2.xml`));
+            expect(widget1Issues.missingSymbols.size, 'Widget1 should report missing-symbol after rename').to.be.greaterThan(0);
+            expect(widget2Issues.missingSymbols.size, 'Widget2 should report missing-symbol after rename').to.be.greaterThan(0);
+        });
+
+        it('adding a new function to a common file resolves missing-symbol errors in all scopes', () => {
+            setupCommonFileWithTwoWidgets(`
+                sub somethingElse()
+                end sub
+            `);
+            program.validate();
+            //both widgets should already be reporting missing commonFunc
+            const widget1Before = program.crossScopeValidation.getIssuesForScope(program.getScopeByName(`components${path.sep}Widget1.xml`));
+            const widget2Before = program.crossScopeValidation.getIssuesForScope(program.getScopeByName(`components${path.sep}Widget2.xml`));
+            expect(widget1Before.missingSymbols.size).to.be.greaterThan(0);
+            expect(widget2Before.missingSymbols.size).to.be.greaterThan(0);
+
+            program.setFile('source/common.bs', `
+                sub somethingElse()
+                end sub
+
+                sub commonFunc()
+                end sub
+            `);
+            program.validate();
+
+            const widget1After = program.crossScopeValidation.getIssuesForScope(program.getScopeByName(`components${path.sep}Widget1.xml`));
+            const widget2After = program.crossScopeValidation.getIssuesForScope(program.getScopeByName(`components${path.sep}Widget2.xml`));
+            expect(widget1After.missingSymbols.size, 'Widget1 should resolve commonFunc after add').to.eq(0);
+            expect(widget2After.missingSymbols.size, 'Widget2 should resolve commonFunc after add').to.eq(0);
+            expectZeroDiagnostics(program);
+        });
+
+        it('renaming a function in a common file and reverting clears the diagnostics in all scopes', () => {
+            //this is the bug the tester reported: rename → diagnostics fire (good),
+            //rename back → diagnostics should clear, but they were sticking around
+            setupCommonFileWithTwoWidgets(`
+                sub commonFunc()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            //rename - should produce missing-symbol diagnostics
+            program.setFile('source/common.bs', `
+                sub commonFuncRenamed()
+                end sub
+            `);
+            program.validate();
+            const afterRename = program.getDiagnostics().filter(d => d.message.toLowerCase().includes('commonfunc'));
+            expect(afterRename.length, 'after rename, both widgets should report missing commonFunc').to.be.gte(2);
+
+            //rename back - diagnostics should clear
+            program.setFile('source/common.bs', `
+                sub commonFunc()
+                end sub
+            `);
+            program.validate();
+            const afterRevert = program.getDiagnostics().filter(d => d.message.toLowerCase().includes('commonfunc'));
+            expect(afterRevert.length, 'after reverting the name, all commonFunc diagnostics should clear').to.eq(0);
+            expectZeroDiagnostics(program);
+        });
+
+        it('adding then removing a method on a class in a common file is reflected in consuming scopes', () => {
+            program.setFile('source/common.bs', `
+                class Klass
+                    name as string
+                end class
+            `);
+            program.setFile('components/Widget1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget1" extends="Group">
+                    <script uri="Widget1.bs"/>
+                    <script uri="pkg:/source/common.bs"/>
+                </component>
+            `);
+            program.setFile('components/Widget1.bs', `
+                sub init()
+                    k = new Klass()
+                    k.greet()
+                end sub
+            `);
+            program.setFile('components/Widget2.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget2" extends="Group">
+                    <script uri="Widget2.bs"/>
+                    <script uri="pkg:/source/common.bs"/>
+                </component>
+            `);
+            program.setFile('components/Widget2.bs', `
+                sub init()
+                    k = new Klass()
+                    k.greet()
+                end sub
+            `);
+            program.validate();
+            //before: greet doesn't exist - both scopes should report it
+            expect(program.getDiagnostics().filter(d => d.message.includes('greet')).length).to.be.gte(2);
+
+            //add the method - errors should clear
+            program.setFile('source/common.bs', `
+                class Klass
+                    name as string
+                    sub greet()
+                    end sub
+                end class
+            `);
+            program.validate();
+            expect(program.getDiagnostics().filter(d => d.message.includes('greet')).length, 'after adding method, no greet errors').to.eq(0);
+
+            //remove the method - errors should come back
+            program.setFile('source/common.bs', `
+                class Klass
+                    name as string
+                end class
+            `);
+            program.validate();
+            expect(program.getDiagnostics().filter(d => d.message.includes('greet')).length, 'after removing method again, errors return').to.be.gte(2);
+        });
+
+        it('changing a function signature in a common file is reflected in consuming scopes', () => {
+            setupCommonFileWithTwoWidgets(`
+                sub commonFunc()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            //change signature to require an argument
+            program.setFile('source/common.bs', `
+                sub commonFunc(name as string)
+                end sub
+            `);
+            program.validate();
+            const afterSigChange = program.getDiagnostics().filter(d => d.message.toLowerCase().includes('argument'));
+            expect(afterSigChange.length, 'both widgets should report argument-count errors').to.be.gte(2);
+
+            //change signature back
+            program.setFile('source/common.bs', `
+                sub commonFunc()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('rename then revert in common.bs clears diagnostics in all scopes (with cancellation between)', async () => {
+            //simulates the LSP path: each edit triggers an async validate that may be
+            //cancelled by the next edit. A cancelled cycle in between rename and revert
+            //must not leave stale "missing symbol" diagnostics in consuming scopes.
+            type EventName = 'beforeValidateFile' | 'validateFile' | 'afterValidateFile' | 'beforeValidateScope' | 'validateScope' | 'afterValidateScope';
+            function getCancellationPlugin(cancelOn: EventName[], tokenSource: CancellationTokenSource): Plugin {
+                const trip = (event: EventName) => {
+                    if (cancelOn.includes(event)) {
+                        tokenSource.cancel();
+                    }
+                };
+                return {
+                    name: 'cancelPlugin',
+                    beforeValidateFile: () => trip('beforeValidateFile'),
+                    validateFile: () => trip('validateFile'),
+                    afterValidateFile: () => trip('afterValidateFile'),
+                    beforeValidateScope: () => trip('beforeValidateScope'),
+                    validateScope: () => trip('validateScope'),
+                    afterValidateScope: () => trip('afterValidateScope')
+                };
+            }
+
+            setupCommonFileWithTwoWidgets(`
+                sub commonFunc()
+                end sub
+            `);
+            await program.validate({ async: true });
+            expectZeroDiagnostics(program);
+
+            //rename - cancel the validation mid-validateScope to simulate a follow-up edit
+            //arriving before validation finished
+            program.setFile('source/common.bs', `
+                sub commonFuncRenamed()
+                end sub
+            `);
+            const renameCancelToken = new CancellationTokenSource();
+            const cancelPlugin = getCancellationPlugin(['validateScope'], renameCancelToken);
+            program.plugins.add(cancelPlugin);
+            await program.validate({ async: true, cancellationToken: renameCancelToken.token });
+            program.plugins.remove(cancelPlugin);
+
+            //revert - this validation runs to completion
+            program.setFile('source/common.bs', `
+                sub commonFunc()
+                end sub
+            `);
+            await program.validate({ async: true });
+
+            const remaining = program.getDiagnostics().filter(d => d.message.toLowerCase().includes('commonfunc'));
+            expect(remaining.length, `commonFunc diagnostics should clear after revert; got: ${remaining.map(d => d.message).join(' | ')}`).to.eq(0);
+        });
+
+        it('rapid edit cycles with overlapping cancellations leave no stale diagnostics', async () => {
+            //simulates a user typing fast: each setFile starts a new async validate that
+            //cancels the previous one. After the dust settles, diagnostics should reflect
+            //the LAST committed state, not any intermediate.
+            setupCommonFileWithTwoWidgets(`
+                sub commonFunc()
+                end sub
+            `);
+            await program.validate({ async: true });
+            expectZeroDiagnostics(program);
+
+            //fire off 6 overlapping validations: rename, revert, rename, revert, rename, revert
+            //each starts before the previous one completes
+            const states = [
+                'sub commonFuncRenamed()\nend sub',
+                'sub commonFunc()\nend sub',
+                'sub commonFuncRenamed()\nend sub',
+                'sub commonFunc()\nend sub',
+                'sub commonFuncRenamed()\nend sub',
+                'sub commonFunc()\nend sub'
+            ];
+            const tokenSources: CancellationTokenSource[] = [];
+            const promises: Promise<void>[] = [];
+            for (const state of states) {
+                program.setFile('source/common.bs', `\n${state}\n`);
+                //cancel the previous run (mimicking LSP behavior)
+                tokenSources[tokenSources.length - 1]?.cancel();
+                const tokenSource = new CancellationTokenSource();
+                tokenSources.push(tokenSource);
+                promises.push(program.validate({ async: true, cancellationToken: tokenSource.token }) as Promise<void>);
+            }
+            await Promise.all(promises);
+
+            //final state is `commonFunc` (the last entry), so widgets should resolve cleanly
+            const remaining = program.getDiagnostics().filter(d => d.message.toLowerCase().includes('commonfunc'));
+            expect(remaining.length, `after rapid edit cycles ending on the original name, no commonFunc diagnostics; got: ${remaining.map(d => d.message).join(' | ')}`).to.eq(0);
+        });
+
+        it('rename-revert of a namespace function in common.bs clears diagnostics across scopes', () => {
+            program.setFile('source/common.bs', `
+                namespace alpha
+                    sub commonFunc()
+                    end sub
+                end namespace
+            `);
+            program.setFile('components/Widget1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget1" extends="Group">
+                    <script uri="Widget1.bs"/>
+                    <script uri="pkg:/source/common.bs"/>
+                </component>
+            `);
+            program.setFile('components/Widget1.bs', `
+                sub init()
+                    alpha.commonFunc()
+                end sub
+            `);
+            program.setFile('components/Widget2.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget2" extends="Group">
+                    <script uri="Widget2.bs"/>
+                    <script uri="pkg:/source/common.bs"/>
+                </component>
+            `);
+            program.setFile('components/Widget2.bs', `
+                sub init()
+                    alpha.commonFunc()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            //rename inside the namespace
+            program.setFile('source/common.bs', `
+                namespace alpha
+                    sub commonFuncRenamed()
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            const afterRename = program.getDiagnostics().filter(d => d.message.toLowerCase().includes('commonfunc'));
+            expect(afterRename.length, 'after rename, both widgets should report missing namespaced commonFunc').to.be.gte(2);
+
+            //revert
+            program.setFile('source/common.bs', `
+                namespace alpha
+                    sub commonFunc()
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            const afterRevert = program.getDiagnostics().filter(d => d.message.toLowerCase().includes('commonfunc'));
+            expect(afterRevert.length, `after reverting namespaced fn name, all commonFunc diagnostics should clear; got: ${afterRevert.map(d => d.message).join(' | ')}`).to.eq(0);
+            expectZeroDiagnostics(program);
         });
     });
 });

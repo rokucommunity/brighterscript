@@ -1813,6 +1813,7 @@ export class ScopeValidator {
 
     private addDiagnostic(diagnostic: BsDiagnostic, diagnosticTag?: string) {
         diagnosticTag = diagnosticTag ?? (this.currentSegmentBeingValidated ? ScopeValidatorDiagnosticTag.Segment : ScopeValidatorDiagnosticTag.Default);
+        this.logDefaultTaggedDiagnostic('addDiagnostic', diagnostic, diagnosticTag);
         this.event.program.diagnostics.register(diagnostic, {
             tags: [diagnosticTag],
             segment: this.currentSegmentBeingValidated
@@ -1824,10 +1825,31 @@ export class ScopeValidator {
      */
     private addMultiScopeDiagnostic(diagnostic: BsDiagnostic, diagnosticTag?: string) {
         diagnosticTag = diagnosticTag ?? (this.currentSegmentBeingValidated ? ScopeValidatorDiagnosticTag.Segment : ScopeValidatorDiagnosticTag.Default);
+        this.logDefaultTaggedDiagnostic('addMultiScopeDiagnostic', diagnostic, diagnosticTag);
         this.event.program.diagnostics.register(diagnostic, {
             tags: [diagnosticTag],
             segment: this.currentSegmentBeingValidated,
             scope: this.event.scope
         });
+    }
+
+    /**
+     * Debug-only: a diagnostic that ends up with `Default` tag is registered outside of an
+     * active segment walk and won't be cleared by the per-segment clear-on-revalidate path.
+     * If something registers a diagnostic this way during one validation cycle and the same
+     * code path doesn't fire on the next cycle, the diagnostic sticks. This log helps
+     * identify where those registrations are coming from. (TEMPORARY — investigation only.)
+     */
+    private logDefaultTaggedDiagnostic(callerName: string, diagnostic: BsDiagnostic, diagnosticTag: string) {
+        if (diagnosticTag !== ScopeValidatorDiagnosticTag.Default) {
+            return;
+        }
+        this.event.program.logger.debug(
+            `[default-tag-diag] ${callerName} scope=${this.event.scope?.name} ` +
+            `code=${diagnostic.code ?? '?'} ` +
+            `uri=${diagnostic.location?.uri} ` +
+            `range=${diagnostic.location?.range?.start?.line}:${diagnostic.location?.range?.start?.character} ` +
+            `msg="${diagnostic.message}"`
+        );
     }
 }
