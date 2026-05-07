@@ -11,7 +11,7 @@ import { ParseMode } from '../../parser/Parser';
 import type { Expression } from '../../parser/AstNode';
 import { util } from '../../util';
 import { isBrsFile, isCallExpression, isDottedGetExpression, isFunctionExpression, isMethodStatement, isNamedArgumentExpression, isNamespaceStatement, isNewExpression, isVariableExpression } from '../../astUtils/reflection';
-import type { CallExpression, FunctionExpression, FunctionParameterExpression, NamedArgumentExpression } from '../../parser/Expression';
+import type { CallExpression, FunctionExpression, FunctionParameterExpression } from '../../parser/Expression';
 import type { ClassStatement, MethodStatement, NamespaceStatement } from '../../parser/Statement';
 import { WalkMode } from '../../astUtils/visitors';
 import { TokenKind } from '../../lexer/TokenKind';
@@ -315,7 +315,7 @@ export class CodeActionsProcessor {
             }
 
             hasNamedArg = true;
-            const namedArg = arg as NamedArgumentExpression;
+            const namedArg = arg;
             const paramIndex = parameters.findIndex(p => p.name.text.toLowerCase() === namedArg.name.text.toLowerCase());
             if (paramIndex < 0 || argsWithParamIndex.some(x => x.paramIndex === paramIndex)) {
                 return;
