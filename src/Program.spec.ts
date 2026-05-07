@@ -992,6 +992,77 @@ describe('Program', () => {
                 expect(changedFunctions).to.include('foo');
                 expect(changedFunctions).to.include('bar');
             });
+
+            it('does not duplicate symbol-table entries when validateFile is cancelled and re-runs', async () => {
+                //BrsFileValidator runs in the `validateFile` plugin event and pushes into per-file
+                //symbol tables for every class/interface/function/etc. If a cancelled validation
+                //re-fired `validateFile` for the same file, those addSymbol calls would run again
+                //and accumulate parallel entries — and CrossScopeValidator would flag a
+                //name-collision. The fix is structural: before/validate/after run as a single
+                //per-file action so cancellation can never land between them.
+                program.setFile('source/types.bs', `
+                    class MyClass
+                        name as string
+                        sub method()
+                        end sub
+                    end class
+                `);
+
+                const options: CancellationPluginOptions = { cancelOn: ['validateFile'], eventWhenCancelled: null, cancelTokenSource: new CancellationTokenSource() };
+                program.plugins.add(getCancellationPlugin(options));
+
+                //first validate is cancelled inside `validateFile`
+                await program.validate({ async: true, cancellationToken: options.cancelTokenSource.token });
+
+                //second validate runs to completion (no cancel)
+                options.cancelOn = [];
+                await program.validate({ async: true });
+
+                //the symbol table should have exactly one entry for MyClass per flag
+                const file = program.getFile<BrsFile>('source/types.bs');
+                const runtimeEntries = file.parser.symbolTable.getOwnSymbols(SymbolTypeFlag.runtime).filter(s => s.name === 'MyClass');
+                const typetimeEntries = file.parser.symbolTable.getOwnSymbols(SymbolTypeFlag.typetime).filter(s => s.name === 'MyClass');
+                expect(runtimeEntries).to.have.lengthOf(1);
+                expect(typetimeEntries).to.have.lengthOf(1);
+
+                //and no name-collision diagnostic should be emitted
+                expectZeroDiagnostics(program);
+            });
+
+            it('does not duplicate symbols across many files when validation is cancelled and re-run repeatedly', async () => {
+                //multi-file variant of the previous test. Each file defines its own class.
+                //Cancel the first pass mid-validateFile, then re-validate to completion, and
+                //verify every file's symbol table has exactly one entry per class. This catches
+                //regressions where partial-file processing leaks duplicate addSymbol calls into
+                //the next pass.
+                const fileCount = 5;
+                for (let i = 0; i < fileCount; i++) {
+                    program.setFile(`source/types${i}.bs`, `
+                        class MyClass${i}
+                            name as string
+                        end class
+                    `);
+                }
+
+                const options: CancellationPluginOptions = { cancelOn: ['validateFile'], eventWhenCancelled: null, cancelTokenSource: new CancellationTokenSource() };
+                program.plugins.add(getCancellationPlugin(options));
+
+                //first pass cancels mid-validateFile
+                await program.validate({ async: true, cancellationToken: options.cancelTokenSource.token });
+
+                //second pass runs to completion
+                options.cancelOn = [];
+                await program.validate({ async: true });
+
+                for (let i = 0; i < fileCount; i++) {
+                    const file = program.getFile<BrsFile>(`source/types${i}.bs`);
+                    const runtimeEntries = file.parser.symbolTable.getOwnSymbols(SymbolTypeFlag.runtime).filter(s => s.name === `MyClass${i}`);
+                    const typetimeEntries = file.parser.symbolTable.getOwnSymbols(SymbolTypeFlag.typetime).filter(s => s.name === `MyClass${i}`);
+                    expect(runtimeEntries, `runtime entries for MyClass${i}`).to.have.lengthOf(1);
+                    expect(typetimeEntries, `typetime entries for MyClass${i}`).to.have.lengthOf(1);
+                }
+                expectZeroDiagnostics(program);
+            });
         });
 
         it('includes files added during beforeValidateProgram in validation', () => {

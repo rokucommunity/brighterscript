@@ -1213,16 +1213,26 @@ export class Program {
                     this.addComponentReferenceType(componentKey, componentName);
                 }
             })
-            .forEach('beforeValidateFile', () => filesToProcess, (file) => {
-                //run the beforeFilevalidate event for every unvalidated file
+            //run before/validate/after as a single per-file action so the Sequencer can't cancel
+            //between them. Splitting into three forEach steps would let cancellation land after
+            //`validateFile` (where BrsFileValidator pushes per-node symbols via addSymbol) but
+            //before `afterValidateFile` (where processSymbolInformation registers validation
+            //segments) — leaving the file in a half-processed state. The next pass would either
+            //re-run BrsFileValidator (pushing duplicate symbols → CrossScopeValidator name-
+            //collision) or skip the file in scope validation (no segments to walk → no
+            //diagnostics emitted). Atomic-per-file means either the file is fully processed or
+            //it's untouched. Plugins that need an all-files-done signal should use
+            //`afterValidateProgram` instead of `afterValidateFile`.
+            .forEach('validateFile', () => filesToProcess, (file) => {
                 this.plugins.emit('beforeValidateFile', {
                     program: this,
                     file: file
                 });
-            })
-            .forEach('validateFile', () => filesToProcess, (file) => {
-                //run the validateFile event for every unvalidated file
                 this.plugins.emit('validateFile', {
+                    program: this,
+                    file: file
+                });
+                this.plugins.emit('afterValidateFile', {
                     program: this,
                     file: file
                 });
@@ -1232,13 +1242,6 @@ export class Program {
                 } else if (isXmlFile(file)) {
                     xmlFilesValidated.push(file);
                 }
-            })
-            .forEach('afterValidateFile', () => filesToProcess, (file) => {
-                //run the validateFile event for every unvalidated file
-                this.plugins.emit('afterValidateFile', {
-                    program: this,
-                    file: file
-                });
             })
             .forEach('do deferred component creation', () => [...brsFilesValidated, ...xmlFilesValidated], (file) => {
                 if (isXmlFile(file)) {
@@ -1417,15 +1420,6 @@ export class Program {
 
             })
             .onCancel(() => {
-                //roll back per-file `isValidated` for files we marked during this run. Otherwise a
-                //subsequent validation will skip them in the file-validation phase, and any
-                //diagnostics emitted only via that phase would be lost.
-                for (const file of brsFilesValidated) {
-                    file.isValidated = false;
-                }
-                for (const file of xmlFilesValidated) {
-                    file.isValidated = false;
-                }
                 logValidateEnd('cancelled');
             })
             .onSuccess(() => {
