@@ -327,6 +327,19 @@ export class ProgramBuilder {
         //get printing options
         const options = diagnosticUtils.getPrintDiagnosticOptions(this.options);
         const { cwd, emitFullPaths } = options;
+        //custom-template reporters are pre-resolved once so we don't recompile them per diagnostic;
+        //the resolved function is stashed on the entry as `run` so we don't have to keep a parallel array.
+        //invalid entries are warned about and skipped (we never want to abort a build over a config typo).
+        const reporters = diagnosticUtils.normalizeDiagnosticReporters(
+            this.options?.diagnosticReporters,
+            this.logger
+        )
+            .map(reporter => (reporter.type === 'custom'
+                ? { ...reporter, run: diagnosticUtils.createCustomDiagnosticReporter(reporter.format) }
+                : reporter));
+        if (reporters.length === 0) {
+            return;
+        }
 
         let srcPaths = Object.keys(diagnosticsByFile).sort();
         for (let srcPath of srcPaths) {
@@ -362,8 +375,16 @@ export class ProgramBuilder {
                         message: x.message
                     };
                 });
-                //format output
-                diagnosticUtils.printDiagnostic(options, severity, filePath, lines, diagnostic, relatedInformation);
+                //format output once per configured reporter
+                for (const reporter of reporters) {
+                    if (reporter.type === 'github-actions') {
+                        diagnosticUtils.printDiagnosticGithubActions({ options: options, severity: severity, filePath: filePath, diagnostic: diagnostic });
+                    } else if (reporter.type === 'custom') {
+                        reporter.run({ options: options, severity: severity, filePath: filePath, diagnostic: diagnostic });
+                    } else {
+                        diagnosticUtils.printDiagnostic(options, severity, filePath, lines, diagnostic, relatedInformation);
+                    }
+                }
             }
         }
     }

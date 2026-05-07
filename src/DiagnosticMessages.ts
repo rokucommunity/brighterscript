@@ -771,6 +771,11 @@ export let DiagnosticMessages = {
         code: 1146,
         severity: DiagnosticSeverity.Error
     }),
+    reservedBuiltinUsedAsValue: (name: string) => ({
+        message: `'${name}' is a reserved builtin and can only be used as a function call (e.g. '${name}(...)')`,
+        code: 1147,
+        severity: DiagnosticSeverity.Error
+    }),
     /**
      * Emitted when a block recovers from a wrong terminator (e.g. `while ... next` or `for ... end while`).
      * `expected` lists the legal terminators in preferred-first order; `found` is the actual text.
@@ -780,7 +785,7 @@ export let DiagnosticMessages = {
         const expectedList = Array.isArray(expected) ? expected : [];
         return {
             message: `Expected ${expectedList.map(text => `'${text}'`).join(' or ')} but found '${found}'`,
-            code: 1147,
+            code: 1148,
             data: {
                 expected: expectedList,
                 found: found

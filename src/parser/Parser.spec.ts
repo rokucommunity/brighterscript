@@ -928,6 +928,63 @@ describe('parser', () => {
                 expect(diagnostics, `assigning to reserved word "${reservedWord}" should have been an error`).to.be.length.greaterThan(0);
             }
         });
+
+        describe('unreferencable builtins as parameter names', () => {
+            it('flags `function f(Box)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(Box)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('Box')]);
+            });
+
+            it('flags `function f(CreateObject)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(CreateObject)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('CreateObject')]);
+            });
+
+            it('flags `function f(GetGlobalAA)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(GetGlobalAA)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('GetGlobalAA')]);
+            });
+
+            it('flags `function f(GetLastRunCompileError)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(GetLastRunCompileError)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('GetLastRunCompileError')]);
+            });
+
+            it('flags `function f(GetLastRunRunTimeError)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(GetLastRunRunTimeError)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('GetLastRunRunTimeError')]);
+            });
+
+            it('flags `function f(ObjFun)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(ObjFun)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('ObjFun')]);
+            });
+
+            it('flags `function f(Pos)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(Pos)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('Pos')]);
+            });
+
+            it('flags `function f(Run)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(Run)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('Run')]);
+            });
+
+            it('flags `function f(Tab)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(Tab)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('Tab')]);
+            });
+
+            it('flags `function f(type)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(type)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('type')]);
+            });
+
+            it('flags `function f(eval)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(eval)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('eval')]);
+            });
+        });
     });
 
     describe('import keyword', () => {
