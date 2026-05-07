@@ -1,4 +1,5 @@
 import { assert, expect } from '../chai-config.spec';
+import * as path from 'path';
 import * as sinonImport from 'sinon';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import type { BsDiagnostic, Callable, CommentFlag, VariableDeclaration } from '../interfaces';
@@ -16,7 +17,7 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import util, { standardizePath as s } from '../util';
 import PluginInterface from '../PluginInterface';
-import { expectCompletionsIncludes, expectDiagnostics, expectHasDiagnostics, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
+import { expectCompletionsIncludes, expectDiagnostics, expectDiagnosticsIncludes, expectHasDiagnostics, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 import { ParseMode, Parser } from '../parser/Parser';
 import { createLogger } from '../logging';
 import { ImportStatement } from '../parser/Statement';
@@ -74,6 +75,246 @@ describe('BrsFile', () => {
             program.setFile('source/main.brs', `
                 namespace CustomApp
                 end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
+
+    describe('line continuation', () => {
+        it('does not allow binary operator continuation in .brs files by default', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.unexpectedToken('\n'),
+                DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+            ]);
+        });
+
+        it('allows binary operator continuation in .bs files', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('transpiles binary operator continuation in .bs files to a single line', () => {
+            testTranspile(`
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `, `
+                sub main()
+                    result = 1 + 2
+                end sub
+            `);
+        });
+
+        it('allows binary operator continuation in .brs files when allowBrighterScriptInBrightScript is enabled', () => {
+            program.options.allowBrighterScriptInBrightScript = true;
+            program.setFile('source/main.brs', `
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not allow multi-line function call args in .brs files by default', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+                sub foo(a, b)
+                end sub
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.unexpectedToken('\n'),
+                DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+            ]);
+        });
+
+        it('allows multi-line array literals as function call args in .brs files by default', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo([
+                        1,
+                        2
+                    ])
+                end sub
+                sub foo(arg)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows multi-line associative array literals as function call args in .brs files by default', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo({
+                        name: "bob",
+                        age: 1
+                    })
+                end sub
+                sub foo(arg)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows multi-line function call args in .bs files', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+                sub foo(a, b)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('transpiles multi-line function call args in .bs files to a single line', () => {
+            testTranspile(`
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+
+                sub foo(a, b)
+                end sub
+            `, `
+                sub main()
+                    foo(1, 2)
+                end sub
+
+                sub foo(a, b)
+                end sub
+            `);
+        });
+
+        it('allows multi-line function call args in .brs files when allowBrighterScriptInBrightScript is enabled', () => {
+            program.options.allowBrighterScriptInBrightScript = true;
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+                sub foo(a, b)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows binary operator continuation in .brs files when minFirmwareVersion is 15.3', () => {
+            program = new Program({ rootDir: rootDir, minFirmwareVersion: '15.3' });
+            program.setFile('source/main.brs', `
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows binary operator continuation in .brs files when minFirmwareVersion is above 15.3', () => {
+            program = new Program({ rootDir: rootDir, minFirmwareVersion: '16.0.0' });
+            program.setFile('source/main.brs', `
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not allow binary operator continuation in .brs files when minFirmwareVersion is below 15.3', () => {
+            program = new Program({ rootDir: rootDir, minFirmwareVersion: '11.0.0' });
+            program.setFile('source/main.brs', `
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.unexpectedToken('\n'),
+                DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+            ]);
+        });
+
+        it('allows multi-line function call args in .brs files when minFirmwareVersion is 15.3', () => {
+            program = new Program({ rootDir: rootDir, minFirmwareVersion: '15.3.0' });
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+                sub foo(a, b)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not allow multi-line function call args in .brs files when minFirmwareVersion is below 15.3', () => {
+            program = new Program({ rootDir: rootDir, minFirmwareVersion: '15.2.9' });
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+                sub foo(a, b)
+                end sub
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.unexpectedToken('\n'),
+                DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+            ]);
+        });
+
+        it('always allows binary operator continuation in .bs files regardless of minFirmwareVersion', () => {
+            program = new Program({ rootDir: rootDir, minFirmwareVersion: '10.0.0' });
+            program.setFile('source/main.bs', `
+                sub main()
+                    result = 1 +
+                             2
+                end sub
             `);
             program.validate();
             expectZeroDiagnostics(program);
@@ -775,6 +1016,134 @@ describe('BrsFile', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
+            });
+        });
+
+        describe('bs:disable / bs:enable block directives', () => {
+            it('a bare bs:disable with no closing bs:enable suppresses every diagnostic in the file', () => {
+                let file = program.setFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                    'bs:disable
+                    sub Main()
+                        name = "bob
+                    end sub
+                `);
+                const blockFlag = file.commentFlags.find(flag => flag.codes === null && flag.affectedRange.end.line === Number.MAX_SAFE_INTEGER);
+                expect(blockFlag, 'a bs:disable flag should be emitted').to.exist;
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('suppresses only the listed codes', () => {
+                program.setFile('source/main.brs', `
+                    'bs:disable: 1083
+                    sub Main()
+                        name = "bob
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('does not suppress unlisted codes', () => {
+                program.setFile('source/main.brs', `
+                    'bs:disable: 9999
+                    sub Main()
+                        name = "bob
+                    end sub
+                `);
+                program.validate();
+                expectHasDiagnostics(program);
+            });
+
+            it('honors a directive that follows other comment-only lines and blank lines', () => {
+                program.setFile('source/main.brs', `
+                    'leading comment
+                    'bs:disable
+                    sub Main()
+                        name = "bob
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('a bs:enable closes the bs:disable block, leaving later code un-suppressed', () => {
+                program.setFile('source/main.brs', `
+                    'bs:disable
+                    'bs:enable
+                    sub Main()
+                        name = "bob
+                    end sub
+                `);
+                program.validate();
+                expectHasDiagnostics(program);
+            });
+
+            it('bs:enable: <code> after a bare bs:disable carves out an exception for that code', () => {
+                program.setFile('source/main.brs', `
+                    'bs:disable
+                    'bs:enable: 1083
+                    sub Main()
+                        name = "bob
+                    end sub
+                `);
+                //code 1083 is now re-enabled, so the diagnostic surfaces
+                program.validate();
+                expectHasDiagnostics(program);
+            });
+        });
+
+        describe('unknown diagnostic codes', () => {
+            it('reports an unknown-code warning for bs:disable-next-line: <unknown>', () => {
+                program.setFile('source/main.brs', `
+                    sub main()
+                        'bs:disable-next-line: 999999
+                        print "hi"
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.unknownDiagnosticCode(999999)
+                }]);
+            });
+
+            it('reports an unknown-code warning for bs:disable: <unknown> (block directive)', () => {
+                program.setFile('source/main.brs', `
+                    'bs:disable: 999999
+                    sub main()
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.unknownDiagnosticCode(999999)
+                }]);
+            });
+
+            it('reports an unknown-code warning for bs:enable: <unknown>', () => {
+                program.setFile('source/main.brs', `
+                    'bs:disable
+                    'bs:enable: 999999
+                    sub main()
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.unknownDiagnosticCode(999999)
+                }]);
+            });
+
+            it('still suppresses the valid code when an unknown code is mixed in', () => {
+                program.setFile('source/main.brs', `
+                    sub Main()
+                        'bs:disable-next-line: 1083 999999
+                        name = "bob
+                    end sub
+                `);
+                program.validate();
+                //the unterminated string (1083) is suppressed; 999999 is still reported as unknown
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.unknownDiagnosticCode(999999)
+                }]);
             });
         });
     });
@@ -1551,10 +1920,8 @@ describe('BrsFile', () => {
             `);
             expectDiagnostics(file.parser.diagnostics, [
                 DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
-                DiagnosticMessages.expectedNewlineOrColon(),
-                DiagnosticMessages.unexpectedToken('end function'),
                 DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
-                DiagnosticMessages.expectedNewlineOrColon()
+                DiagnosticMessages.unexpectedToken('\n')
             ]);
             expect(file.functionCalls.length).to.equal(2);
 
@@ -3170,6 +3537,18 @@ describe('BrsFile', () => {
                 end sub
             `);
             expect(file.transpile().map.toJSON().file).to.eql('main.brs');
+        });
+
+        it('sourcemap sources array contains absolute path by default', () => {
+            program.options.sourceMap = true;
+            const file = program.setFile('source/main.bs', `
+                sub main()
+                end sub
+            `);
+            const map = file.transpile().map.toJSON();
+            expect(map.sources).to.have.lengthOf(1);
+            expect(path.isAbsolute(map.sources[0])).to.be.true;
+            expect(s`${map.sources[0]}`).to.eql(s`${rootDir}/source/main.bs`);
         });
 
         it('handles sourcemap edge case', async () => {

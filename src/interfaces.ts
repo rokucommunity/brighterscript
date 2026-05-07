@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol, Disposable, FileChangeType } from 'vscode-languageserver-protocol';
+import type { Range, Diagnostic, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol, Disposable, FileChangeType, SelectionRange } from 'vscode-languageserver-protocol';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -15,6 +15,7 @@ import type { BscType } from './types/BscType';
 import type { AstEditor } from './astUtils/AstEditor';
 import type { Token } from './lexer/Token';
 import type { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-languageserver';
+import type { SourceFixAllCodeAction } from './CodeActionUtil';
 
 export interface BsDiagnostic extends Diagnostic {
     file: BscFile;
@@ -181,7 +182,21 @@ export interface CommentFlag {
      * The range that this flag applies to (i.e. the lines that should be suppressed/re-enabled)
      */
     affectedRange: Range;
-    codes: DiagnosticCode[] | null;
+    /**
+     * Codes this flag suppresses.
+     * - `null`: every code (the flag suppresses everything in its `affectedRange`)
+     * - array: only those specific codes
+     * - `undefined` (or omitted): no codes (the flag suppresses nothing on its own; useful when the suppression decision is fully delegated to `enableCodes`)
+     */
+    codes?: DiagnosticCode[] | null;
+    /**
+     * Codes explicitly re-enabled (carved out) within this flag's `affectedRange`.
+     * A diagnostic matched by `codes` is NOT suppressed if it is also matched by `enableCodes`.
+     * - `null`: every code is re-enabled (nothing in the range is suppressed)
+     * - array: only those specific codes are carved out
+     * - `undefined` (or omitted): no carve-outs; suppression is governed entirely by `codes`
+     */
+    enableCodes?: DiagnosticCode[] | null;
 }
 
 type ValidateHandler = (scope: Scope, files: BscFile[], callables: CallableContainerMap) => void;
@@ -218,6 +233,14 @@ export interface Plugin {
     afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     beforeProgramDispose?: PluginHandler<BeforeProgramDisposeEvent>;
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
+    /**
+     * Emitted when VS Code requests "source fix all" source actions for a file.
+     * Plugins push one or more `SourceFixAllCodeAction` objects onto `event.actions`,
+     * each representing a distinct named group that will appear in the Source Actions menu.
+     * Plugins are responsible for assembling and merging all changes within each action.
+     */
+    // For possible future use, but not currently implemented:
+    onGetSourceFixAllCodeActions?: PluginHandler<OnGetSourceFixAllCodeActionsEvent>;
 
     /**
      * Emitted before the program starts collecting completions
@@ -309,6 +332,20 @@ export interface Plugin {
     afterProvideWorkspaceSymbols?(event: AfterProvideWorkspaceSymbolsEvent): any;
 
 
+    /**
+     * Called before the `provideSelectionRanges` hook
+     */
+    beforeProvideSelectionRanges?(event: BeforeProvideSelectionRangesEvent): any;
+    /**
+     * Provide the selection ranges for the given positions in a file. Used for expand/shrink selection.
+     */
+    provideSelectionRanges?(event: ProvideSelectionRangesEvent): any;
+    /**
+     * Called after `provideSelectionRanges`. Use this if you want to intercept or sanitize the selection range data provided by bsc or other plugins.
+     */
+    afterProvideSelectionRanges?(event: AfterProvideSelectionRangesEvent): any;
+
+
     onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
     //scope events
     afterScopeCreate?: (scope: Scope) => void;
@@ -346,6 +383,19 @@ export interface OnGetCodeActionsEvent {
     scopes: Scope[];
     diagnostics: BsDiagnostic[];
     codeActions: CodeAction[];
+}
+
+export interface OnGetSourceFixAllCodeActionsEvent {
+    program: Program;
+    file: BscFile;
+    /** All diagnostics for this file (not range-filtered) */
+    diagnostics: BsDiagnostic[];
+    scopes: Scope[];
+    /**
+     * Plugins push one or more SourceFixAllCodeAction objects here.
+     * Each becomes a distinct named entry in VS Code's Source Actions menu.
+     */
+    actions: SourceFixAllCodeAction[];
 }
 
 export interface ProvideCompletionsEvent<TFile extends BscFile = BscFile> {
@@ -444,6 +494,26 @@ export interface ProvideWorkspaceSymbolsEvent {
 }
 export type BeforeProvideWorkspaceSymbolsEvent = ProvideWorkspaceSymbolsEvent;
 export type AfterProvideWorkspaceSymbolsEvent = ProvideWorkspaceSymbolsEvent;
+
+
+export interface ProvideSelectionRangesEvent<TFile = BscFile> {
+    program: Program;
+    /**
+     * The file that the `selectionRange` request was invoked in
+     */
+    file: TFile;
+    /**
+     * The list of positions for which selection ranges are requested
+     */
+    positions: Position[];
+    /**
+     * The result list of selection ranges. One entry per position in `positions`.
+     * Each SelectionRange is a linked list from innermost to outermost via the `.parent` property.
+     */
+    selectionRanges: SelectionRange[];
+}
+export type BeforeProvideSelectionRangesEvent<TFile = BscFile> = ProvideSelectionRangesEvent<TFile>;
+export type AfterProvideSelectionRangesEvent<TFile = BscFile> = ProvideSelectionRangesEvent<TFile>;
 
 
 export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {

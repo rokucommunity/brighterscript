@@ -2,7 +2,7 @@ import * as path from 'path';
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { CompletionItem, Location, Position, Range } from 'vscode-languageserver';
-import { DiagnosticCodeMap, diagnosticCodes } from '../DiagnosticMessages';
+import { diagnosticCodes } from '../DiagnosticMessages';
 import type { FunctionScope } from '../FunctionScope';
 import type { Callable, BsDiagnostic, File, FileReference, FunctionCall, CommentFlag } from '../interfaces';
 import type { Program } from '../Program';
@@ -235,7 +235,7 @@ export class XmlFile {
      * Collect all bs: comment flags
      */
     public getCommentFlags(tokens: Array<IToken & { tokenType: TokenType }>) {
-        const processor = new CommentFlagProcessor(this, ['<!--'], diagnosticCodes, [DiagnosticCodeMap.unknownDiagnosticCode]);
+        const processor = new CommentFlagProcessor(this, ['<!--'], diagnosticCodes);
 
         this.commentFlags = [];
         for (let token of tokens) {
@@ -247,6 +247,7 @@ export class XmlFile {
                 );
             }
         }
+        processor.finalize();
         this.commentFlags.push(...processor.commentFlags);
         this.diagnostics.push(...processor.diagnostics);
     }

@@ -9,7 +9,7 @@ import type { Expression, Statement } from '../../parser/AstNode';
 import type { CallExpression, FunctionExpression, FunctionParameterExpression, NamedArgumentExpression, TernaryExpression } from '../../parser/Expression';
 import { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { ClassStatement, IfStatement, MethodStatement, NamespaceStatement } from '../../parser/Statement';
+import type { ClassStatement, ConstStatement, IfStatement, MethodStatement, NamespaceStatement } from '../../parser/Statement';
 import type { Scope } from '../../Scope';
 import util from '../../util';
 
@@ -418,8 +418,11 @@ export class BrsFilePreTranspileProcessor {
 
     private processExpression(ternaryExpression: Expression, scope: Scope | undefined) {
         let containingNamespace = this.event.file.getNamespaceStatementForPosition(ternaryExpression.range.start)?.getName(ParseMode.BrighterScript);
+        this.processExpressionInNamespace(ternaryExpression, scope, containingNamespace, new Set<ConstStatement>());
+    }
 
-        const parts = util.splitExpression(ternaryExpression);
+    private processExpressionInNamespace(expression: Expression, scope: Scope | undefined, containingNamespace: string | undefined, visitedConsts: Set<ConstStatement>) {
+        const parts = util.splitExpression(expression);
 
         const processedNames: string[] = [];
         for (let part of parts) {
@@ -450,6 +453,22 @@ export class BrsFilePreTranspileProcessor {
             }
 
             if (value && !isCircular) {
+                //If the const's value is a complex expression (e.g. an aa literal containing
+                //enum refs), recursively process inner refs so they're inlined too. Without
+                //this step, cross-file const usage leaves nested enum/const refs unresolved
+                //because the consumer file's pre-transpile pass never visits the inlined
+                //value's children (they live in the const's defining file).
+                if (constStatement && !isLiteralExpression(value)) {
+                    //if we're already inlining this const upstream, skip both the recursive
+                    //walk AND the transpile override. Setting the override here would still
+                    //create a transpile-time cycle (the value contains a ref back to a const
+                    //that has been overridden to re-inline this same value).
+                    if (visitedConsts.has(constStatement)) {
+                        return;
+                    }
+                    this.processInlinedConstValue(value, scope, constStatement, visitedConsts);
+                }
+
                 //override the transpile for this item.
                 this.event.editor.setProperty(part, 'transpile', (state) => {
                     if (isLiteralExpression(value)) {
@@ -463,5 +482,31 @@ export class BrsFilePreTranspileProcessor {
                 return;
             }
         }
+    }
+
+    private processInlinedConstValue(value: Expression, scope: Scope | undefined, constStatement: ConstStatement, visitedConsts: Set<ConstStatement>) {
+        //skip if we've already walked this const's value during the current outer
+        //inline. This guards against unbounded recursion when consts have circular
+        //aggregate references (const A = { x: B }; const B = { y: A }) and avoids
+        //redundant work for diamond reference graphs.
+        if (visitedConsts.has(constStatement)) {
+            return;
+        }
+        visitedConsts.add(constStatement);
+        const innerNamespace = constStatement.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+        value.walk(createVisitor({
+            VariableExpression: (varExpr) => {
+                if (isDottedGetExpression(varExpr.parent)) {
+                    return;
+                }
+                this.processExpressionInNamespace(varExpr, scope, innerNamespace, visitedConsts);
+            },
+            DottedGetExpression: (dottedExpr) => {
+                if (isDottedGetExpression(dottedExpr.parent)) {
+                    return;
+                }
+                this.processExpressionInNamespace(dottedExpr, scope, innerNamespace, visitedConsts);
+            }
+        }), { walkMode: WalkMode.visitExpressionsRecursive });
     }
 }

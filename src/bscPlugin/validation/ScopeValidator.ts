@@ -4,7 +4,7 @@ import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile, BsDiagnostic, OnScopeValidateEvent, CallableContainerMap, Callable } from '../../interfaces';
-import type { ClassStatement, EnumStatement, MethodStatement, NamespaceStatement } from '../../parser/Statement';
+import type { ClassStatement, ConstStatement, EnumStatement, MethodStatement, NamespaceStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
@@ -39,6 +39,7 @@ export class ScopeValidator {
         this.event = event;
         this.walkFiles();
         this.detectDuplicateEnums();
+        this.detectCircularConstReferences();
     }
 
     public reset() {
@@ -350,6 +351,87 @@ export class ScopeValidator {
             }
         }
         this.event.scope.addDiagnostics(diagnostics);
+    }
+
+    /**
+     * Flag circular references between consts (e.g. const A = B; const B = A, or
+     * aggregate cycles like const A = { x: B }; const B = { y: A }). Without this
+     * check, the transpile pass silently emits unresolved refs at the cycle break
+     * point, producing code that fails at runtime.
+     *
+     * Mirrors the existing class-hierarchy circular-reference detection: each const
+     * starts its own walk, and an N-cycle produces N diagnostics (one rooted at
+     * each member of the cycle).
+     */
+    private detectCircularConstReferences() {
+        const scope = this.event.scope;
+        const diagnostics: BsDiagnostic[] = [];
+
+        const followConstRef = (
+            expression: Expression,
+            namespace: string | undefined,
+            chain: ConstStatement[]
+        ) => {
+            const parts = util.splitExpression(expression);
+            const processedNames: string[] = [];
+            for (const part of parts) {
+                if (!isVariableExpression(part) && !isDottedGetExpression(part)) {
+                    return;
+                }
+                processedNames.push(part.name?.text?.toLowerCase());
+                const link = scope.getConstFileLink(processedNames.join('.'), namespace);
+                if (link) {
+                    walkConst(link.item, link.file, chain);
+                    return;
+                }
+            }
+        };
+
+        const walkConst = (
+            constStatement: ConstStatement,
+            file: BrsFile,
+            chain: ConstStatement[]
+        ) => {
+            const cycleStart = chain.indexOf(constStatement);
+            if (cycleStart >= 0) {
+                const items = chain.slice(cycleStart).map(c => c.fullName).concat(constStatement.fullName);
+                diagnostics.push({
+                    ...DiagnosticMessages.circularReferenceDetected(items, scope.name),
+                    file: file,
+                    range: constStatement.tokens.name.range
+                });
+                return;
+            }
+            chain.push(constStatement);
+            const innerNamespace = constStatement.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+            const value = constStatement.value;
+            if (value) {
+                if (isVariableExpression(value) || isDottedGetExpression(value)) {
+                    followConstRef(value, innerNamespace, chain);
+                } else {
+                    value.walk(createVisitor({
+                        VariableExpression: (varExpr) => {
+                            if (isDottedGetExpression(varExpr.parent)) {
+                                return;
+                            }
+                            followConstRef(varExpr, innerNamespace, chain);
+                        },
+                        DottedGetExpression: (dottedExpr) => {
+                            if (isDottedGetExpression(dottedExpr.parent)) {
+                                return;
+                            }
+                            followConstRef(dottedExpr, innerNamespace, chain);
+                        }
+                    }), { walkMode: WalkMode.visitExpressionsRecursive });
+                }
+            }
+            chain.pop();
+        };
+
+        for (const [, link] of scope.getConstMap()) {
+            walkConst(link.item, link.file, []);
+        }
+        scope.addDiagnostics(diagnostics);
     }
 
     /**

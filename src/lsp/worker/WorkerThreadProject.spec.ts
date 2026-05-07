@@ -32,7 +32,7 @@ after(() => {
 describe('WorkerThreadProject', () => {
     let project: WorkerThreadProject;
     before(async function workerThreadWarmup() {
-        this.timeout(20_000);
+        this.timeout(60_000);
         await getWakeWorkerThreadPromise();
     });
 
@@ -62,6 +62,7 @@ describe('WorkerThreadProject', () => {
                 bsconfigPath: undefined,
                 projectNumber: 1
             });
+            await project.validate();
             const diagnostics = await project.getDiagnostics();
             expect(diagnostics).lengthOf(1);
             await expectDiagnosticsAsync(diagnostics, [

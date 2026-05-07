@@ -2,11 +2,11 @@ import { standardizePath as s, util } from '../util';
 import { rokuDeploy } from 'roku-deploy';
 import * as path from 'path';
 import * as EventEmitter from 'eventemitter3';
-import type { LspDiagnostic, LspProject, ProjectConfig } from './LspProject';
+import type { FileRenameTextEdit, LspDiagnostic, LspProject, ProjectConfig } from './LspProject';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
 import { FileChangeType } from 'vscode-languageserver-protocol';
-import type { Hover, Position, Range, Location, SignatureHelp, DocumentSymbol, SymbolInformation, WorkspaceSymbol, CompletionList, CancellationToken } from 'vscode-languageserver-protocol';
+import type { Hover, Position, Range, Location, SignatureHelp, DocumentSymbol, SymbolInformation, WorkspaceSymbol, CompletionList, CancellationToken, SelectionRange } from 'vscode-languageserver-protocol';
 import { Deferred } from '../deferred';
 import type { DocumentActionWithStatus, FlushEvent } from './DocumentManager';
 import { DocumentManager } from './DocumentManager';
@@ -69,6 +69,12 @@ export class ProjectManager {
 
     private documentManager: DocumentManager;
     public static documentManagerDelay = 150;
+
+    /**
+     * Maximum number of projects to activate or validate concurrently during syncProjects.
+     * Limits CPU spikes when many projects are discovered (e.g. in large monorepos).
+     */
+    public projectActivationConcurrencyLimit = 3;
 
     public busyStatusTracker = new BusyStatusTracker<LspProject>();
 
@@ -225,6 +231,7 @@ export class ProjectManager {
 
         this.standaloneProjects.set(srcPath, project);
         await this.activateProject(project, projectConfig);
+        void project.validate();
     }
 
     private removeStandaloneProject(srcPath: string) {
@@ -244,6 +251,13 @@ export class ProjectManager {
      */
     private syncPromise: Promise<void> | undefined;
     private firstSync = new Deferred();
+
+    /**
+     * Monotonically increasing counter used to detect stale sync cycles.
+     * When a new `syncProjects` call arrives, any in-progress activation or validation
+     * from a previous cycle will see a mismatched generation and bail out.
+     */
+    private syncGeneration = 0;
 
     /**
      * Get a promise that resolves when this manager is finished initializing
@@ -298,6 +312,8 @@ export class ProjectManager {
         }
         this.logger.log('syncProjects', workspaceConfigs.map(x => x.workspaceFolder));
 
+        const generation = ++this.syncGeneration;
+
         this.syncPromise = (async () => {
             //build a list of unique projects across all workspace folders
             let projectConfigs = (await Promise.all(
@@ -340,19 +356,53 @@ export class ProjectManager {
                 ).values()
             ];
 
-            //create missing projects
-            await Promise.all(
-                projectConfigs.map(async (config) => {
-                    await this.createAndActivateProject(config);
-                })
-            );
+            // Phase 1: activate projects with concurrency limit (awaited — gates LSP readiness)
+            const activatedProjects: LspProject[] = [];
+            await this.runWithConcurrencyLimit(projectConfigs, this.projectActivationConcurrencyLimit, async (config) => {
+                if (this.syncGeneration !== generation) {
+                    return;
+                }
+                const project = await this.createAndActivateProject(config);
+                activatedProjects.push(project);
+            });
 
             //mark that we've completed our first sync
             this.firstSync.tryResolve();
+
+            // Phase 2: validate activated projects with concurrency limit (NOT awaited — doesn't block LSP requests)
+            if (this.syncGeneration === generation) {
+                void this.runWithConcurrencyLimit(activatedProjects, this.projectActivationConcurrencyLimit, async (project) => {
+                    if (this.syncGeneration !== generation) {
+                        return;
+                    }
+                    await project.validate();
+                }).catch(e => this.logger.error('Validation phase error', e));
+            }
         })();
 
         //return the sync promise
         return this.syncPromise;
+    }
+
+    /**
+     * Run async actions over a list of items with a concurrency limit.
+     * Uses a worker-pool pattern: `concurrencyLimit` workers pull items from a shared queue.
+     */
+    private async runWithConcurrencyLimit<T>(items: T[], concurrencyLimit: number, action: (item: T) => Promise<void>): Promise<void> {
+        const queue = [...items];
+        if (queue.length === 0) {
+            return;
+        }
+        const workerCount = Math.max(1, Math.min(concurrencyLimit, queue.length));
+        const workers = Array.from({ length: workerCount }, async () => {
+            while (queue.length > 0) {
+                const item = queue.shift();
+                if (item) {
+                    await action(item);
+                }
+            }
+        });
+        await Promise.all(workers);
     }
 
     private fileChangesQueue = new ActionQueue({
@@ -443,6 +493,19 @@ export class ProjectManager {
                     return true;
                 }
             }
+            //this is a path to a manifest file
+            if (project.manifestSrcPath?.toLowerCase() === change.srcPath.toLowerCase()) {
+                //try to read the manifest file contents. If this fails (e.g. the file was deleted), manifestFileContents stays undefined,
+                //which will still trigger a reload when compared against the previously loaded contents
+                let manifestFileContents: string;
+                try {
+                    manifestFileContents = fsExtra.readFileSync(change.srcPath).toString();
+                } catch { }
+                //the manifest contents have changed since we last saw it, so reload this project
+                if (project.manifestFileContents !== manifestFileContents) {
+                    return true;
+                }
+            }
             return false;
         });
 
@@ -471,6 +534,7 @@ export class ProjectManager {
 
         this.removeProject(project);
         project = await this.createAndActivateProject(project.activateOptions);
+        void project.validate();
     }
 
     /**
@@ -654,6 +718,51 @@ export class ProjectManager {
         return result ?? [];
     }
 
+    /**
+     * Collect file-rename text edits from every project and reconcile them.
+     * If two projects produce different replacement text for the same (uri, range), drop that edit
+     * to avoid mangling source. Otherwise emit the agreed-upon edit once.
+     */
+    @TrackBusyStatus
+    public async getFileRenameEdits(options: { oldSrcPath: string; newSrcPath: string }): Promise<FileRenameTextEdit[]> {
+        await this.onIdle();
+
+        const perProjectEdits = await Promise.all(
+            this.projects.map(async project => {
+                try {
+                    return await project.getFileRenameEdits(options);
+                } catch (error) {
+                    this.logger.debug(`[${util.getProjectLogName(project)}] getFileRenameEdits failed`, error);
+                    return [] as FileRenameTextEdit[];
+                }
+            })
+        );
+
+        const editsByKey = new Map<string, { edit: FileRenameTextEdit; agreedNewText: string | null }>();
+        for (const projectEdits of perProjectEdits) {
+            for (const edit of projectEdits ?? []) {
+                const key = `${edit.uri.toLowerCase()}|${edit.range.start.line}:${edit.range.start.character}-${edit.range.end.line}:${edit.range.end.character}`;
+                const existing = editsByKey.get(key);
+                if (!existing) {
+                    editsByKey.set(key, { edit: edit, agreedNewText: edit.newText });
+                } else if (existing.agreedNewText !== null && existing.agreedNewText !== edit.newText) {
+                    //projects disagree on the replacement — drop the edit rather than risk corrupting source
+                    existing.agreedNewText = null;
+                }
+            }
+        }
+
+        const result: FileRenameTextEdit[] = [];
+        for (const { edit, agreedNewText } of editsByKey.values()) {
+            if (agreedNewText === null) {
+                this.logger.debug('Dropping file-rename edit due to cross-project disagreement', edit);
+                continue;
+            }
+            result.push({ uri: edit.uri, range: edit.range, newText: agreedNewText });
+        }
+        return result;
+    }
+
     @TrackBusyStatus
     public async getCodeActions(options: { srcPath: string; range: Range }) {
         //wait for all pending syncs to finish
@@ -666,6 +775,32 @@ export class ProjectManager {
             (result) => !!result
         );
         return result;
+    }
+
+    @TrackBusyStatus
+    public async getFixAllCodeActions(options: { srcPath: string }) {
+        //wait for all pending syncs to finish
+        await this.onIdle();
+
+        let result = await util.promiseRaceMatch(
+            this.projects.map(x => x.getSourceFixAllCodeActions(options)),
+            (result) => !!result
+        );
+        return result;
+    }
+
+    @TrackBusyStatus
+    public async getSelectionRanges(options: { srcPath: string; positions: Position[] }): Promise<SelectionRange[]> {
+        //wait for all pending syncs to finish
+        await this.onIdle();
+
+        //Ask every project for selection ranges, keep whichever one responds first with a non-empty result
+        let result = await util.promiseRaceMatch(
+            this.projects.map(x => x.getSelectionRanges(options)),
+            //keep the first non-empty result
+            (result) => result?.length > 0
+        );
+        return result ?? [];
     }
 
     /**
@@ -978,6 +1113,10 @@ export interface WorkspaceConfig {
          * Maximum depth to search for Roku projects
          */
         projectDiscoveryMaxDepth?: number;
+        /**
+         * The maximum number of projects that can be activated concurrently
+         */
+        projectActivationConcurrencyLimit?: number;
     };
 }
 

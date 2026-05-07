@@ -6,7 +6,9 @@ import { CompletionItemKind, TextEdit } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
 import { Scope } from '../Scope';
-import { DiagnosticCodeMap, diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
+import type { NamespaceFileContribution } from '../Scope';
+import { SymbolTable } from '../SymbolTable';
+import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import { FunctionScope } from '../FunctionScope';
 import type { Callable, CallableArg, CallableParam, CommentFlag, FunctionCall, BsDiagnostic, FileReference, FileLink, BscFile } from '../interfaces';
 import type { Token } from '../lexer/Token';
@@ -161,10 +163,90 @@ export class BrsFile {
     }
 
     /**
+     * Return this file's per-namespace contributions. Cached on the file's parser-level
+     * cache, so the result is invalidated automatically when the file re-parses.
+     *
+     * Each entry covers a single dotted name part (so a `namespace A.B.C` declaration
+     * produces entries for `A`, `A.B`, and `A.B.C`). Intermediates carry only structural
+     * fields; leaves populate the relevant statement collections plus a single-file
+     * symbolTable. The symbolTable has no parent provider (see Phase 4 design notes).
+     *
+     * The returned Map is shared across every Scope that pulls in this file, which is
+     * the core sharing primitive Phase 4 relies on.
+     * @internal
+     */
+    protected getNamespaceContributions(): Map<string, NamespaceFileContribution> {
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        let contributions = this.parser.references['namespaceContributions'];
+        if (contributions) {
+            return contributions;
+        }
+
+        contributions = new Map<string, NamespaceFileContribution>();
+        this.ast.walk(createVisitor({
+            NamespaceStatement: namespaceStatement => {
+                const name = namespaceStatement.getName(ParseMode.BrighterScript);
+                const nameParts = name.split('.');
+                let loopName: string | null = null;
+                //ensure each dotted prefix has a contribution entry
+                for (const part of nameParts) {
+                    loopName = loopName === null ? part : `${loopName}.${part}`;
+                    const lowerLoopName = loopName.toLowerCase();
+                    if (!contributions.has(lowerLoopName)) {
+                        //explicitly assign every optional field as undefined so all
+                        //NamespaceFileContribution instances share a single V8 hidden
+                        //class. Subsequent `??=` assignments mutate values without
+                        //changing the object shape, which keeps property access fast.
+                        contributions.set(lowerLoopName, {
+                            file: this,
+                            fullName: loopName,
+                            lastPartName: part,
+                            nameRange: namespaceStatement.nameExpression.range,
+                            statements: undefined,
+                            classStatements: undefined,
+                            functionStatements: undefined,
+                            enumStatements: undefined,
+                            constStatements: undefined,
+                            symbolTable: undefined
+                        });
+                    }
+                }
+                //populate the leaf contribution from this namespaceStatement's body
+                const ns = contributions.get(name.toLowerCase())!;
+                if (namespaceStatement.body.statements.length > 0) {
+                    (ns.statements ??= []).push(...namespaceStatement.body.statements);
+                }
+                for (const statement of namespaceStatement.body.statements) {
+                    if (isClassStatement(statement) && statement.name) {
+                        (ns.classStatements ??= {})[statement.name.text.toLowerCase()] = statement;
+                    } else if (isFunctionStatement(statement) && statement.name) {
+                        (ns.functionStatements ??= {})[statement.name.text.toLowerCase()] = statement;
+                    } else if (isEnumStatement(statement) && statement.fullName) {
+                        (ns.enumStatements ??= new Map()).set(statement.fullName.toLowerCase(), statement);
+                    } else if (isConstStatement(statement) && statement.fullName) {
+                        (ns.constStatements ??= new Map()).set(statement.fullName.toLowerCase(), statement);
+                    }
+                }
+                //single-file aggregate; NO parent provider (sibling resolution does not
+                //walk into a sibling's parent, so the previous scope-coupled provider
+                //was dead code)
+                ns.symbolTable ??= new SymbolTable(`Namespace File Contribution: '${ns.fullName}' in ${this.pkgPath}`);
+                ns.symbolTable.mergeSymbolTable(namespaceStatement.body.getSymbolTable());
+            }
+        }), {
+            walkMode: WalkMode.visitStatements
+        });
+
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        this.parser.references['namespaceContributions'] = contributions;
+        return contributions;
+    }
+
+    /**
      * files referenced by import statements
      */
     public get ownScriptImports() {
-        const result = this.cache?.getOrAdd('BrsFile_ownScriptImports', () => {
+        const result = this.cache?.getOrAdd('ownScriptImports', () => {
             const result = [] as FileReference[];
             for (const statement of this.parser?.references?.importStatements ?? []) {
                 //register import statements
@@ -354,7 +436,8 @@ export class BrsFile {
             this.program.logger.time('debug', ['parser.parse', chalk.green(this.srcPath)], () => {
                 this._parser = Parser.parse(tokens, {
                     mode: this.parseMode,
-                    logger: this.program.logger
+                    logger: this.program.logger,
+                    minFirmwareVersion: this.program.options.minFirmwareVersion
                 });
             });
 
@@ -440,7 +523,7 @@ export class BrsFile {
      * @param tokens - an array of tokens of which to find `TokenKind.Comment` from
      */
     public getCommentFlags(tokens: Token[]) {
-        const processor = new CommentFlagProcessor(this, ['rem', `'`], diagnosticCodes, [DiagnosticCodeMap.unknownDiagnosticCode]);
+        const processor = new CommentFlagProcessor(this, ['rem', `'`], diagnosticCodes);
 
         this.commentFlags = [];
         for (let token of tokens) {
@@ -448,6 +531,7 @@ export class BrsFile {
                 processor.tryAdd(token.text, token.range);
             }
         }
+        processor.finalize();
         this.commentFlags.push(...processor.commentFlags);
         this.diagnostics.push(...processor.diagnostics);
     }
@@ -1093,7 +1177,7 @@ export class BrsFile {
             if (namespace.fullName.toLowerCase() === closestParentNamespaceName) {
                 //add all of this namespace's immediate child namespaces, bearing in mind if we are after a new keyword
                 for (let [, ns] of namespace.namespaces) {
-                    if (!newToken || ns.statements.find((s) => isClassStatement(s))) {
+                    if (!newToken || ns.statements?.find((s) => isClassStatement(s))) {
                         if (!result.has(ns.lastPartName)) {
                             result.set(ns.lastPartName, {
                                 label: ns.lastPartName,
@@ -1104,7 +1188,7 @@ export class BrsFile {
                 }
 
                 //add function and class statement completions
-                for (let stmt of namespace.statements) {
+                for (let stmt of namespace.statements ?? []) {
                     if (isClassStatement(stmt)) {
                         result.set(stmt.name.text, {
                             label: stmt.name.text,
@@ -1255,7 +1339,7 @@ export class BrsFile {
                 }
 
                 let namespace = scope.namespaceLookup.get(namespaceName.toLowerCase());
-                if (namespace?.functionStatements[lowerCalleeName]) {
+                if (namespace?.functionStatements?.[lowerCalleeName]) {
                     return true;
                 }
             }
