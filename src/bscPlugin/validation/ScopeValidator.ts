@@ -525,7 +525,11 @@ export class ScopeValidator {
      */
     private validateNamedArgCallArgs(callExpr: { args: Expression[]; callee: Expression; openingParen?: { range: any } }, params: FunctionParameterExpression[], funcName: string, file: BrsFile) {
         const assignedParams = new Set<number>();
+        const minParams = params.filter(p => !p.defaultValue).length;
+        const maxParams = params.length;
+        const hasTooManyArgs = callExpr.args.length > maxParams;
         let seenNamedArg = false;
+        let expectedParamIdx = 0;
         let hasError = false;
 
         for (const arg of callExpr.args) {
@@ -539,10 +543,10 @@ export class ScopeValidator {
                     hasError = true;
                     continue;
                 }
-                const idx = assignedParams.size;
-                if (idx < params.length) {
-                    assignedParams.add(idx);
+                if (expectedParamIdx < params.length) {
+                    assignedParams.add(expectedParamIdx);
                 }
+                expectedParamIdx++;
             } else {
                 seenNamedArg = true;
                 const namedArg = arg as NamedArgumentExpression;
@@ -569,7 +573,18 @@ export class ScopeValidator {
                     continue;
                 }
 
+                if (paramIdx < expectedParamIdx) {
+                    this.addDiagnostic({
+                        ...DiagnosticMessages.namedArgOutOfOrder(namedArg.name.text),
+                        range: namedArg.name.range,
+                        file: file
+                    });
+                    hasError = true;
+                    continue;
+                }
+
                 assignedParams.add(paramIdx);
+                expectedParamIdx = paramIdx + 1;
             }
         }
 
@@ -577,11 +592,21 @@ export class ScopeValidator {
             return;
         }
 
+        if (hasTooManyArgs) {
+            this.addDiagnostic({
+                ...DiagnosticMessages.mismatchArgumentCount(
+                    minParams === maxParams ? maxParams : `${minParams}-${maxParams}`,
+                    callExpr.args.length
+                ),
+                range: callExpr.callee.range,
+                file: file
+            });
+            return;
+        }
+
         // Validate all required params are provided
         for (let i = 0; i < params.length; i++) {
             if (!assignedParams.has(i) && !params[i].defaultValue) {
-                const minParams = params.filter(p => !p.defaultValue).length;
-                const maxParams = params.length;
                 this.addDiagnostic({
                     ...DiagnosticMessages.mismatchArgumentCount(
                         minParams === maxParams ? maxParams : `${minParams}-${maxParams}`,

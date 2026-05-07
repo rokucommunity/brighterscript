@@ -795,6 +795,11 @@ export let DiagnosticMessages = {
         message: `Named arguments for '${funcName}' are ambiguous: the function has different parameter signatures across component scopes that share this file. Named arguments cannot be safely transpiled.`,
         code: 1151,
         severity: DiagnosticSeverity.Error
+    }),
+    namedArgOutOfOrder: (argName: string) => ({
+        message: `Named argument '${argName}' is out of order`,
+        code: 1152,
+        severity: DiagnosticSeverity.Error
     })
 };
 
