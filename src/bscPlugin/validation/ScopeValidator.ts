@@ -4,7 +4,7 @@ import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile, BsDiagnostic, OnScopeValidateEvent, CallableContainerMap, Callable } from '../../interfaces';
-import type { ClassStatement, ConstStatement, EnumStatement, MethodStatement, NamespaceStatement } from '../../parser/Statement';
+import type { ConstStatement, EnumStatement, NamespaceStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
@@ -544,7 +544,7 @@ export class ScopeValidator {
                     this.checkNamedArgCrossScopeConflict(funcName, callable, params, callExpr, file, scope);
                 } else if (isDottedGetExpression(callExpr.callee)) {
                     // Namespace function call (e.g. MyNs.myFunc(a: 1))
-                    const brsName = this.getNamespaceCallableBrsName(callExpr.callee, scope);
+                    const brsName = util.resolveNamespaceCallableName(callExpr.callee, scope);
                     if (!brsName) {
                         this.addDiagnostic({
                             ...DiagnosticMessages.namedArgsNotAllowedForUnknownFunction((callExpr.callee as DottedGetExpression).name.text),
@@ -597,7 +597,7 @@ export class ScopeValidator {
                 continue;
             }
 
-            const params = this.getClassConstructorParams(classLink.item, scope, containingNamespace);
+            const params = util.getClassConstructorParams(classLink.item, scope, containingNamespace);
             this.validateNamedArgCallArgs(callExpr, params, className, file);
         }
     }
@@ -760,40 +760,6 @@ export class ScopeValidator {
             return false;
         }
         return p1.every((p, i) => p.name.text.toLowerCase() === p2[i].name.text.toLowerCase());
-    }
-
-    /**
-     * If the callee is a dotted-get expression whose leftmost identifier is a known namespace,
-     * returns the BrightScript-flattened name (e.g. "MyNs_myFunc"). Otherwise returns undefined.
-     */
-    private getNamespaceCallableBrsName(callee: DottedGetExpression, scope: Scope): string | undefined {
-        const parts = util.getAllDottedGetParts(callee);
-        if (!parts || !scope.namespaceLookup.has(parts[0].text.toLowerCase())) {
-            return undefined;
-        }
-        return parts.map(p => p.text).join('_');
-    }
-
-    /**
-     * Walk the class and its ancestor chain to find the first constructor's parameter list.
-     * Returns an empty array if no constructor is defined anywhere in the hierarchy.
-     */
-    private getClassConstructorParams(classStmt: ClassStatement, scope: Scope, containingNamespace: string | undefined): FunctionParameterExpression[] {
-        let stmt: ClassStatement | undefined = classStmt;
-        while (stmt) {
-            const ctor = stmt.body.find(
-                s => (s as MethodStatement)?.name?.text?.toLowerCase() === 'new'
-            ) as MethodStatement | undefined;
-            if (ctor) {
-                return ctor.func.parameters;
-            }
-            if (!stmt.parentClassName) {
-                break;
-            }
-            const parentName = stmt.parentClassName.getName(ParseMode.BrighterScript);
-            stmt = scope.getClassFileLink(parentName, containingNamespace)?.item;
-        }
-        return [];
     }
 
     /**

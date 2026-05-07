@@ -11,8 +11,8 @@ import { ParseMode } from '../../parser/Parser';
 import type { Expression } from '../../parser/AstNode';
 import { util } from '../../util';
 import { isBrsFile, isCallExpression, isDottedGetExpression, isFunctionExpression, isMethodStatement, isNamedArgumentExpression, isNamespaceStatement, isNewExpression, isVariableExpression, isXmlFile } from '../../astUtils/reflection';
-import type { CallExpression, FunctionExpression, FunctionParameterExpression } from '../../parser/Expression';
-import type { ClassStatement, MethodStatement, NamespaceStatement } from '../../parser/Statement';
+import type { CallExpression, FunctionExpression } from '../../parser/Expression';
+import type { MethodStatement, NamespaceStatement } from '../../parser/Statement';
 import { WalkMode } from '../../astUtils/visitors';
 import { TokenKind } from '../../lexer/TokenKind';
 import { getMissingExtendsInsertPosition } from './codeActionHelpers';
@@ -570,13 +570,13 @@ export class CodeActionsProcessor {
             if (!classLink) {
                 return undefined;
             }
-            return this.getClassConstructorParams(classLink.item, containingNamespace);
+            return util.getClassConstructorParams(classLink.item, scope, containingNamespace);
         }
         if (isVariableExpression(callExpression.callee)) {
             return this.getCallableParametersByName(callExpression.callee.name.text.toLowerCase());
         }
         if (isDottedGetExpression(callExpression.callee)) {
-            const brsName = this.getNamespaceCallableBrsName(callExpression.callee);
+            const brsName = util.resolveNamespaceCallableName(callExpression.callee, scope);
             if (!brsName) {
                 return undefined;
             }
@@ -591,37 +591,6 @@ export class CodeActionsProcessor {
         }
         const callable = scope.getCallableByName(lowerName);
         return callable?.functionStatement?.func?.parameters;
-    }
-
-    private getNamespaceCallableBrsName(dottedGetExpression: CallExpression['callee']) {
-        const scope = this.event.program.getFirstScopeForFile(this.event.file);
-        const parts = util.getAllDottedGetParts(dottedGetExpression);
-        if (!scope || !parts || !scope.namespaceLookup.has(parts[0].text.toLowerCase())) {
-            return undefined;
-        }
-        return parts.map(p => p.text).join('_');
-    }
-
-    private getClassConstructorParams(classStmt: ClassStatement, containingNamespace: string | undefined): FunctionParameterExpression[] {
-        const scope = this.event.program.getFirstScopeForFile(this.event.file);
-        if (!scope) {
-            return [];
-        }
-        let statement: ClassStatement | undefined = classStmt;
-        while (statement) {
-            const ctor = statement.body.find(
-                s => isMethodStatement(s) && s.name.text.toLowerCase() === 'new'
-            ) as MethodStatement | undefined;
-            if (ctor) {
-                return ctor.func.parameters;
-            }
-            if (!statement.parentClassName) {
-                break;
-            }
-            const parentName = statement.parentClassName.getName(ParseMode.BrighterScript);
-            statement = scope.getClassFileLink(parentName, containingNamespace)?.item;
-        }
-        return [];
     }
 
     /**
