@@ -1,9 +1,9 @@
-import { isAliasStatement, isBody, isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isTypecastStatement, isTypeStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isBody, isCallExpression, isClassStatement, isCommentStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isNamespaceStatement, isTypecastStatement, isTypeStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { OnFileValidateEvent } from '../../interfaces';
-import { TokenKind } from '../../lexer/TokenKind';
+import { TokenKind, UnreferencableBuiltins } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import { CallExpression, type FunctionExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
@@ -197,6 +197,23 @@ export class BrsFileValidator {
             },
             ContinueStatement: (node) => {
                 this.validateContinueStatement(node);
+            },
+            VariableExpression: (node) => {
+                //flag reserved unreferencable builtins (e.g. `ObjFun`, `type`) used in non-call position.
+                //these compile cleanly as values today but are device compile errors
+                //(`Syntax Error. Builtin function call expected`).
+                const name = node.name?.text;
+                if (
+                    name &&
+                    UnreferencableBuiltins.has(name.toLowerCase()) &&
+                    //only valid use is as the callee of a CallExpression
+                    !(isCallExpression(node.parent) && node.parent.callee === node)
+                ) {
+                    this.event.file.addDiagnostic({
+                        ...DiagnosticMessages.reservedBuiltinUsedAsValue(name),
+                        range: node.name.range
+                    });
+                }
             }
         });
 
