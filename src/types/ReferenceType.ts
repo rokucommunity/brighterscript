@@ -628,6 +628,12 @@ export class ParamTypeFromValueReferenceType extends BscType {
                         }
                     } else {
                         resultType = util.getDefaultTypeFromValueType(this.objType);
+                        //if the default-type lookup just hands back another wrapper of the same
+                        //objType (e.g. an unresolvable IntersectionType keeps re-wrapping), the
+                        //proxy chain would loop forever via Reflect.get. Bail to DynamicType.
+                        if (isParamTypeFromValueReferenceType(resultType) && (resultType as ParamTypeFromValueReferenceType).objType === this.objType) {
+                            resultType = DynamicType.instance;
+                        }
                         this.cachedType = resultType;
                     }
 

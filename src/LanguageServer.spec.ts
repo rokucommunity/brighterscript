@@ -522,6 +522,13 @@ describe('LanguageServer', () => {
     });
 
     describe('project-activate', () => {
+        beforeEach(() => {
+            //the project-activate listener calls syncLogLevel which needs `connection.workspace`.
+            //in production that's set up by `server.run()`; these tests fire the event directly
+            //on the project manager without calling run(), so wire the mock connection in by hand.
+            server['connection'] = connection as any;
+        });
+
         it('should sync all open document changes to all projects', async () => {
 
             //force an open text document

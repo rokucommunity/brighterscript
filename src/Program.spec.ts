@@ -2121,6 +2121,12 @@ describe('Program', () => {
             const plugin = program.plugins.add({
                 name: 'TestPlugin',
                 beforePrepareFile: (event) => {
+                    //getTranspiledFileContents triggers a build which prepares every file in the
+                    //program (including the auto-injected bslib), so guard the assumption about
+                    //AST shape to the file we actually authored
+                    if (event.file !== file) {
+                        return;
+                    }
                     const stmt = ((event.file as BrsFile).ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
                     event.editor.setProperty((stmt.expressions[0] as LiteralExpression).tokens.value, 'text', '"hello there"');
                 },
@@ -2211,7 +2217,7 @@ describe('Program', () => {
 
     describe('transpile', () => {
         it('sets needsTranspiled=true when there is at least one edit', async () => {
-            program.setFile('source/main.brs', trim`
+            const file = program.setFile('source/main.brs', trim`
                 sub main()
                     print "hello world"
                 end sub
@@ -2219,6 +2225,10 @@ describe('Program', () => {
             program.plugins.add({
                 name: 'TestPlugin',
                 beforePrepareFile: (event) => {
+                    //skip the auto-injected bslib that the build pipeline also prepares
+                    if (event.file !== file) {
+                        return;
+                    }
                     const stmt = ((event.file as BrsFile).ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
                     event.editor.setProperty((stmt.expressions[0] as LiteralExpression).tokens.value, 'text', '"hello there"');
                 }

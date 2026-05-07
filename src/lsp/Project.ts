@@ -181,6 +181,12 @@ export class Project implements LspProject {
     public async validate() {
         this.logger.debug('Project.validate');
 
+        //a sync that started during a previous Phase 2 may have disposed this project before
+        //runWithConcurrencyLimit reached our slot. Skip validate() if the builder is gone.
+        if (!this.builder?.program) {
+            return;
+        }
+
         this.cancelValidate();
         //store
         this.validationCancelToken = new CancellationTokenSource();

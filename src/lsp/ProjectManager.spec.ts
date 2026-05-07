@@ -1444,6 +1444,11 @@ describe('ProjectManager', () => {
         });
 
         it('spawns a worker thread when threading is enabled', async () => {
+            //the afterEach `manager.dispose()` for this test will log a
+            //'Validation phase error: ... MessageHandler is now disposed' error to the console.
+            //This is expected — Phase 2 validation runs in the worker thread asynchronously
+            //(NOT awaited) and the dispose tears the worker down before that validation finishes,
+            //which rejects the in-flight worker request. Nothing to fix here.
             await manager.syncProjects([{
                 ...workspaceSettings,
                 languageServer: {
