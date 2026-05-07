@@ -2475,6 +2475,78 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
             });
         });
+
+        describe('revalidations', () => {
+            it('revalidates dependent files when a file is changed', () => {
+                program.setFile('source/common.bs', `
+                    function doThing() as string
+                        return "hello"
+                    end function
+                `);
+
+                program.setFile('components/Comp.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Comp" extends="Scene">
+                        <script uri="Comp.bs"/>
+                    </component>
+                `);
+                program.setFile('components/Comp.bs', `
+                    import "pkg:/source/common.bs"
+
+                    sub init()
+                        print doThing()
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+
+                program.setFile('source/common.bs', `
+                    function doOtherThing() as string
+                        return "hello"
+                    end function
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindFunction('doThing').message
+                ]);
+            });
+
+            it('diagnostics in dependent files go away when a file is changed with a fix', () => {
+                program.setFile('components/Comp.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Comp" extends="Scene">
+                        <script uri="Comp.bs"/>
+                    </component>
+                `);
+                program.setFile('components/Comp.bs', `
+                    import "pkg:/source/common.bs"
+
+                    sub init()
+                        print doThing()
+                    end sub
+                `);
+
+                program.setFile('source/common.bs', `
+                    function doOtherThing() as string
+                        return "hello"
+                    end function
+                `);
+
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindFunction('doThing').message
+                ]);
+
+                program.validate();
+                expectZeroDiagnostics(program);
+
+                program.setFile('source/common.bs', `
+                    function doThing() as string
+                        return "hello"
+                    end function
+                `);
+            });
+        });
     });
 
     describe('detachParent', () => {
