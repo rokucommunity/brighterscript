@@ -331,7 +331,7 @@ export class ProgramBuilder {
         //the resolved function is stashed on the entry as `run` so we don't have to keep a parallel array.
         //invalid entries are warned about and skipped (we never want to abort a build over a config typo).
         const reporters = diagnosticUtils.normalizeDiagnosticReporters(
-            this.options?.diagnosticReporters ?? this.options?.diagnosticReporter,
+            this.options?.diagnosticReporters,
             this.logger
         )
             .map(reporter => (reporter.type === 'custom'

@@ -171,11 +171,6 @@ export interface BsConfig {
      */
     diagnosticReporters?: DiagnosticReporter | DiagnosticReporter[];
     /**
-     * @deprecated use `diagnosticReporters`
-     */
-    diagnosticReporter?: DiagnosticReporter | DiagnosticReporter[];
-
-    /**
      * A list of scripts or modules to add extra diagnostics or transform the AST
      */
     plugins?: Array<string>;
@@ -320,8 +315,7 @@ type OptionalBsConfigFields =
     | 'rootDir'
     | 'stagingDir'
     | 'minFirmwareVersion'
-    | 'diagnosticReporters'
-    | 'diagnosticReporter';
+    | 'diagnosticReporters';
 
 export type FinalizedBsConfig =
     Omit<Required<BsConfig>, OptionalBsConfigFields>

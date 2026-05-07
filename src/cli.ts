@@ -26,7 +26,6 @@ let options = yargs
     .option('copy-to-staging', { type: 'boolean', defaultDescription: 'true', description: 'Copy project files into the staging folder, ready to be packaged.' })
     .option('diagnostic-level', { type: 'string', defaultDescription: '"warn"', description: 'Specify what diagnostic types should be printed to the console. Value can be "error", "warn", "hint", "info".' })
     .option('diagnostic-reporters', {
-        alias: ['diagnostic-reporter'],
         type: 'array',
         defaultDescription: '"detailed"',
         description: 'Specify the diagnostic reporter(s). Each value can be "detailed", "github-actions", or a template string containing placeholders like {file}, {line}, {col}, {endLine}, {endCol}, {severity}, {code}, {message}, {source}. Pass the flag multiple times (or list values after a single flag) to enable multiple reporters simultaneously.'
