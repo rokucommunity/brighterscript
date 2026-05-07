@@ -422,7 +422,7 @@ export function printDiagnosticGithubActions(ctx: DiagnosticPrintContext): void 
 
 /**
  * Build a reporter that renders each diagnostic via the given user-supplied template.
- * See `BsConfig.diagnosticReporter` for the placeholder list.
+ * See `BsConfig.diagnosticReporters` for the placeholder list.
  */
 export function createCustomDiagnosticReporter(template: string): DiagnosticReporterFn {
     return (ctx) => {

@@ -330,7 +330,10 @@ export class ProgramBuilder {
         //custom-template reporters are pre-resolved once so we don't recompile them per diagnostic;
         //the resolved function is stashed on the entry as `run` so we don't have to keep a parallel array.
         //invalid entries are warned about and skipped (we never want to abort a build over a config typo).
-        const reporters = diagnosticUtils.normalizeDiagnosticReporters(this.options?.diagnosticReporter, this.logger)
+        const reporters = diagnosticUtils.normalizeDiagnosticReporters(
+            this.options?.diagnosticReporters ?? this.options?.diagnosticReporter,
+            this.logger
+        )
             .map(reporter => (reporter.type === 'custom'
                 ? { ...reporter, run: diagnosticUtils.createCustomDiagnosticReporter(reporter.format) }
                 : reporter));

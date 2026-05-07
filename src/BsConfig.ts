@@ -169,6 +169,10 @@ export interface BsConfig {
      *
      * @default "detailed"
      */
+    diagnosticReporters?: DiagnosticReporter | DiagnosticReporter[];
+    /**
+     * @deprecated use `diagnosticReporters`
+     */
     diagnosticReporter?: DiagnosticReporter | DiagnosticReporter[];
 
     /**
@@ -316,6 +320,7 @@ type OptionalBsConfigFields =
     | 'rootDir'
     | 'stagingDir'
     | 'minFirmwareVersion'
+    | 'diagnosticReporters'
     | 'diagnosticReporter';
 
 export type FinalizedBsConfig =

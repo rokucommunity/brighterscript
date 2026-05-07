@@ -12,7 +12,7 @@ While a minimal `bsconfig.json` file is sufficient for getting started, `bsc` su
   - [`diagnosticFilters`](#diagnosticfilters)
     - [Negative patterns in `diagnosticFilters`](#negative-patterns-in-diagnosticfilters)
   - [`diagnosticLevel`](#diagnosticlevel)
-  - [`diagnosticReporter`](#diagnosticreporter)
+  - [`diagnosticReporters`](#diagnosticreporters)
   - [`diagnosticSeverityOverrides`](#diagnosticseverityoverrides)
   - [`emitDefinitions`](#emitdefinitions)
   - [`emitFullPaths`](#emitfullpaths)
@@ -132,7 +132,7 @@ Type: `"hint" | "info" | "warn" | "error"`
 
 Specify what diagnostic levels are printed to the console. This has no effect on what diagnostics are reported in the LanguageServer. Defaults to `"warn"`.
 
-## `diagnosticReporter`
+## `diagnosticReporters`
 
 Type: `string | { type: string; format?: string } | Array<string | { type: string; format?: string }>`
 
@@ -160,18 +160,18 @@ Each value can be:
 Examples:
 
 ```jsonc
-"diagnosticReporter": "detailed"
+"diagnosticReporters": "detailed"
 
-"diagnosticReporter": "github-actions"
+"diagnosticReporters": "github-actions"
 
 // custom template
-"diagnosticReporter": "{file}:{line}:{col} {severity} BS{code}: {message}"
+"diagnosticReporters": "{file}:{line}:{col} {severity} BS{code}: {message}"
 
 // emit detailed terminal output AND github-actions annotations from the same run
-"diagnosticReporter": ["detailed", "github-actions"]
+"diagnosticReporters": ["detailed", "github-actions"]
 
 // explicit object form (also accepts the same shapes inside an array)
-"diagnosticReporter": { "type": "custom", "format": "{file}:{line}: {message}" }
+"diagnosticReporters": { "type": "custom", "format": "{file}:{line}: {message}" }
 ```
 
 If a value is invalid (typo'd preset, custom template with no known placeholders, etc.) it is logged as a warning and skipped. Duplicate entries are dropped with a warning message. If every configured reporter is invalid, the build falls back to `"detailed"` rather than failing.
