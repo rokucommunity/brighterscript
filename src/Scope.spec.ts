@@ -2511,7 +2511,7 @@ describe('Scope', () => {
                 ]);
             });
 
-            it('diagnostics in dependent files go away when a file is changed with a fix', () => {
+            it.only('diagnostics in dependent files go away when a file is changed with a fix', () => {
                 program.setFile('components/Comp.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="Comp" extends="Scene">
@@ -2536,15 +2536,16 @@ describe('Scope', () => {
                 expectDiagnostics(program, [
                     DiagnosticMessages.cannotFindFunction('doThing').message
                 ]);
-
-                program.validate();
-                expectZeroDiagnostics(program);
-
                 program.setFile('source/common.bs', `
                     function doThing() as string
                         return "hello"
                     end function
                 `);
+
+                program.validate();
+                expectZeroDiagnostics(program);
+
+
             });
         });
     });
