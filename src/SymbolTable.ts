@@ -462,25 +462,6 @@ export class SymbolTable implements SymbolTypeGetter {
     }
 
     /**
-     * Adds all the symbols from another table to this one
-     * It will overwrite any existing symbols in this table
-     */
-    /*mergeSymbolTable(symbolTable: SymbolTable) {
-        function mergeTables(intoTable: SymbolTable, fromTable: SymbolTable) {
-            for (let [, value] of fromTable.symbolMap) {
-                for (const symbol of value) {
-                    if (symbol.data?.doNotMerge) {
-                        continue;
-                    }
-                    intoTable.addSymbol(
-                        symbol.name,
-                        symbol.data,
-                        symbol.type,
-                        symbol.flags
-                    );
-                }*/
-
-    /**
      * Adds all the symbols from another table to this one.
      * Source symbols are shared by reference (not cloned) since BscSymbol is treated as immutable.
      * The destination still owns its own array per key, so subsequent addSymbol calls on either

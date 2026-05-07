@@ -3386,7 +3386,8 @@ describe('parser', () => {
                     end sub
                 `, ParseMode.BrightScript);
                 expectDiagnosticsIncludes(diagnostics, [
-                    DiagnosticMessages.unexpectedToken('\n')
+                    DiagnosticMessages.unexpectedToken('\n'),
+                    DiagnosticMessages.expectedStatement()
                 ]);
             });
         });
@@ -3405,7 +3406,8 @@ describe('parser', () => {
                 `, ParseMode.BrightScript);
                 expectDiagnosticsIncludes(diagnostics, [
                     DiagnosticMessages.unexpectedToken('\n'),
-                    DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments')
+                    DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments'),
+                    DiagnosticMessages.expectedStatement()
                 ]);
             });
 
@@ -3478,7 +3480,8 @@ describe('parser', () => {
                     minFirmwareVersion: '11.0.0'
                 });
                 expectDiagnosticsIncludes(diagnostics, [
-                    DiagnosticMessages.unexpectedToken('\n')
+                    DiagnosticMessages.unexpectedToken('\n'),
+                    DiagnosticMessages.expectedStatement()
                 ]);
             });
 
@@ -3517,7 +3520,8 @@ describe('parser', () => {
                 });
                 expectDiagnosticsIncludes(diagnostics, [
                     DiagnosticMessages.unexpectedToken('\n'),
-                    DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments')
+                    DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments'),
+                    DiagnosticMessages.expectedStatement()
                 ]);
             });
         });
