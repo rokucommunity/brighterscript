@@ -8,10 +8,11 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { BscFile, BsDiagnostic, OnGetCodeActionsEvent } from '../../interfaces';
 import { ParseMode } from '../../parser/Parser';
+import type { Expression } from '../../parser/AstNode';
 import { util } from '../../util';
-import { isBrsFile, isFunctionExpression, isMethodStatement } from '../../astUtils/reflection';
-import type { FunctionExpression } from '../../parser/Expression';
-import type { MethodStatement } from '../../parser/Statement';
+import { isBrsFile, isCallExpression, isDottedGetExpression, isFunctionExpression, isMethodStatement, isNamedArgumentExpression, isNamespaceStatement, isNewExpression, isVariableExpression } from '../../astUtils/reflection';
+import type { CallExpression, FunctionExpression, FunctionParameterExpression, NamedArgumentExpression } from '../../parser/Expression';
+import type { ClassStatement, MethodStatement, NamespaceStatement } from '../../parser/Statement';
 import { WalkMode } from '../../astUtils/visitors';
 import { TokenKind } from '../../lexer/TokenKind';
 
@@ -50,6 +51,8 @@ export class CodeActionsProcessor {
                 this.suggestMissingOverrideQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.cannotUseOverrideKeywordOnConstructorFunction) {
                 this.suggestRemoveOverrideFromConstructorQuickFixes([diagnostic]);
+            } else if (diagnostic.code === DiagnosticCodeMap.namedArgOutOfOrder) {
+                this.suggestNamedArgOrderQuickFix(diagnostic as DiagnosticMessageType<'namedArgOutOfOrder'>);
             }
         }
 
@@ -273,6 +276,138 @@ export class CodeActionsProcessor {
                 })
             );
         }
+    }
+
+    /**
+     * Suggests reordering named arguments to declaration order.
+     */
+    private suggestNamedArgOrderQuickFix(diagnostic: DiagnosticMessageType<'namedArgOutOfOrder'>) {
+        if (!isBrsFile(this.event.file)) {
+            return;
+        }
+        const closestExpression = this.event.file.getClosestExpression(diagnostic.range.start);
+        const callExpression = (
+            isCallExpression(closestExpression)
+                ? closestExpression
+                : closestExpression?.findAncestor<CallExpression>(isCallExpression)
+        );
+        if (!callExpression || callExpression.args.length < 2) {
+            return;
+        }
+
+        const parameters = this.getCallExpressionParameters(callExpression);
+        if (!parameters) {
+            return;
+        }
+
+        const argsWithParamIndex = [] as Array<{ arg: Expression; paramIndex: number }>;
+        let expectedParamIndex = 0;
+        let hasNamedArg = false;
+
+        for (const arg of callExpression.args) {
+            if (!isNamedArgumentExpression(arg)) {
+                if (hasNamedArg || expectedParamIndex >= parameters.length) {
+                    return;
+                }
+                argsWithParamIndex.push({ arg: arg, paramIndex: expectedParamIndex });
+                expectedParamIndex++;
+                continue;
+            }
+
+            hasNamedArg = true;
+            const namedArg = arg as NamedArgumentExpression;
+            const paramIndex = parameters.findIndex(p => p.name.text.toLowerCase() === namedArg.name.text.toLowerCase());
+            if (paramIndex < expectedParamIndex) {
+                // continue collecting so this action can fix all out-of-order named args in this call
+            }
+            if (paramIndex < 0 || argsWithParamIndex.some(x => x.paramIndex === paramIndex)) {
+                return;
+            }
+            argsWithParamIndex.push({ arg: namedArg, paramIndex: paramIndex });
+            expectedParamIndex = paramIndex + 1;
+        }
+
+        const sortedArgs = [...argsWithParamIndex].sort((a, b) => a.paramIndex - b.paramIndex);
+        const sortedArgText = sortedArgs.map(x => util.getTextForRange(this.event.file.fileContents, x.arg.range)).join(', ');
+        const firstArg = callExpression.args[0];
+        const lastArg = callExpression.args[callExpression.args.length - 1];
+        if (!firstArg?.range || !lastArg?.range) {
+            return;
+        }
+
+        this.event.codeActions.push(
+            codeActionUtil.createCodeAction({
+                title: 'Reorder named arguments to match function declaration',
+                diagnostics: [diagnostic],
+                kind: CodeActionKind.QuickFix,
+                changes: [{
+                    type: 'replace',
+                    filePath: this.event.file.srcPath,
+                    range: util.createRangeFromPositions(firstArg.range.start, lastArg.range.end),
+                    newText: sortedArgText
+                }]
+            })
+        );
+    }
+
+    private getCallExpressionParameters(callExpression: CallExpression) {
+        const scope = this.event.program.getFirstScopeForFile(this.event.file);
+        if (!scope) {
+            return undefined;
+        }
+        if (isNewExpression(callExpression.parent)) {
+            const newExpression = callExpression.parent;
+            const className = newExpression.className.getName(ParseMode.BrighterScript);
+            const containingNamespace = newExpression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase();
+            const classLink = scope.getClassFileLink(className, containingNamespace);
+            if (!classLink) {
+                return undefined;
+            }
+            return this.getClassConstructorParams(classLink.item, containingNamespace);
+        }
+        if (isVariableExpression(callExpression.callee)) {
+            const callable = scope.getCallableByName(callExpression.callee.name.text.toLowerCase());
+            return callable?.functionStatement?.func?.parameters;
+        }
+        if (isDottedGetExpression(callExpression.callee)) {
+            const brsName = this.getNamespaceCallableBrsName(callExpression.callee);
+            if (!brsName) {
+                return undefined;
+            }
+            const callable = scope.getCallableByName(brsName.toLowerCase());
+            return callable?.functionStatement?.func?.parameters;
+        }
+    }
+
+    private getNamespaceCallableBrsName(callee: CallExpression['callee']) {
+        const scope = this.event.program.getFirstScopeForFile(this.event.file);
+        const parts = util.getAllDottedGetParts(callee);
+        if (!scope || !parts || !scope.namespaceLookup.has(parts[0].text.toLowerCase())) {
+            return undefined;
+        }
+        return parts.map(p => p.text).join('_');
+    }
+
+    private getClassConstructorParams(classStmt: ClassStatement, containingNamespace: string | undefined): FunctionParameterExpression[] {
+        const scope = this.event.program.getFirstScopeForFile(this.event.file);
+        if (!scope) {
+            return [];
+        }
+        let statement: ClassStatement | undefined = classStmt;
+        while (statement) {
+            const ctor = statement.body.find(
+                s => isMethodStatement(s) && s.name.text.toLowerCase() === 'new'
+            ) as MethodStatement | undefined;
+            if (ctor) {
+                return ctor.func.parameters;
+            }
+            if (!statement.parentClassName) {
+                break;
+            }
+            const parentName = statement.parentClassName.getName(ParseMode.BrighterScript);
+            statement = scope.getClassFileLink(parentName, containingNamespace)?.item;
+        }
+        return [];
     }
 
     /**
