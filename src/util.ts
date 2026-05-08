@@ -25,9 +25,10 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
-import { SourceNode } from 'source-map';
+import { SourceNode, SourceMapConsumer } from 'source-map';
+import type { RawSourceMap, SourceMapGenerator } from 'source-map';
 import * as requireRelative from 'require-relative';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -355,6 +356,7 @@ export class Util {
             files: config.files ?? [...DefaultFiles],
             outDir: outDir,
             sourceMap: config.sourceMap === true,
+            relativeSourceMaps: config.relativeSourceMaps === true,
             watch: config.watch === true ? true : false,
             emitFullPaths: config.emitFullPaths === true ? true : false,
             noEmit: noEmit,
@@ -373,7 +375,8 @@ export class Util {
             removeParameterTypes: config.removeParameterTypes === true ? true : false,
             logLevel: logLevel,
             bslibDestinationDir: bslibDestinationDir,
-            legacyCallfuncHandling: config.legacyCallfuncHandling === true ? true : false
+            legacyCallfuncHandling: config.legacyCallfuncHandling === true ? true : false,
+            validate: config.validate === false ? false : true
         };
 
         //mutate `config` in case anyone is holding a reference to the incomplete one
@@ -465,6 +468,29 @@ export class Util {
             }
         }
         return result.join(path.sep);
+    }
+
+    /**
+     * Compute the replacement text for a file-path string (used in `import` statements and XML `<script uri>` attributes)
+     * when the target file is being renamed. Preserves the original path style: `pkg:/...` stays `pkg:/...`,
+     * relative paths stay relative (recomputed from the containing file's pkg path).
+     *
+     * @param originalText the path string as it appears in source (no surrounding quotes)
+     * @param containingFilePkgPath pkg path of the file containing the reference
+     * @param newTargetPkgPath pkg path of the renamed file (path-separator agnostic)
+     * @returns the new path string, or `null` if the original style is unsupported
+     */
+    public computeRenamedReferencePath(originalText: string, containingFilePkgPath: string, newTargetPkgPath: string): string | null {
+        if (!originalText) {
+            return null;
+        }
+        const newPkgPathForwardSlash = path.normalize(newTargetPkgPath).split(path.sep).join('/');
+        const schemeMatch = /^(pkg|libpkg):\//i.exec(originalText);
+        if (schemeMatch) {
+            return `${schemeMatch[1]}:/${newPkgPathForwardSlash}`;
+        }
+        const relative = this.getRelativePath(containingFilePkgPath, newTargetPkgPath);
+        return relative.split(path.sep).join('/');
     }
 
     /**
@@ -2019,7 +2045,12 @@ export class Util {
         const parts = this.getAllDottedGetParts(node) ?? [];
         var result = parts[0]?.text;
         for (var i = 1; i < parts.length; i++) {
-            result += (i === parts.length - 1 && parseMode === ParseMode.BrighterScript ? lastSep : sep) + parts[i].text;
+            //some parts can be undefined (e.g. an unfinished `widget@.` callfunc with no method name)
+            const part = parts[i];
+            if (!part) {
+                continue;
+            }
+            result += (i === parts.length - 1 && parseMode === ParseMode.BrighterScript ? lastSep : sep) + part.text;
         }
         return result;
         /* eslint-enable no-var */
@@ -2297,6 +2328,85 @@ export class Util {
         return false;
     }
 
+
+    /**
+     * Parse the `sourceMappingURL` comment from file contents and resolve it to a RawSourceMap.
+     * Handles inline base64 data URIs, absolute paths, relative paths (resolved against srcPath's
+     * directory), and falls back to a co-located `<srcPath>.map` file.
+     * Supports both BrightScript-style comments (`'//# sourceMappingURL=...`) and XML-style
+     * comments (`<!--//# sourceMappingURL=... -->`).
+     * Returns undefined if no map can be found.
+     */
+    public async resolveInputSourceMap(fileContents: string, srcPath: string): Promise<RawSourceMap | undefined> {
+        // Match sourceMappingURL - [^\s]+ stops at whitespace (safe, no backtracking risk).
+        // Strip any trailing XML comment close (either --> or --!>) that may have been captured
+        // when the URL is not followed by a space in an XML comment like <!--//# ...=url-->.
+        const match = /['"]?\/\/# sourceMappingURL=([^\s]+)/m.exec(fileContents);
+        if (match) {
+            const url = match[1].replace(/--!?>$/, '').trim();
+            if (url.startsWith('data:')) {
+                // inline base64: data:application/json;base64,<b64>
+                const b64Match = /base64,([A-Za-z0-9+/=]+)$/.exec(url);
+                if (b64Match) {
+                    return JSON.parse(Buffer.from(b64Match[1], 'base64').toString('utf8')) as RawSourceMap;
+                }
+            } else {
+                const mapPath = path.isAbsolute(url) ? url : path.resolve(path.dirname(srcPath), url);
+                if (await fsExtra.pathExists(mapPath)) {
+                    return JSON.parse(await fsExtra.readFile(mapPath, 'utf8')) as RawSourceMap;
+                }
+            }
+        }
+
+        // no usable sourceMappingURL — try co-located <srcPath>.map
+        const colocated = `${srcPath}.map`;
+        if (await fsExtra.pathExists(colocated)) {
+            return JSON.parse(await fsExtra.readFile(colocated, 'utf8')) as RawSourceMap;
+        }
+        return undefined;
+    }
+
+    /**
+     * Apply an input sourcemap to a generated SourceMapGenerator, chaining mappings so the
+     * output traces back through the input map to the original source.
+     */
+    public async applySourceMap(generator: SourceMapGenerator, inputMap: RawSourceMap, sourceFile: string) {
+        await SourceMapConsumer.with(inputMap, null, (consumer) => {
+            generator.applySourceMap(consumer, sourceFile);
+        });
+    }
+
+    /**
+     * Chain a prebuild input sourcemap (loaded from a co-located `.map` file or a
+     * `sourceMappingURL` comment in the file contents) onto an existing serialized output
+     * sourcemap. Returns the chained sourcemap as a JSON string. If no input map is found,
+     * the original output map JSON is returned unchanged.
+     */
+    public async chainInputSourceMap(outputMapJson: string, file: { fileContents?: string; srcPath: string }): Promise<string> {
+        const inputMap = await this.resolveInputSourceMap(file.fileContents ?? '', file.srcPath);
+        if (!inputMap) {
+            return outputMapJson;
+        }
+        const { SourceMapConsumer: Consumer, SourceMapGenerator: Generator } = await import('source-map');
+        const outputMap = JSON.parse(outputMapJson) as RawSourceMap;
+        return Consumer.with(outputMap, null, async (outputConsumer) => {
+            const generator = Generator.fromSourceMap(outputConsumer);
+            await Consumer.with(inputMap, null, (inputConsumer) => {
+                generator.applySourceMap(inputConsumer, file.srcPath);
+            });
+            return generator.toString();
+        });
+    }
+
+    public isBuiltInType(typeName: string) {
+        const typeNameLower = typeName.toLowerCase();
+        if (typeNameLower.startsWith('rosgnode')) {
+            // NOTE: this is unsafe and only used to avoid validation errors in backported v1 type syntax
+            return true;
+        }
+        return false;
+    }
+
     public isGenericNodeType(type: BscType) {
         if (isComponentType(type)) {
             const lowerName = type.toString().toLowerCase();
@@ -2494,6 +2604,13 @@ export class Util {
         let result: BscType;
         let methodName = methodNameToken?.text?.replace(/"/g, ''); // remove quotes if it was the first arg of .callFunc()
 
+        //bail early when there's no method name (e.g. an unfinished `widget@.` callfunc).
+        //downstream getCallFuncType / ReferenceType paths assume a non-empty member name and
+        //will eventually try `name.toLowerCase()` on undefined and crash.
+        if (!methodName) {
+            return undefined;
+        }
+
         // a little hacky here with checking options.ignoreCall because callFuncExpression has the method name
         // It's nicer for CallExpression, because it's a call on any expression.
         let calleeType: BscType;
@@ -2502,7 +2619,7 @@ export class Util {
         } else if (isCallExpression(callExpr) && isDottedGetExpression(callExpr.callee)) {
             calleeType = callExpr.callee.obj.getType({ ...options, flags: SymbolTypeFlag.runtime, ignoreCall: false });
         }
-        const funcType = calleeType.getCallFuncType?.(methodName, options);
+        const funcType = calleeType?.getCallFuncType?.(methodName, options);
         if (funcType) {
             options.typeChain?.push(new TypeChainEntry({
                 name: methodName,
@@ -2727,6 +2844,9 @@ export class Util {
         if (!resultType.isResolvable()) {
             if (isUnionType(resultType)) {
                 resultType = DynamicType.instance;
+            } else if (isParamTypeFromValueReferenceType(resultType)) {
+                //already wrapped — wrapping again would build a recursive proxy chain whose
+                //get handlers loop forever via Reflect.get
             } else {
                 resultType = new ParamTypeFromValueReferenceType(resultType);
             }

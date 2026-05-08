@@ -11,7 +11,7 @@ import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallableType, isCallExpression, isCallfuncExpression, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallableType, isCallExpression, isCallfuncExpression, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -692,7 +692,7 @@ export class DottedGetExpression extends Expression {
     getTypedef(state: BrsTranspileState) {
         //always transpile the dots for typedefs
         return [
-            ...this.obj.transpile(state),
+            ...(this.obj.getTypedef ? this.obj.getTypedef(state) : this.obj.transpile(state)),
             state.transpileToken(this.tokens.dot),
             state.transpileToken(this.tokens.name)
         ];
@@ -1238,7 +1238,6 @@ export class AAMemberExpression extends Expression {
     public readonly value: Expression;
 
     transpile(state: BrsTranspileState) {
-        //TODO move the logic from AALiteralExpression loop into this function
         return [];
     }
 
@@ -1266,12 +1265,75 @@ export class AAMemberExpression extends Expression {
     }
 }
 
+export class AAIndexedMemberExpression extends Expression {
+    constructor(options: {
+        leftBracket?: Token;
+        key: Expression;
+        rightBracket?: Token;
+        colon?: Token;
+        /** The expression evaluated to determine the member's initial value. */
+        value: Expression;
+        comma?: Token;
+    }) {
+        super();
+        this.key = options.key;
+        this.tokens = {
+            leftBracket: options.leftBracket,
+            rightBracket: options.rightBracket,
+            colon: options.colon,
+            comma: options.comma
+        };
+        this.value = options.value;
+        this.location = util.createBoundingLocation(this.tokens.leftBracket, this.key, this.tokens.rightBracket, this.tokens.colon, this.value, this.tokens.comma);
+    }
+
+    public readonly tokens: {
+        readonly leftBracket?: Token;
+        readonly rightBracket?: Token;
+        readonly colon?: Token;
+        readonly comma?: Token;
+    };
+
+    public key: Expression;
+    /** The expression evaluated to determine the member's initial value. */
+    public value: Expression;
+
+
+    public readonly kind = AstNodeKind.AAIndexedMemberExpression;
+
+    public readonly location: Location | undefined;
+
+    transpile(state: BrsTranspileState) {
+        return [];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        walk(this, 'key', visitor, options);
+        walk(this, 'value', visitor, options);
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new AAIndexedMemberExpression({
+                leftBracket: util.cloneToken(this.tokens.leftBracket),
+                key: this.key?.clone(),
+                rightBracket: util.cloneToken(this.tokens.rightBracket),
+                colon: util.cloneToken(this.tokens.colon),
+                value: this.value?.clone(),
+                comma: util.cloneToken(this.tokens.comma)
+            }),
+            ['key', 'value']
+        );
+    }
+}
+
 export class AALiteralExpression extends Expression {
     constructor(options: {
-        elements: Array<AAMemberExpression>;
-        open?: Token;
-        close?: Token;
-    }) {
+        readonly elements: Array<AAMemberExpression | AAIndexedMemberExpression>;
+        readonly open?: Token;
+        readonly close?: Token;
+    }
+    ) {
         super();
         this.tokens = {
             open: options.open,
@@ -1281,7 +1343,7 @@ export class AALiteralExpression extends Expression {
         this.location = util.createBoundingLocation(this.tokens.open, ...this.elements ?? [], this.tokens.close);
     }
 
-    public readonly elements: Array<AAMemberExpression>;
+    public readonly elements: Array<AAMemberExpression | AAIndexedMemberExpression>;
     public readonly tokens: {
         readonly open?: Token;
         readonly close?: Token;
@@ -1318,9 +1380,14 @@ export class AALiteralExpression extends Expression {
             }
 
             //key
-            result.push(
-                state.transpileToken(element.tokens.key)
-            );
+            if (isAAIndexedMemberExpression(element)) {
+                //computed key: transpile the resolved expression (pre-transpile overrides it to a literal)
+                result.push(...element.key.transpile(state));
+            } else {
+                result.push(
+                    state.transpileToken(element.tokens.key)
+                );
+            }
             //colon
             result.push(
                 state.transpileToken(element.tokens.colon, ':'),
@@ -2556,7 +2623,9 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
     }
     if (isAALiteralExpression(expr)) {
         return expr.elements.reduce((acc, e) => {
-            acc[e.tokens.key.text] = expressionToValue(e.value, strict);
+            if (!(isAAIndexedMemberExpression(e))) {
+                acc[e.tokens.key.text] = expressionToValue(e.value, strict);
+            }
             return acc;
         }, {});
     }
@@ -2599,6 +2668,13 @@ export class TypeExpression extends Expression implements TypedefProvider {
     public readonly location: Location;
 
     public transpile(state: BrsTranspileState): TranspileResult {
+        //roku built-in names (rosgnode*, etc.) collapse to `dynamic` at transpile.
+        //Check before isNativeType, since unresolved built-ins resolve to DynamicType
+        //(a native type) which would otherwise pass-through their original text.
+        const name = this.getName(ParseMode.BrighterScript);
+        if (name && util.isBuiltInType(name)) {
+            return ['dynamic'];
+        }
         const exprType = this.getType({ flags: SymbolTypeFlag.typetime });
         if (isNativeType(exprType)) {
             return this.expression.transpile(state);
@@ -2736,7 +2812,9 @@ export class TypedArrayExpression extends Expression {
     public readonly location: Location;
 
     public transpile(state: BrsTranspileState): TranspileResult {
-        return [this.getType({ flags: SymbolTypeFlag.typetime }).toTypeString()];
+        //typed arrays (e.g. `float[]`, `float[][][]`) collapse to `dynamic` since
+        //BrightScript has no array-of-T type at the language level.
+        return ['dynamic'];
     }
 
     public walk(visitor: WalkVisitor, options: WalkOptions) {

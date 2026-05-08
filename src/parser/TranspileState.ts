@@ -22,15 +22,14 @@ export class TranspileState {
     constructor(
         /**
          * The absolute path to the source location of this file. If sourceRoot is specified,
-         * this path will be full path to the file in sourceRoot instead of rootDir.
+         * this path will be the full path to the file under sourceRoot instead of rootDir.
          * If the file resides outside of rootDir, then no changes will be made to this path.
+         * Used for runtime source literals (SOURCE_FILE_PATH, SOURCE_LOCATION).
          */
         public srcPath: string,
         public options: BsConfig
     ) {
-        this.srcPath = srcPath;
-
-        //if a sourceRoot is specified, use that instead of the rootDir
+        //if a sourceRoot is specified, swap rootDir for sourceRoot in the path for runtime literals
         if (this.options.sourceRoot) {
             this.srcPath = this.srcPath.replace(
                 this.options.rootDir,

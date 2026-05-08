@@ -43,5 +43,22 @@ export class XmlFileValidator {
                 location: componentElement.tokens.startTagName.location
             });
         }
+
+        //flag explicit script imports that match the auto-imported codebehind file
+        const file = this.event.file;
+        if (file.program?.options?.autoImportComponentScript === true) {
+            const codebehindPaths = file.possibleCodebehindDestPaths ?? [];
+            for (const scriptImport of file.parser.references.scriptTagImports) {
+                if (!scriptImport.destPath || !scriptImport.filePathRange) {
+                    continue;
+                }
+                if (codebehindPaths.includes(scriptImport.destPath)) {
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.unnecessaryCodebehindScriptImport(),
+                        location: util.createLocationFromFileRange(file, scriptImport.filePathRange)
+                    });
+                }
+            }
+        }
     }
 }

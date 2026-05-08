@@ -8,6 +8,7 @@ import type { BrightScriptClientConfiguration } from './LanguageServer';
 import { CustomCommands, LanguageServer } from './LanguageServer';
 import { createSandbox } from 'sinon';
 import { standardizePath as s, util } from './util';
+import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import type { Program } from './Program';
 import * as assert from 'assert';
@@ -74,7 +75,8 @@ describe('LanguageServer', () => {
             getConfiguration: () => {
                 return {};
             },
-            onDidChangeWorkspaceFolders: () => { }
+            onDidChangeWorkspaceFolders: () => { },
+            onWillRenameFiles: () => null
         },
         tracer: {
             log: () => { }
@@ -92,6 +94,9 @@ describe('LanguageServer', () => {
         server['busyStatusTracker'] = new BusyStatusTracker();
         workspaceFolders = [workspacePath];
         LanguageServer.enableThreadingDefault = false;
+
+        //disable debounce by default for tests so existing tests run without delay
+        server.fileChangeDebounceDelay = 0;
 
         //mock the connection stuff
         sinon.stub(server as any, 'establishConnection').callsFake(() => {
@@ -274,6 +279,211 @@ describe('LanguageServer', () => {
 
     });
 
+    describe('syncProjectActivationConcurrencyLimit', () => {
+        function makeConfig(workspaceFolder: string, limit?: number): WorkspaceConfig {
+            return {
+                languageServer: {
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
+                    logLevel: 'info',
+                    ...(limit !== undefined ? { projectActivationConcurrencyLimit: limit } : {})
+                },
+                workspaceFolder: workspaceFolder,
+                excludePatterns: []
+            };
+        }
+
+        it('defaults to 3 when no workspaces are configured', () => {
+            server['workspaceConfigsCache'] = new Map();
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(3);
+        });
+
+        it('defaults to 3 when workspace has no limit set', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(3);
+        });
+
+        it('reads limit from a single workspace config', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 5)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(5);
+        });
+
+        it('uses the smallest limit from multiple workspace folders', () => {
+            const folder2 = s`${tempDir}/project2`;
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 10)],
+                [folder2, makeConfig(folder2, 2)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(2);
+        });
+
+        it('ignores workspaces with no limit when others have a limit', () => {
+            const folder2 = s`${tempDir}/project2`;
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 7)],
+                [folder2, makeConfig(folder2)] // no limit
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            // only the workspace with a limit contributes; the limitless one is filtered out
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(7);
+        });
+
+        it('does not crash when languageServer is undefined on a cache entry', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, {
+                    languageServer: undefined,
+                    workspaceFolder: workspacePath,
+                    excludePatterns: []
+                } as any]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(3);
+        });
+
+        it('does not crash when projectActivationConcurrencyLimit is a non-numeric string', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 'bad' as any)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            // non-numeric values are filtered out; falls back to default
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(3);
+        });
+
+        it('does not crash when projectActivationConcurrencyLimit is null', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, null as any)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(3);
+        });
+
+        it('defaults to 1 when projectActivationConcurrencyLimit is NaN', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, NaN)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(1);
+        });
+
+        it('defaults to 1 when projectActivationConcurrencyLimit is less than 1', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 0)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(1);
+        });
+
+        it('defaults to 1 when projectActivationConcurrencyLimit is a negative number', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, -5)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(1);
+        });
+
+        it('is called on startup (onInitialized) and reads the configured limit', async () => {
+            server['connection'] = connection as any;
+            const spy = sinon.spy(server as any, 'syncProjectActivationConcurrencyLimit');
+            sinon.stub(server as any, 'getWorkspaceConfigs').returns(Promise.resolve([
+                makeConfig(workspacePath, 4)
+            ]));
+            sinon.stub(server as any, 'syncLogLevel').resolves();
+            sinon.stub(server as any, 'rebuildPathFilterer').resolves();
+            sinon.stub(server as any, 'syncProjects').resolves();
+
+            await server['onInitialized']();
+
+            expect(spy.calledOnce).to.be.true;
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(4);
+        });
+
+        it('is updated by onDidChangeConfiguration', async () => {
+            (server as any)['connection'] = connection;
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 10)]
+            ]);
+            sinon.stub(server as any, 'getWorkspaceConfigs').returns(Promise.resolve([
+                makeConfig(workspacePath, 2)
+            ]));
+            sinon.stub(server as any, 'rebuildPathFilterer').resolves();
+            sinon.stub(server as any, 'syncProjects').resolves();
+
+            await server.onDidChangeConfiguration({ settings: {} });
+
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(2);
+        });
+
+        it('getWorkspaceConfigs does not bake in the default when client omits the setting', async () => {
+            // Regression test: getWorkspaceConfigs previously fell back to the default (3) when
+            // the client didn't configure projectActivationConcurrencyLimit. This caused the
+            // cache to always contain a number, so syncProjectActivationConcurrencyLimit could
+            // never distinguish "user set 3" from "user left it unset", and the "use smallest"
+            // logic would incorrectly override an explicit limit from another workspace with 3.
+            //
+            // Scenario: two workspaces — one sets limit=10, one has no opinion.
+            // Expected: syncProjectActivationConcurrencyLimit uses 10 (the only explicit limit).
+            // Broken behaviour: getWorkspaceConfigs stores 3 for the unconfigured workspace,
+            // so Math.min(10, 3) = 3 is used instead.
+            server.run();
+
+            const folder2 = s`${tempDir}/project2`;
+            workspaceFolders = [workspacePath, folder2];
+
+            sinon.stub(server as any, 'getClientConfiguration').callsFake((uri: string) => {
+                if (uri.includes('project2')) {
+                    // this workspace has no opinion on the concurrency limit
+                    return Promise.resolve({
+                        languageServer: { enableThreading: false, enableProjectDiscovery: true, logLevel: 'info' }
+                    });
+                }
+                return Promise.resolve({
+                    languageServer: { enableThreading: false, enableProjectDiscovery: true, logLevel: 'info', projectActivationConcurrencyLimit: 10 }
+                });
+            });
+            sinon.stub(server as any, 'getWorkspaceExcludeGlobs').resolves([]);
+
+            const configs = await server['getWorkspaceConfigs']();
+            const limitForFolder2 = configs.find(c => c.workspaceFolder === folder2)?.languageServer?.projectActivationConcurrencyLimit;
+
+            // the unconfigured workspace should NOT have the default baked in
+            expect(limitForFolder2).to.be.undefined;
+
+            // and the full sync path should respect only the explicitly-set limit
+            server['workspaceConfigsCache'] = new Map(configs.map(c => [c.workspaceFolder, c]));
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(10);
+        });
+
+        it('changing the limit mid-sync updates the property for the next sync but does not affect in-flight workers', () => {
+            // runWithConcurrencyLimit captures the limit by value at call time.
+            // Updating projectActivationConcurrencyLimit while workers are running
+            // has no effect on the current run — they continue until the queue drains.
+            // The new limit takes effect on the next syncProjects call.
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 5)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(5);
+
+            // a config change arrives while activation is hypothetically in progress
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 1)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+
+            // property reflects the new limit for the NEXT sync
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(1);
+        });
+    });
+
     describe('sendDiagnostics', () => {
         it('dedupes diagnostics found at same location from multiple projects', async () => {
             fsExtra.outputFileSync(s`${rootDir}/common/lib.brs`, `
@@ -312,6 +522,13 @@ describe('LanguageServer', () => {
     });
 
     describe('project-activate', () => {
+        beforeEach(() => {
+            //the project-activate listener calls syncLogLevel which needs `connection.workspace`.
+            //in production that's set up by `server.run()`; these tests fire the event directly
+            //on the project manager without calling run(), so wire the mock connection in by hand.
+            server['connection'] = connection as any;
+        });
+
         it('should sync all open document changes to all projects', async () => {
 
             //force an open text document
@@ -545,7 +762,8 @@ describe('LanguageServer', () => {
                         enableProjectDiscovery: true,
                         projectDiscoveryMaxDepth: 15,
                         projectDiscoveryExclude: undefined,
-                        logLevel: 'info'
+                        logLevel: 'info',
+                        projectActivationConcurrencyLimit: undefined
                     }
                 }
             ]);
@@ -1137,6 +1355,169 @@ describe('LanguageServer', () => {
                 stub.getCalls()[0].args[0]
             ).to.eql([]);
         });
+
+        describe('debouncing', () => {
+            let clock: sinon.SinonFakeTimers;
+
+            beforeEach(() => {
+                (server as any)['connection'] = connection;
+                //enable a non-zero debounce for these tests
+                server.fileChangeDebounceDelay = 150;
+                clock = sinon.useFakeTimers();
+            });
+
+            afterEach(() => {
+                clock.restore();
+            });
+
+            it('batches rapid successive file change events into a single handleFileChanges call', async () => {
+                const stub = sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => Promise.resolve());
+
+                //fire 3 rapid events without awaiting
+                const promise1 = server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Changed,
+                        uri: util.pathToUri(s`${rootDir}/source/file1.brs`)
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                const promise2 = server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Changed,
+                        uri: util.pathToUri(s`${rootDir}/source/file2.brs`)
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                const promise3 = server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Changed,
+                        uri: util.pathToUri(s`${rootDir}/source/file3.brs`)
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                //handleFileChanges should not have been called yet (still within debounce window)
+                expect(stub.callCount).to.eql(0);
+
+                //advance past the debounce window and flush microtasks
+                await clock.tickAsync(200);
+
+                //all promises should resolve to the same batch
+                await Promise.all([promise1, promise2, promise3]);
+
+                //handleFileChanges should have been called exactly once with all 3 changes
+                expect(stub.callCount).to.eql(1);
+                expect(stub.getCalls()[0].args[0]).to.have.lengthOf(3);
+            });
+
+            it('resets the debounce timer on each new event', async () => {
+                const stub = sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => Promise.resolve());
+
+                //fire first event
+                void server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Changed,
+                        uri: util.pathToUri(s`${rootDir}/source/file1.brs`)
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                //advance 100ms (less than the 150ms debounce)
+                await clock.tickAsync(100);
+
+                //fire another event -- this should reset the timer
+                void server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Changed,
+                        uri: util.pathToUri(s`${rootDir}/source/file2.brs`)
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                //advance another 100ms (200ms total, but only 100ms since last event)
+                await clock.tickAsync(100);
+
+                //should NOT have flushed yet because the timer was reset
+                expect(stub.callCount).to.eql(0);
+
+                //advance past the debounce window from the second event
+                await clock.tickAsync(100);
+
+                //now it should have flushed with both changes
+                expect(stub.callCount).to.eql(1);
+                expect(stub.getCalls()[0].args[0]).to.have.lengthOf(2);
+            });
+
+            it('calls rebuildPathFilterer at most once per batch when bsconfig changes', async () => {
+                sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => Promise.resolve());
+                const pathFiltererStub = sinon.stub(server as any, 'rebuildPathFilterer').callsFake(() => Promise.resolve());
+
+                //fire two bsconfig change events
+                void server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Changed,
+                        uri: util.pathToUri(s`${rootDir}/bsconfig.json`)
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                void server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Changed,
+                        uri: util.pathToUri(s`${rootDir}/sub/bsconfig.json`)
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                await clock.tickAsync(200);
+
+                //rebuildPathFilterer should have been called exactly once for the entire batch
+                expect(pathFiltererStub.callCount).to.eql(1);
+            });
+
+            it('deduplicates multiple events for the same file within a batch', async () => {
+                const stub = sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => Promise.resolve());
+
+                //fire 3 Changed events for the same file
+                for (let i = 0; i < 3; i++) {
+                    void server['onDidChangeWatchedFiles']({
+                        changes: [{
+                            type: FileChangeType.Changed,
+                            uri: util.pathToUri(s`${rootDir}/source/file1.brs`)
+                        }]
+                    } as DidChangeWatchedFilesParams);
+                }
+
+                await clock.tickAsync(200);
+
+                //should have been called once with only 1 unique change (not 3)
+                expect(stub.callCount).to.eql(1);
+                expect(stub.getCalls()[0].args[0]).to.have.lengthOf(1);
+            });
+
+            it('keeps the last event type when deduplicating (last event wins)', async () => {
+                const stub = sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => Promise.resolve());
+                const fileUri = util.pathToUri(s`${rootDir}/source/file1.brs`);
+
+                //fire Created then Deleted for the same file
+                void server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Created,
+                        uri: fileUri
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                void server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Deleted,
+                        uri: fileUri
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                await clock.tickAsync(200);
+
+                expect(stub.callCount).to.eql(1);
+                const changes = stub.getCalls()[0].args[0];
+                expect(changes).to.have.lengthOf(1);
+                //the Deleted event should win because it came last
+                expect(changes[0].type).to.eql(FileChangeType.Deleted);
+            });
+        });
     });
 
     describe('onDocumentClose', () => {
@@ -1340,6 +1721,50 @@ describe('LanguageServer', () => {
             } as any);
 
             expect(references).to.be.empty;
+        });
+    });
+
+    describe('onWillRenameFiles', () => {
+        it('advertises the willRename capability in onInitialize', () => {
+            const result: any = server.onInitialize({ capabilities: {} } as any);
+            expect(result.capabilities.workspace?.fileOperations?.willRename).to.exist;
+            const filters = result.capabilities.workspace.fileOperations.willRename.filters;
+            expect(filters).to.be.an('array').with.length.greaterThan(0);
+            expect(filters[0].pattern.glob).to.contain('bs');
+        });
+
+        it('returns null when no project knows about the renamed file', async () => {
+            server['connection'] = server['establishConnection']();
+            await server['syncProjects']();
+
+            const result = await server['onWillRenameFiles']({
+                files: [{
+                    oldUri: util.pathToUri(s`${rootDir}/source/old.bs`),
+                    newUri: util.pathToUri(s`${rootDir}/source/new.bs`)
+                }]
+            });
+
+            expect(result).to.be.null;
+        });
+
+        it('produces a WorkspaceEdit that rewrites import statements pointing at the renamed file', async () => {
+            fsExtra.outputFileSync(s`${rootDir}/source/lib.bs`, '');
+            fsExtra.outputFileSync(s`${rootDir}/source/main.bs`, `import "pkg:/source/lib.bs"`);
+
+            server['connection'] = server['establishConnection']();
+            await server['syncProjects']();
+
+            const mainUri = util.pathToUri(s`${rootDir}/source/main.bs`);
+            const result = await server['onWillRenameFiles']({
+                files: [{
+                    oldUri: util.pathToUri(s`${rootDir}/source/lib.bs`),
+                    newUri: util.pathToUri(s`${rootDir}/source/lib2.bs`)
+                }]
+            });
+
+            expect(result).to.not.be.null;
+            expect(result.changes[mainUri]).to.have.lengthOf(1);
+            expect(result.changes[mainUri][0].newText).to.eql('pkg:/source/lib2.bs');
         });
     });
 
@@ -2038,6 +2463,58 @@ describe('LanguageServer', () => {
             expect(result.items.filter(compItem => compItem.label === 'buildAwesome')).to.length(1);
             expect(result.items.filter(compItem => compItem.label === 'pi')).to.length(1);
             expect(result.items.filter(compItem => compItem.label === 'LCase')).to.length(1);
+        });
+    });
+    describe('onCodeAction', () => {
+        beforeEach(async () => {
+            server.run();
+            await server['onInitialized']();
+        });
+
+        async function callOnCodeAction(only: string[], kinds: (string | undefined)[]) {
+            sinon.stub(server['projectManager'], 'getCodeActions').resolves(
+                kinds.map(kind => ({ kind: kind, title: kind }))
+            );
+            return server['onCodeAction']({
+                textDocument: { uri: URI.file(`${rootDir}/source/main.bs`).toString() },
+                range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+                context: { diagnostics: [], only: only }
+            });
+        }
+
+        it('returns all code actions when context.only is empty', async () => {
+            const result = await callOnCodeAction([], ['quickfix', 'refactor']);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix', 'refactor']);
+        });
+
+        it('returns kindless code actions when context.only is empty', async () => {
+            const result = await callOnCodeAction([], ['quickfix', undefined]);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix', undefined]);
+        });
+
+        it('filters to exact kind match', async () => {
+            const result = await callOnCodeAction(['quickfix'], ['quickfix', 'refactor']);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix']);
+        });
+
+        it('includes child kinds using startsWith hierarchy', async () => {
+            const result = await callOnCodeAction(['quickfix'], ['quickfix', 'quickfix.foo', 'quickfix.foo.bar', 'refactor']);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix', 'quickfix.foo', 'quickfix.foo.bar']);
+        });
+
+        it('does not match unrelated kinds that share a prefix', async () => {
+            const result = await callOnCodeAction(['quickfix'], ['quickfix', 'quickfixFoo', 'refactor']);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix']);
+        });
+
+        it('excludes kindless actions when context.only is set (kind is required to match)', async () => {
+            const result = await callOnCodeAction(['quickfix'], ['quickfix', undefined]);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix']);
+        });
+
+        it('matches across multiple requested kinds', async () => {
+            const result = await callOnCodeAction(['quickfix', 'refactor'], ['quickfix', 'quickfix.foo', 'refactor.extract', 'source']);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix', 'quickfix.foo', 'refactor.extract']);
         });
     });
 });

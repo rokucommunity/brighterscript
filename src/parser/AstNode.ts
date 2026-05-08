@@ -299,6 +299,7 @@ export enum AstNodeKind {
     ArrayLiteralExpression = 'ArrayLiteralExpression',
     AAMemberExpression = 'AAMemberExpression',
     AALiteralExpression = 'AALiteralExpression',
+    AAIndexedMemberExpression = 'AAIndexedMemberExpression',
     UnaryExpression = 'UnaryExpression',
     VariableExpression = 'VariableExpression',
     SourceLiteralExpression = 'SourceLiteralExpression',

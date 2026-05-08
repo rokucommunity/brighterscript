@@ -1,4 +1,5 @@
 import { assert, expect } from '../chai-config.spec';
+import * as path from 'path';
 import * as sinonImport from 'sinon';
 import { Position, Range } from 'vscode-languageserver';
 import type { Callable, CommentFlag, VariableDeclaration } from '../interfaces';
@@ -12,7 +13,7 @@ import { SourceMapConsumer } from 'source-map';
 import { TokenKind } from '../lexer/TokenKind';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util, { standardizePath as s } from '../util';
-import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
+import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, expectDiagnosticsIncludes, getTestGetTypedef, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 import { ParseMode, Parser } from '../parser/Parser';
 import { Block, FunctionStatement } from '../parser/Statement';
 import { ImportStatement, PrintStatement } from '../parser/Statement';
@@ -125,6 +126,313 @@ describe('BrsFile', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+    });
+
+    describe('line continuation', () => {
+        it('does not allow binary operator continuation in .brs files by default', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.unexpectedToken('\n'),
+                DiagnosticMessages.expectedStatement()
+            ]);
+        });
+
+        it('allows binary operator continuation in .bs files', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('transpiles binary operator continuation in .bs files to a single line', async () => {
+            await testTranspile(`
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `, `
+                sub main()
+                    result = 1 + 2
+                end sub
+            `);
+        });
+
+        it('allows binary operator continuation in .brs files when allowBrighterScriptInBrightScript is enabled', () => {
+            program.options.allowBrighterScriptInBrightScript = true;
+            program.setFile('source/main.brs', `
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not allow multi-line function call args in .brs files by default', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+                sub foo(a, b)
+                end sub
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.unexpectedToken('\n'),
+                DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments'),
+                DiagnosticMessages.expectedStatement()
+            ]);
+        });
+
+        it('allows multi-line array literals as function call args in .brs files by default', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo([
+                        1,
+                        2
+                    ])
+                end sub
+                sub foo(arg)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows multi-line associative array literals as function call args in .brs files by default', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo({
+                        name: "bob",
+                        age: 1
+                    })
+                end sub
+                sub foo(arg)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows multi-line function call args in .bs files', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+                sub foo(a, b)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('transpiles multi-line function call args in .bs files to a single line', async () => {
+            await testTranspile(`
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+
+                sub foo(a, b)
+                end sub
+            `, `
+                sub main()
+                    foo(1, 2)
+                end sub
+
+                sub foo(a, b)
+                end sub
+            `);
+        });
+
+        it('allows multi-line function call args in .brs files when allowBrighterScriptInBrightScript is enabled', () => {
+            program.options.allowBrighterScriptInBrightScript = true;
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+                sub foo(a, b)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows binary operator continuation in .brs files when minFirmwareVersion is 15.3', () => {
+            program = new Program({ rootDir: rootDir, minFirmwareVersion: '15.3' });
+            program.setFile('source/main.brs', `
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows binary operator continuation in .brs files when minFirmwareVersion is above 15.3', () => {
+            program = new Program({ rootDir: rootDir, minFirmwareVersion: '16.0.0' });
+            program.setFile('source/main.brs', `
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not allow binary operator continuation in .brs files when minFirmwareVersion is below 15.3', () => {
+            program = new Program({ rootDir: rootDir, minFirmwareVersion: '11.0.0' });
+            program.setFile('source/main.brs', `
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.unexpectedToken('\n'),
+                DiagnosticMessages.expectedStatement()
+            ]);
+        });
+
+        it('allows multi-line function call args in .brs files when minFirmwareVersion is 15.3', () => {
+            program = new Program({ rootDir: rootDir, minFirmwareVersion: '15.3.0' });
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+                sub foo(a, b)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not allow multi-line function call args in .brs files when minFirmwareVersion is below 15.3', () => {
+            program = new Program({ rootDir: rootDir, minFirmwareVersion: '15.2.9' });
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+                sub foo(a, b)
+                end sub
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.unexpectedToken('\n'),
+                DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments'),
+                DiagnosticMessages.expectedStatement()
+            ]);
+        });
+
+        it('always allows binary operator continuation in .bs files regardless of minFirmwareVersion', () => {
+            program = new Program({ rootDir: rootDir, minFirmwareVersion: '10.0.0' });
+            program.setFile('source/main.bs', `
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
+
+    it('does not show "missing function" diagnostic for `call().dottedGet` as a statement', () => {
+        program.setFile(`source/main.brs`, `
+            sub main()
+                test().disabled
+            end sub
+            sub test()
+            end sub
+        `);
+        program.validate();
+        expectDiagnostics(program, [
+            {
+                location: { range: util.createRange(2, 22, 2, 31) },
+                message: DiagnosticMessages.propAccessNotPermittedAfterFunctionCallInExpressionStatement('Property').message
+            }
+        ]);
+    });
+
+    it('does not show "missing function" diagnostic for `call()["indexedGet"]` as a statement', () => {
+        program.setFile(`source/main.brs`, `
+            sub main()
+                test()["disabled"]
+            end sub
+            sub test()
+            end sub
+        `);
+        program.validate();
+        expectDiagnostics(program, [
+            {
+                location: { range: util.createRange(2, 22, 2, 34) },
+                message: DiagnosticMessages.propAccessNotPermittedAfterFunctionCallInExpressionStatement('Index').message
+            }
+        ]);
+    });
+
+    it('does not show "missing function" diagnostic for `call()@xmlAttr` as a statement', () => {
+        program.setFile(`source/main.brs`, `
+            sub main()
+                test()@disabled
+            end sub
+            sub test()
+            end sub
+        `);
+        program.validate();
+        expectDiagnostics(program, [
+            {
+                location: { range: util.createRange(2, 22, 2, 31) },
+                message: DiagnosticMessages.propAccessNotPermittedAfterFunctionCallInExpressionStatement('XML attribute').message
+            }
+        ]);
+    });
+
+    it('does not flag two chained calls together', () => {
+        program.setFile(`source/main.brs`, `
+            sub main()
+                test().test()
+            end sub
+            function test()
+                print "test"
+                return {
+                    test: test
+                }
+            end function
+        `);
+        program.validate();
+        expectDiagnostics(program, []);
     });
 
     it('flags namespaces used as variables', () => {
@@ -1823,6 +2131,29 @@ describe('BrsFile', () => {
 
         it('namespaced functions default param values in d.bs files are transpiled correctly', async () => {
             await testGetTypedef(`
+               namespace promises
+                    function onThen(promise as dynamic, callback = promises.internal.defaultThenCallback as function, context = "__INVALID__" as object) as dynamic
+                        return true
+                    end function
+                end namespace
+                namespace promises.internal
+                    function defaultThenCallback(value = invalid as dynamic, _ = invalid as dynamic) as dynamic
+                    end function
+                end namespace
+            `, `
+               namespace promises
+                   function onThen(promise as dynamic, callback = promises.internal.defaultThenCallback as function, context = "__INVALID__" as object) as dynamic
+                   end function
+               end namespace
+               namespace promises.internal
+                   function defaultThenCallback(value = invalid as dynamic, _ = invalid as dynamic) as dynamic
+                   end function
+               end namespace
+            `);
+        });
+
+        it('namespaced functions default param values in d.bs files are transpiled correctly', async () => {
+            await testGetTypedef(`
                 namespace alpha
                     function beta()
                     end function
@@ -3363,6 +3694,18 @@ describe('BrsFile', () => {
                 end sub
             `);
             expect(file.transpile().map.toJSON().file).to.eql('main.brs');
+        });
+
+        it('sourcemap sources array contains absolute path by default', () => {
+            program.options.sourceMap = true;
+            const file = program.setFile('source/main.bs', `
+                sub main()
+                end sub
+            `) as any;
+            const map = file.transpile().map.toJSON();
+            expect(map.sources).to.have.lengthOf(1);
+            expect(path.isAbsolute(map.sources[0])).to.be.true;
+            expect(s`${map.sources[0]}`).to.eql(s`${rootDir}/source/main.bs`);
         });
 
         it('handles sourcemap edge case', async () => {
@@ -5230,9 +5573,272 @@ describe('BrsFile', () => {
                 end function
 
                 sub setLabelText( label as roSGNodeLabel, text as string)
-                    label.text = text
+                label.text = text
                 end sub
             `);
+            const validateFileEvent = {
+                program: program,
+                file: mainFile
+            };
+            program.plugins.emit('validateFile', validateFileEvent);
+
+            expect(mainFile.requiredSymbols.length).to.eq(0);
+        });
+
+        it('transpiles multi-dimension typed arrays to dynamic', async () => {
+            await testTranspile(`
+                sub main(param1 as float[][][])
+                end sub
+            `, `
+                sub main(param1 as dynamic)
+                end sub
+            `);
+        });
+
+        it('removes typecasts in transpiled code', async () => {
+            await testTranspile(`
+                sub main(myNode, myString)
+                    print (myNode as roSGNode).id
+                    print (myNode as roSGNode).getParent().id
+                    myNode2 = myNode as roSgNode
+                    print (myString as string).len()
+                    print (myString as string).right(3)
+                    myString2 = myString as string
+                end sub
+            `, `
+                sub main(myNode, myString)
+                    print myNode.id
+                    print myNode.getParent().id
+                    myNode2 = myNode
+                    print myString.len()
+                    print myString.right(3)
+                    myString2 = myString
+                end sub
+            `);
+        });
+
+        it('allows and removes multiple typecasts in transpiled code', async () => {
+            await testTranspile(`
+                sub main(myNode)
+                    print ((myNode as roSGNode as roSGNodeLabel).text as string as ifStringOps).len()
+                end sub
+            `, `
+                sub main(myNode)
+                    print myNode.text.len()
+                end sub
+            `);
+        });
+
+        it('allows built in objects as type names', async () => {
+            //v1 transpiles unknown / built-in roku types to `dynamic` instead of `object`
+            //so the typed-assignment story stays consistent (see "allows types on lhs of
+            //assignments" earlier in this file). Master used `object` here, but v1's design
+            //is `dynamic`.
+            await testTranspile(`
+                sub main(x as roSGNode, y as roSGNodeEvent, z as ifArray)
+                end sub
+            `, `
+                sub main(x as dynamic, y as dynamic, z as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows component names as types names', async () => {
+            await testTranspile(`
+                sub main(x as roSGNodeGroup, y as roSGNodeRowList, z as roSGNodeCustomComponent)
+                end sub
+            `, `
+                sub main(x as dynamic, y as dynamic, z as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows union types for primitives', async () => {
+            await testTranspile(`
+                sub main(x as string or float, y as object or float or string)
+                end sub
+            `, `
+                sub main(x as dynamic, y as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows union types for classes, interfaces', async () => {
+            await testTranspile(`
+                interface IFaceA
+                    name as string
+                    data as integer
+                end interface
+
+                interface IFaceB
+                    name as string
+                    value as float
+                end interface
+
+                sub main(x as IFaceA or IFaceB)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows union types for classes, interfaces', async () => {
+            await testTranspile(`
+                namespace alpha.beta
+                    interface IFaceA
+                        name as string
+                        data as integer
+                    end interface
+
+                    interface IFaceB
+                        name as string
+                        value as float
+                    end interface
+                end namespace
+
+                sub main(x as alpha.beta.IFaceA or alpha.beta.IFaceB)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows union types of arrays', async () => {
+            await testTranspile(`
+                namespace alpha.beta
+                    interface IFaceA
+                        name as string
+                        data as integer
+                    end interface
+
+                    interface IFaceB
+                        name as string
+                        value as float
+                    end interface
+                end namespace
+
+                sub main(x as alpha.beta.IFaceA[][] or alpha.beta.IFaceB[] or ifStringOps)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
+
+        it('allows intersection types for primitives', async () => {
+            await testTranspile(`
+                sub main(x as string and float, y as object and float or string)
+                end sub
+            `, `
+                sub main(x as dynamic, y as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows intersection types for classes, interfaces', async () => {
+            await testTranspile(`
+                interface IFaceA
+                    name as string
+                    data as integer
+                end interface
+
+                interface IFaceB
+                    name as string
+                    value as float
+                end interface
+
+                sub main(x as IFaceA and IFaceB)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows intersection types for classes, interfaces', async () => {
+            await testTranspile(`
+                namespace alpha.beta
+                    interface IFaceA
+                        name as string
+                        data as integer
+                    end interface
+
+                    interface IFaceB
+                        name as string
+                        value as float
+                    end interface
+                end namespace
+
+                sub main(x as alpha.beta.IFaceA and alpha.beta.IFaceB)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows intersection types of arrays', async () => {
+            await testTranspile(`
+                namespace alpha.beta
+                    interface IFaceA
+                        name as string
+                        data as integer
+                    end interface
+
+                    interface IFaceB
+                        name as string
+                        value as float
+                    end interface
+                end namespace
+
+                sub main(x as alpha.beta.IFaceA[][] and alpha.beta.IFaceB[] and ifStringOps)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows grouped expression in types types', async () => {
+            await testTranspile(`
+                namespace alpha.beta
+                    interface IFaceA
+                        name as string
+                        data as integer
+                    end interface
+
+                    interface IFaceB
+                        name as string
+                        value as float
+                    end interface
+                end namespace
+
+                sub main(x as (alpha.beta.IFaceA and alpha.beta.IFaceB)[] or ifStringOps)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows built-in types for return values', async () => {
+            //v1 transpiles unknown / built-in roku types to `dynamic` instead of `object`
+            //(see "allows built in objects as type names" earlier in this file)
+            await testTranspile(`
+                function makeLabel(text as string) as roSGNodeLabel
+                   label = createObject("roSGNode", "Label")
+                   label.text = text
+                end function
+            `, `
+                function makeLabel(text as string) as dynamic
+                    label = createObject("roSGNode", "Label")
+                    label.text = text
+                end function
+            `);
+            const mainFile = program.getFile<BrsFile>('source/main.bs');
             const validateFileEvent = {
                 program: program,
                 file: mainFile
@@ -6265,6 +6871,88 @@ describe('BrsFile', () => {
                     print node[m.keyProp]
                 end sub
             `);
+        });
+
+        describe('inline interfaces', () => {
+            it('transpiles to "dynamic"', async () => {
+                await testTranspile(`
+                    function foo(input as {name as string}) as {id as string}
+                        output as {id as string} = {id: input.name}
+                        return output
+                    end function
+                    `, `
+                    function foo(input as dynamic) as dynamic
+                        output = {
+                            id: input.name
+                        }
+                        return output
+                    end function
+                `);
+            });
+        });
+
+        describe('type statements interfaces', () => {
+            it('transpiles statement to nothing', async () => {
+                await testTranspile(`
+                     type number = integer or float
+
+                    sub foo()
+                        print "hello"
+                    end sub
+                `, `
+                    sub foo()
+                        print "hello"
+                    end sub
+                `);
+            });
+
+            it('transpiles type statement to dynamic', async () => {
+                //v1 transpiles unknown / composite types to `dynamic` (master used `object`)
+                //(see "allows union types for primitives" earlier in this file)
+                await testTranspile(`
+                     type number = integer or float
+
+                    sub foo(node as number)
+                        print node[m.keyProp]
+                    end sub
+                `, `
+                    sub foo(node as dynamic)
+                        print node[m.keyProp]
+                    end sub
+                `);
+            });
+        });
+
+        describe('for each loop with types', () => {
+            it('transpiles to untyped for each', async () => {
+                await testTranspile(`
+                    sub foo(items as string[])
+                        for each item as string in items
+                            print item
+                        end for
+                    end sub
+                `, `
+                    sub foo(items as dynamic)
+                        for each item in items
+                            print item
+                        end for
+                    end sub
+                `);
+            });
+        });
+
+        describe('typed functions in type expressions', () => {
+            it('transpiles to function', async () => {
+                await testTranspile(`
+                    function test(func as function(name as string, num as integer) as integer) as integer
+                        return func("hello", 123)
+                    end function
+                `, `
+                    function test(func as Function) as integer
+                        return func("hello", 123)
+                    end function
+                `);
+            });
         });
     });
 

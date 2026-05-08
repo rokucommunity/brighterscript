@@ -10,7 +10,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isCallExpression, isCatchStatement, isConditionalCompileStatement, isEnumMemberStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isUninitializedType, isVoidType, isWhileStatement } from '../astUtils/reflection';
+import { isCallExpression, isCatchStatement, isConditionalCompileStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isUninitializedType, isVoidType, isWhileStatement } from '../astUtils/reflection';
 import type { GetTypeOptions } from '../interfaces';
 import { TypeChainEntry, type TranspileResult, type TypedefProvider } from '../interfaces';
 import { createIdentifier, createInvalidLiteral, createMethodStatement, createToken } from '../astUtils/creators';
@@ -497,6 +497,12 @@ export class ExpressionStatement extends Statement {
             state.transpileAnnotations(this),
             this.expression.transpile(state)
         ];
+    }
+
+    getTypedef(state: BrsTranspileState): TranspileResult {
+        //ExpressionStatements should not be included in typedefs
+        //as they represent code execution which is not part of the type definition
+        return [];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -3974,6 +3980,17 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
         return this.tokens.name.leadingTrivia;
     }
 
+    /**
+     * Get the value of this enum. Requires that `.parent` is set
+     */
+    public getValue() {
+        if (isEnumStatement(this.parent)) {
+            return (this.parent as EnumStatement)?.getMemberValue(this.name);
+        }
+        return undefined;
+    }
+
+
     public transpile(state: BrsTranspileState): TranspileResult {
         return [];
     }
@@ -4629,16 +4646,8 @@ export class TypeStatement extends Statement {
     public readonly location: Location;
 
     transpile(state: BrsTranspileState) {
-        //transpile to a comment just for debugging purposes
-        return [
-            state.transpileToken(this.tokens.type, 'type', true),
-            ' ',
-            state.transpileToken(this.tokens.name),
-            ' ',
-            state.transpileToken(this.tokens.equals, '='),
-            ' ',
-            this.value.transpile(state)
-        ];
+        //type statements have no runtime representation, so they're stripped entirely
+        return [];
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {

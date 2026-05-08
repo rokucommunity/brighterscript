@@ -206,7 +206,13 @@ export class SymbolTable implements SymbolTypeGetter {
         const key = name?.toLowerCase();
         let result: BscSymbol[];
         let memberOfAncestor = false;
-        const addAncestorInfo = (symbol: BscSymbol) => ({ ...symbol, data: { ...symbol.data, memberOfAncestor: memberOfAncestor } });
+        //only clone the symbol when we actually need to attach the `memberOfAncestor` flag
+        //(i.e., we walked up to a parent table). Returning the original reference for own-table
+        //hits keeps identity stable, which downstream consumers (and one symbol-table spec)
+        //rely on.
+        const addAncestorInfo = (symbol: BscSymbol) => (memberOfAncestor
+            ? { ...symbol, data: { ...symbol.data, memberOfAncestor: true } }
+            : symbol);
         let maxStatementIndex = Number.isInteger(additionalOptions?.maxStatementIndex) ? additionalOptions.maxStatementIndex : Number.MAX_SAFE_INTEGER;
         do {
 
@@ -456,29 +462,30 @@ export class SymbolTable implements SymbolTypeGetter {
     }
 
     /**
-     * Adds all the symbols from another table to this one
-     * It will overwrite any existing symbols in this table
+     * Adds all the symbols from another table to this one.
+     * Source symbols are shared by reference (not cloned) since BscSymbol is treated as immutable.
+     * The destination still owns its own array per key, so subsequent addSymbol calls on either
+     * table do not leak across.
      */
     mergeSymbolTable(symbolTable: SymbolTable) {
-        function mergeTables(intoTable: SymbolTable, fromTable: SymbolTable) {
-            for (let [, value] of fromTable.symbolMap) {
-                for (const symbol of value) {
-                    if (symbol.data?.doNotMerge) {
-                        continue;
-                    }
-                    intoTable.addSymbol(
-                        symbol.name,
-                        symbol.data,
-                        symbol.type,
-                        symbol.flags
-                    );
-                }
+        for (const [key, sourceSymbols] of symbolTable.symbolMap) {
+            //skip symbols flagged `doNotMerge` (e.g. typecast/alias bindings) so they stay
+            //local to their declaring block instead of bleeding into sibling tables that
+            //share the same merge target (e.g. the per-namespace aggregate symbol table).
+            const symbolsToMerge = sourceSymbols.filter(symbol => !symbol.data?.doNotMerge);
+            if (symbolsToMerge.length === 0) {
+                continue;
             }
+            let destSymbols = this.symbolMap.get(key);
+            if (!destSymbols) {
+                destSymbols = [];
+                this.symbolMap.set(key, destSymbols);
+            }
+            destSymbols.push(...symbolsToMerge);
         }
 
-        mergeTables(this, symbolTable);
         for (let pocketTable of symbolTable.pocketTables) {
-            mergeTables(this, pocketTable.table);
+            this.mergeSymbolTable(pocketTable.table);
         }
     }
 
@@ -695,6 +702,11 @@ export class SymbolTable implements SymbolTypeGetter {
     }
 }
 
+/**
+ * A symbol entry stored in a SymbolTable.
+ * Treated as immutable once added: range and type must not be reassigned, and the object
+ * may be shared by reference across multiple symbol tables (e.g. via mergeSymbolTable).
+ */
 export interface BscSymbol {
     name: string;
     data: ExtraSymbolData;

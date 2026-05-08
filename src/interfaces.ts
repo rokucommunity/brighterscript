@@ -1,4 +1,4 @@
-import type { Range, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol, Disposable, FileChangeType, CodeDescription, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag } from 'vscode-languageserver-protocol';
+import type { Range, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol, Disposable, FileChangeType, CodeDescription, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, SelectionRange } from 'vscode-languageserver-protocol';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -6,14 +6,13 @@ import type { TypedFunctionType } from './types/TypedFunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
-import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
+import type { FunctionStatement } from './parser/Statement';
 import type { AstNode, Expression } from './parser/AstNode';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
-import type { Identifier, Token } from './lexer/Token';
+import type { Token } from './lexer/Token';
 import type { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-languageserver';
-import type { SymbolTable } from './SymbolTable';
 import type { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { Editor } from './astUtils/Editor';
 import type { BscFile } from './files/BscFile';
@@ -22,6 +21,7 @@ import type { LazyFileData } from './files/LazyFileData';
 import { TokenKind } from './lexer/TokenKind';
 import type { BscTypeKind } from './types/BscTypeKind';
 import { createToken } from './astUtils/creators';
+import type { SourceFixAllCodeAction } from './CodeActionUtil';
 
 export interface BsDiagnostic {
     /**
@@ -282,6 +282,14 @@ export interface Plugin {
     afterRemoveProgram?(event: AfterRemoveProgramEvent): any;
 
     /**
+     * Emitted when VS Code requests "source fix all" source actions for a file.
+     * Plugins push one or more `SourceFixAllCodeAction` objects onto `event.actions`,
+     * each representing a distinct named group that will appear in the Source Actions menu.
+     * Plugins are responsible for assembling and merging all changes within each action.
+     */
+    onGetSourceFixAllCodeActions?(event: OnGetSourceFixAllCodeActionsEvent): any;
+
+    /**
      * Emitted before the program starts collecting completions
      */
     beforeProvideCompletions?(event: BeforeProvideCompletionsEvent): any;
@@ -380,6 +388,20 @@ export interface Plugin {
      * @param event
      */
     afterProvideWorkspaceSymbols?(event: AfterProvideWorkspaceSymbolsEvent): any;
+
+
+    /**
+     * Called before the `provideSelectionRanges` hook
+     */
+    beforeProvideSelectionRanges?(event: BeforeProvideSelectionRangesEvent): any;
+    /**
+     * Provide the selection ranges for the given positions in a file. Used for expand/shrink selection.
+     */
+    provideSelectionRanges?(event: ProvideSelectionRangesEvent): any;
+    /**
+     * Called after `provideSelectionRanges`. Use this if you want to intercept or sanitize the selection range data provided by bsc or other plugins.
+     */
+    afterProvideSelectionRanges?(event: AfterProvideSelectionRangesEvent): any;
 
     //scope events
     beforeValidateScope?(event: BeforeValidateScopeEvent): any;
@@ -568,6 +590,19 @@ export interface AfterValidateProgramEvent extends BeforeValidateProgramEvent {
      * Was the validation cancelled? Will be false if the validation was completed
      */
     wasCancelled: boolean;
+}
+
+export interface OnGetSourceFixAllCodeActionsEvent {
+    program: Program;
+    file: BscFile;
+    /** All diagnostics for this file (not range-filtered) */
+    diagnostics: BsDiagnostic[];
+    scopes: Scope[];
+    /**
+     * Plugins push one or more SourceFixAllCodeAction objects here.
+     * Each becomes a distinct named entry in VS Code's Source Actions menu.
+     */
+    actions: SourceFixAllCodeAction[];
 }
 
 
@@ -777,6 +812,25 @@ export interface AfterProvideSemanticTokensEvent<T extends BscFile = BscFile> {
      */
     semanticTokens: SemanticToken[];
 }
+
+export interface ProvideSelectionRangesEvent<TFile = BscFile> {
+    program: Program;
+    /**
+     * The file that the `selectionRange` request was invoked in
+     */
+    file: TFile;
+    /**
+     * The list of positions for which selection ranges are requested
+     */
+    positions: Position[];
+    /**
+     * The result list of selection ranges. One entry per position in `positions`.
+     * Each SelectionRange is a linked list from innermost to outermost via the `.parent` property.
+     */
+    selectionRanges: SelectionRange[];
+}
+export type BeforeProvideSelectionRangesEvent<TFile = BscFile> = ProvideSelectionRangesEvent<TFile>;
+export type AfterProvideSelectionRangesEvent<TFile = BscFile> = ProvideSelectionRangesEvent<TFile>;
 
 export type BeforeValidateFileEvent = ValidateFileEvent;
 export interface ValidateFileEvent<T extends BscFile = BscFile> {
@@ -1216,26 +1270,6 @@ export interface TypeCompatibilityData {
     expectedType?: BscType;
     allowNameEquality?: boolean;
     unresolveableTarget?: string;
-}
-
-export interface NamespaceContainer {
-    file: BscFile;
-    fullName: string;
-    fullNameLower: string;
-    parentNameLower: string;
-    nameParts: Identifier[];
-    nameRange: Range;
-    lastPartName: string;
-    lastPartNameLower: string;
-    isTopLevel: boolean;
-    namespaceStatements?: NamespaceStatement[];
-    symbolTable: SymbolTable;
-}
-
-export interface ScopeNamespaceContainer {
-    namespaceContainers: NamespaceContainer[];
-    symbolTable: SymbolTable;
-    firstInstance: NamespaceContainer;
 }
 
 /**
