@@ -63,6 +63,11 @@ describe('LanguageServer', () => {
         onWillSaveTextDocumentWaitUntil: () => null,
         onDidSaveTextDocument: () => null,
         onRequest: () => null,
+        languages: {
+            inlayHint: {
+                on: () => null
+            }
+        },
         workspace: {
             getWorkspaceFolders: () => {
                 return workspaceFolders.map(

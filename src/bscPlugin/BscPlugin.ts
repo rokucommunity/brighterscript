@@ -1,5 +1,5 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
-import type { BeforeFileTranspileEvent, Plugin, OnFileValidateEvent, OnGetCodeActionsEvent, OnGetSourceFixAllCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, ProvideSelectionRangesEvent } from '../interfaces';
+import type { BeforeFileTranspileEvent, Plugin, OnFileValidateEvent, OnGetCodeActionsEvent, OnGetSourceFixAllCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, ProvideSelectionRangesEvent, ProvideInlayHintsEvent } from '../interfaces';
 import type { Program } from '../Program';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { FixAllCodeActionsProcessor } from './codeActions/FixAllCodeActionsProcessor';
@@ -16,6 +16,7 @@ import { ScopeValidator } from './validation/ScopeValidator';
 import { XmlFileValidator } from './validation/XmlFileValidator';
 import { WorkspaceSymbolProcessor } from './symbols/WorkspaceSymbolProcessor';
 import { SelectionRangesProcessor } from './selectionRanges/SelectionRangesProcessor';
+import { InlayHintProcessor } from './inlayHints/InlayHintProcessor';
 
 export class BscPlugin implements Plugin {
     public name = 'BscPlugin';
@@ -54,6 +55,10 @@ export class BscPlugin implements Plugin {
 
     public provideSelectionRanges(event: ProvideSelectionRangesEvent) {
         new SelectionRangesProcessor(event).process();
+    }
+
+    public provideInlayHints(event: ProvideInlayHintsEvent) {
+        new InlayHintProcessor(event).process();
     }
 
     public onGetSemanticTokens(event: OnGetSemanticTokensEvent) {
