@@ -103,6 +103,18 @@ describe('BrsFile', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('clears cached lookups', () => {
+            const file = program.setFile('source/main.bs', `sub main(): end sub`);
+            // prime lookup cache
+            void file['_cachedLookups'].functionStatements;
+            const cache = file['_cachedLookups']['cache'];
+            expect(cache.size).to.be.greaterThan(0);
+
+            file.dispose();
+
+            expect(cache.size).to.equal(0);
+        });
     });
 
     describe('allowBrighterScriptInBrightScript', () => {

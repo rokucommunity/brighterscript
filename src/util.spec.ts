@@ -1659,6 +1659,7 @@ describe('util', () => {
     describe('standardizePath', () => {
         let isWindowsOrig = util['isWindows'];
         let isWindows = isWindowsOrig;
+        let standardizePathCacheLimitOrig = util['standardizePathCacheLimit'];
 
         beforeEach(() => {
             util['standardizePathCache'].clear();
@@ -1666,6 +1667,7 @@ describe('util', () => {
         afterEach(() => {
             util['standardizePathCache'].clear();
             util['isWindows'] = isWindowsOrig;
+            util['standardizePathCacheLimit'] = standardizePathCacheLimitOrig;
         });
 
         function test(incoming: string, expected: string) {
@@ -1702,6 +1704,19 @@ describe('util', () => {
                 test('c://one//two//three//', 'c:\\one\\two\\three\\');
                 test('c:\\\\one\\\\two\\\\three\\\\', 'c:\\one\\two\\three\\');
             });
+        });
+
+        it('bounds cache growth by clearing when limit is reached', () => {
+            util['standardizePathCacheLimit'] = 2;
+
+            util.standardizePath('source/a.bs');
+            util.standardizePath('source/b.bs');
+            expect(util['standardizePathCache'].size).to.equal(2);
+
+            util.standardizePath('source/c.bs');
+
+            expect(util['standardizePathCache'].size).to.equal(1);
+            expect(util['standardizePathCache'].has('source/c.bs')).to.be.true;
         });
 
         describe('windows paths on unix', () => {

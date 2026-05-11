@@ -1836,6 +1836,8 @@ export class Util {
 
     private isWindows = process.platform === 'win32';
     private standardizePathCache = new Map<string, string>();
+    // Prevent unbounded growth in long-lived language-server sessions.
+    private standardizePathCacheLimit = 20_000;
 
     /**
      * Converts a path into a standardized format (drive letter to lower, remove extra slashes, use single slash type, resolve relative parts, etc...)
@@ -1855,7 +1857,7 @@ export class Util {
         if (/^virtual:[\/\\]/i.test(thePath)) {
             // Strip the `virtual:` prefix, normalize slashes, then re-add the prefix
             thePath = 'virtual:/' + thePath.slice(8).replace(/^[\/\\]+/, '').replace(/[\/\\]+/g, '/').toLowerCase();
-            this.standardizePathCache.set(originalPath, thePath);
+            this.addToStandardizePathCache(originalPath, thePath);
             return thePath;
         }
 
@@ -1880,8 +1882,15 @@ export class Util {
                 thePath = String.fromCharCode(firstChar + 32) + thePath.slice(1);
             }
         }
-        this.standardizePathCache.set(originalPath, thePath);
+        this.addToStandardizePathCache(originalPath, thePath);
         return thePath;
+    }
+
+    private addToStandardizePathCache(key: string, value: string) {
+        if (this.standardizePathCache.size >= this.standardizePathCacheLimit) {
+            this.standardizePathCache.clear();
+        }
+        this.standardizePathCache.set(key, value);
     }
 
     /**

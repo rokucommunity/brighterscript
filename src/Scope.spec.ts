@@ -205,6 +205,16 @@ describe('Scope', () => {
         expect(scopes.length).to.equal(2);
     });
 
+    it('clears cache when disposed', () => {
+        const scope = program.getScopeByName('source');
+        scope.getAllFiles();
+        expect(scope['cache'].size).to.be.greaterThan(0);
+
+        scope.dispose();
+
+        expect(scope['cache'].size).to.equal(0);
+    });
+
     describe('addFile', () => {
         it('detects callables from all loaded files', () => {
             const sourceScope = program.getScopeByName('source');
