@@ -188,7 +188,7 @@ export class CompletionsProcessor {
         const tokenKind = currentToken?.kind;
 
         //if cursor is after a comment, disable completions
-        if (this.isPostionInComment(file, position)) {
+        if (this.isPositionInComment(file, position)) {
             return emptyResult;
         }
 
@@ -643,7 +643,7 @@ export class CompletionsProcessor {
         ];
     }
 
-    private isPostionInComment(file: BrsFile, position: Position) {
+    private isPositionInComment(file: BrsFile, position: Position) {
         const currentToken = file.getCurrentOrNextTokenAt(position);
         const tokenKind = currentToken?.kind;
         if (!currentToken) {
@@ -654,7 +654,7 @@ export class CompletionsProcessor {
         }
 
         const nextNonComment = file.getNextTokenByPredicate(currentToken, (t: Token) => !AllowedTriviaTokens.includes(t.kind), 1);
-        const firstComment = nextNonComment?.leadingTrivia.find(t => t.kind === TokenKind.Comment);
+        const firstComment = nextNonComment?.leadingTrivia?.find(t => t.kind === TokenKind.Comment);
         if (firstComment && util.comparePosition(position, firstComment?.location?.range.start) >= 0) {
             return true;
         }

@@ -278,7 +278,7 @@ export class CrossScopeValidator {
             return this.providedTreeMap.get(scope.name);
         }
         const providedTree = new ProvidedNode('', this.componentsMap);
-        const duplicatesMap = new Map<string, Set<FileSymbolPair>>();
+        let duplicatesMap: Map<string, Set<FileSymbolPair>> = null;
 
         const referenceTypesMap = new Map<{ symbolName: string; file: BscFile; symbolObj: ProvidedSymbol }, Array<{ name: string; namespacedName?: string }>>();
 
@@ -289,9 +289,12 @@ export class CrossScopeValidator {
             const symbolIsNamespace = providedTree.getNamespace(symbolName);
             const isDupe = providedTree.addSymbol(symbolName, { file: file, symbol: symbolObj.symbol });
             if (symbolIsNamespace || globalSymbol || isDupe || symbolObj.duplicates.length > 0) {
-                let dupesSet = duplicatesMap.get(symbolName);
+                let dupesSet = duplicatesMap?.get(symbolName) ?? null;
                 if (!dupesSet) {
                     dupesSet = new Set<{ file: BrsFile; symbol: BscSymbol }>();
+                    if (!duplicatesMap) {
+                        duplicatesMap = new Map<string, Set<FileSymbolPair>>();
+                    }
                     duplicatesMap.set(symbolName, dupesSet);
                     const existing = providedTree.getSymbol(symbolName);
                     if (existing) {
@@ -539,7 +542,7 @@ export class CrossScopeValidator {
             });
 
             const { missingSymbols, duplicatesMap } = this.getIssuesForScope(scope);
-            if (addDuplicateSymbolDiagnostics) {
+            if (addDuplicateSymbolDiagnostics && duplicatesMap) {
                 for (const [_flag, dupeSet] of duplicatesMap.entries()) {
                     if (dupeSet.size > 1) {
 

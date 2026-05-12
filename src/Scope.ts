@@ -528,6 +528,8 @@ export class Scope {
      * Clean up all event handles
      */
     public dispose() {
+        this.unlinkSymbolTable();
+        this.cache.clear();
         this.unsubscribeFromDependencyGraph?.();
     }
 

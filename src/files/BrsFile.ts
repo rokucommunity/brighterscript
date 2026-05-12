@@ -1386,6 +1386,7 @@ export class BrsFile implements BscFile {
     }
 
     public dispose() {
+        this._cachedLookups?.invalidate();
         this._parser?.dispose();
 
         //deleting these properties result in lower memory usage (garbage collection is magic!)

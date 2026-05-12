@@ -792,10 +792,14 @@ export class Util {
     public pathToUri(filePath: string) {
         if (!filePath) {
             return filePath;
+        } else if (this.pathToURICache.has(filePath)) {
+            return this.pathToURICache.get(filePath);
         } else if (this.isUriLike(filePath)) {
             return filePath;
         } else {
-            return URI.file(filePath).toString();
+            const uri = URI.file(filePath).toString();
+            this.pathToURICache.set(filePath, uri);
+            return uri;
         }
     }
 
@@ -1077,7 +1081,7 @@ export class Util {
                 text: token.text,
                 isReserved: token.isReserved,
                 leadingWhitespace: token.leadingWhitespace,
-                leadingTrivia: token.leadingTrivia.map(x => this.cloneToken(x))
+                leadingTrivia: token.leadingTrivia ? token.leadingTrivia.map(x => this.cloneToken(x)) : undefined
             } as Token;
             //handle those tokens that have charCode
             if ('charCode' in token) {
@@ -1837,6 +1841,8 @@ export class Util {
     private isWindows = process.platform === 'win32';
     private standardizePathCache = new Map<string, string>();
 
+    private pathToURICache = new Map<string, string>();
+
     /**
      * Converts a path into a standardized format (drive letter to lower, remove extra slashes, use single slash type, resolve relative parts, etc...)
      */
@@ -2527,7 +2533,7 @@ export class Util {
 
     public hasLeadingComments(input: Token | AstNode) {
         const leadingTrivia = isToken(input) ? input?.leadingTrivia : input?.leadingTrivia ?? [];
-        return !!leadingTrivia.find(t => t?.kind === TokenKind.Comment);
+        return !!leadingTrivia?.find(t => t?.kind === TokenKind.Comment);
     }
 
     public getLeadingComments(input: Token | AstNode) {

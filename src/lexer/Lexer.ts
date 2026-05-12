@@ -123,7 +123,7 @@ export class Lexer {
                 ? util.createLocation(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1, this.uri)
                 : undefined,
             leadingWhitespace: this.leadingWhitespace,
-            leadingTrivia: this.leadingTrivia ?? []
+            leadingTrivia: this.leadingTrivia.length > 0 ? this.leadingTrivia : undefined
         });
         this.leadingWhitespace = '';
         return this;
@@ -1079,13 +1079,13 @@ export class Lexer {
             isReserved: ReservedWords.has(text.toLowerCase()),
             location: this.locationOf(),
             leadingWhitespace: this.leadingWhitespace,
-            leadingTrivia: []
+            leadingTrivia: undefined
         };
 
         if (this.isTrivia(token)) {
             this.pushTrivia(token);
-        } else {
-            token.leadingTrivia.push(...this.leadingTrivia);
+        } else if (this.leadingTrivia.length > 0) {
+            token.leadingTrivia = [...this.leadingTrivia];
             this.leadingTrivia = [];
         }
         this.leadingWhitespace = '';

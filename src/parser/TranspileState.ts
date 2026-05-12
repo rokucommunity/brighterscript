@@ -113,6 +113,9 @@ export class TranspileState {
 
     public transpileLeadingCommentsForAstNode(node: { leadingTrivia?: Token[] }) {
         const leadingTrivia = node?.leadingTrivia ?? [];
+        if (!leadingTrivia || leadingTrivia.length === 0) {
+            return [];
+        }
         const leadingCommentsSourceNodes = this.transpileComments(leadingTrivia);
         if (leadingCommentsSourceNodes.length > 0) {
             // indent in preparation for next text
@@ -123,7 +126,10 @@ export class TranspileState {
     }
 
     public transpileLeadingComments(token: TranspileToken) {
-        const leadingTrivia = (token?.leadingTrivia ?? []);
+        const leadingTrivia = token?.leadingTrivia ?? [];
+        if (!leadingTrivia || leadingTrivia.length === 0) {
+            return [];
+        }
         const leadingCommentsSourceNodes = this.transpileComments(leadingTrivia);
         if (leadingCommentsSourceNodes.length > 0 && token.text) {
             // indent in preparation for next text

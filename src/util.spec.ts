@@ -1659,6 +1659,7 @@ describe('util', () => {
     describe('standardizePath', () => {
         let isWindowsOrig = util['isWindows'];
         let isWindows = isWindowsOrig;
+        let standardizePathCacheLimitOrig = util['standardizePathCacheLimit'];
 
         beforeEach(() => {
             util['standardizePathCache'].clear();
@@ -1666,6 +1667,7 @@ describe('util', () => {
         afterEach(() => {
             util['standardizePathCache'].clear();
             util['isWindows'] = isWindowsOrig;
+            util['standardizePathCacheLimit'] = standardizePathCacheLimitOrig;
         });
 
         function test(incoming: string, expected: string) {
