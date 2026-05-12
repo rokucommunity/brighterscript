@@ -15,6 +15,10 @@ const rl = readline.createInterface({
     output: process.stdout
 });
 
+//pre-tokenize argv to pull out `--plugin <src> [<name>]` pair entries before yargs sees them
+//(yargs can't natively distinguish "name" positional from another src in a flat array form)
+const { remainingArgv: cliArgv, pluginEntries: cliPluginPairs } = util.extractPluginEntriesFromArgv(process.argv.slice(2));
+
 let options = yargs
     .usage('$0', 'BrighterScript, a superset of Roku\'s BrightScript language')
     .help('help', 'View help information about this tool.')
@@ -44,20 +48,28 @@ let options = yargs
     .option('require', { type: 'array', description: 'A list of modules to require() on startup. Useful for doing things like ts-node registration.' })
     .option('profile', { type: 'boolean', defaultDescription: 'false', description: 'Generate a cpuprofile report during this run' })
     .option('lsp', { type: 'boolean', defaultDescription: 'false', description: 'Run brighterscript as a language server.' })
+    .parserConfiguration({ 'dot-notation': false })
     .check(argv => {
         const diagnosticLevel = argv.diagnosticLevel as string;
         //if we have the diagnostic level and it's not a known value, then fail
         if (diagnosticLevel && ['error', 'warn', 'hint', 'info'].includes(diagnosticLevel) === false) {
             throw new Error(`Invalid diagnostic level "${diagnosticLevel}". Value can be "error", "warn", "hint", "info".`);
         }
+        //merge pre-tokenized `--plugin <src> [<name>]` pair entries into the plugins list before path resolution
+        if (cliPluginPairs.length > 0) {
+            const existingPlugins = ((argv as any).plugins ?? []) as Array<string | { src: string; name?: string; config?: any }>;
+            (argv as any).plugins = [...existingPlugins, ...cliPluginPairs];
+        }
         const cwd = path.resolve(process.cwd(), argv.cwd ?? process.cwd());
         //cli-provided plugin paths should be relative to cwd
         util.resolvePathsRelativeTo(argv, 'plugins', cwd);
         //cli-provided require paths should be relative to cwd
         util.resolvePathsRelativeTo(argv, 'require', cwd);
+        //extract `--plugin.<id>...` overrides into a structured `pluginOverrides` map
+        argv.pluginOverrides = util.extractPluginOverridesFromArgv(argv as Record<string, any>);
         return true;
     })
-    .argv;
+    .parse(cliArgv);
 
 async function main() {
     try {

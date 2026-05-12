@@ -49,9 +49,48 @@ The supported properties are:
 - **`name`** *(optional)* — overrides the plugin's own `name` property. Useful for distinguishing multiple instances of the same plugin loaded with different configs.
 - **`config`** *(optional)* — plugin-specific configuration, either:
   - **An inline object** — passed directly to the plugin.
-  - **A path to a JSONC file** (relative to `cwd`) — the file is parsed and its contents are passed to the plugin. JSONC files support JavaScript-style comments (`//` and `/* */`).
+  - **A path to a JSONC file** — the file is parsed and its contents are passed to the plugin. JSONC files support JavaScript-style comments (`//` and `/* */`). Paths in `bsconfig.json` are resolved relative to the `bsconfig.json` file's directory.
 
 Both the string shorthand and the object form can be mixed in the same `plugins` array.
+
+#### Example: JSONC config file
+
+A JSONC config file lets you keep large or commented plugin configuration out of `bsconfig.json`. Given this `bsconfig.json`:
+
+```json
+{
+    "plugins": [
+        {
+            "src": "@rokucommunity/bslint",
+            "config": "./bslint.jsonc"
+        }
+    ]
+}
+```
+
+…the referenced `bslint.jsonc` might look like this:
+
+```jsonc
+{
+    // overall severity for all rules
+    "severity": "error",
+
+    // skip these files when linting
+    "ignorePatterns": [
+        "**/*.spec.bs",
+        "source/generated/**/*.brs"
+    ],
+
+    "rules": {
+        "no-print": "error",
+        "no-underscores": "warn",
+        /* allow `m.foo` style access in test files only */
+        "consistent-this": "off"
+    }
+}
+```
+
+The compiler parses the file (comments and trailing commas allowed) and hands the resulting object to the plugin via `onSetConfiguration`.
 
 ### Receiving configuration in your plugin
 
@@ -85,12 +124,56 @@ class MyPlugin implements CompilerPlugin {
 
 ### Usage on the CLI
 
-Load plugins by path or package name:
+Load plugins by path or package name with the existing `--plugins` (plural) flag:
 ```bash
 npx bsc --plugins "./scripts/myPlugin.js" "@rokucommunity/bslint"
 ```
 
-Override individual plugin config properties from the CLI using `--plugin.<pluginName>.<prop>`:
+#### Naming a plugin from the CLI
+
+Use the `--plugin` (singular) flag to load a plugin **and give it a name in the same flag**. The flag takes 1 or 2 positional values:
+
+```bash
+# --plugin <src>           — load a plugin (no inline name)
+# --plugin <src> <name>    — load a plugin and assign it a name
+```
+
+Examples:
+
+```bash
+# Load @rokucommunity/bslint and name it "bslint" for CLI targeting
+npx bsc --plugin "@rokucommunity/bslint" bslint
+
+# Load a local script and name it "house-rules"
+npx bsc --plugin ./scripts/customLinter.js house-rules
+
+# Load multiple named plugins by repeating --plugin
+npx bsc --plugin "@rokucommunity/bslint" bslint \
+        --plugin ./scripts/customLinter.js house-rules
+
+# Mix with --plugins (plural) — names from --plugin take effect on those entries only
+npx bsc --plugins alpha beta charlie --plugin "@rokucommunity/bslint" bslint
+```
+
+The name you supply on the CLI is equivalent to the `name` field in a `bsconfig.json` plugin entry — it becomes the highest-priority identifier for `--plugin.<id>...` config overrides (see [How the `<id>` is resolved](#how-the-id-is-resolved) below).
+
+```bash
+# Load and name in one place, then override config keyed by that name
+npx bsc --plugin "@rokucommunity/bslint" bslint --plugin.bslint.severity=error
+```
+
+If the name is omitted, the plugin's factory `name` and its src string remain available as fallback identifiers, exactly like a bare string entry in `bsconfig.json`.
+
+A few details worth knowing:
+
+- `--plugin <src>` consumes the next token as the name **only if** that token does not start with `-`. So `--plugin ./local.js --watch` is parsed as a single src-only entry; `--watch` is its own flag.
+- `--plugin=<src>` (single-token form, with `=`) does **not** support an inline name — use the space-separated pair form when you need a name.
+- The dotted form `--plugin.<id>.<prop>=<value>` is unaffected — it remains a *config override*, not a load directive.
+- Plugin paths starting with `.` are resolved relative to the working directory, the same as `--plugins` entries.
+
+#### Overriding plugin config from the CLI
+
+Override individual plugin config properties using `--plugin.<id>.<prop>=<value>`:
 ```bash
 npx bsc --plugin.my-plugin.severity=error --plugin.my-plugin.ignorePatterns="**/*.spec.bs"
 ```
@@ -100,9 +183,186 @@ Nested properties work too:
 npx bsc --plugin.my-plugin.rules.noUnderscores=true
 ```
 
-CLI overrides are deep-merged on top of whatever `config` the plugin has in `bsconfig.json`. The plugin name used in the CLI flag must match the plugin's `name` property (which can be set via the `name` field in the bsconfig object entry).
+CLI overrides are deep-merged on top of whatever `config` the plugin has in `bsconfig.json`.
 
-> Plugin configuration objects are only supported in `bsconfig.json` — the CLI `--plugins` flag accepts string values only.
+##### How the `<id>` is resolved
+
+A plugin can be identified three different ways, and the `<id>` you write after `--plugin.` is matched against loaded plugins in this strict precedence order:
+
+1. **bsconfig user-supplied `name`** — the `name` field on a plugin entry in `bsconfig.json`. This is the **highest priority**: if any loaded plugin's bsconfig entry has `name === <id>`, that plugin is the winner and other plugins are ignored — even if they have a factory name or src that also matches.
+2. **Plugin factory `name`** — the `name` returned from the plugin's factory function (e.g. `return { name: 'bslint' }`). Only consulted when no bsconfig-name match was found. Plugins that already have a user-supplied bsconfig name are not eligible for factory-name targeting (the user renamed them deliberately).
+3. **bsconfig `src`** — the path or package name string exactly as you wrote it in `bsconfig.json` (e.g. `"./scripts/myPlugin.js"` or `"@rokucommunity/bslint"`). Used as a final fallback for unnamed local scripts.
+
+If an identifier matches multiple plugins at the chosen precedence level, the build fails with an error and you must set a unique `name` on the conflicting entries in `bsconfig.json` to disambiguate. Collisions at *lower* precedence levels are ignored when a *higher* level produced an unambiguous match.
+
+###### Name priority examples
+
+Given this `bsconfig.json`:
+
+```json
+{
+    "plugins": [
+        "@rokucommunity/bslint",
+        { "src": "./scripts/customLinter.js", "name": "bslint" }
+    ]
+}
+```
+
+Both plugins happen to export `name: 'bslint'` from their factory. With the rules above:
+
+```bash
+# Targets ./scripts/customLinter.js only.
+# The bsconfig user-supplied `name` "bslint" on the second entry wins outright;
+# the factory-name match on the first entry is ignored.
+npx bsc --plugin.bslint.severity=error
+
+# Targets @rokucommunity/bslint only — match by bsconfig src.
+npx bsc --plugin.@rokucommunity/bslint.severity=error
+
+# Targets ./scripts/customLinter.js — also matched by bsconfig src.
+npx bsc --plugin.\"./scripts/customLinter.js\".severity=error
+```
+
+If two entries shared the **same** user-supplied `name`, that's the case that fails:
+
+```json
+{
+    "plugins": [
+        { "src": "@rokucommunity/bslint", "name": "linter" },
+        { "src": "./scripts/customLinter.js", "name": "linter" }
+    ]
+}
+```
+
+```bash
+# Error: --plugin.linter is ambiguous. Rename one of the entries in bsconfig.json.
+npx bsc --plugin.linter.severity=error
+```
+
+##### Ways to configure a plugin
+
+There are three layers, each one optional, applied in this order:
+
+1. **Inline `config` in `bsconfig.json`** — the base configuration that always applies.
+2. **CLI total replacement** via a bare `--plugin.<id>=<value>` (no dotted property path) — *replaces* the bsconfig `config` entirely instead of merging on top of it. If `<value>` is a string that points to a JSONC file, the file is parsed and its contents become the new config.
+3. **CLI property overrides** via `--plugin.<id>.<prop>=<value>` — deep-merged on top of whatever the layers above produced.
+
+The order of CLI flags does not matter — total-replacement is always applied first, then merge overrides.
+
+###### Examples
+
+**1. Inline config in bsconfig only:**
+
+```json
+{
+    "plugins": [
+        {
+            "src": "@rokucommunity/bslint",
+            "config": { "severity": "warn", "rules": { "no-print": "error" } }
+        }
+    ]
+}
+```
+
+The plugin receives `{ severity: 'warn', rules: { 'no-print': 'error' } }`.
+
+**2. JSONC file referenced from bsconfig:**
+
+```json
+{
+    "plugins": [
+        { "src": "@rokucommunity/bslint", "config": "./bslint.jsonc" }
+    ]
+}
+```
+
+The plugin receives the parsed contents of `./bslint.jsonc`.
+
+**3. Inline config + CLI merge overrides (most common):**
+
+```json
+{
+    "plugins": [
+        {
+            "src": "@rokucommunity/bslint",
+            "name": "bslint",
+            "config": { "severity": "warn", "rules": { "no-print": "error", "no-underscores": "warn" } }
+        }
+    ]
+}
+```
+
+```bash
+npx bsc --plugin.bslint.severity=error --plugin.bslint.rules.no-underscores=off
+```
+
+The plugin receives:
+```json
+{
+    "severity": "error",
+    "rules": { "no-print": "error", "no-underscores": "off" }
+}
+```
+
+`severity` was overridden, `rules.no-underscores` was overridden, and `rules.no-print` was preserved from bsconfig (deep merge).
+
+**4. CLI total replacement (discards bsconfig config entirely):**
+
+A bare `--plugin.<id>=<value>` has no dotted property path, so it is a *total replacement* and the bsconfig `config` is thrown away:
+
+```json
+{
+    "plugins": [
+        {
+            "src": "@rokucommunity/bslint",
+            "name": "bslint",
+            "config": { "severity": "warn", "rules": { "no-print": "error" } }
+        }
+    ]
+}
+```
+
+```bash
+# The plugin receives the contents of ./ci-bslint.jsonc — the bsconfig `config` (severity, rules) is discarded entirely.
+npx bsc --plugin.bslint=./ci-bslint.jsonc
+```
+
+If `./ci-bslint.jsonc` contains `{ "severity": "error" }`, the plugin receives exactly `{ "severity": "error" }` — *not* a merge with the bsconfig `config`.
+
+**5. CLI total replacement + CLI merge on top:**
+
+You can combine total replacement with merge overrides in a single command. The replacement is applied first (regardless of CLI order), then merges layer on top:
+
+```bash
+# Equivalent regardless of the order on the command line:
+npx bsc --plugin.bslint=./ci-bslint.jsonc --plugin.bslint.severity=hint
+npx bsc --plugin.bslint.severity=hint --plugin.bslint=./ci-bslint.jsonc
+```
+
+If `./ci-bslint.jsonc` is `{ "severity": "error", "rules": { "no-print": "warn" } }`, the plugin receives:
+```json
+{ "severity": "hint", "rules": { "no-print": "warn" } }
+```
+
+##### Quoting ids and properties with dots
+
+Plugin ids and property names that contain dots can be double-quoted to prevent the dot being interpreted as a path separator. Any segment of the dotted key may be quoted:
+
+```bash
+# scoped npm package with no dot in the name — no quoting needed
+npx bsc --plugin.@rokucommunity/bslint.enabled=false
+
+# id with literal dots in it — quote the id segment
+npx bsc --plugin.\"my-module.with.dots\".enabled=false
+
+# property name with a dot — quote the property segment
+npx bsc --plugin.bslint.\"rules.no-underscores\"=warn
+
+# target a local script by its path (the path contains a `.`, so quote it)
+npx bsc --plugin.\"./scripts/myPlugin.js\".enabled=true
+```
+
+> Plugin configuration objects are only supported in `bsconfig.json` — the CLI `--plugins` flag accepts string values only. To configure a plugin from the CLI, load it via `--plugins` (or `bsconfig.json`) and then use `--plugin.<id>...` flags to override its config.
 
 ### Programmatic configuration
 

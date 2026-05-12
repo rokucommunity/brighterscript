@@ -450,7 +450,8 @@ describe('ProgramBuilder', () => {
                     name: 'ConfigPlugin',
                     onSetConfiguration: (cfg: any) => receivedConfigs.push(cfg)
                 },
-                config: { myOption: true }
+                config: { myOption: true },
+                entry: { src: pluginPath, config: { myOption: true } }
             }]);
             builder.options = util.normalizeAndResolveConfig({
                 rootDir: rootDir,
@@ -469,7 +470,8 @@ describe('ProgramBuilder', () => {
                         receivedConfig = cfg;
                     }
                 },
-                config: undefined
+                config: undefined,
+                entry: pluginPath
             }]);
             builder.options = util.normalizeAndResolveConfig({
                 rootDir: rootDir,
@@ -493,7 +495,8 @@ describe('ProgramBuilder', () => {
                         receivedConfig = cfg;
                     }
                 },
-                config: undefined
+                config: undefined,
+                entry: pluginPath
             }]);
             builder.options = util.normalizeAndResolveConfig({
                 rootDir: rootDir,
@@ -511,7 +514,8 @@ describe('ProgramBuilder', () => {
             `);
             sinon.stub(util, 'loadPlugins').returns([{
                 plugin: { name: 'MinimalPlugin' },
-                config: { someConfig: 'value' }
+                config: { someConfig: 'value' },
+                entry: { src: pluginPath, config: { someConfig: 'value' } }
             }]);
             builder.options = util.normalizeAndResolveConfig({
                 rootDir: rootDir,
@@ -535,7 +539,8 @@ describe('ProgramBuilder', () => {
                     name: 'FileConfigPlugin',
                     onSetConfiguration: (cfg: any) => receivedConfigs.push(cfg)
                 },
-                config: { enabled: true, threshold: 5 }
+                config: { enabled: true, threshold: 5 },
+                entry: { src: pluginPath, config: configPath }
             }]);
             builder.options = util.normalizeAndResolveConfig({
                 rootDir: rootDir,
@@ -547,8 +552,8 @@ describe('ProgramBuilder', () => {
 
         it('adds all loaded plugins to the plugin interface', () => {
             sinon.stub(util, 'loadPlugins').returns([
-                { plugin: { name: 'PluginA' }, config: undefined },
-                { plugin: { name: 'PluginB' }, config: undefined }
+                { plugin: { name: 'PluginA' }, config: undefined, entry: 'pluginA' },
+                { plugin: { name: 'PluginB' }, config: undefined, entry: 'pluginB' }
             ]);
             builder.options = util.normalizeAndResolveConfig({
                 rootDir: rootDir,
@@ -569,49 +574,157 @@ describe('ProgramBuilder', () => {
             expect(callCount).to.eql(1);
         });
 
-        it('deep-merges CLI plugin options on top of bsconfig plugin config', () => {
+        it('deep-merges CLI plugin overrides on top of bsconfig plugin config', () => {
             const receivedConfigs: any[] = [];
             sinon.stub(util, 'loadPlugins').returns([{
                 plugin: {
                     name: 'my-plugin',
                     onSetConfiguration: (cfg: any) => receivedConfigs.push(cfg)
                 },
-                config: { severity: 'warn', nested: { a: 1, b: 2 } }
+                config: { severity: 'warn', nested: { a: 1, b: 2 } },
+                entry: { src: 'my-plugin' }
             }]);
             builder.options = util.normalizeAndResolveConfig({ rootDir: rootDir });
-            // simulate what yargs produces for --plugin.my-plugin.severity=error --plugin.my-plugin.nested.a=99
-            (builder.options as any)['plugin'] = { 'my-plugin': { severity: 'error', nested: { a: 99 } } };
+            // simulate what cli.ts produces for --plugin.my-plugin.severity=error --plugin.my-plugin.nested.a=99
+            builder.options.pluginOverrides = { 'my-plugin': { merge: { severity: 'error', nested: { a: 99 } } } };
             builder['loadPlugins']();
             expect(receivedConfigs[0]).to.eql({ severity: 'error', nested: { a: 99, b: 2 } });
         });
 
-        it('CLI plugin options only affect the named plugin', () => {
+        it('CLI plugin overrides only affect the matched plugin', () => {
             const configA: any[] = [];
             const configB: any[] = [];
             sinon.stub(util, 'loadPlugins').returns([
-                { plugin: { name: 'plugin-a', onSetConfiguration: (cfg: any) => configA.push(cfg) }, config: { x: 1 } },
-                { plugin: { name: 'plugin-b', onSetConfiguration: (cfg: any) => configB.push(cfg) }, config: { y: 2 } }
+                { plugin: { name: 'plugin-a', onSetConfiguration: (cfg: any) => configA.push(cfg) }, config: { x: 1 }, entry: { src: 'plugin-a' } },
+                { plugin: { name: 'plugin-b', onSetConfiguration: (cfg: any) => configB.push(cfg) }, config: { y: 2 }, entry: { src: 'plugin-b' } }
             ]);
             builder.options = util.normalizeAndResolveConfig({ rootDir: rootDir });
-            (builder.options as any)['plugin'] = { 'plugin-a': { x: 99 } };
+            builder.options.pluginOverrides = { 'plugin-a': { merge: { x: 99 } } };
             builder['loadPlugins']();
             expect(configA[0]).to.eql({ x: 99 });
             expect(configB[0]).to.eql({ y: 2 });
         });
 
-        it('CLI plugin options apply even when plugin has no bsconfig config', () => {
+        it('CLI plugin overrides apply even when plugin has no bsconfig config', () => {
             const receivedConfigs: any[] = [];
             sinon.stub(util, 'loadPlugins').returns([{
                 plugin: {
                     name: 'bare-plugin',
                     onSetConfiguration: (cfg: any) => receivedConfigs.push(cfg)
                 },
-                config: undefined
+                config: undefined,
+                entry: 'bare-plugin'
             }]);
             builder.options = util.normalizeAndResolveConfig({ rootDir: rootDir });
-            (builder.options as any)['plugin'] = { 'bare-plugin': { foo: 'bar' } };
+            builder.options.pluginOverrides = { 'bare-plugin': { merge: { foo: 'bar' } } };
             builder['loadPlugins']();
             expect(receivedConfigs[0]).to.eql({ foo: 'bar' });
+        });
+
+        it('matches override by bsconfig user-supplied name over factory name', () => {
+            const configA: any[] = [];
+            const configB: any[] = [];
+            sinon.stub(util, 'loadPlugins').returns([
+                //plugin A: factory name is 'bslint' (no user-supplied name)
+                { plugin: { name: 'bslint', onSetConfiguration: (cfg: any) => configA.push(cfg) }, config: { id: 'A' }, entry: '@rokucommunity/bslint' },
+                //plugin B: bsconfig assigns user-supplied name 'bslint' to a different plugin
+                { plugin: { name: 'bslint', onSetConfiguration: (cfg: any) => configB.push(cfg) }, config: { id: 'B' }, entry: { src: './other.js', name: 'bslint' } }
+            ]);
+            builder.options = util.normalizeAndResolveConfig({ rootDir: rootDir });
+            //user wrote --plugin.bslint.enabled=true; user-supplied name wins → only plugin B should be configured
+            builder.options.pluginOverrides = { 'bslint': { merge: { enabled: true } } };
+            builder['loadPlugins']();
+            expect(configA[0]).to.eql({ id: 'A' });
+            expect(configB[0]).to.eql({ id: 'B', enabled: true });
+        });
+
+        it('matches override by bsconfig src as fallback', () => {
+            const receivedConfigs: any[] = [];
+            sinon.stub(util, 'loadPlugins').returns([{
+                plugin: {
+                    name: 'some-factory-name',
+                    onSetConfiguration: (cfg: any) => receivedConfigs.push(cfg)
+                },
+                config: undefined,
+                entry: './scripts/myPlugin.js'
+            }]);
+            builder.options = util.normalizeAndResolveConfig({ rootDir: rootDir });
+            //target by src — neither user-name nor factory-name match, but src does
+            builder.options.pluginOverrides = { './scripts/myPlugin.js': { merge: { foo: 'bar' } } };
+            builder['loadPlugins']();
+            expect(receivedConfigs[0]).to.eql({ foo: 'bar' });
+        });
+
+        it('user-supplied bsconfig name wins even when other plugins have the same factory name (no ambiguity error)', () => {
+            //three plugins all reporting factory name 'bslint'; only one has a user-supplied bsconfig name
+            const configs: Record<string, any[]> = { A: [], B: [], C: [] };
+            sinon.stub(util, 'loadPlugins').returns([
+                { plugin: { name: 'bslint', onSetConfiguration: (cfg: any) => configs.A.push(cfg) }, config: { tag: 'A' }, entry: '@one/bslint' },
+                { plugin: { name: 'bslint', onSetConfiguration: (cfg: any) => configs.B.push(cfg) }, config: { tag: 'B' }, entry: { src: './local.js', name: 'bslint' } },
+                { plugin: { name: 'bslint', onSetConfiguration: (cfg: any) => configs.C.push(cfg) }, config: { tag: 'C' }, entry: '@two/bslint' }
+            ]);
+            builder.options = util.normalizeAndResolveConfig({ rootDir: rootDir });
+            builder.options.pluginOverrides = { 'bslint': { merge: { enabled: true } } };
+            //should NOT throw — user-supplied name on plugin B is the unambiguous winner
+            expect(() => builder['loadPlugins']()).not.to.throw();
+            expect(configs.A[0]).to.eql({ tag: 'A' });
+            expect(configs.B[0]).to.eql({ tag: 'B', enabled: true });
+            expect(configs.C[0]).to.eql({ tag: 'C' });
+        });
+
+        it('hard-fails when a CLI override identifier is ambiguous across factory names', () => {
+            sinon.stub(util, 'loadPlugins').returns([
+                { plugin: { name: 'bslint', onSetConfiguration: () => { } }, config: undefined, entry: '@rokucommunity/bslint' },
+                { plugin: { name: 'bslint', onSetConfiguration: () => { } }, config: undefined, entry: '@other/bslint' }
+            ]);
+            builder.options = util.normalizeAndResolveConfig({ rootDir: rootDir });
+            builder.options.pluginOverrides = { 'bslint': { merge: { foo: 'bar' } } };
+            expect(() => builder['loadPlugins']()).to.throw(/ambiguous/i);
+        });
+
+        it('hard-fails when a CLI override identifier matches no loaded plugin', () => {
+            sinon.stub(util, 'loadPlugins').returns([
+                { plugin: { name: 'bslint', onSetConfiguration: () => { } }, config: undefined, entry: 'bslint' }
+            ]);
+            builder.options = util.normalizeAndResolveConfig({ rootDir: rootDir });
+            builder.options.pluginOverrides = { 'unknown-plugin': { merge: { foo: 'bar' } } };
+            expect(() => builder['loadPlugins']()).to.throw(/did not match any loaded plugin/);
+        });
+
+        it('replaces config entirely with a JSONC file via bare --plugin.<id>=<path>', () => {
+            const configPath = `${tempDir}/replacement.jsonc`;
+            fsExtra.writeFileSync(configPath, `{ "fresh": true }`);
+            const receivedConfigs: any[] = [];
+            sinon.stub(util, 'loadPlugins').returns([{
+                plugin: {
+                    name: 'my-plugin',
+                    onSetConfiguration: (cfg: any) => receivedConfigs.push(cfg)
+                },
+                config: { stale: true, willGoAway: 1 },
+                entry: { src: 'my-plugin' }
+            }]);
+            builder.options = util.normalizeAndResolveConfig({ rootDir: rootDir, cwd: tempDir });
+            builder.options.pluginOverrides = { 'my-plugin': { replace: configPath } };
+            builder['loadPlugins']();
+            expect(receivedConfigs[0]).to.eql({ fresh: true });
+        });
+
+        it('replace + merge: applies replace first then deep-merges on top', () => {
+            const configPath = `${tempDir}/replacement.jsonc`;
+            fsExtra.writeFileSync(configPath, `{ "fresh": true, "enabled": true }`);
+            const receivedConfigs: any[] = [];
+            sinon.stub(util, 'loadPlugins').returns([{
+                plugin: {
+                    name: 'my-plugin',
+                    onSetConfiguration: (cfg: any) => receivedConfigs.push(cfg)
+                },
+                config: { stale: true },
+                entry: { src: 'my-plugin' }
+            }]);
+            builder.options = util.normalizeAndResolveConfig({ rootDir: rootDir, cwd: tempDir });
+            builder.options.pluginOverrides = { 'my-plugin': { replace: configPath, merge: { enabled: false } } };
+            builder['loadPlugins']();
+            expect(receivedConfigs[0]).to.eql({ fresh: true, enabled: false });
         });
     });
 });

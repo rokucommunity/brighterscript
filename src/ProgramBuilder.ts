@@ -189,22 +189,118 @@ export class ProgramBuilder {
             (pathOrModule, err) => this.logger.error(`Error when loading plugin '${pathOrModule}':`, err)
         );
         this.logger.log(`Loading ${this.options.plugins?.length ?? 0} plugins for cwd "${cwd}"`, this.options.plugins);
-        // CLI-provided plugin option overrides, keyed by plugin name: options.plugin.pluginName = { ... }
-        const cliPluginOptions: Record<string, Record<string, any>> = (this.options as any).plugin ?? {};
 
-        for (let entry of pluginEntries) {
-            this.plugins.add(entry.plugin);
-            if (entry.plugin.onSetConfiguration) {
-                let config = entry.config ?? {};
-                const cliOverride = cliPluginOptions[entry.plugin.name];
-                if (cliOverride && typeof cliOverride === 'object') {
-                    config = util.deepMerge(config, cliOverride);
+        //resolve per-plugin CLI overrides to specific plugin entries (throws on ambiguity / no-match)
+        const overrideAssignments = this.resolvePluginOverrideAssignments(pluginEntries, this.options.pluginOverrides ?? {});
+
+        for (let i = 0; i < pluginEntries.length; i++) {
+            const pluginEntry = pluginEntries[i];
+            this.plugins.add(pluginEntry.plugin);
+            if (pluginEntry.plugin.onSetConfiguration) {
+                let config: Record<string, any> = pluginEntry.config ?? {};
+                const override = overrideAssignments[i];
+                if (override) {
+                    if (override.replace !== undefined) {
+                        //fully replace the bsconfig config; resolvePluginConfig loads JSONC if it's a string path
+                        config = util.resolvePluginConfig(override.replace, cwd);
+                    }
+                    if (override.merge) {
+                        config = util.deepMerge(config, override.merge);
+                    }
                 }
-                entry.plugin.onSetConfiguration(config);
+                pluginEntry.plugin.onSetConfiguration(config);
             }
         }
 
         this.plugins.emit('beforeProgramCreate', this);
+    }
+
+    /**
+     * Match each CLI override identifier to exactly one loaded plugin, using the precedence:
+     * 1. bsconfig user-supplied `name` (from a {@link PluginDefinition})
+     * 2. plugin factory-supplied `name`
+     * 3. bsconfig `src` (the path or module name as the user typed it in bsconfig)
+     *
+     * Throws if any identifier matches no plugin, or if multiple plugins match at the chosen precedence level.
+     */
+    private resolvePluginOverrideAssignments(
+        pluginEntries: Array<{ plugin: { name: string }; entry: string | { src: string; name?: string } }>,
+        overrides: Record<string, { replace?: string | Record<string, any>; merge?: Record<string, any> }>
+    ): Array<{ replace?: string | Record<string, any>; merge?: Record<string, any> } | undefined> {
+        const result: Array<{ replace?: string | Record<string, any>; merge?: Record<string, any> } | undefined> = new Array(pluginEntries.length);
+        for (const id of Object.keys(overrides)) {
+            const matches = this.findPluginIndexesForOverrideId(pluginEntries, id);
+            if (matches.length === 0) {
+                throw new Error(`CLI override --plugin.${id} did not match any loaded plugin. Loaded plugins: ${this.describeLoadedPlugins(pluginEntries)}`);
+            }
+            if (matches.length > 1) {
+                const details = matches.map(i => this.describePluginIdentity(pluginEntries[i])).join(', ');
+                throw new Error(`CLI override --plugin.${id} is ambiguous: it matches multiple loaded plugins (${details}). Set a unique \`name\` on each entry in bsconfig.json to disambiguate.`);
+            }
+            result[matches[0]] = overrides[id];
+        }
+        return result;
+    }
+
+    private findPluginIndexesForOverrideId(
+        pluginEntries: Array<{ plugin: { name: string }; entry: string | { src: string; name?: string } }>,
+        id: string
+    ): number[] {
+        //pass 1: bsconfig user-supplied name wins outright over factory/src matches
+        const userNameMatches: number[] = [];
+        for (let i = 0; i < pluginEntries.length; i++) {
+            const entry = pluginEntries[i].entry;
+            if (typeof entry === 'object' && entry?.name === id) {
+                userNameMatches.push(i);
+            }
+        }
+        if (userNameMatches.length > 0) {
+            return userNameMatches;
+        }
+        //pass 2: factory-supplied plugin name (only for plugins WITHOUT a user-supplied bsconfig name)
+        const factoryNameMatches: number[] = [];
+        for (let i = 0; i < pluginEntries.length; i++) {
+            const entry = pluginEntries[i].entry;
+            if (typeof entry === 'object' && entry?.name) {
+                //user gave this plugin an explicit name, so factory-name targeting doesn't reach it
+                continue;
+            }
+            if (pluginEntries[i].plugin.name === id) {
+                factoryNameMatches.push(i);
+            }
+        }
+        if (factoryNameMatches.length > 0) {
+            return factoryNameMatches;
+        }
+        //pass 3: bsconfig src
+        const srcMatches: number[] = [];
+        for (let i = 0; i < pluginEntries.length; i++) {
+            const entry = pluginEntries[i].entry;
+            const src = typeof entry === 'string' ? entry : entry?.src;
+            if (src === id) {
+                srcMatches.push(i);
+            }
+        }
+        return srcMatches;
+    }
+
+    private describePluginIdentity(pluginEntry: { plugin: { name: string }; entry: string | { src: string; name?: string } }): string {
+        const entry = pluginEntry.entry;
+        const src = typeof entry === 'string' ? entry : entry?.src;
+        const userName = typeof entry === 'object' ? entry?.name : undefined;
+        const parts: string[] = [`src=${src}`];
+        if (userName) {
+            parts.push(`name=${userName}`);
+        }
+        parts.push(`factoryName=${pluginEntry.plugin.name}`);
+        return `{${parts.join(', ')}}`;
+    }
+
+    private describeLoadedPlugins(pluginEntries: Array<{ plugin: { name: string }; entry: string | { src: string; name?: string } }>): string {
+        if (pluginEntries.length === 0) {
+            return '(none)';
+        }
+        return pluginEntries.map(e => this.describePluginIdentity(e)).join(', ');
     }
 
     /**

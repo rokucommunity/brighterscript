@@ -840,6 +840,214 @@ describe('util', () => {
         });
     });
 
+    describe('extractPluginEntriesFromArgv', () => {
+        it('returns empty entries when no --plugin pairs are present', () => {
+            const result = util.extractPluginEntriesFromArgv(['--watch', '--rootDir', './src']);
+            expect(result.pluginEntries).to.eql([]);
+            expect(result.remainingArgv).to.eql(['--watch', '--rootDir', './src']);
+        });
+
+        it('captures a src+name pair', () => {
+            const result = util.extractPluginEntriesFromArgv(['--plugin', '@rokucommunity/bslint', 'bslint']);
+            expect(result.pluginEntries).to.eql([{ src: '@rokucommunity/bslint', name: 'bslint' }]);
+            expect(result.remainingArgv).to.eql([]);
+        });
+
+        it('captures a src-only --plugin when at end of args', () => {
+            const result = util.extractPluginEntriesFromArgv(['--plugin', '@rokucommunity/bslint']);
+            expect(result.pluginEntries).to.eql([{ src: '@rokucommunity/bslint' }]);
+            expect(result.remainingArgv).to.eql([]);
+        });
+
+        it('captures a src-only --plugin when followed by another flag', () => {
+            const result = util.extractPluginEntriesFromArgv(['--plugin', '@rokucommunity/bslint', '--watch']);
+            expect(result.pluginEntries).to.eql([{ src: '@rokucommunity/bslint' }]);
+            expect(result.remainingArgv).to.eql(['--watch']);
+        });
+
+        it('supports the --plugin=src single-token form (no inline name)', () => {
+            const result = util.extractPluginEntriesFromArgv(['--plugin=@rokucommunity/bslint', '--watch']);
+            expect(result.pluginEntries).to.eql([{ src: '@rokucommunity/bslint' }]);
+            expect(result.remainingArgv).to.eql(['--watch']);
+        });
+
+        it('handles multiple --plugin pairs', () => {
+            const result = util.extractPluginEntriesFromArgv([
+                '--plugin', '@rokucommunity/bslint', 'bslint',
+                '--plugin', './scripts/local.js', 'mylocal',
+                '--watch'
+            ]);
+            expect(result.pluginEntries).to.eql([
+                { src: '@rokucommunity/bslint', name: 'bslint' },
+                { src: './scripts/local.js', name: 'mylocal' }
+            ]);
+            expect(result.remainingArgv).to.eql(['--watch']);
+        });
+
+        it('leaves --plugin.<id>... override keys alone', () => {
+            const result = util.extractPluginEntriesFromArgv([
+                '--plugin.bslint.enabled=false',
+                '--plugin.bslint.rules.noUnderscores=warn'
+            ]);
+            expect(result.pluginEntries).to.eql([]);
+            expect(result.remainingArgv).to.eql([
+                '--plugin.bslint.enabled=false',
+                '--plugin.bslint.rules.noUnderscores=warn'
+            ]);
+        });
+
+        it('coexists with --plugin pairs and --plugin.<id>... overrides in the same argv', () => {
+            const result = util.extractPluginEntriesFromArgv([
+                '--plugin', '@rokucommunity/bslint', 'bslint',
+                '--plugin.bslint.enabled=false',
+                '--watch'
+            ]);
+            expect(result.pluginEntries).to.eql([{ src: '@rokucommunity/bslint', name: 'bslint' }]);
+            expect(result.remainingArgv).to.eql(['--plugin.bslint.enabled=false', '--watch']);
+        });
+
+        it('throws when --plugin is the last argument', () => {
+            expect(() => util.extractPluginEntriesFromArgv(['--watch', '--plugin'])).to.throw(/--plugin requires a source/);
+        });
+
+        it('throws when --plugin is followed immediately by another flag', () => {
+            expect(() => util.extractPluginEntriesFromArgv(['--plugin', '--watch'])).to.throw(/--plugin requires a source/);
+        });
+
+        it('throws when --plugin= has an empty source', () => {
+            expect(() => util.extractPluginEntriesFromArgv(['--plugin='])).to.throw(/non-empty source/);
+        });
+
+        it('does not consume --plugins (plural) array entries', () => {
+            const result = util.extractPluginEntriesFromArgv(['--plugins', 'a', 'b', 'c']);
+            expect(result.pluginEntries).to.eql([]);
+            expect(result.remainingArgv).to.eql(['--plugins', 'a', 'b', 'c']);
+        });
+    });
+
+    describe('parsePluginOverrideKey', () => {
+        it('parses simple id with a single property', () => {
+            expect(util.parsePluginOverrideKey('bslint.enabled')).to.eql({ id: 'bslint', path: ['enabled'] });
+        });
+
+        it('parses id with no dotted path', () => {
+            expect(util.parsePluginOverrideKey('bslint')).to.eql({ id: 'bslint', path: [] });
+        });
+
+        it('parses nested property path', () => {
+            expect(util.parsePluginOverrideKey('bslint.rules.noUnderscores')).to.eql({ id: 'bslint', path: ['rules', 'noUnderscores'] });
+        });
+
+        it('treats `@` and `/` as part of the id when unquoted', () => {
+            expect(util.parsePluginOverrideKey('@rokucommunity/bslint.enabled')).to.eql({ id: '@rokucommunity/bslint', path: ['enabled'] });
+        });
+
+        it('honors quoted id segment to include dots', () => {
+            expect(util.parsePluginOverrideKey('"my-module.with.dots".enabled')).to.eql({ id: 'my-module.with.dots', path: ['enabled'] });
+        });
+
+        it('honors quoted property segment to include dots', () => {
+            expect(util.parsePluginOverrideKey('bslint."rules.no-underscores"')).to.eql({ id: 'bslint', path: ['rules.no-underscores'] });
+        });
+
+        it('honors quoting on any combination of segments', () => {
+            expect(util.parsePluginOverrideKey('"a.b"."c.d"."e.f"')).to.eql({ id: 'a.b', path: ['c.d', 'e.f'] });
+        });
+
+        it('returns undefined for empty input', () => {
+            expect(util.parsePluginOverrideKey('')).to.be.undefined;
+        });
+
+        it('returns undefined for unterminated quote', () => {
+            expect(util.parsePluginOverrideKey('"unterminated')).to.be.undefined;
+        });
+
+        it('returns undefined when a quoted segment is not followed by a dot or end-of-string', () => {
+            expect(util.parsePluginOverrideKey('"id"extra.foo')).to.be.undefined;
+        });
+
+        it('returns undefined for a trailing dot', () => {
+            expect(util.parsePluginOverrideKey('bslint.')).to.be.undefined;
+        });
+    });
+
+    describe('extractPluginOverridesFromArgv', () => {
+        it('returns empty object when no plugin keys are present', () => {
+            expect(util.extractPluginOverridesFromArgv({ foo: 'bar', _: [] })).to.eql({});
+        });
+
+        it('ignores keys that do not start with `plugin.`', () => {
+            expect(util.extractPluginOverridesFromArgv({
+                plugins: ['a', 'b'],
+                pluginOverrides: 'ignored'
+            })).to.eql({});
+        });
+
+        it('extracts a single merge override', () => {
+            expect(util.extractPluginOverridesFromArgv({
+                'plugin.bslint.enabled': false
+            })).to.eql({
+                bslint: { merge: { enabled: false } }
+            });
+        });
+
+        it('extracts a nested merge override', () => {
+            expect(util.extractPluginOverridesFromArgv({
+                'plugin.bslint.rules.noUnderscores': true
+            })).to.eql({
+                bslint: { merge: { rules: { noUnderscores: true } } }
+            });
+        });
+
+        it('combines multiple merge overrides for the same id', () => {
+            expect(util.extractPluginOverridesFromArgv({
+                'plugin.bslint.enabled': false,
+                'plugin.bslint.rules.noUnderscores': true
+            })).to.eql({
+                bslint: { merge: { enabled: false, rules: { noUnderscores: true } } }
+            });
+        });
+
+        it('treats a bare --plugin.<id>=<value> as a replace', () => {
+            expect(util.extractPluginOverridesFromArgv({
+                'plugin.bslint': './bslint.jsonc'
+            })).to.eql({
+                bslint: { replace: './bslint.jsonc' }
+            });
+        });
+
+        it('keeps both replace and merge entries for the same id (regardless of cli order)', () => {
+            expect(util.extractPluginOverridesFromArgv({
+                'plugin.bslint': './bslint.jsonc',
+                'plugin.bslint.enabled': false
+            })).to.eql({
+                bslint: { replace: './bslint.jsonc', merge: { enabled: false } }
+            });
+        });
+
+        it('handles quoted id with dots', () => {
+            expect(util.extractPluginOverridesFromArgv({
+                'plugin."my.id".foo': 'bar'
+            })).to.eql({
+                'my.id': { merge: { foo: 'bar' } }
+            });
+        });
+
+        it('handles scoped npm package id without quoting', () => {
+            expect(util.extractPluginOverridesFromArgv({
+                'plugin.@rokucommunity/bslint.enabled': true
+            })).to.eql({
+                '@rokucommunity/bslint': { merge: { enabled: true } }
+            });
+        });
+
+        it('does not pick up `plugins.foo` (plural) keys', () => {
+            expect(util.extractPluginOverridesFromArgv({
+                'plugins.foo': 'bar'
+            })).to.eql({});
+        });
+    });
+
     describe('copyBslibToStaging', () => {
         it('copies from local bslib dependency', async () => {
             await util.copyBslibToStaging(tempDir);

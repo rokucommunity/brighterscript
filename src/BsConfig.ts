@@ -155,6 +155,14 @@ export interface BsConfig {
     plugins?: Array<string | PluginDefinition>;
 
     /**
+     * Runtime-only per-plugin config overrides (populated from CLI flags like `--plugin.<id>.foo=bar`).
+     * Not loaded from `bsconfig.json`. Each key is a plugin identifier the user typed; the identifier
+     * is matched against (in order): the bsconfig entry's `name`, the plugin factory's `name`, then the
+     * bsconfig entry's `src`.
+     */
+    pluginOverrides?: Record<string, PluginConfigOverride>;
+
+    /**
      * A list of scripts or modules to pass to node's `require()` on startup. This is useful for doing things like ts-node registration
      */
     require?: Array<string>;
@@ -217,6 +225,25 @@ export interface BsConfig {
 }
 
 /**
+ * Runtime-only override for a single plugin's config, sourced from CLI flags like `--plugin.<id>...`.
+ *
+ * When both `replace` and `merge` are present, `replace` is applied first (entirely replacing the
+ * bsconfig `config` value), and then `merge` is deep-merged on top.
+ */
+export interface PluginConfigOverride {
+    /**
+     * Total replacement for the plugin's config. A string is treated as a path to a JSONC config file.
+     * Sourced from a bare `--plugin.<id>=<value>` (no dotted property path).
+     */
+    replace?: string | Record<string, any>;
+    /**
+     * Properties to deep-merge on top of the plugin's config (after `replace`, if set).
+     * Sourced from `--plugin.<id>.<prop>[.<prop>...]=<value>`.
+     */
+    merge?: Record<string, any>;
+}
+
+/**
  * Defines a plugin entry in bsconfig, either as a string shorthand or an object with src and config.
  */
 export interface PluginDefinition {
@@ -248,7 +275,8 @@ type OptionalBsConfigFields =
     | 'stagingFolderPath'
     | 'diagnosticLevel'
     | 'rootDir'
-    | 'stagingDir';
+    | 'stagingDir'
+    | 'pluginOverrides';
 
 export type FinalizedBsConfig =
     Omit<Required<BsConfig>, OptionalBsConfigFields>

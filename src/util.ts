@@ -1244,11 +1244,13 @@ export class Util {
     }
 
     /**
-     * Load and return the list of plugins, with their resolved configurations
+     * Load and return the list of plugins, with their resolved configurations.
+     * Each returned item also includes the original `entry` (the string or {@link PluginDefinition})
+     * so callers can match the plugin against its bsconfig identity.
      */
-    public loadPlugins(cwd: string, pathOrModules: Array<string | PluginDefinition>, onError?: (pathOrModule: string, err: Error) => void): Array<{ plugin: Plugin; config: Record<string, any> | undefined }> {
+    public loadPlugins(cwd: string, pathOrModules: Array<string | PluginDefinition>, onError?: (pathOrModule: string, err: Error) => void): Array<{ plugin: Plugin; config: Record<string, any> | undefined; entry: string | PluginDefinition }> {
         const logger = createLogger();
-        return pathOrModules.reduce<Array<{ plugin: Plugin; config: Record<string, any> | undefined }>>((acc, entry) => {
+        return pathOrModules.reduce<Array<{ plugin: Plugin; config: Record<string, any> | undefined; entry: string | PluginDefinition }>>((acc, entry) => {
             const pathOrModule = typeof entry === 'string' ? entry : entry.src;
             if (typeof pathOrModule === 'string') {
                 try {
@@ -1286,7 +1288,7 @@ export class Util {
                         config = this.resolvePluginConfig(entry.config, cwd);
                     }
 
-                    acc.push({ plugin: plugin, config: config });
+                    acc.push({ plugin: plugin, config: config, entry: entry });
                 } catch (err: any) {
                     if (onError) {
                         onError(pathOrModule, err);
@@ -1335,6 +1337,165 @@ export class Util {
             return parsed;
         }
         return config;
+    }
+
+    /**
+     * Walk a raw argv (e.g. `process.argv.slice(2)`) and pull out `--plugin <src> [<name>]` pair entries.
+     *
+     * Recognized forms:
+     *  - `--plugin foo bar` → `{ src: 'foo', name: 'bar' }` (consumes 3 tokens)
+     *  - `--plugin foo`     → `{ src: 'foo' }` (consumes 2 tokens; next token was a flag, end of args, etc.)
+     *  - `--plugin=foo`     → `{ src: 'foo' }` (consumes 1 token; this form does not support an inline name)
+     *
+     * Tokens that begin with `--plugin.` (dotted override keys like `--plugin.bslint.foo=true`) are left alone.
+     * Throws if `--plugin` is given without a following source token.
+     *
+     * @returns the entries extracted, plus the remaining argv with the consumed tokens removed.
+     */
+    public extractPluginEntriesFromArgv(argv: readonly string[]): { remainingArgv: string[]; pluginEntries: PluginDefinition[] } {
+        const remainingArgv: string[] = [];
+        const pluginEntries: PluginDefinition[] = [];
+        let i = 0;
+        while (i < argv.length) {
+            const token = argv[i];
+            if (token === '--plugin') {
+                const src = argv[i + 1];
+                if (src === undefined || src.startsWith('-')) {
+                    throw new Error(`--plugin requires a source argument (got: ${src === undefined ? '<end of args>' : src})`);
+                }
+                const maybeName = argv[i + 2];
+                if (maybeName !== undefined && !maybeName.startsWith('-')) {
+                    pluginEntries.push({ src: src, name: maybeName });
+                    i += 3;
+                } else {
+                    pluginEntries.push({ src: src });
+                    i += 2;
+                }
+            } else if (token.startsWith('--plugin=')) {
+                //single-token form: --plugin=src (no inline name available; use the pair form for naming)
+                const src = token.substring('--plugin='.length);
+                if (src === '') {
+                    throw new Error(`--plugin= requires a non-empty source value`);
+                }
+                pluginEntries.push({ src: src });
+                i += 1;
+            } else {
+                remainingArgv.push(token);
+                i += 1;
+            }
+        }
+        return { remainingArgv: remainingArgv, pluginEntries: pluginEntries };
+    }
+
+    /**
+     * Parse a flat plugin-override key (the part after `plugin.`) into a plugin identifier and a dotted property path.
+     * Segments can be double-quoted to include literal dots (or other punctuation) in the segment.
+     *
+     * Examples (input is the substring after `plugin.`):
+     *   `bslint.enabled`            -> { id: 'bslint', path: ['enabled'] }
+     *   `@rokucommunity/bslint.foo` -> { id: '@rokucommunity/bslint', path: ['foo'] }
+     *   `"@scope/x".alpha`          -> { id: '@scope/x', path: ['alpha'] }
+     *   `bslint."alpha.beta"`       -> { id: 'bslint', path: ['alpha.beta'] }
+     *   `bslint`                    -> { id: 'bslint', path: [] }
+     *
+     * Returns undefined when the input is empty or the quotes are malformed.
+     */
+    public parsePluginOverrideKey(keyAfterPrefix: string): { id: string; path: string[] } | undefined {
+        if (!keyAfterPrefix) {
+            return undefined;
+        }
+        const segments: string[] = [];
+        let i = 0;
+        while (i < keyAfterPrefix.length) {
+            let segment: string;
+            if (keyAfterPrefix[i] === '"') {
+                //quoted segment - read up to the next quote
+                const endQuote = keyAfterPrefix.indexOf('"', i + 1);
+                if (endQuote === -1) {
+                    return undefined;
+                }
+                segment = keyAfterPrefix.substring(i + 1, endQuote);
+                i = endQuote + 1;
+                //after a quoted segment, the next char must be '.' or end-of-string
+                if (i < keyAfterPrefix.length && keyAfterPrefix[i] !== '.') {
+                    return undefined;
+                }
+            } else {
+                //unquoted segment - read up to the next '.'
+                const nextDot = keyAfterPrefix.indexOf('.', i);
+                if (nextDot === -1) {
+                    segment = keyAfterPrefix.substring(i);
+                    i = keyAfterPrefix.length;
+                } else {
+                    segment = keyAfterPrefix.substring(i, nextDot);
+                    i = nextDot;
+                }
+            }
+            segments.push(segment);
+            //consume the separator dot
+            if (i < keyAfterPrefix.length && keyAfterPrefix[i] === '.') {
+                i++;
+                //a trailing dot is malformed (no following segment)
+                if (i >= keyAfterPrefix.length) {
+                    return undefined;
+                }
+            }
+        }
+        if (segments[0] === '') {
+            return undefined;
+        }
+        return { id: segments[0], path: segments.slice(1) };
+    }
+
+    /**
+     * Walk an argv-style object and extract plugin-override entries. Keys that start with `plugin.`
+     * are parsed via {@link parsePluginOverrideKey} into `{id, path}` and grouped by id.
+     *
+     * - A key with no dotted path (e.g. `plugin.bslint=./foo.json`) becomes a `replace` entry.
+     * - A key with a dotted path (e.g. `plugin.bslint.enabled=false`) is added to that id's `merge` object.
+     *
+     * Both `replace` and `merge` may be present for the same id; consumers should apply `replace` first
+     * and then deep-merge `merge` on top.
+     */
+    public extractPluginOverridesFromArgv(argv: Record<string, any>): Record<string, { replace?: string | Record<string, any>; merge?: Record<string, any> }> {
+        const overrides: Record<string, { replace?: string | Record<string, any>; merge?: Record<string, any> }> = {};
+        const prefix = 'plugin.';
+        for (const rawKey of Object.keys(argv)) {
+            if (!rawKey.startsWith(prefix)) {
+                continue;
+            }
+            const parsed = this.parsePluginOverrideKey(rawKey.substring(prefix.length));
+            if (!parsed) {
+                continue;
+            }
+            const { id, path: propPath } = parsed;
+            const value = argv[rawKey];
+            //lazily create the override entry
+            let entry = overrides[id];
+            if (!entry) {
+                entry = {};
+                overrides[id] = entry;
+            }
+            if (propPath.length === 0) {
+                //bare `--plugin.<id>=<value>` is a total replacement (string path to JSONC or inline value)
+                entry.replace = value;
+            } else {
+                //dotted path becomes nested merge object
+                if (!entry.merge) {
+                    entry.merge = {};
+                }
+                let cursor = entry.merge;
+                for (let j = 0; j < propPath.length - 1; j++) {
+                    const segment = propPath[j];
+                    if (!cursor[segment] || typeof cursor[segment] !== 'object' || Array.isArray(cursor[segment])) {
+                        cursor[segment] = {};
+                    }
+                    cursor = cursor[segment];
+                }
+                cursor[propPath[propPath.length - 1]] = value;
+            }
+        }
+        return overrides;
     }
 
     /**
