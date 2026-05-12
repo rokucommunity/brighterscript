@@ -1332,7 +1332,7 @@ describe('astUtils visitors', () => {
 
             file.ast.walk(createVisitor({
                 AstNode: (node) => {
-                    const endNodeComments = node.endTrivia.filter(t => t.kind === TokenKind.Comment);
+                    const endNodeComments = node.endTrivia?.filter(t => t.kind === TokenKind.Comment) ?? [];
                     comments.push(...endNodeComments);
                 }
             }), {

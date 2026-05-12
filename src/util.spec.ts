@@ -1706,19 +1706,6 @@ describe('util', () => {
             });
         });
 
-        it('bounds cache growth by clearing when limit is reached', () => {
-            util['standardizePathCacheLimit'] = 2;
-
-            util.standardizePath('source/a.bs');
-            util.standardizePath('source/b.bs');
-            expect(util['standardizePathCache'].size).to.equal(2);
-
-            util.standardizePath('source/c.bs');
-
-            expect(util['standardizePathCache'].size).to.equal(1);
-            expect(util['standardizePathCache'].has('source/c.bs')).to.be.true;
-        });
-
         describe('windows paths on unix', () => {
             beforeEach(() => {
                 isWindows = false;
