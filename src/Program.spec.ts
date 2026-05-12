@@ -3717,6 +3717,24 @@ describe('Program', () => {
             expect(plugin.afterScopeDispose.callCount).to.equal(1);
         });
 
+        it('emits brs file dispose events', () => {
+            const plugin = {
+                name: 'test',
+                beforeFileDispose: sinon.spy(),
+                onFileDispose: sinon.spy(),
+                afterFileDispose: sinon.spy()
+            };
+            program.plugins.add(plugin);
+            program.setFile('source/main.brs', `
+                sub main()
+                end sub
+            `);
+            program.removeFile('source/main.brs');
+            expect(plugin.beforeFileDispose.callCount).to.equal(1);
+            expect(plugin.onFileDispose.callCount).to.equal(1);
+            expect(plugin.afterFileDispose.callCount).to.equal(1);
+        });
+
         it('emits program dispose events', () => {
             const plugin = {
                 name: 'test',
