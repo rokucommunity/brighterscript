@@ -3467,7 +3467,7 @@ describe('BrsFile', () => {
                         event.file.ast.walk(createVisitor({
                             AstNode: (node) => {
                                 //delete all trivia from the node
-                                for (let i = 0; i < (node.leadingTrivia.length ?? 0); i++) {
+                                for (let i = 0; i < (node.leadingTrivia?.length ?? 0); i++) {
                                     delete node.leadingTrivia[i];
                                 }
                                 for (let i = 0; i < (node.endTrivia.length ?? 0); i++) {

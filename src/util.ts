@@ -792,10 +792,14 @@ export class Util {
     public pathToUri(filePath: string) {
         if (!filePath) {
             return filePath;
+        } else if (this.pathToURICache.has(filePath)) {
+            return this.pathToURICache.get(filePath);
         } else if (this.isUriLike(filePath)) {
             return filePath;
         } else {
-            return URI.file(filePath).toString();
+            const uri = URI.file(filePath).toString();
+            this.pathToURICache.set(filePath, uri);
+            return uri;
         }
     }
 
@@ -1077,7 +1081,7 @@ export class Util {
                 text: token.text,
                 isReserved: token.isReserved,
                 leadingWhitespace: token.leadingWhitespace,
-                leadingTrivia: token.leadingTrivia.map(x => this.cloneToken(x))
+                leadingTrivia: token.leadingTrivia ? token.leadingTrivia.map(x => this.cloneToken(x)) : undefined
             } as Token;
             //handle those tokens that have charCode
             if ('charCode' in token) {
@@ -1839,6 +1843,8 @@ export class Util {
     // Prevent unbounded growth in long-lived language-server sessions.
     private standardizePathCacheLimit = 20_000;
 
+    private pathToURICache = new Map<string, string>();
+
     /**
      * Converts a path into a standardized format (drive letter to lower, remove extra slashes, use single slash type, resolve relative parts, etc...)
      */
@@ -1882,7 +1888,8 @@ export class Util {
                 thePath = String.fromCharCode(firstChar + 32) + thePath.slice(1);
             }
         }
-        this.addToStandardizePathCache(originalPath, thePath);
+        this.standardizePathCache.set(originalPath, thePath);
+        //this.addToStandardizePathCache(originalPath, thePath);
         return thePath;
     }
 
@@ -2536,7 +2543,7 @@ export class Util {
 
     public hasLeadingComments(input: Token | AstNode) {
         const leadingTrivia = isToken(input) ? input?.leadingTrivia : input?.leadingTrivia ?? [];
-        return !!leadingTrivia.find(t => t?.kind === TokenKind.Comment);
+        return !!leadingTrivia?.find(t => t?.kind === TokenKind.Comment);
     }
 
     public getLeadingComments(input: Token | AstNode) {
