@@ -842,7 +842,14 @@ export class Util {
                 continue;
             }
             //if this flag disables the code, it's suppressed
-            const isDisabled = flag.codes === null || (diagnosticCode !== undefined && flag.codes?.includes(diagnosticCode));
+            const isDisabled = flag.codes === null || (diagnosticCode !== undefined && (
+                flag.codes?.includes(diagnosticCode) ||
+                // Backward-compat: `bs:disable-line 1001` (cannotFindName) used to suppress all
+                // "cannot find" errors before cannotFindFunction (1140) was introduced as a
+                // separate diagnostic code. Keep 1001 working for function-call errors so that
+                // existing disable comments aren't silently broken.
+                (diagnosticCode === DiagnosticCodeMap.cannotFindFunction && flag.codes?.includes(DiagnosticCodeMap.cannotFindName))
+            ));
             if (isDisabled) {
                 return true;
             }

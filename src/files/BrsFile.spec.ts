@@ -1017,6 +1017,38 @@ describe('BrsFile', () => {
                 program.validate();
                 expectZeroDiagnostics(program);
             });
+
+            it('treats code 1001 (cannotFindName) as also suppressing cannotFindFunction (1140) for backward compatibility', () => {
+                // `cannotFindFunction` (1140) was split from `cannotFindName` (1001) after v0.65.
+                // Users with existing `bs:disable-line 1001` comments must not have their
+                // suppress directives silently broken for function-call "cannot find" errors.
+                program.setFile('source/main.bs', `
+                    sub main()
+                        undefinedFunction() 'bs:disable-line 1001
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('treats code 1001 as suppressing cannotFindFunction at any nesting depth', () => {
+                // Reproduces the original report: a 5-level-deep function call whose
+                // bs:disable-line 1001 comment was not suppressing the error.
+                program.setFile('source/main.bs', `
+                    namespace http
+                        function request() as object
+                            callback = sub()
+                                if true then
+                                    response = {}
+                                    handleInterceptedScreenData(response._interceptedScreenData) 'bs:disable-line 1001
+                                end if
+                            end sub
+                        end function
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
         });
 
         describe('bs:disable / bs:enable block directives', () => {
