@@ -3694,7 +3694,7 @@ describe('Program', () => {
             expect(plugin.afterFileValidate.callCount).to.equal(1);
         });
 
-        it('emits file and scope dispose events', () => {
+        it('emits xml file and component scope dispose events', () => {
             const plugin = {
                 name: 'test',
                 beforeFileDispose: sinon.spy(),

@@ -221,8 +221,17 @@ export type CompilerPlugin = Plugin;
 export interface Plugin {
     name: string;
     //program events
+    /**
+     * Called before the Program instance is created.
+     */
     beforeProgramCreate?: (builder: ProgramBuilder) => void;
+    /**
+     * Called after the Program instance is created but before afterProgramCreate.
+     */
     onProgramCreate?: (program: Program) => void;
+    /**
+     * Called after the Program instance has been created.
+     */
     afterProgramCreate?: (program: Program) => void;
     beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
     onPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
