@@ -51,13 +51,20 @@ While there are no restrictions on plugin names, it helps others to find your pl
 Full compiler lifecycle:
 
 - `beforeProgramCreate`
+- `onProgramCreate`
 - `afterProgramCreate`
+    - `beforeScopeCreate` ("source" scope)
+    - `onScopeCreate` ("source" scope)
     - `afterScopeCreate` ("source" scope)
     - For each file:
         - `beforeFileParse`
+        - `onFileParse`
         - `afterFileParse`
+        - `beforeScopeCreate` (component scope)
+        - `onScopeCreate` (component scope)
         - `afterScopeCreate` (component scope)
     - `beforeProgramValidate`
+    - `onProgramValidate`
     - For each file:
         - `beforeFileValidate`
         - `onFileValidate`
@@ -68,15 +75,21 @@ Full compiler lifecycle:
         - `afterScopeValidate`
     - `afterProgramValidate`
 - `beforePrepublish`
+- `onPrepublish`
 - `afterPrepublish`
 - `beforePublish`
+- `onPublish`
     - `beforeProgramTranspile`
+    - `onProgramTranspile`
     - For each file:
         - `beforeFileTranspile`
+        - `onFileTranspile`
         - `afterFileTranspile`
     - `afterProgramTranspile`
 - `afterPublish`
 - `beforeProgramDispose`
+- `onProgramDispose`
+- `afterProgramDispose`
 
 ### Language server
 
@@ -86,13 +99,18 @@ When a file is removed:
 
 - `beforeFileDispose`
 - `beforeScopeDispose` (component scope)
+- `onScopeDispose` (component scope)
 - `afterScopeDispose` (component scope)
+- `onFileDispose`
 - `afterFileDispose`
 
 When a file is added:
 
 - `beforeFileParse`
+- `onFileParse`
 - `afterFileParse`
+- `beforeScopeCreate` (component scope)
+- `onScopeCreate` (component scope)
 - `afterScopeCreate` (component scope)
 - `afterFileValidate`
 
@@ -104,17 +122,21 @@ When any file is modified:
 After file addition/removal (note: throttled/debounced):
 
 - `beforeProgramValidate`
+- `onProgramValidate`
 - For each invalidated/not-yet-validated file
     - `beforeFileValidate`
     - `onFileValidate`
     - `afterFileValidate`
 - For each invalidated scope:
     - `beforeScopeValidate`
+    - `onScopeValidate`
     - `afterScopeValidate`
 - `afterProgramValidate`
 
 Code Actions
+ - `beforeGetCodeActions`
  - `onGetCodeActions`
+ - `afterGetCodeActions`
 
 Completions
  - `beforeProvideCompletions`
@@ -127,7 +149,9 @@ Hovers
  - `afterProvideHover`
 
 Semantic Tokens
- - `onGetSemanticTokens`
+  - `beforeGetSemanticTokens`
+  - `onGetSemanticTokens`
+  - `afterGetSemanticTokens`
 
 
 ## Compiler API
@@ -157,17 +181,26 @@ export interface CompilerPlugin {
     name: string;
     //program events
     beforeProgramCreate?: (builder: ProgramBuilder) => void;
+    onProgramCreate?: (program: Program) => void;
+    afterProgramCreate?: (program: Program) => void;
     beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    onPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
     afterPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
     beforePublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    onPublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
     afterPublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
-    afterProgramCreate?: (program: Program) => void;
     beforeProgramValidate?: (program: Program) => void;
+    onProgramValidate?: (program: Program) => void;
     afterProgramValidate?: (program: Program) => void;
     beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
+    onProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     beforeProgramDispose?: PluginHandler<BeforeProgramDisposeEvent>;
+    onProgramDispose?: PluginHandler<BeforeProgramDisposeEvent>;
+    afterProgramDispose?: PluginHandler<BeforeProgramDisposeEvent>;
+    beforeGetCodeActions?: PluginHandler<BeforeGetCodeActionsEvent>;
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
+    afterGetCodeActions?: PluginHandler<AfterGetCodeActionsEvent>;
 
     /**
      * Emitted before the program starts collecting completions
@@ -259,16 +292,22 @@ export interface CompilerPlugin {
     afterProvideWorkspaceSymbols?(event: AfterProvideWorkspaceSymbolsEvent): any;
 
 
+    beforeGetSemanticTokens?: PluginHandler<BeforeGetSemanticTokensEvent>;
     onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
+    afterGetSemanticTokens?: PluginHandler<AfterGetSemanticTokensEvent>;
     //scope events
+    beforeScopeCreate?: (scope: Scope) => void;
+    onScopeCreate?: (scope: Scope) => void;
     afterScopeCreate?: (scope: Scope) => void;
     beforeScopeDispose?: (scope: Scope) => void;
+    onScopeDispose?: (scope: Scope) => void;
     afterScopeDispose?: (scope: Scope) => void;
     beforeScopeValidate?: ValidateHandler;
     onScopeValidate?: PluginHandler<OnScopeValidateEvent>;
     afterScopeValidate?: ValidateHandler;
     //file events
     beforeFileParse?: (source: SourceObj) => void;
+    onFileParse?: (source: SourceObj) => void;
     afterFileParse?: (file: BscFile) => void;
     /**
      * Called before each file is validated
@@ -283,8 +322,10 @@ export interface CompilerPlugin {
      */
     afterFileValidate?: (file: BscFile) => void;
     beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
+    onFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
     afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
     beforeFileDispose?: (file: BscFile) => void;
+    onFileDispose?: (file: BscFile) => void;
     afterFileDispose?: (file: BscFile) => void;
 }
 

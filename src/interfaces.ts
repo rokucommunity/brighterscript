@@ -222,17 +222,26 @@ export interface Plugin {
     name: string;
     //program events
     beforeProgramCreate?: (builder: ProgramBuilder) => void;
+    onProgramCreate?: (program: Program) => void;
+    afterProgramCreate?: (program: Program) => void;
     beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    onPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
     afterPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
     beforePublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
+    onPublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
     afterPublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
-    afterProgramCreate?: (program: Program) => void;
     beforeProgramValidate?: (program: Program) => void;
+    onProgramValidate?: (program: Program) => void;
     afterProgramValidate?: (program: Program, wasCancelled: boolean) => void;
     beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
+    onProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     beforeProgramDispose?: PluginHandler<BeforeProgramDisposeEvent>;
+    onProgramDispose?: PluginHandler<BeforeProgramDisposeEvent>;
+    afterProgramDispose?: PluginHandler<BeforeProgramDisposeEvent>;
+    beforeGetCodeActions?: PluginHandler<BeforeGetCodeActionsEvent>;
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
+    afterGetCodeActions?: PluginHandler<AfterGetCodeActionsEvent>;
     /**
      * Emitted when VS Code requests "source fix all" source actions for a file.
      * Plugins push one or more `SourceFixAllCodeAction` objects onto `event.actions`,
@@ -240,7 +249,9 @@ export interface Plugin {
      * Plugins are responsible for assembling and merging all changes within each action.
      */
     // For possible future use, but not currently implemented:
+    beforeGetSourceFixAllCodeActions?: PluginHandler<BeforeGetSourceFixAllCodeActionsEvent>;
     onGetSourceFixAllCodeActions?: PluginHandler<OnGetSourceFixAllCodeActionsEvent>;
+    afterGetSourceFixAllCodeActions?: PluginHandler<AfterGetSourceFixAllCodeActionsEvent>;
 
     /**
      * Emitted before the program starts collecting completions
@@ -345,17 +356,22 @@ export interface Plugin {
      */
     afterProvideSelectionRanges?(event: AfterProvideSelectionRangesEvent): any;
 
-
+    beforeGetSemanticTokens?: PluginHandler<BeforeGetSemanticTokensEvent>;
     onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
+    afterGetSemanticTokens?: PluginHandler<AfterGetSemanticTokensEvent>;
     //scope events
+    beforeScopeCreate?: (scope: Scope) => void;
+    onScopeCreate?: (scope: Scope) => void;
     afterScopeCreate?: (scope: Scope) => void;
     beforeScopeDispose?: (scope: Scope) => void;
+    onScopeDispose?: (scope: Scope) => void;
     afterScopeDispose?: (scope: Scope) => void;
     beforeScopeValidate?: ValidateHandler;
     onScopeValidate?: PluginHandler<OnScopeValidateEvent>;
     afterScopeValidate?: ValidateHandler;
     //file events
     beforeFileParse?: (source: SourceObj) => void;
+    onFileParse?: (source: SourceObj) => void;
     afterFileParse?: (file: BscFile) => void;
     /**
      * Called before each file is validated
@@ -370,8 +386,10 @@ export interface Plugin {
      */
     afterFileValidate?: (file: BscFile) => void;
     beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
+    onFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
     afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
     beforeFileDispose?: (file: BscFile) => void;
+    onFileDispose?: (file: BscFile) => void;
     afterFileDispose?: (file: BscFile) => void;
 }
 export type PluginHandler<T, R = void> = (event: T) => R;
@@ -397,6 +415,10 @@ export interface OnGetSourceFixAllCodeActionsEvent {
      */
     actions: SourceFixAllCodeAction[];
 }
+export type BeforeGetCodeActionsEvent = OnGetCodeActionsEvent;
+export type AfterGetCodeActionsEvent = OnGetCodeActionsEvent;
+export type BeforeGetSourceFixAllCodeActionsEvent = OnGetSourceFixAllCodeActionsEvent;
+export type AfterGetSourceFixAllCodeActionsEvent = OnGetSourceFixAllCodeActionsEvent;
 
 export interface ProvideCompletionsEvent<TFile extends BscFile = BscFile> {
     program: Program;
@@ -534,6 +556,8 @@ export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
      */
     semanticTokens: SemanticToken[];
 }
+export type BeforeGetSemanticTokensEvent<T extends BscFile = BscFile> = OnGetSemanticTokensEvent<T>;
+export type AfterGetSemanticTokensEvent<T extends BscFile = BscFile> = OnGetSemanticTokensEvent<T>;
 
 export interface BeforeFileValidateEvent<T extends BscFile = BscFile> {
     program: Program;

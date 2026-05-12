@@ -10,7 +10,7 @@ import { SymbolTable } from './SymbolTable';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, ProvideSelectionRangesEvent, OnGetSourceFixAllCodeActionsEvent } from './interfaces';
+import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, BeforeFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, ProvideSelectionRangesEvent, OnGetCodeActionsEvent, OnGetSourceFixAllCodeActionsEvent, OnGetSemanticTokensEvent } from './interfaces';
 import type { SourceFixAllCodeAction } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
 import { standardizePath as s, util } from './util';
@@ -572,6 +572,7 @@ export class Program {
                     source: fileContents
                 };
                 this.plugins.emit('beforeFileParse', sourceObj);
+                this.plugins.emit('onFileParse', sourceObj);
 
                 this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
                     brsFile.parse(sourceObj.source);
@@ -602,6 +603,7 @@ export class Program {
                     source: fileContents
                 };
                 this.plugins.emit('beforeFileParse', sourceObj);
+                this.plugins.emit('onFileParse', sourceObj);
 
                 this.logger.time(LogLevel.debug, ['parse', chalk.green(srcPath)], () => {
                     xmlFile.parse(sourceObj.source);
@@ -614,12 +616,14 @@ export class Program {
 
                 //create a new scope for this xml file
                 let scope = new XmlScope(xmlFile, this);
+                this.plugins.emit('beforeScopeCreate', scope);
                 this.addScope(scope);
 
                 //register this compoent now that we have parsed it and know its component name
                 this.registerComponent(xmlFile, scope);
 
                 //notify plugins that the scope is created and the component is registered
+                this.plugins.emit('onScopeCreate', scope);
                 this.plugins.emit('afterScopeCreate', scope);
             } else {
                 //TODO do we actually need to implement this? Figure out how to handle img paths
@@ -706,8 +710,10 @@ export class Program {
     public createSourceScope() {
         if (!this.scopes.source) {
             const sourceScope = new Scope('source', this, 'scope:source');
+            this.plugins.emit('beforeScopeCreate', sourceScope);
             sourceScope.attachDependencyGraph(this.dependencyGraph);
             this.addScope(sourceScope);
+            this.plugins.emit('onScopeCreate', sourceScope);
             this.plugins.emit('afterScopeCreate', sourceScope);
         }
     }
@@ -779,6 +785,7 @@ export class Program {
             let scope = this.scopes[file.pkgPath];
             if (scope) {
                 this.plugins.emit('beforeScopeDispose', scope);
+                this.plugins.emit('onScopeDispose', scope);
                 scope.dispose();
                 //notify dependencies of this scope that it has been removed
                 this.dependencyGraph.remove(scope.dependencyGraphKey!);
@@ -800,6 +807,7 @@ export class Program {
                 this.unregisterComponent(file);
             }
             //dispose file
+            this.plugins.emit('onFileDispose', file);
             file?.dispose();
             this.plugins.emit('afterFileDispose', file);
         }
@@ -872,6 +880,7 @@ export class Program {
             .once(() => {
                 this.diagnostics = [];
                 this.plugins.emit('beforeProgramValidate', this);
+                this.plugins.emit('onProgramValidate', this);
                 beforeProgramValidateWasEmitted = true;
             })
             .forEach(() => Object.values(this.files), (file) => {
@@ -1249,15 +1258,18 @@ export class Program {
                 .filter(x => util.rangesIntersectOrTouch(x.range, range));
 
             const scopes = this.getScopesForFile(file);
-
-            this.plugins.emit('onGetCodeActions', {
+            const event: OnGetCodeActionsEvent = {
                 program: this,
                 file: file,
                 range: range,
                 diagnostics: diagnostics,
                 scopes: scopes,
                 codeActions: codeActions
-            });
+            };
+            this.plugins.emit('beforeGetCodeActions', event);
+
+            this.plugins.emit('onGetCodeActions', event);
+            this.plugins.emit('afterGetCodeActions', event);
         }
         return codeActions;
     }
@@ -1275,13 +1287,16 @@ export class Program {
                 .getDiagnostics()
                 .filter(x => x.file === file);
             const scopes = this.getScopesForFile(file);
-            this.plugins.emit('onGetSourceFixAllCodeActions', {
+            const event = {
                 program: this,
                 file: file,
                 diagnostics: diagnostics,
                 scopes: scopes,
                 actions: actions
-            } as OnGetSourceFixAllCodeActionsEvent);
+            } as OnGetSourceFixAllCodeActionsEvent;
+            this.plugins.emit('beforeGetSourceFixAllCodeActions', event);
+            this.plugins.emit('onGetSourceFixAllCodeActions', event);
+            this.plugins.emit('afterGetSourceFixAllCodeActions', event);
         }
         return actions.map(action => codeActionUtil.createCodeAction({
             ...action,
@@ -1296,12 +1311,15 @@ export class Program {
         const file = this.getFile(srcPath);
         if (file) {
             const result = [] as SemanticToken[];
-            this.plugins.emit('onGetSemanticTokens', {
+            const event = {
                 program: this,
                 file: file,
                 scopes: this.getScopesForFile(file),
                 semanticTokens: result
-            });
+            } as OnGetSemanticTokensEvent;
+            this.plugins.emit('beforeGetSemanticTokens', event);
+            this.plugins.emit('onGetSemanticTokens', event);
+            this.plugins.emit('afterGetSemanticTokens', event);
             return result;
         }
     }
@@ -1422,12 +1440,14 @@ export class Program {
      */
     private _getTranspiledFileContents(file: BscFile, outputPath?: string): FileTranspileResult {
         const editor = new AstEditor();
-        this.plugins.emit('beforeFileTranspile', {
+        const beforeEvent = {
             program: this,
             file: file,
             outputPath: outputPath,
             editor: editor
-        });
+        } as BeforeFileTranspileEvent;
+        this.plugins.emit('beforeFileTranspile', beforeEvent);
+        this.plugins.emit('onFileTranspile', beforeEvent);
 
         //if we have any edits, assume the file needs to be transpiled
         if (editor.hasChanges) {
@@ -1522,6 +1542,7 @@ export class Program {
         const astEditor = new AstEditor();
 
         this.plugins.emit('beforeProgramTranspile', this, entries, astEditor);
+        this.plugins.emit('onProgramTranspile', this, entries, astEditor);
         return {
             entries: entries,
             getOutputPath: getOutputPath,
@@ -1791,7 +1812,9 @@ export class Program {
     }
 
     public dispose() {
-        this.plugins.emit('beforeProgramDispose', { program: this });
+        const event = { program: this };
+        this.plugins.emit('beforeProgramDispose', event);
+        this.plugins.emit('onProgramDispose', event);
 
         for (let filePath in this.files) {
             this.files[filePath].dispose();
@@ -1801,6 +1824,7 @@ export class Program {
         }
         this.globalScope.dispose();
         this.dependencyGraph.dispose();
+        this.plugins.emit('afterProgramDispose', event);
     }
 }
 

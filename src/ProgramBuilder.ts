@@ -169,6 +169,7 @@ export class ProgramBuilder {
     protected createProgram() {
         this.program = new Program(this.options, this.logger, this.plugins);
 
+        this.plugins.emit('onProgramCreate', this.program);
         this.plugins.emit('afterProgramCreate', this.program);
 
         return this.program;
@@ -491,6 +492,7 @@ export class ProgramBuilder {
             }
 
             this.plugins.emit('beforePrepublish', this, filteredFileMap);
+            this.plugins.emit('onPrepublish', this, filteredFileMap);
 
             await this.logger.time(LogLevel.log, ['Copying to staging directory'], async () => {
                 //prepublish all non-program-loaded files to staging
@@ -502,6 +504,7 @@ export class ProgramBuilder {
 
             this.plugins.emit('afterPrepublish', this, filteredFileMap);
             this.plugins.emit('beforePublish', this, fileMap);
+            this.plugins.emit('onPublish', this, fileMap);
 
             await this.logger.time(LogLevel.log, ['Transpiling'], async () => {
                 //transpile any brighterscript files

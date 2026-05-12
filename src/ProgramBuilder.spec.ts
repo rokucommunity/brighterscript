@@ -41,16 +41,19 @@ describe('ProgramBuilder', () => {
         builder.dispose();
     });
 
-    it('includes .program in the afterProgramCreate event', async () => {
+    it('includes .program in the onProgramCreate and afterProgramCreate events', async () => {
         builder = new ProgramBuilder();
         const deferred = new Deferred<Program>();
+        const onProgramCreate = sinon.spy();
         builder.plugins.add({
             name: 'test',
+            onProgramCreate: onProgramCreate,
             afterProgramCreate: () => {
                 deferred.resolve(builder.program);
             }
         });
         builder['createProgram']();
+        expect(onProgramCreate.callCount).to.equal(1);
         expect(
             await deferred.promise
         ).to.exist;

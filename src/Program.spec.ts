@@ -185,21 +185,29 @@ describe('Program', () => {
 
         it(`emits events for scope and file creation`, () => {
             const beforeProgramValidate = sinon.spy();
+            const onProgramValidate = sinon.spy();
             const afterProgramValidate = sinon.spy();
+            const beforeScopeCreate = sinon.spy();
+            const onScopeCreate = sinon.spy();
             const afterScopeCreate = sinon.spy();
             const beforeScopeValidate = sinon.spy();
             const afterScopeValidate = sinon.spy();
             const beforeFileParse = sinon.spy();
+            const onFileParse = sinon.spy();
             const afterFileParse = sinon.spy();
             const afterFileValidate = sinon.spy();
             program.plugins = new PluginInterface([{
                 name: 'emits events for scope and file creation',
                 beforeProgramValidate: beforeProgramValidate,
+                onProgramValidate: onProgramValidate,
                 afterProgramValidate: afterProgramValidate,
+                beforeScopeCreate: beforeScopeCreate,
+                onScopeCreate: onScopeCreate,
                 afterScopeCreate: afterScopeCreate,
                 beforeScopeValidate: beforeScopeValidate,
                 afterScopeValidate: afterScopeValidate,
                 beforeFileParse: beforeFileParse,
+                onFileParse: onFileParse,
                 afterFileParse: afterFileParse,
                 afterFileValidate: afterFileValidate
             }], { logger: createLogger() });
@@ -216,14 +224,18 @@ describe('Program', () => {
 
             //program events
             expect(beforeProgramValidate.callCount).to.equal(1);
+            expect(onProgramValidate.callCount).to.equal(1);
             expect(afterProgramValidate.callCount).to.equal(1);
             //scope events
             //(we get component scope event only because source is created in beforeEach)
+            expect(beforeScopeCreate.callCount).to.equal(1);
+            expect(onScopeCreate.callCount).to.equal(1);
             expect(afterScopeCreate.callCount).to.equal(1);
             expect(beforeScopeValidate.callCount).to.equal(2);
             expect(afterScopeValidate.callCount).to.equal(2);
             //file events
             expect(beforeFileParse.callCount).to.equal(2);
+            expect(onFileParse.callCount).to.equal(2);
             expect(afterFileParse.callCount).to.equal(2);
             expect(afterFileValidate.callCount).to.equal(2);
         });
@@ -2439,12 +2451,18 @@ describe('Program', () => {
                     print "hello world"
                 end sub
             `);
+            const onFileTranspile = sinon.spy();
+            const onProgramTranspile = sinon.spy();
+            const afterProgramTranspile = sinon.spy();
             const plugin = program.plugins.add({
                 name: 'TestPlugin',
                 beforeFileTranspile: (event) => {
                     const stmt = ((event.file as BrsFile).ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
                     event.editor.setProperty((stmt.expressions[0] as LiteralExpression).token, 'text', '"hello there"');
                 },
+                onFileTranspile: onFileTranspile,
+                onProgramTranspile: onProgramTranspile,
+                afterProgramTranspile: afterProgramTranspile,
                 afterFileTranspile: sinon.spy()
             });
             expect(
@@ -2454,6 +2472,9 @@ describe('Program', () => {
                     print "hello there"
                 end sub`
             );
+            expect(onFileTranspile.callCount).to.be.greaterThan(0);
+            expect(onProgramTranspile.callCount).to.be.greaterThan(0);
+            expect(afterProgramTranspile.callCount).to.be.greaterThan(0);
             expect(plugin.afterFileTranspile.callCount).to.be.greaterThan(0);
         });
 
@@ -3673,14 +3694,78 @@ describe('Program', () => {
             expect(plugin.afterFileValidate.callCount).to.equal(1);
         });
 
-        it('emits program dispose event', () => {
+        it('emits file and scope dispose events', () => {
             const plugin = {
                 name: 'test',
-                beforeProgramDispose: sinon.spy()
+                beforeFileDispose: sinon.spy(),
+                onFileDispose: sinon.spy(),
+                afterFileDispose: sinon.spy(),
+                beforeScopeDispose: sinon.spy(),
+                onScopeDispose: sinon.spy(),
+                afterScopeDispose: sinon.spy()
+            };
+            program.plugins.add(plugin);
+            program.setFile('components/main.xml', `
+                <component name="main" extends="Group" />
+            `);
+            program.removeFile('components/main.xml');
+            expect(plugin.beforeFileDispose.callCount).to.equal(1);
+            expect(plugin.onFileDispose.callCount).to.equal(1);
+            expect(plugin.afterFileDispose.callCount).to.equal(1);
+            expect(plugin.beforeScopeDispose.callCount).to.equal(1);
+            expect(plugin.onScopeDispose.callCount).to.equal(1);
+            expect(plugin.afterScopeDispose.callCount).to.equal(1);
+        });
+
+        it('emits program dispose events', () => {
+            const plugin = {
+                name: 'test',
+                beforeProgramDispose: sinon.spy(),
+                onProgramDispose: sinon.spy(),
+                afterProgramDispose: sinon.spy()
             };
             program.plugins.add(plugin);
             program.dispose();
             expect(plugin.beforeProgramDispose.callCount).to.equal(1);
+            expect(plugin.onProgramDispose.callCount).to.equal(1);
+            expect(plugin.afterProgramDispose.callCount).to.equal(1);
+        });
+
+        it('emits before/on/after code-action-like events', () => {
+            const plugin = {
+                name: 'test',
+                beforeGetCodeActions: sinon.spy(),
+                onGetCodeActions: sinon.spy(),
+                afterGetCodeActions: sinon.spy(),
+                beforeGetSourceFixAllCodeActions: sinon.spy(),
+                onGetSourceFixAllCodeActions: sinon.spy(),
+                afterGetSourceFixAllCodeActions: sinon.spy(),
+                beforeGetSemanticTokens: sinon.spy(),
+                onGetSemanticTokens: sinon.spy(),
+                afterGetSemanticTokens: sinon.spy()
+            };
+            program.plugins.add(plugin);
+            program.setFile('source/main.bs', `
+                sub main()
+                end sub
+            `);
+            program.validate();
+            const srcPath = s`${rootDir}/source/main.bs`;
+            program.getCodeActions(srcPath, Range.create(0, 0, 0, 0));
+            program.getSourceFixAllCodeActions(srcPath);
+            program.getSemanticTokens(srcPath);
+
+            expect(plugin.beforeGetCodeActions.callCount).to.equal(1);
+            expect(plugin.onGetCodeActions.callCount).to.equal(1);
+            expect(plugin.afterGetCodeActions.callCount).to.equal(1);
+
+            expect(plugin.beforeGetSourceFixAllCodeActions.callCount).to.equal(1);
+            expect(plugin.onGetSourceFixAllCodeActions.callCount).to.equal(1);
+            expect(plugin.afterGetSourceFixAllCodeActions.callCount).to.equal(1);
+
+            expect(plugin.beforeGetSemanticTokens.callCount).to.equal(1);
+            expect(plugin.onGetSemanticTokens.callCount).to.equal(1);
+            expect(plugin.afterGetSemanticTokens.callCount).to.equal(1);
         });
     });
 
