@@ -196,8 +196,8 @@ export interface CompilerPlugin {
     onProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     beforeProgramDispose?: PluginHandler<BeforeProgramDisposeEvent>;
-    onProgramDispose?: PluginHandler<BeforeProgramDisposeEvent>;
-    afterProgramDispose?: PluginHandler<BeforeProgramDisposeEvent>;
+    onProgramDispose?: PluginHandler<OnProgramDisposeEvent>;
+    afterProgramDispose?: PluginHandler<AfterProgramDisposeEvent>;
     beforeGetCodeActions?: PluginHandler<BeforeGetCodeActionsEvent>;
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
     afterGetCodeActions?: PluginHandler<AfterGetCodeActionsEvent>;
@@ -322,7 +322,7 @@ export interface CompilerPlugin {
      */
     afterFileValidate?: (file: BscFile) => void;
     beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
-    onFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
+    onFileTranspile?: PluginHandler<OnFileTranspileEvent>;
     afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
     beforeFileDispose?: (file: BscFile) => void;
     onFileDispose?: (file: BscFile) => void;

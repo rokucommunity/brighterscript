@@ -237,8 +237,8 @@ export interface Plugin {
     onProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     beforeProgramDispose?: PluginHandler<BeforeProgramDisposeEvent>;
-    onProgramDispose?: PluginHandler<BeforeProgramDisposeEvent>;
-    afterProgramDispose?: PluginHandler<BeforeProgramDisposeEvent>;
+    onProgramDispose?: PluginHandler<OnProgramDisposeEvent>;
+    afterProgramDispose?: PluginHandler<AfterProgramDisposeEvent>;
     beforeGetCodeActions?: PluginHandler<BeforeGetCodeActionsEvent>;
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
     afterGetCodeActions?: PluginHandler<AfterGetCodeActionsEvent>;
@@ -386,7 +386,7 @@ export interface Plugin {
      */
     afterFileValidate?: (file: BscFile) => void;
     beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
-    onFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
+    onFileTranspile?: PluginHandler<OnFileTranspileEvent>;
     afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
     beforeFileDispose?: (file: BscFile) => void;
     onFileDispose?: (file: BscFile) => void;
@@ -587,6 +587,7 @@ export interface BeforeFileTranspileEvent<TFile extends BscFile = BscFile> {
      */
     editor: Editor;
 }
+export type OnFileTranspileEvent<TFile extends BscFile = BscFile> = BeforeFileTranspileEvent<TFile>;
 
 export interface AfterFileTranspileEvent<TFile extends BscFile = BscFile> {
     /**
@@ -618,6 +619,8 @@ export interface AfterFileTranspileEvent<TFile extends BscFile = BscFile> {
 export interface BeforeProgramDisposeEvent {
     program: Program;
 }
+export type OnProgramDisposeEvent = BeforeProgramDisposeEvent;
+export type AfterProgramDisposeEvent = BeforeProgramDisposeEvent;
 
 export interface SemanticToken {
     range: Range;

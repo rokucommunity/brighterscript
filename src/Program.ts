@@ -619,7 +619,7 @@ export class Program {
                 this.plugins.emit('beforeScopeCreate', scope);
                 this.addScope(scope);
 
-                //register this compoent now that we have parsed it and know its component name
+                //register this component now that we have parsed it and know its component name
                 this.registerComponent(xmlFile, scope);
 
                 //notify plugins that the scope is created and the component is registered
