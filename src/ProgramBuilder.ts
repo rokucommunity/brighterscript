@@ -183,14 +183,25 @@ export class ProgramBuilder {
 
     protected loadPlugins() {
         const cwd = this.options.cwd ?? process.cwd();
-        const plugins = util.loadPlugins(
+        const pluginEntries = util.loadPlugins(
             cwd,
             this.options.plugins ?? [],
             (pathOrModule, err) => this.logger.error(`Error when loading plugin '${pathOrModule}':`, err)
         );
         this.logger.log(`Loading ${this.options.plugins?.length ?? 0} plugins for cwd "${cwd}"`, this.options.plugins);
-        for (let plugin of plugins) {
-            this.plugins.add(plugin);
+        // CLI-provided plugin option overrides, keyed by plugin name: options.plugin.pluginName = { ... }
+        const cliPluginOptions: Record<string, Record<string, any>> = (this.options as any).plugin ?? {};
+
+        for (let entry of pluginEntries) {
+            this.plugins.add(entry.plugin);
+            if (entry.plugin.onSetConfiguration) {
+                let config = entry.config ?? {};
+                const cliOverride = cliPluginOptions[entry.plugin.name];
+                if (cliOverride && typeof cliOverride === 'object') {
+                    config = util.deepMerge(config, cliOverride);
+                }
+                entry.plugin.onSetConfiguration(config);
+            }
         }
 
         this.plugins.emit('beforeProgramCreate', this);

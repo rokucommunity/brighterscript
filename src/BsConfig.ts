@@ -149,9 +149,10 @@ export interface BsConfig {
     diagnosticLevel?: 'info' | 'hint' | 'warn' | 'error';
 
     /**
-     * A list of scripts or modules to add extra diagnostics or transform the AST
+     * A list of scripts or modules to add extra diagnostics or transform the AST.
+     * Each entry can be a string (path/module name) or an object with `src` and optional `config` properties.
      */
-    plugins?: Array<string>;
+    plugins?: Array<string | PluginDefinition>;
 
     /**
      * A list of scripts or modules to pass to node's `require()` on startup. This is useful for doing things like ts-node registration
@@ -213,6 +214,25 @@ export interface BsConfig {
      * scripts inside `source` that depend on bslib.brs.  Defaults to `source`.
      */
     bslibDestinationDir?: string;
+}
+
+/**
+ * Defines a plugin entry in bsconfig, either as a string shorthand or an object with src and config.
+ */
+export interface PluginDefinition {
+    /**
+     * The path to the plugin file or npm package name.
+     */
+    src: string;
+    /**
+     * Overrides the plugin's `name` property. Useful for distinguishing multiple instances of the same plugin.
+     */
+    name?: string;
+    /**
+     * Plugin-specific configuration. Can be an object (passed directly to the plugin)
+     * or a path to a JSONC config file to be loaded.
+     */
+    config?: Record<string, any> | string;
 }
 
 type OptionalBsConfigFields =

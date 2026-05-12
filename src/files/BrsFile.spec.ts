@@ -4058,7 +4058,7 @@ describe('BrsFile', () => {
             program.plugins = new PluginInterface(
                 util.loadPlugins(tempDir, [
                     s`${tempDir}/plugins/${pluginFileName}`
-                ]),
+                ]).map(e => e.plugin),
                 { logger: createLogger() }
             );
             const file = program.setFile<any>('source/MAIN.brs', '');
@@ -4069,7 +4069,7 @@ describe('BrsFile', () => {
             program.plugins = new PluginInterface(
                 util.loadPlugins(tempDir, [
                     `./plugins/${pluginFileName}`
-                ]),
+                ]).map(e => e.plugin),
                 { logger: createLogger() }
             );
             const file = program.setFile<any>('source/MAIN.brs', '');

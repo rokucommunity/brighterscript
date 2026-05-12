@@ -135,7 +135,7 @@ describe('util', () => {
                 ]
             };
             util.resolvePathsRelativeTo(config, 'plugins', s`${rootDir}/config`);
-            expect(config?.plugins?.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
+            expect(config?.plugins?.map(p => (p ? util.pathSepNormalize(p as string, '/') : undefined))).to.deep.equal([
                 `${rootDir}/config/plugins.js`,
                 `${rootDir}/config/scripts/plugins.js`,
                 `${rootDir}/scripts/plugins.js`,
@@ -174,10 +174,45 @@ describe('util', () => {
                 ]
             };
             util.resolvePathsRelativeTo(config, 'plugins', s`${process.cwd()}/config`);
-            expect(config?.plugins?.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
+            expect(config?.plugins?.map(p => (p ? util.pathSepNormalize(p as string, '/') : undefined))).to.deep.equal([
                 s`${process.cwd()}/config/plugins.js`,
                 'bsplugin'
             ].map(p => util.pathSepNormalize(p, '/')));
+        });
+
+        it('resolves the `src` of plugin definition objects relative to the bsconfig dir', () => {
+            const config: BsConfig = {
+                plugins: [
+                    { src: './my-plugin.js', config: { foo: 'bar' } },
+                    { src: 'bsplugin', config: { foo: 'bar' } }
+                ]
+            };
+            util.resolvePathsRelativeTo(config, 'plugins', s`${rootDir}/config`);
+            const plugins = config.plugins as Array<{ src: string; config?: any }>;
+            expect(util.pathSepNormalize(plugins[0].src, '/')).to.eql(util.pathSepNormalize(`${rootDir}/config/my-plugin.js`, '/'));
+            expect(plugins[1].src).to.eql('bsplugin');
+        });
+
+        it('resolves a plugin definition `config` file path relative to the bsconfig dir', () => {
+            const config: BsConfig = {
+                plugins: [
+                    { src: 'bsplugin', config: './bsplugin-config.json' }
+                ]
+            };
+            util.resolvePathsRelativeTo(config, 'plugins', s`${rootDir}/config`);
+            const plugins = config.plugins as Array<{ src: string; config?: any }>;
+            expect(util.pathSepNormalize(plugins[0].config, '/')).to.eql(util.pathSepNormalize(`${rootDir}/config/bsplugin-config.json`, '/'));
+        });
+
+        it('leaves inline-object plugin configs untouched', () => {
+            const config: BsConfig = {
+                plugins: [
+                    { src: 'bsplugin', config: { foo: 'bar' } }
+                ]
+            };
+            util.resolvePathsRelativeTo(config, 'plugins', s`${rootDir}/config`);
+            const plugins = config.plugins as Array<{ src: string; config?: any }>;
+            expect(plugins[0].config).to.eql({ foo: 'bar' });
         });
     });
 
@@ -590,8 +625,8 @@ describe('util', () => {
                 };
             `);
             const stub = sinon.stub(console, 'warn').callThrough();
-            const plugins = util.loadPlugins(cwd, [pluginPath]);
-            expect(plugins[0].name).to.eql('AwesomePlugin');
+            const entries = util.loadPlugins(cwd, [pluginPath]);
+            expect(entries[0].plugin.name).to.eql('AwesomePlugin');
             expect(stub.callCount).to.equal(1);
         });
 
@@ -602,8 +637,8 @@ describe('util', () => {
                 };
             `);
             const stub = sinon.stub(console, 'warn').callThrough();
-            const plugins = util.loadPlugins(cwd, [pluginPath]);
-            expect(plugins[0].name).to.eql('AwesomePlugin');
+            const entries = util.loadPlugins(cwd, [pluginPath]);
+            expect(entries[0].plugin.name).to.eql('AwesomePlugin');
             expect(stub.callCount).to.equal(1);
         });
 
@@ -616,8 +651,8 @@ describe('util', () => {
                 };
             `);
             const stub = sinon.stub(console, 'warn').callThrough();
-            const plugins = util.loadPlugins(cwd, [pluginPath]);
-            expect(plugins[0].name).to.eql('AwesomePlugin');
+            const entries = util.loadPlugins(cwd, [pluginPath]);
+            expect(entries[0].plugin.name).to.eql('AwesomePlugin');
             //does not warn about factory pattern
             expect(stub.callCount).to.equal(0);
         });
@@ -631,8 +666,8 @@ describe('util', () => {
                 };
             `);
             const stub = sinon.stub(console, 'warn').callThrough();
-            const plugins = util.loadPlugins(cwd, [pluginPath]);
-            expect(plugins[0].name).to.eql('AwesomePlugin');
+            const entries = util.loadPlugins(cwd, [pluginPath]);
+            expect(entries[0].plugin.name).to.eql('AwesomePlugin');
             //does not warn about factory pattern
             expect(stub.callCount).to.equal(0);
         });
@@ -647,10 +682,161 @@ describe('util', () => {
                 };
             `);
             sinon.stub(console, 'warn').callThrough();
-            const plugins = util.loadPlugins(cwd, [pluginPath]);
-            expect((plugins[0] as any).initOptions).to.eql({
+            const entries = util.loadPlugins(cwd, [pluginPath]);
+            expect((entries[0].plugin as any).initOptions).to.eql({
                 version: util.getBrighterScriptVersion()
             });
+        });
+
+        it('returns undefined config for string plugin entries', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports = function() {
+                    return { name: 'AwesomePlugin' };
+                };
+            `);
+            sinon.stub(console, 'warn').callThrough();
+            const entries = util.loadPlugins(cwd, [pluginPath]);
+            expect(entries[0].config).to.be.undefined;
+        });
+
+        it('overrides plugin name when entry has a name property', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports = function() {
+                    return { name: 'OriginalName' };
+                };
+            `);
+            sinon.stub(console, 'warn').callThrough();
+            const entries = util.loadPlugins(cwd, [{ src: pluginPath, name: 'OverriddenName' }]);
+            expect(entries[0].plugin.name).to.eql('OverriddenName');
+        });
+
+        it('does not override plugin name when entry has no name property', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports = function() {
+                    return { name: 'OriginalName' };
+                };
+            `);
+            sinon.stub(console, 'warn').callThrough();
+            const entries = util.loadPlugins(cwd, [{ src: pluginPath }]);
+            expect(entries[0].plugin.name).to.eql('OriginalName');
+        });
+
+        it('returns inline object config for object plugin entries', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports = function() {
+                    return { name: 'AwesomePlugin' };
+                };
+            `);
+            sinon.stub(console, 'warn').callThrough();
+            const entries = util.loadPlugins(cwd, [{ src: pluginPath, config: { foo: 'bar', count: 42 } }]);
+            expect(entries[0].plugin.name).to.eql('AwesomePlugin');
+            expect(entries[0].config).to.eql({ foo: 'bar', count: 42 });
+        });
+
+        it('loads config from a JSONC file path', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports = function() {
+                    return { name: 'AwesomePlugin' };
+                };
+            `);
+            const configPath = `${tempDir}/plugin-config.json`;
+            fsExtra.writeFileSync(configPath, `{ "key": "value", "num": 99 }`);
+            sinon.stub(console, 'warn').callThrough();
+            const entries = util.loadPlugins(cwd, [{ src: pluginPath, config: configPath }]);
+            expect(entries[0].config).to.eql({ key: 'value', num: 99 });
+        });
+
+        it('loads config from a JSONC file with comments', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports = function() {
+                    return { name: 'AwesomePlugin' };
+                };
+            `);
+            const configPath = `${tempDir}/plugin-config.jsonc`;
+            fsExtra.writeFileSync(configPath, `{
+                // this is a comment
+                "enabled": true,
+                "level": "verbose" /* another comment */
+            }`);
+            sinon.stub(console, 'warn').callThrough();
+            const entries = util.loadPlugins(cwd, [{ src: pluginPath, config: configPath }]);
+            expect(entries[0].config).to.eql({ enabled: true, level: 'verbose' });
+        });
+
+        it('resolves relative config file paths against cwd', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports = function() {
+                    return { name: 'AwesomePlugin' };
+                };
+            `);
+            const configPath = `${tempDir}/plugin-config.json`;
+            fsExtra.writeFileSync(configPath, `{ "mode": "test" }`);
+            sinon.stub(console, 'warn').callThrough();
+            // pass a relative path from cwd
+            const entries = util.loadPlugins(tempDir, [{ src: pluginPath, config: 'plugin-config.json' }]);
+            expect(entries[0].config).to.eql({ mode: 'test' });
+        });
+
+        it('throws when config file path does not exist', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports = function() {
+                    return { name: 'AwesomePlugin' };
+                };
+            `);
+            sinon.stub(console, 'warn').callThrough();
+            expect(() => {
+                util.loadPlugins(cwd, [{ src: pluginPath, config: 'does-not-exist.json' }]);
+            }).to.throw;
+        });
+
+        it('calls onError when a plugin fails to load', () => {
+            const errors: string[] = [];
+            util.loadPlugins(cwd, ['nonexistent-plugin-module'], (pathOrModule, err) => {
+                errors.push(pathOrModule);
+            });
+            expect(errors).to.eql(['nonexistent-plugin-module']);
+        });
+    });
+
+    describe('deepMerge', () => {
+        it('merges top-level keys from source into target', () => {
+            expect(util.deepMerge({ a: 1 }, { b: 2 })).to.eql({ a: 1, b: 2 });
+        });
+
+        it('source values overwrite target values', () => {
+            expect(util.deepMerge({ a: 1 }, { a: 99 })).to.eql({ a: 99 });
+        });
+
+        it('recursively merges nested objects', () => {
+            expect(util.deepMerge(
+                { foo: { a: 1, b: 2 } },
+                { foo: { a: 99 } }
+            )).to.eql({ foo: { a: 99, b: 2 } });
+        });
+
+        it('handles deeply nested merges', () => {
+            expect(util.deepMerge(
+                { foo: { bar: { a: 1, b: 2 } } },
+                { foo: { bar: { a: 99 } } }
+            )).to.eql({ foo: { bar: { a: 99, b: 2 } } });
+        });
+
+        it('source array replaces target array (no element-wise merge)', () => {
+            expect(util.deepMerge({ arr: [1, 2, 3] }, { arr: [4, 5] })).to.eql({ arr: [4, 5] });
+        });
+
+        it('does not mutate the target object', () => {
+            const target = { a: 1, nested: { x: 1 } };
+            util.deepMerge(target, { a: 2, nested: { x: 9 } });
+            expect(target).to.eql({ a: 1, nested: { x: 1 } });
+        });
+
+        it('handles empty source', () => {
+            expect(util.deepMerge({ a: 1 }, {})).to.eql({ a: 1 });
+        });
+
+        it('handles empty target', () => {
+            expect(util.deepMerge({}, { a: 1 })).to.eql({ a: 1 });
         });
     });
 

@@ -7,7 +7,7 @@ import { rokuDeploy, DefaultFiles } from 'roku-deploy';
 import type { Diagnostic, Position, Range, Location, DiagnosticRelatedInformation } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
-import type { BsConfig, FinalizedBsConfig } from './BsConfig';
+import type { BsConfig, FinalizedBsConfig, PluginDefinition } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, Plugin, ExpressionInfo, TranspileResult, MaybePromise, DisposableLike, PluginFactory } from './interfaces';
 import { BooleanType } from './types/BooleanType';
@@ -282,15 +282,28 @@ export class Util {
         if (!collection[key]) {
             return;
         }
-        const result = new Set<string>();
-        for (const p of collection[key] as string[] ?? []) {
-            if (p) {
-                result.add(
-                    p?.startsWith('.') ? path.resolve(relativeDir, p) : p
-                );
+        const resolvedStrings = new Set<string>();
+        const result: Array<string | PluginDefinition> = [];
+        for (const entry of collection[key] as Array<string | PluginDefinition> ?? []) {
+            if (!entry) {
+                continue;
+            }
+            if (typeof entry === 'string') {
+                const resolved = entry.startsWith('.') ? path.resolve(relativeDir, entry) : entry;
+                if (!resolvedStrings.has(resolved)) {
+                    resolvedStrings.add(resolved);
+                    result.push(resolved);
+                }
+            } else {
+                //plugin definition object — resolve its `src` and `config` (when it's a file path) against relativeDir
+                const resolvedSrc = entry.src?.startsWith('.') ? path.resolve(relativeDir, entry.src) : entry.src;
+                const resolvedConfig = typeof entry.config === 'string' && entry.config.startsWith('.')
+                    ? path.resolve(relativeDir, entry.config)
+                    : entry.config;
+                result.push({ ...entry, src: resolvedSrc, config: resolvedConfig });
             }
         }
-        collection[key] = [...result];
+        collection[key] = result;
     }
 
     /**
@@ -1231,11 +1244,12 @@ export class Util {
     }
 
     /**
-     * Load and return the list of plugins
+     * Load and return the list of plugins, with their resolved configurations
      */
-    public loadPlugins(cwd: string, pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void): Plugin[] {
+    public loadPlugins(cwd: string, pathOrModules: Array<string | PluginDefinition>, onError?: (pathOrModule: string, err: Error) => void): Array<{ plugin: Plugin; config: Record<string, any> | undefined }> {
         const logger = createLogger();
-        return pathOrModules.reduce<Plugin[]>((acc, pathOrModule) => {
+        return pathOrModules.reduce<Array<{ plugin: Plugin; config: Record<string, any> | undefined }>>((acc, entry) => {
+            const pathOrModule = typeof entry === 'string' ? entry : entry.src;
             if (typeof pathOrModule === 'string') {
                 try {
                     const loaded = requireRelative(pathOrModule, cwd);
@@ -1261,7 +1275,18 @@ export class Util {
                     if (!plugin.name) {
                         plugin.name = pathOrModule;
                     }
-                    acc.push(plugin);
+
+                    // if the entry has an explicit name, forcibly override the plugin's name
+                    if (typeof entry === 'object' && entry.name) {
+                        plugin.name = entry.name;
+                    }
+
+                    let config: Record<string, any> | undefined;
+                    if (typeof entry === 'object' && entry.config !== undefined) {
+                        config = this.resolvePluginConfig(entry.config, cwd);
+                    }
+
+                    acc.push({ plugin: plugin, config: config });
                 } catch (err: any) {
                     if (onError) {
                         onError(pathOrModule, err);
@@ -1272,6 +1297,44 @@ export class Util {
             }
             return acc;
         }, []);
+    }
+
+    /**
+     * Deep-merge `source` into `target`, returning a new object. Arrays in `source` replace arrays in `target`.
+     * Plain objects are merged recursively; all other values are overwritten by `source`.
+     */
+    public deepMerge(target: Record<string, any>, source: Record<string, any>): Record<string, any> {
+        const result = { ...target };
+        for (const key of Object.keys(source)) {
+            const srcVal = source[key];
+            const tgtVal = result[key];
+            if (srcVal !== null && typeof srcVal === 'object' && !Array.isArray(srcVal) &&
+                tgtVal !== null && typeof tgtVal === 'object' && !Array.isArray(tgtVal)) {
+                result[key] = this.deepMerge(tgtVal, srcVal);
+            } else {
+                result[key] = srcVal;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Resolve a plugin's config value. If it's a string, treat it as a path to a JSONC config file.
+     * If it's an object, return it directly.
+     */
+    public resolvePluginConfig(config: Record<string, any> | string, cwd: string): Record<string, any> {
+        if (typeof config === 'string') {
+            const configPath = path.resolve(cwd, config);
+            const configText = fsExtra.readFileSync(configPath, 'utf8');
+            const errors: any[] = [];
+            const parsed = parseJsonc(configText, errors);
+            if (errors.length > 0) {
+                const msgs = errors.map(e => printParseErrorCode(e.error)).join(', ');
+                throw new Error(`Failed to parse plugin config file "${configPath}": ${msgs}`);
+            }
+            return parsed;
+        }
+        return config;
     }
 
     /**

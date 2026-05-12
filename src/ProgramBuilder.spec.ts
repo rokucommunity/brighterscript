@@ -429,6 +429,191 @@ describe('ProgramBuilder', () => {
             ).to.be.true;
         });
     });
+
+    describe('loadPlugins', () => {
+        let pluginPath: string;
+        let pluginId = 1;
+
+        beforeEach(() => {
+            pluginPath = `${tempDir}/pb-plugin${pluginId++}.js`;
+        });
+
+        it('calls onSetConfiguration with inline config object when plugin entry is an object', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports = function() {
+                    return { name: 'ConfigPlugin' };
+                };
+            `);
+            const receivedConfigs: any[] = [];
+            sinon.stub(util, 'loadPlugins').returns([{
+                plugin: {
+                    name: 'ConfigPlugin',
+                    onSetConfiguration: (cfg: any) => receivedConfigs.push(cfg)
+                },
+                config: { myOption: true }
+            }]);
+            builder.options = util.normalizeAndResolveConfig({
+                rootDir: rootDir,
+                plugins: [{ src: pluginPath, config: { myOption: true } }]
+            });
+            builder['loadPlugins']();
+            expect(receivedConfigs).to.eql([{ myOption: true }]);
+        });
+
+        it('calls onSetConfiguration with empty object when plugin has no config', () => {
+            let receivedConfig: any;
+            sinon.stub(util, 'loadPlugins').returns([{
+                plugin: {
+                    name: 'NoConfigPlugin',
+                    onSetConfiguration: (cfg: any) => {
+                        receivedConfig = cfg;
+                    }
+                },
+                config: undefined
+            }]);
+            builder.options = util.normalizeAndResolveConfig({
+                rootDir: rootDir,
+                plugins: [pluginPath]
+            });
+            builder['loadPlugins']();
+            expect(receivedConfig).to.eql({});
+        });
+
+        it('calls onSetConfiguration with empty object for string shorthand plugins', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports = function() {
+                    return { name: 'StringShorthandPlugin' };
+                };
+            `);
+            let receivedConfig: any;
+            sinon.stub(util, 'loadPlugins').returns([{
+                plugin: {
+                    name: 'StringShorthandPlugin',
+                    onSetConfiguration: (cfg: any) => {
+                        receivedConfig = cfg;
+                    }
+                },
+                config: undefined
+            }]);
+            builder.options = util.normalizeAndResolveConfig({
+                rootDir: rootDir,
+                plugins: [pluginPath]
+            });
+            builder['loadPlugins']();
+            expect(receivedConfig).to.eql({});
+        });
+
+        it('does not crash when plugin has no onSetConfiguration method', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports = function() {
+                    return { name: 'MinimalPlugin' };
+                };
+            `);
+            sinon.stub(util, 'loadPlugins').returns([{
+                plugin: { name: 'MinimalPlugin' },
+                config: { someConfig: 'value' }
+            }]);
+            builder.options = util.normalizeAndResolveConfig({
+                rootDir: rootDir,
+                plugins: [{ src: pluginPath, config: { someConfig: 'value' } }]
+            });
+            // should not throw
+            expect(() => builder['loadPlugins']()).not.to.throw();
+        });
+
+        it('calls onSetConfiguration with config loaded from a JSONC file', () => {
+            fsExtra.writeFileSync(pluginPath, `
+                module.exports = function() {
+                    return { name: 'FileConfigPlugin' };
+                };
+            `);
+            const configPath = `${tempDir}/my-plugin-config.json`;
+            fsExtra.writeFileSync(configPath, `{ "enabled": true, "threshold": 5 }`);
+            const receivedConfigs: any[] = [];
+            sinon.stub(util, 'loadPlugins').returns([{
+                plugin: {
+                    name: 'FileConfigPlugin',
+                    onSetConfiguration: (cfg: any) => receivedConfigs.push(cfg)
+                },
+                config: { enabled: true, threshold: 5 }
+            }]);
+            builder.options = util.normalizeAndResolveConfig({
+                rootDir: rootDir,
+                plugins: [{ src: pluginPath, config: configPath }]
+            });
+            builder['loadPlugins']();
+            expect(receivedConfigs).to.eql([{ enabled: true, threshold: 5 }]);
+        });
+
+        it('adds all loaded plugins to the plugin interface', () => {
+            sinon.stub(util, 'loadPlugins').returns([
+                { plugin: { name: 'PluginA' }, config: undefined },
+                { plugin: { name: 'PluginB' }, config: undefined }
+            ]);
+            builder.options = util.normalizeAndResolveConfig({
+                rootDir: rootDir,
+                plugins: ['pluginA', 'pluginB']
+            });
+            builder['loadPlugins']();
+            expect(builder.plugins.has({ name: 'PluginA' })).to.be.false; // `has` checks by reference
+            // verify via emit - count beforeProgramCreate calls
+            let callCount = 0;
+            builder.plugins.add({
+                name: 'counter',
+                beforeProgramCreate: () => {
+                    callCount++;
+                }
+            });
+            // PluginA and PluginB don't have beforeProgramCreate, so only counter fires
+            builder.plugins.emit('beforeProgramCreate', builder as any);
+            expect(callCount).to.eql(1);
+        });
+
+        it('deep-merges CLI plugin options on top of bsconfig plugin config', () => {
+            const receivedConfigs: any[] = [];
+            sinon.stub(util, 'loadPlugins').returns([{
+                plugin: {
+                    name: 'my-plugin',
+                    onSetConfiguration: (cfg: any) => receivedConfigs.push(cfg)
+                },
+                config: { severity: 'warn', nested: { a: 1, b: 2 } }
+            }]);
+            builder.options = util.normalizeAndResolveConfig({ rootDir: rootDir });
+            // simulate what yargs produces for --plugin.my-plugin.severity=error --plugin.my-plugin.nested.a=99
+            (builder.options as any)['plugin'] = { 'my-plugin': { severity: 'error', nested: { a: 99 } } };
+            builder['loadPlugins']();
+            expect(receivedConfigs[0]).to.eql({ severity: 'error', nested: { a: 99, b: 2 } });
+        });
+
+        it('CLI plugin options only affect the named plugin', () => {
+            const configA: any[] = [];
+            const configB: any[] = [];
+            sinon.stub(util, 'loadPlugins').returns([
+                { plugin: { name: 'plugin-a', onSetConfiguration: (cfg: any) => configA.push(cfg) }, config: { x: 1 } },
+                { plugin: { name: 'plugin-b', onSetConfiguration: (cfg: any) => configB.push(cfg) }, config: { y: 2 } }
+            ]);
+            builder.options = util.normalizeAndResolveConfig({ rootDir: rootDir });
+            (builder.options as any)['plugin'] = { 'plugin-a': { x: 99 } };
+            builder['loadPlugins']();
+            expect(configA[0]).to.eql({ x: 99 });
+            expect(configB[0]).to.eql({ y: 2 });
+        });
+
+        it('CLI plugin options apply even when plugin has no bsconfig config', () => {
+            const receivedConfigs: any[] = [];
+            sinon.stub(util, 'loadPlugins').returns([{
+                plugin: {
+                    name: 'bare-plugin',
+                    onSetConfiguration: (cfg: any) => receivedConfigs.push(cfg)
+                },
+                config: undefined
+            }]);
+            builder.options = util.normalizeAndResolveConfig({ rootDir: rootDir });
+            (builder.options as any)['plugin'] = { 'bare-plugin': { foo: 'bar' } };
+            builder['loadPlugins']();
+            expect(receivedConfigs[0]).to.eql({ foo: 'bar' });
+        });
+    });
 });
 
 function createBsDiagnostic(filePath: string, messages: string[]): BsDiagnostic[] {

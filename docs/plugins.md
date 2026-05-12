@@ -21,10 +21,88 @@ Those plugins will be loaded by the VSCode extension and can provide live diagno
 }
 ```
 
+### Plugin configuration objects
+
+Instead of a plain string, a plugin entry can be an object with `src`, `name`, and `config` properties. This lets you pass plugin-specific configuration directly in `bsconfig.json`.
+
+```json
+{
+    "plugins": [
+        {
+            "src": "./scripts/myPlugin.js",
+            "name": "my-plugin",
+            "config": {
+                "severity": "error",
+                "ignorePatterns": ["**/*.spec.bs"]
+            }
+        },
+        {
+            "src": "@rokucommunity/bslint",
+            "config": "./path/to/bslint-config.json"
+        }
+    ]
+}
+```
+
+The supported properties are:
+- **`src`** *(required)* — the path to the plugin file or npm package name, same as the string shorthand.
+- **`name`** *(optional)* — overrides the plugin's own `name` property. Useful for distinguishing multiple instances of the same plugin loaded with different configs.
+- **`config`** *(optional)* — plugin-specific configuration, either:
+  - **An inline object** — passed directly to the plugin.
+  - **A path to a JSONC file** (relative to `cwd`) — the file is parsed and its contents are passed to the plugin. JSONC files support JavaScript-style comments (`//` and `/* */`).
+
+Both the string shorthand and the object form can be mixed in the same `plugins` array.
+
+### Receiving configuration in your plugin
+
+The compiler calls the `onSetConfiguration` lifecycle hook on every plugin immediately after loading it, before any other lifecycle events fire. Plugins loaded via the string shorthand receive an empty object (`{}`); plugins loaded via the object form receive their resolved `config` value (or `{}` if no `config` was specified). Plugins may be reconfigured multiple times in watch mode if the `bsconfig.json` or plugin config files change.
+
+```typescript
+import type { CompilerPlugin } from 'brighterscript';
+
+interface MyPluginConfig {
+    severity?: 'error' | 'warn';
+    ignorePatterns?: string[];
+}
+
+export default function () {
+    return new MyPlugin();
+}
+
+class MyPlugin implements CompilerPlugin {
+    public name = 'my-plugin';
+    private config: MyPluginConfig = {};
+
+    public onSetConfiguration(newConfig: MyPluginConfig) {
+        this.config = newConfig;
+    }
+
+    public afterFileValidate(file) {
+        // use this.config here
+    }
+}
+```
+
 ### Usage on the CLI
+
+Load plugins by path or package name:
 ```bash
 npx bsc --plugins "./scripts/myPlugin.js" "@rokucommunity/bslint"
 ```
+
+Override individual plugin config properties from the CLI using `--plugin.<pluginName>.<prop>`:
+```bash
+npx bsc --plugin.my-plugin.severity=error --plugin.my-plugin.ignorePatterns="**/*.spec.bs"
+```
+
+Nested properties work too:
+```bash
+npx bsc --plugin.my-plugin.rules.noUnderscores=true
+```
+
+CLI overrides are deep-merged on top of whatever `config` the plugin has in `bsconfig.json`. The plugin name used in the CLI flag must match the plugin's `name` property (which can be set via the `name` field in the bsconfig object entry).
+
+> Plugin configuration objects are only supported in `bsconfig.json` — the CLI `--plugins` flag accepts string values only.
 
 ### Programmatic configuration
 

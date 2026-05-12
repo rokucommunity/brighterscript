@@ -205,6 +205,12 @@ export type CompilerPlugin = Plugin;
 
 export interface Plugin {
     name: string;
+    /**
+     * Called when the plugin is given its configuration. This may be called multiple times
+     * if the configuration changes (e.g. bsconfig or plugin config files are modified during watch mode).
+     * @param config the plugin-specific configuration object
+     */
+    onSetConfiguration?: (config: Record<string, any>) => void;
     //program events
     beforeProgramCreate?: (builder: ProgramBuilder) => void;
     beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
