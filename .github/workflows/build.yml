@@ -16,11 +16,12 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
+        node-version: ["16", "18", "20"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "16.20.2"
+          node-version: ${{ matrix.node-version }}
           architecture: 'x64' # fix for macos-latest
       - run: npm ci
       - run: npm run build
