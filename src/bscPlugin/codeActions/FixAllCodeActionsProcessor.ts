@@ -2,13 +2,13 @@ import type { BsDiagnostic } from '../../interfaces';
 import { DiagnosticCodeMap } from '../../DiagnosticMessages';
 import type { DiagnosticMessageType } from '../../DiagnosticMessages';
 import type { XmlFile } from '../../files/XmlFile';
-import type { OnGetSourceFixAllCodeActionsEvent } from '../../interfaces';
+import type { ProvideSourceFixAllCodeActionsEvent } from '../../interfaces';
 import { isXmlFile } from '../../astUtils/reflection';
 import { getMissingExtendsInsertPosition, getRemoveReturnValueChange } from './codeActionHelpers';
 
 export class FixAllCodeActionsProcessor {
     public constructor(
-        public event: OnGetSourceFixAllCodeActionsEvent
+        public event: ProvideSourceFixAllCodeActionsEvent
     ) { }
 
     public process() {

@@ -282,12 +282,20 @@ export interface Plugin {
     afterRemoveProgram?(event: AfterRemoveProgramEvent): any;
 
     /**
+     * Called before the `provideSourceFixAllCodeActions` hook.
+     */
+    beforeProvideSourceFixAllCodeActions?(event: BeforeProvideSourceFixAllCodeActionsEvent): any;
+    /**
      * Emitted when VS Code requests "source fix all" source actions for a file.
      * Plugins push one or more `SourceFixAllCodeAction` objects onto `event.actions`,
      * each representing a distinct named group that will appear in the Source Actions menu.
      * Plugins are responsible for assembling and merging all changes within each action.
      */
-    onGetSourceFixAllCodeActions?(event: OnGetSourceFixAllCodeActionsEvent): any;
+    provideSourceFixAllCodeActions?(event: ProvideSourceFixAllCodeActionsEvent): any;
+    /**
+     * Called after `provideSourceFixAllCodeActions`. Use this to intercept or sanitize the actions before they are converted to LSP CodeActions.
+     */
+    afterProvideSourceFixAllCodeActions?(event: AfterProvideSourceFixAllCodeActionsEvent): any;
 
     /**
      * Emitted before the program starts collecting completions
@@ -438,6 +446,11 @@ export interface Plugin {
      */
     beforeAddFile?(event: BeforeAddFileEvent): any;
     /**
+     * Called while a file is being added to the program. This is the central event fired between `beforeAddFile` and `afterAddFile`.
+     * Includes physical files as well as any virtual files produced by `provideFile` events
+     */
+    addFile?(event: AddFileEvent): any;
+    /**
      * Called after a file has been added to the program.
      * Includes physical files as well as any virtual files produced by `provideFile` events
      */
@@ -447,6 +460,11 @@ export interface Plugin {
      * Called before a file is removed from the program. This includes physical and virtual files
      */
     beforeRemoveFile?(event: BeforeRemoveFileEvent): any;
+    /**
+     * Called while a file is being removed from the program. This is the central event fired between `beforeRemoveFile` and `afterRemoveFile`.
+     * This includes physical and virtual files
+     */
+    removeFile?(event: RemoveFileEvent): any;
     /**
      * Called after a file has been removed from the program. This includes physical and virtual files
      */
@@ -471,6 +489,10 @@ export interface Plugin {
      * Called right before the program builds (i.e. generates the code and puts it in the outDir
      */
     beforeBuildProgram?(event: BeforeBuildProgramEvent): any;
+    /**
+     * Called while the program builds. This is the central event fired between `beforeBuildProgram` and `afterBuildProgram`.
+     */
+    buildProgram?(event: BuildProgramEvent): any;
     /**
      * Called right after the program builds (i.e. generates the code and puts it in the outDir
      */
@@ -523,6 +545,10 @@ export interface Plugin {
      * Called before any files are written
      */
     beforeWriteProgram?(event: BeforeWriteProgramEvent): any;
+    /**
+     * Called while files are being written. This is the central event fired between `beforeWriteProgram` and `afterWriteProgram`.
+     */
+    writeProgram?(event: WriteProgramEvent): any;
     /**
      * Called after all files are written
      */
@@ -592,7 +618,7 @@ export interface AfterValidateProgramEvent extends BeforeValidateProgramEvent {
     wasCancelled: boolean;
 }
 
-export interface OnGetSourceFixAllCodeActionsEvent {
+export interface ProvideSourceFixAllCodeActionsEvent {
     program: Program;
     file: BscFile;
     /** All diagnostics for this file (not range-filtered) */
@@ -604,6 +630,12 @@ export interface OnGetSourceFixAllCodeActionsEvent {
      */
     actions: SourceFixAllCodeAction[];
 }
+export type BeforeProvideSourceFixAllCodeActionsEvent = ProvideSourceFixAllCodeActionsEvent;
+export type AfterProvideSourceFixAllCodeActionsEvent = ProvideSourceFixAllCodeActionsEvent;
+/**
+ * @deprecated use `ProvideSourceFixAllCodeActionsEvent` instead
+ */
+export type OnGetSourceFixAllCodeActionsEvent = ProvideSourceFixAllCodeActionsEvent;
 
 
 export interface ProvideCompletionsEvent<TFile extends BscFile = BscFile> {
@@ -625,6 +657,7 @@ export interface BeforeBuildProgramEvent {
     files: BscFile[];
     editor: Editor;
 }
+export type BuildProgramEvent = BeforeBuildProgramEvent;
 export type AfterBuildProgramEvent = BeforeBuildProgramEvent;
 
 export interface ProvideHoverEvent {
@@ -926,12 +959,14 @@ export interface BeforeAddFileEvent<TFile extends BscFile = BscFile> {
     file: TFile;
     program: Program;
 }
+export type AddFileEvent<TFile extends BscFile = BscFile> = BeforeAddFileEvent<TFile>;
 export type AfterAddFileEvent<TFile extends BscFile = BscFile> = BeforeAddFileEvent<TFile>;
 
 export interface BeforeRemoveFileEvent<TFile extends BscFile = BscFile> {
     file: TFile;
     program: Program;
 }
+export type RemoveFileEvent<TFile extends BscFile = BscFile> = BeforeRemoveFileEvent<TFile>;
 export type AfterRemoveFileEvent<TFile extends BscFile = BscFile> = BeforeRemoveFileEvent<TFile>;
 
 export type BeforePrepareProgramEvent = PrepareProgramEvent;
@@ -1020,6 +1055,7 @@ export interface BeforeWriteProgramEvent {
     outDir: string;
     files: Map<BscFile, SerializedFile[]>;
 }
+export type WriteProgramEvent = BeforeWriteProgramEvent;
 export type AfterWriteProgramEvent = BeforeWriteProgramEvent;
 
 
