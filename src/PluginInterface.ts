@@ -165,7 +165,8 @@ export default class PluginInterface<T extends Plugin = Plugin> {
             beforeFileValidate: 'beforeValidateFile',
             onFileValidate: 'validateFile',
             afterFileValidate: 'afterValidateFile',
-            onSerializeProgram: 'serializeProgram'
+            onSerializeProgram: 'serializeProgram',
+            onGetSourceFixAllCodeActions: 'provideSourceFixAllCodeActions'
         };
 
         for (const [oldEvent, newEvent] of Object.entries(upgradeWithWarn)) {
