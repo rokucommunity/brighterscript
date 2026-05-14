@@ -1,5 +1,5 @@
 /* eslint-disable func-names */
-import { TokenKind, ReservedWords, Keywords, PreceedingRegexTypes } from './TokenKind';
+import { TokenKind, ReservedWords, Keywords, PreceedingRegexTypes, FixedTokenText, LexerTextCache } from './TokenKind';
 import type { Token } from './Token';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
 import type { Range, Diagnostic } from 'vscode-languageserver';
@@ -105,8 +105,8 @@ export class Lexer {
 
         this.tokens.push({
             kind: TokenKind.Eof,
-            isReserved: false,
             text: '',
+            isReserved: false,
             range: this.options.trackLocations
                 ? util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1)
                 : undefined,
@@ -392,13 +392,27 @@ export class Lexer {
         while (this.peek() === ' ' || this.peek() === '\t') {
             this.advance();
         }
-        const whitespaceToken = this.addToken(TokenKind.Whitespace);
-        this.leadingWhitespace = whitespaceToken.text;
-        //if we aren't keeping the whitespace tokens, then remove this one
         if (this.options.includeWhitespace === false) {
-            this.tokens.pop();
+            //skip the Token + Range allocations entirely; we only need the canonical
+            //text so subsequent tokens can reference it as their leadingWhitespace
+            let text = this.source.slice(this.start, this.current);
+            const cached = LexerTextCache.get(text);
+            if (cached !== undefined) {
+                text = cached;
+            } else {
+                LexerTextCache.set(text, text);
+            }
+            this.leadingWhitespace = text;
+            //match what addToken's sync() would have done so the next token's range
+            //starts after the whitespace rather than where it began
+            this.start = this.current;
+            this.lineBegin = this.lineEnd;
+            this.columnBegin = this.columnEnd;
+        } else {
+            const whitespaceToken = this.addToken(TokenKind.Whitespace);
+            this.leadingWhitespace = whitespaceToken.text;
+            this.start = this.current;
         }
-        this.start = this.current;
     }
 
     private newline() {
@@ -1055,7 +1069,23 @@ export class Lexer {
      * @param kind the type of token to produce.
      */
     private addToken(kind: TokenKind) {
-        let text = this.source.slice(this.start, this.current);
+        let text: string;
+        const fixedText = FixedTokenText[kind];
+        if (fixedText !== undefined) {
+            text = fixedText;
+        } else {
+            text = this.source.slice(this.start, this.current);
+            //canonicalize tokens with a bounded set of valid text values so repeated
+            //occurrences share a single string instance instead of fresh sliced wrappers
+            if (kind === TokenKind.Newline || kind === TokenKind.Whitespace) {
+                const cached = LexerTextCache.get(text);
+                if (cached !== undefined) {
+                    text = cached;
+                } else {
+                    LexerTextCache.set(text, text);
+                }
+            }
+        }
         let token: Token = {
             kind: kind,
             text: text,
