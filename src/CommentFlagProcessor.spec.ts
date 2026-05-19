@@ -5,7 +5,7 @@ import { Lexer } from './lexer/Lexer';
 import type { BscFile } from './files/BscFile';
 import util from './util';
 
-describe('CommentFlagProcessor', () => {
+describe.only('CommentFlagProcessor', () => {
     let processor: CommentFlagProcessor;
 
     const mockBscFile: BscFile = null as any;
@@ -120,7 +120,7 @@ describe('CommentFlagProcessor', () => {
         });
 
         it('tokenizes bs:disable comment with codes', () => {
-            const token = Lexer.scan(`'bs:disable:1 2 3`).tokens[0];
+            const token = Lexer.scan(`'bs:disable:1 2 3`).tokens[0].leadingTrivia[0];
             expect(
                 processor['tokenize'](token.text, token.location.range)
             ).to.eql({
