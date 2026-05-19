@@ -8,13 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.72.2](https://github.com/rokucommunity/brighterscript/compare/0.72.1...v0.72.2) - 2026-05-19
 ### Changed
- - Security enhancements ([#1714](https://github.com/rokucommunity/brighterscript/pull/1714))
  - upgrade to [@rokucommunity/logger@0.3.12](https://github.com/rokucommunity/logger/blob/master/CHANGELOG.md#0312---2026-05-19). Notable changes since 0.3.11:
      - Security enhancements ([#17](https://github.com/rokucommunity/logger/pull/17))
-     - chore: support OIDC ([#16](https://github.com/rokucommunity/logger/pull/16))
  - upgrade to [roku-deploy@3.17.4](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3174---2026-05-19). Notable changes since 3.17.2:
-     - npm audit fixes ([#263](https://github.com/rokucommunity/roku-deploy/pull/263))
-     - Add `autoLaunch` option to control `dev_autolaunch` on sideload ([#261](https://github.com/rokucommunity/roku-deploy/pull/261))
+     - Security enhancements ([#263](https://github.com/rokucommunity/roku-deploy/pull/263))
+### Fixed
+ - Security enhancements ([#1714](https://github.com/rokucommunity/brighterscript/pull/1714))
 
 
 
