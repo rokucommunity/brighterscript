@@ -1,9 +1,9 @@
-import { isAliasStatement, isBlock, isBody, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypecastExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isBlock, isBody, isCallExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypecastExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, ValidateFileEvent } from '../../interfaces';
-import { TokenKind } from '../../lexer/TokenKind';
+import { TokenKind, UnreferencableBuiltins } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import { CallExpression, type FunctionExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
@@ -391,6 +391,23 @@ export class BrsFileValidator {
                         const loopVarType = node.parent.getLoopVariableType({ flags: SymbolTypeFlag.runtime });
                         blockSymbolTable.addSymbol(node.parent.tokens.item.text, { isInstance: true }, loopVarType, SymbolTypeFlag.runtime);
                     }
+                }
+            },
+            VariableExpression: (node) => {
+                //flag reserved unreferencable builtins (e.g. `ObjFun`, `type`) used in non-call position.
+                //these compile cleanly as values today but are device compile errors
+                //(`Syntax Error. Builtin function call expected`).
+                const name = node.tokens.name?.text;
+                if (
+                    name &&
+                    UnreferencableBuiltins.has(name.toLowerCase()) &&
+                    //only valid use is as the callee of a CallExpression
+                    !(isCallExpression(node.parent) && node.parent.callee === node)
+                ) {
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.reservedBuiltinUsedAsValue(name),
+                        location: node.tokens.name.location
+                    });
                 }
             },
             AstNode: (node) => {

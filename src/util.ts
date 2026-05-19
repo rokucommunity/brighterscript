@@ -2364,7 +2364,7 @@ export class Util {
             }
         }
 
-        // no usable sourceMappingURL — try co-located <srcPath>.map
+        // no usable sourceMappingURL; try co-located <srcPath>.map
         const colocated = `${srcPath}.map`;
         if (await fsExtra.pathExists(colocated)) {
             return JSON.parse(await fsExtra.readFile(colocated, 'utf8')) as RawSourceMap;

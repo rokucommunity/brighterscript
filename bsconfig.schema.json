@@ -8,6 +8,53 @@
             "password"
         ]
     },
+    "definitions": {
+        "diagnosticReporterValue": {
+            "oneOf": [
+                {
+                    "type": "string",
+                    "description": "Either a preset name ('detailed' or 'github-actions') or a custom template string containing at least one known placeholder."
+                },
+                {
+                    "type": "object",
+                    "required": ["type"],
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "enum": ["detailed"]
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                {
+                    "type": "object",
+                    "required": ["type"],
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "enum": ["github-actions"]
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                {
+                    "type": "object",
+                    "required": ["type", "format"],
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "enum": ["custom"]
+                        },
+                        "format": {
+                            "type": "string",
+                            "description": "Template string. Supported placeholders: {file}, {line}, {col}, {endLine}, {endCol}, {severity}, {severityCode}, {code}, {message}, {source}."
+                        }
+                    },
+                    "additionalProperties": false
+                }
+            ]
+        }
+    },
     "properties": {
         "extends": {
             "description": "Relative or absolute path to another bsconfig.json file that this file should use as a base and then override. Prefix with a question mark (?) to prevent throwing an exception if the file does not exist.",
@@ -330,6 +377,21 @@
                 "info",
                 "warn",
                 "error"
+            ]
+        },
+        "diagnosticReporters": {
+            "description": "Specify how diagnostics are reported to the console. Accepts a single value or an array; each diagnostic is rendered once per entry. Each value is either a preset name ('detailed', 'github-actions'), a custom template string containing at least one known placeholder ({file}, {line}, {col}, {endLine}, {endCol}, {severity}, {severityCode}, {code}, {message}, {source}), or an object with explicit `type`. Defaults to 'detailed'.",
+            "default": "detailed",
+            "oneOf": [
+                {
+                    "$ref": "#/definitions/diagnosticReporterValue"
+                },
+                {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/diagnosticReporterValue"
+                    }
+                }
             ]
         },
         "allowBrighterScriptInBrightScript": {

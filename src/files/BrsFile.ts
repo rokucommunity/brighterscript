@@ -5,7 +5,7 @@ import { CancellationTokenSource } from 'vscode-languageserver';
 import { CompletionItemKind } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
-import { DiagnosticCodeMap, diagnosticCodes, DiagnosticLegacyCodeMap, DiagnosticMessages } from '../DiagnosticMessages';
+import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import type { NamespaceFileContribution } from '../Scope';
 import { SymbolTable } from '../SymbolTable';
 import { FunctionScope } from '../FunctionScope';
@@ -523,7 +523,7 @@ export class BrsFile implements BscFile {
      * @param tokens - an array of tokens of which to find `TokenKind.Comment` from
      */
     public getCommentFlags(tokens: Token[]) {
-        const processor = new CommentFlagProcessor(this, ['rem', `'`], diagnosticCodes, [DiagnosticCodeMap.unknownDiagnosticCode, DiagnosticLegacyCodeMap.unknownDiagnosticCode]);
+        const processor = new CommentFlagProcessor(this, ['rem', `'`], diagnosticCodes);
 
         this.commentFlags = [];
         for (let lexerToken of tokens) {
@@ -533,6 +533,7 @@ export class BrsFile implements BscFile {
                 }
             }
         }
+        processor.finalize();
         this.commentFlags.push(...processor.commentFlags);
         this.program?.diagnostics.register(processor.diagnostics);
     }

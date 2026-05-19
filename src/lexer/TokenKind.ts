@@ -594,6 +594,27 @@ export const DisallowedLocalIdentifiersText = new Set([
 ]);
 
 /**
+ * Reserved BrightScript builtins that cannot be referenced — they compile only when invoked as a function call.
+ * Any non-call reference (e.g. `x = type`, `print foo(ObjFun)`) is a device compile error
+ * (most produce `Syntax Error. Builtin function call expected`, hex code &h9d;
+ * `createobject` and `tab` produce a generic `Syntax Error` &h02 with the same outcome).
+ * Names are lowercased for case-insensitive matching.
+ */
+export const UnreferencableBuiltins = new Set([
+    'box',
+    'createobject',
+    'eval',
+    'getglobalaa',
+    'getlastruncompileerror',
+    'getlastrunruntimeerror',
+    'objfun',
+    'pos',
+    'run',
+    'tab',
+    'type'
+]);
+
+/**
  * List of string versions of TokenKind and various globals that are NOT allowed as scope function names.
  * Used to throw more helpful "you can't use a reserved word as a function name" errors.
  */

@@ -115,6 +115,28 @@ export interface BsConfig {
     diagnosticLevel?: 'info' | 'hint' | 'warn' | 'error';
 
     /**
+     * Specify how diagnostics should be reported to the console.
+     * Accepts a single value or an array. When given an array, each diagnostic is rendered
+     * once per entry (so you can, for example, get both detailed terminal output and
+     * github-actions PR annotations from a single run).
+     *
+     * Each value may be a preset name ('detailed', 'github-actions'), a custom template string
+     * (any string containing a `{` placeholder), or an object with explicit `type`.
+     *
+     * Custom templates support the following placeholders, replaced per diagnostic:
+     *   {file}, {line}, {col}, {endLine}, {endCol}, {severity}, {code}, {message}, {source}
+     *
+     * Examples:
+     *   "detailed"
+     *   "github-actions"
+     *   "{file}:{line}:{col} {severity} {code}: {message}"
+     *   { type: "custom", format: "{file}:{line}: {message}" }
+     *   ["detailed", "github-actions"]
+     *
+     * @default "detailed"
+     */
+    diagnosticReporters?: DiagnosticReporter | DiagnosticReporter[];
+    /**
      * A list of scripts or modules to add extra diagnostics or transform the AST
      */
     plugins?: Array<string>;
@@ -227,6 +249,29 @@ export interface BsConfig {
     validate?: boolean;
 }
 
+/**
+ * Discriminated union describing how diagnostics are rendered to the console.
+ * - String shorthand: a preset name ('detailed' | 'github-actions') or a template string
+ *   (any string containing a `{` is treated as a custom template).
+ * - Object form: explicit `type` so config files can stay strictly typed.
+ */
+export type DiagnosticReporter =
+    | 'detailed'
+    | 'github-actions'
+    // eslint-disable-next-line @typescript-eslint/ban-types -- string & {} preserves autocomplete for the literals above
+    | (string & {})
+    | { type: 'detailed' }
+    | { type: 'github-actions' }
+    | { type: 'custom'; format: string };
+
+/**
+ * Object form of `DiagnosticReporter` after string shorthand has been resolved.
+ */
+export type NormalizedDiagnosticReporter =
+    | { type: 'detailed' }
+    | { type: 'github-actions' }
+    | { type: 'custom'; format: string };
+
 type OptionalBsConfigFields =
     | '_ancestors'
     | 'sourceRoot'
@@ -240,7 +285,8 @@ type OptionalBsConfigFields =
     | 'rootDir'
     | 'stagingDir'
     | 'stagingFolderPath'
-    | 'minFirmwareVersion';
+    | 'minFirmwareVersion'
+    | 'diagnosticReporters';
 
 export type FinalizedBsConfig =
     Omit<Required<BsConfig>, OptionalBsConfigFields>

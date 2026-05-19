@@ -3,6 +3,7 @@ import * as yargs from 'yargs';
 import * as path from 'path';
 import { ProgramBuilder } from './ProgramBuilder';
 import { DiagnosticSeverity } from 'vscode-languageserver';
+import { normalizeDiagnosticReporters } from './diagnosticUtils';
 import util from './util';
 import { LanguageServer } from './LanguageServer';
 import chalk from 'chalk';
@@ -23,6 +24,11 @@ let options = yargs
     .option('cwd', { type: 'string', description: 'Override the current working directory.' })
     .option('noEmit', { type: 'boolean', defaultDescription: 'false', description: 'Do not generate any output files.' })
     .option('diagnosticLevel', { type: 'string', defaultDescription: '"warn"', description: 'Specify what diagnostic types should be printed to the console. Value can be "error", "warn", "hint", "info".' })
+    .option('diagnosticReporters', {
+        type: 'array',
+        defaultDescription: '"detailed"',
+        description: 'Specify the diagnostic reporter(s). Each value can be "detailed", "github-actions", or a template string containing placeholders like {file}, {line}, {col}, {endLine}, {endCol}, {severity}, {code}, {message}, {source}. Pass the flag multiple times (or list values after a single flag) to enable multiple reporters simultaneously.'
+    })
     .option('plugins', { type: 'array', alias: 'plugin', description: 'A list of scripts or modules to add extra diagnostics or transform the AST.' })
     .option('emitFullPaths', { type: 'boolean', defaultDescription: 'false', description: 'Emit full paths to files when encountering diagnostics.' })
     .option('files', { type: 'array', description: 'The list of files (or globs) to include in your project. Be sure to wrap these in double quotes when using globs.' })
@@ -43,6 +49,12 @@ let options = yargs
         //if we have the diagnostic level and it's not a known value, then fail
         if (diagnosticLevel && ['error', 'warn', 'hint', 'info'].includes(diagnosticLevel) === false) {
             throw new Error(`Invalid diagnostic level "${diagnosticLevel}". Value can be "error", "warn", "hint", "info".`);
+        }
+        const diagnosticReporters = argv.diagnosticReporters as string[] | undefined;
+        if (diagnosticReporters !== undefined) {
+            //surface preset typos at startup. this never throws: bad reporters are warned about
+            //via console.warn and ignored so the build still runs with whatever's left (or the default).
+            normalizeDiagnosticReporters(diagnosticReporters);
         }
         const cwd = path.resolve(process.cwd(), argv.cwd ?? process.cwd());
         //cli-provided plugin paths should be relative to cwd
