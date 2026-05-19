@@ -466,11 +466,9 @@ describe('ProgramBuilder', () => {
             });
 
             const callOrder: string[] = [];
-            let diagnostics = createBsDiagnostic('p1', ['m1']);
-            let f1 = diagnostics[0].file as BrsFile;
-            f1.fileContents = `l1\nl2\nl3`;
+            let diagnostics = createBsDiagnostics('p1', ['m1']);
+            builder.program.setFile('p1', `l1\nl2\nl3`);
             sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
-            sinon.stub(builder.program, 'getFile').returns(f1);
             sinon.stub(diagnosticUtils, 'printDiagnosticGithubActions').callsFake(() => {
                 callOrder.push('github-actions');
             });
@@ -494,11 +492,9 @@ describe('ProgramBuilder', () => {
             });
 
             const callOrder: string[] = [];
-            let diagnostics = createBsDiagnostic('p1', ['m1']);
-            let f1 = diagnostics[0].file as BrsFile;
-            f1.fileContents = `l1\nl2\nl3`;
+            let diagnostics = createBsDiagnostics('p1', ['m1']);
+            builder.program.setFile('p1', `l1\nl2\nl3`);
             sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
-            sinon.stub(builder.program, 'getFile').returns(f1);
             sinon.stub(diagnosticUtils, 'printDiagnostic').callsFake(() => {
                 callOrder.push('detailed');
             });

@@ -996,7 +996,7 @@ export class Util {
     /**
      * Helper for creating `Location` objects from a file and range
      */
-    public createLocationFromFileRange(file: BscFile, range: Range): Location {
+    public createLocationFromFileRange(file: { srcPath: string }, range: Range): Location {
         return this.createLocationFromRange(this.pathToUri(file?.srcPath), range);
     }
 
