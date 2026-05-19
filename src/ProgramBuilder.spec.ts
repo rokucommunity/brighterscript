@@ -454,6 +454,62 @@ describe('ProgramBuilder', () => {
 
             expect(printStub.called).to.be.true;
         });
+
+        it('calls reporters in bsconfig order', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                rootDir: rootDir,
+                diagnosticReporters: ['github-actions', '{file}: {message}', 'detailed']
+            } as BsConfig);
+            builder.options = util.normalizeAndResolveConfig({
+                cwd: rootDir,
+                project: s`${rootDir}/bsconfig.json`
+            });
+
+            const callOrder: string[] = [];
+            let diagnostics = createBsDiagnostics('p1', ['m1']);
+            builder.program.setFile('p1', `l1\nl2\nl3`);
+            sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
+            sinon.stub(diagnosticUtils, 'printDiagnosticGithubActions').callsFake(() => {
+                callOrder.push('github-actions');
+            });
+            sinon.stub(diagnosticUtils, 'createCustomDiagnosticReporter').callsFake(() => {
+                return () => {
+                    callOrder.push('custom');
+                };
+            });
+            sinon.stub(diagnosticUtils, 'printDiagnostic').callsFake(() => {
+                callOrder.push('detailed');
+            });
+
+            builder['printDiagnostics']();
+            expect(callOrder).to.eql(['github-actions', 'custom', 'detailed']);
+        });
+
+        it('calls reporters in cli option order', () => {
+            builder.options = util.normalizeAndResolveConfig({
+                rootDir: rootDir,
+                diagnosticReporters: ['detailed', 'github-actions', '{file}: {message}']
+            });
+
+            const callOrder: string[] = [];
+            let diagnostics = createBsDiagnostics('p1', ['m1']);
+            builder.program.setFile('p1', `l1\nl2\nl3`);
+            sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
+            sinon.stub(diagnosticUtils, 'printDiagnostic').callsFake(() => {
+                callOrder.push('detailed');
+            });
+            sinon.stub(diagnosticUtils, 'printDiagnosticGithubActions').callsFake(() => {
+                callOrder.push('github-actions');
+            });
+            sinon.stub(diagnosticUtils, 'createCustomDiagnosticReporter').callsFake(() => {
+                return () => {
+                    callOrder.push('custom');
+                };
+            });
+
+            builder['printDiagnostics']();
+            expect(callOrder).to.eql(['detailed', 'github-actions', 'custom']);
+        });
     });
 
     it('prints diagnostic, when file has no lines', () => {

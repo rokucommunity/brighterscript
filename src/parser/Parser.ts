@@ -1276,18 +1276,26 @@ export class Parser {
 
         this.consumeStatementSeparators();
 
-        const whileBlock = this.block(TokenKind.EndWhile);
+        const whileBlock = this.block(TokenKind.EndWhile, TokenKind.Next);
         let endWhile: Token;
-        if (!whileBlock || this.peek().kind !== TokenKind.EndWhile) {
+        if (whileBlock && this.peek().kind === TokenKind.EndWhile) {
+            endWhile = this.advance();
+        } else if (whileBlock && this.peek().kind === TokenKind.Next) {
+            //recover: a stray `next` is a common mistake when the user means `end while`.
+            //emit a targeted diagnostic and consume the `next` so the rest of the file parses cleanly.
+            this.diagnostics.push({
+                ...DiagnosticMessages.mismatchedEndingToken(['end while'], 'next'),
+                location: this.peek()?.location
+            });
+            endWhile = this.advance();
+        } else {
             this.diagnostics.push({
                 ...DiagnosticMessages.couldNotFindMatchingEndKeyword('while'),
-                location: this.peek().location
+                location: this.peek()?.location
             });
             if (!whileBlock) {
                 throw this.lastDiagnosticAsError();
             }
-        } else {
-            endWhile = this.advance();
         }
 
         return new WhileStatement({
@@ -1357,18 +1365,25 @@ export class Parser {
 
         this.consumeStatementSeparators();
 
-        let body = this.block(TokenKind.EndFor, TokenKind.Next);
+        let body = this.block(TokenKind.EndFor, TokenKind.Next, TokenKind.EndWhile);
         let endForToken: Token;
-        if (!body || !this.checkAny(TokenKind.EndFor, TokenKind.Next)) {
+        if (body && this.checkAny(TokenKind.EndFor, TokenKind.Next)) {
+            endForToken = this.advance();
+        } else if (body && this.peek().kind === TokenKind.EndWhile) {
+            //recover: a stray `end while` is a common mistake when the user means `end for`.
+            this.diagnostics.push({
+                ...DiagnosticMessages.mismatchedEndingToken(['end for', 'next'], 'end while'),
+                location: this.peek()?.location
+            });
+            endForToken = this.advance();
+        } else {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedEndForOrNextToTerminateForLoop(forToken.text),
-                location: this.peek().location
+                location: this.peek()?.location
             });
             if (!body) {
                 throw this.lastDiagnosticAsError();
             }
-        } else {
-            endForToken = this.advance();
         }
 
         // WARNING: BrightScript doesn't delete the loop initial value after a for/to loop! It just
@@ -1420,24 +1435,31 @@ export class Parser {
 
         this.consumeStatementSeparators();
 
-        let body = this.block(TokenKind.EndFor, TokenKind.Next);
-        let endForToken: Token;
-        if (!body || !this.checkAny(TokenKind.EndFor, TokenKind.Next)) {
-
+        let body = this.block(TokenKind.EndFor, TokenKind.Next, TokenKind.EndWhile);
+        let endFor: Token;
+        if (body && this.checkAny(TokenKind.EndFor, TokenKind.Next)) {
+            endFor = this.advance();
+        } else if (body && this.peek().kind === TokenKind.EndWhile) {
+            //recover: a stray `end while` is a common mistake when the user means `end for`.
+            this.diagnostics.push({
+                ...DiagnosticMessages.mismatchedEndingToken(['end for', 'next'], 'end while'),
+                location: this.peek()?.location
+            });
+            endFor = this.advance();
+        } else {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedEndForOrNextToTerminateForLoop(forEach.text),
                 location: this.peek().location
             });
             throw this.lastDiagnosticAsError();
         }
-        endForToken = this.advance();
 
         return new ForEachStatement({
             forEach: forEach,
             as: asToken,
             typeExpression: typeExpression,
             in: maybeIn,
-            endFor: endForToken,
+            endFor: endFor,
             item: name,
             target: target,
             body: body

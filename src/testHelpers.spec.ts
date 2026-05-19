@@ -283,7 +283,7 @@ export function trimMap(source: string) {
     return source.replace(/('|<!--)\/\/# sourceMappingURL=.*$/m, '').trimEnd();
 }
 
-export function expectCodeActions(test: () => any, expected: CodeActionShorthand[]) {
+export function expectCodeActions(test: () => any, expected: CodeActionShorthand[], options?: { includeDisableDirectives?: boolean }) {
     const sinon = createSandbox();
     const stub = sinon.stub(codeActionUtil, 'createCodeAction');
     try {

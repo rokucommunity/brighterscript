@@ -1,10 +1,10 @@
 import { expect } from '../../chai-config.spec';
-import type { Range } from 'vscode-languageserver';
+import type { CodeAction, Range } from 'vscode-languageserver';
 import { Program } from '../../Program';
 import { expectCodeActions, trim } from '../../testHelpers.spec';
 import { standardizePath as s, util } from '../../util';
 import type { BscFile } from '../../files/BscFile';
-import type { ProvideCodeActionsEvent } from '../../interfaces';
+import type { BsDiagnostic, ProvideCodeActionsEvent } from '../../interfaces';
 import { rootDir } from '../../testHelpers.spec';
 import { CodeActionsProcessor } from './CodeActionsProcessor';
 
@@ -21,22 +21,28 @@ describe('CodeActionsProcessor', () => {
     });
 
     /**
-     * Helper function for testing code actions
+     * Helper function for testing code actions. By default it filters out the generic
+     * `Disable {code} for this line/file` quick fixes because every diagnostic gets them
+     * and the per-feature tests below only care about feature-specific actions.
      */
-    function testGetCodeActions(file: BscFile | string, range: Range, expected: string[]) {
+    function testGetCodeActions(file: BscFile | string, range: Range, expected: string[], options?: { includeDisableDirectives?: boolean }) {
         program.validate();
-        expect(
-            program.getCodeActions(
-                typeof file === 'string' ? file : file.srcPath,
-                range
-            )
-                //the bs:disable-{line,file} suggestions fire for every diagnostic with a `code`,
-                //which is most of them. The legacy code-action specs predate that feature; filter
-                //the disable suggestions out so each spec can focus on the fix it cares about.
-                .map(x => x.title)
-                .filter(title => !title.startsWith('Disable '))
-                .sort()
-        ).to.eql(expected);
+        const titles = program.getCodeActions(
+            typeof file === 'string' ? file : file.srcPath,
+            range
+        ).map(x => x.title);
+        expect(filterDisableActions(titles, options).sort()).to.eql(expected);
+    }
+
+    /**
+     * Drops the generic `Disable {code} for this line/file` titles from a list so feature-level
+     * assertions can stay focused on their own actions.
+     */
+    function filterDisableActions(titles: string[], options?: { includeDisableDirectives?: boolean }) {
+        if (options?.includeDisableDirectives) {
+            return titles;
+        }
+        return titles.filter(t => !/^Disable .+ for this (line|file)/.test(t));
     }
 
     describe('getCodeActions', () => {
@@ -986,6 +992,375 @@ describe('CodeActionsProcessor', () => {
             const changes = Object.values(fix!.edit!.changes!)[0];
             // range covers "override " (8 chars + 1 space)
             expect(changes[0].range.start.character).to.equal(changes[0].range.end.character - 9);
+        });
+    });
+
+    describe('mismatched loop terminator', () => {
+        it('offers a single quick fix for `while ... next`', () => {
+            const file = program.setFile('source/main.bs', `
+                sub a()
+                    while n <= 3
+                        n = n + 1
+                    next
+                end sub
+            `);
+            // cursor on the bogus `next` (line 4)
+            testGetCodeActions(file, util.createRange(4, 20, 4, 20), [`Convert 'next' to 'end while'`]);
+        });
+
+        it('replaces only the bogus `next` token, preserving indentation', () => {
+            const file = program.setFile('source/main.bs', `
+                sub a()
+                    while n <= 3
+                        n = n + 1
+                    next
+                end sub
+            `);
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(4, 20, 4, 20));
+            const fix = actions.find(a => a.title === `Convert 'next' to 'end while'`);
+            const changes = Object.values(fix!.edit!.changes!)[0];
+            expect(changes).to.be.lengthOf(1);
+            expect(changes[0].newText).to.equal('end while');
+            //the replace range is exactly the 4-character `next` token
+            expect(changes[0].range.end.character - changes[0].range.start.character).to.equal(4);
+        });
+
+        it('marks the `end while` quick fix as preferred for `while ... next`', () => {
+            const file = program.setFile('source/main.bs', `
+                sub a()
+                    while n <= 3
+                        n = n + 1
+                    next
+                end sub
+            `);
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(4, 20, 4, 20));
+            const fix = actions.find(a => a.title === `Convert 'next' to 'end while'`);
+            expect(fix!.isPreferred).to.equal(true);
+        });
+
+        it('offers a fix-all for multiple `while ... next` instances in the same file', () => {
+            const file = program.setFile('source/main.bs', `
+                sub a()
+                    while x
+                        x = false
+                    next
+                    while y
+                        y = false
+                    next
+                end sub
+            `);
+            //cursor on the first bogus `next`
+            testGetCodeActions(file, util.createRange(4, 20, 4, 20), [
+                `Convert 'next' to 'end while'`,
+                `Fix all: Convert 'next' to 'end while'`
+            ]);
+        });
+
+        it('offers two quick fixes (end for preferred, next) for `for ... end while`', () => {
+            const file = program.setFile('source/main.bs', `
+                sub a()
+                    for i = 0 to 3
+                        print i
+                    end while
+                end sub
+            `);
+            testGetCodeActions(file, util.createRange(4, 20, 4, 20), [
+                `Convert 'end while' to 'end for'`,
+                `Convert 'end while' to 'next'`
+            ]);
+        });
+
+        it('marks the `end for` quick fix as preferred and `next` as non-preferred', () => {
+            const file = program.setFile('source/main.bs', `
+                sub a()
+                    for i = 0 to 3
+                        print i
+                    end while
+                end sub
+            `);
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(4, 20, 4, 20));
+            const endForFix = actions.find(a => a.title === `Convert 'end while' to 'end for'`);
+            const nextFix = actions.find(a => a.title === `Convert 'end while' to 'next'`);
+            expect(endForFix!.isPreferred).to.equal(true);
+            expect(nextFix!.isPreferred).to.not.equal(true);
+        });
+
+        it('offers two quick fixes for `for each ... end while`', () => {
+            const file = program.setFile('source/main.bs', `
+                sub a()
+                    for each x in arr
+                        print x
+                    end while
+                end sub
+            `);
+            testGetCodeActions(file, util.createRange(4, 20, 4, 20), [
+                `Convert 'end while' to 'end for'`,
+                `Convert 'end while' to 'next'`
+            ]);
+        });
+
+        it('offers fix-all variants for both end for and next when there are multiple `for ... end while` instances', () => {
+            const file = program.setFile('source/main.bs', `
+                sub a()
+                    for i = 0 to 3
+                        print i
+                    end while
+                    for j = 0 to 3
+                        print j
+                    end while
+                end sub
+            `);
+            //cursor on the first bogus `end while`
+            testGetCodeActions(file, util.createRange(4, 20, 4, 20), [
+                `Convert 'end while' to 'end for'`,
+                `Convert 'end while' to 'next'`,
+                `Fix all: Convert 'end while' to 'end for'`,
+                `Fix all: Convert 'end while' to 'next'`
+            ]);
+        });
+
+        it('does not offer the quick fix for a valid `for ... next`', () => {
+            const file = program.setFile('source/main.bs', `
+                sub a()
+                    for i = 0 to 3
+                        print i
+                    next
+                end sub
+            `);
+            //cursor on the valid `next`
+            testGetCodeActions(file, util.createRange(4, 20, 4, 20), []);
+        });
+    });
+
+    describe('disable diagnostic actions', () => {
+        const findLineAction = (actions: CodeAction[], code: string | number) => actions.find(a => a.title.startsWith(`Disable ${code} for this line`));
+        const findFileAction = (actions: CodeAction[], code: string | number) => actions.find(a => a.title.startsWith(`Disable ${code} for this file`));
+
+        it('emits "Disable for this line" and "Disable for this file" actions for any diagnostic with a code', () => {
+            const file = program.setFile('source/main.bs', `
+                sub init()
+                    doSomething()
+                end sub
+            `);
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(2, 22, 2, 22));
+            //the diagnostic for an undefined function — code is `cannotFindFunction` (cannot-find-function)
+            expect(findLineAction(actions, 'cannot-find-function'), 'expected a "Disable cannot-find-function for this line: ..." action').to.exist;
+            expect(findFileAction(actions, 'cannot-find-function'), 'expected a "Disable cannot-find-function for this file: ..." action').to.exist;
+        });
+
+        it('includes the diagnostic message in the action title', () => {
+            const file = program.setFile('source/main.bs', `
+                sub init()
+                    doSomething()
+                end sub
+            `);
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(2, 22, 2, 22));
+            const action = findLineAction(actions, 'cannot-find-function');
+            expect(action!.title).to.match(/^Disable cannot-find-function for this line: .+/);
+            //the message portion is the diagnostic's message, so it should mention the missing function name
+            expect(action!.title).to.include('doSomething');
+        });
+
+        it('inserts a bs:disable-next-line directive above the diagnostic, preserving indent', () => {
+            const file = program.setFile('source/main.bs', `
+                sub init()
+                    doSomething()
+                end sub
+            `);
+            program.validate();
+            const action = findLineAction(program.getCodeActions(file.srcPath, util.createRange(2, 22, 2, 22)), 'cannot-find-function');
+            expect(action).to.exist;
+            const edits = Object.values(action!.edit!.changes!)[0];
+            expect(edits).to.have.lengthOf(1);
+            //"                    doSomething()" — 20 spaces of indent on line 2
+            expect(edits[0].newText).to.equal(`                    ' bs:disable-next-line: cannot-find-function\n`);
+            expect(edits[0].range).to.eql(util.createRange(2, 0, 2, 0));
+        });
+
+        it('inserts a bs:disable directive at line 0 in a brs/bs file', () => {
+            const file = program.setFile('source/main.bs', `
+                sub init()
+                    doSomething()
+                end sub
+            `);
+            program.validate();
+            const action = findFileAction(program.getCodeActions(file.srcPath, util.createRange(2, 22, 2, 22)), 'cannot-find-function');
+            expect(action).to.exist;
+            const edits = Object.values(action!.edit!.changes!)[0];
+            expect(edits[0].newText).to.equal(`' bs:disable: cannot-find-function\n`);
+            expect(edits[0].range).to.eql(util.createRange(0, 0, 0, 0));
+        });
+
+        it('inserts an XML-style bs:disable directive after the XML declaration', () => {
+            const file = program.setFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="comp1">
+                </component>
+            `);
+            program.validate();
+            const action = program.getCodeActions(file.srcPath, util.createRange(1, 5, 1, 5))
+                .find(a => /^Disable .+ for this file/.test(a.title));
+            expect(action).to.exist;
+            const edits = Object.values(action!.edit!.changes!)[0];
+            //inserted right after `?>` on line 0 with a leading newline so the directive sits on its own line
+            expect(edits[0].newText.startsWith('\n<!-- bs:disable: ')).to.be.true;
+            expect(edits[0].newText.endsWith(' -->')).to.be.true;
+            expect(edits[0].range.start.line).to.equal(0);
+        });
+
+        it('inserts an XML-style bs:disable directive at line 0 when the <?xml ?> declaration is missing', () => {
+            //Roku permits XML component files without the optional `<?xml ?>` declaration
+            const file = program.setFile('components/comp1.xml', trim`
+                <component name="comp1">
+                </component>
+            `);
+            program.validate();
+            const action = program.getCodeActions(file.srcPath, util.createRange(0, 5, 0, 5))
+                .find(a => /^Disable .+ for this file/.test(a.title));
+            expect(action).to.exist;
+            const edits = Object.values(action!.edit!.changes!)[0];
+            //no declaration to anchor to, so insert at the very top with a trailing newline
+            expect(edits[0].newText.startsWith('<!-- bs:disable: ')).to.be.true;
+            expect(edits[0].newText.endsWith(' -->\n')).to.be.true;
+            expect(edits[0].range).to.eql(util.createRange(0, 0, 0, 0));
+        });
+
+        it('does not emit disable actions for diagnostics without a code', () => {
+            const file = program.setFile('source/main.bs', `
+                sub init()
+                end sub
+            `);
+            program.validate();
+            //inject a diagnostic with no code into the event
+            const range = util.createRange(1, 16, 1, 16);
+            const event: ProvideCodeActionsEvent = {
+                program: program,
+                file: file as BscFile,
+                range: range,
+                scopes: program.getScopesForFile(file),
+                diagnostics: [{ code: undefined, message: 'no code', range: range, file: file } as any],
+                codeActions: []
+            };
+            new CodeActionsProcessor(event).process();
+            expect(event.codeActions.filter(a => /^Disable .+ for this/.test(a.title))).to.be.empty;
+        });
+
+        it('extends an existing bs:disable-next-line directive instead of inserting a new one', () => {
+            const file = program.setFile('source/main.bs', `
+                sub init()
+                    ' bs:disable-next-line: 9999
+                    doSomething()
+                end sub
+            `);
+            program.validate();
+            //the diagnostic is on line 3 (the doSomething call). The existing directive sits on line 2.
+            const action = findLineAction(program.getCodeActions(file.srcPath, util.createRange(3, 22, 3, 22)), 'cannot-find-function');
+            expect(action).to.exist;
+            const edits = Object.values(action!.edit!.changes!)[0];
+            expect(edits).to.have.lengthOf(1);
+            //replaces the existing comment with a merged version
+            expect(edits[0].newText).to.equal(`' bs:disable-next-line: 9999 cannot-find-function`);
+        });
+
+        it('extends an existing trailing bs:disable-line directive', () => {
+            const file = program.setFile('source/main.bs', `
+                sub init()
+                    doSomething() ' bs:disable-line: 9999
+                end sub
+            `);
+            program.validate();
+            const action = findLineAction(program.getCodeActions(file.srcPath, util.createRange(2, 22, 2, 22)), 'cannot-find-function');
+            expect(action).to.exist;
+            const edits = Object.values(action!.edit!.changes!)[0];
+            expect(edits[0].newText).to.equal(`' bs:disable-line: 9999 cannot-find-function`);
+        });
+
+        it('extends an existing header-level bs:disable directive instead of inserting a new one', () => {
+            const file = program.setFile('source/main.bs', `' bs:disable: 9999
+                sub init()
+                    doSomething()
+                end sub
+            `);
+            program.validate();
+            const action = findFileAction(program.getCodeActions(file.srcPath, util.createRange(2, 22, 2, 22)), 'cannot-find-function');
+            expect(action).to.exist;
+            const edits = Object.values(action!.edit!.changes!)[0];
+            expect(edits[0].newText).to.equal(`' bs:disable: 9999 cannot-find-function`);
+        });
+
+        it('extends an existing XML header-level bs:disable directive', () => {
+            const file = program.setFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <!-- bs:disable: 9999 -->
+                <component name="comp1">
+                </component>
+            `);
+            program.validate();
+            const action = program.getCodeActions(file.srcPath, util.createRange(2, 5, 2, 5))
+                .find(a => /^Disable .+ for this file/.test(a.title));
+            expect(action).to.exist;
+            const edits = Object.values(action!.edit!.changes!)[0];
+            //the new code is appended to the existing space-separated list
+            //In this case "missing-extends-attribute"
+            expect(/^<!-- bs:disable: 9999 [\w-]+ -->$/.test(edits[0].newText)).to.be.true;
+        });
+
+        it('does not duplicate the code when it is already in an existing directive', () => {
+            const file = program.setFile('source/main.bs', `
+                sub init()
+                    ' bs:disable-next-line: 9001
+                    print "hello"
+                end sub
+            `);
+            program.validate();
+            //inject a synthetic diagnostic so we can exercise the no-op path with a code that's already listed in the existing directive
+            const range = util.createRange(3, 22, 3, 22);
+            const event: ProvideCodeActionsEvent = {
+                program: program,
+                file: file as BscFile,
+                range: range,
+                scopes: program.getScopesForFile(file),
+                diagnostics: [{
+                    code: 9001,
+                    message: 'fake diagnostic',
+                    location: util.createLocationFromFileRange(file, range)
+                } as BsDiagnostic],
+                codeActions: []
+            };
+            new CodeActionsProcessor(event).process();
+            //the line action should be skipped (already in directive); the file action should still be available
+            expect(findLineAction(event.codeActions, 9001)).to.be.undefined;
+            expect(findFileAction(event.codeActions, 9001)).to.exist;
+        });
+
+        it('skips the line action when an existing directive suppresses all codes', () => {
+            const file = program.setFile('source/main.bs', `
+                sub init()
+                    ' bs:disable-next-line
+                    print "hello"
+                end sub
+            `);
+            program.validate();
+            const range = util.createRange(3, 22, 3, 22);
+            const event: ProvideCodeActionsEvent = {
+                program: program,
+                file: file as BscFile,
+                range: range,
+                scopes: program.getScopesForFile(file),
+                diagnostics: [{
+                    code: 9001,
+                    message: 'fake diagnostic',
+                    location: util.createLocationFromFileRange(file, range)
+                } as BsDiagnostic],
+                codeActions: []
+            };
+            new CodeActionsProcessor(event).process();
+            expect(findLineAction(event.codeActions, 9001)).to.be.undefined;
         });
     });
 });

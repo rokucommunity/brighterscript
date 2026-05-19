@@ -214,7 +214,21 @@ export interface CommentFlag {
      * The range that this flag applies to (i.e. the lines that should be suppressed/re-enabled)
      */
     affectedRange: Range;
-    codes: DiagnosticCode[] | null;
+    /**
+     * Codes this flag suppresses.
+     * - `null`: every code (the flag suppresses everything in its `affectedRange`)
+     * - array: only those specific codes
+     * - `undefined` (or omitted): no codes (the flag suppresses nothing on its own; useful when the suppression decision is fully delegated to `enableCodes`)
+     */
+    codes?: DiagnosticCode[] | null;
+    /**
+     * Codes explicitly re-enabled (carved out) within this flag's `affectedRange`.
+     * A diagnostic matched by `codes` is NOT suppressed if it is also matched by `enableCodes`.
+     * - `null`: every code is re-enabled (nothing in the range is suppressed)
+     * - array: only those specific codes are carved out
+     * - `undefined` (or omitted): no carve-outs; suppression is governed entirely by `codes`
+     */
+    enableCodes?: DiagnosticCode[] | null;
 }
 
 export interface PluginFactoryOptions {
