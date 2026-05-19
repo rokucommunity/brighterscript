@@ -47,7 +47,6 @@ import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
 import { FunctionType } from './types/FunctionType';
 import type { AssignmentStatement, NamespaceStatement } from './parser/Statement';
-import type { BscFile } from './files/BscFile';
 import type { NamespaceType } from './types/NamespaceType';
 import { getUniqueType } from './types/helpers';
 import { InvalidType } from './types/InvalidType';

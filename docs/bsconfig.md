@@ -192,9 +192,9 @@ If a value is invalid (typo'd preset, custom template with no known placeholders
 The CLI accepts the same value (single or repeated):
 
 ```bash
-bsc --diagnostic-reporters detailed
-bsc --diagnostic-reporters detailed github-actions
-bsc --diagnostic-reporters '{file}:{line}: {message}'
+bsc --diagnosticReporters detailed
+bsc --diagnosticReporters detailed github-actions
+bsc --diagnosticReporters '{file}:{line}: {message}'
 ```
 
 ## `diagnosticSeverityOverrides`
