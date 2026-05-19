@@ -5,7 +5,7 @@ import { Lexer } from './lexer/Lexer';
 import type { BscFile } from './files/BscFile';
 import util from './util';
 
-describe.only('CommentFlagProcessor', () => {
+describe('CommentFlagProcessor', () => {
     let processor: CommentFlagProcessor;
 
     const mockBscFile: BscFile = null as any;

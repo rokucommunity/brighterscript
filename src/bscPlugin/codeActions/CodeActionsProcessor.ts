@@ -127,7 +127,7 @@ export class CodeActionsProcessor {
         const isXml = isXmlFile(file);
         //existing.forLine: any line/next-line directive on or above the diagnostic line that the line action could extend
         //existing.forFile: any header-level bs:disable that the file action could extend
-        const existing = this.findExistingDisableDirectives(file, diagnostic.location.range.start.line);
+        const existing = this.findExistingDisableDirectives(file, diagnostic.location?.range.start.line);
 
         //format helpers wrap the directive body in the right comment syntax (`'` for brs, `<!-- -->` for xml)
         const formatLineDirective = (token: 'line' | 'next-line', codes: string[]) => {
@@ -246,7 +246,7 @@ export class CodeActionsProcessor {
         let forLine: ExistingDirective | null = null;
         let forFile: ExistingDirective | null = null;
         for (const token of tokens) {
-            const isComment = isXml ? token.tokenType?.name === 'Comment' : token.kind === TokenKind.Comment;
+            const isComment = isXml ? token.tokenType?.name === 'Comment' : token.leadingTrivia?.some(t => t.kind === TokenKind.Comment);
             if (!isComment) {
                 if (isXml) {
                     if (token.tokenType?.name === 'OPEN') {
@@ -257,20 +257,24 @@ export class CodeActionsProcessor {
                 }
                 continue;
             }
-            const tokenRange: Range = isXml ? rangeFromTokenValue(token) : token.location.range;
-            const tokenText: string = isXml ? token.image : token.text;
-            const parsed = parseDisableComment(tokenText);
-            if (!parsed) {
-                continue;
-            }
-            const directive: ExistingDirective = { type: parsed.directiveType, codes: parsed.codes, range: tokenRange };
-            if (!forLine && parsed.directiveType === 'line' && tokenRange.start.line === diagLine) {
-                forLine = directive;
-            } else if (!forLine && parsed.directiveType === 'next-line' && tokenRange.start.line === diagLine - 1) {
-                forLine = directive;
-            } else if (!forFile && parsed.directiveType === 'block' && inHeader) {
-                //only header-level `bs:disable` directives are extended for the file-level quick fix
-                forFile = directive;
+            const commentTokens = isXml ? [token] : token.leadingTrivia.filter(t => t.kind === TokenKind.Comment);
+
+            for (const commentToken of commentTokens) {
+                const tokenRange: Range = isXml ? rangeFromTokenValue(commentToken) : commentToken.location.range;
+                const tokenText: string = isXml ? commentToken.image : commentToken.text;
+                const parsed = parseDisableComment(tokenText);
+                if (!parsed) {
+                    continue;
+                }
+                const directive: ExistingDirective = { type: parsed.directiveType, codes: parsed.codes, range: tokenRange };
+                if (!forLine && parsed.directiveType === 'line' && tokenRange.start.line === diagLine) {
+                    forLine = directive;
+                } else if (!forLine && parsed.directiveType === 'next-line' && tokenRange.start.line === diagLine - 1) {
+                    forLine = directive;
+                } else if (!forFile && parsed.directiveType === 'block' && inHeader) {
+                    //only header-level `bs:disable` directives are extended for the file-level quick fix
+                    forFile = directive;
+                }
             }
         }
         return { forLine: forLine, forFile: forFile };
