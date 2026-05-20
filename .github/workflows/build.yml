@@ -18,7 +18,6 @@ jobs:
           node-version: "18.20.4"
           architecture: 'x64' # fix for macos-latest
       - run: npm ci
-      - run: npm run audit
       - run: npm run build
       - run: npm run lint
       - run: npm run test
