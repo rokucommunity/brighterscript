@@ -1,0 +1,20 @@
+name: Security Audit
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  schedule:
+    #nightly at 06:00 UTC (1am EST / 2am EDT)
+    - cron: '0 6 * * *'
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+      - uses: actions/setup-node@master
+        with:
+          node-version: "18.20.4"
+      - run: npm ci
+      - run: npm run audit
