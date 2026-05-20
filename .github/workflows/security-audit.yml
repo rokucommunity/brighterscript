@@ -18,3 +18,11 @@ jobs:
           node-version: "18.20.4"
       - run: npm ci
       - run: npm run audit
+
+  security-audit-required:
+    needs: audit
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - if: github.event_name != 'pull_request' || startsWith(github.head_ref, 'release/')
+        run: if [ "${{ needs.audit.result }}" = "failure" ]; then exit 1; fi
