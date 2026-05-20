@@ -3,7 +3,7 @@
 A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 
 [![build status](https://img.shields.io/github/actions/workflow/status/rokucommunity/brighterscript/build.yml?branch=master&logo=github)](https://github.com/rokucommunity/brighterscript/actions?query=branch%3Amaster+workflow%3Abuild)
-[![Security Audit](https://img.shields.io/github/actions/workflow/status/rokucommunity/brighterscript/security-audit.yml?branch=master&logo=github)](https://github.com/rokucommunity/brighterscript/actions/workflows/security-audit.yml)
+[![Security Audit](https://img.shields.io/github/actions/workflow/status/rokucommunity/brighterscript/security-audit.yml?branch=master&logo=github&label=Security%20Audit)](https://github.com/rokucommunity/brighterscript/actions/workflows/security-audit.yml)
 [![coverage status](https://img.shields.io/coveralls/github/rokucommunity/brighterscript?logo=coveralls)](https://coveralls.io/github/rokucommunity/brighterscript?branch=master)
 [![monthly downloads](https://img.shields.io/npm/dm/brighterscript.svg?sanitize=true&logo=npm&logoColor=)](https://npmcharts.com/compare/brighterscript?minimal=true)
 [![npm version](https://img.shields.io/npm/v/brighterscript.svg?logo=npm)](https://www.npmjs.com/package/brighterscript)
