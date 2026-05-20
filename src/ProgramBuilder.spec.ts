@@ -79,6 +79,7 @@ describe('ProgramBuilder', () => {
     it('can edit files array in afterProvideProgram event', async () => {
         builder = new ProgramBuilder();
         const deferred = new Deferred<Program>();
+        const beforeFilesLength = builder.options.files.length;
         builder.plugins.add({
             name: 'test',
             afterProvideProgram: (event: AfterProvideProgramEvent) => {
@@ -92,7 +93,7 @@ describe('ProgramBuilder', () => {
             await deferred.promise
         ).to.exist;
 
-        expect(builder.options.files.length).to.equal(5);
+        expect(builder.options.files.length).to.equal(beforeFilesLength + 1);
     });
 
     describe('loadFiles', () => {
