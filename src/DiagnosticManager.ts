@@ -13,6 +13,7 @@ import type { Logger } from './logging';
 import { LogLevel, createLogger } from './logging';
 import type { Program } from './Program';
 import type { BrsFile } from './files/BrsFile';
+import { DiagnosticCodeMap } from './DiagnosticMessages';
 
 interface DiagnosticWithContexts {
     diagnostic: BsDiagnosticWithKey;
@@ -207,18 +208,37 @@ export class DiagnosticManager {
         const diagnosticLegacyCode = typeof diagnostic.legacyCode === 'string' ? diagnostic.legacyCode.toLowerCase() : diagnostic.legacyCode;
         const file = this.program?.getFile(diagnostic.location?.uri);
 
+        if (diagnosticCode === DiagnosticCodeMap.unknownDiagnosticCode) {
+            return false;
+        }
+
         for (let flag of file?.commentFlags ?? []) {
-            //this diagnostic is affected by this flag
-            if (diagnostic.location.range && util.rangeContains(flag.affectedRange, diagnostic.location.range.start)) {
-                //if the flag acts upon this diagnostic's code
-                const diagCodeSuppressed = (diagnosticCode !== undefined && flag.codes?.includes(diagnosticCode)) ||
-                    (diagnosticLegacyCode !== undefined && flag.codes?.includes(diagnosticLegacyCode));
-                if (flag.codes === null || diagCodeSuppressed) {
-                    return true;
-                }
+
+            if (!diagnostic.location?.range || !util.rangeContains(flag.affectedRange, diagnostic.location.range.start)) {
+                continue;
+            }
+            //if this flag explicitly re-enables the code, it's not suppressed here, keep looking
+            const isEnabled = flag.enableCodes === null || this.doesCodeListIncludeCode(flag.enableCodes, diagnosticCode, diagnosticLegacyCode);
+            if (isEnabled) {
+                continue;
+            }
+
+            //if this flag disables the code, it's suppressed
+            const isDisabled = flag.codes === null || this.doesCodeListIncludeCode(flag.codes, diagnosticCode, diagnosticLegacyCode);
+            if (isDisabled) {
+                return true;
             }
         }
         return false;
+    }
+
+    private doesCodeListIncludeCode(codes: (string | number)[] | null, code: string | number | undefined, legacyCode: string | number | undefined) {
+        const codeLower = typeof code === 'string' ? code.toLowerCase() : code.toString();
+        const legacyCodeLower = typeof legacyCode === 'string' ? legacyCode.toLowerCase() : legacyCode?.toString();
+        return codes?.some((c) => {
+            const cLower = typeof c === 'string' ? c.toLowerCase() : c.toString();
+            return cLower === codeLower || cLower === legacyCodeLower;
+        });
     }
 
     private filterDiagnostics(diagnostics: BsDiagnostic[]) {

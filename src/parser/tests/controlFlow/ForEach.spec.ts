@@ -4,9 +4,12 @@ import { ParseMode, Parser } from '../../Parser';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
+import type { FunctionStatement } from '../../Statement';
 import { ForEachStatement } from '../../Statement';
 import { VariableExpression } from '../../Expression';
 import util from '../../../util';
+import { DiagnosticMessages } from '../../../DiagnosticMessages';
+import { isFunctionStatement } from '../../../astUtils/reflection';
 
 describe('parser foreach loops', () => {
     it('requires a name and target', () => {
@@ -150,5 +153,44 @@ describe('parser foreach loops', () => {
         expect(forEach.typeExpression?.getName()).to.equal('String');
         expect(forEach.target).to.be.instanceof(VariableExpression);
         expect((forEach.target as VariableExpression).tokens.name).to.deep.include(identifier('lipsum'));
+    });
+
+    describe('terminator recovery', () => {
+        it('emits a single targeted diagnostic for `for each ... end while`', () => {
+            const parser = Parser.parse(`
+                sub a()
+                    for each x in arr
+                        print x
+                    end while
+                end sub
+            `);
+            expect(parser.diagnostics).to.be.lengthOf(1);
+            expect(parser.diagnostics[0].code).to.equal(DiagnosticMessages.mismatchedEndingToken().code);
+            expect((parser.diagnostics[0] as any).data).to.eql({ expected: ['end for', 'next'], found: 'end while' });
+        });
+
+        it('stores the bogus `end while` token on the ForEachStatement', () => {
+            const parser = Parser.parse(`
+                sub a()
+                    for each x in arr
+                        print x
+                    end while
+                end sub
+            `);
+            const fn = parser.ast.findChild<FunctionStatement>(isFunctionStatement);
+            const forEachStmt = fn.func.body.statements[0] as ForEachStatement;
+            expect(forEachStmt.tokens.endFor.kind).to.equal(TokenKind.EndWhile);
+        });
+
+        it('does not regress on the canonical `for each ... next` form', () => {
+            const parser = Parser.parse(`
+                sub a()
+                    for each x in arr
+                        print x
+                    next
+                end sub
+            `);
+            expect(parser.diagnostics).to.be.lengthOf(0);
+        });
     });
 });

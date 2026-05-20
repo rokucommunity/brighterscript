@@ -10,9 +10,6 @@ on:
 jobs:
   ci:
     runs-on: ${{ matrix.os }}
-    env:
-      #hardcode the coveralls token...it's not overly important to protect, and github actions won't allow forks to work with coveralls otherwise
-      COVERALLS_REPO_TOKEN: "kVPcGJfehOArEQnHb8BT3KS72xbUQCoxI"
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
@@ -20,13 +17,21 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "16.20.2"
+          node-version: "18.20.4"
           architecture: 'x64' # fix for macos-latest
       - run: npm ci
+      - run: npm run audit
       - run: npm run build
       - run: npm run lint
       - run: npm run test
-      - run: npm run publish-coverage
+      - name: Upload coverage to Coveralls
+        if: matrix.os == 'ubuntu-latest'
+        uses: coverallsapp/github-action@v2
+        env:
+          #hardcode the coveralls token...it's not overly important to protect, and github actions won't allow forks to work with coveralls otherwise
+          COVERALLS_REPO_TOKEN: "kVPcGJfehOArEQnHb8BT3KS72xbUQCoxI"
+        with:
+          path-to-lcov: ./coverage/lcov.info
       # this is stalling out for some reason, so disable it for now
       #- run: npm run test-related-projects
   npm-release:

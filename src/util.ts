@@ -47,7 +47,6 @@ import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
 import { FunctionType } from './types/FunctionType';
 import type { AssignmentStatement, NamespaceStatement } from './parser/Statement';
-import type { BscFile } from './files/BscFile';
 import type { NamespaceType } from './types/NamespaceType';
 import { getUniqueType } from './types/helpers';
 import { InvalidType } from './types/InvalidType';
@@ -996,7 +995,7 @@ export class Util {
     /**
      * Helper for creating `Location` objects from a file and range
      */
-    public createLocationFromFileRange(file: BscFile, range: Range): Location {
+    public createLocationFromFileRange(file: { srcPath: string }, range: Range): Location {
         return this.createLocationFromRange(this.pathToUri(file?.srcPath), range);
     }
 
@@ -2364,7 +2363,7 @@ export class Util {
             }
         }
 
-        // no usable sourceMappingURL — try co-located <srcPath>.map
+        // no usable sourceMappingURL; try co-located <srcPath>.map
         const colocated = `${srcPath}.map`;
         if (await fsExtra.pathExists(colocated)) {
             return JSON.parse(await fsExtra.readFile(colocated, 'utf8')) as RawSourceMap;
