@@ -4,6 +4,9 @@ on:
     branches:
       - master
   pull_request:
+  schedule:
+    #nightly at 00:00 UTC
+    - cron: '0 0 * * *'
 
 jobs:
   audit:
