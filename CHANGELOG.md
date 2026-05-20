@@ -7,12 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [1.0.0-alpha.51](https://github.com/rokucommunity/brighterscript/compare/1.0.0-alpha.50...v1.0.0-alpha.51) - 2026-05-20
+### Added
+ - Allow typed functions in type expressions ([#1620](https://github.com/rokucommunity/brighterscript/pull/1620))
+ - Allow typecast statement on all variables ([#1622](https://github.com/rokucommunity/brighterscript/pull/1622))
 ### Changed
  - Merges latest v0.72.2 into v1 ([#1717](https://github.com/rokucommunity/brighterscript/pull/1717))
  - Token leadingTrivia handling and reduce memory retention in long-lived compiler/LSP caches ([#1705](https://github.com/rokucommunity/brighterscript/pull/1705))
  - Merge/master 0.72.0 ([#1702](https://github.com/rokucommunity/brighterscript/pull/1702))
- - Allow typed functions in type expressions ([#1620](https://github.com/rokucommunity/brighterscript/pull/1620))
- - Allow typecast statement on all variables ([#1622](https://github.com/rokucommunity/brighterscript/pull/1622))
  - Documentation updates ([#1616](https://github.com/rokucommunity/brighterscript/pull/1616))
  - upgrade to [@rokucommunity/logger@0.3.12](https://github.com/rokucommunity/logger/blob/master/CHANGELOG.md#0312---2026-05-19). Notable changes since 0.3.11:
      - Security enhancements ([#17](https://github.com/rokucommunity/logger/pull/17))
@@ -22,17 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
      - Add `autoLaunch` option to control `dev_autolaunch` on sideload ([#261](https://github.com/rokucommunity/roku-deploy/pull/261))
      - Expanded the default files array to include the locale folder ([#237](https://github.com/rokucommunity/roku-deploy/pull/237))
      - Fix crash when loading roku-deploy on node < 18 ([#256](https://github.com/rokucommunity/roku-deploy/pull/256))
-     - chore: drop undici, use native fetch ([#254](https://github.com/rokucommunity/roku-deploy/pull/254))
      - feat: add RokuDeploy.validateDeveloperPassword ([#252](https://github.com/rokucommunity/roku-deploy/pull/252))
      - fix: correct DeviceInfoRaw serial-number property name ([#251](https://github.com/rokucommunity/roku-deploy/pull/251))
-     - Bump lodash from 4.17.23 to 4.18.1 ([#247](https://github.com/rokucommunity/roku-deploy/pull/247))
-     - Resolve files array staging option ([#249](https://github.com/rokucommunity/roku-deploy/pull/249))
+      Resolve files array staging option ([#249](https://github.com/rokucommunity/roku-deploy/pull/249))
      - Fix `zipFolder` bug that wasn't properly handling absolute stagingDir path ([#245](https://github.com/rokucommunity/roku-deploy/pull/245))
-     - Bump picomatch from 2.3.1 to 2.3.2 ([#242](https://github.com/rokucommunity/roku-deploy/pull/242))
-     - Bump flatted from 3.2.2 to 3.4.2 ([#236](https://github.com/rokucommunity/roku-deploy/pull/236))
-     - Bump minimatch from 3.1.2 to 3.1.5 ([#234](https://github.com/rokucommunity/roku-deploy/pull/234))
-     - Bump ajv from 6.12.6 to 6.14.0 ([#232](https://github.com/rokucommunity/roku-deploy/pull/232))
-     - Bump lodash from 4.17.21 to 4.17.23 ([#227](https://github.com/rokucommunity/roku-deploy/pull/227))
 ### Fixed
  - Fix for each validation error ([#1646](https://github.com/rokucommunity/brighterscript/pull/1646))
  - Fixes issue with forEach iterating over a union of iterables ([#1629](https://github.com/rokucommunity/brighterscript/pull/1629))
