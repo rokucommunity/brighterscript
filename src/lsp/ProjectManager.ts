@@ -6,7 +6,7 @@ import type { FileRenameTextEdit, LspDiagnostic, LspProject, ProjectConfig } fro
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
 import { FileChangeType } from 'vscode-languageserver-protocol';
-import type { Hover, Position, Range, Location, SignatureHelp, DocumentSymbol, SymbolInformation, WorkspaceSymbol, CompletionList, CancellationToken, SelectionRange } from 'vscode-languageserver-protocol';
+import type { Hover, Position, Range, Location, SignatureHelp, DocumentSymbol, SymbolInformation, WorkspaceSymbol, CompletionList, CancellationToken, SelectionRange, InlayHint } from 'vscode-languageserver-protocol';
 import { Deferred } from '../deferred';
 import type { DocumentActionWithStatus, FlushEvent } from './DocumentManager';
 import { DocumentManager } from './DocumentManager';
@@ -797,6 +797,20 @@ export class ProjectManager {
         //Ask every project for selection ranges, keep whichever one responds first with a non-empty result
         let result = await util.promiseRaceMatch(
             this.projects.map(x => x.getSelectionRanges(options)),
+            //keep the first non-empty result
+            (result) => result?.length > 0
+        );
+        return result ?? [];
+    }
+
+    @TrackBusyStatus
+    public async getInlayHints(options: { srcPath: string; range: Range }): Promise<InlayHint[]> {
+        //wait for all pending syncs to finish
+        await this.onIdle();
+
+        //Ask every project for inlay hints, keep whichever one responds first with a non-empty result
+        let result = await util.promiseRaceMatch(
+            this.projects.map(x => x.getInlayHints(options)),
             //keep the first non-empty result
             (result) => result?.length > 0
         );

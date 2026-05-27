@@ -1,4 +1,4 @@
-import type { Range, Diagnostic, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol, Disposable, FileChangeType, SelectionRange } from 'vscode-languageserver-protocol';
+import type { Range, Diagnostic, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol, Disposable, FileChangeType, SelectionRange, InlayHint } from 'vscode-languageserver-protocol';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -346,6 +346,20 @@ export interface Plugin {
     afterProvideSelectionRanges?(event: AfterProvideSelectionRangesEvent): any;
 
 
+    /**
+     * Called before the `provideInlayHints` hook
+     */
+    beforeProvideInlayHints?(event: BeforeProvideInlayHintsEvent): any;
+    /**
+     * Provide inlay hints (e.g. parameter names at call sites, inferred type annotations) for the given range.
+     */
+    provideInlayHints?(event: ProvideInlayHintsEvent): any;
+    /**
+     * Called after `provideInlayHints`. Use this if you want to intercept or sanitize the inlay hints provided by bsc or other plugins.
+     */
+    afterProvideInlayHints?(event: AfterProvideInlayHintsEvent): any;
+
+
     onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
     //scope events
     afterScopeCreate?: (scope: Scope) => void;
@@ -514,6 +528,29 @@ export interface ProvideSelectionRangesEvent<TFile = BscFile> {
 }
 export type BeforeProvideSelectionRangesEvent<TFile = BscFile> = ProvideSelectionRangesEvent<TFile>;
 export type AfterProvideSelectionRangesEvent<TFile = BscFile> = ProvideSelectionRangesEvent<TFile>;
+
+
+export interface ProvideInlayHintsEvent<TFile = BscFile> {
+    program: Program;
+    /**
+     * The file that the `inlayHint` request was invoked in
+     */
+    file: TFile;
+    /**
+     * The range of the document for which inlay hints should be computed
+     */
+    range: Range;
+    /**
+     * The list of scopes that this file is a member of
+     */
+    scopes: Scope[];
+    /**
+     * The result list of inlay hints. Plugins push hints into this array.
+     */
+    inlayHints: InlayHint[];
+}
+export type BeforeProvideInlayHintsEvent<TFile = BscFile> = ProvideInlayHintsEvent<TFile>;
+export type AfterProvideInlayHintsEvent<TFile = BscFile> = ProvideInlayHintsEvent<TFile>;
 
 
 export interface OnGetSemanticTokensEvent<T extends BscFile = BscFile> {
