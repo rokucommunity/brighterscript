@@ -1,8 +1,8 @@
 {
-    // Fail on moderate severity and above. See README "Accepted security advisories" for
+    // Fail on high severity and above. See README "Accepted security advisories" for
     // why each allowlisted entry is safe to defer.
     "$schema": "https://github.com/IBM/audit-ci/raw/main/docs/schema.json",
-    "moderate": true,
+    "high": true,
     "allowlist": [
         {
             "GHSA-w5hq-g745-h8pq": {
