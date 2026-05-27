@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.72.3](https://github.com/rokucommunity/brighterscript/compare/0.72.2...v0.72.3) - 2026-05-27
+### Added
+ - Add parameter name inlay hints ([#1703](https://github.com/rokucommunity/brighterscript/pull/1703))
+ - Add security-audit-required gate job to security-audit workflow ([#1720](https://github.com/rokucommunity/brighterscript/pull/1720))
+### Changed
+ - Update minimum audit threshold ([#1723](https://github.com/rokucommunity/brighterscript/pull/1723))
+ - Accept GHSA-w5hq-g745-h8pq (uuid <11.1.1) advisory ([#1722](https://github.com/rokucommunity/brighterscript/pull/1722))
+ - Security Audit workflow ([#1718](https://github.com/rokucommunity/brighterscript/pull/1718))
+
+
+
 ## [0.72.2](https://github.com/rokucommunity/brighterscript/compare/0.72.1...v0.72.2) - 2026-05-19
 ### Changed
  - upgrade to [@rokucommunity/logger@0.3.12](https://github.com/rokucommunity/logger/blob/master/CHANGELOG.md#0312---2026-05-19). Notable changes since 0.3.11:
