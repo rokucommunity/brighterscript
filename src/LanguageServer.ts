@@ -30,7 +30,9 @@ import type {
     SelectionRangeParams,
     RenameFilesParams,
     WorkspaceEdit,
-    TextEdit
+    TextEdit,
+    InlayHint,
+    InlayHintParams
 } from 'vscode-languageserver/node';
 import {
     SemanticTokensRequest,
@@ -177,6 +179,9 @@ export class LanguageServer {
         //Register semantic token requests. TODO switch to a more specific connection function call once they actually add it
         this.connection.onRequest(SemanticTokensRequest.method, this.onFullSemanticTokens.bind(this));
 
+        //Register inlay hint requests. Inlay hints live under connection.languages and aren't picked up by the on* auto-bind loop above
+        this.connection.languages.inlayHint.on(this.onInlayHint.bind(this));
+
         //file-operation requests live under connection.workspace, so they aren't picked up by the on* auto-bind loop above
         this.connection.workspace.onWillRenameFiles(this.onWillRenameFiles.bind(this));
 
@@ -239,6 +244,7 @@ export class LanguageServer {
                 definitionProvider: true,
                 hoverProvider: true,
                 selectionRangeProvider: true,
+                inlayHintProvider: true,
                 executeCommandProvider: {
                     commands: [
                         CustomCommands.TranspileFile
@@ -629,6 +635,15 @@ export class LanguageServer {
 
         const srcPath = util.uriToPath(params.textDocument.uri);
         return this.projectManager.getSelectionRanges({ srcPath: srcPath, positions: params.positions });
+    }
+
+    @AddStackToErrorMessage
+    public async onInlayHint(params: InlayHintParams): Promise<InlayHint[]> {
+        this.logger.debug('onInlayHint', params);
+
+        const srcPath = util.uriToPath(params.textDocument.uri);
+        const result = await this.projectManager.getInlayHints({ srcPath: srcPath, range: params.range });
+        return result ?? [];
     }
 
     @AddStackToErrorMessage

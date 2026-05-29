@@ -1,5 +1,5 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
-import type { Plugin, ValidateFileEvent, ProvideCodeActionsEvent, ProvideHoverEvent, ProvideSemanticTokensEvent, ValidateScopeEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, AfterProvideFileEvent, AfterValidateFileEvent, AfterValidateProgramEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, OnPrepareFileEvent, WriteFileEvent, OnGetSourceFixAllCodeActionsEvent, ProvideSelectionRangesEvent } from '../interfaces';
+import type { Plugin, ValidateFileEvent, ProvideCodeActionsEvent, ProvideHoverEvent, ProvideSemanticTokensEvent, ValidateScopeEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, AfterProvideFileEvent, AfterValidateFileEvent, AfterValidateProgramEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, OnPrepareFileEvent, WriteFileEvent, OnGetSourceFixAllCodeActionsEvent, ProvideSelectionRangesEvent, ProvideInlayHintsEvent } from '../interfaces';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { FixAllCodeActionsProcessor } from './codeActions/FixAllCodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
@@ -23,6 +23,7 @@ import { BrsFilePreTranspileProcessor } from './transpile/BrsFileTranspileProces
 import { XmlFilePreTranspileProcessor } from './transpile/XmlFilePreTranspileProcessor';
 import { BrsFileAfterValidator } from './validation/BrsFileAfterValidator';
 import { SelectionRangesProcessor } from './selectionRanges/SelectionRangesProcessor';
+import { InlayHintProcessor } from './inlayHints/InlayHintProcessor';
 
 export class BscPlugin implements Plugin {
     public name = 'BscPlugin';
@@ -65,6 +66,10 @@ export class BscPlugin implements Plugin {
 
     public provideSelectionRanges(event: ProvideSelectionRangesEvent) {
         new SelectionRangesProcessor(event).process();
+    }
+
+    public provideInlayHints(event: ProvideInlayHintsEvent) {
+        new InlayHintProcessor(event).process();
     }
 
     public provideSemanticTokens(event: ProvideSemanticTokensEvent) {
