@@ -3628,6 +3628,21 @@ describe('BrsFile', () => {
             `, undefined, 'source/main.bs');
         });
 
+        it('does not crash when annotation has undefined leadingTrivia', async () => {
+            //the lexer emits leadingTrivia as `undefined` (rather than `[]`) when a token has no preceding trivia,
+            //so an `@annotation` whose `at` token has no preceding whitespace/comments/newlines produces
+            //`at.leadingTrivia === undefined`. `AnnotationExpression.transpile` forwards that directly to
+            //`state.transpileComments`, which must tolerate a nullish input rather than crashing on `.filter`
+            //of undefined. Feed source that starts at column 0 with no leading newline to ensure no trivia
+            //is attached to the `@` token.
+            program.setFile('source/main.bs', `@annotation\nsub main()\n    print "main"\nend sub`);
+            program.validate();
+            expectZeroDiagnostics(program);
+            //this should not throw
+            const result = await program.getTranspiledFileContents('source/main.bs');
+            expect(result.code).to.include('sub main()');
+        });
+
         it('includes annotation comments for class', async () => {
             await testTranspile(`
                 'comment1
