@@ -16,8 +16,8 @@ describe('RegexLiteralExpression', () => {
     });
 
     describe('transpile', () => {
-        it('captures flags', () => {
-            testTranspile(`
+        it('captures flags', async () => {
+            await testTranspile(`
                 sub main()
                     print /hello/gi
                 end sub
@@ -28,8 +28,8 @@ describe('RegexLiteralExpression', () => {
             `);
         });
 
-        it('handles when no flags', () => {
-            testTranspile(`
+        it('handles when no flags', async () => {
+            await testTranspile(`
                 sub main()
                     print /hello/
                 end sub
@@ -40,8 +40,8 @@ describe('RegexLiteralExpression', () => {
             `);
         });
 
-        it('handles weird escapes', () => {
-            testTranspile(`
+        it('handles weird escapes', async () => {
+            await testTranspile(`
                 sub main()
                     print /\\r\\n\\//
                 end sub
@@ -52,8 +52,8 @@ describe('RegexLiteralExpression', () => {
             `);
         });
 
-        it('escapes quotemark', () => {
-            testTranspile(`
+        it('escapes quotemark', async () => {
+            await testTranspile(`
                 sub main()
                     print /"/
                 end sub
@@ -75,8 +75,8 @@ describe('RegexLiteralExpression', () => {
             ]);
         });
 
-        it('handles edge cases', () => {
-            testTranspile(`
+        it('handles edge cases', async () => {
+            await testTranspile(`
                 sub main()
                     print /1/
                     ? /1/

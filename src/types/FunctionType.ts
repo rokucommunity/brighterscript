@@ -1,89 +1,44 @@
+import { isCallableType, isDynamicType, isFunctionTypeLike, isObjectType } from '../astUtils/reflection';
+import { BaseFunctionType } from './BaseFunctionType';
 import type { BscType } from './BscType';
-import { DynamicType } from './DynamicType';
+import { BscTypeKind } from './BscTypeKind';
+import { isUnionTypeCompatible } from './helpers';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
+import type { TypeCompatibilityData } from '../interfaces';
 
-export class FunctionType implements BscType {
-    constructor(
-        public returnType: BscType
-    ) {
+export class FunctionType extends BaseFunctionType {
+    public readonly kind = BscTypeKind.FunctionType;
 
-    }
+    public static instance = new FunctionType();
 
-    /**
-     * The name of the function for this type. Can be undefined
-     */
-    public name: string | undefined;
-
-    /**
-     * Determines if this is a sub or not
-     */
-    public isSub = false;
-
-    public params = [] as Array<{ name: string; type: BscType; isOptional: boolean }>;
-
-    public setName(name: string) {
-        this.name = name;
-        return this;
-    }
-
-    public addParameter(name: string, type: BscType, isOptional: boolean) {
-        this.params.push({
-            name: name,
-            type: type,
-            isOptional: isOptional === true ? true : false
-        });
-        return this;
-    }
-
-    public isAssignableTo(targetType: BscType) {
-        if (targetType instanceof DynamicType) {
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
+        if (
+            isDynamicType(targetType) ||
+            isCallableType(targetType) ||
+            isFunctionTypeLike(targetType) ||
+            isObjectType(targetType) ||
+            isUnionTypeCompatible(this, targetType, data)
+        ) {
             return true;
-        } else if (targetType instanceof FunctionType) {
-            //compare all parameters
-            let len = Math.max(this.params.length, targetType.params.length);
-            for (let i = 0; i < len; i++) {
-                let myParam = this.params[i];
-                let targetParam = targetType.params[i];
-                if (!myParam || !targetParam || !myParam.type.isAssignableTo(targetParam.type)) {
-                    return false;
-                }
-            }
-
-            //compare return type
-            if (!this.returnType || !targetType.returnType || !this.returnType.isAssignableTo(targetType.returnType)) {
-                return false;
-            }
-
-            //made it here, all params and return type are equivalent
-            return true;
-        } else {
-            return false;
         }
-    }
-
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
+        return false;
     }
 
     public toString() {
-        let paramTexts: string[] = [];
-        for (let param of this.params) {
-            paramTexts.push(`${param.name}${param.isOptional ? '?' : ''} as ${param.type.toString()}`);
-        }
-        return `${this.isSub ? 'sub' : 'function'} ${this.name}(${paramTexts.join(', ')}) as ${this.returnType.toString()}`;
+        return this.toTypeString();
 
     }
 
     public toTypeString(): string {
-        return 'Function';
+        return 'function';
     }
 
-    public clone() {
-        const result = new FunctionType(this.returnType);
-        for (let param of this.params) {
-            result.addParameter(param.name, param.type, param.isOptional);
+    isEqual(targetType: BscType) {
+        if (isFunctionTypeLike(targetType)) {
+            return true;
         }
-        result.isSub = this.isSub;
-        result.returnType = this.returnType?.clone();
-        return result;
+        return false;
     }
 }
+
+BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('function', FunctionType.instance);

@@ -5,8 +5,6 @@ import * as path from 'path';
 import type { ProjectConfig, ActivateResponse, LspDiagnostic, LspProject, FileRenameTextEdit } from './LspProject';
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
 import type { Plugin, Hover, MaybePromise } from '../interfaces';
-import { DiagnosticMessages } from '../DiagnosticMessages';
-import { URI } from 'vscode-uri';
 import { Deferred } from '../deferred';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import { rokuDeploy } from 'roku-deploy';
@@ -19,6 +17,8 @@ import type { BsConfig } from '../BsConfig';
 import type { Logger, LogLevel } from '../logging';
 import { createLogger } from '../logging';
 import * as fsExtra from 'fs-extra';
+import type { XmlFile } from '../files/XmlFile';
+import type { BrsFile } from '../files/BrsFile';
 
 export class Project implements LspProject {
     public constructor(
@@ -72,9 +72,7 @@ export class Project implements LspProject {
             cwd: cwd,
             project: this.bsconfigPath,
             watch: false,
-            createPackage: false,
-            deploy: false,
-            copyToStaging: false,
+            noEmit: true,
             showDiagnosticsInConsole: false,
             validate: false
         } as BsConfig;
@@ -92,11 +90,18 @@ export class Project implements LspProject {
             showDiagnosticsInConsole: false
         });
 
-        //flush diagnostics every time the program finishes validating
-        //this plugin must be added LAST to the program to ensure we can see all diagnostics
+        //flush diagnostics every time the program FINISHES validating.
+        //this plugin must be added LAST to the program to ensure we can see all diagnostics.
+        //skip cancelled validations: those fire afterValidateProgram with whatever partial
+        //state was reached, and downstream consumers (e.g. test specs awaiting
+        //onNextDiagnostics) end up reading the partial emit instead of the completed one
+        //that follows.
         this.builder.plugins.add({
             name: 'bsc-language-server',
-            afterProgramValidate: () => {
+            afterValidateProgram: (event) => {
+                if (event?.wasCancelled) {
+                    return;
+                }
                 const diagnostics = this.getDiagnostics();
                 this.emit('diagnostics', {
                     diagnostics: diagnostics
@@ -104,20 +109,17 @@ export class Project implements LspProject {
             }
         } as Plugin);
 
-        //if we found a deprecated brsconfig.json, add a diagnostic warning the user
-        if (this.bsconfigPath && path.basename(this.bsconfigPath) === 'brsconfig.json') {
-            this.builder.addDiagnostic(this.bsconfigPath, {
-                ...DiagnosticMessages.brsConfigJsonIsDeprecated(),
-                range: util.createRange(0, 0, 0, 0)
-            });
+        this.manifestSrcPath = this.builder.program.manifestPath;
+
+        //load the manifest file contents (used for change detection to trigger project reloads)
+        if (this.manifestSrcPath) {
+            try {
+                this.manifestFileContents = (await fsExtra.readFile(this.manifestSrcPath)).toString();
+            } catch { }
         }
 
-        //load the manifest file contents (used for change detection to trigger project reloads).
-        //use builder.program.manifestPath which reflects the actual src path (respects {src;dest} mappings)
-        this.manifestSrcPath = this.builder.program.manifestPath;
-        try {
-            this.manifestFileContents = (await fsExtra.readFile(this.manifestSrcPath)).toString();
-        } catch { }
+        //trigger a validation (but don't wait for it. That way we can cancel it sooner if we get new incoming data or requests)
+        void this.validate();
 
         this.activationDeferred.resolve();
 
@@ -179,6 +181,12 @@ export class Project implements LspProject {
     public async validate() {
         this.logger.debug('Project.validate');
 
+        //a sync that started during a previous Phase 2 may have disposed this project before
+        //runWithConcurrencyLimit reached our slot. Skip validate() if the builder is gone.
+        if (!this.builder?.program) {
+            return;
+        }
+
         this.cancelValidate();
         //store
         this.validationCancelToken = new CancellationTokenSource();
@@ -202,15 +210,22 @@ export class Project implements LspProject {
         delete this.validationCancelToken;
     }
 
-    public getDiagnostics() {
-        const diagnostics = this.builder.getDiagnostics();
-        return diagnostics.map(x => {
-            const uri = URI.file(x.file.srcPath).toString();
-            return {
-                ...util.toDiagnostic(x, uri),
-                uri: uri
-            };
-        });
+    public getDiagnostics(): LspDiagnostic[] {
+        const result: LspDiagnostic[] = [];
+        for (const diagnostic of this.builder.getDiagnostics()) {
+            //skip diagnostics that have no location
+            if (!diagnostic?.location?.uri) {
+                this.logger.debug('Skipping diagnostic that has no location', diagnostic);
+                continue;
+            }
+
+            const srcPath = util.uriToPath(diagnostic.location.uri);
+            result.push({
+                ...util.toDiagnostic(diagnostic, srcPath),
+                uri: diagnostic.location.uri
+            });
+        }
+        return result;
     }
 
     /**
@@ -313,7 +328,7 @@ export class Project implements LspProject {
         let destPath = rokuDeploy.getDestPath(srcPath, files, rootDir);
 
         //if we have a file and the contents haven't changed
-        let file = this.builder.program.getFile(destPath);
+        let file = this.builder.program.getFile<XmlFile | BrsFile>(destPath);
         if (file && file.fileContents === fileContents) {
             return false;
         }
@@ -432,36 +447,41 @@ export class Project implements LspProject {
         }
 
         const programOptions = this.builder.program.options;
-        const newPkgPath = this.computePkgPathForNewSrcPath(options.newSrcPath, programOptions);
-        if (!newPkgPath) {
+        const newDestPath = this.computeDestPathForNewSrcPath(options.newSrcPath, programOptions);
+        if (!newDestPath) {
             return [];
         }
 
-        const oldPkgPath = util.standardizePath(oldFile.pkgPath).toLowerCase();
+        //rename comparisons happen at the source-extension level (destPath), since import
+        //statements reference source paths (e.g. "pkg:/source/lib.bs"), not the transpiled
+        //pkgPath (e.g. "source/lib.brs"). A new file at "source/lib2.bs" needs to be
+        //identified by its destPath, not its pkgPath.
+        const oldDestPath = util.standardizePath(oldFile.destPath).toLowerCase();
 
-        //if the rename doesn't change the pkg path, nothing to do
-        if (oldPkgPath === newPkgPath.toLowerCase()) {
+        //if the rename doesn't change the dest path, nothing to do
+        if (oldDestPath === newDestPath.toLowerCase()) {
             return [];
         }
 
         const result: FileRenameTextEdit[] = [];
         for (const file of Object.values(this.builder.program.files)) {
             if (isBrsFile(file)) {
-                for (const importStatement of file.parser?.references?.importStatements ?? []) {
-                    if (!importStatement.filePathToken || !importStatement.filePath) {
+                // eslint-disable-next-line @typescript-eslint/dot-notation
+                for (const importStatement of file['_cachedLookups']?.importStatements ?? []) {
+                    if (!importStatement.tokens.path || !importStatement.filePath) {
                         continue;
                     }
-                    const resolvedPkgPath = util.getPkgPathFromTarget(file.pkgPath, importStatement.filePath);
-                    if (!resolvedPkgPath || util.standardizePath(resolvedPkgPath).toLowerCase() !== oldPkgPath) {
+                    const resolvedPkgPath = util.getPkgPathFromTarget(file.destPath, importStatement.filePath);
+                    if (!resolvedPkgPath || util.standardizePath(resolvedPkgPath).toLowerCase() !== oldDestPath) {
                         continue;
                     }
-                    const newText = util.computeRenamedReferencePath(importStatement.filePath, file.pkgPath, newPkgPath);
+                    const newText = util.computeRenamedReferencePath(importStatement.filePath, file.destPath, newDestPath);
                     if (newText === null) {
                         continue;
                     }
                     result.push({
                         uri: util.pathToUri(file.srcPath),
-                        range: importStatement.filePathToken.range,
+                        range: importStatement.tokens.path.location.range,
                         newText: newText
                     });
                 }
@@ -470,11 +490,11 @@ export class Project implements LspProject {
                     if (!scriptTag.filePathRange || !scriptTag.text) {
                         continue;
                     }
-                    const resolvedPkgPath = util.getPkgPathFromTarget(file.pkgPath, scriptTag.text);
-                    if (!resolvedPkgPath || util.standardizePath(resolvedPkgPath).toLowerCase() !== oldPkgPath) {
+                    const resolvedPkgPath = util.getPkgPathFromTarget(file.destPath, scriptTag.text);
+                    if (!resolvedPkgPath || util.standardizePath(resolvedPkgPath).toLowerCase() !== oldDestPath) {
                         continue;
                     }
-                    const newText = util.computeRenamedReferencePath(scriptTag.text, file.pkgPath, newPkgPath);
+                    const newText = util.computeRenamedReferencePath(scriptTag.text, file.destPath, newDestPath);
                     if (newText === null) {
                         continue;
                     }
@@ -495,7 +515,7 @@ export class Project implements LspProject {
      * folders that aren't yet in the glob still get their imports rewritten.
      * Returns undefined if the new path is outside this project's rootDir.
      */
-    private computePkgPathForNewSrcPath(newSrcPath: string, programOptions: { files?: BsConfig['files']; rootDir?: string }): string | undefined {
+    private computeDestPathForNewSrcPath(newSrcPath: string, programOptions: { files?: BsConfig['files']; rootDir?: string }): string | undefined {
         if (!programOptions.rootDir) {
             return undefined;
         }

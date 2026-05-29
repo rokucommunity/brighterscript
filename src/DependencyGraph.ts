@@ -78,6 +78,24 @@ export class DependencyGraph {
     }
 
     /**
+     * Get a list of the immediate dependencies for the given key.
+     */
+    public getImmediateDependencies(keys: string | string[], exclude?: string[]) {
+        if (typeof keys === 'string') {
+            return this.nodes[keys]?.dependencies ?? [];
+        } else {
+            const set = new Set<string>();
+            for (const key of keys) {
+                const dependencies = this.getImmediateDependencies(key, exclude);
+                for (const dependency of dependencies) {
+                    set.add(dependency);
+                }
+            }
+            return [...set];
+        }
+    }
+
+    /**
      * Remove the item. This will emit an onchange event for all dependent nodes
      */
     public remove(key: string) {

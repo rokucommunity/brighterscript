@@ -1,5 +1,5 @@
 import { expectCompletionsIncludes, expectDiagnostics, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile } from '../../../testHelpers.spec';
-import { util } from '../../../util';
+import { util, standardizePath as s } from '../../../util';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
 import { ParseMode, Parser } from '../../Parser';
@@ -7,9 +7,9 @@ import { expect } from '../../../chai-config.spec';
 import type { ConstStatement } from '../../Statement';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { LiteralExpression } from '../../Expression';
-import { CompletionItemKind } from 'vscode-languageserver-protocol';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { rootDir } from '../../../testHelpers.spec';
+import { CompletionItemKind } from 'vscode-languageserver';
 
 const sinon = createSandbox();
 
@@ -34,7 +34,7 @@ describe('ConstStatement', () => {
                 const = {
                     name: "Bob"
                 }
-                print const.name = {}
+                print const.name = "John"
             end sub
         `);
         program.validate();
@@ -42,7 +42,7 @@ describe('ConstStatement', () => {
     });
 
     it('supports basic structure', () => {
-        parser.parse('const API_KEY = "abc"', { mode: ParseMode.BrighterScript });
+        parser.parse('const API_KEY = "abc"', { mode: ParseMode.BrighterScript, srcPath: s`${rootDir}/source/main.bs` });
         expectZeroDiagnostics(parser);
         const statement = parser.ast.statements[0] as ConstStatement;
         expect(statement.tokens.const?.kind).to.eql(TokenKind.Const);
@@ -52,13 +52,13 @@ describe('ConstStatement', () => {
         });
         const value = statement.value as LiteralExpression;
         expect(value).to.be.instanceof(LiteralExpression);
-        expect(value.token?.text).to.eql('"abc"');
+        expect(value.tokens.value?.text).to.eql('"abc"');
         //ensure range is correct
-        expect(statement.range).to.eql(util.createRange(0, 0, 0, 21));
+        expect(statement.location?.range).to.eql(util.createRange(0, 0, 0, 21));
     });
 
-    it('produces typedef', () => {
-        testGetTypedef(`
+    it('produces typedef', async () => {
+        await testGetTypedef(`
             const API_KEY = "abc"
             const SOME_OBJ = {}
             const SOME_ARR = []
@@ -68,11 +68,20 @@ describe('ConstStatement', () => {
     it('allows const with the name `optional`', () => {
         program.setFile('source/main.bs', `
             const optional = true
+            sub main()
+                print optional
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
+    it('allows const with the name `optional` in a namespace', () => {
+        program.setFile('source/main.bs', `
             namespace alpha
                 const optional = true
             end namespace
             sub main()
-                print optional
                 print alpha.optional
             end sub
         `);
@@ -82,8 +91,8 @@ describe('ConstStatement', () => {
 
     describe('transpile', () => {
 
-        it('transpiles simple consts', () => {
-            testTranspile(`
+        it('transpiles simple consts', async () => {
+            await testTranspile(`
                 const API_KEY = "abc"
                 sub main()
                     print API_KEY
@@ -95,8 +104,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('transpiles arrays', () => {
-            testTranspile(`
+        it('transpiles arrays', async () => {
+            await testTranspile(`
                 const WORDS = [
                     "alpha"
                     "beta"
@@ -114,8 +123,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('transpiles objects', () => {
-            testTranspile(`
+        it('transpiles objects', async () => {
+            await testTranspile(`
                 const DEFAULTS = {
                     alpha: true
                     beta: true
@@ -133,8 +142,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('supports consts inside namespaces', () => {
-            testTranspile(`
+        it('supports consts inside namespaces', async () => {
+            await testTranspile(`
                 namespace network
                     const API_KEY = "abc"
                     sub get()
@@ -155,8 +164,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('supports property access on complex objects', () => {
-            testTranspile(`
+        it('supports property access on complex objects', async () => {
+            await testTranspile(`
                 const DEFAULTS = {
                     enabled: true
                 }
@@ -172,21 +181,21 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('supports calling methods on consts', () => {
-            testTranspile(`
+        it('supports calling methods on consts', async () => {
+            await testTranspile(`
                 const API_KEY ="ABC"
                 sub main()
-                    print API_KEY.toString()
+                    print API_KEY.toStr()
                 end sub
             `, `
                 sub main()
-                    print "ABC".toString()
+                    print "ABC".toStr()
                 end sub
             `);
         });
 
-        it('transpiles within += operator', () => {
-            testTranspile(`
+        it('transpiles within += operator', async () => {
+            await testTranspile(`
                 namespace constants
                     const API_KEY = "test"
                 end namespace
@@ -205,8 +214,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('transpiles nested consts that reference other consts within same namespace', () => {
-            testTranspile(`
+        it('transpiles nested consts that reference other consts within same namespace', async () => {
+            await testTranspile(`
                 namespace theming
                     const FLAG_A = "A"
                     const FLAG_B = "B"
@@ -225,17 +234,17 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('transpiles nested consts that reference other consts in different namespaces', () => {
-            testTranspile(`
-                namespace aa.bb
+        it('transpiles nested consts that reference other consts in different namespaces', async () => {
+            await testTranspile(`
+                namespace alpha.beta
                     const FLAG_A = "A"
                 end namespace
-                namespace main
+                namespace charlie
                     const FLAG_B = "B"
-                    const AD_BREAK_START = { a: aa.bb.FLAG_A, b: FLAG_B }
+                    const AD_BREAK_START = { a: alpha.beta.FLAG_A, b: FLAG_B }
                 end namespace
                 sub main()
-                    print main.AD_BREAK_START
+                    print charlie.AD_BREAK_START
                 end sub
             `, `
                 sub main()
@@ -247,14 +256,14 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('transpiles nested consts that reference other consts across files', () => {
+        it('transpiles nested consts that reference other consts across files', async () => {
             program.setFile('source/constants.bs', `
                 namespace theming
                     const PRIMARY_COLOR = "blue"
                 end namespace
                 const FLAG_B = "B"
             `);
-            testTranspile(`
+            await testTranspile(`
                 const SECONDARY_COLOR = theming.PRIMARY_COLOR
                 const AD_BREAK_START = { a: SECONDARY_COLOR, b: FLAG_B }
                 sub main()
@@ -270,8 +279,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('recursively resolves nested consts that reference other consts', () => {
-            testTranspile(`
+        it('recursively resolves nested consts that reference other consts', async () => {
+            await testTranspile(`
                 const FLAG_A = "A"
                 const FLAG_B = FLAG_A
                 const AD_BREAK_START = { a: FLAG_A, b: FLAG_B }
@@ -288,8 +297,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('handles the exact example from the issue - nested consts with namespace references', () => {
-            testTranspile(`
+        it('handles the exact example from the issue - nested consts with namespace references', async () => {
+            await testTranspile(`
                 namespace aa.bb
                     const FLAG_A = "test"
                 end namespace
@@ -308,10 +317,10 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('handles cyclical const references without infinite loop', () => {
+        it('handles cyclical const references without infinite loop', async () => {
             //the cycle is also reported via a diagnostic; this test only verifies
             //the transpile output doesn't recurse forever.
-            testTranspile(`
+            await testTranspile(`
                 const A = B
                 const B = C
                 const C = A
@@ -325,8 +334,8 @@ describe('ConstStatement', () => {
             `, 'trim', 'source/main.bs', false);
         });
 
-        it('resolves consts inside array literals', () => {
-            testTranspile(`
+        it('resolves consts inside array literals', async () => {
+            await testTranspile(`
                 const FLAG_A = "A"
                 const FLAG_B = "B"
                 const MY_ARRAY = [FLAG_A, FLAG_B, "C"]
@@ -344,8 +353,8 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('resolves enum used in const - same file', () => {
-            testTranspile(`
+        it('resolves enum used in const - same file', async () => {
+            await testTranspile(`
                 namespace Theming
                     enum Color
                         RED = "#FF0000"
@@ -363,7 +372,7 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('resolves enum used in const - cross file', () => {
+        it('resolves enum used in const - cross file', async () => {
             program.setFile('source/theming.bs', `
                 namespace Theming
                     enum Color
@@ -372,7 +381,7 @@ describe('ConstStatement', () => {
                     end enum
                 end namespace
             `);
-            testTranspile(`
+            await testTranspile(`
                 namespace Theming
                     const PRIMARY_COLOR = Theming.Color.BLUE
                 end namespace
@@ -386,7 +395,7 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('resolves const -> enum -> const -> enum chain across files', () => {
+        it('resolves const -> enum -> const -> enum chain across files', async () => {
             program.setFile('source/theming1.bs', `
                 namespace Theming
                     const BACKGROUND_COLOR = Theming.Color.BLACK
@@ -405,7 +414,7 @@ describe('ConstStatement', () => {
                     const OVERLAY_COLOR = Theming.BACKGROUND_COLOR
                 end namespace
             `);
-            testTranspile(`
+            await testTranspile(`
                 sub test()
                     aa = {
                         backgroundOverlay: {
@@ -424,7 +433,7 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('resolves enum refs inside an aa-literal const used cross-file (issue #1618)', () => {
+        it('resolves enum refs inside an aa-literal const used cross-file (issue #1618)', async () => {
             program.setFile('source/map.bs', `
                 namespace name.space
                     enum someEnum
@@ -440,7 +449,7 @@ describe('ConstStatement', () => {
                     }
                 end namespace
             `);
-            testTranspile(`
+            await testTranspile(`
                 namespace name.space
                     class someClass
                         public function someFunc(key as dynamic) as object
@@ -472,7 +481,7 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('resolves enum refs in computed keys of an aa-literal const used cross-file', () => {
+        it('resolves enum refs in computed keys of an aa-literal const used cross-file', async () => {
             program.setFile('source/map.bs', `
                 namespace name.space
                     enum someEnum
@@ -486,7 +495,7 @@ describe('ConstStatement', () => {
                     }
                 end namespace
             `);
-            testTranspile(`
+            await testTranspile(`
                 namespace name.space
                     sub useMap(key as dynamic) as object
                         return name.space.myMap[key]
@@ -502,7 +511,7 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('inlines a const aa-literal at multiple consumer call sites in the same file', () => {
+        it('inlines a const aa-literal at multiple consumer call sites in the same file', async () => {
             program.setFile('source/consts.bs', `
                 namespace ns
                     enum E
@@ -511,7 +520,7 @@ describe('ConstStatement', () => {
                     const M = { "x": ns.E.X }
                 end namespace
             `);
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     a = ns.M
                     b = ns.M
@@ -528,7 +537,7 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('handles diamond const reference graph (one base const reached via two paths)', () => {
+        it('handles diamond const reference graph (one base const reached via two paths)', async () => {
             program.setFile('source/consts.bs', `
                 namespace ns
                     enum E
@@ -539,7 +548,7 @@ describe('ConstStatement', () => {
                     const B = { "b": ns.C }
                 end namespace
             `);
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     print ns.A
                     print ns.B
@@ -560,7 +569,7 @@ describe('ConstStatement', () => {
             `);
         });
 
-        it('does not infinite-loop on circular const-of-aa references', function() {
+        it('does not infinite-loop on circular const-of-aa references', async function () {
             this.timeout(2000);
             program.setFile('source/consts.bs', `
                 namespace ns
@@ -572,7 +581,7 @@ describe('ConstStatement', () => {
             //transpile completes without recursing forever. The runtime semantics
             //of the cyclic ref are inherently broken, but the compile must not hang.
             //(A diagnostic is also emitted; see the dedicated cycle-diagnostic tests.)
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     print ns.A
                 end sub
@@ -594,10 +603,13 @@ describe('ConstStatement', () => {
             `);
             program.validate();
             //matches the class-hierarchy convention: one diagnostic per const in the cycle,
-            //each rotated so the diagnostic's const is at the head of the chain
+            //each rotated so the diagnostic's const is at the head of the chain. v1 also
+            //fires the bare single-symbol form during reference resolution.
             expectDiagnostics(program, [
-                DiagnosticMessages.circularReferenceDetected(['A', 'B', 'A'], 'source').message,
-                DiagnosticMessages.circularReferenceDetected(['B', 'A', 'B'], 'source').message
+                DiagnosticMessages.circularReferenceDetected('B').message,
+                DiagnosticMessages.circularReferenceDetected('B').message,
+                DiagnosticMessages.circularReferenceDetected(['A', 'B', 'A']).message,
+                DiagnosticMessages.circularReferenceDetected(['B', 'A', 'B']).message
             ]);
         });
 
@@ -610,8 +622,8 @@ describe('ConstStatement', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.circularReferenceDetected(['ns.A', 'ns.B', 'ns.A'], 'source').message,
-                DiagnosticMessages.circularReferenceDetected(['ns.B', 'ns.A', 'ns.B'], 'source').message
+                DiagnosticMessages.circularReferenceDetected(['ns.A', 'ns.B', 'ns.A']).message,
+                DiagnosticMessages.circularReferenceDetected(['ns.B', 'ns.A', 'ns.B']).message
             ]);
         });
 
@@ -625,9 +637,9 @@ describe('ConstStatement', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.circularReferenceDetected(['ns.A', 'ns.B', 'ns.C', 'ns.A'], 'source').message,
-                DiagnosticMessages.circularReferenceDetected(['ns.B', 'ns.C', 'ns.A', 'ns.B'], 'source').message,
-                DiagnosticMessages.circularReferenceDetected(['ns.C', 'ns.A', 'ns.B', 'ns.C'], 'source').message
+                DiagnosticMessages.circularReferenceDetected(['ns.A', 'ns.B', 'ns.C', 'ns.A']).message,
+                DiagnosticMessages.circularReferenceDetected(['ns.B', 'ns.C', 'ns.A', 'ns.B']).message,
+                DiagnosticMessages.circularReferenceDetected(['ns.C', 'ns.A', 'ns.B', 'ns.C']).message
             ]);
         });
 
@@ -647,7 +659,7 @@ describe('ConstStatement', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('resolves complex multi-file const-enum chain', () => {
+        it('resolves complex multi-file const-enum chain', async () => {
             program.setFile('source/colors.bs', `
                 namespace Theme
                     enum Color
@@ -662,7 +674,7 @@ describe('ConstStatement', () => {
                     const ALT_COLOR = Theme.MAIN_COLOR
                 end namespace
             `);
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     colors = {
                         main: Theme.ALT_COLOR
@@ -688,10 +700,10 @@ describe('ConstStatement', () => {
                     log()
                 end sub
             `);
-
+            program.validate();
+            // log(|)
             expectCompletionsIncludes(
-                // log(|)
-                program.getCompletions('source/main.bs', util.createPosition(3, 24)),
+                program.getCompletions('source/main.bs', util.createPosition(3, 34)),
                 [{
                     label: 'API_KEY',
                     kind: CompletionItemKind.Constant
@@ -699,8 +711,8 @@ describe('ConstStatement', () => {
             );
         });
 
-        it('transpiles simple const in a unary expression', () => {
-            testTranspile(`
+        it('transpiles simple const in a unary expression', async () => {
+            await testTranspile(`
                 const foo = 1
                 sub main()
                     bar = -foo
@@ -712,8 +724,8 @@ describe('ConstStatement', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('transpiles complex const in a unary expression', () => {
-            testTranspile(`
+        it('transpiles complex const in a unary expression', async () => {
+            await testTranspile(`
                 namespace some.consts
                     const foo = 1
                 end namespace
@@ -736,7 +748,7 @@ describe('ConstStatement', () => {
                     log(constants.)
                 end sub
             `);
-
+            program.validate();
             expectCompletionsIncludes(
                 // log(|)
                 program.getCompletions('source/main.bs', util.createPosition(5, 34)),

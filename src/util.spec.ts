@@ -1,14 +1,24 @@
 import { expect } from './chai-config.spec';
 import * as path from 'path';
-import util, { standardizePath as s } from './util';
+import { util, standardizePath as s } from './util';
 import { Position, Range } from 'vscode-languageserver';
 import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import { tempDir, rootDir } from './testHelpers.spec';
-import { Program } from './Program';
-import type { BsDiagnostic } from '.';
+import { tempDir, rootDir, expectTypeToBe } from './testHelpers.spec';
+import { TypeChainEntry } from './interfaces';
+import { NamespaceType } from './types/NamespaceType';
+import { ClassType } from './types/ClassType';
+import { ReferenceType } from './types/ReferenceType';
+import { SymbolTypeFlag } from './SymbolTypeFlag';
+import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InterfaceType, InvalidType, LongIntegerType, ObjectType, StringType, TypedFunctionType, UnionType, VoidType } from './types';
+import { TokenKind } from './lexer/TokenKind';
+import { createToken } from './astUtils/creators';
+import { createDottedIdentifier, createVariableExpression } from './astUtils/creators';
+import { Parser } from './parser/Parser';
+import type { FunctionStatement } from './parser/Statement';
+import { ComponentType } from './types/ComponentType';
 
 const sinon = createSandbox();
 
@@ -40,34 +50,29 @@ describe('util', () => {
         });
     });
 
-    describe('diagnosticIsSuppressed', () => {
-        it('does not crash when diagnostic is missing location information', () => {
-            const program = new Program({});
-            const file = program.setFile('source/main.brs', '');
-            const diagnostic: BsDiagnostic = {
-                file: file,
-                message: 'crash',
-                //important part of the test. range must be missing
-                range: undefined as any
-            };
+    describe('getAllDottedGetPartsAsString', () => {
+        it('returns undefined when no value found', () => {
+            expect(
+                util.getAllDottedGetPartsAsString(undefined)
+            ).to.eql(undefined);
+        });
 
-            file.commentFlags.push({
-                affectedRange: util.createRange(1, 2, 3, 4),
-                codes: [1, 2, 3],
-                file: file,
-                range: util.createRange(1, 2, 3, 4)
-            });
-            file.diagnostics.push(diagnostic);
+        it('returns var name', () => {
+            expect(
+                util.getAllDottedGetPartsAsString(createVariableExpression('alpha'))
+            ).to.eql('alpha');
+        });
 
-            util.diagnosticIsSuppressed(diagnostic);
-
-            //test passes if there's no crash
+        it('returns dotted get name', () => {
+            expect(
+                util.getAllDottedGetPartsAsString(createDottedIdentifier(['alpha', 'beta']))
+            ).to.eql('alpha.beta');
         });
     });
 
-    describe('getRokuPkgPath', () => {
+    describe('sanitizePkgPath', () => {
         it('replaces more than one windows slash in a path', () => {
-            expect(util.getRokuPkgPath('source\\folder1\\folder2\\file.brs')).to.eql('pkg:/source/folder1/folder2/file.brs');
+            expect(util.sanitizePkgPath('source\\folder1\\folder2\\file.brs')).to.eql('pkg:/source/folder1/folder2/file.brs');
         });
     });
 
@@ -135,20 +140,18 @@ describe('util', () => {
                 ]
             };
             util.resolvePathsRelativeTo(config, 'plugins', s`${rootDir}/config`);
-            expect(config?.plugins?.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
+            expect(config?.plugins?.map(p => (p ? pathSepNormalize(p, '/') : undefined))).to.deep.equal([
                 `${rootDir}/config/plugins.js`,
                 `${rootDir}/config/scripts/plugins.js`,
                 `${rootDir}/scripts/plugins.js`,
                 'bsplugin'
-            ].map(p => util.pathSepNormalize(p, '/')));
+            ].map(p => pathSepNormalize(p, '/')));
         });
 
         it('resolves path relatively to config file', () => {
             const mockConfig: BsConfig = {
-                outFile: 'out/app.zip',
                 rootDir: 'rootDir',
-                cwd: 'cwd',
-                stagingDir: 'stagingDir'
+                cwd: 'cwd'
             };
             fsExtra.outputFileSync(s`${rootDir}/child.json`, JSON.stringify(mockConfig));
             let config = util.loadConfigFile(s`${rootDir}/child.json`);
@@ -157,9 +160,7 @@ describe('util', () => {
                     s`${rootDir}/child.json`
                 ],
                 'cwd': s`${rootDir}/cwd`,
-                'outFile': s`${rootDir}/out/app.zip`,
-                'rootDir': s`${rootDir}/rootDir`,
-                'stagingDir': s`${rootDir}/stagingDir`
+                'rootDir': s`${rootDir}/rootDir`
             });
         });
 
@@ -174,10 +175,10 @@ describe('util', () => {
                 ]
             };
             util.resolvePathsRelativeTo(config, 'plugins', s`${process.cwd()}/config`);
-            expect(config?.plugins?.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
+            expect(config?.plugins?.map(p => (p ? pathSepNormalize(p, '/') : undefined))).to.deep.equal([
                 s`${process.cwd()}/config/plugins.js`,
                 'bsplugin'
-            ].map(p => util.pathSepNormalize(p, '/')));
+            ].map(p => pathSepNormalize(p, '/')));
         });
     });
 
@@ -231,8 +232,8 @@ describe('util', () => {
 
     describe('pathSepNormalize', () => {
         it('works for both types of separators', () => {
-            expect(util.pathSepNormalize('c:/some\\path', '\\')).to.equal('c:\\some\\path');
-            expect(util.pathSepNormalize('c:/some\\path', '/')).to.equal('c:/some/path');
+            expect(pathSepNormalize('c:/some\\path', '\\')).to.equal('c:\\some\\path');
+            expect(pathSepNormalize('c:/some\\path', '/')).to.equal('c:/some/path');
         });
         it('does not throw when given `undefined`', () => {
             expect(undefined).to.be.undefined;
@@ -249,6 +250,37 @@ describe('util', () => {
     });
 
     describe('findClosestConfigFile', () => {
+
+        /**
+         * Walks up the chain to find the closest bsconfig.json file
+         */
+        async function findClosestConfigFile(currentPath: string): Promise<string | undefined> {
+            //make the path absolute
+            currentPath = path.resolve(
+                path.normalize(
+                    currentPath
+                )
+            );
+
+            let previousPath: string | undefined;
+            //using ../ on the root of the drive results in the same file path, so that's how we know we reached the top
+            while (previousPath !== currentPath) {
+                previousPath = currentPath;
+
+                let bsPath = path.join(currentPath, 'bsconfig.json');
+                let brsPath = path.join(currentPath, 'brsconfig.json');
+                if (await util.pathExists(bsPath)) {
+                    return bsPath;
+                } else if (await util.pathExists(brsPath)) {
+                    return brsPath;
+                } else {
+                    //walk upwards one directory
+                    currentPath = path.resolve(path.join(currentPath, '../'));
+                }
+            }
+            //got to the root path, no config file exists
+        }
+
         it('finds config up the chain', async () => {
             const brsFilePath = s`${rootDir}/src/app.brs`;
             const currentDirBsConfigPath = s`${rootDir}/src/bsconfig.json`;
@@ -261,13 +293,13 @@ describe('util', () => {
             fsExtra.outputFileSync(parentDirBsConfigPath, '');
             fsExtra.outputFileSync(parentDirBrsConfigPath, '');
 
-            expect(await util.findClosestConfigFile(brsFilePath)).to.equal(currentDirBsConfigPath);
+            expect(await findClosestConfigFile(brsFilePath)).to.equal(currentDirBsConfigPath);
             fsExtra.removeSync(currentDirBsConfigPath);
-            expect(await util.findClosestConfigFile(brsFilePath)).to.equal(currentDirBrsConfigPath);
+            expect(await findClosestConfigFile(brsFilePath)).to.equal(currentDirBrsConfigPath);
             fsExtra.removeSync(currentDirBrsConfigPath);
-            expect(await util.findClosestConfigFile(brsFilePath)).to.equal(parentDirBsConfigPath);
+            expect(await findClosestConfigFile(brsFilePath)).to.equal(parentDirBsConfigPath);
             fsExtra.removeSync(parentDirBsConfigPath);
-            expect(await util.findClosestConfigFile(brsFilePath)).to.equal(parentDirBrsConfigPath);
+            expect(await findClosestConfigFile(brsFilePath)).to.equal(parentDirBrsConfigPath);
         });
 
     });
@@ -332,6 +364,36 @@ describe('util', () => {
                 });
             }).not.to.throw;
         });
+
+        it('remaps stagingDir to outDir', () => {
+            expect(util.normalizeAndResolveConfig({
+                stagingDir: './staging'
+            })).to.include({
+                outDir: './staging'
+            });
+        });
+
+        it('remaps stagingFolderPath to outDir', () => {
+            expect(util.normalizeAndResolveConfig({
+                stagingFolderPath: './staging'
+            })).to.include({
+                outDir: './staging'
+            });
+        });
+
+        it('uses provided outDir', () => {
+            expect(util.normalizeAndResolveConfig({
+                outDir: './staging'
+            })).to.include({
+                outDir: './staging'
+            });
+        });
+
+        it('uses default outDir', () => {
+            expect(util.normalizeAndResolveConfig({})).to.include({
+                outDir: './out'
+            });
+        });
     });
 
     describe('normalizeConfig', () => {
@@ -356,21 +418,21 @@ describe('util', () => {
         });
 
         it('loads project from disc', () => {
-            fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{ "outFile": "customOutDir/pkg.zip" }`);
+            fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.json`, `{ "outDir": "customOutDir" }`);
             let config = util.normalizeAndResolveConfig({
                 project: s`${tempDir}/rootDir/bsconfig.json`
             });
             expect(
-                config.outFile
+                config.outDir
             ).to.equal(
-                s`${tempDir}/rootDir/customOutDir/pkg.zip`
+                s`${tempDir}/rootDir/customOutDir`
             );
         });
 
         it('loads project from disc and extends it', () => {
             //the extends file
             fsExtra.outputFileSync(s`${tempDir}/rootDir/bsconfig.base.json`, `{
-                "outFile": "customOutDir/pkg1.zip",
+                "outDir": "customOutDir",
                 "rootDir": "core"
             }`);
 
@@ -382,7 +444,7 @@ describe('util', () => {
 
             let config = util.normalizeAndResolveConfig({ project: s`${tempDir}/rootDir/bsconfig.json` });
 
-            expect(config.outFile).to.equal(s`${tempDir}/rootDir/customOutDir/pkg1.zip`);
+            expect(config.outDir).to.equal(s`${tempDir}/rootDir/customOutDir`);
             expect(config.rootDir).to.equal(s`${tempDir}/rootDir/core`);
             expect(config.watch).to.equal(true);
         });
@@ -437,20 +499,85 @@ describe('util', () => {
                 expect(util.normalizeConfig(<any>{ bslibDestinationDir: input }).bslibDestinationDir).to.equal('source/opt');
             });
         });
+
+        it('used default noEmit value', () => {
+            let config = util.normalizeConfig({} as any);
+            expect(config.noEmit).to.be.false;
+        });
+
+        it('used noEmit value over copyToStaging', () => {
+            let config = util.normalizeConfig({ noEmit: true, copyToStaging: false } as any);
+            expect(config.noEmit).to.be.true;
+            config = util.normalizeConfig({ noEmit: false, copyToStaging: false } as any);
+            expect(config.noEmit).to.be.false;
+        });
+
+        it('used copyToStaging when noEmit is not present', () => {
+            let config = util.normalizeConfig({ copyToStaging: true } as any);
+            expect(config.noEmit).to.be.false;
+            config = util.normalizeConfig({ copyToStaging: false } as any);
+            expect(config.noEmit).to.be.true;
+        });
+
+        it('defaults outDir to ./out', () => {
+            let config = util.normalizeConfig({} as any);
+            expect(config.outDir).to.equal('./out');
+        });
+
+        it('uses stagingDir when outDir is not provided', () => {
+            let config = util.normalizeConfig({ stagingDir: 'staging' } as any);
+            expect(config.outDir).to.equal('staging');
+        });
+
+        it('uses stagingFolderPath when outDir is not provided', () => {
+            let config = util.normalizeConfig({ stagingFolderPath: 'stagingPath' } as any);
+            expect(config.outDir).to.equal('stagingPath');
+        });
+
+        it('uses outDir when stagingDir is provided', () => {
+            let config = util.normalizeConfig({ outDir: 'outTest', stagingDir: 'staging' } as any);
+            expect(config.outDir).to.equal('outTest');
+        });
+
+        it('uses outDir when stagingFolderPath is provided', () => {
+            let config = util.normalizeConfig({ outDir: 'outTest', stagingFolderPath: 'stagingPath' } as any);
+            expect(config.outDir).to.equal('outTest');
+        });
+
+        it('uses outDir when stagingFolderPath and stagingDir are provided', () => {
+            let config = util.normalizeConfig({ outDir: 'outTest', stagingDir: 'staging', stagingFolderPath: 'stagingPath' } as any);
+            expect(config.outDir).to.equal('outTest');
+        });
     });
 
     describe('areArraysEqual', () => {
+        /**
+         * Determine if two arrays containing primitive values are equal.
+         * This considers order and compares by equality.
+         */
+        function areArraysEqual(arr1: any[], arr2: any[]) {
+            if (arr1.length !== arr2.length) {
+                return false;
+            }
+            for (let i = 0; i < arr1.length; i++) {
+                if (arr1[i] !== arr2[i]) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         it('finds equal arrays', () => {
-            expect(util.areArraysEqual([1, 2], [1, 2])).to.be.true;
-            expect(util.areArraysEqual(['cat', 'dog'], ['cat', 'dog'])).to.be.true;
+            expect(areArraysEqual([1, 2], [1, 2])).to.be.true;
+            expect(areArraysEqual(['cat', 'dog'], ['cat', 'dog'])).to.be.true;
         });
         it('detects non-equal arrays', () => {
-            expect(util.areArraysEqual([1, 2], [1])).to.be.false;
-            expect(util.areArraysEqual([1, 2], [2])).to.be.false;
-            expect(util.areArraysEqual([2], [1])).to.be.false;
-            expect(util.areArraysEqual([2], [0])).to.be.false;
-            expect(util.areArraysEqual(['cat', 'dog'], ['cat', 'dog', 'mouse'])).to.be.false;
-            expect(util.areArraysEqual(['cat', 'dog'], ['dog', 'cat'])).to.be.false;
+            expect(areArraysEqual([1, 2], [1])).to.be.false;
+            expect(areArraysEqual([1, 2], [2])).to.be.false;
+            expect(areArraysEqual([2], [1])).to.be.false;
+            expect(areArraysEqual([2], [0])).to.be.false;
+            expect(areArraysEqual(['cat', 'dog'], ['cat', 'dog', 'mouse'])).to.be.false;
+            expect(areArraysEqual(['cat', 'dog'], ['dog', 'cat'])).to.be.false;
         });
     });
 
@@ -531,12 +658,6 @@ describe('util', () => {
         });
         it('works when source and target are in different subs', () => {
             expect(util.getRelativePath('sub1/file.xml', 'sub2/file.brs')).to.equal(s`../sub2/file.brs`);
-        });
-    });
-
-    describe('padLeft', () => {
-        it('stops at an upper limit to prevent terrible memory explosions', () => {
-            expect(util.padLeft('', Number.MAX_VALUE, ' ')).to.be.lengthOf(1000);
         });
     });
 
@@ -690,25 +811,26 @@ describe('util', () => {
         });
     });
 
-    describe('copyBslibToStaging', () => {
-        it('copies from local bslib dependency', async () => {
-            await util.copyBslibToStaging(tempDir);
-            expect(fsExtra.pathExistsSync(`${tempDir}/source/bslib.brs`)).to.be.true;
-            expect(
-                /^function bslib_toString\(/mg.exec(
-                    fsExtra.readFileSync(`${tempDir}/source/bslib.brs`).toString()
-                )
-            ).not.to.be.null;
+    describe('range creation', () => {
+        it('createRangeFromPositions', () => {
+            const pos11 = { line: 1, character: 1 };
+            const pos99 = { line: 9, character: 9 };
+
+            expect(util.createRangeFromPositions(pos11, pos99)).to.eql(util.createRange(1, 1, 9, 9));
+            expect(util.createRangeFromPositions(null, pos99)).to.eql(util.createRange(9, 9, 9, 9));
+            expect(util.createRangeFromPositions(pos11, null)).to.eql(util.createRange(1, 1, 1, 1));
         });
 
-        it('copies from local bslib dependency to optionally specified destination directory', async () => {
-            await util.copyBslibToStaging(tempDir, 'source/opt');
-            expect(fsExtra.pathExistsSync(`${tempDir}/source/opt/bslib.brs`)).to.be.true;
-            expect(
-                /^function bslib_toString\(/mg.exec(
-                    fsExtra.readFileSync(`${tempDir}/source/opt/bslib.brs`).toString()
-                )
-            ).not.to.be.null;
+
+        it('createBoundingRange', () => {
+            const range1 = util.createRange(1, 1, 2, 2);
+            const range2 = util.createRange(2, 2, 3, 3);
+            const range3 = util.createRange(100, 100, 100, 100);
+
+            expect(util.createBoundingRange(range1)).to.eql(util.createRange(1, 1, 2, 2));
+            expect(util.createBoundingRange(range1, range2)).to.eql(util.createRange(1, 1, 3, 3));
+            expect(util.createBoundingRange(range2, range1)).to.eql(util.createRange(1, 1, 3, 3));
+            expect(util.createBoundingRange(range2, range3, range1)).to.eql(util.createRange(1, 1, 100, 100));
         });
     });
 
@@ -910,6 +1032,18 @@ describe('util', () => {
         });
     });
 
+    it('isRangeInRange', () => {
+        expect(util.isRangeInRange(
+            util.createRange(0, 1, 1, 3),
+            util.createRange(0, 0, 2, 0)
+        )).to.be.true;
+
+        expect(util.isRangeInRange(
+            util.createRange(0, 0, 2, 0),
+            util.createRange(0, 1, 1, 3)
+        )).to.be.false;
+    });
+
     it('sortByRange', () => {
         const front = {
             range: util.createRange(1, 1, 1, 2)
@@ -928,9 +1062,34 @@ describe('util', () => {
     });
 
     describe('splitWithLocation', () => {
+        /**
+         * Split the given text and return ranges for each chunk.
+         * Only works for single-line strings
+         */
+        function splitGetRange(separator: string, text: string, range: Range) {
+            const chunks = text.split(separator);
+            const result = [] as Array<{ text: string; range: Range }>;
+            let offset = 0;
+            for (let chunk of chunks) {
+                //only keep nonzero chunks
+                if (chunk.length > 0) {
+                    result.push({
+                        text: chunk,
+                        range: util.createRange(
+                            range.start.line,
+                            range.start.character + offset,
+                            range.end.line,
+                            range.start.character + offset + chunk.length
+                        )
+                    });
+                }
+                offset += chunk.length + separator.length;
+            }
+            return result;
+        }
         it('works with no split items', () => {
             expect(
-                util.splitGetRange('.', 'hello', util.createRange(2, 10, 2, 15))
+                splitGetRange('.', 'hello', util.createRange(2, 10, 2, 15))
             ).to.eql([{
                 text: 'hello',
                 range: util.createRange(2, 10, 2, 15)
@@ -939,7 +1098,7 @@ describe('util', () => {
 
         it('handles empty chunks', () => {
             expect(
-                util.splitGetRange('l', 'hello', util.createRange(2, 10, 2, 15))
+                splitGetRange('l', 'hello', util.createRange(2, 10, 2, 15))
             ).to.eql([{
                 text: 'he',
                 range: util.createRange(2, 10, 2, 12)
@@ -951,7 +1110,7 @@ describe('util', () => {
 
         it('handles multiple non-empty chunks', () => {
             expect(
-                util.splitGetRange('.', 'abc.d.efgh.i', util.createRange(2, 10, 2, 2))
+                splitGetRange('.', 'abc.d.efgh.i', util.createRange(2, 10, 2, 2))
             ).to.eql([{
                 text: 'abc',
                 range: util.createRange(2, 10, 2, 13)
@@ -973,8 +1132,7 @@ describe('util', () => {
             expect(
                 util.toDiagnostic({
                     ...DiagnosticMessages.cannotFindName('someVar'),
-                    file: undefined as any,
-                    range: util.createRange(1, 2, 3, 4),
+                    location: { uri: null, range: util.createRange(1, 2, 3, 4) },
                     relatedInformation: [{
                         message: 'Alpha',
                         location: undefined as any
@@ -982,7 +1140,7 @@ describe('util', () => {
                 }, 'u/r/i').relatedInformation
             ).to.eql([{
                 message: 'Alpha',
-                location: util.createLocation(
+                location: util.createLocationFromRange(
                     'u/r/i', util.createRange(1, 2, 3, 4)
                 )
             }]);
@@ -992,11 +1150,10 @@ describe('util', () => {
             expect(
                 util.toDiagnostic({
                     ...DiagnosticMessages.cannotFindName('someVar'),
-                    file: undefined as any,
-                    range: util.createRange(1, 2, 3, 4),
+                    location: { uri: null, range: util.createRange(1, 2, 3, 4) },
                     relatedInformation: [{
                         message: 'Alpha',
-                        location: util.createLocation(
+                        location: util.createLocationFromRange(
                             'uri', util.createRange(2, 3, 4, 5)
                         )
                     }, {
@@ -1006,13 +1163,400 @@ describe('util', () => {
                 }, undefined as any).relatedInformation
             ).to.eql([{
                 message: 'Alpha',
-                location: util.createLocation(
+                location: util.createLocationFromRange(
                     'uri', util.createRange(2, 3, 4, 5)
                 )
             }]);
         });
     });
 
+    describe('processTypeChain', () => {
+        it('should  find the correct details in a list of type resolutions', () => {
+            const nodes = [
+                createVariableExpression('Alpha', util.createLocation(1, 1, 2, 2)),
+                createVariableExpression('Beta', util.createLocation(2, 2, 3, 3)),
+                createVariableExpression('CharlieProp', util.createLocation(3, 3, 4, 4))
+            ];
+
+            const chain = [
+                new TypeChainEntry({ name: 'AlphaNamespace', type: new NamespaceType('Alpha'), data: { flags: SymbolTypeFlag.runtime }, astNode: nodes[0] }),
+                new TypeChainEntry({ name: 'BetaProp', type: new ClassType('Beta'), data: { flags: SymbolTypeFlag.runtime }, astNode: nodes[1] }),
+                new TypeChainEntry({ name: 'CharlieProp', type: new ReferenceType('Charlie', 'Alpha.Beta.CharlieProp', SymbolTypeFlag.runtime, () => null), data: { flags: SymbolTypeFlag.runtime }, astNode: nodes[2] })
+            ];
+
+            const result = util.processTypeChain(chain);
+            expect(result.itemName).to.eql('CharlieProp');
+            expect(result.fullChainName).to.eql('AlphaNamespace.BetaProp.CharlieProp');
+            expect(result.itemParentTypeName).to.eql('Beta');
+            expect(result.fullNameOfItem).to.eql('Beta.CharlieProp');
+            expect(result.location.range).to.eql(util.createRange(3, 3, 4, 4));
+        });
+
+        it('respects the separatorToken', () => {
+            const nodes = [
+                createVariableExpression('Custom', util.createLocation(1, 1, 2, 2)),
+                createVariableExpression('someCallFunc', util.createLocation(2, 2, 3, 3))
+            ];
+            const chain = [
+                new TypeChainEntry({ name: 'roSGNodeCustom', type: new ComponentType('Custom'), data: { flags: SymbolTypeFlag.runtime }, astNode: nodes[0] }),
+                new TypeChainEntry({ name: 'someCallFunc', type: new TypedFunctionType(VoidType.instance), data: { flags: SymbolTypeFlag.runtime }, astNode: nodes[1], separatorToken: createToken(TokenKind.Callfunc) })
+            ];
+
+            const result = util.processTypeChain(chain);
+            expect(result.fullChainName).to.eql('roSGNodeCustom@.someCallFunc');
+        });
+    });
+
+    describe('binaryOperatorResultType', () => {
+        it('returns the correct type for math operations', () => {
+            // String + String is string
+            expectTypeToBe(util.binaryOperatorResultType(StringType.instance, createToken(TokenKind.Plus), StringType.instance), StringType);
+            // string plus anything else is an error - return dynamic
+            expect(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Plus), StringType.instance)).to.be.undefined;
+
+            const boxedInt = new InterfaceType('roInt');
+            boxedInt.isBuiltIn = true;
+            const boxedFloat = new InterfaceType('roFloat');
+            boxedFloat.isBuiltIn = true;
+
+            // Plus
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Plus), IntegerType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Plus), FloatType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Plus), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Plus), boxedFloat), FloatType);
+
+            // Subtract
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Minus), IntegerType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Minus), FloatType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Minus), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Minus), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Plus), boxedFloat), FloatType);
+
+            // Multiply
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Star), IntegerType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Star), FloatType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Star), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Star), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Star), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Star), boxedFloat), FloatType);
+
+            // Mod
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Mod), IntegerType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Mod), FloatType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Mod), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Mod), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Mod), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Mod), boxedFloat), FloatType);
+
+            // Divide
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Forwardslash), IntegerType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Forwardslash), FloatType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Forwardslash), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Forwardslash), IntegerType.instance), FloatType); // int/int -> float
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Plus), boxedFloat), FloatType);
+
+
+            // Exponent
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Caret), IntegerType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Caret), FloatType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Caret), LongIntegerType.instance), DoubleType);// long^int -> Double, int^long -> Double
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Caret), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Caret), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Caret), boxedFloat), FloatType);
+        });
+
+        it('returns the correct type for Bitshift operations', () => {
+            const boxedInt = new InterfaceType('roInt');
+            boxedInt.isBuiltIn = true;
+            const boxedFloat = new InterfaceType('roFloat');
+            boxedFloat.isBuiltIn = true;
+
+            // <<
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.LeftShift), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.LeftShift), FloatType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.LeftShift), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.LeftShift), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.LeftShift), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.LeftShift), boxedFloat), IntegerType);
+
+            // >>
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.RightShift), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.RightShift), FloatType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.RightShift), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.RightShift), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.RightShift), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.RightShift), boxedFloat), IntegerType);
+        });
+
+        it('returns the correct type for Comparison operations', () => {
+            const boxedInt = new InterfaceType('roInt');
+            boxedInt.isBuiltIn = true;
+            const boxedFloat = new InterfaceType('roFloat');
+            boxedFloat.isBuiltIn = true;
+
+            // =
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Equal), IntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Equal), FloatType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Equal), LongIntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Equal), IntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.Equal), IntegerType.instance), BooleanType); // = accepts invalid
+            expect(util.binaryOperatorResultType(StringType.instance, createToken(TokenKind.Equal), IntegerType.instance)).to.be.undefined; // only one string is not accepted
+            expectTypeToBe(util.binaryOperatorResultType(StringType.instance, createToken(TokenKind.Equal), StringType.instance), BooleanType); // both strings is accepted
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Equal), IntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.Equal), boxedFloat), BooleanType);
+            // <>
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.LessGreater), InvalidType.instance), BooleanType); // <> accepts invalid
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, createToken(TokenKind.LessGreater), InvalidType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedFloat, createToken(TokenKind.LessGreater), InvalidType.instance), BooleanType);
+            // > - does not accept invalid
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Greater), IntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Greater), FloatType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Greater), LongIntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Greater), IntegerType.instance), BooleanType);
+            expect(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.Greater), IntegerType.instance)).to.be.undefined; // invalid not accepted
+            // etc. - all should be boolean
+        });
+
+        it('returns the correct type for Logical/bitwise operations', () => {
+            // and
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.And), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.And), FloatType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.And), BooleanType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(BooleanType.instance, createToken(TokenKind.And), IntegerType.instance), BooleanType);
+            expect(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.And), IntegerType.instance)).to.be.undefined; // invalid not accepted
+            expect(util.binaryOperatorResultType(StringType.instance, createToken(TokenKind.And), IntegerType.instance)).to.be.undefined; // strings are not accepted
+            // or
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, createToken(TokenKind.Or), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Or), FloatType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Or), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Or), IntegerType.instance), IntegerType);
+            expect(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.Or), IntegerType.instance)).to.be.undefined;
+        });
+
+        it('assumes a dynamic type is a valid type', () => {
+            expectTypeToBe(util.binaryOperatorResultType(StringType.instance, createToken(TokenKind.Plus), DynamicType.instance), StringType);
+            expectTypeToBe(util.binaryOperatorResultType(DynamicType.instance, createToken(TokenKind.Plus), StringType.instance), StringType);
+            expectTypeToBe(util.binaryOperatorResultType(FloatType.instance, createToken(TokenKind.ForwardslashEqual), DynamicType.instance), FloatType);
+
+            // "and" / "or" are logic operators with booleans
+            expectTypeToBe(util.binaryOperatorResultType(DynamicType.instance, createToken(TokenKind.And), BooleanType.instance), BooleanType);
+
+            // "and" / "or" are bitwise operators with number
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, createToken(TokenKind.Or), DynamicType.instance), IntegerType);
+        });
+
+        it('handles union types ', () => {
+            const floatIntUnion = new UnionType([IntegerType.instance, FloatType.instance]);
+            expectTypeToBe(util.binaryOperatorResultType(floatIntUnion, createToken(TokenKind.Plus), DoubleType.instance), DoubleType);
+        });
+
+        it('handles 2 union types', () => {
+            const floatIntUnion = new UnionType([IntegerType.instance, FloatType.instance]);
+            expectTypeToBe(util.binaryOperatorResultType(floatIntUnion, createToken(TokenKind.Plus), floatIntUnion), FloatType);
+        });
+
+        it('handles union types with diverse member types', () => {
+            const myUnion = new UnionType([FloatType.instance, StringType.instance, BooleanType.instance]);
+            expectTypeToBe(util.binaryOperatorResultType(myUnion, createToken(TokenKind.Plus), myUnion), DynamicType);
+        });
+
+        it('handles union types with self-referencing unions', () => {
+            const myUnion = new UnionType([FloatType.instance, StringType.instance, DynamicType.instance]);
+            myUnion.addType(myUnion);
+            expectTypeToBe(util.binaryOperatorResultType(myUnion, createToken(TokenKind.Plus), myUnion), DynamicType);
+        });
+
+        it('handles object Types', () => {
+            expectTypeToBe(util.binaryOperatorResultType(new ObjectType(), createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+        });
+
+        it('handles object Types', () => {
+            expectTypeToBe(util.binaryOperatorResultType(new ObjectType(), createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+        });
+    });
+
+    describe('unaryOperatorResultType', () => {
+        it('returns the correct type for minus operation', () => {
+            let minus = createToken(TokenKind.Minus);
+            expectTypeToBe(util.unaryOperatorResultType(minus, IntegerType.instance), IntegerType);
+            expectTypeToBe(util.unaryOperatorResultType(minus, FloatType.instance), FloatType);
+            expect(util.unaryOperatorResultType(minus, BooleanType.instance)).to.be.undefined;
+            expectTypeToBe(util.unaryOperatorResultType(minus, DoubleType.instance), DoubleType);
+            expect(util.unaryOperatorResultType(minus, StringType.instance)).to.be.undefined;
+            expectTypeToBe(util.unaryOperatorResultType(minus, DynamicType.instance), DynamicType);
+            expect(util.unaryOperatorResultType(minus, VoidType.instance)).to.be.undefined;
+
+            const boxedFloat = new InterfaceType('roFloat');
+            boxedFloat.isBuiltIn = true;
+            expectTypeToBe(util.unaryOperatorResultType(minus, boxedFloat), FloatType);
+        });
+
+        it('returns the correct type for not operation', () => {
+            let notToken = createToken(TokenKind.Not);
+            const boxedFloat = new InterfaceType('roFloat');
+            boxedFloat.isBuiltIn = true;
+            expectTypeToBe(util.unaryOperatorResultType(notToken, IntegerType.instance), IntegerType);
+            expectTypeToBe(util.unaryOperatorResultType(notToken, FloatType.instance), IntegerType);
+            expectTypeToBe(util.unaryOperatorResultType(notToken, BooleanType.instance), BooleanType);
+            expectTypeToBe(util.unaryOperatorResultType(notToken, DoubleType.instance), IntegerType);
+            expect(util.unaryOperatorResultType(notToken, StringType.instance)).to.be.undefined;
+            expectTypeToBe(util.unaryOperatorResultType(notToken, LongIntegerType.instance), LongIntegerType);
+            expect(util.unaryOperatorResultType(notToken, VoidType.instance)).to.be.undefined;
+            expectTypeToBe(util.unaryOperatorResultType(notToken, boxedFloat), IntegerType);
+        });
+
+        it('handles object Types', () => {
+            expectTypeToBe(util.unaryOperatorResultType(createToken(TokenKind.Minus), new ObjectType()), ObjectType);
+        });
+    });
+
+    describe('getTokenDocumentation', () => {
+        it('should return a string of the comment', () => {
+            const { ast } = Parser.parse(`
+                ' This is a comment.
+                ' it has two lines
+                function getOne() as integer
+                    return 1
+                end function
+            `);
+            const func = (ast.statements[0] as FunctionStatement).func;
+            const docs = util.getNodeDocumentation(func);
+            expect(docs).to.eql('This is a comment.\nit has two lines');
+        });
+
+        it('should pay attention to @param, @return, etc. (jsdoc tags)', () => {
+            const { ast } = Parser.parse(`
+                ' Add 1 to a number
+                '
+                ' @public
+                ' @param {integer} the number to add to
+                ' @return {integer} the result
+                function addOne(num as integer) as integer
+                    return num + 1
+                end function
+            `);
+            const func = (ast.statements[0] as FunctionStatement).func;
+            const docs = util.getNodeDocumentation(func);
+            expect(docs).to.eql('Add 1 to a number\n\n\n_@public_\n\n_@param_ {integer} the number to add to\n\n_@return_ {integer} the result');
+        });
+
+
+        it('only includes comments directly above token', () => {
+            const { ast } = Parser.parse(`
+                const abc = "ABC" ' comment at end of line
+
+                ' plus one
+                function addOne(num as integer) as integer
+                    return num + 1
+                end function
+            `);
+            const func = (ast.statements[1] as FunctionStatement).func;
+            const docs = util.getNodeDocumentation(func);
+            expect(docs).to.eql('plus one');
+        });
+
+        it('allows jsdoc style comment blocks', () => {
+            const { ast } = Parser.parse(`
+                ' /**
+                '  plus one
+                ' */
+                function addOne(num as integer) as integer
+                    return num + 1
+                end function
+            `);
+            const func = (ast.statements[0] as FunctionStatement).func;
+            const docs = util.getNodeDocumentation(func);
+            expect(docs).to.eql('plus one');
+        });
+
+        it('allows jsdoc style comment blocks with leading *', () => {
+            const { ast } = Parser.parse(`
+                ' /**
+                '  * plus one
+                '  */
+                function addOne(num as integer) as integer
+                    return num + 1
+                end function
+            `);
+            const func = (ast.statements[0] as FunctionStatement).func;
+            const docs = util.getNodeDocumentation(func);
+            expect(docs).to.eql('plus one');
+        });
+    });
+
+    describe('truncate', () => {
+        const items = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty'];
+
+        it('returns whole string when under the limit', () => {
+            expect(
+                util.truncate({
+                    leadingText: 'We have numbers: ',
+                    items: items,
+                    partBuilder: (item) => item,
+                    maxLength: 1000
+                })
+            ).to.eql(
+                'We have numbers: ' + items.join(', ')
+            );
+        });
+
+        it('truncates to max length', () => {
+            expect(
+                util.truncate({
+                    leadingText: 'We have numbers: ',
+                    items: items,
+                    partBuilder: (item) => item,
+                    maxLength: 50
+                })
+            ).to.eql(
+                'We have numbers: one, two, three, ...and 17 more'
+            );
+        });
+
+        it('shows at least 2 items, even if going over the length', () => {
+            expect(
+                util.truncate({
+                    leadingText: 'We have numbers: ',
+                    items: items,
+                    partBuilder: (item) => item,
+                    maxLength: 30
+                })
+            ).to.eql(
+                'We have numbers: one, two, ...and 18 more'
+            );
+        });
+
+        it('Accounts for extra wrapping around items', () => {
+            expect(
+                util.truncate({
+                    leadingText: 'We have numbers: ',
+                    items: items,
+                    partBuilder: (item) => `--${item}--`,
+                    maxLength: 60
+                })
+            ).to.eql(
+                'We have numbers: --one--, --two--, --three--, ...and 17 more'
+            );
+        });
+
+        it('includes trailing text', () => {
+            expect(
+                util.truncate({
+                    leadingText: 'We have numbers: ',
+                    trailingText: '!',
+                    items: items,
+                    partBuilder: (item) => item,
+                    maxLength: 50
+                })
+            ).to.eql(
+                'We have numbers: one, two, three, ...and 17 more!'
+            );
+        });
+    });
     describe('promiseRaceMatch', () => {
         async function resolveAfter<T = any>(value: T, timeout: number) {
             await util.sleep(timeout);
@@ -1115,6 +1659,7 @@ describe('util', () => {
     describe('standardizePath', () => {
         let isWindowsOrig = util['isWindows'];
         let isWindows = isWindowsOrig;
+        let standardizePathCacheLimitOrig = util['standardizePathCacheLimit'];
 
         beforeEach(() => {
             util['standardizePathCache'].clear();
@@ -1122,6 +1667,7 @@ describe('util', () => {
         afterEach(() => {
             util['standardizePathCache'].clear();
             util['isWindows'] = isWindowsOrig;
+            util['standardizePathCacheLimit'] = standardizePathCacheLimitOrig;
         });
 
         function test(incoming: string, expected: string) {
@@ -1228,6 +1774,98 @@ describe('util', () => {
                 test('/one//two///three//', '/one/two/three/');
                 test('\\\\one\\\\two\\\\three\\\\', '/one/two/three/');
             });
+
+        });
+
+        describe('virtual:/ paths', () => {
+            it('preserves virtual:/ prefix on windows', () => {
+                isWindows = true;
+                test('virtual:/ButtonPrimary.brs', 'virtual:/buttonprimary.brs');
+                test('virtual:\\ButtonPrimary.brs', 'virtual:/buttonprimary.brs');
+            });
+
+            it('preserves virtual:/ prefix on unix', () => {
+                isWindows = false;
+                test('virtual:/ButtonPrimary.brs', 'virtual:/buttonprimary.brs');
+                test('virtual:\\ButtonPrimary.brs', 'virtual:/buttonprimary.brs');
+            });
+
+            it('normalizes consecutive slashes in virtual paths', () => {
+                isWindows = true;
+                test('virtual://one//two.brs', 'virtual:/one/two.brs');
+                isWindows = false;
+                test('virtual://one//two.brs', 'virtual:/one/two.brs');
+            });
+
+            it('lowercases virtual path content', () => {
+                test('virtual:/UPPER/CasePath.brs', 'virtual:/upper/casepath.brs');
+            });
+        });
+    });
+
+    describe('isClassUsedAsFunction', () => {
+        it('does not crash when class type has no name', () => {
+            util.isClassUsedAsFunction(new ClassType(undefined), undefined, { flags: SymbolTypeFlag.runtime });
+        });
+    });
+
+    describe('hasLeadingComments', () => {
+        it('does not crash on undefined trivia', () => {
+            expect(util.hasLeadingComments(undefined)).to.be.false;
+        });
+
+        it('returns false when there are no leading comments', () => {
+            const token = createToken(TokenKind.Identifier);
+            token.leadingTrivia = [];
+            expect(util.hasLeadingComments(token)).to.be.false;
+        });
+
+        it('returns true when there are leading comments', () => {
+            const token = createToken(TokenKind.Identifier);
+            token.leadingTrivia = [createToken(TokenKind.Comment, `'comment`)];
+            expect(util.hasLeadingComments(token)).to.be.true;
+        });
+
+        it('does not crash on unexpected trivia item types', () => {
+            const token = createToken(TokenKind.Identifier);
+            token.leadingTrivia = [undefined, null, 1, true, 'string', {}, createToken(TokenKind.Comment, `'comment`)] as any[];
+            expect(util.hasLeadingComments(token)).to.be.true;
+        });
+    });
+
+    describe('getLeadingComments', () => {
+        it('does not crash on undefined trivia', () => {
+            expect(util.getLeadingComments(undefined)).to.eql([]);
+        });
+
+        it('returns [] when there are no leading comments', () => {
+            const token = createToken(TokenKind.Identifier);
+            token.leadingTrivia = [];
+            expect(util.getLeadingComments(token)).to.eql([]);
+        });
+
+        it('returns true when there are leading comments', () => {
+            const token = createToken(TokenKind.Identifier);
+            token.leadingTrivia = [createToken(TokenKind.Comment, `'comment 1`)];
+            expect(util.getLeadingComments(token)).eql([createToken(TokenKind.Comment, `'comment 1`)]);
+        });
+
+        it('does not crash on unexpected trivia item types', () => {
+            const token = createToken(TokenKind.Identifier);
+            token.leadingTrivia = [undefined, null, 1, true, 'string', {}, createToken(TokenKind.Comment, `'comment 2`)] as any[];
+            expect(util.getLeadingComments(token)).eql([createToken(TokenKind.Comment, `'comment 2`)]);
         });
     });
 });
+
+
+/**
+ * Given a path to a file/directory, replace all path separators with the current system's version.
+ */
+function pathSepNormalize(filePath: string, separator?: string) {
+    if (!filePath) {
+        return filePath;
+    }
+    separator = separator ? separator : path.sep;
+    return filePath.replace(/[\\/]+/g, separator);
+}

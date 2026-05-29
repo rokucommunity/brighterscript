@@ -2,6 +2,7 @@ import { expect } from '../../../chai-config.spec';
 import type { DimStatement } from '../../Statement';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { Parser } from '../../Parser';
+import { expectDiagnostics } from '../../../testHelpers.spec';
 
 describe('parser DimStatement', () => {
     it('parses properly', () => {
@@ -30,8 +31,8 @@ describe('parser DimStatement', () => {
         const dimStatement = (parser.ast.statements[0] as DimStatement);
         //the statement should still exist and have null identifier
         expect(dimStatement).to.exist;
-        expect(dimStatement.identifier).to.not.exist;
-        expect(parser.diagnostics.map(x => x.message)).to.include(DiagnosticMessages.expectedIdentifierAfterKeyword('dim').message);
+        expect(dimStatement.tokens.name).to.not.exist;
+        expect(parser.diagnostics.map(x => x.message)).to.include(DiagnosticMessages.expectedIdentifier('dim').message);
     });
 
     it('flags missing left bracket', () => {
@@ -39,8 +40,12 @@ describe('parser DimStatement', () => {
         const dimStatement = (parser.ast.statements[0] as DimStatement);
         //the statement should still exist and have null dimensions
         expect(dimStatement).to.exist;
-        expect(dimStatement.openingSquare).to.not.exist;
-        expect(parser.diagnostics.map(x => x.message)).to.include(DiagnosticMessages.missingLeftSquareBracketAfterDimIdentifier().message);
+        expect(dimStatement.tokens.openingSquare).to.not.exist;
+        expectDiagnostics(parser, [
+            DiagnosticMessages.missingExpressionsInDimStatement().message,
+            DiagnosticMessages.expectedToken('[').message,
+            DiagnosticMessages.unexpectedToken(']').message
+        ]);
     });
 
     it('flags missing right bracket', () => {
@@ -48,8 +53,10 @@ describe('parser DimStatement', () => {
         const dimStatement = (parser.ast.statements[0] as DimStatement);
         //the statement should still exist and have null dimensions
         expect(dimStatement).to.exist;
-        expect(dimStatement.closingSquare).to.not.exist;
-        expect(parser.diagnostics.map(x => x.message)).to.include(DiagnosticMessages.missingRightSquareBracketAfterDimIdentifier().message);
+        expect(dimStatement.tokens.closingSquare).to.not.exist;
+        expectDiagnostics(parser, [
+            DiagnosticMessages.unmatchedLeftToken('[', 'dim identifier').message
+        ]);
     });
 
     it('flags missing expression(s)', () => {
@@ -66,12 +73,12 @@ function validatePass(text: string, dimStatementIndex: number, identifierText: s
     const parser = Parser.parse(text);
     const dimStatement = (parser.ast.statements[dimStatementIndex] as DimStatement);
     expect(dimStatement).to.exist;
-    expect(dimStatement.dimToken).to.exist;
-    expect(dimStatement.identifier).to.exist;
-    expect(dimStatement.identifier!.text).to.equal(identifierText);
-    expect(dimStatement.openingSquare).to.exist;
+    expect(dimStatement.tokens.dim).to.exist;
+    expect(dimStatement.tokens.name).to.exist;
+    expect(dimStatement.tokens.name!.text).to.equal(identifierText);
+    expect(dimStatement.tokens.openingSquare).to.exist;
     expect(dimStatement.dimensions).to.exist;
     expect(dimStatement.dimensions!.length).to.equal(dimensionsCount);
-    expect(dimStatement.closingSquare).to.exist;
-    expect(dimStatement.range).to.exist;
+    expect(dimStatement.tokens.closingSquare).to.exist;
+    expect(dimStatement.location).to.exist;
 }

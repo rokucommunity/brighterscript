@@ -1,20 +1,29 @@
-import type { BscType } from './BscType';
-import { DynamicType } from './DynamicType';
+import { isDynamicType, isInvalidTypeLike, isObjectType } from '../astUtils/reflection';
+import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
+import { isUnionTypeCompatible } from './helpers';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 
-export class InvalidType implements BscType {
+export class InvalidType extends BscType {
     constructor(
         public typeText?: string
-    ) { }
-
-    public isAssignableTo(targetType: BscType) {
-        return (
-            targetType instanceof InvalidType ||
-            targetType instanceof DynamicType
-        );
+    ) {
+        super();
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
+    public readonly kind = BscTypeKind.InvalidType;
+
+    public static instance = new InvalidType('invalid');
+
+    public isBuiltIn = true;
+
+    public isTypeCompatible(targetType: BscType) {
+        return (
+            isInvalidTypeLike(targetType) ||
+            isDynamicType(targetType) ||
+            isObjectType(targetType) ||
+            isUnionTypeCompatible(this, targetType)
+        );
     }
 
     public toString() {
@@ -25,7 +34,9 @@ export class InvalidType implements BscType {
         return this.toString();
     }
 
-    public clone() {
-        return new InvalidType(this.typeText);
+    isEqual(targetType: BscType): boolean {
+        return isInvalidTypeLike(targetType);
     }
 }
+
+BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('invalid', InvalidType.instance);

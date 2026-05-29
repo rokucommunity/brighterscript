@@ -118,6 +118,37 @@ describe('ProjectManager', () => {
         });
     });
 
+    describe('getHover', () => {
+        it('dedupes identical hover contents', async () => {
+            fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `
+                sub main()
+                end sub
+            `);
+            await manager.syncProjects([{
+                languageServer: {
+                    enableProjectDiscovery: false,
+                    enableThreading: false
+                },
+                workspaceFolder: rootDir
+            }]);
+            sinon.stub(manager.projects[0], 'getHover').returns(Promise.resolve([{
+                contents: ['one', 'two', 'three'],
+                range: util.createRange(1, 1, 1, 1)
+            }, {
+                contents: ['two', 'three', 'four'],
+                range: util.createRange(2, 2, 2, 2)
+            }]));
+            const hover = await manager.getHover({
+                srcPath: s`${rootDir}/source/main.brs`,
+                position: util.createPosition(1, 23)
+            });
+            expect(hover).to.eql({
+                contents: ['one', 'two', 'three', 'four'],
+                range: util.createRange(1, 1, 2, 2)
+            });
+        });
+    });
+
     describe('syncProjects', () => {
         it('does not crash on zero projects', async () => {
             await manager.syncProjects([]);
@@ -186,16 +217,17 @@ describe('ProjectManager', () => {
             ]);
         });
 
-        it('gets diagnostics from plugins added in afterProgramValidate', async () => {
+        it('gets diagnostics from plugins added in afterValidateProgram', async () => {
             fsExtra.outputFileSync(`${rootDir}/plugin.js`, `
                 module.exports = function () {
                     return {
-                        afterProgramValidate: function(program) {
-                            var file = program.getFile('source/main.brs');
+                        afterValidateProgram: function(event) {
+                            var file = event.program.getFile('source/main.brs');
                             //add a diagnostic from a plugin
-                            file.addDiagnostic({
+                            event.program.diagnostics.register({
                                 message: 'Test diagnostic',
                                 code: 'test-123',
+                                location: {},
                                 severity: 1
                             });
                         }
@@ -217,7 +249,7 @@ describe('ProjectManager', () => {
             await manager.syncProjects([workspaceSettings]);
             expectDiagnostics(await onNextDiagnostics(), [
                 DiagnosticMessages.cannotFindName('nameNotDefined').message,
-                'Test diagnostic'
+                'Test diagnostic (location unknown, added here for visibility)'
             ]);
         });
 
@@ -735,6 +767,195 @@ describe('ProjectManager', () => {
         });
     });
 
+    describe('maxDepth configuration', () => {
+        function writeTestFiles(files: Record<string, string>) {
+            for (const [filePath, content] of Object.entries(files)) {
+                fsExtra.outputFileSync(`${rootDir}/${filePath}`, content);
+            }
+        }
+
+        it('respects maxDepth of 1 when discovering projects', async () => {
+            // Create bsconfig.json files at different depths
+            writeTestFiles({
+                'bsconfig.json': '',
+                'level1/bsconfig.json': '',
+                'level1/level2/bsconfig.json': '',
+                'level1/level2/level3/bsconfig.json': ''
+            });
+
+            await manager.syncProjects([{
+                ...workspaceSettings,
+                languageServer: {
+                    ...workspaceSettings.languageServer,
+                    projectDiscoveryMaxDepth: 1
+                }
+            }]);
+
+            // maxDepth: 1 should find files at depth 0 only
+            expect(
+                manager.projects.map(x => x.projectKey).sort()
+            ).to.eql([
+                s`${rootDir}/bsconfig.json`
+            ]);
+        });
+
+        it('respects maxDepth of 5 when discovering projects', async () => {
+            // Create bsconfig.json files at different depths
+            writeTestFiles({
+                'bsconfig.json': '',
+                'level1/bsconfig.json': '',
+                'level1/level2/bsconfig.json': '',
+                'level1/level2/level3/bsconfig.json': '',
+                'level1/level2/level3/level4/bsconfig.json': '',
+                'level1/level2/level3/level4/level5/bsconfig.json': '',
+                'level1/level2/level3/level4/level5/level6/bsconfig.json': ''
+            });
+
+            await manager.syncProjects([{
+                ...workspaceSettings,
+                languageServer: {
+                    ...workspaceSettings.languageServer,
+                    projectDiscoveryMaxDepth: 5
+                }
+            }]);
+
+            // maxDepth: 5 should find files at depths 0, 1, 2, 3, 4
+            expect(
+                manager.projects.map(x => x.projectKey).sort()
+            ).to.eql([
+                s`${rootDir}/bsconfig.json`,
+                s`${rootDir}/level1/bsconfig.json`,
+                s`${rootDir}/level1/level2/bsconfig.json`,
+                s`${rootDir}/level1/level2/level3/bsconfig.json`,
+                s`${rootDir}/level1/level2/level3/level4/bsconfig.json`
+            ]);
+        });
+
+        it('respects maxDepth of 20 when discovering projects', async () => {
+            // Create bsconfig.json files at different depths, skipping some levels in between
+            // and proving it stops at level 20 by creating files at level 20 and 21
+            // Note: depth 20 means the file is in the 20th directory level from root
+            writeTestFiles({
+                'bsconfig.json': '',
+                'level1/bsconfig.json': '',
+                'level1/level2/level3/level4/level5/bsconfig.json': '',
+                'level1/level2/level3/level4/level5/level6/level7/level8/level9/level10/level11/level12/level13/level14/level15/level16/level17/level18/level19/bsconfig.json': '',
+                'level1/level2/level3/level4/level5/level6/level7/level8/level9/level10/level11/level12/level13/level14/level15/level16/level17/level18/level19/level20/bsconfig.json': ''
+            });
+
+            await manager.syncProjects([{
+                ...workspaceSettings,
+                languageServer: {
+                    ...workspaceSettings.languageServer,
+                    projectDiscoveryMaxDepth: 20
+                }
+            }]);
+
+            // maxDepth: 20 should find file at level 19 (depth 20) but not at level 20 (depth 21)
+            expect(
+                manager.projects.map(x => x.projectKey).sort()
+            ).to.eql([
+                s`${rootDir}/bsconfig.json`,
+                s`${rootDir}/level1/bsconfig.json`,
+                s`${rootDir}/level1/level2/level3/level4/level5/bsconfig.json`,
+                s`${rootDir}/level1/level2/level3/level4/level5/level6/level7/level8/level9/level10/level11/level12/level13/level14/level15/level16/level17/level18/level19/bsconfig.json`
+            ]);
+        });
+
+        it('uses default maxDepth of 15 when no maxDepth is specified', async () => {
+            // Create bsconfig.json files at different depths, skipping some levels in between
+            // and proving it stops at level 15 by creating files at level 15 and 16
+            // Note: depth 15 means the file is in the 15th directory level from root
+            writeTestFiles({
+                'bsconfig.json': '',
+                'level1/bsconfig.json': '',
+                'level1/level2/level3/level4/level5/bsconfig.json': '',
+                'level1/level2/level3/level4/level5/level6/level7/level8/level9/level10/level11/level12/level13/level14/bsconfig.json': '',
+                'level1/level2/level3/level4/level5/level6/level7/level8/level9/level10/level11/level12/level13/level14/level15/bsconfig.json': ''
+            });
+
+            await manager.syncProjects([workspaceSettings]);
+
+            // Default maxDepth: 15 should find file at level 14 (depth 15) but not at level 15 (depth 16)
+            expect(
+                manager.projects.map(x => x.projectKey).sort()
+            ).to.eql([
+                s`${rootDir}/bsconfig.json`,
+                s`${rootDir}/level1/bsconfig.json`,
+                s`${rootDir}/level1/level2/level3/level4/level5/bsconfig.json`,
+                s`${rootDir}/level1/level2/level3/level4/level5/level6/level7/level8/level9/level10/level11/level12/level13/level14/bsconfig.json`
+            ]);
+        });
+
+        it('respects maxDepth of 1 when discovering roku projects with manifest files', async () => {
+            // Create manifest files at different depths
+            writeTestFiles({
+                'manifest': '',
+                'source/main.brs': '',
+                'level1/manifest': '',
+                'level1/source/main.brs': '',
+                'level1/level2/manifest': '',
+                'level1/level2/source/main.brs': '',
+                'level1/level2/level3/manifest': '',
+                'level1/level2/level3/source/main.brs': ''
+            });
+
+            await manager.syncProjects([{
+                ...workspaceSettings,
+                languageServer: {
+                    ...workspaceSettings.languageServer,
+                    projectDiscoveryMaxDepth: 1
+                }
+            }]);
+
+            // maxDepth: 1 should find projects at depth 0 only
+            expect(
+                manager.projects.map(x => x.projectKey).sort()
+            ).to.eql([
+                s`${rootDir}`
+            ]);
+        });
+
+        it('respects maxDepth of 5 when discovering roku projects with manifest files', async () => {
+            // Create manifest files at different depths
+            writeTestFiles({
+                'manifest': '',
+                'source/main.brs': '',
+                'level1/manifest': '',
+                'level1/source/main.brs': '',
+                'level1/level2/manifest': '',
+                'level1/level2/source/main.brs': '',
+                'level1/level2/level3/manifest': '',
+                'level1/level2/level3/source/main.brs': '',
+                'level1/level2/level3/level4/manifest': '',
+                'level1/level2/level3/level4/source/main.brs': '',
+                'level1/level2/level3/level4/level5/manifest': '',
+                'level1/level2/level3/level4/level5/source/main.brs': '',
+                'level1/level2/level3/level4/level5/level6/manifest': '',
+                'level1/level2/level3/level4/level5/level6/source/main.brs': ''
+            });
+
+            await manager.syncProjects([{
+                ...workspaceSettings,
+                languageServer: {
+                    ...workspaceSettings.languageServer,
+                    projectDiscoveryMaxDepth: 5
+                }
+            }]);
+
+            // maxDepth: 5 should find projects at depths 0, 1, 2, 3, 4
+            expect(
+                manager.projects.map(x => x.projectKey).sort()
+            ).to.eql([
+                s`${rootDir}`,
+                s`${rootDir}/level1`,
+                s`${rootDir}/level1/level2`,
+                s`${rootDir}/level1/level2/level3`,
+                s`${rootDir}/level1/level2/level3/level4`
+            ]);
+        });
+    });
+
     describe('getCompletions', () => {
         it('works for quick file changes', async () => {
             //set up the project
@@ -969,8 +1190,8 @@ describe('ProjectManager', () => {
 
             let deferred1 = new Deferred();
             let deferred2 = new Deferred();
-            const project1 = manager.projects.find(x => x.bsconfigPath.includes('project1')) as Project;
-            const project2 = manager.projects.find(x => x.bsconfigPath.includes('project2')) as Project;
+            const project1 = manager.projects.find(x => x.bsconfigPath.includes('project1')) as unknown as Project;
+            const project2 = manager.projects.find(x => x.bsconfigPath.includes('project2')) as unknown as Project;
 
             const project1Stub: SinonStub = sinon.stub(project1, 'applyFileChanges').callsFake(async (...args) => {
                 const result = await project1Stub.wrappedMethod.apply(project1, args);
@@ -1108,7 +1329,7 @@ describe('ProjectManager', () => {
             await onNextDiagnostics();
 
             let applyFileChangesDeferred = new Deferred<DocumentActionWithStatus[]>();
-            const project1 = manager.projects[0] as Project;
+            const project1 = manager.projects[0] as unknown as Project;
 
             const project1Stub = sinon.stub(project1, 'applyFileChanges').callsFake(async (...args) => {
                 const result = await project1Stub.wrappedMethod.apply(project1, args);
@@ -1223,6 +1444,11 @@ describe('ProjectManager', () => {
         });
 
         it('spawns a worker thread when threading is enabled', async () => {
+            //the afterEach `manager.dispose()` for this test will log a
+            //'Validation phase error: ... MessageHandler is now disposed' error to the console.
+            //This is expected — Phase 2 validation runs in the worker thread asynchronously
+            //(NOT awaited) and the dispose tears the worker down before that validation finishes,
+            //which rejects the in-flight worker request. Nothing to fix here.
             await manager.syncProjects([{
                 ...workspaceSettings,
                 languageServer: {
@@ -1363,7 +1589,7 @@ describe('ProjectManager', () => {
                 this.server.listen(port, host);
             }
 
-            afterProgramCreate(program: Program) {
+            afterProvideProgram(program: Program) {
                 // hijack the function to get workspace symbols, return a promise that resolves in the future
                 program.getWorkspaceSymbols = () => {
                     return this.deferred.promise as any;

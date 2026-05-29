@@ -1,4 +1,3 @@
-import type { Range } from 'vscode-languageserver-protocol';
 import { InlayHintKind } from 'vscode-languageserver-protocol';
 import {
     isBrsFile,
@@ -15,6 +14,7 @@ import { WalkMode, createVisitor } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ProvideInlayHintsEvent } from '../../interfaces';
 import type { CallExpression, CallfuncExpression, FunctionParameterExpression } from '../../parser/Expression';
+import type { Expression } from '../../parser/AstNode';
 import type { ClassStatement, FunctionStatement, MethodStatement, NamespaceStatement } from '../../parser/Statement';
 import { ParseMode } from '../../parser/Parser';
 import { util } from '../../util';
@@ -37,13 +37,13 @@ export class InlayHintProcessor {
 
         file.ast.walk(createVisitor({
             CallExpression: (call) => {
-                if (!call.range || !util.rangesIntersectOrTouch(call.range, range)) {
+                if (!call.location?.range || !util.rangesIntersectOrTouch(call.location.range, range)) {
                     return;
                 }
                 this.emitParameterNameHints(file, call);
             },
             CallfuncExpression: (call) => {
-                if (!call.range || !util.rangesIntersectOrTouch(call.range, range)) {
+                if (!call.location?.range || !util.rangesIntersectOrTouch(call.location.range, range)) {
                     return;
                 }
                 this.emitParameterNameHintsForCallfunc(file, call);
@@ -70,7 +70,7 @@ export class InlayHintProcessor {
         if (!call.args || call.args.length === 0) {
             return;
         }
-        const name = call.methodName?.text;
+        const name = call.tokens.methodName?.text;
         if (!name) {
             return;
         }
@@ -101,14 +101,14 @@ export class InlayHintProcessor {
 
         //plain function call: `foo(...)`
         if (isVariableExpression(callee)) {
-            const name = callee.name.text;
+            const name = callee.tokens.name.text;
             const containingNamespace = callee.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
             return this.lookupFunctionParameters(file, name, containingNamespace);
         }
 
         //namespace call or method call: `ns.foo(...)` / `m.foo(...)` / `instance.foo(...)`
         if (isDottedGetExpression(callee)) {
-            const name = callee.name.text;
+            const name = callee.tokens.name.text;
             const parts = util.getAllDottedGetParts(callee);
             if (!parts || parts.length < 2) {
                 return undefined;
@@ -148,7 +148,7 @@ export class InlayHintProcessor {
      * across all classes (only used when there's exactly one match).
      */
     private lookupClassMethodParameters(file: BrsFile, callee: { obj?: any }, name: string): FunctionParameterExpression[] | undefined {
-        if (isVariableExpression(callee.obj) && callee.obj.name.text === 'm') {
+        if (isVariableExpression(callee.obj) && callee.obj.tokens.name.text === 'm') {
             const enclosingClass = callee.obj.findAncestor<ClassStatement>(isClassStatement);
             if (enclosingClass) {
                 const method = file.getClassMethod(enclosingClass, name, true);
@@ -186,20 +186,21 @@ export class InlayHintProcessor {
         return undefined;
     }
 
-    private pushHintsForArgs(args: Array<{ range?: Range }>, params: FunctionParameterExpression[]) {
+    private pushHintsForArgs(args: Expression[], params: FunctionParameterExpression[]) {
         for (let i = 0; i < args.length && i < params.length; i++) {
             const arg = args[i];
             const param = params[i];
-            const paramName = param?.name?.text;
-            if (!paramName || !arg?.range) {
+            const paramName = param?.tokens?.name?.text;
+            const argRange = arg?.location?.range;
+            if (!paramName || !argRange) {
                 continue;
             }
             //skip when the argument is just an identifier that already matches the parameter name
-            if (isVariableExpression(arg as any) && (arg as any).name?.text?.toLowerCase() === paramName.toLowerCase()) {
+            if (isVariableExpression(arg) && arg.tokens.name?.text?.toLowerCase() === paramName.toLowerCase()) {
                 continue;
             }
             this.event.inlayHints.push({
-                position: arg.range.start,
+                position: argRange.start,
                 label: `${paramName}:`,
                 kind: InlayHintKind.Parameter,
                 paddingRight: true

@@ -46,16 +46,16 @@ describe('ternary expressions', () => {
     });
 
     it(`supports boolean expression condition`, () => {
-        let { statements, diagnostics } = parseBs(`being = isZombie = false ? "human" : "zombie"`);
-        expect(statements[0]).to.be.instanceof(AssignmentStatement);
-        expect((statements[0] as AssignmentStatement).value).to.be.instanceof(TernaryExpression);
+        let { ast, diagnostics } = parseBs(`being = isZombie = false ? "human" : "zombie"`);
+        expect(ast.statements[0]).to.be.instanceof(AssignmentStatement);
+        expect((ast.statements[0] as AssignmentStatement).value).to.be.instanceof(TernaryExpression);
         expectZeroDiagnostics(diagnostics);
     });
 
     it(`supports function condition`, () => {
-        let { statements, diagnostics } = parseBs(`a = user.getAccount() ? "logged in" : "not logged in"`);
-        expect(statements[0]).to.be.instanceof(AssignmentStatement);
-        expect((statements[0] as AssignmentStatement).value).to.be.instanceof(TernaryExpression);
+        let { ast, diagnostics } = parseBs(`a = user.getAccount() ? "logged in" : "not logged in"`);
+        expect(ast.statements[0]).to.be.instanceof(AssignmentStatement);
+        expect((ast.statements[0] as AssignmentStatement).value).to.be.instanceof(TernaryExpression);
         expectZeroDiagnostics(diagnostics);
     });
 
@@ -100,13 +100,13 @@ describe('ternary expressions', () => {
 
     describe('in assignment', () => {
         it(`simple case`, () => {
-            let { statements, diagnostics } = parseBs(`a = true ? "human" : "zombie"`);
+            let { ast, diagnostics } = parseBs(`a = true ? "human" : "zombie"`);
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(AssignmentStatement);
+            expect(ast.statements[0]).instanceof(AssignmentStatement);
         });
 
         it(`multi line arrays case`, () => {
-            let { statements, diagnostics } = parseBs(`
+            let { ast, diagnostics } = parseBs(`
                 a = true ? [
                         "one"
                         "two"
@@ -118,27 +118,27 @@ describe('ternary expressions', () => {
                     ]
             `);
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(AssignmentStatement);
+            expect(ast.statements[0]).instanceof(AssignmentStatement);
         });
 
         it(`single line assoc array`, () => {
-            let { statements, diagnostics } = parseBs(`a = true ? {"a":"a"} : {}`);
+            let { ast, diagnostics } = parseBs(`a = true ? {"a":"a"} : {}`);
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(AssignmentStatement);
+            expect(ast.statements[0]).instanceof(AssignmentStatement);
         });
 
         it(`multi line assoc array`, () => {
-            let { statements, diagnostics } = parseBs(`
+            let { ast, diagnostics } = parseBs(`
                 a = true ? {"a":"a"} : {
                     "b": "test"
                 }`
             );
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(AssignmentStatement);
+            expect(ast.statements[0]).instanceof(AssignmentStatement);
         });
 
         it(`multi line assoc array - both sides`, () => {
-            let { statements, diagnostics } = parseBs(`
+            let { ast, diagnostics } = parseBs(`
                 a = true ? {
                         "a":"a"
                         "b":"b"
@@ -147,106 +147,106 @@ describe('ternary expressions', () => {
                     }
             `);
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(AssignmentStatement);
+            expect(ast.statements[0]).instanceof(AssignmentStatement);
         });
 
         it(`in func call with array args`, () => {
-            let { statements, diagnostics } = parseBs(`m.eatBrains(a.count() > 10 ? ["a","B"] : ["c", "d"])`);
+            let { ast, diagnostics } = parseBs(`m.eatBrains(a.count() > 10 ? ["a","B"] : ["c", "d"])`);
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(ExpressionStatement);
-            expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
-            let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
+            expect(ast.statements[0]).instanceof(ExpressionStatement);
+            expect((ast.statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
+            let callExpression = (ast.statements[0] as ExpressionStatement).expression as CallExpression;
             expect(callExpression.args.length).to.equal(1);
             expect(callExpression.args[0]).instanceof(TernaryExpression);
         });
 
         it(`in func call with aa args`, () => {
-            let { statements, diagnostics } = parseBs(`m.eatBrains(a.count() > 10 ? {"a":1} : {"b": ["c", "d"]})`);
+            let { ast, diagnostics } = parseBs(`m.eatBrains(a.count() > 10 ? {"a":1} : {"b": ["c", "d"]})`);
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(ExpressionStatement);
-            expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
-            let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
+            expect(ast.statements[0]).instanceof(ExpressionStatement);
+            expect((ast.statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
+            let callExpression = (ast.statements[0] as ExpressionStatement).expression as CallExpression;
             expect(callExpression.args.length).to.equal(1);
             expect(callExpression.args[0]).instanceof(TernaryExpression);
         });
 
         it(`in simple func call`, () => {
-            let { statements, diagnostics } = parseBs(`m.eatBrains(a = true ? "a" : "b")`);
+            let { ast, diagnostics } = parseBs(`m.eatBrains(a = true ? "a" : "b")`);
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(ExpressionStatement);
-            expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
-            let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
+            expect(ast.statements[0]).instanceof(ExpressionStatement);
+            expect((ast.statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
+            let callExpression = (ast.statements[0] as ExpressionStatement).expression as CallExpression;
             expect(callExpression.args.length).to.equal(1);
             expect(callExpression.args[0]).instanceof(TernaryExpression);
         });
 
         it(`in func call with more args`, () => {
-            let { statements, diagnostics } = parseBs(`m.eatBrains(a = true ? "a" : "b", true, 12)`);
+            let { ast, diagnostics } = parseBs(`m.eatBrains(a = true ? "a" : "b", true, 12)`);
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(ExpressionStatement);
-            expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
-            let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
+            expect(ast.statements[0]).instanceof(ExpressionStatement);
+            expect((ast.statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
+            let callExpression = (ast.statements[0] as ExpressionStatement).expression as CallExpression;
             expect(callExpression.args.length).to.equal(3);
             expect(callExpression.args[0]).instanceof(TernaryExpression);
         });
 
         it(`in func call with more args, and comparing value`, () => {
-            let { statements, diagnostics } = parseBs(`m.eatBrains((a = true ? "a" : "b").count() = 3, true, 12)`);
+            let { ast, diagnostics } = parseBs(`m.eatBrains((a = true ? "a" : "b").count() = 3, true, 12)`);
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(ExpressionStatement);
-            expect((statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
-            let callExpression = (statements[0] as ExpressionStatement).expression as CallExpression;
+            expect(ast.statements[0]).instanceof(ExpressionStatement);
+            expect((ast.statements[0] as ExpressionStatement).expression).instanceof(CallExpression);
+            let callExpression = (ast.statements[0] as ExpressionStatement).expression as CallExpression;
             expect(callExpression.args.length).to.equal(3);
         });
 
         it(`in array`, () => {
-            let { statements, diagnostics } = parseBs(`a = [a = true ? {"a":"a"} : {"b":"b"}, "c"]`);
+            let { ast, diagnostics } = parseBs(`a = [a = true ? {"a":"a"} : {"b":"b"}, "c"]`);
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(AssignmentStatement);
-            expect((statements[0] as AssignmentStatement).value).instanceof(ArrayLiteralExpression);
-            let literalExpression = (statements[0] as AssignmentStatement).value as ArrayLiteralExpression;
+            expect(ast.statements[0]).instanceof(AssignmentStatement);
+            expect((ast.statements[0] as AssignmentStatement).value).instanceof(ArrayLiteralExpression);
+            let literalExpression = (ast.statements[0] as AssignmentStatement).value as ArrayLiteralExpression;
             expect(literalExpression.elements[0]).instanceOf(TernaryExpression);
             expect(literalExpression.elements[1]).instanceOf(LiteralExpression);
         });
 
         it(`in aa`, () => {
-            let { statements, diagnostics } = parseBs(`a = {"v1": a = true ? {"a":"a"} : {"b":"b"}, "v2": "c"}`);
+            let { ast, diagnostics } = parseBs(`a = {"v1": a = true ? {"a":"a"} : {"b":"b"}, "v2": "c"}`);
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(AssignmentStatement);
-            expect((statements[0] as AssignmentStatement).value).instanceof(AALiteralExpression);
-            let literalExpression = (statements[0] as AssignmentStatement).value as AALiteralExpression;
-            expect((literalExpression.elements[0] as AAMemberExpression).keyToken.text).is.equal('"v1"');
+            expect(ast.statements[0]).instanceof(AssignmentStatement);
+            expect((ast.statements[0] as AssignmentStatement).value).instanceof(AALiteralExpression);
+            let literalExpression = (ast.statements[0] as AssignmentStatement).value as AALiteralExpression;
+            expect((literalExpression.elements[0] as AAMemberExpression).tokens.key.text).is.equal('"v1"');
             expect((literalExpression.elements[0] as any).value).instanceOf(TernaryExpression);
-            expect((literalExpression.elements[1] as AAMemberExpression).keyToken.text).is.equal('"v2"');
+            expect((literalExpression.elements[1] as AAMemberExpression).tokens.key.text).is.equal('"v2"');
             expect((literalExpression.elements[1] as any).value).instanceOf(LiteralExpression);
         });
 
         it(`in for each`, () => {
-            let { statements, diagnostics } = parseBs(
+            let { ast, diagnostics } = parseBs(
                 `for each person in isZombieMode ? zombies : humans
                     ? "person is " ; person
                 end for
             `);
             expectZeroDiagnostics(diagnostics);
-            expect(statements[0]).instanceof(ForEachStatement);
-            expect((statements[0] as ForEachStatement).target).instanceof(TernaryExpression);
+            expect(ast.statements[0]).instanceof(ForEachStatement);
+            expect((ast.statements[0] as ForEachStatement).target).instanceof(TernaryExpression);
         });
 
         it('creates TernaryExpression with missing alternate', () => {
-            const { statements } = parseBs(`
+            const { ast } = parseBs(`
                 print name = "bob" ? "human":
             `);
-            const expr = (statements[0] as PrintStatement).expressions[0];
+            const expr = (ast.statements[0] as PrintStatement).expressions[0];
             expect(expr).to.be.instanceof(TernaryExpression);
             expect(expr).property('alternate').to.be.undefined;
             expect(expr).property('consequent').not.to.be.undefined;
         });
 
         it('creates TernaryExpression with missing consequent', () => {
-            const { statements } = parseBs(`
+            const { ast } = parseBs(`
                 print name = "bob" ? : "human"
             `);
-            const expr = (statements[0] as PrintStatement).expressions[0];
+            const expr = (ast.statements[0] as PrintStatement).expressions[0];
             expect(expr).to.be.instanceof(TernaryExpression);
             expect(expr).property('consequent').to.be.undefined;
             expect(expr).property('alternate').not.to.be.undefined;
@@ -265,8 +265,8 @@ describe('ternary expressions', () => {
             program.dispose();
         });
 
-        it('transpiles top-level ternary expression', () => {
-            testTranspile(`
+        it('transpiles top-level ternary expression', async () => {
+            await testTranspile(`
                 a += true ? 1 : 2
             `, `
                 if true then
@@ -277,8 +277,8 @@ describe('ternary expressions', () => {
             `, undefined, undefined, false);
         });
 
-        it('transpiles ternary in RHS of AssignmentStatement to IfStatement', () => {
-            testTranspile(`
+        it('transpiles ternary in RHS of AssignmentStatement to IfStatement', async () => {
+            await testTranspile(`
                 sub main()
                     a = true ? 1 : 2
                 end sub
@@ -293,13 +293,15 @@ describe('ternary expressions', () => {
             `);
         });
 
-        it('transpiles ternary in RHS of incrementor AssignmentStatement to IfStatement', () => {
-            testTranspile(`
+        it('transpiles ternary in RHS of incrementor AssignmentStatement to IfStatement', async () => {
+            await testTranspile(`
                 sub main()
+                    a = 1
                     a += true ? 1 : 2
                 end sub
             `, `
                 sub main()
+                    a = 1
                     if true then
                         a += 1
                     else
@@ -309,8 +311,8 @@ describe('ternary expressions', () => {
             `);
         });
 
-        it('transpiles ternary in RHS of DottedSetStatement to IfStatement', () => {
-            testTranspile(`
+        it('transpiles ternary in RHS of DottedSetStatement to IfStatement', async () => {
+            await testTranspile(`
                 sub main()
                     m.a = true ? 1 : 2
                 end sub
@@ -325,8 +327,8 @@ describe('ternary expressions', () => {
             `);
         });
 
-        it('transpiles ternary in RHS of incrementor DottedSetStatement to IfStatement', () => {
-            testTranspile(`
+        it('transpiles ternary in RHS of incrementor DottedSetStatement to IfStatement', async () => {
+            await testTranspile(`
                 sub main()
                     m.a += true ? 1 : 2
                 end sub
@@ -341,8 +343,8 @@ describe('ternary expressions', () => {
             `);
         });
 
-        it('transpiles ternary in RHS of IndexedSetStatement to IfStatement', () => {
-            testTranspile(`
+        it('transpiles ternary in RHS of IndexedSetStatement to IfStatement', async () => {
+            await testTranspile(`
                 sub main()
                     m["a"] = true ? 1 : 2
                 end sub
@@ -357,8 +359,8 @@ describe('ternary expressions', () => {
             `);
         });
 
-        it('transpiles ternary in RHS of incrementor IndexedSetStatement to IfStatement', () => {
-            testTranspile(`
+        it('transpiles ternary in RHS of incrementor IndexedSetStatement to IfStatement', async () => {
+            await testTranspile(`
                 sub main()
                     m["a"] += true ? 1 : 2
                 end sub
@@ -373,9 +375,9 @@ describe('ternary expressions', () => {
             `);
         });
 
-        it('uses the proper prefix when aliased package is installed', () => {
+        it('uses the proper prefix when aliased package is installed', async () => {
             program.setFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     user = {}
                     result = [
@@ -392,8 +394,8 @@ describe('ternary expressions', () => {
             `);
         });
 
-        it('simple consequents', () => {
-            testTranspile(`
+        it('simple consequents', async () => {
+            await testTranspile(`
                 sub main()
                     user = {}
                     a = user = invalid ? "no user" : "logged in"
@@ -409,7 +411,7 @@ describe('ternary expressions', () => {
                 end sub
             `);
 
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     user = {}
                     a = user = invalid ? 1 : "logged in"
@@ -425,7 +427,7 @@ describe('ternary expressions', () => {
                 end sub
             `);
 
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     user = {}
                     a = user = invalid ? 1.2 : "logged in"
@@ -441,7 +443,7 @@ describe('ternary expressions', () => {
                 end sub
             `);
 
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     user = {}
                     a = user = invalid ? {} : "logged in"
@@ -457,7 +459,7 @@ describe('ternary expressions', () => {
                 end sub
             `);
 
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     user = {}
                     a = user = invalid ? [] : "logged in"
@@ -474,8 +476,8 @@ describe('ternary expressions', () => {
             `);
         });
 
-        it('simple alternates', () => {
-            testTranspile(`
+        it('simple alternates', async () => {
+            await testTranspile(`
                 sub main()
                     user = {}
                     a = user = invalid ? "logged in" : "no user"
@@ -491,7 +493,7 @@ describe('ternary expressions', () => {
                 end sub
             `);
 
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     user = {}
                     a = user = invalid ? "logged in" : 1
@@ -507,7 +509,7 @@ describe('ternary expressions', () => {
                 end sub
             `);
 
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     user = {}
                     a = user = invalid ? "logged in" : 1.2
@@ -523,7 +525,7 @@ describe('ternary expressions', () => {
                 end sub
             `);
 
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     user = {}
                     a = user = invalid ? "logged in" :  []
@@ -539,7 +541,7 @@ describe('ternary expressions', () => {
                 end sub
             `);
 
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     user = {}
                     a = user = invalid ? "logged in" :  {}
@@ -556,8 +558,8 @@ describe('ternary expressions', () => {
             `);
         });
 
-        it('does not capture restricted OS functions', () => {
-            testTranspile(`
+        it('does not capture restricted OS functions', async () => {
+            await testTranspile(`
                 sub main()
                     test(true ? invalid : [
                         createObject("roDeviceInfo")
@@ -601,14 +603,14 @@ describe('ternary expressions', () => {
             `);
         });
 
-        it('complex conditions do not cause scope capture', () => {
-            testTranspile(`
+        it('complex conditions do not cause scope capture', async () => {
+            await testTranspile(`
                 sub main()
-                    a = str("true") = "true" ? true : false
+                    a = str(123) = "123" ? true : false
                 end sub
             `, `
                 sub main()
-                    if str("true") = "true" then
+                    if str(123) = "123" then
                         a = true
                     else
                         a = false
@@ -616,7 +618,7 @@ describe('ternary expressions', () => {
                 end sub
             `);
 
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     a = m.top.service.IsTrue() ? true : false
                 end sub
@@ -630,7 +632,7 @@ describe('ternary expressions', () => {
                 end sub
             `);
 
-            testTranspile(`
+            await testTranspile(`
                 sub test(param1)
                 end sub
 
@@ -651,8 +653,8 @@ describe('ternary expressions', () => {
             `);
         });
 
-        it('captures scope for function call conseqent', () => {
-            testTranspile(`
+        it('captures scope for function call conseqent', async () => {
+            await testTranspile(`
                 sub main()
                     zombie = {}
                     result = [
@@ -675,8 +677,8 @@ describe('ternary expressions', () => {
             `);
         });
 
-        it('captures scope for function call alternate', () => {
-            testTranspile(`
+        it('captures scope for function call alternate', async () => {
+            await testTranspile(`
                 sub main()
                     zombie = {}
                     result = [
@@ -699,8 +701,8 @@ describe('ternary expressions', () => {
             `);
         });
 
-        it('captures scope for complex consequent', () => {
-            testTranspile(`
+        it('captures scope for complex consequent', async () => {
+            await testTranspile(`
                 sub main()
                     settings = {}
                     result = [
@@ -723,8 +725,8 @@ describe('ternary expressions', () => {
             `);
         });
 
-        it('ignores enum variable names for scope capturing', () => {
-            testTranspile(`
+        it('ignores enum variable names for scope capturing', async () => {
+            await testTranspile(`
                 enum Direction
                     up = "up"
                     down = "down"
@@ -751,8 +753,8 @@ describe('ternary expressions', () => {
             `);
         });
 
-        it('ignores const variable names for scope capturing', () => {
-            testTranspile(`
+        it('ignores const variable names for scope capturing', async () => {
+            await testTranspile(`
                 enum Direction
                     up = "up"
                     down = "down"
@@ -780,8 +782,8 @@ describe('ternary expressions', () => {
             `);
         });
 
-        it('supports scope-captured outer, and simple inner', () => {
-            testTranspile(
+        it('supports scope-captured outer, and simple inner', async () => {
+            await testTranspile(
                 `
                     sub main()
                         zombie = {}
@@ -803,8 +805,8 @@ describe('ternary expressions', () => {
             );
         });
 
-        it('supports nested ternary in assignment', () => {
-            testTranspile(
+        it('supports nested ternary in assignment', async () => {
+            await testTranspile(
                 `
                     sub main()
                         result = true ? (false ? "one" : "two") : "three"
@@ -826,8 +828,8 @@ describe('ternary expressions', () => {
             );
         });
 
-        it('supports nested ternary in DottedSet', () => {
-            testTranspile(
+        it('supports nested ternary in DottedSet', async () => {
+            await testTranspile(
                 `
                     sub main()
                         m.result = true ? (false ? "one" : "two") : "three"
@@ -849,8 +851,8 @@ describe('ternary expressions', () => {
             );
         });
 
-        it('supports nested ternary in IndexedSet', () => {
-            testTranspile(
+        it('supports nested ternary in IndexedSet', async () => {
+            await testTranspile(
                 `
                     sub main()
                         m["result"] = true ? (false ? "one" : "two") : "three"
@@ -872,8 +874,8 @@ describe('ternary expressions', () => {
             );
         });
 
-        it('supports ternary in indexedSet key', () => {
-            testTranspile(
+        it('supports ternary in indexedSet key', async () => {
+            await testTranspile(
                 `
                     sub main()
                         m[m.isShiftPressed ? "a" : "b"] = 0
@@ -895,8 +897,8 @@ describe('ternary expressions', () => {
             );
         });
 
-        it('supports scope-captured outer, and simple inner', () => {
-            testTranspile(
+        it('supports scope-captured outer, and simple inner', async () => {
+            await testTranspile(
                 `
                     sub main()
                         zombie = {}
@@ -924,8 +926,8 @@ describe('ternary expressions', () => {
             );
         });
 
-        it('uses scope capture for property access', () => {
-            testTranspile(
+        it('uses scope capture for property access', async () => {
+            await testTranspile(
                 `
                     sub main()
                         person = {}
@@ -951,22 +953,22 @@ describe('ternary expressions', () => {
             );
         });
 
-        it('uses `invalid` in place of missing consequent ', () => {
-            testTranspile(
+        it('uses `invalid` in place of missing consequent ', async () => {
+            await testTranspile(
                 `print name = "bob" ? :"zombie"`,
                 `print bslib_ternary(name = "bob", invalid, "zombie")`
                 , 'none', undefined, false);
         });
 
-        it('uses `invalid` in place of missing alternate ', () => {
-            testTranspile(
+        it('uses `invalid` in place of missing alternate ', async () => {
+            await testTranspile(
                 `print name = "bob" ? "human"`,
                 `print bslib_ternary(name = "bob", "human", invalid)`
                 , 'none', undefined, false);
         });
 
-        it('uses `invalid` in place of missing alternate and consequent ', () => {
-            testTranspile(
+        it('uses `invalid` in place of missing alternate and consequent ', async () => {
+            await testTranspile(
                 `print name = "bob" ?:`,
                 `print bslib_ternary(name = "bob", invalid, invalid)`
                 , 'none', undefined, false);

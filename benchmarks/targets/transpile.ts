@@ -1,3 +1,4 @@
+import type { BrsFile, BsConfig } from '../../src';
 import type { TargetOptions } from '../target-runner';
 
 module.exports = async (options: TargetOptions) => {
@@ -10,15 +11,17 @@ module.exports = async (options: TargetOptions) => {
         cwd: projectPath,
         createPackage: false,
         copyToStaging: false,
+        noEmit: true,
         //disable diagnostic reporting (they still get collected)
         diagnosticFilters: ['**/*'],
-        logLevel: 'error'
-    });
-    if (Object.keys(builder.program.files).length === 0) {
+        logLevel: 'error',
+        ...options.additionalConfig
+    } as BsConfig & Record<string, any>);
+    if (Object.keys(builder.program!.files).length === 0) {
         throw new Error('No files found in program');
     }
 
-    const files = Object.values(builder.program.files);
+    const files = Object.values(builder.program!.files) as Array<BrsFile>;
 
     //force transpile for every file
     for (const file of files) {

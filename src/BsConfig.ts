@@ -46,20 +46,9 @@ export interface BsConfig {
     files?: Array<string | { src: string | string[]; dest?: string }>;
 
     /**
-     * The path where the output zip file should be placed.
-     * @default "./out/package.zip"
+     * If true, the files are not copied to outDir.
      */
-    outFile?: string;
-
-    /**
-     * Creates a zip package. Defaults to true. This setting is ignored when deploy is enabled.
-     */
-    createPackage?: boolean;
-
-    /**
-     * If true, the files are copied to staging. This setting is ignored when deploy is enabled or if createPackage is enabled
-     */
-    copyToStaging?: boolean;
+    noEmit?: boolean;
 
     /**
      * If true, the server will keep running and will watch and recompile on every file change
@@ -68,46 +57,18 @@ export interface BsConfig {
     watch?: boolean;
 
     /**
-     * If true, after a successful buld, the project will be deployed to the roku specified in host
+     * The path to the out folder
+     * @default "./out"
      */
-    deploy?: boolean;
+    outDir?: string;
 
     /**
-     * The host of the Roku that this project will deploy to
-     */
-    host?: string;
-
-    /**
-     * The username to use when deploying to a Roku device
-     */
-    username?: string;
-
-    /**
-     * The password to use when deploying to a Roku device
-     */
-    password?: string;
-
-    /**
-     * Prevent the staging folder from being deleted after creating the package
-     * @default false
-     */
-    retainStagingDir?: boolean;
-
-    /**
-     * Prevent the staging folder from being deleted after creating the package
-     * @default false
-     * @deprecated use `retainStagingDir` instead
-     */
-    retainStagingFolder?: boolean;
-
-    /**
-     * The path to the staging directory (wehre the output files are copied immediately before creating the zip)
+     * @deprecated use `outDir` instead
      */
     stagingDir?: string;
 
     /**
-     * The path to the staging folder (where all files are copied to right before creating the zip package)
-     * @deprecated use `stagingDir` instead
+     * @deprecated use `outDir` instead
      */
     stagingFolderPath?: string;
 
@@ -141,7 +102,12 @@ export interface BsConfig {
     /**
      * A list of filters used to exclude diagnostics from the output
      */
-    diagnosticFilters?: Array<number | string | { src: string; codes: (number | string)[] } | { src: string } | { codes: (number | string)[] }>;
+    diagnosticFilters?: Array<string | number | { files?: string | Array<string | { src: string } | { dest: string }>; codes?: Array<number | string> }>;
+
+    /**
+     * Use the deprecated diagnosticFilters format from v0. This is useful for backwards compatibility.
+     */
+    diagnosticFiltersV0Compatibility?: boolean;
 
     /**
      * Specify what diagnostic types should be printed to the console. Defaults to 'warn'
@@ -256,6 +222,12 @@ export interface BsConfig {
      */
     bslibDestinationDir?: string;
 
+    /* Legacy RokuOS versions required at least one argument in callfunc() invocations.
+     * Previous brighterscript versions handled this by inserting invalid as an argument when no other args are present.
+     * This is not necessary in modern RokuOS versions.
+     */
+    legacyCallfuncHandling?: boolean;
+
     /**
      * The minimum Roku firmware version required to run this project.
      * When set, BrightScript (.brs) files are always validated against the version restriction.
@@ -307,13 +279,12 @@ type OptionalBsConfigFields =
     | 'manifest'
     | 'noProject'
     | 'extends'
-    | 'host'
-    | 'password'
     | 'require'
-    | 'stagingFolderPath'
+    | 'outDir'
     | 'diagnosticLevel'
     | 'rootDir'
     | 'stagingDir'
+    | 'stagingFolderPath'
     | 'minFirmwareVersion'
     | 'diagnosticReporters';
 
