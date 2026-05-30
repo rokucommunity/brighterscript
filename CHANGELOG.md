@@ -9,12 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.72.4](https://github.com/rokucommunity/brighterscript/compare/0.72.3...v0.72.4) - 2026-05-30
 ### Changed
  - upgrade to [roku-deploy@3.17.5](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3175---2026-05-30). Notable changes since 3.17.4:
-     - Preserve `!` glob-negation prefix in standardizePath ([#277](https://github.com/rokucommunity/roku-deploy/pull/277))
-     - Update minimum audit threshold ([#273](https://github.com/rokucommunity/roku-deploy/pull/273))
-     - Accept GHSA-w5hq-g745-h8pq (uuid <11.1.1) advisory ([#272](https://github.com/rokucommunity/roku-deploy/pull/272))
-     - Add `security-audit-required` gate job to security audit workflow ([#269](https://github.com/rokucommunity/roku-deploy/pull/269))
-     - Use explicit label on Security Audit badge ([#266](https://github.com/rokucommunity/roku-deploy/pull/266))
-     - Security Audit workflow ([#265](https://github.com/rokucommunity/roku-deploy/pull/265))
+     - Preserve `!` glob-negation prefix when using normalizeFilesArray ([#277](https://github.com/rokucommunity/roku-deploy/pull/277))
 
 
 
