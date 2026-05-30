@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.72.4](https://github.com/rokucommunity/brighterscript/compare/0.72.3...v0.72.4) - 2026-05-30
+### Changed
+ - upgrade to [roku-deploy@3.17.5](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3175---2026-05-30). Notable changes since 3.17.4:
+     - Preserve `!` glob-negation prefix when using normalizeFilesArray ([#277](https://github.com/rokucommunity/roku-deploy/pull/277))
+
+
+
 ## [0.72.3](https://github.com/rokucommunity/brighterscript/compare/0.72.2...v0.72.3) - 2026-05-27
 ### Added
  - parameter name inlay hints ([#1703](https://github.com/rokucommunity/brighterscript/pull/1703))
