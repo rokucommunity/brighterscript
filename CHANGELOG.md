@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.52](https://github.com/rokucommunity/brighterscript/compare/1.0.0-alpha.51...v1.0.0-alpha.52) - 2026-06-01
+### Changed
+ - Guard transpileComments against undefined trivia tokens ([#1725](https://github.com/rokucommunity/brighterscript/pull/1725))
+ - Merge master into v1 ([#1726](https://github.com/rokucommunity/brighterscript/pull/1726))
+ - upgrade to [roku-deploy@3.17.5](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3175---2026-05-30). Notable changes since 3.17.4:
+     - Preserve `!` glob-negation prefix in standardizePath ([#277](https://github.com/rokucommunity/roku-deploy/pull/277))
+     - Security Audit workflow ([#265](https://github.com/rokucommunity/roku-deploy/pull/265))
+
+
+
 ## [1.0.0-alpha.51](https://github.com/rokucommunity/brighterscript/compare/1.0.0-alpha.50...v1.0.0-alpha.51) - 2026-05-20
 ### Added
  - Allow typed functions in type expressions ([#1620](https://github.com/rokucommunity/brighterscript/pull/1620))
