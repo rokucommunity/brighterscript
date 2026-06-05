@@ -738,13 +738,21 @@ export class ScopeValidator {
         while (isTypeStatementType(funcType)) {
             funcType = funcType.wrappedType;
         }
+        let _funcName: string;
+        // Only get the function name if we need it for a diagnostic, since it can be expensive to calculate for complex expressions
+        function getFuncName() {
+            if (_funcName) {
+                return _funcName;
+            }
+            _funcName = util.getAllDottedGetPartsAsString(callee, ParseMode.BrighterScript, isCallfuncExpression(callee) ? '@.' : '.');
+            return _funcName;
+        }
         if (!funcType?.isResolvable() || !isCallableType(funcType) || isCompoundType(funcType)) {
-            const funcName = util.getAllDottedGetPartsAsString(callee, ParseMode.BrighterScript, isCallfuncExpression(callee) ? '@.' : '.');
             if (isUnionType(funcType)) {
                 if (!util.isUnionOfFunctions(funcType) && !isCallfuncExpression(callee)) {
                     // union of func and non func. not callable
                     this.addMultiScopeDiagnostic({
-                        ...DiagnosticMessages.notCallable(funcName),
+                        ...DiagnosticMessages.notCallable(getFuncName()),
                         location: callErrorLocation
                     });
                     return;
@@ -764,7 +772,7 @@ export class ScopeValidator {
                             // param differences!
                             this.addMultiScopeDiagnostic({
                                 ...DiagnosticMessages.incompatibleSymbolDefinition(
-                                    funcName,
+                                    getFuncName(),
                                     { isUnion: true, data: compatibilityData }),
                                 location: callErrorLocation
                             });
@@ -777,17 +785,16 @@ export class ScopeValidator {
 
             }
             if (funcType && !isCallableType(funcType) && !isReferenceType(funcType)) {
-                const globalFuncWithVarName = globalCallableMap.get(funcName.toLowerCase());
+                const globalFuncWithVarName = globalCallableMap.get(getFuncName().toLowerCase());
                 if (globalFuncWithVarName) {
                     funcType = globalFuncWithVarName.type;
                 } else {
                     this.addMultiScopeDiagnostic({
-                        ...DiagnosticMessages.notCallable(funcName),
+                        ...DiagnosticMessages.notCallable(getFuncName()),
                         location: callErrorLocation
                     });
                     return;
                 }
-
             }
         }
 
