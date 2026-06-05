@@ -830,15 +830,13 @@ export class ScopeValidator {
         }
         let paramIndex = 0;
         for (let arg of argsForCall) {
-            const data = {} as ExtraSymbolData;
-            let argType = this.getNodeTypeWrapper(file, arg, { flags: SymbolTypeFlag.runtime, data: data });
-
             const paramType = funcType.params[paramIndex]?.type;
             if (!paramType) {
                 // unable to find a paramType -- maybe there are more args than params
                 break;
             }
-
+            const data = {} as ExtraSymbolData;
+            let argType = this.getNodeTypeWrapper(file, arg, { flags: SymbolTypeFlag.runtime, data: data });
             if (isCallableType(paramType) && isClassType(argType) && isClassStatement(data.definingNode)) {
                 argType = data.definingNode.getConstructorType();
             }

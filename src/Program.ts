@@ -761,6 +761,7 @@ export class Program {
             file: file,
             program: this
         };
+        this.scopesPerFile.clear();
 
         this.plugins.emit('beforeAddFile', fileAddEvent);
 
@@ -778,6 +779,7 @@ export class Program {
     private unassignFile<T extends BscFile = BscFile>(file: T) {
         delete this.files[file.srcPath.toLowerCase()];
         this.destMap.delete(file.destPath.toLowerCase());
+        this.scopesPerFile.clear();
         return file;
     }
 
@@ -1101,6 +1103,7 @@ export class Program {
         xmlFilesValidated: XmlFile[];
         changedSymbols: Map<SymbolTypeFlag, Set<string>>;
         changedComponentTypes: string[];
+        scopesToInvalidate: Scope[];
         scopesToValidate: Scope[];
         filesToBeValidatedInScopeContext: Set<BscFile>;
 
@@ -1109,6 +1112,7 @@ export class Program {
             xmlFilesValidated: [],
             changedSymbols: new Map<SymbolTypeFlag, Set<string>>(),
             changedComponentTypes: [],
+            scopesToInvalidate: [],
             scopesToValidate: [],
             filesToBeValidatedInScopeContext: new Set<BscFile>()
         };
@@ -1166,6 +1170,7 @@ export class Program {
         const xmlFilesValidated: XmlFile[] = this.validationDetails.xmlFilesValidated;
         const changedSymbols = this.validationDetails.changedSymbols;
         const changedComponentTypes = this.validationDetails.changedComponentTypes;
+        const scopesToInvalidate = this.validationDetails.scopesToInvalidate;
         const scopesToValidate = this.validationDetails.scopesToValidate;
         const filesToBeValidatedInScopeContext = this.validationDetails.filesToBeValidatedInScopeContext;
 
@@ -1173,7 +1178,7 @@ export class Program {
 
         let logValidateEnd = (status?: string) => { };
 
-        //will be populated later on during the correspnding sequencer event
+        //will be populated later on during the corresponding sequencer event
         let filesToProcess: BscFile[];
 
         const sequencer = new Sequencer({
@@ -1246,7 +1251,7 @@ export class Program {
             .forEach('do deferred component creation', () => [...brsFilesValidated, ...xmlFilesValidated], (file) => {
                 if (isXmlFile(file)) {
                     this.addDeferredComponentTypeSymbolCreation(file);
-                } else if (isBrsFile(file)) {
+                } else if (isBrsFile(file) && !this.isFirstValidation) {
                     const fileHasChanges = file.providedSymbols.changes.get(SymbolTypeFlag.runtime).size > 0 || file.providedSymbols.changes.get(SymbolTypeFlag.typetime).size > 0;
                     if (fileHasChanges) {
                         for (const scope of this.getScopesForFile(file)) {
@@ -1361,9 +1366,16 @@ export class Program {
                 this.logger.time(LogLevel.info, ['addDiagnosticsForScopes'], () => {
                     this.crossScopeValidation.addDiagnosticsForScopes(scopesToCheck);
                 });
-                const filesToRevalidate = this.crossScopeValidation.getFilesRequiringChangedSymbol(scopesToCheck, changedSymbols);
-                for (const file of filesToRevalidate) {
-                    filesToBeValidatedInScopeContext.add(file);
+                if (this.isFirstValidation) {
+                    //on the first validation, we want to validate all scopes, so we add all files to the set of files to be validated in scope context
+                    for (const file of Object.values(this.files)) {
+                        filesToBeValidatedInScopeContext.add(file);
+                    }
+                } else {
+                    const filesToRevalidate = this.crossScopeValidation.getFilesRequiringChangedSymbol(scopesToCheck, changedSymbols);
+                    for (const file of filesToRevalidate) {
+                        filesToBeValidatedInScopeContext.add(file);
+                    }
                 }
 
                 this.currentScopeValidationOptions = {
@@ -1376,18 +1388,28 @@ export class Program {
                 //can reset changedComponent types
                 this.validationDetails.changedComponentTypes = [];
             })
-            .forEach('invalidate affected scopes', () => filesToBeValidatedInScopeContext, (file) => {
+            .forEach('invalidating file segments', () => filesToBeValidatedInScopeContext, (file) => {
                 if (isBrsFile(file)) {
                     file.validationSegmenter.unValidateAllSegments();
-                    for (const scope of this.getScopesForFile(file)) {
+                    if (!this.isFirstValidation) {
+                        scopesToInvalidate.push(...this.getScopesForFile(file));
+                    }
+                }
+            })
+            .once('invalidate affected scopes', () => {
+                if (this.isFirstValidation) {
+                    for (const scope of this.getAllUserScopes()) {
+                        scope.invalidate();
+                    }
+                } else {
+                    for (const scope of scopesToInvalidate) {
                         scope.invalidate();
                     }
                 }
             })
             .once('checking scopes to validate', () => {
                 //sort the scope names so we get consistent results
-                for (const scopeName of this.getSortedScopeNames()) {
-                    let scope = this.scopes[scopeName];
+                for (const scope of this.getAllUserScopes()) {
                     if (scope.shouldValidate(this.currentScopeValidationOptions)) {
                         scopesToValidate.push(scope);
                     }
@@ -1411,12 +1433,7 @@ export class Program {
             })
             .once('detect duplicate component names', () => {
                 this.detectDuplicateComponentNames();
-                this.isFirstValidation = false;
 
-                // can reset other validation details
-                this.validationDetails.changedSymbols = new Map<SymbolTypeFlag, Set<string>>();
-                this.validationDetails.scopesToValidate = [];
-                this.validationDetails.filesToBeValidatedInScopeContext = new Set<BscFile>();
 
             })
             .onCancel(() => {
@@ -1424,6 +1441,13 @@ export class Program {
             })
             .onSuccess(() => {
                 logValidateEnd();
+                this.isFirstValidation = false;
+
+                // can reset other validation details
+                this.validationDetails.changedSymbols = new Map<SymbolTypeFlag, Set<string>>();
+                this.validationDetails.scopesToInvalidate = [];
+                this.validationDetails.scopesToValidate = [];
+                this.validationDetails.filesToBeValidatedInScopeContext = new Set<BscFile>();
             })
             .onComplete(() => {
                 //if we emitted the beforeValidateProgram hook, emit the afterValidateProgram hook as well
@@ -1462,8 +1486,7 @@ export class Program {
 
     private getScopesForCrossScopeValidation(someComponentTypeChanged: boolean, didProvidedSymbolChange: boolean) {
         const scopesForCrossScopeValidation: Scope[] = [];
-        for (let scopeName of this.getSortedScopeNames()) {
-            let scope = this.scopes[scopeName];
+        for (let scope of this.getAllUserScopes()) {
             if (this.globalScope === scope) {
                 continue;
             }
@@ -1612,12 +1635,25 @@ export class Program {
         return this.sortedScopeNames;
     }
 
+    public getAllUserScopes() {
+        return Object.values(this.scopes).filter(s => s.name !== 'global');
+    }
+
+
+    private scopesPerFile: Map<BscFile, Scope[]> = new Map();
+
+
     /**
      * Get a list of all scopes the file is loaded into
      * @param file the file
      */
     public getScopesForFile(file: BscFile | string) {
         const resolvedFile = typeof file === 'string' ? this.getFile(file) : file;
+
+        const cachedResult = this.scopesPerFile.get(resolvedFile);
+        if (cachedResult) {
+            return cachedResult;
+        }
 
         let result = [] as Scope[];
         if (resolvedFile) {
@@ -1630,6 +1666,7 @@ export class Program {
                 }
             }
         }
+        this.scopesPerFile.set(resolvedFile, result);
         return result;
     }
 
