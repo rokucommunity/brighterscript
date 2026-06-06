@@ -583,7 +583,10 @@ export class ScopeValidator {
     protected validateCreateObjectCall(file: BrsFile, call: CallExpression) {
 
         //skip non CreateObject function calls
-        const callName = util.getAllDottedGetPartsAsString(call.callee)?.toLowerCase();
+        if (!isVariableExpression(call.callee)) {
+            return;
+        }
+        const callName = call.callee.tokens.name?.text?.toLowerCase();
         if (callName !== 'createobject' || !isLiteralExpression(call?.args[0])) {
             return;
         }
