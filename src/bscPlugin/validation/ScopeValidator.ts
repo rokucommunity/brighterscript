@@ -905,7 +905,6 @@ export class ScopeValidator {
         const expectedLHSType = this.getNodeTypeWrapper(file, dottedSetStmt, { ...getTypeOpts, data: {}, typeChain: typeChainExpectedLHS });
         const actualRHSType = this.getNodeTypeWrapper(file, dottedSetStmt?.value, getTypeOpts);
         const compatibilityData: TypeCompatibilityData = {};
-        const typeChainScan = util.processTypeChain(typeChainExpectedLHS);
         // check if anything in typeChain is an AA - if so, just allow it
         if (typeChainExpectedLHS.find(typeChainItem => isAssociativeArrayType(typeChainItem.type))) {
             // something in the chain is an AA
@@ -913,6 +912,7 @@ export class ScopeValidator {
             return;
         }
         if (!expectedLHSType || !expectedLHSType?.isResolvable()) {
+            const typeChainScan = util.processTypeChain(typeChainExpectedLHS);
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
                 location: typeChainScan?.location
@@ -1228,9 +1228,9 @@ export class ScopeValidator {
             }
         } else if (isDynamicType(exprType) && isEnumType(parentTypeInfo?.type) && isDottedGetExpression(expression)) {
             const enumFileLink = this.event.scope.getEnumFileLink(util.getAllDottedGetPartsAsString(expression.obj));
-            const typeChainScanForItem = util.processTypeChain(typeChain);
-            const typeChainScanForParent = util.processTypeChain(typeChain.slice(0, -1));
             if (enumFileLink) {
+                const typeChainScanForItem = util.processTypeChain(typeChain);
+                const typeChainScanForParent = util.processTypeChain(typeChain.slice(0, -1));
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.cannotFindName(lastTypeInfo?.name, typeChainScanForItem.fullChainName, typeChainScanForParent.fullNameOfItem, 'enum'),
                     location: lastTypeInfo?.location,
