@@ -1366,12 +1366,7 @@ export class Program {
                 this.logger.time(LogLevel.info, ['addDiagnosticsForScopes'], () => {
                     this.crossScopeValidation.addDiagnosticsForScopes(scopesToCheck);
                 });
-                if (this.isFirstValidation) {
-                    //on the first validation, we want to validate all scopes, so we add all files to the set of files to be validated in scope context
-                    for (const file of Object.values(this.files)) {
-                        filesToBeValidatedInScopeContext.add(file);
-                    }
-                } else {
+                if (!this.isFirstValidation) {
                     const filesToRevalidate = this.crossScopeValidation.getFilesRequiringChangedSymbol(scopesToCheck, changedSymbols);
                     for (const file of filesToRevalidate) {
                         filesToBeValidatedInScopeContext.add(file);
