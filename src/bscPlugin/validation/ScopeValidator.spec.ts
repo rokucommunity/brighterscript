@@ -13,10 +13,11 @@ import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import undent from 'undent';
 import * as fsExtra from 'fs-extra';
 import { tempDir, rootDir } from '../../testHelpers.spec';
-import { isReturnStatement } from '../../astUtils/reflection';
+import { isFunctionStatement, isReturnStatement } from '../../astUtils/reflection';
 import { ScopeValidator } from './ScopeValidator';
-import type { ReturnStatement } from '../../parser/Statement';
+import type { FunctionStatement, ReturnStatement } from '../../parser/Statement';
 import { Logger } from '@rokucommunity/logger';
+import { ParseMode } from '../..';
 
 describe('ScopeValidator', () => {
 
@@ -7046,6 +7047,35 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
+        });
+    });
+
+
+    describe('file filter', () => {
+        it('should not walk files if the DiagnosticFilterer says not to', () => {
+            const program = new Program({
+                rootDir: rootDir + '/src',
+                files: [
+                    `/source/**/*.*`,
+                    `/components/**/*.*`
+                ],
+                diagnosticFilters: [
+                    { files: `source/doNotValidate.brs` }
+                ]
+            });
+
+            const fileNotValidated = program.setFile<BrsFile>('source/doNotValidate.brs', `
+                sub doStuff()
+                    a = 1 + "hello" ' obviously wrong, but should not be reported because of the filter
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            const unvalidatedSegments = fileNotValidated.validationSegmenter.getAllUnvalidatedSegments();
+            expect(unvalidatedSegments).to.lengthOf(1);
+            expect(isFunctionStatement(unvalidatedSegments[0])).to.be.true;
+            expect((unvalidatedSegments[0] as FunctionStatement).getName(ParseMode.BrighterScript)).to.equal('doStuff');
         });
     });
 });
