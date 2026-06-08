@@ -482,8 +482,7 @@ export class DiagnosticManager {
         if (this.diagnosticFilterer.options !== this.options) {
             this.diagnosticFilterer.options = this.options;
         }
-        this.diagnosticFilterer.isFileFiltered(file);
-        return false;
+        return this.diagnosticFilterer.isFileFiltered(file);
     }
 
 }
