@@ -669,6 +669,20 @@ export class DottedGetExpression extends Expression {
     };
     readonly obj: Expression;
 
+    /**
+     * @deprecated use `tokens.name` instead
+     */
+    public get name(): Identifier {
+        return this.tokens.name;
+    }
+
+    /**
+     * @deprecated use `tokens.dot` instead
+     */
+    public get dot(): Token | undefined {
+        return this.tokens.dot;
+    }
+
     public readonly kind = AstNodeKind.DottedGetExpression;
 
     public readonly location: Location | undefined;
@@ -848,6 +862,27 @@ export class IndexedGetExpression extends Expression {
         readonly closingSquare?: Token;
         readonly questionDot?: Token; //  ? or ?.
     };
+
+    /**
+     * @deprecated use `tokens.questionDot` instead
+     */
+    public get questionDotToken(): Token | undefined {
+        return this.tokens.questionDot;
+    }
+
+    /**
+     * @deprecated use `tokens.openingSquare` instead
+     */
+    public get openingSquare(): Token | undefined {
+        return this.tokens.openingSquare;
+    }
+
+    /**
+     * @deprecated use `indexes[0]` instead
+     */
+    public get index(): Expression | undefined {
+        return this.indexes?.[0];
+    }
 
     public readonly location: Location | undefined;
 
@@ -1535,6 +1570,13 @@ export class VariableExpression extends Expression {
     public readonly kind = AstNodeKind.VariableExpression;
 
     public readonly location: Location;
+
+    /**
+     * @deprecated use `tokens.name` instead
+     */
+    public get name(): Identifier {
+        return this.tokens.name;
+    }
 
     public getName(parseMode?: ParseMode) {
         return this.tokens.name.text;
