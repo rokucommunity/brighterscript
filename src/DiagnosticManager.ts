@@ -478,13 +478,17 @@ export class DiagnosticManager {
         }
     }
 
-    public shouldFilterFile(file: BrsFile): boolean {
+    /**
+     * Are the diagnostics for this file completely filtered?
+     * If so, we can skip any Scope-based validation on this file at all, which can save a lot of time for large files
+     * with many diagnostics that are being ignored
+     */
+    public canSkipScopeValidationForFile(file: BrsFile): boolean {
         if (this.diagnosticFilterer.options !== this.options) {
             this.diagnosticFilterer.options = this.options;
         }
-        return this.diagnosticFilterer.isFileFiltered(file);
+        return this.diagnosticFilterer.isFileCompletelyFiltered(file);
     }
-
 }
 
 interface DiagnosticContextFilter {
