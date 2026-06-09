@@ -2975,25 +2975,72 @@ describe('ScopeValidator', () => {
             });
         });
 
-        it.only('allows arbitrary member on node as part of component interface', () => {
-            program.setFile('components/comp1.xml', `
-                <component name="Comp1" extends="Group">
-                    <interface>
-                        <field id="myNode" type="node" />
-                    </interface>
-                </component>
-            `);
+        describe('arbitrary members on roSGNode', () => {
+            it('does allows arbitrary member on node in BrightScript (brs) files', () => {
+                program.setFile('source/util.brs', `
+                    function doStuff()
+                        node = createObject("roSGNode", "Node")
+                        node.someArbitraryMember = "hello"
+                        return node
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
 
-            program.setFile('source/util.bs', `
-                function getComp1(node as roSGNode) as roSGNodeComp1
-                    comp1 = createObject("roSGNode", "Comp1")
-                    comp1.myNode = node
-                    node.someArbitraryMember = "hello"
-                    return comp1
-                end function
-            `);
-            program.validate();
-            expectZeroDiagnostics(program);
+            it('does not allows arbitrary member on node after allowing it in BrightScript (brs) files', () => {
+                program.setFile('source/aaaa.brs', `
+                    function doStuff()
+                        node = createObject("roSGNode", "Node")
+                        ' doing this in a BRS file will NOT cause a diagnostic
+                        node.someArbitraryMember = "hello"
+                        return node
+                    end function
+                `);
+                program.setFile('components/comp1.xml', `
+                    <component name="Comp1" extends="Group">
+                        <script uri="comp1.bs"/>
+                        <interface>
+                            <field id="myNode" type="node" />
+                        </interface>
+                    </component>
+                `);
+                program.setFile('components/comp1.bs', `
+                  function doStuff()
+                        node = createObject("roSGNode", "Node")
+                        ' doing this in a BS file WILL cause a diagnostic
+                        node.someArbitraryMember = "hello"
+                        return node
+                    end function
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindName('someArbitraryMember', 'roSGNodeNode.someArbitraryMember', 'roSGNodeNode').message
+                ]);
+            });
+
+            it('does not allow arbitrary member on node as part of component interface', () => {
+                program.setFile('components/comp1.xml', `
+                    <component name="Comp1" extends="Group">
+                        <interface>
+                            <field id="myNode" type="node" />
+                        </interface>
+                    </component>
+                `);
+
+                program.setFile('source/util.bs', `
+                    function getComp1(node as roSGNode) as roSGNodeComp1
+                        comp1 = createObject("roSGNode", "Comp1")
+                        comp1.myNode = node
+                        comp1.myNode.someArbitraryMember = "hello"
+                        return comp1
+                    end function
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindName('someArbitraryMember', 'roSGNodeNode.someArbitraryMember', 'roSGNodeNode').message
+                ]);
+            });
         });
     });
 

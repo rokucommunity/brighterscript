@@ -1775,7 +1775,9 @@ export class ScopeValidator {
      * @returns the processed result type
      */
     private getNodeTypeWrapper(file: BrsFile, node: AstNode, getTypeOpts: GetTypeOptions) {
-        const type = node?.getType(getTypeOpts);
+        const isBrightScriptMode = file.parseMode === ParseMode.BrightScript;
+
+        const type = node?.getType({ ...getTypeOpts, changeUnknownMemberToDynamic: isBrightScriptMode });
 
         if (file.parseMode === ParseMode.BrightScript) {
             // this is a brightscript file
@@ -1792,11 +1794,6 @@ export class ScopeValidator {
             if (isUnionType(type)) {
                 //this is a union
                 return DynamicType.instance;
-            }
-
-            if (isComponentType(type)) {
-                // modify type to allow any member access for Node types
-                type.changeUnknownMemberToDynamic = true;
             }
         }
 
