@@ -2974,6 +2974,27 @@ describe('ScopeValidator', () => {
                 ]);
             });
         });
+
+        it.only('allows arbitrary member on node as part of component interface', () => {
+            program.setFile('components/comp1.xml', `
+                <component name="Comp1" extends="Group">
+                    <interface>
+                        <field id="myNode" type="node" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('source/util.bs', `
+                function getComp1(node as roSGNode) as roSGNodeComp1
+                    comp1 = createObject("roSGNode", "Comp1")
+                    comp1.myNode = node
+                    node.someArbitraryMember = "hello"
+                    return comp1
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('itemCannotBeUsedAsVariable', () => {
