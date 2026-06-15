@@ -17,46 +17,33 @@
                 },
                 {
                     "type": "object",
-                    "required": [
-                        "type"
-                    ],
+                    "required": ["type"],
                     "properties": {
                         "type": {
                             "type": "string",
-                            "enum": [
-                                "detailed"
-                            ]
+                            "enum": ["detailed"]
                         }
                     },
                     "additionalProperties": false
                 },
                 {
                     "type": "object",
-                    "required": [
-                        "type"
-                    ],
+                    "required": ["type"],
                     "properties": {
                         "type": {
                             "type": "string",
-                            "enum": [
-                                "github-actions"
-                            ]
+                            "enum": ["github-actions"]
                         }
                     },
                     "additionalProperties": false
                 },
                 {
                     "type": "object",
-                    "required": [
-                        "type",
-                        "format"
-                    ],
+                    "required": ["type", "format"],
                     "properties": {
                         "type": {
                             "type": "string",
-                            "enum": [
-                                "custom"
-                            ]
+                            "enum": ["custom"]
                         },
                         "format": {
                             "type": "string",
