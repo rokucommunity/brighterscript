@@ -583,7 +583,10 @@ export class ScopeValidator {
     protected validateCreateObjectCall(file: BrsFile, call: CallExpression) {
 
         //skip non CreateObject function calls
-        const callName = util.getAllDottedGetPartsAsString(call.callee)?.toLowerCase();
+        if (!isVariableExpression(call.callee)) {
+            return;
+        }
+        const callName = call.callee.tokens.name?.text?.toLowerCase();
         if (callName !== 'createobject' || !isLiteralExpression(call?.args[0])) {
             return;
         }
@@ -738,13 +741,21 @@ export class ScopeValidator {
         while (isTypeStatementType(funcType)) {
             funcType = funcType.wrappedType;
         }
+        let _funcName: string;
+        // Only get the function name if we need it for a diagnostic, since it can be expensive to calculate for complex expressions
+        function getFuncName() {
+            if (_funcName) {
+                return _funcName;
+            }
+            _funcName = util.getAllDottedGetPartsAsString(callee, ParseMode.BrighterScript, isCallfuncExpression(callee) ? '@.' : '.');
+            return _funcName;
+        }
         if (!funcType?.isResolvable() || !isCallableType(funcType) || isCompoundType(funcType)) {
-            const funcName = util.getAllDottedGetPartsAsString(callee, ParseMode.BrighterScript, isCallfuncExpression(callee) ? '@.' : '.');
             if (isUnionType(funcType)) {
                 if (!util.isUnionOfFunctions(funcType) && !isCallfuncExpression(callee)) {
                     // union of func and non func. not callable
                     this.addMultiScopeDiagnostic({
-                        ...DiagnosticMessages.notCallable(funcName),
+                        ...DiagnosticMessages.notCallable(getFuncName()),
                         location: callErrorLocation
                     });
                     return;
@@ -764,7 +775,7 @@ export class ScopeValidator {
                             // param differences!
                             this.addMultiScopeDiagnostic({
                                 ...DiagnosticMessages.incompatibleSymbolDefinition(
-                                    funcName,
+                                    getFuncName(),
                                     { isUnion: true, data: compatibilityData }),
                                 location: callErrorLocation
                             });
@@ -777,17 +788,16 @@ export class ScopeValidator {
 
             }
             if (funcType && !isCallableType(funcType) && !isReferenceType(funcType)) {
-                const globalFuncWithVarName = globalCallableMap.get(funcName.toLowerCase());
+                const globalFuncWithVarName = globalCallableMap.get(getFuncName().toLowerCase());
                 if (globalFuncWithVarName) {
                     funcType = globalFuncWithVarName.type;
                 } else {
                     this.addMultiScopeDiagnostic({
-                        ...DiagnosticMessages.notCallable(funcName),
+                        ...DiagnosticMessages.notCallable(getFuncName()),
                         location: callErrorLocation
                     });
                     return;
                 }
-
             }
         }
 
@@ -823,15 +833,13 @@ export class ScopeValidator {
         }
         let paramIndex = 0;
         for (let arg of argsForCall) {
-            const data = {} as ExtraSymbolData;
-            let argType = this.getNodeTypeWrapper(file, arg, { flags: SymbolTypeFlag.runtime, data: data });
-
             const paramType = funcType.params[paramIndex]?.type;
             if (!paramType) {
                 // unable to find a paramType -- maybe there are more args than params
                 break;
             }
-
+            const data = {} as ExtraSymbolData;
+            let argType = this.getNodeTypeWrapper(file, arg, { flags: SymbolTypeFlag.runtime, data: data });
             if (isCallableType(paramType) && isClassType(argType) && isClassStatement(data.definingNode)) {
                 argType = data.definingNode.getConstructorType();
             }
@@ -897,7 +905,6 @@ export class ScopeValidator {
         const expectedLHSType = this.getNodeTypeWrapper(file, dottedSetStmt, { ...getTypeOpts, data: {}, typeChain: typeChainExpectedLHS });
         const actualRHSType = this.getNodeTypeWrapper(file, dottedSetStmt?.value, getTypeOpts);
         const compatibilityData: TypeCompatibilityData = {};
-        const typeChainScan = util.processTypeChain(typeChainExpectedLHS);
         // check if anything in typeChain is an AA - if so, just allow it
         if (typeChainExpectedLHS.find(typeChainItem => isAssociativeArrayType(typeChainItem.type))) {
             // something in the chain is an AA
@@ -905,6 +912,7 @@ export class ScopeValidator {
             return;
         }
         if (!expectedLHSType || !expectedLHSType?.isResolvable()) {
+            const typeChainScan = util.processTypeChain(typeChainExpectedLHS);
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
                 location: typeChainScan?.location
@@ -1220,9 +1228,9 @@ export class ScopeValidator {
             }
         } else if (isDynamicType(exprType) && isEnumType(parentTypeInfo?.type) && isDottedGetExpression(expression)) {
             const enumFileLink = this.event.scope.getEnumFileLink(util.getAllDottedGetPartsAsString(expression.obj));
-            const typeChainScanForItem = util.processTypeChain(typeChain);
-            const typeChainScanForParent = util.processTypeChain(typeChain.slice(0, -1));
             if (enumFileLink) {
+                const typeChainScanForItem = util.processTypeChain(typeChain);
+                const typeChainScanForParent = util.processTypeChain(typeChain.slice(0, -1));
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.cannotFindName(lastTypeInfo?.name, typeChainScanForItem.fullChainName, typeChainScanForParent.fullNameOfItem, 'enum'),
                     location: lastTypeInfo?.location,

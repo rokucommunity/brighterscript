@@ -51,6 +51,21 @@ export interface BsConfig {
     noEmit?: boolean;
 
     /**
+     * @deprecated packaging is handled outside of `BsConfig`
+     */
+    createPackage?: boolean;
+
+    /**
+     * @deprecated deployment is handled outside of `BsConfig`
+     */
+    deploy?: boolean;
+
+    /**
+     * @deprecated staging copy behavior is handled outside of `BsConfig`
+     */
+    copyToStaging?: boolean;
+
+    /**
      * If true, the server will keep running and will watch and recompile on every file change
      * @default false
      */
@@ -288,6 +303,9 @@ type OptionalBsConfigFields =
     | 'extends'
     | 'require'
     | 'outDir'
+    | 'createPackage'
+    | 'deploy'
+    | 'copyToStaging'
     | 'diagnosticLevel'
     | 'rootDir'
     | 'stagingDir'
