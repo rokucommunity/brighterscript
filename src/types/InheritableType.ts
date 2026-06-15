@@ -1,5 +1,5 @@
 import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
-import { isInheritableType, isReferenceType } from '../astUtils/reflection';
+import { isComponentType, isInheritableType, isReferenceType } from '../astUtils/reflection';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { BscType } from './BscType';
 import type { ReferenceType } from './ReferenceType';
@@ -15,20 +15,22 @@ export abstract class InheritableType extends BscType {
     }
 
     getMemberType(memberName: string, options: GetTypeOptions) {
-        let hasRoAssociativeArrayAsAncestor = this.name.toLowerCase() === 'roassociativearray' || this.getAncestorTypeList()?.find(ancestorType => ancestorType.name.toLowerCase() === 'roassociativearray');
+        const hasRoAssociativeArrayAsAncestor = this.name.toLowerCase() === 'roassociativearray' || this.getAncestorTypeList()?.find(ancestorType => ancestorType.name.toLowerCase() === 'roassociativearray');
 
-        if (hasRoAssociativeArrayAsAncestor) {
-            return super.getMemberType(memberName, options) ?? (!options?.ignoreDefaultDynamicMembers ? DynamicType.instance : undefined);
+        const isComponentWithUnknownDynamicMember = isComponentType(this) && options.changeUnknownNodeMemberToDynamic;
+
+        if (hasRoAssociativeArrayAsAncestor || isComponentWithUnknownDynamicMember) {
+            const foundMember = super.getMemberType(memberName, options);
+            if (foundMember) {
+                return foundMember;
+            }
+            if (!options?.ignoreDefaultDynamicMembers) {
+                return DynamicType.instance;
+            }
+            return undefined;
         }
 
         const resultType = super.getMemberType(memberName, { ...options, fullName: memberName, tableProvider: () => this.memberTable });
-
-        if (options.changeUnknownMemberToDynamic && !resultType.isResolvable()) {
-            if (options.ignoreDefaultDynamicMembers) {
-                return resultType;
-            }
-            return DynamicType.instance;
-        }
         return resultType;
     }
 

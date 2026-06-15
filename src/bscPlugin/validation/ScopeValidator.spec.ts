@@ -2975,8 +2975,8 @@ describe('ScopeValidator', () => {
             });
         });
 
-        describe('arbitrary members on roSGNode', () => {
-            it('does allows arbitrary member on node in BrightScript (brs) files', () => {
+        describe('arbitrary members on roSGNode and roSNodeContentNode', () => {
+            it('allows arbitrary member on node in BrightScript (brs) files', () => {
                 program.setFile('source/util.brs', `
                     function doStuff()
                         node = createObject("roSGNode", "Node")
@@ -2988,15 +2988,7 @@ describe('ScopeValidator', () => {
                 expectZeroDiagnostics(program);
             });
 
-            it('does not allows arbitrary member on node after allowing it in BrightScript (brs) files', () => {
-                program.setFile('source/aaaa.brs', `
-                    function doStuff()
-                        node = createObject("roSGNode", "Node")
-                        ' doing this in a BRS file will NOT cause a diagnostic
-                        node.someArbitraryMember = "hello"
-                        return node
-                    end function
-                `);
+            it('allows arbitrary member on node in BrightScript (bs) files', () => {
                 program.setFile('components/comp1.xml', `
                     <component name="Comp1" extends="Group">
                         <script uri="comp1.bs"/>
@@ -3008,18 +3000,15 @@ describe('ScopeValidator', () => {
                 program.setFile('components/comp1.bs', `
                   function doStuff()
                         node = createObject("roSGNode", "Node")
-                        ' doing this in a BS file WILL cause a diagnostic
                         node.someArbitraryMember = "hello"
                         return node
                     end function
                 `);
                 program.validate();
-                expectDiagnostics(program, [
-                    DiagnosticMessages.cannotFindName('someArbitraryMember', 'roSGNodeNode.someArbitraryMember', 'roSGNodeNode').message
-                ]);
+                expectZeroDiagnostics(program);
             });
 
-            it('does not allow arbitrary member on node as part of component interface', () => {
+            it('allows arbitrary member on node as part of component interface', () => {
                 program.setFile('components/comp1.xml', `
                     <component name="Comp1" extends="Group">
                         <interface>
@@ -3037,11 +3026,37 @@ describe('ScopeValidator', () => {
                     end function
                 `);
                 program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows arbitrary member on ContentNode', () => {
+                program.setFile('source/util.bs', `
+                    function buildContentNode(data as roAssociativeArray) as roSGNodeContentNode
+                        content = createObject("roSGNode", "ContentNode")
+                        content.update(data, true)
+                        content.arbitrary = 123
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('disallows arbitrary member on node when strict mode is on', () => {
+                program.options.strict = true;
+                program.setFile('source/util.bs', `
+                    function doStuff()
+                        node = createObject("roSGNode", "Node")
+                        node.someArbitraryMember = "hello"
+                        return node
+                    end function
+                `);
+                program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.cannotFindName('someArbitraryMember', 'roSGNodeNode.someArbitraryMember', 'roSGNodeNode').message
+                    DiagnosticMessages.cannotFindName('someArbitraryMember', 'roSGNodeNode.someArbitraryMember', 'roSGNodeNode')
                 ]);
             });
         });
+
     });
 
     describe('itemCannotBeUsedAsVariable', () => {
@@ -6968,6 +6983,19 @@ describe('ScopeValidator', () => {
             program.validate();
             expectDiagnostics(program, [
                 DiagnosticMessages.notCallable('node@.getName').message
+            ]);
+        });
+
+        it('disallows callfunc on generic node when strict mode is enabled', () => {
+            program.options.strict = true;
+            program.setFile('source/test.bs', `
+                sub doCallfunc(node as roSGNode)
+                    node.callfunc("someFunc", 1, 2, 3)
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindCallFuncFunction('someFunc', 'roSGNodeNode@.someFunc', 'roSGNodeNode').message
             ]);
         });
     });

@@ -17,33 +17,46 @@
                 },
                 {
                     "type": "object",
-                    "required": ["type"],
+                    "required": [
+                        "type"
+                    ],
                     "properties": {
                         "type": {
                             "type": "string",
-                            "enum": ["detailed"]
+                            "enum": [
+                                "detailed"
+                            ]
                         }
                     },
                     "additionalProperties": false
                 },
                 {
                     "type": "object",
-                    "required": ["type"],
+                    "required": [
+                        "type"
+                    ],
                     "properties": {
                         "type": {
                             "type": "string",
-                            "enum": ["github-actions"]
+                            "enum": [
+                                "github-actions"
+                            ]
                         }
                     },
                     "additionalProperties": false
                 },
                 {
                     "type": "object",
-                    "required": ["type", "format"],
+                    "required": [
+                        "type",
+                        "format"
+                    ],
                     "properties": {
                         "type": {
                             "type": "string",
-                            "enum": ["custom"]
+                            "enum": [
+                                "custom"
+                            ]
                         },
                         "format": {
                             "type": "string",
@@ -411,6 +424,11 @@
                 "11.0.0",
                 "12.0.0"
             ]
+        },
+        "strict": {
+            "description": "Enables a set of stricter type-checking rules and language features. When true, unknown members on Component types will be treated as errors instead of dynamic. Defaults to false.",
+            "type": "boolean",
+            "default": false
         }
     }
 }

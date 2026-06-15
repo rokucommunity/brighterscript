@@ -375,7 +375,8 @@ export class Util {
             logLevel: logLevel,
             bslibDestinationDir: bslibDestinationDir,
             legacyCallfuncHandling: config.legacyCallfuncHandling === true ? true : false,
-            validate: config.validate === false ? false : true
+            validate: config.validate === false ? false : true,
+            strict: config.strict === true ? true : false
         };
 
         //mutate `config` in case anyone is holding a reference to the incomplete one
@@ -2412,10 +2413,13 @@ export class Util {
         return false;
     }
 
-    public isGenericNodeType(type: BscType) {
+    public isGenericNodeType(type: BscType, mustBeCallfuncAble: boolean) {
         if (isComponentType(type)) {
             const lowerName = type.toString().toLowerCase();
             if (lowerName === 'rosgnode' || lowerName === 'rosgnodenode') {
+                return true;
+            }
+            if (!mustBeCallfuncAble && (lowerName === 'rosgnodecontentnode')) {
                 return true;
             }
         }

@@ -247,6 +247,13 @@ export interface BsConfig {
      * @default true
      */
     validate?: boolean;
+
+    /**
+     * Enables a set of stricter type-checking rules and language features. When true, unknown members on Component types
+     * will be treated as errors instead of dynamic
+     * @default false
+     */
+    strict?: boolean;
 }
 
 /**

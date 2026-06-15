@@ -675,7 +675,7 @@ export class ScopeValidator {
         const firstArgToken = call?.args[0]?.tokens.value;
         if (callName === 'createchild') {
             this.checkComponentName(firstArgToken);
-        } else if (callName === 'callfunc' && !util.isGenericNodeType(callerType)) {
+        } else if (callName === 'callfunc' && (!util.isGenericNodeType(callerType, true) || this.event.program.options.strict)) {
             const funcType = util.getCallFuncType(call, firstArgToken, { flags: SymbolTypeFlag.runtime, ignoreCall: true });
             if (!funcType?.isResolvable()) {
                 const functionName = firstArgToken.text.replace(/"/g, '');
@@ -715,7 +715,7 @@ export class ScopeValidator {
         }
         const functionFullname = `${callerType.toString()}@.${methodName}`;
         const callErrorLocation = expression.location;
-        if (util.isGenericNodeType(callerType) || isObjectType(callerType) || isDynamicType(callerType)) {
+        if ((util.isGenericNodeType(callerType, true) && !this.event.program.options.strict) || isObjectType(callerType) || isDynamicType(callerType)) {
             // ignore "general" node
             return;
         }
@@ -1777,7 +1777,7 @@ export class ScopeValidator {
     private getNodeTypeWrapper(file: BrsFile, node: AstNode, getTypeOpts: GetTypeOptions) {
         const isBrightScriptMode = file.parseMode === ParseMode.BrightScript;
 
-        const type = node?.getType({ ...getTypeOpts, changeUnknownMemberToDynamic: isBrightScriptMode });
+        const type = node?.getType({ ...getTypeOpts, changeUnknownNodeMemberToDynamic: isBrightScriptMode || !this.event.program.options.strict });
 
         if (file.parseMode === ParseMode.BrightScript) {
             // this is a brightscript file
