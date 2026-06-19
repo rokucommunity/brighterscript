@@ -413,7 +413,17 @@
             ]
         },
         "strict": {
-            "description": "Enables a set of stricter type-checking rules and language features. When true, unknown members on Component types will be treated as errors instead of dynamic. Defaults to false.",
+            "description": "Enables a set of stricter type-checking rules and language features. When set, this acts as a default value for other `strict`-related options. Defaults to false.",
+            "type": "boolean",
+            "default": false
+        },
+        "strictCallFunc": {
+            "description": "Enables stricter type-checking for callfunc() invocations. When true, callfunc() invocations will not be allowed on generic Node types. Defaults to false.",
+            "type": "boolean",
+            "default": false
+        },
+        "strictNodeMembers": {
+            "description": "Enables stricter type-checking for Node members. When true, unknown members on Node types will be treated as errors instead of dynamic values. Defaults to false.",
             "type": "boolean",
             "default": false
         }

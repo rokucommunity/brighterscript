@@ -3041,8 +3041,8 @@ describe('ScopeValidator', () => {
                 expectZeroDiagnostics(program);
             });
 
-            it('disallows arbitrary member on node when strict mode is on', () => {
-                program.options.strict = true;
+            it('disallows arbitrary member on node when strictNodeMembers mode is on', () => {
+                program.options.strictNodeMembers = true;
                 program.setFile('source/util.bs', `
                     function doStuff()
                         node = createObject("roSGNode", "Node")
@@ -6986,8 +6986,8 @@ describe('ScopeValidator', () => {
             ]);
         });
 
-        it('disallows callfunc on generic node when strict mode is enabled', () => {
-            program.options.strict = true;
+        it('disallows callfunc on generic node when strictCallFunc mode is enabled', () => {
+            program.options.strictCallFunc = true;
             program.setFile('source/test.bs', `
                 sub doCallfunc(node as roSGNode)
                     node.callfunc("someFunc", 1, 2, 3)

@@ -349,6 +349,8 @@ export class Util {
             outDir = './out'; //default case
         }
 
+        const strictValue = !!config.strict;
+
         const configWithDefaults: Omit<FinalizedBsConfig, 'rootDir'> = {
             cwd: cwd,
             //use default files array from rokuDeploy
@@ -376,7 +378,9 @@ export class Util {
             bslibDestinationDir: bslibDestinationDir,
             legacyCallfuncHandling: config.legacyCallfuncHandling === true ? true : false,
             validate: config.validate === false ? false : true,
-            strict: config.strict === true ? true : false
+            strict: strictValue,
+            strictCallFunc: (typeof config.strictCallFunc === 'boolean' ? config.strictCallFunc : strictValue),
+            strictNodeMembers: (typeof config.strictNodeMembers === 'boolean' ? config.strictNodeMembers : strictValue)
         };
 
         //mutate `config` in case anyone is holding a reference to the incomplete one

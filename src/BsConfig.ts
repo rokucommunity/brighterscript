@@ -264,11 +264,22 @@ export interface BsConfig {
     validate?: boolean;
 
     /**
-     * Enables a set of stricter type-checking rules and language features. When true, unknown members on Component types
-     * will be treated as errors instead of dynamic
+     * When true, enables all strict mode options (strictCallFunc, strictNodeMembers, and any future options added that are considered "strict"). This is a convenient way to enable strict mode without having to set each option individually.
      * @default false
      */
     strict?: boolean;
+
+    /**
+     * Enables stricter type-checking for callfunc() invocations. When true, callfunc() invocations will not be allowed on generic Node types.
+     * @default false
+     */
+    strictCallFunc?: boolean;
+
+    /**
+     * Enables stricter type-checking for Node members. When true, unknown members on Node types will be treated as errors instead of dynamic values.
+     * @default false
+     */
+    strictNodeMembers?: boolean;
 }
 
 /**

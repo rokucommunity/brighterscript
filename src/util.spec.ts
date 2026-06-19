@@ -548,6 +548,27 @@ describe('util', () => {
             let config = util.normalizeConfig({ outDir: 'outTest', stagingDir: 'staging', stagingFolderPath: 'stagingPath' } as any);
             expect(config.outDir).to.equal('outTest');
         });
+
+        it('sets correct strict* values when strict is true', () => {
+            let config = util.normalizeConfig({ strict: true } as any);
+            expect(config.strict).to.be.true;
+            expect(config.strictCallFunc).to.be.true;
+            expect(config.strictNodeMembers).to.be.true;
+        });
+
+        it('allows strict* values to override strict', () => {
+            let config = util.normalizeConfig({ strict: true, strictCallFunc: false, strictNodeMembers: false } as any);
+            expect(config.strict).to.be.true;
+            expect(config.strictCallFunc).to.be.false;
+            //expect(config.strictNodeMembers).to.be.false;
+        });
+
+        it('defaults strict* values to false when strict is not set', () => {
+            let config = util.normalizeConfig({} as any);
+            expect(config.strict).to.be.false;
+            expect(config.strictCallFunc).to.be.false;
+            expect(config.strictNodeMembers).to.be.false;
+        });
     });
 
     describe('areArraysEqual', () => {
