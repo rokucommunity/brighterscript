@@ -349,6 +349,8 @@ export class Util {
             outDir = './out'; //default case
         }
 
+        const strictValue = !!config.strict;
+
         const configWithDefaults: Omit<FinalizedBsConfig, 'rootDir'> = {
             cwd: cwd,
             //use default files array from rokuDeploy
@@ -375,7 +377,10 @@ export class Util {
             logLevel: logLevel,
             bslibDestinationDir: bslibDestinationDir,
             legacyCallfuncHandling: config.legacyCallfuncHandling === true ? true : false,
-            validate: config.validate === false ? false : true
+            validate: config.validate === false ? false : true,
+            strict: strictValue,
+            strictCallFunc: (typeof config.strictCallFunc === 'boolean' ? config.strictCallFunc : strictValue),
+            strictNodeMembers: (typeof config.strictNodeMembers === 'boolean' ? config.strictNodeMembers : strictValue)
         };
 
         //mutate `config` in case anyone is holding a reference to the incomplete one
@@ -2412,10 +2417,13 @@ export class Util {
         return false;
     }
 
-    public isGenericNodeType(type: BscType) {
+    public isGenericNodeType(type: BscType, mustBeCallfuncAble: boolean) {
         if (isComponentType(type)) {
             const lowerName = type.toString().toLowerCase();
             if (lowerName === 'rosgnode' || lowerName === 'rosgnodenode') {
+                return true;
+            }
+            if (!mustBeCallfuncAble && (lowerName === 'rosgnodecontentnode')) {
                 return true;
             }
         }

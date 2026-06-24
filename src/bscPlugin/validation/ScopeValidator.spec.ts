@@ -2974,6 +2974,89 @@ describe('ScopeValidator', () => {
                 ]);
             });
         });
+
+        describe('arbitrary members on roSGNode and roSNodeContentNode', () => {
+            it('allows arbitrary member on node in BrightScript (brs) files', () => {
+                program.setFile('source/util.brs', `
+                    function doStuff()
+                        node = createObject("roSGNode", "Node")
+                        node.someArbitraryMember = "hello"
+                        return node
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows arbitrary member on node in BrightScript (bs) files', () => {
+                program.setFile('components/comp1.xml', `
+                    <component name="Comp1" extends="Group">
+                        <script uri="comp1.bs"/>
+                        <interface>
+                            <field id="myNode" type="node" />
+                        </interface>
+                    </component>
+                `);
+                program.setFile('components/comp1.bs', `
+                  function doStuff()
+                        node = createObject("roSGNode", "Node")
+                        node.someArbitraryMember = "hello"
+                        return node
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows arbitrary member on node as part of component interface', () => {
+                program.setFile('components/comp1.xml', `
+                    <component name="Comp1" extends="Group">
+                        <interface>
+                            <field id="myNode" type="node" />
+                        </interface>
+                    </component>
+                `);
+
+                program.setFile('source/util.bs', `
+                    function getComp1(node as roSGNode) as roSGNodeComp1
+                        comp1 = createObject("roSGNode", "Comp1")
+                        comp1.myNode = node
+                        comp1.myNode.someArbitraryMember = "hello"
+                        return comp1
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows arbitrary member on ContentNode', () => {
+                program.setFile('source/util.bs', `
+                    function buildContentNode(data as roAssociativeArray) as roSGNodeContentNode
+                        content = createObject("roSGNode", "ContentNode")
+                        content.update(data, true)
+                        content.arbitrary = 123
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('disallows arbitrary member on node when strictNodeMembers mode is on', () => {
+                program.options.strictNodeMembers = true;
+                program.setFile('source/util.bs', `
+                    function doStuff()
+                        node = createObject("roSGNode", "Node")
+                        node.someArbitraryMember = "hello"
+                        return node
+                    end function
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindName('someArbitraryMember', 'roSGNodeNode.someArbitraryMember', 'roSGNodeNode')
+                ]);
+            });
+        });
+
     });
 
     describe('itemCannotBeUsedAsVariable', () => {
@@ -6900,6 +6983,19 @@ describe('ScopeValidator', () => {
             program.validate();
             expectDiagnostics(program, [
                 DiagnosticMessages.notCallable('node@.getName').message
+            ]);
+        });
+
+        it('disallows callfunc on generic node when strictCallFunc mode is enabled', () => {
+            program.options.strictCallFunc = true;
+            program.setFile('source/test.bs', `
+                sub doCallfunc(node as roSGNode)
+                    node.callfunc("someFunc", 1, 2, 3)
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindCallFuncFunction('someFunc', 'roSGNodeNode@.someFunc', 'roSGNodeNode').message
             ]);
         });
     });

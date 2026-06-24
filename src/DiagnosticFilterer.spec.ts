@@ -326,11 +326,11 @@ describe('DiagnosticFilterer', () => {
         ]);
     });
 
-    describe('isFileFiltered', () => {
+    describe('isFileCompletelyFiltered', () => {
         it('should find files that are completely filtered by src', () => {
             filterer.options = options;
-            expect(filterer.isFileFiltered({ srcPath: `${rootDir}/lib/some/file.brs`, destPath: `source/some/file.brs` })).true;
-            expect(filterer.isFileFiltered({ srcPath: `${rootDir}/notlib/other/file.brs`, destPath: `source/other/file.brs` })).false;
+            expect(filterer.isFileCompletelyFiltered({ srcPath: `${rootDir}/lib/some/file.brs`, destPath: `source/some/file.brs` })).true;
+            expect(filterer.isFileCompletelyFiltered({ srcPath: `${rootDir}/notlib/other/file.brs`, destPath: `source/other/file.brs` })).false;
         });
 
         it('should find files that are completely filtered by dest', () => {
@@ -340,8 +340,8 @@ describe('DiagnosticFilterer', () => {
                     { files: [{ dest: 'source/remove/**/*.*' }] }
                 ]
             };
-            expect(filterer.isFileFiltered({ srcPath: `${rootDir}/source/some/file.brs`, destPath: `source/remove/some/file.brs` })).true;
-            expect(filterer.isFileFiltered({ srcPath: `${rootDir}/source/other/file.brs`, destPath: `source/keep/other/file.brs` })).false;
+            expect(filterer.isFileCompletelyFiltered({ srcPath: `${rootDir}/source/some/file.brs`, destPath: `source/remove/some/file.brs` })).true;
+            expect(filterer.isFileCompletelyFiltered({ srcPath: `${rootDir}/source/other/file.brs`, destPath: `source/keep/other/file.brs` })).false;
         });
 
         it('should find files that are completely filtered by src, with negative filtering', () => {
@@ -354,8 +354,8 @@ describe('DiagnosticFilterer', () => {
                     { files: '!lib/special/**/*.brs' }
                 ]
             };
-            expect(filterer.isFileFiltered({ srcPath: `${rootDir}/lib/some/file.brs`, destPath: `source/some/file.brs` })).true;
-            expect(filterer.isFileFiltered({ srcPath: `${rootDir}/lib/special/file.brs`, destPath: `source/special/file.brs` })).false;
+            expect(filterer.isFileCompletelyFiltered({ srcPath: `${rootDir}/lib/some/file.brs`, destPath: `source/some/file.brs` })).true;
+            expect(filterer.isFileCompletelyFiltered({ srcPath: `${rootDir}/lib/special/file.brs`, destPath: `source/special/file.brs` })).false;
         });
     });
 

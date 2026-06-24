@@ -1224,6 +1224,11 @@ export interface GetTypeOptions {
      * If this is true, AA's, objects, nodes, etc, do not return dynamic if no member is found
      */
     ignoreDefaultDynamicMembers?: boolean;
+    /**
+     * If this is true, AA's, objects, nodes, etc will return dynamic for unknown members, instead of ReferenceType.
+     * This is useful for validating in contexts when members could be anything
+     */
+    changeUnknownNodeMemberToDynamic?: boolean;
 }
 
 export class TypeChainEntry {

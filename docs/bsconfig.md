@@ -40,6 +40,9 @@ While a minimal `bsconfig.json` file is sufficient for getting started, `bsc` su
     - [`relativeSourceMaps: true`](#relativesourcemaps-true)
   - [`sourceRoot`](#sourceroot)
   - [`stagingDir`](#stagingdir)
+  - [`strict`](#strict)
+    - [`strictCallFunc`](#strictCallFunc)
+    - [`strictNodeMembers`](#strictNodeMembers)
   - [`username`](#username)
   - [`watch`](#watch)
 
@@ -586,6 +589,54 @@ The exact behavior depends on whether [`relativeSourceMaps`](#relativesourcemaps
 - **`relativeSourceMaps: true`:** The map file's `sourceRoot` field is set to this value, and `sources[]` entries are relative to `sourceRoot`. The `rootDir` portion of each source path is still replaced with `sourceRoot` when computing the relative path.
 
 In both cases, `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals embedded in the transpiled output will reflect the `sourceRoot`-substituted path at runtime.
+
+## `strict`
+
+Type: `boolean`
+
+Enables a set of stricter type-checking rules and language features. When set, this acts as a default value for other `strict`-related options. Defaults to false.
+
+For example, in order to turn all all `strict` options, but disable `strictCallFunc`, you could specify:
+
+```json
+{
+    "strict": true,
+    "strictCallFunc": false
+}
+```
+
+### `strictCallFunc`
+
+Type: `boolean`
+
+Enables stricter type-checking for callfunc() invocations. When true, callfunc() invocations will not be allowed on generic Node types. Defaults to false.
+
+For example, if this were true:
+
+```brighterscript
+sub example(node as roSGNode)
+  node@.someFunction() ' error because roSGNode itself does not have any available call func's
+end sub
+```
+
+### `strictNodeMembers`
+
+Type: `boolean`
+
+Enables stricter type-checking for Node members. When true, unknown members on Node types will be treated as errors instead of dynamic values. Defaults to false.
+
+For example, if this were true:
+
+```brighterscript
+sub example()
+  myPoster = createObject("roSGNode", "Poster")
+  ' update the node with a new field
+  myPoster.update({
+    data: 1234
+  , true})
+  print myPoster.data ' error because "Poster" does not have the "data" field
+end sub
+```
 
 ## `outDir`
 Type: `string`
