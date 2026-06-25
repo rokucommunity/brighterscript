@@ -1,5 +1,4 @@
 import * as path from 'path';
-import 'array-flat-polyfill';
 import type {
     CompletionItem,
     Connection,
