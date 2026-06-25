@@ -859,9 +859,9 @@ export class Parser {
                     range: this.peek().range
                 });
                 functionType = {
-                    isReserved: true,
                     kind: TokenKind.Function,
                     text: 'function',
+                    isReserved: true,
                     //zero-length location means derived
                     range: {
                         start: this.peek().range.start,
@@ -1092,7 +1092,7 @@ export class Parser {
         } else {
             const nameExpression = new VariableExpression(name);
             result = new AssignmentStatement(
-                { kind: TokenKind.Equal, text: '=', range: operator.range },
+                { kind: TokenKind.Equal, text: '=', isReserved: false, range: operator.range, leadingWhitespace: '' },
                 name,
                 new BinaryExpression(nameExpression, operator, value)
             );
@@ -2287,7 +2287,7 @@ export class Parser {
                     left.additionalIndexes,
                     operator.kind === TokenKind.Equal
                         ? operator
-                        : { kind: TokenKind.Equal, text: '=', range: operator.range }
+                        : { kind: TokenKind.Equal, text: '=', isReserved: false, range: operator.range, leadingWhitespace: '' }
                 );
             } else if (isDottedGetExpression(left)) {
                 return new DottedSetStatement(
@@ -2299,7 +2299,7 @@ export class Parser {
                     left.dot,
                     operator.kind === TokenKind.Equal
                         ? operator
-                        : { kind: TokenKind.Equal, text: '=', range: operator.range }
+                        : { kind: TokenKind.Equal, text: '=', isReserved: false, range: operator.range, leadingWhitespace: '' }
                 );
             }
         }
