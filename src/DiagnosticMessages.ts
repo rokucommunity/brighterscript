@@ -792,8 +792,55 @@ export let DiagnosticMessages = {
             },
             severity: DiagnosticSeverity.Error
         };
-    }
+    },
+    /**
+     * Callable was marked removed in `availability.os` or `availability.rsg`, and the project's
+     * effective firmware/rsg_version meets that threshold. The call is a hard error on device.
+     */
+    globalCallableRemoved: (name = '', axis: AvailabilityAxis = 'os', threshold = '', current = '') => ({
+        message: `'${name}' is removed in ${formatAvailabilityAxis(axis, threshold)} or higher (current target is ${current})`,
+        code: 1149,
+        data: { name: name, axis: axis, threshold: threshold, current: current },
+        severity: DiagnosticSeverity.Error
+    }),
+    /**
+     * Callable was marked deprecated in `availability.os` or `availability.rsg`, and the project's
+     * effective firmware/rsg_version meets that threshold. The call still works but should
+     * be migrated.
+     */
+    globalCallableDeprecated: (name = '', axis: AvailabilityAxis = 'os', threshold = '', current = '') => ({
+        message: `'${name}' is deprecated as of ${formatAvailabilityAxis(axis, threshold)} (current target is ${current})`,
+        code: 1150,
+        data: { name: name, axis: axis, threshold: threshold, current: current },
+        severity: DiagnosticSeverity.Warning
+    }),
+    rsgVersionRequiresMinFirmware: (rsgVersion: string, requiredFirmware: string, configuredFirmware: string) => ({
+        message: `rsg_version=${rsgVersion} requires Roku firmware version ${requiredFirmware} or higher (current target is ${configuredFirmware})`,
+        code: 1151,
+        severity: DiagnosticSeverity.Error
+    }),
+    invalidRsgVersionFormat: (value: string) => ({
+        message: `'${value}' is not a valid rsg_version (expected value like '1.2' or '1.3')`,
+        code: 1152,
+        severity: DiagnosticSeverity.Warning
+    }),
+    rsgVersionDeprecated: (rsgVersion: string, suggestedReplacement: string) => ({
+        message: `rsg_version=${rsgVersion} is deprecated; consider upgrading to rsg_version=${suggestedReplacement}`,
+        code: 1153,
+        severity: DiagnosticSeverity.Warning
+    }),
+    rsgVersionRemoved: (rsgVersion: string, removedAt: string, replacement: string) => ({
+        message: `rsg_version=${rsgVersion} was removed in firmware ${removedAt}; use rsg_version=${replacement}`,
+        code: 1154,
+        severity: DiagnosticSeverity.Error
+    })
 };
+
+export type AvailabilityAxis = 'os' | 'rsg';
+
+function formatAvailabilityAxis(axis: AvailabilityAxis, version: string): string {
+    return axis === 'os' ? `Roku OS ${version}` : `rsg_version=${version}`;
+}
 
 export const DiagnosticCodeMap = {} as Record<keyof (typeof DiagnosticMessages), number>;
 export let diagnosticCodes = [] as number[];
