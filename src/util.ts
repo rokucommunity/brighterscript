@@ -6,6 +6,7 @@ import * as path from 'path';
 import { rokuDeploy, DefaultFiles } from 'roku-deploy';
 import type { Diagnostic, Position, Range, Location, DiagnosticRelatedInformation } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
+import * as xml2js from 'xml2js';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { DiagnosticCodeMap, DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, Plugin, ExpressionInfo, TranspileResult, MaybePromise, DisposableLike, PluginFactory } from './interfaces';
@@ -762,6 +763,21 @@ export class Util {
             return `[Function: ${(value.name || 'anonymous')}]`;
         }
         return value;
+    }
+
+    /**
+     * Parse an xml file and get back a javascript object containing its results
+     */
+    public parseXml(text: string) {
+        return new Promise<any>((resolve, reject) => {
+            xml2js.parseString(text, (err, data) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(data);
+                }
+            });
+        });
     }
 
     public propertyCount(object: Record<string, unknown>) {
