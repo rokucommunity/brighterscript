@@ -741,4 +741,258 @@ describe('BrsFileValidator', () => {
             expect(evalDiags).to.be.lengthOf(1);
         });
     });
+
+    describe('unreferencable builtins', () => {
+        const reservedBuiltinCode = DiagnosticMessages.reservedBuiltinUsedAsValue('').code;
+
+        function reservedBuiltinDiagnostics() {
+            return program.getDiagnostics().filter(diagnostic => diagnostic.code === reservedBuiltinCode);
+        }
+
+        function expectFlagged(names: string[]) {
+            expect(
+                reservedBuiltinDiagnostics().map(diagnostic => diagnostic.message)
+            ).to.eql(
+                names.map(name => DiagnosticMessages.reservedBuiltinUsedAsValue(name).message)
+            );
+        }
+
+        function expectNotFlagged() {
+            expect(reservedBuiltinDiagnostics()).to.eql([]);
+        }
+
+        it('flags `x = ObjFun` (RHS value read)', () => {
+            program.setFile('source/main.brs', `
+                sub a()
+                    x = ObjFun
+                    print x
+                end sub
+            `);
+            program.validate();
+            expectFlagged(['ObjFun']);
+        });
+
+        it('flags `print type(ObjFun)` (passed as argument)', () => {
+            program.setFile('source/main.brs', `
+                sub a()
+                    print type(ObjFun)
+                end sub
+            `);
+            program.validate();
+            expectFlagged(['ObjFun']);
+        });
+
+        it('flags `f(ObjFun, 2)` (passed by value)', () => {
+            program.setFile('source/main.brs', `
+                sub a()
+                    f(ObjFun, 2)
+                end sub
+                sub f(arg1, arg2)
+                end sub
+            `);
+            program.validate();
+            expectFlagged(['ObjFun']);
+        });
+
+        it('flags `x = type` (RHS value read)', () => {
+            program.setFile('source/main.brs', `
+                sub a()
+                    x = type
+                    print x
+                end sub
+            `);
+            program.validate();
+            expectFlagged(['type']);
+        });
+
+        it('does not flag `ObjFun(m)` (canonical call)', () => {
+            program.setFile('source/main.brs', `
+                sub a()
+                    ObjFun(m, "")
+                end sub
+            `);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('does not flag `type(123)` (canonical call)', () => {
+            program.setFile('source/main.brs', `
+                sub a()
+                    print type(123)
+                end sub
+            `);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('does not flag `m.ObjFun = 1` (property assignment)', () => {
+            program.setFile('source/main.brs', `
+                sub a()
+                    m.ObjFun = 1
+                end sub
+            `);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('does not flag `m.type = 1` (property assignment)', () => {
+            program.setFile('source/main.brs', `
+                sub a()
+                    m.type = 1
+                end sub
+            `);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('does not flag `{ ObjFun: 1 }` (AA literal key)', () => {
+            program.setFile('source/main.brs', `
+                sub a()
+                    aa = { ObjFun: 1 }
+                end sub
+            `);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('does not flag `{ type: 1 }` (AA literal key)', () => {
+            program.setFile('source/main.brs', `
+                sub a()
+                    aa = { type: 1 }
+                end sub
+            `);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('does not flag a BrighterScript `type Name = ...` statement', () => {
+            program.setFile('source/main.bs', `
+                type MyAlias = string or integer
+            `);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('case-insensitive match for OBJFUN, ObjFun, objfun', () => {
+            program.setFile('source/main.brs', `
+                sub a()
+                    x = OBJFUN
+                    y = objfun
+                end sub
+            `);
+            program.validate();
+            expectFlagged(['OBJFUN', 'objfun']);
+        });
+
+        //per-builtin coverage for each device-verified entry in UnreferencableBuiltins.
+        //each pair: (1) bare value read flags, (2) canonical call form does not flag.
+
+        it('flags `x = Box` (RHS value read)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = Box\nend sub`);
+            program.validate();
+            expectFlagged(['Box']);
+        });
+
+        it('does not flag `Box(1)` (canonical call)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = Box(1)\nend sub`);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('flags `x = CreateObject` (RHS value read)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = CreateObject\nend sub`);
+            program.validate();
+            expectFlagged(['CreateObject']);
+        });
+
+        it('does not flag `CreateObject("roSGNode", "Node")` (canonical call)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = CreateObject("roSGNode", "Node")\nend sub`);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('flags `x = GetGlobalAA` (RHS value read)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = GetGlobalAA\nend sub`);
+            program.validate();
+            expectFlagged(['GetGlobalAA']);
+        });
+
+        it('does not flag `GetGlobalAA()` (canonical call)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = GetGlobalAA()\nend sub`);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('flags `x = GetLastRunCompileError` (RHS value read)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = GetLastRunCompileError\nend sub`);
+            program.validate();
+            expectFlagged(['GetLastRunCompileError']);
+        });
+
+        it('does not flag `GetLastRunCompileError()` (canonical call)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = GetLastRunCompileError()\nend sub`);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('flags `x = GetLastRunRunTimeError` (RHS value read)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = GetLastRunRunTimeError\nend sub`);
+            program.validate();
+            expectFlagged(['GetLastRunRunTimeError']);
+        });
+
+        it('does not flag `GetLastRunRunTimeError()` (canonical call)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = GetLastRunRunTimeError()\nend sub`);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('flags `x = Pos` (RHS value read)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = Pos\nend sub`);
+            program.validate();
+            expectFlagged(['Pos']);
+        });
+
+        it('does not flag `Pos(0)` (canonical call)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = Pos(0)\nend sub`);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('flags `x = Run` (RHS value read)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = Run\nend sub`);
+            program.validate();
+            expectFlagged(['Run']);
+        });
+
+        it('does not flag `Run("pkg:/source/foo.brs")` (canonical call)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = Run("pkg:/source/foo.brs")\nend sub`);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('flags `x = Tab` (RHS value read)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = Tab\nend sub`);
+            program.validate();
+            expectFlagged(['Tab']);
+        });
+
+        it('does not flag `Tab(5)` (canonical call)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = Tab(5)\nend sub`);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('flags `x = eval` (RHS value read)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = eval\nend sub`);
+            program.validate();
+            expectFlagged(['eval']);
+        });
+
+        it('does not flag `eval("print 1")` (canonical call)', () => {
+            program.setFile('source/main.brs', `sub a()\neval("print 1")\nend sub`);
+            program.validate();
+            expectNotFlagged();
+        });
+    });
 });

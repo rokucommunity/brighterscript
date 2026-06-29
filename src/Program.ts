@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
 import * as semver from 'semver';
-import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, DocumentSymbol, CancellationToken, SelectionRange } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, DocumentSymbol, CancellationToken, SelectionRange, InlayHint } from 'vscode-languageserver';
 import { CancellationTokenSource, CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
@@ -11,7 +11,7 @@ import { SymbolTable } from './SymbolTable';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, ProvideSelectionRangesEvent, OnGetSourceFixAllCodeActionsEvent } from './interfaces';
+import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, ProvideSelectionRangesEvent, ProvideInlayHintsEvent, OnGetSourceFixAllCodeActionsEvent } from './interfaces';
 import type { SourceFixAllCodeAction } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
 import { standardizePath as s, util } from './util';
@@ -1232,6 +1232,27 @@ export class Program {
             this.plugins.emit('provideSelectionRanges', event);
             this.plugins.emit('afterProvideSelectionRanges', event);
             return event.selectionRanges;
+        }
+        return [];
+    }
+
+    /**
+     * Get inlay hints for the given file and range.
+     */
+    public getInlayHints(srcPath: string, range: Range): InlayHint[] {
+        const file = this.getFile(srcPath);
+        if (file) {
+            const event: ProvideInlayHintsEvent = {
+                program: this,
+                file: file,
+                range: range,
+                scopes: this.getScopesForFile(file),
+                inlayHints: []
+            };
+            this.plugins.emit('beforeProvideInlayHints', event);
+            this.plugins.emit('provideInlayHints', event);
+            this.plugins.emit('afterProvideInlayHints', event);
+            return event.inlayHints;
         }
         return [];
     }
