@@ -1,6 +1,6 @@
 {
   "name": "brighterscript",
-  "version": "0.72.5",
+  "version": "0.73.0",
   "description": "A superset of Roku's BrightScript language.",
   "scripts": {
     "preversion": "npm run build && npm run lint && npm run test",
@@ -134,7 +134,7 @@
   },
   "dependencies": {
     "@rokucommunity/bslib": "^0.1.1",
-    "@rokucommunity/logger": "^0.3.13",
+    "@rokucommunity/logger": "^0.4.0",
     "@xml-tools/parser": "^1.0.7",
     "chalk": "^2.4.2",
     "chevrotain": "^7.0.1",

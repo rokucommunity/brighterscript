@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.73.0](https://github.com/rokucommunity/brighterscript/compare/0.72.5...v0.73.0) - 2026-06-29
+### Changed
+ - Validate eval/rsg_version against firmware lifecycle ([#1698](https://github.com/rokucommunity/brighterscript/pull/1698))
+ - Replace single-use deps with util/formatUtils helpers ([#1736](https://github.com/rokucommunity/brighterscript/pull/1736))
+ - Bump form-data from 2.5.5 to 2.5.6 ([#1733](https://github.com/rokucommunity/brighterscript/pull/1733))
+ - upgrade to [@rokucommunity/logger@0.4.0](https://github.com/rokucommunity/logger/blob/master/CHANGELOG.md#040---2026-06-29). Notable changes since 0.3.13:
+     - Reduce public API surface and implement API Extractor ([#30](https://github.com/rokucommunity/logger/pull/30))
+     - chore: Reduce prod deps 6 → 1 (inline single-use helpers) + consolidate source-map-support ([#29](https://github.com/rokucommunity/logger/pull/29))
+### Removed
+ - Remove more prod deps: (drop array-flat-polyfill/readline, consolidate minimatch into micromatch) ([#1737](https://github.com/rokucommunity/brighterscript/pull/1737))
+
+
+
 ## [0.72.5](https://github.com/rokucommunity/brighterscript/compare/0.72.4...v0.72.5) - 2026-06-10
 ### Changed
  - upgrade to [@rokucommunity/logger@0.3.13](https://github.com/rokucommunity/logger/blob/master/CHANGELOG.md#0313---2026-06-08). Notable changes since 0.3.12:
