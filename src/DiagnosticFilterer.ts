@@ -1,6 +1,6 @@
 import type { BsDiagnostic } from './interfaces';
 import * as path from 'path';
-import * as minimatch from 'minimatch';
+import * as micromatch from 'micromatch';
 import type { BsConfig } from './BsConfig';
 import util, { standardizePath as s } from './util';
 import { URI } from 'vscode-uri';
@@ -162,17 +162,30 @@ export class DiagnosticFilterer {
             path.isAbsolute(filter.src) ? filter.src : `${this.rootDir}/${filter.src}`
         );
 
-        let matchedFileUris = minimatch.match(fileUris, src, {
+        //micromatch (picomatch) treats backslashes as escape chars, but standardizePath produces
+        //backslashes on Windows. Match against forward-slash-normalized copies of the paths (and pattern),
+        //then map the matches back to the original paths.
+        const originalByNormalized = new Map<string, string>();
+        for (const filePath of fileUris) {
+            originalByNormalized.set(filePath.replace(/\\/g, '/'), filePath);
+        }
+        let matchedFileUris = micromatch([...originalByNormalized.keys()], src.replace(/\\/g, '/'), {
             nocase: true
-        }).map(src => util.pathToUri(src).toLowerCase());
+        }).map(normalized => util.pathToUri(originalByNormalized.get(normalized)).toLowerCase());
 
         return matchedFileUris;
     }
 
     private matchFileDestUris(filter: NormalizedFilter, fileUris: string[]): string[] {
-        let matchedFileUris = minimatch.match(fileUris, filter.dest, {
+        //micromatch (picomatch) treats backslashes as escape chars; normalize both the paths and the
+        //pattern to forward slashes, then map the matches back to the original dest paths.
+        const originalByNormalized = new Map<string, string>();
+        for (const destPath of fileUris) {
+            originalByNormalized.set(destPath.replace(/\\/g, '/'), destPath);
+        }
+        let matchedFileUris = micromatch([...originalByNormalized.keys()], filter.dest.replace(/\\/g, '/'), {
             nocase: true
-        });
+        }).map(normalized => originalByNormalized.get(normalized));
         return matchedFileUris;
     }
 
