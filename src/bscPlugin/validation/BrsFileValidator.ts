@@ -18,6 +18,9 @@ import type { BrightScriptDoc } from '../../parser/BrightScriptDocParser';
 import brsDocParser from '../../parser/BrightScriptDocParser';
 import { TypeStatementType } from '../../types/TypeStatementType';
 import * as semver from 'semver';
+import { OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION } from '../../RokuConstants';
+import type { AvailabilityAxis } from '../../DiagnosticMessages';
+import { globalCallableMap } from '../../globalCallables';
 
 export class BrsFileValidator {
     constructor(
@@ -89,6 +92,7 @@ export class BrsFileValidator {
                 if (node.tokens.openingParen?.kind === TokenKind.QuestionLeftParen) {
                     this.validateMinFirmwareVersionForOptionalChaining(node.tokens.openingParen?.location?.range);
                 }
+                this.validateGlobalCallableAvailability(node);
             },
             EnumStatement: (node) => {
                 this.validateDeclarationLocations(node, 'enum', () => util.createBoundingRange(node.tokens.enum, node.tokens.name));
@@ -822,33 +826,77 @@ export class BrsFileValidator {
     }
 
     /**
-     * The minimum Roku firmware version that introduced optional chaining support (Roku OS 11).
-     * Optional chaining is NOT transpiled by BrighterScript, so this restriction applies to both
-     * .brs and .bs files.
-     */
-    private static readonly OPTIONAL_CHAINING_MIN_VERSION = '11.0.0';
-
-    /**
      * Add a diagnostic if the configured minFirmwareVersion is lower than the version that
      * introduced optional chaining support (Roku OS 11).
      * This applies to both .brs and .bs files because optional chaining is not transpiled —
      * it is emitted as-is, so the target device must natively support it.
      */
     private validateMinFirmwareVersionForOptionalChaining(range: Range | undefined) {
-        const minFirmwareVersion = this.event.file.program.options.minFirmwareVersion;
-        if (!minFirmwareVersion) {
-            return;
-        }
-        const coercedMinVersion = semver.coerce(minFirmwareVersion);
-        if (coercedMinVersion && semver.lt(coercedMinVersion, BrsFileValidator.OPTIONAL_CHAINING_MIN_VERSION)) {
+        const minFirmwareVersion = this.event.program.getMinFirmwareVersion();
+        if (semver.lt(minFirmwareVersion, OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION)) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.featureRequiresMinFirmwareVersion(
                     'optional chaining',
-                    BrsFileValidator.OPTIONAL_CHAINING_MIN_VERSION,
+                    OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION,
                     minFirmwareVersion
                 ),
                 location: util.createLocationFromFileRange(this.event.file, range)
             });
         }
+    }
+
+    /**
+     * For a bare top-level call to a known global callable, fire one deprecation/removal
+     * diagnostic driven by `callable.availability`. The rsg axis takes precedence: if it
+     * fires, the os axis is skipped entirely. The os axis is only consulted when rsg is
+     * silent (rsg axis not configured, or effective rsg below its thresholds).
+     *
+     * Skips method calls (`m.foo()`) and namespaced calls (`alpha.foo()`) — only the bare
+     * top-level builtin form resolves to a global callable.
+     */
+    private validateGlobalCallableAvailability(node: CallExpression) {
+        if (!isVariableExpression(node.callee)) {
+            return;
+        }
+        const calleeName = node.callee.name?.text;
+        if (!calleeName) {
+            return;
+        }
+        const callable = globalCallableMap.get(calleeName.toLowerCase());
+        const availability = callable?.availability;
+        if (!availability) {
+            return;
+        }
+        const rsgDiagnostic = this.computeAvailabilityDiagnostic(calleeName, 'rsg', availability.rsg, this.event.file.program.getRsgVersion());
+        const diagnostic = rsgDiagnostic ??
+            this.computeAvailabilityDiagnostic(calleeName, 'os', availability.os, this.event.file.program.getMinFirmwareVersion());
+        if (diagnostic) {
+            this.event.program.diagnostics.register({
+                ...diagnostic,
+                location: node.callee.location
+            });
+        }
+    }
+
+    /**
+     * Compute (but don't emit) the diagnostic for one axis of {@link Availability}: returns
+     * `globalCallableRemoved` if the project's effective version is at/past the axis's
+     * `removed` threshold, otherwise `globalCallableDeprecated` if it's at/past `deprecated`,
+     * otherwise `undefined`.
+     *
+     * `effectiveVersion` is expected in canonical semver form (program getters guarantee this);
+     * availability constants are authored in canonical form too, so no coercion is needed here.
+     */
+    private computeAvailabilityDiagnostic(calleeName: string, axis: AvailabilityAxis, info: { added?: string; deprecated?: string; removed?: string } | undefined, effectiveVersion: string) {
+        if (!info) {
+            return undefined;
+        }
+        if (info.removed && semver.gte(effectiveVersion, info.removed)) {
+            return DiagnosticMessages.globalCallableRemoved(calleeName, axis, info.removed, effectiveVersion);
+        }
+        if (info.deprecated && semver.gte(effectiveVersion, info.deprecated)) {
+            return DiagnosticMessages.globalCallableDeprecated(calleeName, axis, info.deprecated, effectiveVersion);
+        }
+        return undefined;
     }
 }

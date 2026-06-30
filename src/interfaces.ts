@@ -22,6 +22,7 @@ import { TokenKind } from './lexer/TokenKind';
 import type { BscTypeKind } from './types/BscTypeKind';
 import { createToken } from './astUtils/creators';
 import type { SourceFixAllCodeAction } from './CodeActionUtil';
+import type { Availability } from './RokuConstants';
 
 export interface BsDiagnostic {
     /**
@@ -116,7 +117,17 @@ export interface Callable {
      * The range of the name of this callable
      */
     nameRange?: Range;
+    /**
+     * @deprecated Use `availability` instead, which carries firmware/rsg_version thresholds for
+     * deprecation and removal.
+     */
     isDeprecated?: boolean;
+    /**
+     * Optional availability metadata relative to Roku OS firmware and/or manifest rsg_version.
+     * When set, the validator emits deprecation/removal diagnostics if the project's effective
+     * values cross the listed thresholds.
+     */
+    availability?: Availability;
     getName: (parseMode: ParseMode) => string;
     /**
      * Indicates whether or not this callable has an associated namespace

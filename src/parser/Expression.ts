@@ -7,7 +7,6 @@ import type { Location } from 'vscode-languageserver';
 import util from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
-import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
@@ -1723,7 +1722,7 @@ export class SourceLiteralExpression extends Expression {
         let text: string;
         switch (this.tokens.value.kind) {
             case TokenKind.SourceFilePathLiteral:
-                const pathUrl = fileUrl(state.srcPath);
+                const pathUrl = util.fileUrl(state.srcPath);
                 text = `"${pathUrl.substring(0, 4)}" + "${pathUrl.substring(4)}"`;
                 break;
             case TokenKind.SourceLineNumLiteral:
@@ -1750,7 +1749,7 @@ export class SourceLiteralExpression extends Expression {
                 text = `"${rootNamespace}"`;
                 break;
             case TokenKind.SourceLocationLiteral:
-                const locationUrl = fileUrl(state.srcPath);
+                const locationUrl = util.fileUrl(state.srcPath);
                 //TODO find first parent that has range, or default to -1
                 text = `"${locationUrl.substring(0, 4)}" + "${locationUrl.substring(4)}:${this.getClosestLineNumber()}"`;
                 break;
