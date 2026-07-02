@@ -2,10 +2,15 @@ name: create-vsix
 on:
   pull_request:
     types: [labeled, unlabeled, synchronize]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "The pull request to build a vsix for (PR number or full PR URL)"
+        required: true
 jobs:
   create-vsix:
     runs-on: ubuntu-latest
-    if: contains(github.event.pull_request.labels.*.name, 'create-vsix')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'create-vsix')
     steps:
       # Get a bot token so the bot's name shows up on all our actions
       - name: Get Token From roku-ci-token Application
@@ -16,27 +21,16 @@ jobs:
           private_key: ${{ secrets.BOT_PRIVATE_KEY }}
       - name: Set New GitHub Token
         run: echo "TOKEN=${{ steps.generate-token.outputs.token }}" >> $GITHUB_ENV
-      #trigger the build on vscode-brightscript-language
-      - name: Build vsix for branch "${{ github.head_ref}}"
+      # Trigger the build on vscode-brightscript-language. That workflow interprets these
+      # inputs, builds the .vsix files, and posts the download links back on the PR
+      - name: Build vsix
         uses: aurelien-baudet/workflow-dispatch@v2.1.1
         id: create-vsix
         with:
-         workflow: create-vsix
-         ref: master
-         wait-for-completion: true
-         display-workflow-run-url: true
-         repo: rokucommunity/vscode-brightscript-language
-         token: ${{ env.TOKEN }}
-         inputs: '{ "branch": "${{ github.head_ref }}"}'
-      #add a comment on the PR
-      - name: Add comment to PR
-        uses: actions/github-script@v5
-        with:
-          github-token: ${{ env.TOKEN }}
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: 'Hey there! I just built a new version of the vscode extension based on ${{ github.event.pull_request.head.sha }}. You can download the .vsix [here](${{steps.create-vsix.outputs.workflow-url}}) and then follow [these installation instructions](https://github.com/rokucommunity/vscode-brightscript-language#pre-release-versions).'
-            })
+          workflow: create-vsix
+          ref: master
+          wait-for-completion: true
+          display-workflow-run-url: true
+          repo: rokucommunity/vscode-brightscript-language
+          token: ${{ env.TOKEN }}
+          inputs: '{ "branch": "${{ github.head_ref }}", "pr": "${{ github.event.pull_request.html_url || github.event.inputs.pr }}", "repo": "${{ github.repository }}" }'
