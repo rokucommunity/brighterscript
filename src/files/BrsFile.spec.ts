@@ -24,7 +24,6 @@ import { tempDir, rootDir } from '../testHelpers.spec';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { ClassType, EnumType, FloatType, InterfaceType } from '../types';
 import type { StandardizedFileEntry } from 'roku-deploy';
-import * as fileUrl from 'file-url';
 import type { AALiteralExpression } from '../parser/Expression';
 import { CallExpression, FunctionExpression, LiteralExpression } from '../parser/Expression';
 import { Logger } from '@rokucommunity/logger';
@@ -2508,7 +2507,7 @@ describe('BrsFile', () => {
             });
 
             it('handles source literals properly', () => {
-                const pathUrl = fileUrl(rootDir);
+                const pathUrl = util.fileUrl(rootDir);
                 let text = `"${pathUrl.substring(0, 4)}" + "${pathUrl.substring(4)}`;
                 doTest(`
                     sub test()

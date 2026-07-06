@@ -258,6 +258,8 @@ describe('NullCoalescingExpression', () => {
         });
 
         it('does not capture restricted OS functions', async () => {
+            //failOnDiagnostic=false: the bare `eval("print 1")` triggers the rsg_version=1.2
+            //deprecation diagnostic under default settings, which is unrelated to what this test covers.
             await testTranspile(`
                 sub main()
                     num = 1
@@ -302,7 +304,7 @@ describe('NullCoalescingExpression', () => {
 
                 sub test(p1)
                 end sub
-            `);
+            `, 'trim', 'source/main.bs', false);
         });
 
         it('properly transpiles null coalesence assignments - complex alternate', async () => {
