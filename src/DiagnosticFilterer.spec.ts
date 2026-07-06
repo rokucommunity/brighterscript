@@ -159,6 +159,82 @@ describe('DiagnosticFilterer', () => {
                 ).to.eql([5]);
             });
         });
+
+        describe('slash handling and roku-deploy-style patterns', () => {
+            //the matcher must behave identically regardless of slash style, because file srcPaths are
+            //backslashes on Windows but globs are conventionally written with forward slashes. It must
+            //also support the full roku-deploy glob syntax (braces, ?, character classes).
+
+            it('matches backslash-style src paths against forward-slash globs', () => {
+                expect(
+                    filterer.filter(options, [
+                        //explicitly backslash paths (the Windows-normalized form)
+                        getDiagnostic(11, `${rootDir}\\lib\\a.brs`), //remove (matches lib/**/*.brs)
+                        getDiagnostic(12, `${rootDir}\\lib\\a\\b\\b.brs`), //remove
+                        getDiagnostic(10, `${rootDir}\\source\\common.brs`) //keep
+                    ]).map(x => x.code)
+                ).to.eql([10]);
+            });
+
+            it('matches forward-slash src paths against forward-slash globs', () => {
+                expect(
+                    filterer.filter(options, [
+                        getDiagnostic(11, `${rootDir}/lib/a.brs`), //remove
+                        getDiagnostic(10, `${rootDir}/source/common.brs`) //keep
+                    ]).map(x => x.code)
+                ).to.eql([10]);
+            });
+
+            it('matches mixed forward/backslash src paths', () => {
+                expect(
+                    filterer.filter(options, [
+                        getDiagnostic(11, `${rootDir}/lib\\a/b\\c.brs`), //remove (matches lib/**/*.brs)
+                        getDiagnostic(10, `${rootDir}\\source/common.brs`) //keep
+                    ]).map(x => x.code)
+                ).to.eql([10]);
+            });
+
+            it('supports brace-expansion patterns', () => {
+                let braceOptions = {
+                    rootDir: rootDir,
+                    diagnosticFilters: [{ files: 'lib/**/*.{brs,bs}' }]
+                };
+                expect(
+                    filterer.filter(braceOptions, [
+                        getDiagnostic(11, `${rootDir}/lib/a.brs`), //remove
+                        getDiagnostic(12, `${rootDir}/lib/a.bs`), //remove
+                        getDiagnostic(10, `${rootDir}/lib/a.xml`) //keep
+                    ]).map(x => x.code)
+                ).to.eql([10]);
+            });
+
+            it('supports single-char (?) patterns', () => {
+                let questionOptions = {
+                    rootDir: rootDir,
+                    diagnosticFilters: [{ files: 'lib/?.brs' }]
+                };
+                expect(
+                    filterer.filter(questionOptions, [
+                        getDiagnostic(11, `${rootDir}/lib/a.brs`), //remove (single char)
+                        getDiagnostic(10, `${rootDir}/lib/ab.brs`) //keep (two chars)
+                    ]).map(x => x.code)
+                ).to.eql([10]);
+            });
+
+            it('supports character-class patterns', () => {
+                let classOptions = {
+                    rootDir: rootDir,
+                    diagnosticFilters: [{ files: 'lib/[ab].brs' }]
+                };
+                expect(
+                    filterer.filter(classOptions, [
+                        getDiagnostic(11, `${rootDir}/lib/a.brs`), //remove
+                        getDiagnostic(12, `${rootDir}/lib/b.brs`), //remove
+                        getDiagnostic(10, `${rootDir}/lib/c.brs`) //keep
+                    ]).map(x => x.code)
+                ).to.eql([10]);
+            });
+        });
     });
     describe('standardizeDiagnosticFilters', () => {
         it('handles null and falsey diagnostic filters', () => {

@@ -527,6 +527,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.73.0](https://github.com/rokucommunity/brighterscript/compare/0.72.5...v0.73.0) - 2026-06-29
+### Changed
+ - Validate eval/rsg_version against firmware lifecycle ([#1698](https://github.com/rokucommunity/brighterscript/pull/1698))
+ - Reduced unessisary unnecessary production dependencies ([#1735](https://github.com/rokucommunity/brighterscript/pull/1735)) ([#1736](https://github.com/rokucommunity/brighterscript/pull/1736)) ([#1737](https://github.com/rokucommunity/brighterscript/pull/1737))
+ - upgrade to [@rokucommunity/logger@0.4.0](https://github.com/rokucommunity/logger/blob/master/CHANGELOG.md#040---2026-06-29).
+
+
+
+## [0.72.5](https://github.com/rokucommunity/brighterscript/compare/0.72.4...v0.72.5) - 2026-06-10
+### Changed
+ - upgrade to [@rokucommunity/logger@0.3.13](https://github.com/rokucommunity/logger/blob/master/CHANGELOG.md#0313---2026-06-08). Notable changes since 0.3.12:
+     - chore: Security updates ([#15](https://github.com/rokucommunity/logger/pull/15), [#14](https://github.com/rokucommunity/logger/pull/14), [#27](https://github.com/rokucommunity/logger/pull/27), [#26](https://github.com/rokucommunity/logger/pull/26), [#24](https://github.com/rokucommunity/logger/pull/24), [#21](https://github.com/rokucommunity/logger/pull/21), [#19](https://github.com/rokucommunity/logger/pull/19))
+ - upgrade to [roku-deploy@3.17.6](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3176---2026-06-04). Notable changes since 3.17.5:
+     - Fix case-insensitive matching for absolute `files.src` glob patterns on case-insensitive file systems ([#279](https://github.com/rokucommunity/roku-deploy/pull/279))
+
+
+
+## [0.72.4](https://github.com/rokucommunity/brighterscript/compare/0.72.3...v0.72.4) - 2026-05-30
+### Changed
+ - upgrade to [roku-deploy@3.17.5](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3175---2026-05-30). Notable changes since 3.17.4:
+     - Preserve `!` glob-negation prefix when using normalizeFilesArray ([#277](https://github.com/rokucommunity/roku-deploy/pull/277))
+
+
+
 ## [0.72.3](https://github.com/rokucommunity/brighterscript/compare/0.72.2...v0.72.3) - 2026-05-27
 ### Added
  - parameter name inlay hints ([#1703](https://github.com/rokucommunity/brighterscript/pull/1703))

@@ -559,6 +559,8 @@ describe('ternary expressions', () => {
         });
 
         it('does not capture restricted OS functions', async () => {
+            //failOnDiagnostic=false: the bare `eval("print 1")` triggers the rsg_version=1.2
+            //deprecation diagnostic under default settings, which is unrelated to what this test covers.
             await testTranspile(`
                 sub main()
                     test(true ? invalid : [
@@ -600,7 +602,7 @@ describe('ternary expressions', () => {
 
                 sub test(p1)
                 end sub
-            `);
+            `, 'trim', 'source/main.bs', false);
         });
 
         it('complex conditions do not cause scope capture', async () => {
