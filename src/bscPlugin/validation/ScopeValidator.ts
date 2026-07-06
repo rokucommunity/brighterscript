@@ -168,7 +168,7 @@ export class ScopeValidator {
         this.event.scope.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
 
-                if (this.event.program.diagnostics.shouldFilterFile(file)) {
+                if (this.event.program.diagnostics.canSkipScopeValidationForFile(file)) {
                     return;
                 }
 
@@ -678,7 +678,7 @@ export class ScopeValidator {
         const firstArgToken = call?.args[0]?.tokens.value;
         if (callName === 'createchild') {
             this.checkComponentName(firstArgToken);
-        } else if (callName === 'callfunc' && !util.isGenericNodeType(callerType)) {
+        } else if (callName === 'callfunc' && (!util.isGenericNodeType(callerType, true) || this.event.program.options.strictCallFunc)) {
             const funcType = util.getCallFuncType(call, firstArgToken, { flags: SymbolTypeFlag.runtime, ignoreCall: true });
             if (!funcType?.isResolvable()) {
                 const functionName = firstArgToken.text.replace(/"/g, '');
@@ -718,7 +718,7 @@ export class ScopeValidator {
         }
         const functionFullname = `${callerType.toString()}@.${methodName}`;
         const callErrorLocation = expression.location;
-        if (util.isGenericNodeType(callerType) || isObjectType(callerType) || isDynamicType(callerType)) {
+        if ((util.isGenericNodeType(callerType, true) && !this.event.program.options.strictCallFunc) || isObjectType(callerType) || isDynamicType(callerType)) {
             // ignore "general" node
             return;
         }
@@ -1783,7 +1783,9 @@ export class ScopeValidator {
      * @returns the processed result type
      */
     private getNodeTypeWrapper(file: BrsFile, node: AstNode, getTypeOpts: GetTypeOptions) {
-        const type = node?.getType(getTypeOpts);
+        const isBrightScriptMode = file.parseMode === ParseMode.BrightScript;
+
+        const type = node?.getType({ ...getTypeOpts, changeUnknownNodeMemberToDynamic: isBrightScriptMode || !this.event.program.options.strictNodeMembers });
 
         if (file.parseMode === ParseMode.BrightScript) {
             // this is a brightscript file
@@ -1800,11 +1802,6 @@ export class ScopeValidator {
             if (isUnionType(type)) {
                 //this is a union
                 return DynamicType.instance;
-            }
-
-            if (isComponentType(type)) {
-                // modify type to allow any member access for Node types
-                type.changeUnknownMemberToDynamic = true;
             }
         }
 

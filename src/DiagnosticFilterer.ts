@@ -71,7 +71,7 @@ export class DiagnosticFilterer {
      * Should this file be completely ignored?
      * If the file diagnostics are ignored, we do not need to validate this file
      */
-    public isFileFiltered(file: { srcPath: string; destPath: string }) {
+    public isFileCompletelyFiltered(file: { srcPath: string; destPath: string }) {
         if (!this.options || !this.filters) {
             return false;
         }
