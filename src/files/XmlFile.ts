@@ -31,6 +31,15 @@ const XmlTokenName = {
     string: 'STRING'
 } as const;
 
+/**
+ * Attributes available on the interface elements, keyed by (lower-case) tag name, in the order they
+ * should be offered
+ */
+const interfaceElementAttributes: Record<string, string[]> = {
+    field: ['id', 'type', 'value', 'onChange', 'alwaysNotify', 'alias'],
+    function: ['name']
+};
+
 export class XmlFile {
     constructor(
         public srcPath: string,
@@ -433,19 +442,30 @@ export class XmlFile {
     }
 
     /**
-     * Get element (tag name) completions for the node/component types valid at this position. Nodes and
-     * components are only valid inside a `<children>` block (or nested inside another node), so this returns
-     * nothing at the component root, inside `<interface>`, etc. (those elements are handled by snippets).
+     * Get element (tag name) completions valid at this position, based on the enclosing element:
+     * `<interface>` offers `<field>`/`<function>`; `<children>` (or a nested node) offers node/component
+     * instances. Other locations (the component root, etc.) offer nothing.
      * @param position the cursor position, used to determine the enclosing element
      * @param includeOpenBracket whether to prefix the inserted snippet with `<` (true when the cursor is
      * not already immediately after an `<`)
      */
     private getElementCompletions(position: Position, includeOpenBracket: boolean): CompletionItem[] {
         const container = this.getEnclosingElementName(position)?.toLowerCase();
-        //only offer node/component completions inside <children> or nested inside another node
-        if (container !== 'children' && !(container && this.program.hasSceneGraphNode(container))) {
-            return [];
+        if (container === 'interface') {
+            return this.getInterfaceElementCompletions(includeOpenBracket);
         }
+        //node/component instances are only valid inside <children> or nested inside another node
+        if (container === 'children' || (container && this.program.hasSceneGraphNode(container))) {
+            return this.getNodeElementCompletions(includeOpenBracket);
+        }
+        return [];
+    }
+
+    /**
+     * Get element completions for the node/component instances valid inside a `<children>` block
+     * @param includeOpenBracket whether to prefix the inserted snippet with `<`
+     */
+    private getNodeElementCompletions(includeOpenBracket: boolean): CompletionItem[] {
         const ownComponentName = this.componentName?.text?.toLowerCase();
         const openBracket = includeOpenBracket ? '<' : '';
         return this.program.getSceneGraphNodeNames()
@@ -462,12 +482,55 @@ export class XmlFile {
     }
 
     /**
-     * Get attribute (field) name completions for the node with the given name, excluding attributes
-     * already present on the tag.
+     * Get the `<field>`/`<function>` element completions valid inside an `<interface>` block
+     * @param includeOpenBracket whether to prefix the inserted snippet with `<`
      */
-    private getAttributeCompletions(nodeName: string, existingAttributeNames: string[]): CompletionItem[] {
+    private getInterfaceElementCompletions(includeOpenBracket: boolean): CompletionItem[] {
+        const openBracket = includeOpenBracket ? '<' : '';
+        return [
+            {
+                label: 'field',
+                kind: CompletionItemKind.Field,
+                insertTextFormat: InsertTextFormat.Snippet,
+                insertText: `${openBracket}field id="$1" type="$2" />`,
+                detail: 'Interface field'
+            },
+            {
+                label: 'function',
+                kind: CompletionItemKind.Function,
+                insertTextFormat: InsertTextFormat.Snippet,
+                insertText: `${openBracket}function name="$1" />`,
+                detail: 'Interface function'
+            }
+        ];
+    }
+
+    /**
+     * Get attribute name completions for a start tag, excluding attributes already present. Interface
+     * `<field>`/`<function>` elements offer their fixed attribute set; any other tag is treated as a node
+     * and offers its (inherited) writable fields.
+     */
+    private getAttributeCompletions(tagName: string, existingAttributeNames: string[]): CompletionItem[] {
         const existing = new Set(existingAttributeNames.map(name => name.toLowerCase()));
-        return this.program.getSceneGraphNodeFields(nodeName)
+
+        //interface <field>/<function> have a fixed set of attributes
+        const structuralAttributes = interfaceElementAttributes[tagName.toLowerCase()];
+        if (structuralAttributes) {
+            return structuralAttributes
+                .map((name, index) => ({ name: name, index: index }))
+                .filter(attribute => !existing.has(attribute.name.toLowerCase()))
+                .map(attribute => ({
+                    label: attribute.name,
+                    kind: CompletionItemKind.Field,
+                    insertTextFormat: InsertTextFormat.Snippet,
+                    insertText: `${attribute.name}="$1"`,
+                    //preserve the declared order (id/type first)
+                    sortText: String(attribute.index).padStart(2, '0')
+                }));
+        }
+
+        //otherwise treat the tag as a node and offer its fields
+        return this.program.getSceneGraphNodeFields(tagName)
             .filter(field => !existing.has(field.name.toLowerCase()))
             //built-in read-only fields can't be set in xml; project fields (no accessPermission) are always writable
             .filter(field => !field.accessPermission || /write/i.test(field.accessPermission))

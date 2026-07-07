@@ -446,7 +446,7 @@ describe('XmlFile', () => {
             expect(completions.every(x => x.kind === CompletionItemKind.Class)).to.be.true;
         });
 
-        it('does not provide node completions inside <interface>', () => {
+        it('provides <field>/<function> completions inside <interface> (not nodes)', () => {
             const xmlFile = program.setFile<XmlFile>('components/main.xml', trim`
                 <component name="Main" extends="Group">
                     <interface>
@@ -456,9 +456,36 @@ describe('XmlFile', () => {
             `);
             const lines = xmlFile.fileContents.split('\n');
             const lineIndex = lines.findIndex(line => line.trim() === '<');
-            const completions = xmlFile.getCompletions(Position.create(lineIndex, lines[lineIndex].indexOf('<') + 1));
+            const labels = xmlFile.getCompletions(Position.create(lineIndex, lines[lineIndex].indexOf('<') + 1)).map(x => x.label);
+            expect(labels).to.include.members(['field', 'function']);
             //nodes/components are only valid inside <children>, not inside <interface>
-            expect(completions).to.be.empty;
+            expect(labels).not.to.include('Label');
+        });
+
+        it('provides attribute completions inside a <field> tag', () => {
+            const xmlFile = program.setFile<XmlFile>('components/main.xml', trim`
+                <component name="Main" extends="Group">
+                    <interface>
+                        <field id="thing" >
+                    </interface>
+                </component>
+            `);
+            const labels = xmlFile.getCompletions(positionAfter(xmlFile.fileContents, '<field id="thing" ')).map(x => x.label);
+            expect(labels).to.include.members(['type', 'value', 'onChange', 'alias']);
+            //`id` is already present, so it should not be suggested again
+            expect(labels).not.to.include('id');
+        });
+
+        it('provides attribute completions inside a <function> tag', () => {
+            const xmlFile = program.setFile<XmlFile>('components/main.xml', trim`
+                <component name="Main" extends="Group">
+                    <interface>
+                        <function >
+                    </interface>
+                </component>
+            `);
+            const labels = xmlFile.getCompletions(positionAfter(xmlFile.fileContents, '<function ')).map(x => x.label);
+            expect(labels).to.eql(['name']);
         });
 
         it('provides field completions inside an open element tag', () => {
