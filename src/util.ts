@@ -247,6 +247,17 @@ export class Util {
             if (result.outDir) {
                 result.outDir = path.resolve(projectFileCwd, result.outDir);
             }
+            //map the deprecated staging options to `outDir` (relative to THIS config file), then discard them
+            //so they don't flow through to the final program options
+            if (!('outDir' in projectConfig)) {
+                if (projectConfig.stagingFolderPath) {
+                    result.outDir = path.resolve(projectFileCwd, projectConfig.stagingFolderPath);
+                } else if (projectConfig.stagingDir) {
+                    result.outDir = path.resolve(projectFileCwd, projectConfig.stagingDir);
+                }
+            }
+            delete result.stagingFolderPath;
+            delete result.stagingDir;
             if (result.cwd) {
                 result.cwd = path.resolve(projectFileCwd, result.cwd);
             }
@@ -284,27 +295,32 @@ export class Util {
      * @param config a bsconfig object to use as the baseline for the resulting config
      */
     public normalizeAndResolveConfig(config: BsConfig | undefined): FinalizedBsConfig {
-        let result = this.normalizeConfig({
-            ...config
-        });
-
         if (config?.noProject) {
-            return result;
+            return this.normalizeConfig({
+                ...config
+            });
         }
 
+        let project: string | undefined;
         //if no options were provided, try to find a bsconfig.json file
         if (!config || !config.project) {
-            result.project = this.getConfigFilePath(config?.cwd);
+            project = this.getConfigFilePath(config?.cwd);
         } else {
             //use the config's project link
-            result.project = config.project;
+            project = config.project;
         }
-        if (result.project) {
-            let configFile = this.loadConfigFile(result.project, undefined, config?.cwd);
-            result = Object.assign(result, configFile);
+
+        let mergedConfig = { ...config };
+        if (project) {
+            let configFile = this.loadConfigFile(project, undefined, config?.cwd);
+            //the project file values are the defaults; the provided options override them
+            mergedConfig = { ...configFile, ...config };
         }
-        //override the defaults with the specified options
-        result = Object.assign(result, config);
+
+        //set defaults and map deprecated options AFTER merging the project file, so that
+        //deprecated options (i.e. `stagingFolderPath`, `copyToStaging`) from the project file are properly honored
+        let result = this.normalizeConfig(mergedConfig);
+        result.project = project;
         return result;
     }
 
@@ -321,6 +337,8 @@ export class Util {
 
         if (typeof config.logLevel === 'string') {
             logLevel = LogLevel[(config.logLevel as string).toLowerCase()] ?? LogLevel.log;
+        } else if (typeof config.logLevel === 'number') {
+            logLevel = config.logLevel;
         }
 
         let bslibDestinationDir = config.bslibDestinationDir ?? 'source';
