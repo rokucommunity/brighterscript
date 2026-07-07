@@ -472,14 +472,14 @@ describe('util', () => {
             );
         });
 
-        it('does not leak deprecated staging options from project files onto the final options', () => {
+        it('passes deprecated staging options from project files through to the final options', () => {
             fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
                 stagingFolderPath: './staging',
                 stagingDir: './staging'
             });
             const result = util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` });
-            expect(result.stagingFolderPath).to.be.undefined;
-            expect(result.stagingDir).to.be.undefined;
+            expect(result.stagingFolderPath).to.eql('./staging');
+            expect(result.stagingDir).to.eql('./staging');
         });
 
         it('honors copyToStaging from a loaded project file', () => {

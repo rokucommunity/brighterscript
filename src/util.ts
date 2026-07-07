@@ -247,8 +247,8 @@ export class Util {
             if (result.outDir) {
                 result.outDir = path.resolve(projectFileCwd, result.outDir);
             }
-            //map the deprecated staging options to `outDir` (relative to THIS config file), then discard them
-            //so they don't flow through to the final program options
+            //map the deprecated staging options to `outDir` (relative to THIS config file).
+            //the deprecated options themselves are left as-is so consumers that still read them keep working
             if (!('outDir' in projectConfig)) {
                 if (projectConfig.stagingFolderPath) {
                     result.outDir = path.resolve(projectFileCwd, projectConfig.stagingFolderPath);
@@ -256,8 +256,6 @@ export class Util {
                     result.outDir = path.resolve(projectFileCwd, projectConfig.stagingDir);
                 }
             }
-            delete result.stagingFolderPath;
-            delete result.stagingDir;
             if (result.cwd) {
                 result.cwd = path.resolve(projectFileCwd, result.cwd);
             }
