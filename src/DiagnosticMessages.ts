@@ -382,6 +382,11 @@ export let DiagnosticMessages = {
         code: 1070,
         severity: DiagnosticSeverity.Error
     }),
+    xmlTagMismatch: (openingTag: string, closingTag: string) => ({
+        message: `Mismatched closing tag: expected '</${openingTag}>' but found '</${closingTag}>'`,
+        code: 1155,
+        severity: DiagnosticSeverity.Error
+    }),
     expectedLabelIdentifierAfterGotoKeyword: () => ({
         message: `Expected label identifier after 'goto' keyword`,
         code: 1071,

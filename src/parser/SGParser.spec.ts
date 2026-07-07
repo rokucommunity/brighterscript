@@ -158,4 +158,23 @@ describe('SGParser', () => {
             range: Range.create(0, 0, 1, 12)
         });
     });
+
+    it('Adds error when tag names mismatch', () => {
+        const parser = new SGParser();
+        parser.parse(
+            'pkg:/components/ParentScene.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="ChildScene" extends="ParentScene">
+                <children>
+                    <Group id="myGroup">
+                    </LayoutGroup>
+                </children>
+            </component>
+        `);
+        expect(parser.diagnostics).to.be.lengthOf(1);
+        expect(parser.diagnostics[0]).to.deep.include({
+            ...DiagnosticMessages.xmlTagMismatch('Group', 'LayoutGroup'),
+            range: Range.create(4, 10, 4, 21)
+        });
+    });
 });

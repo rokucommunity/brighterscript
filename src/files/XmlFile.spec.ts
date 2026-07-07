@@ -669,6 +669,73 @@ describe('XmlFile', () => {
             `, 'none', 'components/Comp.xml');
         });
 
+        it('transpiles mismatched tags correctly using opening tag', () => {
+            const file = program.setFile('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup">
+                        </LayoutGroup>
+                    </children>
+                </component>
+            `);
+            file.needsTranspiled = true;
+            program.validate();
+            
+            // Should have a diagnostic for the mismatch
+            expect(file.diagnostics).to.have.lengthOf(1);
+            expect(file.diagnostics[0]).to.deep.include({
+                ...DiagnosticMessages.xmlTagMismatch('Group', 'LayoutGroup')
+            });
+            
+            // But transpile should still work correctly (self-closing since no children)
+            const transpiled = file.transpile();
+            expect(trimMap(transpiled.code)).to.equal(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                    <children>
+                        <Group id="myGroup" />
+                    </children>
+                </component>
+            `);
+        });
+
+        it('transpiles mismatched tags with children correctly using opening tag', () => {
+            const file = program.setFile('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup">
+                            <Label text="hello" />
+                        </LayoutGroup>
+                    </children>
+                </component>
+            `);
+            file.needsTranspiled = true;
+            program.validate();
+            
+            // Should have a diagnostic for the mismatch
+            expect(file.diagnostics).to.have.lengthOf(1);
+            expect(file.diagnostics[0]).to.deep.include({
+                ...DiagnosticMessages.xmlTagMismatch('Group', 'LayoutGroup')
+            });
+            
+            // Transpile should use the opening tag for closing, not the mismatched closing tag
+            const transpiled = file.transpile();
+            expect(trimMap(transpiled.code)).to.equal(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                    <children>
+                        <Group id="myGroup">
+                            <Label text="hello" />
+                        </Group>
+                    </children>
+                </component>
+            `);
+        });
+
         it('does not include additional bslib script if already there ', () => {
             testTranspile(trim`
                 <?xml version="1.0" encoding="utf-8" ?>

@@ -24,7 +24,8 @@ export class SGTag {
     constructor(
         public tag: SGToken,
         public attributes: SGAttribute[] = [],
-        public range?: Range
+        public range?: Range,
+        public closingTag?: SGToken
     ) { }
 
     get id() {
@@ -106,9 +107,10 @@ export class SGNode extends SGTag {
         tag: SGToken,
         attributes?: SGAttribute[],
         public children: SGNode[] = [],
-        range?: Range
+        range?: Range,
+        closingTag?: SGToken
     ) {
-        super(tag, attributes, range);
+        super(tag, attributes, range, closingTag);
     }
 
     protected transpileBody(state: TranspileState): (string | SourceNode)[] {
@@ -130,9 +132,10 @@ export class SGChildren extends SGNode {
     constructor(
         tag: SGToken = { text: 'children' },
         children: SGNode[] = [],
-        range?: Range
+        range?: Range,
+        closingTag?: SGToken
     ) {
-        super(tag, [], children, range);
+        super(tag, [], children, range, closingTag);
     }
 }
 
@@ -142,9 +145,10 @@ export class SGScript extends SGTag {
         tag: SGToken = { text: 'script' },
         attributes?: SGAttribute[],
         public cdata?: SGToken,
-        range?: Range
+        range?: Range,
+        closingTag?: SGToken
     ) {
-        super(tag, attributes, range);
+        super(tag, attributes, range, closingTag);
         if (!attributes) {
             this.type = 'text/brightscript';
         }
@@ -216,9 +220,10 @@ export class SGField extends SGTag {
     constructor(
         tag: SGToken = { text: 'field' },
         attributes: SGAttribute[] = [],
-        range?: Range
+        range?: Range,
+        closingTag?: SGToken
     ) {
-        super(tag, attributes, range);
+        super(tag, attributes, range, closingTag);
     }
 
     get type() {
@@ -269,9 +274,10 @@ export class SGFunction extends SGTag {
     constructor(
         tag: SGToken = { text: 'function' },
         attributes: SGAttribute[] = [],
-        range?: Range
+        range?: Range,
+        closingTag?: SGToken
     ) {
-        super(tag, attributes, range);
+        super(tag, attributes, range, closingTag);
     }
 
     get name() {
@@ -290,9 +296,10 @@ export class SGInterface extends SGTag {
     constructor(
         tag: SGToken = { text: 'interface' },
         content?: SGTag[],
-        range?: Range
+        range?: Range,
+        closingTag?: SGToken
     ) {
-        super(tag, [], range);
+        super(tag, [], range, closingTag);
         if (content) {
             for (const tag of content) {
                 if (isSGField(tag)) {
@@ -356,9 +363,10 @@ export class SGComponent extends SGTag {
         tag: SGToken = { text: 'component' },
         attributes?: SGAttribute[],
         content?: SGTag[],
-        range?: Range
+        range?: Range,
+        closingTag?: SGToken
     ) {
-        super(tag, attributes, range);
+        super(tag, attributes, range, closingTag);
         if (content) {
             for (const tag of content) {
                 if (isSGInterface(tag)) {
