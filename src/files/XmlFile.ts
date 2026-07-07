@@ -500,7 +500,15 @@ export class XmlFile {
      */
     public getTokenAt(position: Position): IToken | undefined {
         for (const token of (this.parser.tokens ?? []) as unknown as IToken[]) {
-            if (util.rangeContains(this.getTokenRange(token), position)) {
+            const startLine = (token.startLine ?? 1) - 1;
+            const startCharacter = (token.startColumn ?? 1) - 1;
+            const endLine = (token.endLine ?? 1) - 1;
+            //endColumn is the 1-based column of the last character, which is the 0-based exclusive end
+            const endCharacter = token.endColumn ?? 0;
+            //start-inclusive, end-exclusive so a caret at a token boundary belongs to a single token
+            const afterStart = position.line > startLine || (position.line === startLine && position.character >= startCharacter);
+            const beforeEnd = position.line < endLine || (position.line === endLine && position.character < endCharacter);
+            if (afterStart && beforeEnd) {
                 return token;
             }
         }
@@ -516,6 +524,43 @@ export class XmlFile {
             token.endLine - 1,
             token.endColumn
         );
+    }
+
+    /**
+     * If the position sits on a node's tag name or an attribute (field) name, describe what it points at
+     * (the enclosing node name, and the field name when on an attribute) plus the hovered token's range.
+     * Returns undefined otherwise. Used by hover.
+     */
+    public getNodeAndFieldAt(position: Position): XmlNodeContext | undefined {
+        const token = this.getTokenAt(position);
+        if (token?.tokenType.name !== XmlTokenName.name) {
+            return undefined;
+        }
+        const tokens = (this.parser.tokens ?? []) as unknown as IToken[];
+        const index = tokens.indexOf(token);
+        //walk backward to the nearest tag opener (`<` or `</`)
+        let openIndex = -1;
+        for (let i = index - 1; i >= 0; i--) {
+            const tokenName = tokens[i].tokenType.name;
+            if (tokenName === XmlTokenName.open || tokenName === XmlTokenName.slashOpen) {
+                openIndex = i;
+                break;
+            }
+            //hit the end of a previous tag without finding an opener -> not on a tag/attribute name
+            if (tokenName === XmlTokenName.close || tokenName === XmlTokenName.slashClose) {
+                return undefined;
+            }
+        }
+        const tagNameToken = openIndex >= 0 ? tokens[openIndex + 1] : undefined;
+        if (tagNameToken?.tokenType.name !== XmlTokenName.name) {
+            return undefined;
+        }
+        const range = this.getTokenRange(token);
+        //the hovered token is the tag name itself -> node context; otherwise it's an attribute on that node
+        if (index === openIndex + 1) {
+            return { nodeName: tagNameToken.image, range: range };
+        }
+        return { nodeName: tagNameToken.image, fieldName: token.image, range: range };
     }
 
     /**
@@ -681,4 +726,14 @@ export class XmlFile {
         //unsubscribe from any DependencyGraph subscriptions
         this.unsubscribeFromDependencyGraph?.();
     }
+}
+
+/**
+ * Describes what an xml position points at: a node's tag name (no `fieldName`) or an attribute (field)
+ * name on that node (`fieldName` set). `range` is the range of the hovered token.
+ */
+export interface XmlNodeContext {
+    nodeName: string;
+    fieldName?: string;
+    range: Range;
 }

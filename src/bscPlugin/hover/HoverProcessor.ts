@@ -153,7 +153,53 @@ export class HoverProcessor {
     }
 
     private getXmlFileHover(file: XmlFile): Hover | undefined {
-        //TODO add xml hovers
-        return undefined;
+        const context = file.getNodeAndFieldAt(this.event.position);
+        if (!context) {
+            return undefined;
+        }
+        const program = file.program;
+
+        //hovering an attribute (field) name -> show the field's type, default, and description
+        if (context.fieldName) {
+            const field = program.getSceneGraphNodeFields(context.nodeName).find(
+                x => x.name.toLowerCase() === context.fieldName.toLowerCase()
+            );
+            if (!field) {
+                return undefined;
+            }
+            const parts = [util.mdFence(`${field.name} as ${field.type ?? 'dynamic'}`, 'brightscript')];
+            if (field.default !== undefined && field.default !== '') {
+                parts.push(`Default: \`${field.default}\``);
+            }
+            if (field.description) {
+                parts.push('***', field.description);
+            }
+            return { contents: parts.join('\n'), range: context.range };
+        }
+
+        //hovering a node's tag name -> show its description, parent, and docs link
+        const node = program.getSceneGraphNode(context.nodeName);
+        if (!node) {
+            return undefined;
+        }
+        const parts: string[] = [];
+        if (node.builtInNode) {
+            const extendsName = node.builtInNode.extends?.name;
+            parts.push(`**${node.builtInNode.name}**${extendsName ? ` extends ${extendsName}` : ''}`);
+            //the scraped description often begins with a redundant "Extends [Parent](...)" paragraph; drop it
+            const description = node.builtInNode.description?.replace(/^Extends .*?(\n\n|$)/s, '').trim();
+            if (description) {
+                parts.push('***', description);
+            }
+            if (node.builtInNode.url) {
+                parts.push('', `[Roku docs](${node.builtInNode.url})`);
+            }
+        } else if (node.componentFile) {
+            const component = node.componentFile.ast.component;
+            const extendsName = component?.extends;
+            parts.push(`**${component?.name ?? context.nodeName}**${extendsName ? ` extends ${extendsName}` : ''}`);
+            parts.push('', `Component defined in \`${node.componentFile.pkgPath}\``);
+        }
+        return { contents: parts.join('\n'), range: context.range };
     }
 }
