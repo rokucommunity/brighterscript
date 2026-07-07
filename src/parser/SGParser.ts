@@ -171,6 +171,10 @@ interface IToken {
     endOffset?: number;
     endLine?: number;
     endColumn?: number;
+    /**
+     * The lexer token type. Present on tokens produced by `@xml-tools`; used to classify cursor context.
+     */
+    tokenType?: { name: string };
 }
 
 function mapElement({ children }: ElementCstNode, diagnostics: Diagnostic[]): SGTag {
@@ -226,8 +230,12 @@ function reportUnexpectedChildren(name: SGToken, diagnostics: Diagnostic[]) {
     });
 }
 
-function mapNode({ children }: ElementCstNode): SGNode {
-    const nameToken = children.Name[0];
+function mapNode({ children }: ElementCstNode): SGNode | undefined {
+    const nameToken = children.Name?.[0];
+    //skip malformed elements that have no tag name (e.g. a lone `<` while the user is still typing)
+    if (!nameToken) {
+        return undefined;
+    }
     let range: Range;
     const selfClosing = !!children.SLASH_CLOSE;
     if (selfClosing) {
@@ -276,7 +284,9 @@ function mapNodes(content: ContentCstNode): SGNode[] {
         return [];
     }
     const { element } = content.children;
-    return element?.map(element => mapNode(element));
+    return element
+        ?.map(element => mapNode(element))
+        .filter((node): node is SGNode => !!node);
 }
 
 function hasElements(content: ContentCstNode): boolean {
