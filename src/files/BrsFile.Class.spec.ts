@@ -2151,4 +2151,158 @@ describe('BrsFile BrighterScript classes', () => {
             DiagnosticMessages.mismatchArgumentCount(1, 0)
         ]);
     });
+
+    describe('conditional compile', () => {
+        it('transpiles methods inside conditional compile blocks', async () => {
+            await testTranspile(`
+                #const DEBUG = true
+                class Animal
+                    sub speak()
+                        print "speak"
+                    end sub
+                    #if DEBUG
+                        sub debugSpeak()
+                            print "debug"
+                        end sub
+                    #end if
+                end class
+            `, `
+                #const DEBUG = true
+                sub __Animal_method_new()
+                end sub
+                sub __Animal_method_speak()
+                    print "speak"
+                end sub
+                #if DEBUG
+                    sub __Animal_method_debugSpeak()
+                        print "debug"
+                    end sub
+                #end if
+                function __Animal_builder()
+                    instance = {}
+                    instance.new = __Animal_method_new
+                    instance.speak = __Animal_method_speak
+                    #if DEBUG
+                        instance.debugSpeak = __Animal_method_debugSpeak
+                    #end if
+                    return instance
+                end function
+                function Animal()
+                    instance = __Animal_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, 'trim', 'source/main.bs');
+        });
+
+        it('transpiles fields inside conditional compile blocks as conditional initializers', async () => {
+            await testTranspile(`
+                #const DEBUG = true
+                class Animal
+                    name = "generic"
+                    #if DEBUG
+                        logLevel = 4
+                    #else
+                        logLevel = 0
+                    #end if
+                end class
+            `, `
+                #const DEBUG = true
+                sub __Animal_method_new()
+                    m.name = "generic"
+                    #if DEBUG
+                        m.logLevel = 4
+                    #else
+                        m.logLevel = 0
+                    #end if
+                end sub
+                function __Animal_builder()
+                    instance = {}
+                    instance.new = __Animal_method_new
+                    return instance
+                end function
+                function Animal()
+                    instance = __Animal_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, 'trim', 'source/main.bs');
+        });
+
+        it('transpiles #else if chains of methods', async () => {
+            await testTranspile(`
+                #const DEBUG = true
+                #const BETA = false
+                class Animal
+                    #if DEBUG
+                        sub speak()
+                            print "debug"
+                        end sub
+                    #else if BETA
+                        sub speak()
+                            print "beta"
+                        end sub
+                    #else
+                        sub speak()
+                            print "prod"
+                        end sub
+                    #end if
+                end class
+            `, `
+                #const DEBUG = true
+                #const BETA = false
+                sub __Animal_method_new()
+                end sub
+                #if DEBUG
+                    sub __Animal_method_speak()
+                        print "debug"
+                    end sub
+                #else if BETA
+                    sub __Animal_method_speak()
+                        print "beta"
+                    end sub
+                #else
+                    sub __Animal_method_speak()
+                        print "prod"
+                    end sub
+                #end if
+                function __Animal_builder()
+                    instance = {}
+                    instance.new = __Animal_method_new
+                    #if DEBUG
+                        instance.speak = __Animal_method_speak
+                    #else if BETA
+                        instance.speak = __Animal_method_speak
+                    #else
+                        instance.speak = __Animal_method_speak
+                    #end if
+                    return instance
+                end function
+                function Animal()
+                    instance = __Animal_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, 'trim', 'source/main.bs');
+        });
+
+        it('does not produce diagnostics for conditional members used within the class', () => {
+            program.setFile('source/main.bs', `
+                #const DEBUG = true
+                class Animal
+                    #if DEBUG
+                        logLevel = 4
+                        sub debugSpeak()
+                            print m.logLevel
+                        end sub
+                    #end if
+                    sub speak()
+                        m.debugSpeak()
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
 });

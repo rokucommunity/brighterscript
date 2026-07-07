@@ -686,60 +686,10 @@ export class Parser {
 
         //gather up all class members (Fields, Methods)
         let body = [] as Statement[];
-        while (this.checkAny(TokenKind.Public, TokenKind.Protected, TokenKind.Private, TokenKind.Function, TokenKind.Sub, TokenKind.Comment, TokenKind.Identifier, TokenKind.At, ...AllowedProperties)) {
+        while (this.checkAny(TokenKind.Public, TokenKind.Protected, TokenKind.Private, TokenKind.Function, TokenKind.Sub, TokenKind.Comment, TokenKind.Identifier, TokenKind.At, TokenKind.HashIf, ...AllowedProperties)) {
             try {
-                let decl: Statement;
-                let accessModifier: Token;
-
-                if (this.check(TokenKind.At)) {
-                    this.annotationExpression();
-                }
-
-                if (this.checkAny(TokenKind.Public, TokenKind.Protected, TokenKind.Private)) {
-                    //use actual access modifier
-                    accessModifier = this.advance();
-                }
-
-                let overrideKeyword: Token;
-                if (this.peek().text.toLowerCase() === 'override') {
-                    overrideKeyword = this.advance();
-                }
-                //methods (function/sub keyword OR identifier followed by opening paren)
-                if (this.checkAny(TokenKind.Function, TokenKind.Sub) || (this.checkAny(TokenKind.Identifier, ...AllowedProperties) && this.checkNext(TokenKind.LeftParen))) {
-                    const funcDeclaration = this.functionDeclaration(false, false);
-
-                    //if we have an overrides keyword AND this method is called 'new', that's not allowed
-                    if (overrideKeyword && funcDeclaration.tokens.name.text.toLowerCase() === 'new') {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.cannotUseOverrideKeywordOnConstructorFunction(),
-                            location: overrideKeyword.location
-                        });
-                    }
-
-                    decl = new MethodStatement({
-                        modifiers: accessModifier,
-                        name: funcDeclaration.tokens.name,
-                        func: funcDeclaration.func,
-                        override: overrideKeyword
-                    });
-
-                    //fields
-                } else if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
-
-                    decl = this.fieldDeclaration(accessModifier);
-
-                    //class fields cannot be overridden
-                    if (overrideKeyword) {
-                        this.diagnostics.push({
-                            ...DiagnosticMessages.classFieldCannotBeOverridden(),
-                            location: overrideKeyword.location
-                        });
-                    }
-
-                }
-
+                let decl = this.classMemberDeclaration();
                 if (decl) {
-                    this.consumePendingAnnotations(decl);
                     body.push(decl);
                 }
             } catch (e) {
@@ -770,6 +720,121 @@ export class Parser {
 
         this.exitAnnotationBlock(parentAnnotations);
         return result;
+    }
+
+    /**
+     * Parse a single member (method, field, annotation, or conditional compile block) of a class body
+     */
+    private classMemberDeclaration(): Statement | undefined {
+        //conditional compile blocks can wrap class members
+        if (this.check(TokenKind.HashIf)) {
+            return this.conditionalCompileStatement(() => this.classBodyConditionalCompileBlock());
+        }
+
+        let decl: Statement;
+        let accessModifier: Token;
+
+        if (this.check(TokenKind.At)) {
+            this.annotationExpression();
+        }
+
+        if (this.checkAny(TokenKind.Public, TokenKind.Protected, TokenKind.Private)) {
+            //use actual access modifier
+            accessModifier = this.advance();
+        }
+
+        let overrideKeyword: Token;
+        if (this.peek().text.toLowerCase() === 'override') {
+            overrideKeyword = this.advance();
+        }
+        //methods (function/sub keyword OR identifier followed by opening paren)
+        if (this.checkAny(TokenKind.Function, TokenKind.Sub) || (this.checkAny(TokenKind.Identifier, ...AllowedProperties) && this.checkNext(TokenKind.LeftParen))) {
+            const funcDeclaration = this.functionDeclaration(false, false);
+
+            //if we have an overrides keyword AND this method is called 'new', that's not allowed
+            if (overrideKeyword && funcDeclaration.tokens.name.text.toLowerCase() === 'new') {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.cannotUseOverrideKeywordOnConstructorFunction(),
+                    location: overrideKeyword.location
+                });
+            }
+
+            decl = new MethodStatement({
+                modifiers: accessModifier,
+                name: funcDeclaration.tokens.name,
+                func: funcDeclaration.func,
+                override: overrideKeyword
+            });
+
+            //fields
+        } else if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
+
+            decl = this.fieldDeclaration(accessModifier);
+
+            //class fields cannot be overridden
+            if (overrideKeyword) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.classFieldCannotBeOverridden(),
+                    location: overrideKeyword.location
+                });
+            }
+
+        }
+
+        if (decl) {
+            this.consumePendingAnnotations(decl);
+        }
+        return decl;
+    }
+
+    /**
+     * Parse the contents of a conditional compile branch inside a class body (class members only).
+     * Follows the same token-position contract as `conditionalCompileBlock`: when a branch terminator
+     * (`#else if`, `#else`, `#end if`) is found, the parser is rewound to the newline that precedes it.
+     */
+    private classBodyConditionalCompileBlock(): Block | undefined {
+        const parentAnnotations = this.enterAnnotationBlock();
+
+        this.consumeStatementSeparators(true);
+        const conditionalEndTokens = [TokenKind.HashElse, TokenKind.HashElseIf, TokenKind.HashEndIf];
+        this.globalTerminators.push(conditionalEndTokens);
+        const statements: Statement[] = [];
+        while (this.checkAny(TokenKind.Public, TokenKind.Protected, TokenKind.Private, TokenKind.Function, TokenKind.Sub, TokenKind.Comment, TokenKind.Identifier, TokenKind.At, TokenKind.HashIf, ...AllowedProperties)) {
+            try {
+                let decl = this.classMemberDeclaration();
+                if (decl) {
+                    statements.push(decl);
+                }
+            } catch (e) {
+                //throw out any failed members and move on to the next line
+                this.flagUntil(TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
+            }
+
+            //ensure statement separator
+            this.consumeStatementSeparators();
+        }
+        this.globalTerminators.pop();
+
+        if (this.isAtEnd()) {
+            this.exitAnnotationBlock(parentAnnotations);
+            return undefined;
+        }
+
+        if (this.checkAny(...conditionalEndTokens)) {
+            if (this.previous().kind === TokenKind.Newline) {
+                //rewind to the preceding newline (callers expect to consume it themselves)
+                this.current--;
+            }
+            this.exitAnnotationBlock(parentAnnotations);
+            return new Block({ statements: statements });
+        }
+
+        //found something that is neither a class member nor a conditional compile terminator (i.e. `end class`)
+        this.diagnostics.push({
+            ...DiagnosticMessages.unsafeUnmatchedTerminatorInConditionalCompileBlock(this.peek().text),
+            location: this.peek().location
+        });
+        throw this.lastDiagnosticAsError();
     }
 
     private fieldDeclaration(accessModifier: Token | null) {
@@ -2154,7 +2219,13 @@ export class Parser {
         return branch;
     }
 
-    private conditionalCompileStatement(): ConditionalCompileStatement {
+    /**
+     * Parse a `#if` statement
+     * @param branchBlockParser optional function used to parse the contents of each branch. When omitted,
+     *                          branches are parsed as regular statement blocks. (Class bodies pass a parser
+     *                          that only allows class members.)
+     */
+    private conditionalCompileStatement(branchBlockParser?: () => Block | undefined): ConditionalCompileStatement {
         const hashIfToken = this.advance();
         let notToken: Token | undefined;
 
@@ -2182,7 +2253,7 @@ export class Parser {
         //if this is `#if false` remove all diagnostics.
         let diagnosticsLengthBeforeBlock = this.diagnostics.length;
 
-        thenBranch = this.blockConditionalCompileBranch(hashIfToken);
+        thenBranch = this.blockConditionalCompileBranch(hashIfToken, branchBlockParser);
         const conditionTextLower = condition.text.toLowerCase();
         if (!this.options.bsConsts?.get(conditionTextLower) || conditionTextLower === 'false') {
             //throw out any new diagnostics created as a result of a false block
@@ -2195,13 +2266,13 @@ export class Parser {
         //else branch
         if (this.check(TokenKind.HashElseIf)) {
             // recurse-read `#else if`
-            elseBranch = this.conditionalCompileStatement();
+            elseBranch = this.conditionalCompileStatement(branchBlockParser);
             this.ensureNewLine();
 
         } else if (this.check(TokenKind.HashElse)) {
             hashElseToken = this.advance();
             let diagnosticsLengthBeforeBlock = this.diagnostics.length;
-            elseBranch = this.blockConditionalCompileBranch(hashIfToken);
+            elseBranch = this.blockConditionalCompileBranch(hashIfToken, branchBlockParser);
 
             if (condition.text.toLowerCase() === 'true') {
                 //throw out any new diagnostics created as a result of a false block
@@ -2237,13 +2308,13 @@ export class Parser {
     }
 
     //consume a conditional compile branch block of an `#if` statement
-    private blockConditionalCompileBranch(hashIfToken: Token) {
+    private blockConditionalCompileBranch(hashIfToken: Token, branchBlockParser?: () => Block | undefined) {
         //keep track of the current error count, because if the then branch fails,
         //we will trash them in favor of a single error on if
         let diagnosticsLengthBeforeBlock = this.diagnostics.length;
 
         //parsing until trailing "#end if", "#else", "#else if"
-        let branch = this.conditionalCompileBlock();
+        let branch = branchBlockParser ? branchBlockParser() : this.conditionalCompileBlock();
 
         if (!branch) {
             //throw out any new diagnostics created as a result of a `then` block parse failure.

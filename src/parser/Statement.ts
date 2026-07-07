@@ -10,7 +10,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isCallExpression, isCatchStatement, isConditionalCompileStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isUninitializedType, isVoidType, isWhileStatement } from '../astUtils/reflection';
+import { isBlock, isCallExpression, isCatchStatement, isConditionalCompileStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isUninitializedType, isVoidType, isWhileStatement } from '../astUtils/reflection';
 import type { GetTypeOptions } from '../interfaces';
 import { TypeChainEntry, type TranspileResult, type TypedefProvider } from '../interfaces';
 import { createIdentifier, createInvalidLiteral, createMethodStatement, createToken } from '../astUtils/creators';
@@ -2629,15 +2629,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         this.parentClassName = options.parentClassName;
         this.symbolTable = new SymbolTable(`ClassStatement: '${this.tokens.name?.text}'`, () => this.parent?.getSymbolTable());
 
-        for (let statement of this.body) {
-            if (isMethodStatement(statement)) {
-                this.methods.push(statement);
-                this.memberMap[statement?.tokens.name?.text.toLowerCase()] = statement;
-            } else if (isFieldStatement(statement)) {
-                this.fields.push(statement);
-                this.memberMap[statement?.tokens.name?.text.toLowerCase()] = statement;
-            }
-        }
+        this.registerMembers(this.body);
 
         this.location = util.createBoundingLocation(
             this.parentClassName,
@@ -2692,6 +2684,29 @@ export class ClassStatement extends Statement implements TypedefProvider {
     public readonly fields = [] as FieldStatement[];
 
     public readonly location: Location | undefined;
+
+    /**
+     * Register all members (methods and fields) found in the given statements,
+     * descending into conditional compile blocks
+     */
+    private registerMembers(statements: Statement[]) {
+        for (let statement of statements) {
+            if (isMethodStatement(statement)) {
+                this.methods.push(statement);
+                this.memberMap[statement?.tokens.name?.text.toLowerCase()] = statement;
+            } else if (isFieldStatement(statement)) {
+                this.fields.push(statement);
+                this.memberMap[statement?.tokens.name?.text.toLowerCase()] = statement;
+            } else if (isConditionalCompileStatement(statement)) {
+                this.registerMembers(statement.thenBranch?.statements ?? []);
+                if (isConditionalCompileStatement(statement.elseBranch)) {
+                    this.registerMembers([statement.elseBranch]);
+                } else if (isBlock(statement.elseBranch)) {
+                    this.registerMembers(statement.elseBranch.statements);
+                }
+            }
+        }
+    }
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -2910,57 +2925,66 @@ export class ClassStatement extends Statement implements TypedefProvider {
         );
         let parentClassIndex = this.getParentClassIndex(state);
 
-        for (let statement of body) {
-            //is field statement
-            if (isFieldStatement(statement)) {
-                //do nothing with class fields in this situation, they are handled elsewhere
-                continue;
+        const transpileMemberAssignments = (statements: Statement[]) => {
+            let memberResults = [] as TranspileResult;
+            for (let statement of statements) {
+                //is field statement
+                if (isFieldStatement(statement)) {
+                    //do nothing with class fields in this situation, they are handled elsewhere
+                    continue;
 
-                //methods
-            } else if (isMethodStatement(statement)) {
+                    //methods
+                } else if (isMethodStatement(statement)) {
 
-                //store overridden parent methods as super{parentIndex}_{methodName}
-                if (
-                    //is override method
-                    statement.tokens.override ||
-                    //is constructor function in child class
-                    (statement.tokens.name.text.toLowerCase() === 'new' && ancestors[0])
-                ) {
-                    result.push(
-                        `instance.super${parentClassIndex}_${statement.tokens.name.text} = instance.${statement.tokens.name.text}`,
+                    //store overridden parent methods as super{parentIndex}_{methodName}
+                    if (
+                        //is override method
+                        statement.tokens.override ||
+                        //is constructor function in child class
+                        (statement.tokens.name.text.toLowerCase() === 'new' && ancestors[0])
+                    ) {
+                        memberResults.push(
+                            `instance.super${parentClassIndex}_${statement.tokens.name.text} = instance.${statement.tokens.name.text}`,
+                            state.newline,
+                            state.indent()
+                        );
+                    }
+
+                    state.classStatement = this;
+                    state.skipLeadingComments = true;
+                    //add leading comments
+                    if ((statement.leadingTrivia?.filter(token => token.kind === TokenKind.Comment) ?? []).length > 0) {
+                        memberResults.push(
+                            ...state.transpileComments(statement.leadingTrivia),
+                            state.indent()
+                        );
+                    }
+                    memberResults.push(
+                        'instance.',
+                        state.transpileToken(statement.tokens.name),
+                        ' = ',
+                        state.transpileToken(this.getMethodIdentifier(transpiledClassName, statement)),
+                        state.newline,
+                        state.indent()
+                    );
+                    state.skipLeadingComments = false;
+                    delete state.classStatement;
+                } else if (isConditionalCompileStatement(statement)) {
+                    memberResults.push(
+                        ...this.getTranspiledConditionalCompileMembers(state, statement, transpileMemberAssignments)
+                    );
+                } else {
+                    //other random statements (probably just comments)
+                    memberResults.push(
+                        ...statement.transpile(state),
                         state.newline,
                         state.indent()
                     );
                 }
-
-                state.classStatement = this;
-                state.skipLeadingComments = true;
-                //add leading comments
-                if ((statement.leadingTrivia?.filter(token => token.kind === TokenKind.Comment) ?? []).length > 0) {
-                    result.push(
-                        ...state.transpileComments(statement.leadingTrivia),
-                        state.indent()
-                    );
-                }
-                result.push(
-                    'instance.',
-                    state.transpileToken(statement.tokens.name),
-                    ' = ',
-                    state.transpileToken(this.getMethodIdentifier(transpiledClassName, statement)),
-                    state.newline,
-                    state.indent()
-                );
-                state.skipLeadingComments = false;
-                delete state.classStatement;
-            } else {
-                //other random statements (probably just comments)
-                result.push(
-                    ...statement.transpile(state),
-                    state.newline,
-                    state.indent()
-                );
             }
-        }
+            return memberResults;
+        };
+        result.push(...transpileMemberAssignments(body));
         //return the instance
         result.push('return instance\n');
         state.blockDepth--;
@@ -3030,7 +3054,72 @@ export class ClassStatement extends Statement implements TypedefProvider {
                     state.indent()
                 );
                 delete state.classStatement;
+            } else if (isConditionalCompileStatement(statement)) {
+                result.push(
+                    ...this.getTranspiledConditionalCompileMembers(state, statement, (branchStatements) => {
+                        return this.getTranspiledMethods(state, transpiledClassName, branchStatements);
+                    })
+                );
             }
+        }
+        return result;
+    }
+
+    /**
+     * Transpile a conditional compile statement found in a class body, emitting the `#if`/`#else if`/`#else`/`#end if`
+     * directives and delegating the transpilation of the members in each branch to the given callback.
+     */
+    private getTranspiledConditionalCompileMembers(state: BrsTranspileState, statement: ConditionalCompileStatement, transpileBranchMembers: (statements: Statement[]) => TranspileResult) {
+        let result = [] as TranspileResult;
+        let hasContent = false;
+
+        const transpileBranchBody = (branchStatements: Statement[]) => {
+            state.blockDepth++;
+            const leadingIndent = state.indent();
+            const body = transpileBranchMembers(branchStatements);
+            state.blockDepth--;
+            if (body.length === 0) {
+                //nothing to emit for this branch - just move to the next line
+                return [state.newline, state.indent()] as TranspileResult;
+            }
+            hasContent = true;
+            //remove the trailing indent from the final member (it was emitted at the deeper block depth)
+            body.pop();
+            return [state.newline, leadingIndent, ...body, state.indent()] as TranspileResult;
+        };
+
+        result.push('#if ');
+        if (statement.tokens.not) {
+            result.push('not ');
+        }
+        result.push(state.transpileToken(statement.tokens.condition));
+        result.push(...transpileBranchBody(statement.thenBranch?.statements ?? []));
+
+        let elseBranch = statement.elseBranch;
+        while (elseBranch) {
+            if (isConditionalCompileStatement(elseBranch)) {
+                result.push('#else if ');
+                if (elseBranch.tokens.not) {
+                    result.push('not ');
+                }
+                result.push(state.transpileToken(elseBranch.tokens.condition));
+                result.push(...transpileBranchBody(elseBranch.thenBranch?.statements ?? []));
+                elseBranch = elseBranch.elseBranch;
+            } else {
+                result.push('#else');
+                result.push(...transpileBranchBody(elseBranch.statements));
+                elseBranch = undefined;
+            }
+        }
+        result.push(
+            '#end if',
+            state.newline,
+            state.indent()
+        );
+
+        //if no branch produced any output, skip this conditional compile statement entirely
+        if (!hasContent) {
+            return [] as TranspileResult;
         }
         return result;
     }
@@ -3345,14 +3434,14 @@ export class MethodStatement extends FunctionStatement {
     }
 
     /**
-     * Inject field initializers at the top of the `new` function (after any present `super()` call)
+     * Inject field initializers at the top of the `new` function (after any present `super()` call).
+     * Fields declared inside conditional compile blocks have their initializers wrapped in an equivalent
+     * conditional compile statement.
      */
     private injectFieldInitializersForConstructor(state: BrsTranspileState) {
         let startingIndex = state.classStatement!.hasParentClass() ? 1 : 0;
 
-        let newStatements = [] as Statement[];
-        //insert the field initializers in order
-        for (let field of state.classStatement!.fields) {
+        const buildFieldAssignment = (field: FieldStatement) => {
             let thisQualifiedName = { ...field.tokens.name };
             thisQualifiedName.text = 'm.' + field.tokens.name?.text;
             const fieldAssignment = field.initialValue
@@ -3369,8 +3458,56 @@ export class MethodStatement extends FunctionStatement {
                 });
             // Add parent so namespace lookups work
             fieldAssignment.parent = state.classStatement;
-            newStatements.push(fieldAssignment);
-        }
+            return fieldAssignment;
+        };
+
+        //build a conditional compile statement containing the field initializers of the original's branches,
+        //or undefined if there are no fields in any branch
+        const buildConditionalCompile = (statement: ConditionalCompileStatement): ConditionalCompileStatement | undefined => {
+            const thenStatements = buildInitializers(statement.thenBranch?.statements ?? []);
+            let elseBranch: ConditionalCompileStatement | Block | undefined;
+            if (isConditionalCompileStatement(statement.elseBranch)) {
+                elseBranch = buildConditionalCompile(statement.elseBranch);
+            } else if (isBlock(statement.elseBranch)) {
+                const elseStatements = buildInitializers(statement.elseBranch.statements);
+                if (elseStatements.length > 0) {
+                    elseBranch = new Block({ statements: elseStatements });
+                }
+            }
+            if (thenStatements.length === 0 && !elseBranch) {
+                //no fields in any branch - nothing to initialize
+                return undefined;
+            }
+            const conditionalCompile = new ConditionalCompileStatement({
+                hashIf: util.cloneToken(statement.tokens.hashIf),
+                not: util.cloneToken(statement.tokens.not),
+                condition: util.cloneToken(statement.tokens.condition),
+                hashElse: elseBranch ? util.cloneToken(statement.tokens.hashElse) : undefined,
+                hashEndIf: util.cloneToken(statement.tokens.hashEndIf),
+                thenBranch: new Block({ statements: thenStatements }),
+                elseBranch: elseBranch
+            });
+            conditionalCompile.parent = state.classStatement;
+            return conditionalCompile;
+        };
+
+        const buildInitializers = (statements: Statement[]): Statement[] => {
+            const result = [] as Statement[];
+            for (const statement of statements) {
+                if (isFieldStatement(statement)) {
+                    result.push(buildFieldAssignment(statement));
+                } else if (isConditionalCompileStatement(statement)) {
+                    const conditionalCompile = buildConditionalCompile(statement);
+                    if (conditionalCompile) {
+                        result.push(conditionalCompile);
+                    }
+                }
+            }
+            return result;
+        };
+
+        //insert the field initializers in order
+        let newStatements = buildInitializers(state.classStatement!.body);
         state.editor.arraySplice(this.func.body.statements, startingIndex, 0, ...newStatements);
     }
 
