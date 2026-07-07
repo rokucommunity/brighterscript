@@ -681,13 +681,13 @@ describe('XmlFile', () => {
             `);
             file.needsTranspiled = true;
             program.validate();
-            
+
             // Should have a diagnostic for the mismatch
             expect(file.diagnostics).to.have.lengthOf(1);
             expect(file.diagnostics[0]).to.deep.include({
                 ...DiagnosticMessages.xmlTagMismatch('Group', 'LayoutGroup')
             });
-            
+
             // But transpile should still work correctly (self-closing since no children)
             const transpiled = file.transpile();
             expect(trimMap(transpiled.code)).to.equal(trim`
@@ -714,13 +714,13 @@ describe('XmlFile', () => {
             `);
             file.needsTranspiled = true;
             program.validate();
-            
+
             // Should have a diagnostic for the mismatch
             expect(file.diagnostics).to.have.lengthOf(1);
             expect(file.diagnostics[0]).to.deep.include({
                 ...DiagnosticMessages.xmlTagMismatch('Group', 'LayoutGroup')
             });
-            
+
             // Transpile should use the opening tag for closing, not the mismatched closing tag
             const transpiled = file.transpile();
             expect(trimMap(transpiled.code)).to.equal(trim`

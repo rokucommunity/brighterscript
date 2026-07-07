@@ -187,7 +187,7 @@ function mapElement({ children }: ElementCstNode, diagnostics: Diagnostic[]): SG
     }
     const name = mapToken(nameToken);
     const closingName = closingNameToken ? mapToken(closingNameToken) : undefined;
-    
+
     // Check for tag mismatch
     if (closingName && name.text !== closingName.text) {
         diagnostics.push({
@@ -195,7 +195,7 @@ function mapElement({ children }: ElementCstNode, diagnostics: Diagnostic[]): SG
             range: closingName.range
         });
     }
-    
+
     const attributes = mapAttributes(children.attribute);
     const content = children.content?.[0];
     switch (name.text) {
@@ -251,7 +251,7 @@ function mapNode({ children }: ElementCstNode, diagnostics?: Diagnostic[]): SGNo
     }
     const name = mapToken(nameToken);
     const closingName = closingNameToken ? mapToken(closingNameToken) : undefined;
-    
+
     // Check for tag mismatch
     if (closingName && name.text !== closingName.text && diagnostics) {
         diagnostics.push({
@@ -259,7 +259,7 @@ function mapNode({ children }: ElementCstNode, diagnostics?: Diagnostic[]): SGNo
             range: closingName.range
         });
     }
-    
+
     const attributes = mapAttributes(children.attribute);
     const content = children.content?.[0];
     const nodeContent = mapNodes(content, diagnostics);
