@@ -1,8 +1,9 @@
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { XmlFile } from '../../files/XmlFile';
 import type { OnFileValidateEvent } from '../../interfaces';
-import type { SGAst } from '../../parser/SGTypes';
+import type { SGAst, SGNode } from '../../parser/SGTypes';
 import util from '../../util';
+import { isValidSceneGraphFieldValue } from './FieldTypeValidator';
 
 export class XmlFileValidator {
     constructor(
@@ -59,6 +60,67 @@ export class XmlFileValidator {
                 file: this.event.file,
                 range: explicitCodebehindScriptTag.filePathRange
             });
+        }
+
+        //validate the node instances declared in the <children> block
+        for (const node of component.children?.children ?? []) {
+            this.validateNode(node);
+        }
+    }
+
+    /**
+     * Validate a single node instance and recurse into its children. Flags unknown node types, and (for
+     * known types) unknown/mis-cased field names and clearly-invalid field values.
+     */
+    private validateNode(node: SGNode) {
+        const nodeName = node.tag.text;
+        if (this.event.program.hasSceneGraphNode(nodeName)) {
+            this.validateNodeAttributes(node, nodeName);
+        } else {
+            this.event.file.diagnostics.push({
+                ...DiagnosticMessages.xmlUnknownComponentType(nodeName),
+                range: node.tag.range,
+                file: this.event.file
+            });
+        }
+        //recurse regardless, so nested typos are still reported
+        for (const child of node.children ?? []) {
+            this.validateNode(child);
+        }
+    }
+
+    private validateNodeAttributes(node: SGNode, nodeName: string) {
+        const fields = this.event.program.getSceneGraphNodeFields(nodeName);
+        //if we can't resolve any fields for a known node, don't guess (avoids mass false positives)
+        if (fields.length === 0) {
+            return;
+        }
+        const fieldsByLowerName = new Map(fields.map(field => [field.name.toLowerCase(), field]));
+        for (const attribute of node.attributes ?? []) {
+            const attributeName = attribute.key.text;
+            const field = fieldsByLowerName.get(attributeName.toLowerCase());
+            if (!field) {
+                this.event.file.diagnostics.push({
+                    ...DiagnosticMessages.xmlUnknownField(attributeName, nodeName),
+                    range: attribute.key.range,
+                    file: this.event.file
+                });
+                continue;
+            }
+            if (field.name !== attributeName) {
+                this.event.file.diagnostics.push({
+                    ...DiagnosticMessages.xmlFieldNameCaseMismatch(attributeName, field.name),
+                    range: attribute.key.range,
+                    file: this.event.file
+                });
+            }
+            if (field.type && !isValidSceneGraphFieldValue(attribute.value?.text, field.type)) {
+                this.event.file.diagnostics.push({
+                    ...DiagnosticMessages.xmlInvalidFieldValue(field.name, field.type),
+                    range: attribute.value?.range ?? attribute.key.range,
+                    file: this.event.file
+                });
+            }
         }
     }
 
