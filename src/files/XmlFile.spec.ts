@@ -396,7 +396,7 @@ describe('XmlFile', () => {
         });
 
         //TODO - refine this test once cdata scripts are supported
-        it('provides xml element completions, never brightscript scope completions', () => {
+        it('does not provide node completions outside of <children>', () => {
             program.setFile('components/component1.brs', ``);
 
             let xmlFile = program.setFile('components/component1.xml', trim`
@@ -406,10 +406,8 @@ describe('XmlFile', () => {
                 </component>
             `);
 
-            const completions = program.getCompletions(xmlFile.srcPath, Position.create(1, 1));
-            //every completion is an xml element (node) completion, not a brightscript scope symbol
-            expect(completions).not.to.be.empty;
-            expect(completions.every(x => x.kind === CompletionItemKind.Class)).to.be.true;
+            //at the component root (not inside <children>) we should not spew node/scope completions
+            expect(program.getCompletions(xmlFile.srcPath, Position.create(1, 1))).to.be.empty;
         });
 
         /**
@@ -446,6 +444,21 @@ describe('XmlFile', () => {
             //a component can't contain itself
             expect(labels).not.to.include('Main');
             expect(completions.every(x => x.kind === CompletionItemKind.Class)).to.be.true;
+        });
+
+        it('does not provide node completions inside <interface>', () => {
+            const xmlFile = program.setFile<XmlFile>('components/main.xml', trim`
+                <component name="Main" extends="Group">
+                    <interface>
+                        <
+                    </interface>
+                </component>
+            `);
+            const lines = xmlFile.fileContents.split('\n');
+            const lineIndex = lines.findIndex(line => line.trim() === '<');
+            const completions = xmlFile.getCompletions(Position.create(lineIndex, lines[lineIndex].indexOf('<') + 1));
+            //nodes/components are only valid inside <children>, not inside <interface>
+            expect(completions).to.be.empty;
         });
 
         it('provides field completions inside an open element tag', () => {

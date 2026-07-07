@@ -417,7 +417,7 @@ export class XmlFile {
             const tagNameToken = tokens[boundaryIndex + 1];
             //no tag name yet, or the cursor is still on/within the tag name -> complete element names
             if (tagNameToken?.tokenType.name !== XmlTokenName.name || util.comparePositionToRange(position, this.getTokenRange(tagNameToken)) <= 0) {
-                return this.getElementCompletions(false);
+                return this.getElementCompletions(position, false);
             }
             //otherwise complete attribute (field) names for the enclosing node
             return this.getAttributeCompletions(tagNameToken.image, this.getExistingAttributeNames(boundaryIndex + 2));
@@ -425,7 +425,7 @@ export class XmlFile {
 
         //cursor is in element content (right after a `>` / `/>`) -> complete child element names
         if (boundary?.tokenType.name === XmlTokenName.close || boundary?.tokenType.name === XmlTokenName.slashClose) {
-            return this.getElementCompletions(true);
+            return this.getElementCompletions(position, true);
         }
 
         //inside a closing tag (`</...`), before any tag, or any other position -> no completions
@@ -433,11 +433,19 @@ export class XmlFile {
     }
 
     /**
-     * Get element (tag name) completions for every known SceneGraph node and project component.
+     * Get element (tag name) completions for the node/component types valid at this position. Nodes and
+     * components are only valid inside a `<children>` block (or nested inside another node), so this returns
+     * nothing at the component root, inside `<interface>`, etc. (those elements are handled by snippets).
+     * @param position the cursor position, used to determine the enclosing element
      * @param includeOpenBracket whether to prefix the inserted snippet with `<` (true when the cursor is
      * not already immediately after an `<`)
      */
-    private getElementCompletions(includeOpenBracket: boolean): CompletionItem[] {
+    private getElementCompletions(position: Position, includeOpenBracket: boolean): CompletionItem[] {
+        const container = this.getEnclosingElementName(position)?.toLowerCase();
+        //only offer node/component completions inside <children> or nested inside another node
+        if (container !== 'children' && !(container && this.program.hasSceneGraphNode(container))) {
+            return [];
+        }
         const ownComponentName = this.componentName?.text?.toLowerCase();
         const openBracket = includeOpenBracket ? '<' : '';
         return this.program.getSceneGraphNodeNames()
@@ -493,6 +501,64 @@ export class XmlFile {
             }
         }
         return names;
+    }
+
+    /**
+     * Determine the name of the element that directly encloses the given position, by walking the tokens
+     * and tracking a stack of open (content-bearing) elements. Self-closing tags and closed tags are not
+     * on the stack, so the result is the nearest ancestor whose start tag closed before the cursor.
+     * Returns undefined at the top level of the document.
+     */
+    private getEnclosingElementName(position: Position): string | undefined {
+        const tokens = (this.parser.tokens ?? []) as unknown as IToken[];
+        const stack: string[] = [];
+        let expectingTagName = false;
+        let isCloseTag = false;
+        let currentTag: string | undefined;
+        for (const token of tokens) {
+            const startLine = (token.startLine ?? 1) - 1;
+            const startCharacter = (token.startColumn ?? 1) - 1;
+            //tokens are ordered, so stop once one starts at or after the cursor
+            if (position.line < startLine || (position.line === startLine && position.character <= startCharacter)) {
+                break;
+            }
+            switch (token.tokenType.name) {
+                case XmlTokenName.open:
+                    expectingTagName = true;
+                    isCloseTag = false;
+                    currentTag = undefined;
+                    break;
+                case XmlTokenName.slashOpen:
+                    expectingTagName = true;
+                    isCloseTag = true;
+                    currentTag = undefined;
+                    break;
+                case XmlTokenName.name:
+                    //the first Name after an opener is the tag name; later Names are attributes
+                    if (expectingTagName) {
+                        currentTag = token.image;
+                        expectingTagName = false;
+                    }
+                    break;
+                case XmlTokenName.close:
+                    if (isCloseTag) {
+                        stack.pop();
+                    } else if (currentTag) {
+                        stack.push(currentTag);
+                    }
+                    currentTag = undefined;
+                    isCloseTag = false;
+                    expectingTagName = false;
+                    break;
+                case XmlTokenName.slashClose:
+                    //self-closing start tag; nothing is pushed
+                    currentTag = undefined;
+                    isCloseTag = false;
+                    expectingTagName = false;
+                    break;
+            }
+        }
+        return stack[stack.length - 1];
     }
 
     /**
