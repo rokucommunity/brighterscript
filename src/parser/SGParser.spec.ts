@@ -1,7 +1,7 @@
 import { expect } from '../chai-config.spec';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { expectZeroDiagnostics, trim } from '../testHelpers.spec';
+import { expectDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
 import SGParser from './SGParser';
 import { createSandbox } from 'sinon';
 import { Program } from '../Program';
@@ -12,17 +12,23 @@ let sinon = createSandbox();
 describe('SGParser', () => {
 
     let program: Program;
+    const testTranspile = getTestTranspile(() => [program, rootDir]);
 
     beforeEach(() => {
         program = new Program({ rootDir: rootDir, sourceMap: false });
     });
+
     afterEach(() => {
         sinon.restore();
         program.dispose();
     });
 
-    it('Parses well formed SG component', () => {
-        const file = program.setFile<XmlFile>('components/file.xml', trim`
+    it('Parses well formed SG component', async () => {
+        program.setFile('components/Component1.brs', `
+            sub load()
+            end sub
+        `);
+        const { file } = await testTranspile<XmlFile>(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ParentScene" extends="GrandparentScene">
                 <interface>
@@ -44,18 +50,8 @@ describe('SGParser', () => {
                         font="font:MediumBoldSystemFont"
                         />
                 </children>
-            </component>`
-        );
-        const { ast } = file.parser;
-        expect(ast.prolog).to.exist;
-        expect(ast.component).to.exist;
-        expect(ast.root).to.equal(ast.component);
-        expectZeroDiagnostics(file);
-
-        const output = file.transpile();
-        expect(
-            output.code.trimEnd()
-        ).to.equal(trim`
+            </component>
+        `, trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ParentScene" extends="GrandparentScene">
                 <interface>
@@ -73,13 +69,17 @@ describe('SGParser', () => {
                     <Label id="loadingIndicator" text="Loading..." font="font:MediumBoldSystemFont" />
                 </children>
             </component>
-        `);
+        `, undefined, 'components/file.xml');
+
+        const { ast } = file.parser;
+        expect(ast.prologElement).to.exist;
+        expect(ast.componentElement).to.exist;
+        expect(ast.rootElement).to.equal(ast.componentElement);
     });
 
     it('does not crash when missing tag name', () => {
         const parser = new SGParser();
-        parser.parse(
-            'pkg:/components/ParentScene.xml', trim`
+        parser.parse(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
             <!-- a standalone less-than symbol used to cause issues -->
@@ -92,8 +92,7 @@ describe('SGParser', () => {
 
     it('Adds error when an unexpected tag is found in xml', () => {
         const parser = new SGParser();
-        parser.parse(
-            'pkg:/components/ParentScene.xml', trim`
+        parser.parse(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <interface>
@@ -103,20 +102,18 @@ describe('SGParser', () => {
             </component>
         `);
         expect(parser.diagnostics).to.be.lengthOf(2);
-        expect(parser.diagnostics[0]).to.deep.include({
+        expectDiagnostics(parser, [{
             ...DiagnosticMessages.xmlUnexpectedTag('unexpected'),
-            range: Range.create(3, 9, 3, 19)
-        });
-        expect(parser.diagnostics[1]).to.deep.include({
+            location: { range: Range.create(3, 9, 3, 19) }
+        }, {
             ...DiagnosticMessages.xmlUnexpectedTag('unexpectedToo'),
-            range: Range.create(5, 5, 5, 18)
-        });
+            location: { range: Range.create(5, 5, 5, 18) }
+        }]);
     });
 
     it('Adds error when a leaf tag is found to have children', () => {
         const parser = new SGParser();
-        parser.parse(
-            'pkg:/components/ParentScene.xml', trim`
+        parser.parse(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <interface>
@@ -129,33 +126,30 @@ describe('SGParser', () => {
                 </script>
             </component>
         `);
-        expect(parser.diagnostics).to.be.lengthOf(2);
-        expect(parser.diagnostics[0]).to.deep.include({
+        expectDiagnostics(parser, [{
             ...DiagnosticMessages.xmlUnexpectedChildren('field'),
-            range: Range.create(3, 9, 3, 14)
-        });
-        expect(parser.diagnostics[1]).to.deep.include({
+            location: { range: Range.create(3, 9, 3, 14) }
+        }, {
             ...DiagnosticMessages.xmlUnexpectedChildren('script'),
-            range: Range.create(7, 5, 7, 11)
-        });
+            location: { range: Range.create(7, 5, 7, 11) }
+        }]);
     });
 
     it('Adds error when whitespace appears before the prolog', () => {
         const parser = new SGParser();
-        parser.parse('path/to/component/ChildScene.xml', /* not trimmed */`
+        parser.parse(/* not trimmed */`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ChildScene" extends="ParentScene">
                 <script type="text/brightscript" uri="ChildScene.brs" />
             </component>`
         );
         expect(parser.diagnostics).to.be.lengthOf(2);
-        expect(parser.diagnostics[0]).to.deep.include({ // expecting opening tag but got prolog
-            code: DiagnosticMessages.xmlGenericParseError('').code,
-            range: Range.create(1, 12, 1, 18)
-        });
-        expect(parser.diagnostics[1]).to.deep.include({
-            ...DiagnosticMessages.xmlGenericParseError('Syntax error: whitespace found before the XML prolog'),
-            range: Range.create(0, 0, 1, 12)
-        });
+        expectDiagnostics(parser, [{ // expecting opening tag but got prolog
+            code: DiagnosticMessages.syntaxError('Expecting token of type --> OPEN <-- but found --> \'<?xml \' <--').code,
+            location: { range: Range.create(1, 12, 1, 18) }
+        }, {
+            ...DiagnosticMessages.syntaxError('Syntax error: whitespace found before the XML prolog'),
+            location: { range: Range.create(0, 0, 1, 12) }
+        }]);
     });
 });

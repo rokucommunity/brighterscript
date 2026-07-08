@@ -12,6 +12,8 @@ A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 
 ## Overview
 
+**WARNING: this is the `v1` branch with experimental features**
+
 The BrighterScript language provides new features and syntax enhancements to Roku's BrightScript language. Because the language is a superset of BrightScript, the parser and associated tools (VSCode integration, cli, etc...) work with standard BrightScript (.brs) files. This means you will get benefits (as described in the following section) from using the BrighterScript compiler, whether your project contains BrighterScript (.bs) files or not. The BrighterScript language transpiles to standard BrightScript, so your code is fully compatible with all roku devices.
 
 ## Help!
@@ -154,7 +156,7 @@ If you need to configure `bsc`, you can do so in two ways:
 1. Your project resides in a subdirectory of your workspace folder.
 
     ```bash
-    bsc --root-dir ./rokuSourceFiles
+    bsc --rootDir ./rokuSourceFiles
     ```
 2. Run the compiler in watch mode
 
@@ -162,16 +164,12 @@ If you need to configure `bsc`, you can do so in two ways:
     bsc --watch
     ```
 
-3. Run the compiler in watch mode, and redeploy to the roku on every change
-    ```bash
-    bsc --watch --deploy --host 192.168.1.10 --password secret_password
-    ```
-4. Use a bsconfig.json file not located at cwd
+3. Use a bsconfig.json file not located at cwd
     ```bash
     bsc --project ./some_folder/bsconfig.json
     ```
 
-5. Run the compiler as a **linter** only (watch mode supported)
+4. Run the compiler as a **linter** only (watch mode supported)
     ```bash
     bsc --create-package false --copy-to-staging false
     ```
@@ -187,8 +185,7 @@ The presence of a `bsconfig.json` file in a directory indicates that the directo
     "files": [
         "**/*"
     ],
-    "stagingFolderPath": "dist",
-    "retainStagingFolder": true,
+    "outDir": "out",
     //this flag tells BrighterScript that for every xml file, try to import a .bs file with the same name and location
     "autoImportComponentScript": true,
     "sourceMap": true

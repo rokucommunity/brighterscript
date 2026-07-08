@@ -1,5 +1,5 @@
-import type { Diagnostic } from 'vscode-languageserver';
 import type { XmlFile } from '../../files/XmlFile';
+import type { BsDiagnostic } from '../../interfaces';
 import { util } from '../../util';
 
 /**
@@ -8,8 +8,10 @@ import { util } from '../../util';
  * the `<component` tag itself if there are no attributes yet.
  */
 export function getMissingExtendsInsertPosition(file: XmlFile) {
-    const { component } = file.parser.ast;
-    return (component.attributes[component.attributes.length - 1] ?? component.tag).range.end;
+    const componentElement = file.parser.ast.componentElement;
+    const lastAttribute = componentElement.attributes[componentElement.attributes.length - 1];
+    const range = lastAttribute?.location?.range ?? componentElement.tokens.startTagName?.location?.range;
+    return range?.end;
 }
 
 /**
@@ -17,15 +19,15 @@ export function getMissingExtendsInsertPosition(file: XmlFile) {
  * statement flagged by `voidFunctionMayNotReturnValue`. Leaves the bare `return`
  * keyword in place.
  */
-export function getRemoveReturnValueChange(diagnostic: Diagnostic, filePath: string) {
+export function getRemoveReturnValueChange(diagnostic: BsDiagnostic, filePath: string) {
     return {
         type: 'delete' as const,
         filePath: filePath,
         range: util.createRange(
-            diagnostic.range.start.line,
-            diagnostic.range.start.character + 'return'.length,
-            diagnostic.range.end.line,
-            diagnostic.range.end.character
+            diagnostic.location.range.start.line,
+            diagnostic.location.range.start.character + 'return'.length,
+            diagnostic.location.range.end.line,
+            diagnostic.location.range.end.character
         )
     };
 }

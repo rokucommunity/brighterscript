@@ -3,6 +3,7 @@
 Traditional BrightScript supports object creation (see [roAssociativeArray](https://developer.roku.com/docs/references/brightscript/components/roassociativearray.md)), but these can get a bit complicated at times, are generally created in a factory function. These objects are also difficult to track from a type-checking perspective, as their shape can morph over time. In BrighterScript, you can declare actual classes, and compile them into pure BrightScript which can be used on any Roku device.
 
 ## Classes
+
 Here's an example of a simple BrighterScript class
 
 ```vb
@@ -43,7 +44,9 @@ Notice that there are four functions created in the transpiled code for the `Ani
 
 
 ## Inheritance
+
 In BrighterScript, we can use patterns common to other object-oriented languages such as using inheritance to create a new class based off of an existing class.
+
 ```BrighterScript
 class Animal
     sub new(name as string)
@@ -85,6 +88,7 @@ sub Main()
     '> Waddling...\nDewey moved 2 meters\nFell over...I'm new at this
 end sub
 ```
+
 <details>
   <summary>View the transpiled BrightScript code</summary>
 
@@ -152,18 +156,21 @@ sub Main()
     smokey = Animal("Smokey")
     smokey.move(1)
     '> Bear moved 1 meters
+
     donald = Duck("Donald")
     donald.move(2)
     '> Waddling...\nDonald moved 2 meters
+
     dewey = BabyDuck("Dewey")
     dewey.move(3)
     '> Waddling...\nDewey moved 2 meters\nFell over...I'm new at this
 end sub
 ```
+
 </details>
 
-
 ## Constructor function
+
 The constructor function for a class is called `new`.
 
 ```vb
@@ -196,9 +203,11 @@ function Duck(name as string)
     return instance
 end function
 ```
+
 </details>
 
 ### Constructor function with inheritance
+
 When constructing a child that inherits from a base class, the first call in the child's constructor must be a call to the parent's constructor
 
 ```vb
@@ -256,9 +265,11 @@ function BabyDuck(name as string, age as integer)
     return instance
 end function
 ```
+
 </details>
 
 ## Overrides
+
 Child classes can override methods on parent classes. In this example, the `BabyDuck.Eat()` method completely overrides the parent method. Note: the `override` keyword is mandatory, and you will get a compile error if it is not included in the child class and there is a matching method on the base class. Also, you will get a compile error if the override keyword is present in a child class, but that method doesn't exist in the parent class.
 
 ```vb
@@ -314,9 +325,11 @@ function BabyDuck()
     return instance
 end function
 ```
+
 </details>
 
 ### Calling parent method from child
+
 You can also call the original methods on the base class from within an overridden method on a child class.
 
 ```vb
@@ -334,6 +347,7 @@ class BabyDuck extends Duck
 end class
 
 ```
+
 <details>
   <summary>View the transpiled BrightScript code</summary>
 
@@ -375,9 +389,11 @@ function BabyDuck()
     return instance
 end function
 ```
+
 </details>
 
 ## Public by default
+
 Class fields and methods are public by default, which aligns with the general BrightScript approach that "everything is public".
 
 ```vb
@@ -399,6 +415,7 @@ class Person
     end sub
 end class
 ```
+
 <details>
   <summary>View the transpiled BrightScript code</summary>
 
@@ -430,11 +447,13 @@ function Person()
     return instance
 end function
 ```
+
 </details>
 
 You will get compile-time errors whenever you access private members of a class from outside the class. However, be aware that this is only a compile-time restriction. At runtime, all members are public.
 
 ## Dynamic type by default
+
 You can specify a type for class fields and a return type for methods. However, this is entirely optional. All fields and methods have a default type of `dynamic`. However, BrighterScript will attempt to infer the type from usage. Take this for example:
 
 ```BrighterScript
@@ -451,6 +470,7 @@ class Person
     end function
 end class
 ```
+
 <details>
   <summary>View the transpiled BrightScript code</summary>
 
@@ -477,9 +497,11 @@ function Person()
     return instance
 end function
 ```
+
 </details>
 
 ## Property initialization
+
 Like most other object-oriented classes, you can initialze a property with a default value.
 
 ```BrighterScript
@@ -488,6 +510,7 @@ class Duck
     hasChildren = true
 end class
 ```
+
 <details>
   <summary>View the transpiled BrightScript code</summary>
 
@@ -507,16 +530,18 @@ function Duck()
     return instance
 end function
 ```
+
 </details>
 
-
 ## Usage
+
 In order to use a class, you need to construct one. Based on our person class above, you can create a new person like this:
 
 ```vb
 donald = new Person("Donald")
 daisy = new Person("Daisy")
 ```
+
 <details>
   <summary>View the transpiled BrightScript code</summary>
 
@@ -524,10 +549,11 @@ daisy = new Person("Daisy")
 donald = Person("Donald")
 daisy = Person("Daisy")
 ```
+
 </details>
 
-
 ## Namespaces
+
 Classes can also be contained within a namespace. At runtime, all namespace periods are replaced with underscores.
 
 ```BrighterScript
@@ -539,6 +565,7 @@ namespace Vertibrates.Birds
     end class
 end namespace
 ```
+
 <details>
   <summary>View the transpiled BrightScript code</summary>
 
@@ -570,10 +597,11 @@ function Vertibrates_Birds_Duck()
     return instance
 end function
 ```
+
 </details>
 
-
 ## Instance binding
+
 As you would expect, methods attached to a class will have their `m` assigned to that class instance whenever they are invoked through the object. (i.e. `someClassInstance.doSomething()`. However, keep in mind that functions themselves retain no direct knowledge of what object they are bound to.
 
 This is no different than the way plain BrightScript functions and objects interact, but it was worth mentioning that classes cannot mitigate this fundamental runtime limitation.
@@ -604,6 +632,7 @@ sub main()
     sayHello() ' prints "Main method"
 end sub
 ```
+
 <details>
   <summary>View the transpiled BrightScript code</summary>
 
@@ -637,8 +666,8 @@ sub main()
     sayHello() ' prints "Main method"
 end sub
 ```
-</details>
 
+</details>
 
 ## Optional fields
 
@@ -650,7 +679,7 @@ class Video
     length as float
     optional subtitleUrl as string
     optional rating as string
-    optional genre as string
+    optional genre as string[]
 end class
 ```
 

@@ -1,3 +1,4 @@
+import type { BsConfig } from '../../src';
 import type { TargetOptions } from '../target-runner';
 
 module.exports = async (options: TargetOptions) => {
@@ -10,23 +11,24 @@ module.exports = async (options: TargetOptions) => {
         cwd: projectPath,
         createPackage: false,
         copyToStaging: false,
-        enableTypeValidation: true,
+        noEmit: true,
         //disable diagnostic reporting (they still get collected)
         diagnosticFilters: ['**/*'],
-        logLevel: 'error'
-    } as any);
-    if (Object.keys(builder.program.files).length === 0) {
+        logLevel: 'error',
+        ...options.additionalConfig
+    } as BsConfig & Record<string, any>);
+    if (Object.keys(builder.program!.files).length === 0) {
         throw new Error('No files found in program');
     }
 
     suite.add(fullName, (deferred) => {
-        const scopes = Object.values(builder.program['scopes']);
+        const scopes = Object.values(builder.program!['scopes']);
         //mark all scopes as invalid so they'll re-validate
         for (let scope of scopes) {
             scope.invalidate();
         }
         Promise.resolve(
-            builder.program.validate()
+            builder.program!.validate()
         ).finally(() => deferred.resolve());
     }, {
         ...suiteOptions,

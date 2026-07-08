@@ -2,7 +2,7 @@ import { expect } from './chai-config.spec';
 import { Range } from 'vscode-languageserver';
 import { CommentFlagProcessor } from './CommentFlagProcessor';
 import { Lexer } from './lexer/Lexer';
-import type { BscFile } from '.';
+import type { BscFile } from './files/BscFile';
 import util from './util';
 
 describe('CommentFlagProcessor', () => {
@@ -120,9 +120,9 @@ describe('CommentFlagProcessor', () => {
         });
 
         it('tokenizes bs:disable comment with codes', () => {
-            const token = Lexer.scan(`'bs:disable:1 2 3`).tokens[0];
+            const token = Lexer.scan(`'bs:disable:1 2 3`).tokens[0].leadingTrivia[0];
             expect(
-                processor['tokenize'](token.text, token.range)
+                processor['tokenize'](token.text, token.location.range)
             ).to.eql({
                 commentTokenText: `'`,
                 directive: 'disable',
@@ -140,9 +140,10 @@ describe('CommentFlagProcessor', () => {
         });
 
         it('works for special case', () => {
-            const token = Lexer.scan(`print "hi" 'bs:disable-line: 123456 999999   aaaab`).tokens[2];
+            const tokens = Lexer.scan(`print "hi" 'bs:disable-line: 123456 999999   aaaab`).tokens;
+            const token = tokens[2].leadingTrivia[1];
             expect(
-                processor['tokenize'](token.text, token.range)
+                processor['tokenize'](token.text, token.location.range)
             ).to.eql({
                 commentTokenText: `'`,
                 directive: 'line',
@@ -160,9 +161,9 @@ describe('CommentFlagProcessor', () => {
         });
 
         it('tokenizes bs:disable-line comment with codes', () => {
-            const token = Lexer.scan(`'bs:disable-line:1 2 3`).tokens[0];
+            const token = Lexer.scan(`'bs:disable-line:1 2 3`).tokens[0].leadingTrivia[0];
             expect(
-                processor['tokenize'](token.text, token.range)
+                processor['tokenize'](token.text, token.location?.range)
             ).to.eql({
                 commentTokenText: `'`,
                 directive: 'line',
@@ -180,9 +181,10 @@ describe('CommentFlagProcessor', () => {
         });
 
         it('tokenizes bs:disable-line comment with leading space', () => {
-            const token = Lexer.scan(`' bs:disable-line:1`).tokens[0];
+            const tokens = Lexer.scan(`' bs:disable-line:1`).tokens;
+            const token = tokens[0].leadingTrivia[0];
             expect(
-                processor['tokenize'](token.text, token.range)
+                processor['tokenize'](token.text, token.location?.range)
             ).to.eql({
                 commentTokenText: `'`,
                 directive: 'line',
@@ -194,9 +196,10 @@ describe('CommentFlagProcessor', () => {
         });
 
         it('tokenizes bs:disable-line comment with leading tab', () => {
-            const token = Lexer.scan(`'\tbs:disable-line:1`).tokens[0];
+            const tokens = Lexer.scan(`'\tbs:disable-line:1`).tokens;
+            const token = tokens[0].leadingTrivia[0];
             expect(
-                processor['tokenize'](token.text, token.range)
+                processor['tokenize'](token.text, token.location?.range)
             ).to.eql({
                 commentTokenText: `'`,
                 directive: 'line',

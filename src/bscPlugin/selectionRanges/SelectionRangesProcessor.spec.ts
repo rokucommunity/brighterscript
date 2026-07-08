@@ -50,7 +50,7 @@ describe('SelectionRangesProcessor', () => {
     function getSelectionRange(code: string, line: number, character: number) {
         const file = program.setFile('source/main.brs', code);
         program.validate();
-        const ranges = program.getSelectionRanges(file.pathAbsolute, [util.createPosition(line, character)]);
+        const ranges = program.getSelectionRanges(file.srcPath, [util.createPosition(line, character)]);
         return ranges[0];
     }
 
@@ -252,7 +252,7 @@ describe('SelectionRangesProcessor', () => {
         const file = program.setFile('source/multi.brs', code);
         program.validate();
 
-        const ranges = program.getSelectionRanges(file.pathAbsolute, [
+        const ranges = program.getSelectionRanges(file.srcPath, [
             util.createPosition(1, 4), // cursor on 'a'
             util.createPosition(2, 4) // cursor on 'b'
         ]);
@@ -298,7 +298,7 @@ describe('SelectionRangesProcessor', () => {
         const file = program.setFile('source/empty.brs', code);
         program.validate();
         // position far past the last line — should not throw
-        const ranges = program.getSelectionRanges(file.pathAbsolute, [util.createPosition(99, 0)]);
+        const ranges = program.getSelectionRanges(file.srcPath, [util.createPosition(99, 0)]);
         expect(Array.isArray(ranges)).to.be.true;
     });
 
@@ -346,7 +346,7 @@ describe('SelectionRangesProcessor', () => {
         const file = program.setFile('source/plugin.brs', code);
         program.validate();
 
-        const ranges = program.getSelectionRanges(file.pathAbsolute, [util.createPosition(0, 4)]);
+        const ranges = program.getSelectionRanges(file.srcPath, [util.createPosition(0, 4)]);
         // The bsc plugin should push a range, and the test plugin pushed another
         expect(ranges.length).to.be.at.least(2);
         const hasCustom = ranges.some(r => r.range.start.line === 0 && r.range.end.character === 10);

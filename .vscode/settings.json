@@ -20,5 +20,5 @@
     "js/ts.format.insertSpaceAfterFunctionKeywordForAnonymousFunctions": true,
     "js/ts.format.insertSpaceAfterOpeningAndBeforeClosingNonemptyBrackets": false,
     "files.trimTrailingWhitespace": true,
-    "js/ts.tsdk.path": "node_modules\\typescript\\lib"
+    "js/ts.tsdk.path": "node_modules/typescript/lib"
 }

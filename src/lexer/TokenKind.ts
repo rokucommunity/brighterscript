@@ -1,3 +1,5 @@
+import type { Token } from './Token';
+
 export enum TokenKind {
     // parens (and friends)
     LeftParen = 'LeftParen', // (
@@ -108,7 +110,6 @@ export enum TokenKind {
     EndWhile = 'EndWhile',
     Eval = 'Eval',
     Exit = 'Exit',
-    ExitFor = 'ExitFor', // not technically a reserved word, but definitely a tokenKind
     ExitWhile = 'ExitWhile',
     False = 'False',
     For = 'For',
@@ -119,6 +120,7 @@ export enum TokenKind {
     GetLastRunRunTimeError = 'GetLastRunRunTimeError',
     Goto = 'Goto',
     If = 'If',
+    In = 'In',
     Let = 'Let',
     Next = 'Next',
     Not = 'Not',
@@ -270,9 +272,7 @@ export const Keywords: Record<string, TokenKind> = {
     endwhile: TokenKind.EndWhile,
     'end while': TokenKind.EndWhile,
     exit: TokenKind.Exit,
-    'exit for': TokenKind.ExitFor, // note: 'exitfor' (no space) is *not* a keyword
     exitwhile: TokenKind.ExitWhile,
-    'exit while': TokenKind.ExitWhile,
     false: TokenKind.False,
     for: TokenKind.For,
     'for each': TokenKind.ForEach, // note: 'foreach' (no space) is *not* a keyword
@@ -350,6 +350,21 @@ export type BlockTerminator =
     | TokenKind.Catch
     | TokenKind.EndTry;
 
+/** Set of keywords that end non-conditional compilation blocks. */
+export const BlockTerminators = [
+    TokenKind.Else,
+    TokenKind.EndFor,
+    TokenKind.Next,
+    TokenKind.EndIf,
+    TokenKind.EndWhile,
+    TokenKind.EndSub,
+    TokenKind.EndFunction,
+    TokenKind.EndNamespace,
+    TokenKind.EndInterface,
+    TokenKind.Catch,
+    TokenKind.EndTry
+];
+
 /** The set of operators valid for use in assignment statements. */
 export const AssignmentOperators = [
     TokenKind.Equal,
@@ -389,7 +404,6 @@ export const AllowedProperties = [
     TokenKind.EndWhile,
     TokenKind.Eval,
     TokenKind.Exit,
-    TokenKind.ExitFor,
     TokenKind.ExitWhile,
     TokenKind.False,
     TokenKind.For,
@@ -400,6 +414,7 @@ export const AllowedProperties = [
     TokenKind.GetLastRunRunTimeError,
     TokenKind.Goto,
     TokenKind.If,
+    TokenKind.In,
     TokenKind.Invalid,
     TokenKind.Let,
     TokenKind.Mod,
@@ -460,13 +475,13 @@ export const AllowedProperties = [
     TokenKind.Const,
     TokenKind.Continue,
     TokenKind.Typecast,
-    TokenKind.Alias
+    TokenKind.Alias,
+    TokenKind.Type
 ];
 
 /** List of TokenKind that are allowed as local var identifiers. */
 export const AllowedLocalIdentifiers = [
     TokenKind.EndFor,
-    TokenKind.ExitFor,
     TokenKind.ForEach,
     TokenKind.Void,
     TokenKind.Boolean,
@@ -496,6 +511,7 @@ export const AllowedLocalIdentifiers = [
     TokenKind.EndTry,
     TokenKind.Const,
     TokenKind.Continue,
+    TokenKind.In,
     TokenKind.Typecast,
     TokenKind.Alias,
     TokenKind.Type
@@ -655,11 +671,16 @@ export const DeclarableTypes = [
     TokenKind.Double,
     TokenKind.String,
     TokenKind.Object,
-    TokenKind.Interface,
     TokenKind.Dynamic,
     TokenKind.Void,
     TokenKind.Function
 ];
+
+/** List of TokenKind that will not break parsing a TypeExpression in Brighterscript*/
+export const AllowedTypeIdentifiers = [
+    ...(AllowedProperties.filter(tokenKind => tokenKind !== TokenKind.Invalid))
+];
+
 
 /**
  * The tokens that might preceed a regex literal
@@ -704,3 +725,44 @@ export const PreceedingRegexTypes = new Set([
     TokenKind.Colon,
     TokenKind.Semicolon
 ]);
+
+/**
+ * The tokens that may be in leading trivia
+ */
+export const AllowedTriviaTokens: ReadonlyArray<TokenKind> = [
+    TokenKind.Newline,
+    TokenKind.Whitespace,
+    TokenKind.Comment,
+    TokenKind.Colon
+];
+
+
+/**
+ * Tokens that can be used between expressions in a print statement
+ */
+export type PrintSeparatorToken = Token & {
+    kind: TokenKind.Comma | TokenKind.Semicolon;
+};
+
+/**
+ * The tokens that may be in a binary expression
+ */
+export const BinaryExpressionOperatorTokens: ReadonlyArray<TokenKind> = [
+    TokenKind.Equal,
+    TokenKind.LessGreater,
+    TokenKind.Greater,
+    TokenKind.GreaterEqual,
+    TokenKind.Less,
+    TokenKind.LessEqual,
+    TokenKind.And,
+    TokenKind.Or,
+    TokenKind.Plus,
+    TokenKind.Minus,
+    TokenKind.Star,
+    TokenKind.RightShift,
+    TokenKind.LeftShift,
+    TokenKind.Forwardslash,
+    TokenKind.Mod,
+    TokenKind.Backslash,
+    TokenKind.Caret
+];

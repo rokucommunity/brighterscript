@@ -1,16 +1,19 @@
 import { expect } from '../../../chai-config.spec';
 
-import { Parser } from '../../Parser';
+import { ParseMode, Parser } from '../../Parser';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
+import type { FunctionStatement } from '../../Statement';
 import { ForEachStatement } from '../../Statement';
 import { VariableExpression } from '../../Expression';
+import util from '../../../util';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
+import { isFunctionStatement } from '../../../astUtils/reflection';
 
 describe('parser foreach loops', () => {
     it('requires a name and target', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.ForEach, 'for each'),
             identifier('word'),
             identifier('in'),
@@ -24,18 +27,18 @@ describe('parser foreach loops', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.exist;
+        expect(ast.statements).to.exist;
 
-        let forEach = statements[0] as any;
+        let forEach = ast.statements[0] as any;
         expect(forEach).to.be.instanceof(ForEachStatement);
 
-        expect(forEach.item).to.deep.include(identifier('word'));
+        expect(forEach.tokens.item).to.deep.include(identifier('word'));
         expect(forEach.target).to.be.instanceof(VariableExpression);
-        expect(forEach.target.name).to.deep.include(identifier('lipsum'));
+        expect(forEach.target.tokens.name).to.deep.include(identifier('lipsum'));
     });
 
     it('allows \'next\' to terminate loop', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.ForEach, 'for each'),
             identifier('word'),
             identifier('in'),
@@ -49,8 +52,8 @@ describe('parser foreach loops', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.exist;
-        expect(statements).to.be.length.greaterThan(0);
+        expect(ast.statements).to.exist;
+        expect(ast.statements).to.be.length.greaterThan(0);
     });
 
     it('location tracking', () => {
@@ -62,36 +65,41 @@ describe('parser foreach loops', () => {
          * 1|   Rnd(a)
          * 2| end for
          */
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             {
                 kind: TokenKind.ForEach,
                 text: 'for each',
                 isReserved: true,
-                range: Range.create(0, 0, 0, 8)
+                location: util.createLocation(0, 0, 0, 8),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'a',
                 isReserved: false,
-                range: Range.create(0, 9, 0, 10)
+                location: util.createLocation(0, 9, 0, 10),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'in',
                 isReserved: true,
-                range: Range.create(0, 11, 0, 13)
+                location: util.createLocation(0, 11, 0, 13),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'b',
                 isReserved: false,
-                range: Range.create(0, 14, 0, 15)
+                location: util.createLocation(0, 14, 0, 15),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
-                range: Range.create(0, 15, 0, 16)
+                location: util.createLocation(0, 15, 0, 16),
+                leadingTrivia: []
             },
             // loop body isn't significant for location tracking, so helper functions are safe
             identifier('Rnd'),
@@ -103,16 +111,48 @@ describe('parser foreach loops', () => {
                 kind: TokenKind.EndFor,
                 text: 'end for',
                 isReserved: false,
-                range: Range.create(2, 0, 2, 7)
+                location: util.createLocation(2, 0, 2, 7),
+                leadingTrivia: []
             },
             EOF
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.lengthOf(1);
-        expect(statements[0].range).deep.include(
+        expect(ast.statements).to.be.lengthOf(1);
+        expect(ast.statements[0].location.range).deep.include(
             Range.create(0, 0, 2, 7)
         );
+    });
+
+    it('supports optional type annotation', () => {
+        let { ast, diagnostics } = Parser.parse([
+            token(TokenKind.ForEach, 'for each'),
+            identifier('word'),
+            token(TokenKind.As, 'as'),
+            identifier('String'),
+            identifier('in'),
+            identifier('lipsum'),
+            token(TokenKind.Newline, '\n'),
+
+            // body would go here, but it's not necessary for this test
+            token(TokenKind.EndFor, 'end for'),
+            token(TokenKind.Newline, '\n'),
+            EOF
+        ], { mode: ParseMode.BrighterScript });
+
+        expect(diagnostics).to.be.lengthOf(0);
+        expect(ast.statements).to.exist;
+
+        let forEach = ast.statements[0] as ForEachStatement;
+        expect(forEach).to.be.instanceof(ForEachStatement);
+
+        expect(forEach.tokens.item).to.deep.include(identifier('word'));
+        expect(forEach.tokens.as).to.exist;
+        expect(forEach.tokens.as.text).to.equal('as');
+        expect(forEach.typeExpression).to.exist;
+        expect(forEach.typeExpression?.getName()).to.equal('String');
+        expect(forEach.target).to.be.instanceof(VariableExpression);
+        expect((forEach.target as VariableExpression).tokens.name).to.deep.include(identifier('lipsum'));
     });
 
     describe('terminator recovery', () => {
@@ -137,7 +177,7 @@ describe('parser foreach loops', () => {
                     end while
                 end sub
             `);
-            const fn = parser.references.functionStatements[0];
+            const fn = parser.ast.findChild<FunctionStatement>(isFunctionStatement);
             const forEachStmt = fn.func.body.statements[0] as ForEachStatement;
             expect(forEachStmt.tokens.endFor.kind).to.equal(TokenKind.EndWhile);
         });
