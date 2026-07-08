@@ -219,8 +219,8 @@ export class LanguageServer {
                 // Tell the client that the server supports code completion
                 completionProvider: {
                     resolveProvider: false,
-                    //anytime the user types a period, auto-show the completion results
-                    triggerCharacters: ['.'],
+                    //`.` auto-shows brightscript completions; `<` auto-shows xml element completions
+                    triggerCharacters: ['.', '<'],
                     allCommitCharacters: ['.', '@']
                 },
                 documentSymbolProvider: true,
