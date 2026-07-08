@@ -394,6 +394,102 @@ describe('util', () => {
                 outDir: './out'
             });
         });
+
+        it('honors stagingFolderPath from a loaded project file', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                stagingFolderPath: './staging'
+            });
+            expect(
+                util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` }).outDir
+            ).to.eql(
+                s`${rootDir}/staging`
+            );
+        });
+
+        it('honors stagingDir from a loaded project file', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                stagingDir: './staging'
+            });
+            expect(
+                util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` }).outDir
+            ).to.eql(
+                s`${rootDir}/staging`
+            );
+        });
+
+        it('prefers outDir over stagingFolderPath when both are in the project file', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                outDir: './modern',
+                stagingFolderPath: './legacy'
+            });
+            expect(
+                util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` }).outDir
+            ).to.eql(
+                s`${rootDir}/modern`
+            );
+        });
+
+        it('prefers a provided outDir option over the project file stagingFolderPath', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                stagingFolderPath: './legacy'
+            });
+            expect(
+                util.normalizeAndResolveConfig({
+                    project: s`${rootDir}/bsconfig.json`,
+                    outDir: './cli-out'
+                }).outDir
+            ).to.eql(
+                './cli-out'
+            );
+        });
+
+        it('resolves stagingFolderPath relative to the bsconfig file that declared it', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/folder1/parent.json`, {
+                stagingFolderPath: './staging'
+            });
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                extends: 'folder1/parent.json'
+            });
+            expect(
+                util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` }).outDir
+            ).to.eql(
+                s`${rootDir}/folder1/staging`
+            );
+        });
+
+        it('lets a child config stagingFolderPath override the parent outDir', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/parent.json`, {
+                outDir: './parent-out'
+            });
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                extends: 'parent.json',
+                stagingFolderPath: './child-staging'
+            });
+            expect(
+                util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` }).outDir
+            ).to.eql(
+                s`${rootDir}/child-staging`
+            );
+        });
+
+        it('passes deprecated staging options from project files through to the final options', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                stagingFolderPath: './staging',
+                stagingDir: './staging'
+            });
+            const result = util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` });
+            expect(result.stagingFolderPath).to.eql('./staging');
+            expect(result.stagingDir).to.eql('./staging');
+        });
+
+        it('honors copyToStaging from a loaded project file', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                copyToStaging: false
+            });
+            expect(
+                util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` }).noEmit
+            ).to.be.true;
+        });
     });
 
     describe('normalizeConfig', () => {
