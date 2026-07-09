@@ -2,8 +2,18 @@ import { expect } from '../../chai-config.spec';
 import { Program } from '../../Program';
 import { util } from '../../util';
 import { createSandbox } from 'sinon';
-import { rootDir } from '../../testHelpers.spec';
+import { rootDir, trim } from '../../testHelpers.spec';
 let sinon = createSandbox();
+
+/**
+ * Find the position on the first character of `marker` within `contents`
+ */
+function positionOf(contents: string, marker: string) {
+    const index = contents.indexOf(marker);
+    const before = contents.substring(0, index);
+    const lines = before.split('\n');
+    return util.createPosition(lines.length - 1, lines[lines.length - 1].length);
+}
 
 const fence = (code: string) => util.mdFence(code, 'brightscript');
 
@@ -218,6 +228,69 @@ describe('HoverProcessor', () => {
             let hover = program.getHover('source/main.bs', util.createPosition(2, 43))[0];
             expect(hover?.range).to.eql(util.createRange(2, 40, 2, 50));
             expect(hover?.contents).to.eql(fence('const name.sp.a.c.e.SOME_VALUE = true'));
+        });
+    });
+
+    describe('XmlFile', () => {
+        it('shows node docs when hovering a built-in node tag name', () => {
+            const contents = trim`
+                <component name="Main" extends="Group">
+                    <children>
+                        <Label text="hi" />
+                    </children>
+                </component>
+            `;
+            const file = program.setFile('components/main.xml', contents);
+            const hover = program.getHover(file.srcPath, positionOf(contents, 'Label text'))[0];
+            expect(hover).to.exist;
+            expect(hover.contents).to.include('Label');
+            expect(hover.contents).to.include('extends LabelBase');
+            expect(hover.contents).to.include('Roku docs');
+        });
+
+        it('shows field docs when hovering an attribute name', () => {
+            const contents = trim`
+                <component name="Main" extends="Group">
+                    <children>
+                        <Label text="hi" />
+                    </children>
+                </component>
+            `;
+            const file = program.setFile('components/main.xml', contents);
+            const hover = program.getHover(file.srcPath, positionOf(contents, 'text='))[0];
+            expect(hover).to.exist;
+            expect(hover.contents).to.include('text as string');
+        });
+
+        it('shows component docs when hovering a project component tag name', () => {
+            program.setFile('components/widget.xml', trim`
+                <component name="Widget" extends="Group">
+                </component>
+            `);
+            const contents = trim`
+                <component name="Main" extends="Group">
+                    <children>
+                        <Widget />
+                    </children>
+                </component>
+            `;
+            const file = program.setFile('components/main.xml', contents);
+            const hover = program.getHover(file.srcPath, positionOf(contents, 'Widget '))[0];
+            expect(hover).to.exist;
+            expect(hover.contents).to.include('Widget');
+            expect(hover.contents).to.include('Component defined in');
+        });
+
+        it('does not show a hover on an attribute value', () => {
+            const contents = trim`
+                <component name="Main" extends="Group">
+                    <children>
+                        <Label text="hi" />
+                    </children>
+                </component>
+            `;
+            const file = program.setFile('components/main.xml', contents);
+            expect(program.getHover(file.srcPath, positionOf(contents, '"hi"'))).to.be.empty;
         });
     });
 });
