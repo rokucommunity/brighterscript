@@ -62,7 +62,7 @@ describe('XmlFileValidator', () => {
         expect(scenegraphDiagnostics(file).map(x => x.code)).to.include(1156);
     });
 
-    it('flags a field name case mismatch', () => {
+    it('does not flag a case-differing field name (no longer a diagnostic)', () => {
         const file = program.setFile<XmlFile>('components/main.xml', trim`
             <component name="Main" extends="Group">
                 <children>
@@ -71,7 +71,7 @@ describe('XmlFileValidator', () => {
             </component>
         `);
         program.validate();
-        expect(scenegraphDiagnostics(file).map(x => x.code)).to.include(1157);
+        expect(scenegraphDiagnostics(file)).to.be.empty;
     });
 
     it('flags a clearly-invalid scalar field value but allows valid and ambiguous ones', () => {
@@ -90,23 +90,53 @@ describe('XmlFileValidator', () => {
             </component>
         `);
         program.validate();
-        expect(scenegraphDiagnostics(badFile).map(x => x.code)).to.include(1158);
+        expect(scenegraphDiagnostics(badFile).map(x => x.code)).to.include(1157);
         expect(scenegraphDiagnostics(goodFile)).to.be.empty;
     });
 
-    it('validates fields on ContentNode against its known schema', () => {
+    it('does not flag component-library components', () => {
         const file = program.setFile<XmlFile>('components/main.xml', trim`
             <component name="Main" extends="Group">
                 <children>
-                    <ContentNode Title="Home" bogusField="x" />
+                    <MyLib:SomeView />
                 </children>
             </component>
         `);
         program.validate();
-        const codes = scenegraphDiagnostics(file).map(x => x.code);
-        //`Title` is a real ContentNode field, correctly cased -> no diagnostic
-        expect(codes).not.to.include(1157);
-        //`bogusField` is not a ContentNode field -> unknown field
-        expect(codes).to.include(1156);
+        //complib-scoped names (containing ':') can't be resolved yet, so they should not be flagged
+        expect(scenegraphDiagnostics(file)).to.be.empty;
+    });
+
+    it('lets a plugin claim an attribute to opt out of field validation', () => {
+        const file = program.setFile<XmlFile>('components/main.xml', trim`
+            <component name="Main" extends="Group">
+                <children>
+                    <Label data-custom="x" />
+                </children>
+            </component>
+        `);
+        program.plugins.add({
+            name: 'claims custom attributes',
+            onValidateXmlAttribute: (event) => {
+                if (event.attribute.key.text.startsWith('data-')) {
+                    event.handled = true;
+                }
+            }
+        });
+        program.validate();
+        //the plugin claimed `data-custom`, so brighterscript should not flag it as an unknown field
+        expect(scenegraphDiagnostics(file)).to.be.empty;
+    });
+
+    it('flags mismatched opening and closing tag names', () => {
+        const file = program.setFile<XmlFile>('components/main.xml', trim`
+            <component name="Main" extends="Group">
+                <children>
+                    <Rectangle></rectangle>
+                </children>
+            </component>
+        `);
+        program.validate();
+        expect(scenegraphDiagnostics(file).map(x => x.code)).to.include(1158);
     });
 });

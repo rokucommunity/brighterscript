@@ -1,9 +1,9 @@
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { XmlFile } from '../../files/XmlFile';
 import type { OnFileValidateEvent } from '../../interfaces';
-import type { SGAst, SGNode } from '../../parser/SGTypes';
+import type { SGAst, SGAttribute, SGNode } from '../../parser/SGTypes';
 import util from '../../util';
-import { isValidSceneGraphFieldValue } from './FieldTypeValidator';
+import { isValidSceneGraphFieldValue } from './XmlFieldTypeValidator';
 
 export class XmlFileValidator {
     constructor(
@@ -70,13 +70,14 @@ export class XmlFileValidator {
 
     /**
      * Validate a single node instance and recurse into its children. Flags unknown node types, and (for
-     * known types) unknown/mis-cased field names and clearly-invalid field values.
+     * known types) unknown field names and clearly-invalid field values.
      */
     private validateNode(node: SGNode) {
         const nodeName = node.tag.text;
         if (this.event.program.hasSceneGraphNode(nodeName)) {
             this.validateNodeAttributes(node, nodeName);
-        } else {
+        //skip component-library components (e.g. `ComplibName:SomeView`); we can't resolve those yet
+        } else if (!nodeName.includes(':')) {
             this.event.file.diagnostics.push({
                 ...DiagnosticMessages.xmlUnknownComponentType(nodeName),
                 range: node.tag.range,
@@ -97,6 +98,10 @@ export class XmlFileValidator {
         }
         const fieldsByLowerName = new Map(fields.map(field => [field.name.toLowerCase(), field]));
         for (const attribute of node.attributes ?? []) {
+            //let plugins claim an attribute (e.g. custom/transformed attributes) before we validate it
+            if (this.isAttributeHandledByPlugin(node, attribute)) {
+                continue;
+            }
             const attributeName = attribute.key.text;
             const field = fieldsByLowerName.get(attributeName.toLowerCase());
             if (!field) {
@@ -107,13 +112,6 @@ export class XmlFileValidator {
                 });
                 continue;
             }
-            if (field.name !== attributeName) {
-                this.event.file.diagnostics.push({
-                    ...DiagnosticMessages.xmlFieldNameCaseMismatch(attributeName, field.name),
-                    range: attribute.key.range,
-                    file: this.event.file
-                });
-            }
             if (field.type && !isValidSceneGraphFieldValue(attribute.value?.text, field.type)) {
                 this.event.file.diagnostics.push({
                     ...DiagnosticMessages.xmlInvalidFieldValue(field.name, field.type),
@@ -122,6 +120,22 @@ export class XmlFileValidator {
                 });
             }
         }
+    }
+
+    /**
+     * Emit the `onValidateXmlAttribute` event so plugins can claim an attribute (returning `handled: true`)
+     * to opt it out of brighterscript's built-in field validation.
+     */
+    private isAttributeHandledByPlugin(node: SGNode, attribute: SGAttribute): boolean {
+        const event = {
+            program: this.event.program,
+            file: this.event.file,
+            node: node,
+            attribute: attribute,
+            handled: false
+        };
+        this.event.program.plugins.emit('onValidateXmlAttribute', event);
+        return event.handled;
     }
 
 }

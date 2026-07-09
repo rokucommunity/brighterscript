@@ -178,6 +178,7 @@ interface IToken {
 }
 
 function mapElement({ children }: ElementCstNode, diagnostics: Diagnostic[]): SGTag {
+    validateTagNameMatch(children, diagnostics);
     const nameToken = children.Name[0];
     let range: Range;
     const selfClosing = !!children.SLASH_CLOSE;
@@ -215,10 +216,10 @@ function mapElement({ children }: ElementCstNode, diagnostics: Diagnostic[]): SG
             const cdata = getCdata(content);
             return new SGScript(name, attributes, cdata, range);
         case 'children':
-            const childrenContent = mapNodes(content);
+            const childrenContent = mapNodes(content, diagnostics);
             return new SGChildren(name, childrenContent, range);
         default:
-            const nodeContent = mapNodes(content);
+            const nodeContent = mapNodes(content, diagnostics);
             return new SGNode(name, attributes, nodeContent, range);
     }
 }
@@ -230,12 +231,13 @@ function reportUnexpectedChildren(name: SGToken, diagnostics: Diagnostic[]) {
     });
 }
 
-function mapNode({ children }: ElementCstNode): SGNode | undefined {
+function mapNode({ children }: ElementCstNode, diagnostics: Diagnostic[]): SGNode | undefined {
     const nameToken = children.Name?.[0];
     //skip malformed elements that have no tag name (e.g. a lone `<` while the user is still typing)
     if (!nameToken) {
         return undefined;
     }
+    validateTagNameMatch(children, diagnostics);
     let range: Range;
     const selfClosing = !!children.SLASH_CLOSE;
     if (selfClosing) {
@@ -248,8 +250,23 @@ function mapNode({ children }: ElementCstNode): SGNode | undefined {
     const name = mapToken(nameToken);
     const attributes = mapAttributes(children.attribute);
     const content = children.content?.[0];
-    const nodeContent = mapNodes(content);
+    const nodeContent = mapNodes(content, diagnostics);
     return new SGNode(name, attributes, nodeContent, range);
+}
+
+/**
+ * `@xml-tools` matches start/end tag names case-insensitively, but Roku's compiler does not. Flag any
+ * difference (including case) between an element's opening and closing tag names.
+ */
+function validateTagNameMatch(children: ElementCstNode['children'], diagnostics: Diagnostic[]) {
+    const openName = children.Name?.[0];
+    const closeName = children.END_NAME?.[0];
+    if (openName && closeName && openName.image !== closeName.image) {
+        diagnostics.push({
+            ...DiagnosticMessages.xmlStartEndTagMismatch(openName.image, closeName.image),
+            range: rangeFromTokens(closeName)
+        });
+    }
 }
 
 function mapElements(content: ContentCstNode, allow: string[], diagnostics: Diagnostic[]): SGTag[] {
@@ -279,13 +296,13 @@ function mapElements(content: ContentCstNode, allow: string[], diagnostics: Diag
     return tags;
 }
 
-function mapNodes(content: ContentCstNode): SGNode[] {
+function mapNodes(content: ContentCstNode, diagnostics: Diagnostic[]): SGNode[] {
     if (!content) {
         return [];
     }
     const { element } = content.children;
     return element
-        ?.map(element => mapNode(element))
+        ?.map(element => mapNode(element, diagnostics))
         .filter((node): node is SGNode => !!node);
 }
 

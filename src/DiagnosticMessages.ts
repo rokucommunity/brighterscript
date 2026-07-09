@@ -844,15 +844,15 @@ export let DiagnosticMessages = {
         code: 1156,
         severity: DiagnosticSeverity.Error
     }),
-    xmlFieldNameCaseMismatch: (actualName: string, expectedName: string) => ({
-        message: `Field '${actualName}' should be '${expectedName}' to match the declared casing`,
-        code: 1157,
-        severity: DiagnosticSeverity.Warning
-    }),
     xmlInvalidFieldValue: (fieldName: string, expectedType: string) => ({
         message: `Value for field '${fieldName}' is not a valid '${expectedType}'`,
+        code: 1157,
+        severity: DiagnosticSeverity.Error
+    }),
+    xmlStartEndTagMismatch: (openName: string, closeName: string) => ({
+        message: `Opening tag '${openName}' does not match closing tag '${closeName}'`,
         code: 1158,
-        severity: DiagnosticSeverity.Warning
+        severity: DiagnosticSeverity.Error
     })
 };
 
