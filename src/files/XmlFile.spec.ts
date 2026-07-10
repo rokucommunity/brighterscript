@@ -736,6 +736,63 @@ describe('XmlFile', () => {
             `);
         });
 
+        it('does not emit a mismatch diagnostic for well-formed matching tags', () => {
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup">
+                            <Label text="hello" />
+                        </Group>
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(file);
+        });
+
+        it('does not emit a mismatch diagnostic for self-closing tags', () => {
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup" />
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(file);
+        });
+
+        it('catches mismatched tags injected via a plugin (no closingTag on the parser AST)', () => {
+            //this proves the check runs at validation time against the stored closingTag,
+            //so it catches AST mutated/injected by plugins, not just parser output
+            program.plugins.add({
+                name: 'inject-mismatched-closing-tag',
+                afterFileParse: (file) => {
+                    if (isXmlFile(file)) {
+                        const group = file.parser.ast.component?.children?.children?.[0];
+                        if (group) {
+                            //plugin sets a mismatched closing tag programmatically
+                            group.closingTag = { text: 'LayoutGroup' };
+                        }
+                    }
+                }
+            });
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup" />
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(file, [
+                DiagnosticMessages.xmlTagMismatch('Group', 'LayoutGroup')
+            ]);
+        });
+
         it('does not include additional bslib script if already there ', () => {
             testTranspile(trim`
                 <?xml version="1.0" encoding="utf-8" ?>

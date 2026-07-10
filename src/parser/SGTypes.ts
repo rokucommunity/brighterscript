@@ -60,6 +60,15 @@ export class SGTag {
         }
     }
 
+    /**
+     * The nested tags directly contained by this tag. Base tags have no children;
+     * subclasses that contain other tags override this. Used for AST traversal
+     * (e.g. validation) so it works regardless of how the AST was constructed.
+     */
+    public getChildren(): SGTag[] {
+        return [];
+    }
+
     transpile(state: TranspileState): SourceNode {
         return new SourceNode(null, null, state.srcPath, [
             state.indentText,
@@ -111,6 +120,10 @@ export class SGNode extends SGTag {
         closingTag?: SGToken
     ) {
         super(tag, attributes, range, closingTag);
+    }
+
+    public getChildren(): SGTag[] {
+        return this.children;
     }
 
     protected transpileBody(state: TranspileState): (string | SourceNode)[] {
@@ -343,6 +356,10 @@ export class SGInterface extends SGTag {
         }
     }
 
+    public getChildren(): SGTag[] {
+        return [...this.fields, ...this.functions];
+    }
+
     protected transpileBody(state: TranspileState): (string | SourceNode)[] {
         const body: (string | SourceNode)[] = ['>\n'];
         state.blockDepth++;
@@ -402,6 +419,19 @@ export class SGComponent extends SGTag {
     }
     set extends(value: string) {
         this.setAttribute('extends', value);
+    }
+
+    public getChildren(): SGTag[] {
+        const result: SGTag[] = [];
+        if (this.api) {
+            result.push(this.api);
+        }
+        result.push(...this.scripts);
+        if (this.children) {
+            result.push(this.children);
+        }
+        result.push(...this.customizations);
+        return result;
     }
 
     protected transpileBody(state: TranspileState): (string | SourceNode)[] {

@@ -159,7 +159,7 @@ describe('SGParser', () => {
         });
     });
 
-    it('Adds error when tag names mismatch', () => {
+    it('captures the closing tag name on the AST when it mismatches', () => {
         const parser = new SGParser();
         parser.parse(
             'pkg:/components/ParentScene.xml', trim`
@@ -171,10 +171,29 @@ describe('SGParser', () => {
                 </children>
             </component>
         `);
-        expect(parser.diagnostics).to.be.lengthOf(1);
-        expect(parser.diagnostics[0]).to.deep.include({
-            ...DiagnosticMessages.xmlTagMismatch('Group', 'LayoutGroup'),
-            range: Range.create(4, 10, 4, 21)
-        });
+        //parsing does not emit the mismatch diagnostic; that happens at validation time
+        expect(parser.diagnostics).to.be.lengthOf(0);
+        //but the parser should capture the (mismatched) closing tag so validation can inspect it
+        const group = parser.ast.component.children.children[0];
+        expect(group.tag.text).to.equal('Group');
+        expect(group.closingTag?.text).to.equal('LayoutGroup');
+        expect(group.closingTag?.range).to.eql(Range.create(4, 10, 4, 21));
+    });
+
+    it('leaves closingTag undefined for self-closing tags', () => {
+        const parser = new SGParser();
+        parser.parse(
+            'pkg:/components/ParentScene.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="ChildScene" extends="ParentScene">
+                <children>
+                    <Group id="myGroup" />
+                </children>
+            </component>
+        `);
+        expect(parser.diagnostics).to.be.lengthOf(0);
+        const group = parser.ast.component.children.children[0];
+        expect(group.tag.text).to.equal('Group');
+        expect(group.closingTag).to.be.undefined;
     });
 });

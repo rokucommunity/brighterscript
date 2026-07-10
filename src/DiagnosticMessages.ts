@@ -382,11 +382,6 @@ export let DiagnosticMessages = {
         code: 1070,
         severity: DiagnosticSeverity.Error
     }),
-    xmlTagMismatch: (openingTag: string, closingTag: string) => ({
-        message: `Mismatched closing tag: expected '</${openingTag}>' but found '</${closingTag}>'`,
-        code: 1155,
-        severity: DiagnosticSeverity.Error
-    }),
     expectedLabelIdentifierAfterGotoKeyword: () => ({
         message: `Expected label identifier after 'goto' keyword`,
         code: 1071,
@@ -837,6 +832,11 @@ export let DiagnosticMessages = {
     rsgVersionRemoved: (rsgVersion: string, removedAt: string, replacement: string) => ({
         message: `rsg_version=${rsgVersion} was removed in firmware ${removedAt}; use rsg_version=${replacement}`,
         code: 1154,
+        severity: DiagnosticSeverity.Error
+    }),
+    xmlTagMismatch: (openingTag: string, closingTag: string) => ({
+        message: `Mismatched closing tag: expected '</${openingTag}>' but found '</${closingTag}>'`,
+        code: 1155,
         severity: DiagnosticSeverity.Error
     })
 };

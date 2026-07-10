@@ -188,14 +188,6 @@ function mapElement({ children }: ElementCstNode, diagnostics: Diagnostic[]): SG
     const name = mapToken(nameToken);
     const closingName = closingNameToken ? mapToken(closingNameToken) : undefined;
 
-    // Check for tag mismatch
-    if (closingName && name.text !== closingName.text) {
-        diagnostics.push({
-            ...DiagnosticMessages.xmlTagMismatch(name.text, closingName.text),
-            range: closingName.range
-        });
-    }
-
     const attributes = mapAttributes(children.attribute);
     const content = children.content?.[0];
     switch (name.text) {
@@ -222,10 +214,10 @@ function mapElement({ children }: ElementCstNode, diagnostics: Diagnostic[]): SG
             const cdata = getCdata(content);
             return new SGScript(name, attributes, cdata, range, closingName);
         case 'children':
-            const childrenContent = mapNodes(content, diagnostics);
+            const childrenContent = mapNodes(content);
             return new SGChildren(name, childrenContent, range, closingName);
         default:
-            const nodeContent = mapNodes(content, diagnostics);
+            const nodeContent = mapNodes(content);
             return new SGNode(name, attributes, nodeContent, range, closingName);
     }
 }
@@ -237,7 +229,7 @@ function reportUnexpectedChildren(name: SGToken, diagnostics: Diagnostic[]) {
     });
 }
 
-function mapNode({ children }: ElementCstNode, diagnostics?: Diagnostic[]): SGNode {
+function mapNode({ children }: ElementCstNode): SGNode {
     const nameToken = children.Name[0];
     const closingNameToken = children.END_NAME?.[0];
     let range: Range;
@@ -252,17 +244,9 @@ function mapNode({ children }: ElementCstNode, diagnostics?: Diagnostic[]): SGNo
     const name = mapToken(nameToken);
     const closingName = closingNameToken ? mapToken(closingNameToken) : undefined;
 
-    // Check for tag mismatch
-    if (closingName && name.text !== closingName.text && diagnostics) {
-        diagnostics.push({
-            ...DiagnosticMessages.xmlTagMismatch(name.text, closingName.text),
-            range: closingName.range
-        });
-    }
-
     const attributes = mapAttributes(children.attribute);
     const content = children.content?.[0];
-    const nodeContent = mapNodes(content, diagnostics);
+    const nodeContent = mapNodes(content);
     return new SGNode(name, attributes, nodeContent, range, closingName);
 }
 
@@ -293,12 +277,12 @@ function mapElements(content: ContentCstNode, allow: string[], diagnostics: Diag
     return tags;
 }
 
-function mapNodes(content: ContentCstNode, diagnostics?: Diagnostic[]): SGNode[] {
+function mapNodes(content: ContentCstNode): SGNode[] {
     if (!content) {
         return [];
     }
     const { element } = content.children;
-    return element?.map(element => mapNode(element, diagnostics)) ?? [];
+    return element?.map(element => mapNode(element));
 }
 
 function hasElements(content: ContentCstNode): boolean {
