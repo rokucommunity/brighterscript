@@ -1165,6 +1165,12 @@ export let DiagnosticMessages = {
         legacyCode: 1154,
         severity: DiagnosticSeverity.Error,
         code: 'rsg-version-removed'
+    }),
+    deprecatedBsConfigOption: (optionName: string) => ({
+        message: `'${optionName}' is deprecated at the top level of bsconfig.json. Move it into 'compilerOptions.${optionName}' instead`,
+        legacyCode: 1155,
+        severity: DiagnosticSeverity.Warning,
+        code: 'deprecated-bsconfig-option'
     })
 };
 export const defaultMaximumTruncationLength = 160;
