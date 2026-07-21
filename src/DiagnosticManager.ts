@@ -13,7 +13,8 @@ import type { Logger } from './logging';
 import { LogLevel, createLogger } from './logging';
 import type { Program } from './Program';
 import type { BrsFile } from './files/BrsFile';
-import { DiagnosticCodeMap } from './DiagnosticMessages';
+import { DiagnosticCodeMap, DiagnosticMessages } from './DiagnosticMessages';
+import * as path from 'path';
 
 interface DiagnosticWithContexts {
     diagnostic: BsDiagnosticWithKey;
@@ -488,6 +489,25 @@ export class DiagnosticManager {
             this.diagnosticFilterer.options = this.options;
         }
         return this.diagnosticFilterer.isFileCompletelyFiltered(file);
+    }
+
+    /**
+     * Flag `diagnosticFilters` entries that look like file paths/globs rather than diagnostic codes.
+     * This is a common mistake when migrating a bsconfig.json from the v0-style filters (which were file globs)
+     */
+    public detectPathLikeDiagnosticFilterCodes(config: FinalizedBsConfig, context?: DiagnosticContext) {
+        const pathLikeCodes = this.diagnosticFilterer.getPathLikeDiagnosticFilterCodes(config);
+        if (pathLikeCodes.length === 0) {
+            return;
+        }
+        const location = util.createLocationFromRange(
+            util.pathToUri(config.project ?? path.join(config.cwd, 'bsconfig.json')),
+            util.createRange(0, 0, 0, 0)
+        );
+        this.register(pathLikeCodes.map(code => ({
+            ...DiagnosticMessages.diagnosticFilterLooksLikeFilePath(code.toString()),
+            location: location
+        })), context);
     }
 }
 

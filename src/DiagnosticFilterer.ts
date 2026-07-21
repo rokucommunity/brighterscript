@@ -417,4 +417,48 @@ export class DiagnosticFilterer {
         }
 
     }
+
+    /**
+     * Does this diagnostic filter "code" value look like a file path/glob instead of a diagnostic code?
+     * v0-style `diagnosticFilters` entries were file globs, but v1 treats bare string/number entries as codes.
+     * This heuristic catches the common glob patterns left over from a v0-style config.
+     */
+    public isCodeValuePathLike(value: number | string): boolean {
+        if (typeof value !== 'string') {
+            return false;
+        }
+        const lowerValue = value.toLowerCase();
+        return (
+            value.includes('./') ||
+            value.includes('**') ||
+            lowerValue.endsWith('.bs') ||
+            lowerValue.endsWith('.brs') ||
+            lowerValue.endsWith('.xml')
+        );
+    }
+
+    /**
+     * Scan the (non-v0-compat) `diagnosticFilters` config for entries that look like file paths/globs
+     * rather than diagnostic codes, to help teams migrating from the v0-style config.
+     */
+    public getPathLikeDiagnosticFilterCodes(config: BsConfig): (number | string)[] {
+        if (config.diagnosticFiltersV0Compatibility) {
+            return [];
+        }
+        const result = new Set<number | string>();
+        for (let filter of config.diagnosticFilters ?? []) {
+            if ((typeof filter === 'string' || typeof filter === 'number') && this.isCodeValuePathLike(filter)) {
+                result.add(filter);
+                continue;
+            }
+            if (filter && typeof filter === 'object' && 'codes' in filter && Array.isArray(filter.codes)) {
+                for (const code of filter.codes) {
+                    if (this.isCodeValuePathLike(code)) {
+                        result.add(code);
+                    }
+                }
+            }
+        }
+        return [...result];
+    }
 }
