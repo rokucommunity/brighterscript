@@ -267,7 +267,7 @@ export class ReferenceType extends BscType {
                 this.referenceChain.add(resolvedType);
                 resolvedType = (resolvedType as any)?.getTarget?.();
             }
-            this.tableProvider().setCachedType(this.memberKey, { type: resolvedType }, { flags: this.flags });
+            symbolTable.setCachedType(this.memberKey, { type: resolvedType }, { flags: this.flags });
         }
 
         if (resolvedType && !isAnyReferenceType(resolvedType)) {
