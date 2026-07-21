@@ -1,0 +1,57 @@
+' Auto-generated fixture component-local file for the validate-scope benchmark target.
+' Heavily references shared.* types (ReferenceTypes resolved across file/scope boundaries).
+namespace comp2
+
+    class Local0
+        public sharedField as shared.Class10
+        public sharedIface as shared.Interface0
+        public function process(input as shared.Class10) as shared.Class11
+            return input.field1
+        end function
+    end class
+
+    class Local1
+        public sharedField as shared.Class11
+        public sharedIface as shared.Interface1
+        public function process(input as shared.Class11) as shared.Class12
+            return input.field1
+        end function
+    end class
+
+    class Local2
+        public sharedField as shared.Class12
+        public sharedIface as shared.Interface2
+        public function process(input as shared.Class12) as shared.Class13
+            return input.field1
+        end function
+    end class
+
+    class Local3
+        public sharedField as shared.Class13
+        public sharedIface as shared.Interface3
+        public function process(input as shared.Class13) as shared.Class14
+            return input.field1
+        end function
+    end class
+
+    class Local4
+        public sharedField as shared.Class14
+        public sharedIface as shared.Interface4
+        public function process(input as shared.Class14) as shared.Class15
+            return input.field1
+        end function
+    end class
+
+    class Local5
+        public sharedField as shared.Class15
+        public sharedIface as shared.Interface5
+        public function process(input as shared.Class15) as shared.Class16
+            return input.field1
+        end function
+    end class
+
+    function init()
+        instance = new Local0()
+        print instance
+    end function
+end namespace

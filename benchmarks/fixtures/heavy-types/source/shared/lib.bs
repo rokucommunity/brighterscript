@@ -1,0 +1,316 @@
+' Auto-generated fixture: heavy cross-type-reference BrighterScript file
+' Used by the validate-scope benchmark target to stress-test ReferenceType resolution
+' across multiple component scopes.
+namespace shared
+
+    interface Interface0
+        fieldA as Class0
+        fieldB as Class1
+        function methodA(value as Class0) as Class1
+    end interface
+
+    interface Interface1
+        fieldA as Class2
+        fieldB as Class3
+        function methodA(value as Class2) as Class3
+    end interface
+
+    interface Interface2
+        fieldA as Class4
+        fieldB as Class5
+        function methodA(value as Class4) as Class5
+    end interface
+
+    interface Interface3
+        fieldA as Class6
+        fieldB as Class7
+        function methodA(value as Class6) as Class7
+    end interface
+
+    interface Interface4
+        fieldA as Class8
+        fieldB as Class9
+        function methodA(value as Class8) as Class9
+    end interface
+
+    interface Interface5
+        fieldA as Class10
+        fieldB as Class11
+        function methodA(value as Class10) as Class11
+    end interface
+
+    interface Interface6
+        fieldA as Class12
+        fieldB as Class13
+        function methodA(value as Class12) as Class13
+    end interface
+
+    interface Interface7
+        fieldA as Class14
+        fieldB as Class15
+        function methodA(value as Class14) as Class15
+    end interface
+
+    interface Interface8
+        fieldA as Class16
+        fieldB as Class17
+        function methodA(value as Class16) as Class17
+    end interface
+
+    interface Interface9
+        fieldA as Class18
+        fieldB as Class19
+        function methodA(value as Class18) as Class19
+    end interface
+
+    class Class0
+        public field1 as Class1
+        public field2 as Class2
+        public field3 as Class3
+        public ifaceField as Interface0
+        public function transform(input as Class1) as Class2
+            return m.field2
+        end function
+    end class
+
+    class Class1
+        public field1 as Class2
+        public field2 as Class3
+        public field3 as Class4
+        public ifaceField as Interface1
+        public function transform(input as Class2) as Class3
+            return m.field2
+        end function
+    end class
+
+    class Class2
+        public field1 as Class3
+        public field2 as Class4
+        public field3 as Class5
+        public ifaceField as Interface2
+        public function transform(input as Class3) as Class4
+            return m.field2
+        end function
+    end class
+
+    class Class3
+        public field1 as Class4
+        public field2 as Class5
+        public field3 as Class6
+        public ifaceField as Interface3
+        public function transform(input as Class4) as Class5
+            return m.field2
+        end function
+    end class
+
+    class Class4
+        public field1 as Class5
+        public field2 as Class6
+        public field3 as Class7
+        public ifaceField as Interface4
+        public function transform(input as Class5) as Class6
+            return m.field2
+        end function
+    end class
+
+    class Class5
+        public field1 as Class6
+        public field2 as Class7
+        public field3 as Class8
+        public ifaceField as Interface5
+        public function transform(input as Class6) as Class7
+            return m.field2
+        end function
+    end class
+
+    class Class6
+        public field1 as Class7
+        public field2 as Class8
+        public field3 as Class9
+        public ifaceField as Interface6
+        public function transform(input as Class7) as Class8
+            return m.field2
+        end function
+    end class
+
+    class Class7
+        public field1 as Class8
+        public field2 as Class9
+        public field3 as Class10
+        public ifaceField as Interface7
+        public function transform(input as Class8) as Class9
+            return m.field2
+        end function
+    end class
+
+    class Class8
+        public field1 as Class9
+        public field2 as Class10
+        public field3 as Class11
+        public ifaceField as Interface8
+        public function transform(input as Class9) as Class10
+            return m.field2
+        end function
+    end class
+
+    class Class9
+        public field1 as Class10
+        public field2 as Class11
+        public field3 as Class12
+        public ifaceField as Interface9
+        public function transform(input as Class10) as Class11
+            return m.field2
+        end function
+    end class
+
+    class Class10
+        public field1 as Class11
+        public field2 as Class12
+        public field3 as Class13
+        public ifaceField as Interface0
+        public function transform(input as Class11) as Class12
+            return m.field2
+        end function
+    end class
+
+    class Class11
+        public field1 as Class12
+        public field2 as Class13
+        public field3 as Class14
+        public ifaceField as Interface1
+        public function transform(input as Class12) as Class13
+            return m.field2
+        end function
+    end class
+
+    class Class12
+        public field1 as Class13
+        public field2 as Class14
+        public field3 as Class15
+        public ifaceField as Interface2
+        public function transform(input as Class13) as Class14
+            return m.field2
+        end function
+    end class
+
+    class Class13
+        public field1 as Class14
+        public field2 as Class15
+        public field3 as Class16
+        public ifaceField as Interface3
+        public function transform(input as Class14) as Class15
+            return m.field2
+        end function
+    end class
+
+    class Class14
+        public field1 as Class15
+        public field2 as Class16
+        public field3 as Class17
+        public ifaceField as Interface4
+        public function transform(input as Class15) as Class16
+            return m.field2
+        end function
+    end class
+
+    class Class15
+        public field1 as Class16
+        public field2 as Class17
+        public field3 as Class18
+        public ifaceField as Interface5
+        public function transform(input as Class16) as Class17
+            return m.field2
+        end function
+    end class
+
+    class Class16
+        public field1 as Class17
+        public field2 as Class18
+        public field3 as Class19
+        public ifaceField as Interface6
+        public function transform(input as Class17) as Class18
+            return m.field2
+        end function
+    end class
+
+    class Class17
+        public field1 as Class18
+        public field2 as Class19
+        public field3 as Class20
+        public ifaceField as Interface7
+        public function transform(input as Class18) as Class19
+            return m.field2
+        end function
+    end class
+
+    class Class18
+        public field1 as Class19
+        public field2 as Class20
+        public field3 as Class21
+        public ifaceField as Interface8
+        public function transform(input as Class19) as Class20
+            return m.field2
+        end function
+    end class
+
+    class Class19
+        public field1 as Class20
+        public field2 as Class21
+        public field3 as Class22
+        public ifaceField as Interface9
+        public function transform(input as Class20) as Class21
+            return m.field2
+        end function
+    end class
+
+    class Class20
+        public field1 as Class21
+        public field2 as Class22
+        public field3 as Class23
+        public ifaceField as Interface0
+        public function transform(input as Class21) as Class22
+            return m.field2
+        end function
+    end class
+
+    class Class21
+        public field1 as Class22
+        public field2 as Class23
+        public field3 as Class24
+        public ifaceField as Interface1
+        public function transform(input as Class22) as Class23
+            return m.field2
+        end function
+    end class
+
+    class Class22
+        public field1 as Class23
+        public field2 as Class24
+        public field3 as Class0
+        public ifaceField as Interface2
+        public function transform(input as Class23) as Class24
+            return m.field2
+        end function
+    end class
+
+    class Class23
+        public field1 as Class24
+        public field2 as Class0
+        public field3 as Class1
+        public ifaceField as Interface3
+        public function transform(input as Class24) as Class0
+            return m.field2
+        end function
+    end class
+
+    class Class24
+        public field1 as Class0
+        public field2 as Class1
+        public field3 as Class2
+        public ifaceField as Interface4
+        public function transform(input as Class0) as Class1
+            return m.field2
+        end function
+    end class
+
+end namespace
