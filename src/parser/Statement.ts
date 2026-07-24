@@ -4610,7 +4610,7 @@ export class ConditionalCompileConstStatement extends Statement {
 }
 
 
-export class TypeStatement extends Statement {
+export class TypeStatement extends Statement implements TypedefProvider {
     constructor(options: {
         type?: Token;
         name: Token;
@@ -4648,6 +4648,27 @@ export class TypeStatement extends Statement {
     transpile(state: BrsTranspileState) {
         //type statements have no runtime representation, so they're stripped entirely
         return [];
+    }
+
+    getTypedef(state: BrsTranspileState): TranspileResult {
+        const result: TranspileResult = [];
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
+        result.push(
+            this.tokens.type ? state.tokenToSourceNode(this.tokens.type) : 'type',
+            ' ',
+            state.tokenToSourceNode(this.tokens.name),
+            ' ',
+            this.tokens.equals ? state.tokenToSourceNode(this.tokens.equals) : '=',
+            ' ',
+            ...this.value.getTypedef(state)
+        );
+        return result;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {

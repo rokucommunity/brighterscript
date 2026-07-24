@@ -3081,6 +3081,12 @@ export class TypedFunctionTypeExpression extends Expression {
         return [this.getType({ flags: SymbolTypeFlag.typetime }).toTypeString()];
     }
 
+    public getTypedef(state: BrsTranspileState): TranspileResult {
+        //preserve the full signature (param names/types, return type) in typedefs,
+        //rather than the generic runtime type name used by `transpile()`
+        return [this.getType({ flags: SymbolTypeFlag.typetime }).toString()];
+    }
+
     public walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walkArray(this.params, visitor, options, this);
