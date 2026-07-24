@@ -4013,6 +4013,19 @@ describe('ScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('does not report cannot-find-name for unresolvable types referenced in .d.bs files', () => {
+            //simulates a .d.bs typedef whose namespace-qualified types don't actually resolve
+            //(e.g. produced by a buggy third-party rewrite tool), which should never produce diagnostics
+            program.setFile('source/util.d.bs', `
+                namespace SomeNamespace
+                    function getSomething(a as SomeNamespace.ifDraw2d) as SomeNamespace.roAssociativeArray
+                    end function
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('assignmentTypeMismatch', () => {
