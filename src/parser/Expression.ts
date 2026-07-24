@@ -10,7 +10,7 @@ import { ParseMode } from './Parser';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallableType, isCallExpression, isCallfuncExpression, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -2733,8 +2733,18 @@ export class TypeExpression extends Expression implements TypedefProvider {
     }
 
     getTypedef(state: TranspileState): TranspileResult {
+        // classes and enums always know their own fully-namespace-qualified name, regardless
+        // of how they were referenced in source (bare same-namespace shorthand, fully-qualified,
+        // etc.) - use that instead of the raw written text, which would otherwise be flattened
+        // to the type's compiled runtime symbol name (e.g. `Namespace_Type`) for class references
+        const exprType = this.getType({ flags: SymbolTypeFlag.typetime });
+        if (isClassType(exprType) || isEnumType(exprType)) {
+            return [exprType.toString()];
+        }
         // TypeDefs should pass through any valid type names
-        return this.expression.transpile(state as BrsTranspileState);
+        return this.expression.getTypedef
+            ? this.expression.getTypedef(state as BrsTranspileState)
+            : this.expression.transpile(state as BrsTranspileState);
     }
 
     getName(parseMode = ParseMode.BrighterScript): string {

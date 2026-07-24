@@ -5174,6 +5174,54 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('uses namespace-qualified type names for function params/returns referencing a same-namespace class', () => {
+            testTypedef(`
+                namespace Shapes
+                    class Circle
+                    end class
+                    sub defineCircle(newCircle as Circle)
+                    end sub
+                    function getCircle() as Circle
+                    end function
+                end namespace
+            `, trim`
+                namespace Shapes
+                    class Circle
+                        sub new()
+                        end sub
+                    end class
+                    sub defineCircle(newCircle as Shapes.Circle)
+                    end sub
+                    function getCircle() as Shapes.Circle
+                    end function
+                end namespace
+            `);
+        });
+
+        it('uses namespace-qualified type names for function params/returns referencing a fully-qualified class', () => {
+            testTypedef(`
+                namespace Shapes
+                    class Circle
+                    end class
+                    sub defineCircle(newCircle as Shapes.Circle)
+                    end sub
+                    function getCircle() as Shapes.Circle
+                    end function
+                end namespace
+            `, trim`
+                namespace Shapes
+                    class Circle
+                        sub new()
+                        end sub
+                    end class
+                    sub defineCircle(newCircle as Shapes.Circle)
+                    end sub
+                    function getCircle() as Shapes.Circle
+                    end function
+                end namespace
+            `);
+        });
+
         it('strips function body', () => {
             testTypedef(`
                 sub main(param1 as string)
