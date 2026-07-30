@@ -1,8 +1,8 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import type { DottedGetExpression, FunctionParameterExpression, LiteralExpression, TypecastExpression, TypeExpression } from './Expression';
-import { FunctionExpression } from './Expression';
+import type { DottedGetExpression, LiteralExpression, TypecastExpression } from './Expression';
+import { FunctionExpression, FunctionParameterExpression, TypeExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import type { Location } from 'vscode-languageserver';
@@ -10,10 +10,10 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isCallExpression, isCatchStatement, isConditionalCompileStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isUninitializedType, isVoidType, isWhileStatement } from '../astUtils/reflection';
+import { isCallExpression, isCatchStatement, isClassType, isConditionalCompileStatement, isEnumMemberStatement, isEnumType, isEnumStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isUninitializedType, isVoidType, isWhileStatement } from '../astUtils/reflection';
 import type { GetTypeOptions } from '../interfaces';
 import { TypeChainEntry, type TranspileResult, type TypedefProvider } from '../interfaces';
-import { createIdentifier, createInvalidLiteral, createMethodStatement, createToken } from '../astUtils/creators';
+import { createDottedIdentifier, createIdentifier, createInvalidLiteral, createMethodStatement, createToken, createVariableExpression } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { SymbolTable } from '../SymbolTable';
@@ -2606,6 +2606,23 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
     }
 }
 
+/**
+ * A `TypeExpression` whose type is already known, bypassing symbol-table resolution.
+ * Used when synthesizing a subclass's implicit constructor parameters: the cloned
+ * parameter's type expression is detached from the AST (no parent, so no symbol table
+ * to resolve against), so we resolve its type once - using the original, still-attached
+ * parameter - and bake the result in directly rather than re-resolving it.
+ */
+class ResolvedTypeExpression extends TypeExpression {
+    constructor(private readonly resolvedType: BscType, expression: Expression) {
+        super({ expression: expression });
+    }
+
+    public getType(options: GetTypeOptions): BscType {
+        return this.resolvedType;
+    }
+}
+
 export class ClassStatement extends Statement implements TypedefProvider {
     constructor(options: {
         class?: Token;
@@ -2868,6 +2885,31 @@ export class ClassStatement extends Statement implements TypedefProvider {
     }
 
     /**
+     * Clone a parent constructor's parameter for use in a synthesized subclass constructor.
+     * The clone is detached from the AST (no parent), so if the parameter's type is a class
+     * or enum, its type reference can't be re-resolved by symbol name once cloned - especially
+     * since the subclass may live in a different namespace than the one the parameter's type
+     * was originally declared in, where even a fully-qualified reference has no symbol table
+     * to resolve against. Resolve the type now (while the original is still properly attached),
+     * and bake the fully-qualified name/type directly into the clone.
+     */
+    private cloneConstructorParam(param: FunctionParameterExpression): FunctionParameterExpression {
+        const exprType = param.typeExpression?.getType({ flags: SymbolTypeFlag.typetime });
+        if (!isClassType(exprType) && !isEnumType(exprType)) {
+            return param.clone();
+        }
+        const nameParts = exprType.toString().split('.');
+        const qualifiedExpression = nameParts.length > 1 ? createDottedIdentifier(nameParts) : createVariableExpression(nameParts[0]);
+        return new FunctionParameterExpression({
+            name: param.tokens.name,
+            equals: param.tokens.equals,
+            defaultValue: param.defaultValue?.clone(),
+            as: param.tokens.as,
+            typeExpression: new ResolvedTypeExpression(exprType, qualifiedExpression)
+        });
+    }
+
+    /**
      * Determine if the specified field was declared in one of the ancestor classes
      */
     public isFieldDeclaredByAncestor(fieldName: string, ancestors: ClassStatement[]) {
@@ -2999,7 +3041,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                         modifiers: [],
                         name: createIdentifier('new'),
                         func: new FunctionExpression({
-                            parameters: params.map(x => x.clone()),
+                            parameters: params.map(x => this.cloneConstructorParam(x)),
                             body: new Block({ statements: [call] }),
                             functionType: createToken(TokenKind.Sub),
                             endFunctionType: createToken(TokenKind.EndSub),
