@@ -12,6 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'create-vsix')
     steps:
+      # GitHub withholds repository secrets from fork-triggered runs, so fail fast with a clear message
+      - name: Reject fork PRs
+        if: github.event.pull_request.head.repo.fork
+        run: |
+          echo "::error::Could not build a .vsix because fork PRs can't access the required secrets. Ask a maintainer to dispatch it manually for PR #${{ github.event.pull_request.number }}: https://github.com/${{ github.repository }}/actions/workflows/create-vsix.yml"
+          exit 1
       # Get a bot token so the bot's name shows up on all our actions
       - name: Get Token From roku-ci-token Application
         uses: tibdex/github-app-token@v1
