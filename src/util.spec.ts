@@ -12,7 +12,7 @@ import { NamespaceType } from './types/NamespaceType';
 import { ClassType } from './types/ClassType';
 import { ReferenceType } from './types/ReferenceType';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
-import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InterfaceType, InvalidType, LongIntegerType, ObjectType, StringType, TypedFunctionType, UnionType, VoidType } from './types';
+import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InterfaceType, InvalidType, LongIntegerType, ObjectType, StringType, TypedFunctionType, UninitializedType, UnionType, VoidType } from './types';
 import { TokenKind } from './lexer/TokenKind';
 import { createToken } from './astUtils/creators';
 import { createDottedIdentifier, createVariableExpression } from './astUtils/creators';
@@ -1493,6 +1493,32 @@ describe('util', () => {
 
         it('handles object Types', () => {
             expectTypeToBe(util.binaryOperatorResultType(new ObjectType(), createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+        });
+
+        it('allows = and <> comparisons of a void type against invalid', () => {
+            expectTypeToBe(util.binaryOperatorResultType(VoidType.instance, createToken(TokenKind.Equal), InvalidType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.Equal), VoidType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(VoidType.instance, createToken(TokenKind.LessGreater), InvalidType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.LessGreater), VoidType.instance), BooleanType);
+        });
+
+        it('allows = and <> comparisons of a void type against dynamic', () => {
+            expectTypeToBe(util.binaryOperatorResultType(VoidType.instance, createToken(TokenKind.Equal), DynamicType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(VoidType.instance, createToken(TokenKind.LessGreater), DynamicType.instance), BooleanType);
+        });
+
+        it('still disallows non-comparison operators on a void type', () => {
+            expect(util.binaryOperatorResultType(VoidType.instance, createToken(TokenKind.Plus), InvalidType.instance)).to.be.undefined;
+            expect(util.binaryOperatorResultType(VoidType.instance, createToken(TokenKind.Less), InvalidType.instance)).to.be.undefined;
+        });
+
+        it('still disallows comparisons of a void type against non-invalid/dynamic types', () => {
+            expect(util.binaryOperatorResultType(VoidType.instance, createToken(TokenKind.Equal), StringType.instance)).to.be.undefined;
+        });
+
+        it('still disallows = and <> comparisons of an uninitialized type against invalid', () => {
+            expect(util.binaryOperatorResultType(UninitializedType.instance, createToken(TokenKind.Equal), InvalidType.instance)).to.be.undefined;
+            expect(util.binaryOperatorResultType(UninitializedType.instance, createToken(TokenKind.LessGreater), InvalidType.instance)).to.be.undefined;
         });
     });
 
