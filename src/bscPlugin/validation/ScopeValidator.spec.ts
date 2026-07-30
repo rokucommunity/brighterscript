@@ -4912,6 +4912,67 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.operatorTypeMismatch('+', 'string or integer', 'string').message
             ]);
         });
+
+        it('allows comparing a void value against a dynamic value with =', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub logEvent(name as string)
+                    print name
+                end sub
+
+                sub main(input as dynamic)
+                    result = logEvent("started")
+                    if result = input
+                        print "same"
+                    else
+                        print "different"
+                    end if
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows comparing a void value against invalid with <>', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub getConfig()
+                end sub
+
+                sub main()
+                    config = getConfig()
+                    if config <> invalid
+                        print "config exists"
+                    else
+                        print "no config"
+                    end if
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows comparing a "void or <type>" union against invalid with <>', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub fetchChannelData()
+                end sub
+
+                sub main()
+                    channel = fetchChannelData()
+                    if true
+                        channel = {
+                            title: "Home"
+                        }
+                    end if
+
+                    if channel <> invalid
+                        print channel.title
+                    else
+                        print "no channel"
+                    end if
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('memberAccessibilityMismatch', () => {
