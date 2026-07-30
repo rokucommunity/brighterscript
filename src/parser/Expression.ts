@@ -2693,9 +2693,16 @@ export class TypeExpression extends Expression implements TypedefProvider {
          * The standard AST expression that represents the type for this TypeExpression.
          */
         expression: Expression;
+        /**
+         * An already-known type for this TypeExpression, bypassing resolution of `expression`
+         * via symbol table lookup. Useful when `expression` is not attached to (or can't resolve
+         * against) a real symbol table - e.g. a type reference synthesized for a detached AST node.
+         */
+        resolvedType?: BscType;
     }) {
         super();
         this.expression = options.expression;
+        this.resolvedType = options.resolvedType;
         this.location = util.cloneLocation(this.expression?.location);
     }
 
@@ -2705,6 +2712,12 @@ export class TypeExpression extends Expression implements TypedefProvider {
      * The standard AST expression that represents the type for this TypeExpression.
      */
     public readonly expression: Expression;
+
+    /**
+     * An already-known type for this TypeExpression. When set, `getType()` returns this
+     * directly instead of resolving `expression` via symbol table lookup.
+     */
+    public readonly resolvedType?: BscType;
 
     public readonly location: Location;
 
@@ -2729,7 +2742,7 @@ export class TypeExpression extends Expression implements TypedefProvider {
     }
 
     public getType(options: GetTypeOptions): BscType {
-        return this.expression.getType({ ...options, flags: SymbolTypeFlag.typetime });
+        return this.resolvedType ?? this.expression.getType({ ...options, flags: SymbolTypeFlag.typetime });
     }
 
     getTypedef(state: TranspileState): TranspileResult {
@@ -2760,7 +2773,8 @@ export class TypeExpression extends Expression implements TypedefProvider {
     public clone() {
         return this.finalizeClone(
             new TypeExpression({
-                expression: this.expression?.clone()
+                expression: this.expression?.clone(),
+                resolvedType: this.resolvedType
             }),
             ['expression']
         );

@@ -2606,23 +2606,6 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
     }
 }
 
-/**
- * A `TypeExpression` whose type is already known, bypassing symbol-table resolution.
- * Used when synthesizing a subclass's implicit constructor parameters: the cloned
- * parameter's type expression is detached from the AST (no parent, so no symbol table
- * to resolve against), so we resolve its type once - using the original, still-attached
- * parameter - and bake the result in directly rather than re-resolving it.
- */
-class ResolvedTypeExpression extends TypeExpression {
-    constructor(private readonly resolvedType: BscType, expression: Expression) {
-        super({ expression: expression });
-    }
-
-    public getType(options: GetTypeOptions): BscType {
-        return this.resolvedType;
-    }
-}
-
 export class ClassStatement extends Statement implements TypedefProvider {
     constructor(options: {
         class?: Token;
@@ -2905,7 +2888,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
             equals: param.tokens.equals,
             defaultValue: param.defaultValue?.clone(),
             as: param.tokens.as,
-            typeExpression: new ResolvedTypeExpression(exprType, qualifiedExpression)
+            typeExpression: new TypeExpression({ expression: qualifiedExpression, resolvedType: exprType })
         });
     }
 
