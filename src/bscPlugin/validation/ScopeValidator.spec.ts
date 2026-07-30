@@ -4900,6 +4900,18 @@ describe('ScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('detects when a union contains an incompatible type', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                function test(x as string or integer)
+                    print x + "world"
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.operatorTypeMismatch('+', 'string or integer', 'string').message
+            ]);
+        });
     });
 
     describe('memberAccessibilityMismatch', () => {
