@@ -1550,7 +1550,15 @@ export class Util {
             rightType = this.getHighestPriorityType(rightType.types);
         }
 
-        if (isVoidType(leftType) || isVoidType(rightType) || isUninitializedType(leftType) || isUninitializedType(rightType)) {
+        if (isUninitializedType(leftType) || isUninitializedType(rightType)) {
+            return undefined;
+        }
+        if (isVoidType(leftType) || isVoidType(rightType)) {
+            // = and <> can still be used to check a possibly-void value against invalid/dynamic
+            if ((operator.kind === TokenKind.Equal || operator.kind === TokenKind.LessGreater) &&
+                (isInvalidTypeLike(leftType) || isInvalidTypeLike(rightType) || isDynamicType(leftType) || isDynamicType(rightType))) {
+                return BooleanType.instance;
+            }
             return undefined;
         }
 
