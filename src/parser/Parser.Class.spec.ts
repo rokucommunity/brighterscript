@@ -3,11 +3,11 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import { TokenKind, AllowedLocalIdentifiers, AllowedProperties } from '../lexer/TokenKind';
 import { Lexer } from '../lexer/Lexer';
 import { Parser, ParseMode } from './Parser';
-import type { FunctionStatement, AssignmentStatement, FieldStatement } from './Statement';
+import type { FunctionStatement, AssignmentStatement, FieldStatement, ConditionalCompileStatement, MethodStatement, Block } from './Statement';
 import { ClassStatement } from './Statement';
 import { NewExpression } from './Expression';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics } from '../testHelpers.spec';
-import { isClassStatement } from '../astUtils/reflection';
+import { isClassStatement, isConditionalCompileStatement, isMethodStatement } from '../astUtils/reflection';
 import { StringType } from '../types/StringType';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import util from '../util';
@@ -559,6 +559,154 @@ describe('parser class', () => {
             expect(klassMembers.length).to.eq(1);
             // eslint-disable-next-line no-bitwise
             klassMembers.forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(SymbolTypeFlag.optional));
+        });
+    });
+
+    describe('conditional compile', () => {
+        it('allows methods inside conditional compile blocks', () => {
+            let { ast, diagnostics } = Parser.parse(`
+                class Person
+                    sub speak()
+                    end sub
+
+                    #if DEBUG
+                        sub debugSpeak()
+                            print "debug"
+                        end sub
+                    #end if
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            const klass = ast.statements[0] as ClassStatement;
+            expect(isClassStatement(klass)).to.be.true;
+            expect(isConditionalCompileStatement(klass.body[1])).to.be.true;
+            const cc = klass.body[1] as ConditionalCompileStatement;
+            expect(isMethodStatement(cc.thenBranch.statements[0])).to.be.true;
+            //both methods are registered on the class
+            expect(klass.methods.map(x => x.tokens.name.text)).to.eql(['speak', 'debugSpeak']);
+            expect(klass.memberMap['debugspeak']).to.exist;
+        });
+
+        it('allows fields inside conditional compile blocks', () => {
+            let { ast, diagnostics } = Parser.parse(`
+                class Person
+                    name as string
+                    #if DEBUG
+                        debugName as string
+                    #end if
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            const klass = ast.statements[0] as ClassStatement;
+            expect(klass.fields.map(x => x.tokens.name.text)).to.eql(['name', 'debugName']);
+        });
+
+        it('allows #else and #else if branches with members', () => {
+            let { ast, diagnostics } = Parser.parse(`
+                class Person
+                    #if DEBUG
+                        sub speak()
+                            print "debug"
+                        end sub
+                    #else if BETA
+                        sub speak()
+                            print "beta"
+                        end sub
+                    #else
+                        sub speak()
+                            print "prod"
+                        end sub
+                    #end if
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            const klass = ast.statements[0] as ClassStatement;
+            const cc = klass.body[0] as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(cc)).to.be.true;
+            expect(isMethodStatement(cc.thenBranch.statements[0])).to.be.true;
+            const elseIf = cc.elseBranch as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(elseIf)).to.be.true;
+            expect(elseIf.tokens.condition.text).to.eq('BETA');
+            expect(isMethodStatement(elseIf.thenBranch.statements[0])).to.be.true;
+            expect(isMethodStatement((elseIf.elseBranch as Block).statements[0])).to.be.true;
+            //all three speak() methods are registered
+            expect(klass.methods).to.be.lengthOf(3);
+        });
+
+        it('allows nested conditional compile blocks', () => {
+            let { ast, diagnostics } = Parser.parse(`
+                class Person
+                    #if DEBUG
+                        #if BETA
+                            sub speak()
+                            end sub
+                        #end if
+                    #end if
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            const klass = ast.statements[0] as ClassStatement;
+            const outer = klass.body[0] as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(outer)).to.be.true;
+            const inner = outer.thenBranch.statements[0] as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(inner)).to.be.true;
+            expect(isMethodStatement(inner.thenBranch.statements[0])).to.be.true;
+            expect(klass.methods).to.be.lengthOf(1);
+        });
+
+        it('allows empty conditional compile blocks', () => {
+            let { ast, diagnostics } = Parser.parse(`
+                class Person
+                    #if DEBUG
+                    #end if
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            const klass = ast.statements[0] as ClassStatement;
+            expect(isConditionalCompileStatement(klass.body[0])).to.be.true;
+        });
+
+        it('allows annotations on members inside conditional compile blocks', () => {
+            let { ast, diagnostics } = Parser.parse(`
+                class Person
+                    #if DEBUG
+                        @it("does something")
+                        sub speak()
+                        end sub
+                    #end if
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            const klass = ast.statements[0] as ClassStatement;
+            const cc = klass.body[0] as ConditionalCompileStatement;
+            const method = cc.thenBranch.statements[0] as MethodStatement;
+            expect(method.annotations?.[0]?.name).to.eq('it');
+        });
+
+        it('includes conditional members in the class type', () => {
+            let { ast, diagnostics } = Parser.parse(`
+                class Person
+                    #if DEBUG
+                        sub speak()
+                        end sub
+                    #end if
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            const klass = ast.statements[0] as ClassStatement;
+            const klassType = klass.getType({ flags: SymbolTypeFlag.typetime });
+            expect(klassType.getMemberTable().getSymbol('speak', SymbolTypeFlag.runtime)).to.exist;
+        });
+
+        it('flags unterminated conditional compile blocks in class bodies', () => {
+            let { diagnostics } = Parser.parse(`
+                class Person
+                    #if DEBUG
+                        sub speak()
+                        end sub
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expect(diagnostics.length).to.be.greaterThan(0);
         });
     });
 });
