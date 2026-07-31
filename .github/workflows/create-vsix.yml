@@ -27,8 +27,18 @@ jobs:
           private_key: ${{ secrets.BOT_PRIVATE_KEY }}
       - name: Set New GitHub Token
         run: echo "TOKEN=${{ steps.generate-token.outputs.token }}" >> $GITHUB_ENV
-      # Trigger the build on vscode-brightscript-language. That workflow interprets these
-      # inputs, builds the .vsix files, and posts the download links back on the PR
+      # Resolve the input to a full PR URL (a bare PR number refers to this repo)
+      - name: Resolve PR URL
+        id: pr
+        run: |
+          input="${{ github.event.pull_request.html_url || github.event.inputs.pr }}"
+          if [[ "$input" =~ ^[0-9]+$ ]]; then
+            input="https://github.com/${{ github.repository }}/pull/$input"
+          fi
+          echo "url=$input" >> "$GITHUB_OUTPUT"
+      # Trigger the build on vscode-brightscript-language. That workflow looks up the PR, builds the
+      # .vsix files (preferring same-named branches attached to open PRs across all the projects),
+      # and posts the download links back on the PR
       - name: Build vsix
         uses: aurelien-baudet/workflow-dispatch@v2.1.1
         id: create-vsix
@@ -39,4 +49,4 @@ jobs:
           display-workflow-run-url: true
           repo: rokucommunity/vscode-brightscript-language
           token: ${{ env.TOKEN }}
-          inputs: '{ "branch": "${{ github.head_ref }}", "pr": "${{ github.event.pull_request.html_url || github.event.inputs.pr }}", "repo": "${{ github.repository }}" }'
+          inputs: '{ "pr": "${{ steps.pr.outputs.url }}" }'
