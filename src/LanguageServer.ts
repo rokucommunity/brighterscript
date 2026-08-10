@@ -530,6 +530,16 @@ export class LanguageServer {
         this.logger.debug('onCompletion', params, cancellationToken);
 
         const srcPath = util.uriToPath(params.textDocument.uri);
+
+        //`<` is registered as a trigger character for xml element completions, but it's the less-than
+        //operator everywhere else, so ignore it for non-xml files
+        if (params.context?.triggerCharacter === '<' && !srcPath.toLowerCase().endsWith('.xml')) {
+            return {
+                items: [],
+                isIncomplete: false
+            };
+        }
+
         const completions = await this.projectManager.getCompletions({
             srcPath: srcPath,
             position: params.position,
