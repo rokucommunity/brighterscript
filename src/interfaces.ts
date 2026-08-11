@@ -8,6 +8,7 @@ import type { ParseMode } from './parser/Parser';
 import type { Program, SourceObj, TranspileObj } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
 import type { FunctionStatement } from './parser/Statement';
+import type { SGAttribute, SGNode } from './parser/SGTypes';
 import type { Expression } from './parser/AstNode';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceMapGenerator, SourceNode } from 'source-map';
@@ -391,6 +392,12 @@ export interface Plugin {
      */
     onFileValidate?: PluginHandler<OnFileValidateEvent>;
     /**
+     * Called while validating each attribute on a SceneGraph node in an xml component. Set `handled: true`
+     * to claim the attribute so brighterscript skips its own field validation of it (useful for plugins
+     * that inject or transform custom attributes).
+     */
+    onValidateXmlAttribute?: PluginHandler<OnValidateXmlAttributeEvent>;
+    /**
      * Called after each file is validated
      */
     afterFileValidate?: (file: BscFile) => void;
@@ -591,6 +598,23 @@ export interface BeforeFileValidateEvent<T extends BscFile = BscFile> {
 export interface OnFileValidateEvent<T extends BscFile = BscFile> {
     program: Program;
     file: T;
+}
+
+export interface OnValidateXmlAttributeEvent {
+    program: Program;
+    file: XmlFile;
+    /**
+     * The SceneGraph node the attribute is declared on
+     */
+    node: SGNode;
+    /**
+     * The attribute being validated
+     */
+    attribute: SGAttribute;
+    /**
+     * Set to `true` from a plugin to claim this attribute, so brighterscript skips its own validation of it
+     */
+    handled: boolean;
 }
 
 export interface OnScopeValidateEvent {

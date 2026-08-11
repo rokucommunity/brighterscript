@@ -113,6 +113,22 @@ describe('SGParser', () => {
         });
     });
 
+    it('Adds error when opening and closing tag names do not match', () => {
+        const parser = new SGParser();
+        parser.parse(
+            'pkg:/components/ChildScene.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="ChildScene" extends="Scene">
+                <children>
+                    <Rectangle></rectangle>
+                </children>
+            </component>
+        `);
+        expect(parser.diagnostics.map(x => x.code)).to.include(
+            DiagnosticMessages.xmlStartEndTagMismatch('Rectangle', 'rectangle').code
+        );
+    });
+
     it('Adds error when a leaf tag is found to have children', () => {
         const parser = new SGParser();
         parser.parse(
