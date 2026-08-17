@@ -73,7 +73,7 @@ export class BuiltInInterfaceAdder {
             const lowerIfaceName = iface.name.toLowerCase();
             const ifaceData = (interfaces[lowerIfaceName] ?? events[lowerIfaceName]) as BRSInterfaceData;
 
-            if (builtInComponent.interfaces) {
+            if (builtInComponent.interfaces && this.getLookupTable) {
                 // this type has interfaces - add them directly as members
                 const ifaceType = this.getLookupTable()?.getSymbolType(iface.name, { flags: SymbolTypeFlag.typetime });
                 if (ifaceType) {
