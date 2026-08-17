@@ -70,7 +70,9 @@ describe('WorkerThreadProject', () => {
     });
 
     afterEach(async function keepWorkerPoolWarm() {
-        this.timeout(15_000);
+        //a fresh worker's cold boot (real OS thread + ts-node/register bootstrap) can take up to the same order of
+        //magnitude as workerThreadWarmup's own 60s allowance on slower CI hardware - give this the same budget
+        this.timeout(60_000);
         fsExtra.emptyDirSync(tempDir);
         project?.dispose();
         //keep a spare worker warm for the next test (see preloadAndWaitUntilReady() for why)
