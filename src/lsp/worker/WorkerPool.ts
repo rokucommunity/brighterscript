@@ -49,7 +49,7 @@ export class WorkerPool {
      */
     private getLeastLoadedEntry(): WorkerEntry {
         return this.workers.reduce(
-            (least, current) => current.projectCount < least.projectCount ? current : least,
+            (least, current) => (current.projectCount < least.projectCount ? current : least),
             this.workers[0]
         );
     }
