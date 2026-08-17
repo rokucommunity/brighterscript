@@ -425,6 +425,15 @@ describe('Program', () => {
             expectDiagnostics(program, []);
         });
 
+        it('flags diagnosticFilters entries that exactly match a known project file, even without a glob-like pattern', () => {
+            program.setFile('manifest', '');
+            program.options.diagnosticFilters = ['manifest'] as any;
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.diagnosticFilterLooksLikeFilePath('manifest')
+            ]);
+        });
+
         it('does not produce duplicate parse errors for different component scopes', () => {
             //add a file with a parse error
             program.setFile('components/lib.brs', `

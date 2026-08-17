@@ -496,7 +496,10 @@ export class DiagnosticManager {
      * This is a common mistake when migrating a bsconfig.json from the v0-style filters (which were file globs)
      */
     public detectPathLikeDiagnosticFilterCodes(config: FinalizedBsConfig, context?: DiagnosticContext) {
-        const pathLikeCodes = this.diagnosticFilterer.getPathLikeDiagnosticFilterCodes(config);
+        const knownDestPaths = this.program ? new Set(
+            Object.values(this.program.files).map(file => file.destPath.toLowerCase().replace(/\\/g, '/'))
+        ) : undefined;
+        const pathLikeCodes = this.diagnosticFilterer.getPathLikeDiagnosticFilterCodes(config, knownDestPaths);
         if (pathLikeCodes.length === 0) {
             return;
         }
