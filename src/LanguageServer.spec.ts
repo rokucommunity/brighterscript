@@ -574,6 +574,27 @@ describe('LanguageServer', () => {
         });
     });
 
+    describe('critical-failure', () => {
+        it('notifies the client when a project reports a critical failure', async () => {
+            server['connection'] = connection as any;
+            const deferred = new Deferred<any>();
+            const stub = sinon.stub(server['connection'], 'sendNotification').callsFake((...args: any[]) => {
+                deferred.resolve(args);
+                return Promise.resolve();
+            });
+
+            server['projectManager']['emit']('critical-failure', {
+                project: server['projectManager'].projects[0],
+                message: 'worker thread crashed unexpectedly'
+            });
+
+            const args = await deferred.promise;
+            expect(args[0]).to.eql('critical-failure');
+            expect(args[1]).to.include('worker thread crashed unexpectedly');
+            stub.restore();
+        });
+    });
+
     describe('project-activate', () => {
         it('should sync all open document changes to all projects', async () => {
 

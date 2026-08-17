@@ -17,7 +17,12 @@ if (!parentPort) {
 
 parentPort.on('message', (message: { type: string; port: MessagePort }) => {
     if (message?.type === 'attachProject') {
-        const runner = new WorkerThreadProjectRunner();
-        runner.run(message.port);
+        try {
+            const runner = new WorkerThreadProjectRunner();
+            runner.run(message.port);
+        } catch (e) {
+            //don't let one project's setup failure crash this worker thread and take down every other project sharing it
+            console.error('Failed to attach project to worker thread', e);
+        }
     }
 });

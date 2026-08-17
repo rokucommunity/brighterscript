@@ -118,4 +118,18 @@ describe('MessageHandler', () => {
 
         localServer.dispose();
     });
+
+    it('rejects sendRequest() calls made after dispose()', async () => {
+        let client = new MessageHandler<LspProject>({ port: channel.port2 });
+        client.dispose();
+
+        let error: Error;
+        try {
+            await client.sendRequest('activate');
+        } catch (e) {
+            error = e as any;
+        }
+        expect(error).to.exist;
+        expect(error.message).to.include('disposed');
+    });
 });

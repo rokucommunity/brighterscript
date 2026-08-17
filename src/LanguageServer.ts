@@ -137,6 +137,13 @@ export class LanguageServer {
             this.sendDiagnostics(event).catch(logAndIgnoreError);
         });
 
+        //if a project's worker thread crashes unexpectedly, notify the client so the user isn't left staring at a frozen project with no explanation
+        this.projectManager.on('critical-failure', (event) => {
+            const message = `[${util.getProjectLogName(event.project)}] ${event.message}`;
+            this.logger.error(message);
+            this.sendCriticalFailure(message);
+        });
+
         // Send all open document changes whenever a project is activated. This is necessary because at project startup, the project loads files from disk
         // and may not have the latest unsaved file changes. Any existing projects that already use these files will just ignore the changes
         // because the file contents haven't changed.

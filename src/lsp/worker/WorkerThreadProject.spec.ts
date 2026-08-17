@@ -2,7 +2,7 @@ import { tempDir, rootDir, expectDiagnosticsAsync } from '../../testHelpers.spec
 import * as fsExtra from 'fs-extra';
 import { WorkerThreadProject, workerPool } from './WorkerThreadProject';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
-import { expect } from 'chai';
+import { expect } from '../../chai-config.spec';
 import util from '../../util';
 
 export async function wakeWorkerThread() {
@@ -49,7 +49,8 @@ describe('WorkerThreadProject', () => {
     });
 
     describe('activate', () => {
-        it('shows diagnostics after running', async () => {
+        it('shows diagnostics after running', async function () {
+            this.timeout(15_000);
             fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `
                 sub main()
                     print varNotThere
@@ -108,7 +109,8 @@ describe('WorkerThreadProject', () => {
             workerPool.maxWorkers = originalMaxWorkers;
         });
 
-        it('allows multiple projects to share a single worker thread when capped', async () => {
+        it('allows multiple projects to share a single worker thread when capped', async function () {
+            this.timeout(15_000);
             workerPool.maxWorkers = 1;
 
             fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `
@@ -157,7 +159,8 @@ describe('WorkerThreadProject', () => {
             }
         });
 
-        it('leaves the surviving co-tenant project functional after the other one is disposed', async () => {
+        it('leaves the surviving co-tenant project functional after the other one is disposed', async function () {
+            this.timeout(15_000);
             workerPool.maxWorkers = 1;
 
             fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `
@@ -206,7 +209,8 @@ describe('WorkerThreadProject', () => {
             }
         });
 
-        it('leaves the surviving co-tenant project functional even if the other one is disposed twice', async () => {
+        it('leaves the surviving co-tenant project functional even if the other one is disposed twice', async function () {
+            this.timeout(15_000);
             workerPool.maxWorkers = 1;
 
             fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `

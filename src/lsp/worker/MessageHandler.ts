@@ -96,6 +96,9 @@ export class MessageHandler<T, TRequestName = MethodNames<T>> {
      * @param options.id an id for this request
      */
     public async sendRequest<R>(name: TRequestName, options?: { data: any[]; id?: number }) {
+        if (this.isDisposed) {
+            throw new Error(`Cannot send request '${name}' because MessageHandler is disposed`);
+        }
         const request: WorkerMessage = {
             type: 'request',
             name: name as any,

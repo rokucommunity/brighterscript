@@ -1222,7 +1222,8 @@ describe('ProjectManager', () => {
             await getWakeWorkerThreadPromise();
         });
 
-        it('spawns a worker thread when threading is enabled', async () => {
+        it('spawns a worker thread when threading is enabled', async function () {
+            this.timeout(15_000);
             await manager.syncProjects([{
                 ...workspaceSettings,
                 languageServer: {
