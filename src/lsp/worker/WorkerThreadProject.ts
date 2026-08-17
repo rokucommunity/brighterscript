@@ -1,5 +1,6 @@
 import * as EventEmitter from 'eventemitter3';
 import { Worker } from 'worker_threads';
+import type { MessagePort } from 'worker_threads';
 import type { WorkerMessage } from './MessageHandler';
 import { MessageHandler } from './MessageHandler';
 import util from '../../util';
@@ -65,11 +66,14 @@ export class WorkerThreadProject implements LspProject {
         this.workspaceFolder = options.workspaceFolder ? util.standardizePath(options.workspaceFolder) : options.workspaceFolder;
         this.projectNumber = options.projectNumber;
 
-        // start a new worker thread or get an unused existing thread
-        this.worker = workerPool.getWorker();
+        // get a dedicated MessagePort on a (possibly shared) worker thread
+        const assignment = workerPool.assignProject();
+        this.worker = assignment.worker;
+        this.port = assignment.port;
+        this.worker.on('exit', this.handleWorkerExit);
         this.messageHandler = new MessageHandler<LspProject>({
             name: 'MainThread',
-            port: this.worker,
+            port: this.port,
             onRequest: this.processRequest.bind(this),
             onUpdate: this.processUpdate.bind(this)
         });
@@ -149,9 +153,34 @@ export class WorkerThreadProject implements LspProject {
     manifestSrcPath?: string;
 
     /**
-     * The worker thread where the actual project will execute
+     * The worker thread where the actual project will execute. May be shared with other projects.
      */
     private worker: Worker;
+
+    /**
+     * This project's dedicated MessagePort on `worker`, used for all request/response/update traffic
+     */
+    private port: MessagePort;
+
+    /**
+     * True once `dispose()` has run. Used to distinguish an intentional worker shutdown from an unexpected crash.
+     */
+    private isDisposed = false;
+
+    /**
+     * Called if this project's worker thread exits. If we didn't cause that ourselves via `dispose()`,
+     * treat it as a critical failure so the user finds out instead of every request just hanging forever.
+     */
+    private handleWorkerExit = (code: number) => {
+        if (this.isDisposed) {
+            return;
+        }
+        this.logger.error(`Worker thread for project #${this.projectNumber} exited unexpectedly with code ${code}`);
+        //emit() is async (it schedules on next tick); this handler can't be async since it's an EventEmitter callback, so void it per project convention
+        void this.emit('critical-failure', {
+            message: `The BrighterScript language server's worker thread crashed unexpectedly (exit code ${code}). This project (and any others sharing its worker thread) will stop responding until the language server is reloaded.`
+        });
+    };
 
     /**
      * Path to the project. For directory-only projects, this is the path to the dir. For bsconfig.json projects, this is the path to the config.
@@ -325,14 +354,18 @@ export class WorkerThreadProject implements LspProject {
     public disposables: LspProject['disposables'] = [];
 
     public dispose() {
+        this.isDisposed = true;
+        this.worker?.off('exit', this.handleWorkerExit);
+
         for (let disposable of this.disposables ?? []) {
             disposable?.dispose?.();
         }
         this.disposables = [];
 
-        //move the worker back to the pool so it can be used again
+        //close our dedicated port and release our slot on the worker (which terminates the worker if it's now empty)
+        this.port?.close();
         if (this.worker) {
-            workerPool.releaseWorker(this.worker);
+            workerPool.releaseProject(this.worker);
         }
         this.emitter?.removeAllListeners();
     }
