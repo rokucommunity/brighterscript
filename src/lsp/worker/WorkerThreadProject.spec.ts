@@ -156,5 +156,105 @@ describe('WorkerThreadProject', () => {
                 projectB.dispose();
             }
         });
+
+        it('leaves the surviving co-tenant project functional after the other one is disposed', async () => {
+            workerPool.maxWorkers = 1;
+
+            fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `
+                sub main()
+                    print "project A"
+                end sub
+            `);
+            const rootDirB = `${tempDir}/projectB`;
+            fsExtra.outputFileSync(`${rootDirB}/source/main.brs`, `
+                sub main()
+                    print varNotThere
+                end sub
+            `);
+
+            const projectB = new WorkerThreadProject();
+            try {
+                await project.activate({
+                    projectKey: undefined,
+                    projectDir: rootDir,
+                    workspaceFolder: rootDir,
+                    bsconfigPath: undefined,
+                    projectNumber: 1
+                });
+                await projectB.activate({
+                    projectKey: undefined,
+                    projectDir: rootDirB,
+                    workspaceFolder: rootDirB,
+                    bsconfigPath: undefined,
+                    projectNumber: 2
+                });
+
+                //both projects should be sharing the same (single) worker thread
+                expect(workerPool['workers']).to.be.lengthOf(1);
+
+                //dispose project A only. project B (and the shared worker) should keep working.
+                project.dispose();
+
+                await projectB.validate();
+                const diagnosticsB = await projectB.getDiagnostics();
+                expect(diagnosticsB).to.be.lengthOf(1);
+                await expectDiagnosticsAsync(diagnosticsB, [
+                    DiagnosticMessages.cannotFindName('varNotThere').message
+                ]);
+            } finally {
+                projectB.dispose();
+            }
+        });
+
+        it('leaves the surviving co-tenant project functional even if the other one is disposed twice', async () => {
+            workerPool.maxWorkers = 1;
+
+            fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `
+                sub main()
+                    print "project A"
+                end sub
+            `);
+            const rootDirB = `${tempDir}/projectB`;
+            fsExtra.outputFileSync(`${rootDirB}/source/main.brs`, `
+                sub main()
+                    print varNotThere
+                end sub
+            `);
+
+            const projectB = new WorkerThreadProject();
+            try {
+                await project.activate({
+                    projectKey: undefined,
+                    projectDir: rootDir,
+                    workspaceFolder: rootDir,
+                    bsconfigPath: undefined,
+                    projectNumber: 1
+                });
+                await projectB.activate({
+                    projectKey: undefined,
+                    projectDir: rootDirB,
+                    workspaceFolder: rootDirB,
+                    bsconfigPath: undefined,
+                    projectNumber: 2
+                });
+
+                //both projects should be sharing the same (single) worker thread
+                expect(workerPool['workers']).to.be.lengthOf(1);
+
+                //simulate the double-dispose pattern used by this file's beforeEach/afterEach hooks
+                project.dispose();
+                project.dispose();
+
+                //project B (and the shared worker) should still be alive and functional
+                await projectB.validate();
+                const diagnosticsB = await projectB.getDiagnostics();
+                expect(diagnosticsB).to.be.lengthOf(1);
+                await expectDiagnosticsAsync(diagnosticsB, [
+                    DiagnosticMessages.cannotFindName('varNotThere').message
+                ]);
+            } finally {
+                projectB.dispose();
+            }
+        });
     });
 });

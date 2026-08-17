@@ -180,6 +180,9 @@ export class WorkerThreadProject implements LspProject {
         void this.emit('critical-failure', {
             message: `The BrighterScript language server's worker thread crashed unexpectedly (exit code ${code}). This project (and any others sharing its worker thread) will stop responding until the language server is reloaded.`
         });
+        //the worker is gone, so any in-flight requests will never get a response. Dispose the message handler
+        //so it rejects those pending requests instead of leaving callers hanging forever.
+        this.messageHandler?.dispose();
     };
 
     /**
@@ -354,6 +357,9 @@ export class WorkerThreadProject implements LspProject {
     public disposables: LspProject['disposables'] = [];
 
     public dispose() {
+        if (this.isDisposed) {
+            return;
+        }
         this.isDisposed = true;
         this.worker?.off('exit', this.handleWorkerExit);
 

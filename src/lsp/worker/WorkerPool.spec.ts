@@ -5,7 +5,16 @@ import * as sinon from 'sinon';
 
 describe('WorkerPool', () => {
     let pool: WorkerPool;
-    let workers: Array<Worker & { postMessage: sinon.SinonStub; terminate: sinon.SinonStub }> = [];
+    let workers: Array<Worker & { postMessage: sinon.SinonStub; terminate: sinon.SinonStub; once: sinon.SinonStub }> = [];
+
+    /**
+     * Simulate a worker unexpectedly exiting by invoking the `'exit'` handler that `WorkerPool` registered on it
+     * via `worker.once('exit', ...)`
+     */
+    function emitExit(worker: { once: sinon.SinonStub }) {
+        const call = worker.once.getCalls().find(c => c.args[0] === 'exit');
+        call?.args[1]?.();
+    }
 
     beforeEach(() => {
         workers = [];
@@ -13,7 +22,8 @@ describe('WorkerPool', () => {
         pool = new WorkerPool(() => {
             const worker = {
                 postMessage: sinon.stub(),
-                terminate: sinon.stub().resolves()
+                terminate: sinon.stub().resolves(),
+                once: sinon.stub()
             } as any;
             workers.push(worker);
             return worker;
@@ -27,17 +37,19 @@ describe('WorkerPool', () => {
     });
 
     describe('preload', () => {
-        it('ensures enough workers have been created', () => {
+        it('respects maxWorkers even if a larger count is requested', () => {
             expect(workers.length).to.eql(0);
 
             pool.preload(5);
-            expect(workers.length).to.eql(5);
+            //maxWorkers is 2, so preload should never exceed that cap
+            expect(workers.length).to.eql(2);
 
             pool.preload(7);
-            expect(workers.length).to.eql(7);
+            expect(workers.length).to.eql(2);
         });
 
         it('does not create extra workers if enough already exist', () => {
+            pool.maxWorkers = 3;
             pool.preload(3);
             expect(workers.length).to.eql(3);
 
@@ -77,6 +89,23 @@ describe('WorkerPool', () => {
             expect(transferList).to.include(message.port);
             expect(port).to.exist;
         });
+
+        it('reuses an idle preloaded worker instead of creating a new one', () => {
+            pool.preload(2);
+            expect(workers.length).to.eql(2);
+
+            const { worker } = pool.assignProject();
+            //no new worker should have been created; the idle preloaded worker should have been reused
+            expect(workers.length).to.eql(2);
+            expect(workers).to.include(worker);
+        });
+
+        it('does not throw when maxWorkers is 0 and there are no workers yet', () => {
+            pool.maxWorkers = 0;
+            const { worker } = pool.assignProject();
+            expect(worker).to.exist;
+            expect(workers.length).to.eql(1);
+        });
     });
 
     describe('releaseProject', () => {
@@ -105,6 +134,34 @@ describe('WorkerPool', () => {
         it('does not crash when releasing an unknown worker', () => {
             const unknownWorker = {} as Worker;
             pool.releaseProject(unknownWorker);
+        });
+    });
+
+    describe('worker crash handling', () => {
+        it('removes a crashed worker from the pool so it is not selected again', () => {
+            const { worker } = pool.assignProject();
+            expect(pool['workers']).to.be.lengthOf(1);
+
+            //simulate the worker crashing/exiting unexpectedly
+            emitExit(worker as any);
+
+            expect(pool['workers']).to.be.lengthOf(0);
+
+            //a subsequent assignment should create a brand new worker instead of reusing the dead one
+            const { worker: newWorker } = pool.assignProject();
+            expect(newWorker).to.not.equal(worker);
+            expect(pool['workers']).to.be.lengthOf(1);
+        });
+
+        it('does not double-splice or re-terminate when releaseProject already removed the entry', () => {
+            const { worker } = pool.assignProject();
+            pool.releaseProject(worker);
+            expect(pool['workers']).to.be.lengthOf(0);
+
+            //the worker's real 'exit' event fires after terminate() resolves; simulate that now.
+            //this should be a safe no-op since releaseProject already removed the entry.
+            expect(() => emitExit(worker as any)).to.not.throw();
+            expect(pool['workers']).to.be.lengthOf(0);
         });
     });
 

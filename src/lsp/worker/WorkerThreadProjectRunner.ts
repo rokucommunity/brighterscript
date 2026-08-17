@@ -44,6 +44,14 @@ export class WorkerThreadProjectRunner {
         });
 
         this.requestInterceptors.activate = this.onActivate.bind(this);
+
+        //when this project's dedicated port is closed (either because the main thread called `.dispose()`
+        //on this project, or the whole channel was otherwise torn down), clean up this project's Program/Project
+        //instance even though the worker thread itself (and any other projects sharing it) keeps running.
+        parentPort.on('close', () => {
+            this.project?.dispose();
+            this.messageHandler?.dispose();
+        });
     }
 
     /**

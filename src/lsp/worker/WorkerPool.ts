@@ -41,7 +41,22 @@ export class WorkerPool {
             projectCount: 0
         };
         this.workers.push(entry);
+        //if this worker unexpectedly exits, stop tracking it so it can't be selected for future assignments
+        //(and so it doesn't permanently consume one of our `maxWorkers` slots)
+        entry.worker.once('exit', () => this.removeWorker(entry.worker));
         return entry;
+    }
+
+    /**
+     * Stop tracking a worker in this pool. Does NOT terminate the worker (it's assumed to already be gone,
+     * e.g. because it exited/crashed). Safe to call even if the worker is already untracked (e.g. because
+     * `releaseProject()` already removed it as part of an intentional shutdown).
+     */
+    private removeWorker(worker: Worker) {
+        const index = this.workers.findIndex(x => x.worker === worker);
+        if (index > -1) {
+            this.workers.splice(index, 1);
+        }
     }
 
     /**
@@ -59,25 +74,33 @@ export class WorkerPool {
      * @param count the minimum number of workers that should exist when this function exits
      */
     public preload(count: number) {
-        while (this.workers.length < count) {
+        while (this.workers.length < Math.min(count, this.maxWorkers)) {
             this.createWorker();
         }
     }
 
     /**
-     * Assign a new project to a worker thread. If the pool hasn't yet reached `maxWorkers`, a new worker
-     * is created for this project. Otherwise, the project is attached to the least-loaded existing worker
-     * via its own dedicated `MessagePort`, so multiple projects can share a single worker thread/isolate.
+     * Assign a new project to a worker thread. Prefers reusing an existing idle (zero-project) worker
+     * (e.g. one created via `preload()`). If none is available and the pool hasn't yet reached `maxWorkers`,
+     * a new worker is created for this project. Otherwise, the project is attached to the least-loaded
+     * existing worker via its own dedicated `MessagePort`, so multiple projects can share a single worker
+     * thread/isolate.
      * @returns the worker thread hosting this project, and the MessagePort dedicated to it
      */
     public assignProject(): { worker: Worker; port: MessagePort } {
-        let entry: WorkerEntry;
-        if (this.workers.length < this.maxWorkers) {
-            this.logger.log('Creating new worker thread');
-            entry = this.createWorker();
+        let entry = this.workers.find(x => x.projectCount === 0);
+        if (!entry) {
+            //`this.workers.length === 0` is included so a nonsensical `maxWorkers` (0, negative, NaN) can never
+            //leave the pool permanently stuck with zero workers
+            if (this.workers.length === 0 || this.workers.length < this.maxWorkers) {
+                this.logger.log('Creating new worker thread');
+                entry = this.createWorker();
+            } else {
+                this.logger.log('Reusing existing worker thread');
+                entry = this.getLeastLoadedEntry();
+            }
         } else {
-            this.logger.log('Reusing existing worker thread');
-            entry = this.getLeastLoadedEntry();
+            this.logger.log('Reusing preloaded/idle worker thread');
         }
         entry.projectCount++;
 
