@@ -6,8 +6,8 @@ import util, { standardizePath as s } from '../util';
 import type { SinonStub } from 'sinon';
 import { createSandbox } from 'sinon';
 import { Project } from './Project';
-import { WorkerThreadProject, workerPool } from './worker/WorkerThreadProject';
-import { getWakeWorkerThreadPromise } from './worker/WorkerThreadProject.spec';
+import { WorkerThreadProject } from './worker/WorkerThreadProject';
+import { getWakeWorkerThreadPromise, preloadAndWaitUntilReady } from './worker/WorkerThreadProject.spec';
 import type { LspDiagnostic } from './LspProject';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { FileChangeType } from 'vscode-languageserver-protocol';
@@ -43,12 +43,13 @@ describe('ProjectManager', () => {
         });
     });
 
-    afterEach(() => {
+    afterEach(async function keepWorkerPoolWarm() {
+        this.timeout(15_000);
         fsExtra.emptyDirSync(tempDir);
         sinon.restore();
         manager.dispose();
-        //keep a spare worker warm for the next test that needs real threading (see WorkerThreadProject.spec.ts's wakeWorkerThread())
-        workerPool.preload(1);
+        //keep a spare worker warm for the next test that needs real threading (see WorkerThreadProject.spec.ts's preloadAndWaitUntilReady())
+        await preloadAndWaitUntilReady(1);
     });
     let diagnosticsListeners: Array<(diagnostics: LspDiagnostic[]) => void> = [];
     let diagnosticsResponses: Array<LspDiagnostic[]> = [];
