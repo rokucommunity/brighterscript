@@ -15,6 +15,9 @@ export async function wakeWorkerThread() {
         } as any);
     } finally {
         project.dispose();
+        //keep a spare worker warm and ready so subsequent real-worker-thread tests in this run don't each pay
+        //the cost of a cold worker-thread + ts-node/register bootstrap (which can take 15+ seconds on slower CI hardware)
+        workerPool.preload(1);
     }
 }
 
@@ -46,6 +49,8 @@ describe('WorkerThreadProject', () => {
     afterEach(() => {
         fsExtra.emptyDirSync(tempDir);
         project?.dispose();
+        //keep a spare worker warm for the next test (see wakeWorkerThread() for why)
+        workerPool.preload(1);
     });
 
     describe('activate', () => {

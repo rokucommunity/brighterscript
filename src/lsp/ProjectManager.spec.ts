@@ -6,7 +6,7 @@ import util, { standardizePath as s } from '../util';
 import type { SinonStub } from 'sinon';
 import { createSandbox } from 'sinon';
 import { Project } from './Project';
-import { WorkerThreadProject } from './worker/WorkerThreadProject';
+import { WorkerThreadProject, workerPool } from './worker/WorkerThreadProject';
 import { getWakeWorkerThreadPromise } from './worker/WorkerThreadProject.spec';
 import type { LspDiagnostic } from './LspProject';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -47,6 +47,8 @@ describe('ProjectManager', () => {
         fsExtra.emptyDirSync(tempDir);
         sinon.restore();
         manager.dispose();
+        //keep a spare worker warm for the next test that needs real threading (see WorkerThreadProject.spec.ts's wakeWorkerThread())
+        workerPool.preload(1);
     });
     let diagnosticsListeners: Array<(diagnostics: LspDiagnostic[]) => void> = [];
     let diagnosticsResponses: Array<LspDiagnostic[]> = [];
