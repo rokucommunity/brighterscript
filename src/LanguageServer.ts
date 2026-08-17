@@ -1,4 +1,5 @@
 import * as path from 'path';
+import * as os from 'os';
 import type {
     CompletionItem,
     Connection,
@@ -76,6 +77,12 @@ export class LanguageServer {
      * The default number of projects that are permitted to activate concurrently.
      */
     private static projectActivationConcurrencyLimitDefault = 3;
+
+    /**
+     * The default maximum number of worker threads to use for running LSP projects. Can be overridden by
+     * per-workspace settings. Multiple projects will share a single worker thread once this limit is reached.
+     */
+    public static maxProjectWorkersDefault = Math.max(1, os.cpus().length);
 
     /**
      * The language server protocol connection, used to send and receive all requests and responses
@@ -281,6 +288,7 @@ export class LanguageServer {
         await this.syncLogLevel();
 
         this.syncProjectActivationConcurrencyLimit();
+        this.syncMaxProjectWorkers();
 
         try {
             if (this.hasConfigurationCapability) {
@@ -403,6 +411,29 @@ export class LanguageServer {
         this.projectManager.projectActivationConcurrencyLimit = concurrencyLimit;
     }
 
+    /**
+     * Get the max project workers setting from all workspaces and set the worker pool's cap to the lowest value found.
+     * This ensures that if the user has multiple workspaces open with different limits,
+     * we respect the most restrictive limit to avoid overwhelming the user's machine.
+     */
+    private syncMaxProjectWorkers() {
+        const limits = [...this.workspaceConfigsCache]
+            .map(x => x?.[1]?.languageServer?.maxProjectWorkers)
+            .filter(x => typeof x === 'number');
+
+        //if we don't have any limits defined, use our default value
+        if (limits.length === 0) {
+            limits.push(LanguageServer.maxProjectWorkersDefault);
+        }
+
+        let maxProjectWorkers = Math.min(...limits);
+        //we must always support at least 1 worker, otherwise no threaded projects could ever activate
+        if (!(maxProjectWorkers >= 1)) {
+            this.logger.log(`maxProjectWorkers was set to ${maxProjectWorkers}, which is not a valid value. Defaulting to 1.`);
+            maxProjectWorkers = 1;
+        }
+        workerPool.maxWorkers = maxProjectWorkers;
+    }
 
     @AddStackToErrorMessage
     private async onTextDocumentDidChangeContent(event: TextDocumentChangeEvent<TextDocument>) {
@@ -558,7 +589,8 @@ export class LanguageServer {
                         projectDiscoveryMaxDepth: brightscriptConfig?.languageServer?.projectDiscoveryMaxDepth ?? 15,
                         projectDiscoveryExclude: brightscriptConfig?.languageServer?.projectDiscoveryExclude,
                         logLevel: brightscriptConfig?.languageServer?.logLevel,
-                        projectActivationConcurrencyLimit: brightscriptConfig?.languageServer?.projectActivationConcurrencyLimit
+                        projectActivationConcurrencyLimit: brightscriptConfig?.languageServer?.projectActivationConcurrencyLimit,
+                        maxProjectWorkers: brightscriptConfig?.languageServer?.maxProjectWorkers
                     }
                 };
             })
@@ -601,6 +633,7 @@ export class LanguageServer {
             this.workspaceConfigsCache = configs;
 
             this.syncProjectActivationConcurrencyLimit();
+            this.syncMaxProjectWorkers();
 
             //if configuration changed, rebuild the path filterer
             await this.rebuildPathFilterer();
@@ -1028,6 +1061,7 @@ export interface BrightScriptClientConfiguration {
         logLevel: LogLevel | string;
         projectDiscoveryMaxDepth?: number;
         projectActivationConcurrencyLimit?: number;
+        maxProjectWorkers?: number;
     };
 }
 

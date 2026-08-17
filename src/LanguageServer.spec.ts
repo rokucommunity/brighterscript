@@ -26,6 +26,7 @@ import { standardizePath } from 'roku-deploy';
 import undent from 'undent';
 import { ProjectManager } from './lsp/ProjectManager';
 import type { WorkspaceConfig } from './lsp/ProjectManager';
+import { workerPool } from './lsp/worker/WorkerThreadProject';
 
 const sinon = createSandbox();
 
@@ -489,6 +490,53 @@ describe('LanguageServer', () => {
         });
     });
 
+    describe('syncMaxProjectWorkers', () => {
+        function makeConfig(workspaceFolder: string, maxWorkers?: number): WorkspaceConfig {
+            return {
+                languageServer: {
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
+                    logLevel: 'info',
+                    ...(maxWorkers !== undefined ? { maxProjectWorkers: maxWorkers } : {})
+                },
+                workspaceFolder: workspaceFolder,
+                excludePatterns: []
+            };
+        }
+
+        it('defaults to LanguageServer.maxProjectWorkersDefault when no workspaces are configured', () => {
+            server['workspaceConfigsCache'] = new Map();
+            server['syncMaxProjectWorkers']();
+            expect(workerPool.maxWorkers).to.eql(LanguageServer.maxProjectWorkersDefault);
+        });
+
+        it('reads the limit from a single workspace config', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 4)]
+            ]);
+            server['syncMaxProjectWorkers']();
+            expect(workerPool.maxWorkers).to.eql(4);
+        });
+
+        it('uses the smallest limit from multiple workspace folders', () => {
+            const folder2 = s`${tempDir}/project2`;
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 10)],
+                [folder2, makeConfig(folder2, 2)]
+            ]);
+            server['syncMaxProjectWorkers']();
+            expect(workerPool.maxWorkers).to.eql(2);
+        });
+
+        it('defaults to 1 when the configured value is less than 1', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 0)]
+            ]);
+            server['syncMaxProjectWorkers']();
+            expect(workerPool.maxWorkers).to.eql(1);
+        });
+    });
+
     describe('sendDiagnostics', () => {
         it('dedupes diagnostics found at same location from multiple projects', async () => {
             fsExtra.outputFileSync(s`${rootDir}/common/lib.brs`, `
@@ -761,7 +809,8 @@ describe('LanguageServer', () => {
                         projectDiscoveryMaxDepth: 15,
                         projectDiscoveryExclude: undefined,
                         logLevel: 'info',
-                        projectActivationConcurrencyLimit: undefined
+                        projectActivationConcurrencyLimit: undefined,
+                        maxProjectWorkers: undefined
                     }
                 }
             ]);
