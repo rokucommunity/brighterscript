@@ -52,6 +52,17 @@ export function getWakeWorkerThreadPromise() {
     return wakeWorkerThreadPromise1;
 }
 
+//Kick off the worker warmup as early as possible - at module-load time, before ANY test in the whole suite runs -
+//instead of waiting until this describe block's `before` hook is reached. Mocha `require()`s every matching spec
+//file up front before running anything, so this fires essentially at time zero of the whole process. By the time
+//execution actually reaches `workerThreadWarmup` below (potentially thousands of unrelated tests later), the real
+//OS thread + ts-node/register bootstrap this depends on has usually already finished in the background, overlapping
+//with everything that ran before it instead of adding its own cold-boot cost on top. The `before` hook still awaits
+//the same (memoized) promise for correctness and to surface any real error as a normal test failure.
+void getWakeWorkerThreadPromise().catch(() => {
+    //intentionally ignored here - the `before` hook's own `await` surfaces the real error
+});
+
 after(() => {
     workerPool.dispose();
 });
