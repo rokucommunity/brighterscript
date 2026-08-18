@@ -69,9 +69,32 @@ after(() => {
 
 describe('WorkerThreadProject', () => {
     let project: WorkerThreadProject;
+
+    //A persistent project that's never disposed until this whole describe block finishes. Its sole purpose is to
+    //hold a permanent tenant slot on the shared worker, so `WorkerPool`'s "terminate the worker once its last
+    //tenant releases" policy never actually fires between individual tests in this file: each test's own
+    //project(s) come and go freely, but this one keeps the underlying worker itself alive throughout, avoiding a
+    //real ~1-2s reboot (or 15+ seconds on slower CI hardware) between every single real-worker-thread test. Forcing
+    //`maxWorkers = 1` ensures every project activated in this file lands on that same one worker instead of
+    //spreading across several.
+    let keepAliveProject: WorkerThreadProject;
+
     before(async function workerThreadWarmup() {
         this.timeout(60_000);
         await getWakeWorkerThreadPromise();
+
+        workerPool.maxWorkers = 1;
+        keepAliveProject = new WorkerThreadProject();
+        await keepAliveProject.activate({
+            projectPath: rootDir,
+            projectNumber: 0
+        } as any);
+    });
+
+    after(() => {
+        //dispose cleanly here (rather than relying solely on the module-level workerPool.dispose() below) so this
+        //doesn't log a spurious "worker thread crashed unexpectedly" critical-failure when the pool tears down
+        keepAliveProject?.dispose();
     });
 
     beforeEach(() => {
@@ -82,11 +105,12 @@ describe('WorkerThreadProject', () => {
 
     afterEach(async function keepWorkerPoolWarm() {
         //a fresh worker's cold boot (real OS thread + ts-node/register bootstrap) can take up to the same order of
-        //magnitude as workerThreadWarmup's own 60s allowance on slower CI hardware - give this the same budget
+        //magnitude as workerThreadWarmup's own 60s allowance on slower CI hardware - give this the same budget.
+        //`keepAliveProject` above should make this a no-op in the common case; this is a defensive fallback in
+        //case something disposes it or the pool ends up empty unexpectedly.
         this.timeout(60_000);
         fsExtra.emptyDirSync(tempDir);
         project?.dispose();
-        //keep a spare worker warm for the next test (see preloadAndWaitUntilReady() for why)
         await preloadAndWaitUntilReady(1);
     });
 
