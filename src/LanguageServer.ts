@@ -137,7 +137,7 @@ export class LanguageServer {
             this.sendDiagnostics(event).catch(logAndIgnoreError);
         });
 
-        //if a project's worker thread crashes unexpectedly, notify the client so the user isn't left staring at a frozen project with no explanation
+        //notify the client if a project's worker thread crashes unexpectedly
         this.projectManager.on('critical-failure', (event) => {
             const message = `[${util.getProjectLogName(event.project)}] ${event.message}`;
             this.logger.error(message);

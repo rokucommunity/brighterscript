@@ -27,9 +27,5 @@ parentPort.on('message', (message: { type: string; port: MessagePort }) => {
     }
 });
 
-//let the main thread know this worker has finished booting (loaded ts-node/register and registered its message
-//listener) and is actually ready to receive `attachProject` messages. Spinning up a brand new worker thread involves
-//real OS thread creation plus a `ts-node/register` bootstrap, which can take anywhere from milliseconds to tens of
-//seconds depending on the machine - this signal lets callers (see WorkerPool) distinguish "the Worker object exists"
-//from "the worker can actually do anything yet".
+//tell the main thread this worker has booted and is actually ready to receive `attachProject` messages (see WorkerPool)
 parentPort.postMessage({ type: 'ready' });

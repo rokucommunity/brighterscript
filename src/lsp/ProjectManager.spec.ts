@@ -44,13 +44,12 @@ describe('ProjectManager', () => {
     });
 
     afterEach(async function keepWorkerPoolWarm() {
-        //a fresh worker's cold boot (real OS thread + ts-node/register bootstrap) can take up to the same order of
-        //magnitude as workerThreadWarmup's own 60s allowance on slower CI hardware - give this the same budget
+        //defensive fallback in case the pool ends up empty; give it a cold-boot-sized budget
         this.timeout(60_000);
         fsExtra.emptyDirSync(tempDir);
         sinon.restore();
         manager.dispose();
-        //keep a spare worker warm for the next test that needs real threading (see WorkerThreadProject.spec.ts's preloadAndWaitUntilReady())
+        //keep a spare worker warm for the next real-threading test (see WorkerThreadProject.spec.ts)
         await preloadAndWaitUntilReady(1);
     });
     let diagnosticsListeners: Array<(diagnostics: LspDiagnostic[]) => void> = [];

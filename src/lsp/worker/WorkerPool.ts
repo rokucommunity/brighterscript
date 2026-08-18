@@ -41,8 +41,7 @@ export class WorkerPool {
             projectCount: 0
         };
         this.workers.push(entry);
-        //if this worker unexpectedly exits, stop tracking it so it can't be selected for future assignments
-        //(and so it doesn't permanently consume one of our `maxWorkers` slots)
+        //stop tracking a worker once it unexpectedly exits, so it can't be reused and doesn't consume a maxWorkers slot forever
         entry.worker.once('exit', () => this.removeWorker(entry.worker));
         return entry;
     }
@@ -90,8 +89,7 @@ export class WorkerPool {
     public assignProject(): { worker: Worker; port: MessagePort } {
         let entry = this.workers.find(x => x.projectCount === 0);
         if (!entry) {
-            //`this.workers.length === 0` is included so a nonsensical `maxWorkers` (0, negative, NaN) can never
-            //leave the pool permanently stuck with zero workers
+            //the `=== 0` check guards against a nonsensical maxWorkers (0, negative, NaN) stranding the pool at zero workers
             if (this.workers.length === 0 || this.workers.length < this.maxWorkers) {
                 this.logger.log('Creating new worker thread');
                 entry = this.createWorker();

@@ -6,13 +6,8 @@ import { expect } from '../../chai-config.spec';
 import util from '../../util';
 
 /**
- * Ensure at least `count` workers exist in the shared `workerPool`, and wait until any newly-created ones have
- * actually finished booting (loaded ts-node/register and registered their message listener - see `run.ts`'s
- * `{ type: 'ready' }` postMessage) before resolving. `WorkerPool.preload()` itself returns as soon as the
- * underlying `Worker` object is constructed, which is NOT the same as the worker being able to do anything yet:
- * spinning up a real OS thread + ts-node bootstrap can take anywhere from milliseconds locally to 15+ seconds on
- * slower CI hardware. Without this wait, a "preloaded" worker handed to the next test via `assignProject()`'s
- * idle-worker-reuse can still be mid-boot, and that test's own timeout can expire before the worker ever responds.
+ * Ensure at least `count` workers exist in `workerPool`, waiting for any newly-created ones to signal readiness
+ * (see `run.ts`'s `{ type: 'ready' }` message) - `WorkerPool.preload()` alone returns before the worker can do anything.
  */
 export async function preloadAndWaitUntilReady(count: number) {
     const before = workerPool['workers'].length;
@@ -38,8 +33,7 @@ export async function wakeWorkerThread() {
         } as any);
     } finally {
         project.dispose();
-        //keep a spare worker warm and ready so subsequent real-worker-thread tests in this run don't each pay
-        //the cost of a cold worker-thread + ts-node/register bootstrap (which can take 15+ seconds on slower CI hardware)
+        //keep a spare worker warm so subsequent real-worker-thread tests skip the cold-boot cost
         await preloadAndWaitUntilReady(1);
     }
 }
@@ -52,13 +46,8 @@ export function getWakeWorkerThreadPromise() {
     return wakeWorkerThreadPromise1;
 }
 
-//Kick off the worker warmup as early as possible - at module-load time, before ANY test in the whole suite runs -
-//instead of waiting until this describe block's `before` hook is reached. Mocha `require()`s every matching spec
-//file up front before running anything, so this fires essentially at time zero of the whole process. By the time
-//execution actually reaches `workerThreadWarmup` below (potentially thousands of unrelated tests later), the real
-//OS thread + ts-node/register bootstrap this depends on has usually already finished in the background, overlapping
-//with everything that ran before it instead of adding its own cold-boot cost on top. The `before` hook still awaits
-//the same (memoized) promise for correctness and to surface any real error as a normal test failure.
+//kick off the worker warmup at module-load time (mocha requires all spec files before running any test), so its
+//cold-boot cost overlaps with everything that runs before workerThreadWarmup's `before` hook awaits it below
 void getWakeWorkerThreadPromise().catch(() => {
     //intentionally ignored here - the `before` hook's own `await` surfaces the real error
 });
@@ -70,13 +59,7 @@ after(() => {
 describe('WorkerThreadProject', () => {
     let project: WorkerThreadProject;
 
-    //A persistent project that's never disposed until this whole describe block finishes. Its sole purpose is to
-    //hold a permanent tenant slot on the shared worker, so `WorkerPool`'s "terminate the worker once its last
-    //tenant releases" policy never actually fires between individual tests in this file: each test's own
-    //project(s) come and go freely, but this one keeps the underlying worker itself alive throughout, avoiding a
-    //real ~1-2s reboot (or 15+ seconds on slower CI hardware) between every single real-worker-thread test. Forcing
-    //`maxWorkers = 1` ensures every project activated in this file lands on that same one worker instead of
-    //spreading across several.
+    //holds a permanent tenant slot on the shared worker so it never hits zero tenants (and gets terminated) between tests
     let keepAliveProject: WorkerThreadProject;
 
     before(async function workerThreadWarmup() {
@@ -92,8 +75,7 @@ describe('WorkerThreadProject', () => {
     });
 
     after(() => {
-        //dispose cleanly here (rather than relying solely on the module-level workerPool.dispose() below) so this
-        //doesn't log a spurious "worker thread crashed unexpectedly" critical-failure when the pool tears down
+        //dispose explicitly to avoid a spurious "worker crashed" log when workerPool.dispose() tears it down instead
         keepAliveProject?.dispose();
     });
 
@@ -104,10 +86,7 @@ describe('WorkerThreadProject', () => {
     });
 
     afterEach(async function keepWorkerPoolWarm() {
-        //a fresh worker's cold boot (real OS thread + ts-node/register bootstrap) can take up to the same order of
-        //magnitude as workerThreadWarmup's own 60s allowance on slower CI hardware - give this the same budget.
-        //`keepAliveProject` above should make this a no-op in the common case; this is a defensive fallback in
-        //case something disposes it or the pool ends up empty unexpectedly.
+        //defensive fallback in case keepAliveProject didn't prevent the pool from emptying; give it a cold-boot-sized budget
         this.timeout(60_000);
         fsExtra.emptyDirSync(tempDir);
         project?.dispose();

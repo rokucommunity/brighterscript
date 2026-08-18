@@ -158,8 +158,7 @@ describe('WorkerPool', () => {
             pool.releaseProject(worker);
             expect(pool['workers']).to.be.lengthOf(0);
 
-            //the worker's real 'exit' event fires after terminate() resolves; simulate that now.
-            //this should be a safe no-op since releaseProject already removed the entry.
+            //simulate the real 'exit' event firing after terminate() - should be a safe no-op, entry's already gone
             expect(() => emitExit(worker as any)).to.not.throw();
             expect(pool['workers']).to.be.lengthOf(0);
         });
