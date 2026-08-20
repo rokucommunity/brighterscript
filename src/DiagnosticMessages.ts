@@ -833,6 +833,16 @@ export let DiagnosticMessages = {
         message: `rsg_version=${rsgVersion} was removed in firmware ${removedAt}; use rsg_version=${replacement}`,
         code: 1154,
         severity: DiagnosticSeverity.Error
+    }),
+    /**
+     * @param name the full name of the function, including namespace
+     * @param length the actual length of `name`
+     * @param maxLength the maximum length a function name may be before it gets truncated by the device at runtime
+     */
+    functionNameTooLong: (name: string, length: number, maxLength: number) => ({
+        message: `Function name '${name}' is ${length} characters long, which exceeds the maximum of ${maxLength}. It will be truncated when converted with ToStr()`,
+        code: 1155,
+        severity: DiagnosticSeverity.Warning
     })
 };
 

@@ -321,6 +321,47 @@ describe('BrsFileValidator', () => {
         }]);
     });
 
+    describe('function name length', () => {
+        it('allows a function name at exactly the max length', () => {
+            const name = 'a'.repeat(89);
+            program.setFile('source/main.brs', `
+                sub ${name}()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags a function name that exceeds the max length', () => {
+            const name = 'a'.repeat(90);
+            program.setFile('source/main.brs', `
+                sub ${name}()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.functionNameTooLong(name, 90, 89),
+                range: util.createRange(1, 20, 1, 20 + name.length)
+            }]);
+        });
+
+        it('flags a namespaced function whose flattened name exceeds the max length', () => {
+            const shortName = 'b'.repeat(85);
+            program.setFile('source/main.bs', `
+                namespace alpha
+                    sub ${shortName}()
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            const flattenedName = `alpha_${shortName}`;
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.functionNameTooLong(flattenedName, flattenedName.length, 89),
+                range: util.createRange(2, 24, 2, 24 + shortName.length)
+            }]);
+        });
+    });
+
     describe('function return values', () => {
 
         it('catches sub with return value', () => {
