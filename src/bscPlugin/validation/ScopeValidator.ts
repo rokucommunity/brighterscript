@@ -154,7 +154,7 @@ export class ScopeValidator {
 
         //do many per-file checks for every file in this (and parent) scopes
         this.event.scope.enumerateBrsFiles((file) => {
-            if (!isBrsFile(file)) {
+            if (!isBrsFile(file) || file.isTypedef) {
                 return;
             }
 
@@ -168,6 +168,11 @@ export class ScopeValidator {
 
         this.event.scope.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
+
+                //typedef files (.d.bs) are ambient declarations only - never validated for diagnostics
+                if (file.isTypedef) {
+                    return;
+                }
 
                 if (this.event.program.diagnostics.canSkipScopeValidationForFile(file)) {
                     return;
@@ -277,9 +282,6 @@ export class ScopeValidator {
                         });
                     },
                     FunctionExpression: (func) => {
-                        if (file.isTypedef) {
-                            return;
-                        }
                         this.addValidationKindMetric('FunctionExpression', () => {
                             this.validateFunctionExpressionForReturn(func);
                         });
