@@ -1135,7 +1135,7 @@ export interface WorkspaceConfig {
          * The maximum number of worker threads to use for running LSP projects. Once this limit is reached,
          * additional projects are multiplexed onto existing worker threads rather than spawning new ones.
          */
-        maxProjectWorkers?: number;
+        maxWorkerThreads?: number;
     };
 }
 

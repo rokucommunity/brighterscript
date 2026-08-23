@@ -162,6 +162,24 @@ describe('WorkerPool', () => {
             expect(() => emitExit(worker as any)).to.not.throw();
             expect(pool['workers']).to.be.lengthOf(0);
         });
+
+        it('leaves no orphaned bookkeeping when a sibling releases a project after the shared worker crashed', () => {
+            pool.maxWorkers = 1;
+            const { worker } = pool.assignProject();
+            pool.assignProject();
+            expect(pool['workers']).to.be.lengthOf(1);
+
+            //the worker crashes while two projects are still attached to it
+            emitExit(worker as any);
+            expect(pool['workers']).to.be.lengthOf(0);
+
+            //each sibling project disposing afterward calls releaseProject with the now-dead worker - neither should
+            //throw, resurrect the entry, or re-terminate the worker
+            expect(() => pool.releaseProject(worker)).to.not.throw();
+            expect(() => pool.releaseProject(worker)).to.not.throw();
+            expect(pool['workers']).to.be.lengthOf(0);
+            expect((worker.terminate as sinon.SinonStub).called).to.be.false;
+        });
     });
 
     describe('dispose', () => {

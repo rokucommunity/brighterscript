@@ -80,9 +80,10 @@ export class LanguageServer {
 
     /**
      * The default maximum number of worker threads to use for running LSP projects. Can be overridden by
-     * per-workspace settings. Multiple projects will share a single worker thread once this limit is reached.
+     * per-workspace settings. Once this limit is reached, additional projects are spread evenly across the
+     * existing worker threads instead of each getting a dedicated one.
      */
-    public static maxProjectWorkersDefault = Math.max(1, os.cpus().length);
+    public static maxWorkerThreadsDefault = Math.max(1, os.cpus().length);
 
     /**
      * The language server protocol connection, used to send and receive all requests and responses
@@ -295,7 +296,7 @@ export class LanguageServer {
         await this.syncLogLevel();
 
         this.syncProjectActivationConcurrencyLimit();
-        this.syncMaxProjectWorkers();
+        this.syncMaxWorkerThreads();
 
         try {
             if (this.hasConfigurationCapability) {
@@ -419,27 +420,27 @@ export class LanguageServer {
     }
 
     /**
-     * Get the max project workers setting from all workspaces and set the worker pool's cap to the lowest value found.
+     * Get the max worker threads setting from all workspaces and set the worker pool's cap to the lowest value found.
      * This ensures that if the user has multiple workspaces open with different limits,
      * we respect the most restrictive limit to avoid overwhelming the user's machine.
      */
-    private syncMaxProjectWorkers() {
+    private syncMaxWorkerThreads() {
         const limits = [...this.workspaceConfigsCache]
-            .map(x => x?.[1]?.languageServer?.maxProjectWorkers)
+            .map(x => x?.[1]?.languageServer?.maxWorkerThreads)
             .filter(x => typeof x === 'number');
 
         //if we don't have any limits defined, use our default value
         if (limits.length === 0) {
-            limits.push(LanguageServer.maxProjectWorkersDefault);
+            limits.push(LanguageServer.maxWorkerThreadsDefault);
         }
 
-        let maxProjectWorkers = Math.min(...limits);
+        let maxWorkerThreads = Math.min(...limits);
         //we must always support at least 1 worker, otherwise no threaded projects could ever activate
-        if (!(maxProjectWorkers >= 1)) {
-            this.logger.log(`maxProjectWorkers was set to ${maxProjectWorkers}, which is not a valid value. Defaulting to 1.`);
-            maxProjectWorkers = 1;
+        if (!(maxWorkerThreads >= 1)) {
+            this.logger.log(`maxWorkerThreads was set to ${maxWorkerThreads}, which is not a valid value. Defaulting to 1.`);
+            maxWorkerThreads = 1;
         }
-        workerPool.maxWorkers = maxProjectWorkers;
+        workerPool.maxWorkers = maxWorkerThreads;
     }
 
     @AddStackToErrorMessage
@@ -597,7 +598,7 @@ export class LanguageServer {
                         projectDiscoveryExclude: brightscriptConfig?.languageServer?.projectDiscoveryExclude,
                         logLevel: brightscriptConfig?.languageServer?.logLevel,
                         projectActivationConcurrencyLimit: brightscriptConfig?.languageServer?.projectActivationConcurrencyLimit,
-                        maxProjectWorkers: brightscriptConfig?.languageServer?.maxProjectWorkers
+                        maxWorkerThreads: brightscriptConfig?.languageServer?.maxWorkerThreads
                     }
                 };
             })
@@ -640,7 +641,7 @@ export class LanguageServer {
             this.workspaceConfigsCache = configs;
 
             this.syncProjectActivationConcurrencyLimit();
-            this.syncMaxProjectWorkers();
+            this.syncMaxWorkerThreads();
 
             //if configuration changed, rebuild the path filterer
             await this.rebuildPathFilterer();
@@ -1068,7 +1069,7 @@ export interface BrightScriptClientConfiguration {
         logLevel: LogLevel | string;
         projectDiscoveryMaxDepth?: number;
         projectActivationConcurrencyLimit?: number;
-        maxProjectWorkers?: number;
+        maxWorkerThreads?: number;
     };
 }
 

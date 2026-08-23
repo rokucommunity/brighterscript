@@ -46,12 +46,6 @@ export function getWakeWorkerThreadPromise() {
     return wakeWorkerThreadPromise1;
 }
 
-//kick off the worker warmup at module-load time (mocha requires all spec files before running any test), so its
-//cold-boot cost overlaps with everything that runs before workerThreadWarmup's `before` hook awaits it below
-void getWakeWorkerThreadPromise().catch(() => {
-    //intentionally ignored here - the `before` hook's own `await` surfaces the real error
-});
-
 after(() => {
     workerPool.dispose();
 });

@@ -178,7 +178,7 @@ export class WorkerThreadProject implements LspProject {
         this.logger.error(`Worker thread for project #${this.projectNumber} exited unexpectedly with code ${code}`);
         //emit() is async; this handler can't be, so void it
         void this.emit('critical-failure', {
-            message: `The BrighterScript language server's worker thread crashed unexpectedly (exit code ${code}). This project (and any others sharing its worker thread) will stop responding until the language server is reloaded.`
+            message: `The BrighterScript language server's worker thread crashed unexpectedly (exit code ${code}). This project (and any others sharing its worker thread) will stop responding until the language server is reloaded - there is currently no automatic recovery for a crashed worker thread.`
         });
         //reject any in-flight requests instead of leaving callers hanging forever on a worker that's gone
         this.messageHandler?.dispose();

@@ -490,31 +490,31 @@ describe('LanguageServer', () => {
         });
     });
 
-    describe('syncMaxProjectWorkers', () => {
-        function makeConfig(workspaceFolder: string, maxWorkers?: number): WorkspaceConfig {
+    describe('syncMaxWorkerThreads', () => {
+        function makeConfig(workspaceFolder: string, maxWorkerThreads?: number): WorkspaceConfig {
             return {
                 languageServer: {
                     enableThreading: false,
                     enableProjectDiscovery: true,
                     logLevel: 'info',
-                    ...(maxWorkers !== undefined ? { maxProjectWorkers: maxWorkers } : {})
+                    ...(maxWorkerThreads !== undefined ? { maxWorkerThreads: maxWorkerThreads } : {})
                 },
                 workspaceFolder: workspaceFolder,
                 excludePatterns: []
             };
         }
 
-        it('defaults to LanguageServer.maxProjectWorkersDefault when no workspaces are configured', () => {
+        it('defaults to LanguageServer.maxWorkerThreadsDefault when no workspaces are configured', () => {
             server['workspaceConfigsCache'] = new Map();
-            server['syncMaxProjectWorkers']();
-            expect(workerPool.maxWorkers).to.eql(LanguageServer.maxProjectWorkersDefault);
+            server['syncMaxWorkerThreads']();
+            expect(workerPool.maxWorkers).to.eql(LanguageServer.maxWorkerThreadsDefault);
         });
 
         it('reads the limit from a single workspace config', () => {
             server['workspaceConfigsCache'] = new Map([
                 [workspacePath, makeConfig(workspacePath, 4)]
             ]);
-            server['syncMaxProjectWorkers']();
+            server['syncMaxWorkerThreads']();
             expect(workerPool.maxWorkers).to.eql(4);
         });
 
@@ -524,7 +524,7 @@ describe('LanguageServer', () => {
                 [workspacePath, makeConfig(workspacePath, 10)],
                 [folder2, makeConfig(folder2, 2)]
             ]);
-            server['syncMaxProjectWorkers']();
+            server['syncMaxWorkerThreads']();
             expect(workerPool.maxWorkers).to.eql(2);
         });
 
@@ -532,7 +532,7 @@ describe('LanguageServer', () => {
             server['workspaceConfigsCache'] = new Map([
                 [workspacePath, makeConfig(workspacePath, 0)]
             ]);
-            server['syncMaxProjectWorkers']();
+            server['syncMaxWorkerThreads']();
             expect(workerPool.maxWorkers).to.eql(1);
         });
     });
@@ -831,7 +831,7 @@ describe('LanguageServer', () => {
                         projectDiscoveryExclude: undefined,
                         logLevel: 'info',
                         projectActivationConcurrencyLimit: undefined,
-                        maxProjectWorkers: undefined
+                        maxWorkerThreads: undefined
                     }
                 }
             ]);
