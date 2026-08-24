@@ -7,7 +7,7 @@ import { TokenKind, UnreferencableBuiltins } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import { CallExpression, type FunctionExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, WhileStatement } from '../../parser/Statement';
+import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, WhileStatement } from '../../parser/Statement';
 import { DynamicType } from '../../types/DynamicType';
 import { InterfaceType } from '../../types/InterfaceType';
 import util from '../../util';
@@ -123,10 +123,13 @@ export class BrsFileValidator {
                 }
 
                 const namespace = node.findAncestor(isNamespaceStatement);
+                //the function's actual runtime name (namespaced functions get flattened into a single global name, e.g. `namespace_functionName`)
+                let runtimeName = node.name?.text;
                 //this function is declared inside a namespace
                 if (namespace) {
                     //add the transpiled name for namespaced functions to the root symbol table
                     const transpiledNamespaceFunctionName = node.getName(ParseMode.BrightScript);
+                    runtimeName = transpiledNamespaceFunctionName;
                     const funcType = node.func.getFunctionType();
                     funcType.setName(transpiledNamespaceFunctionName);
 
@@ -138,6 +141,8 @@ export class BrsFileValidator {
                         );
                     }
                 }
+
+                this.validateFunctionNameLength(node, runtimeName);
             },
             FunctionExpression: (node) => {
                 if (!node.symbolTable.hasSymbol('m')) {
@@ -244,6 +249,22 @@ export class BrsFileValidator {
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel(keyword),
             range: rangeFactory?.() ?? statement.range
         });
+    }
+
+    /**
+     * The maximum function name length, in characters, before the Roku device truncates it
+     * when converting it to a string (e.g. via `ToStr()` or when printed in a stack trace).
+     * Verified on real devices running Roku OS 15.x. See https://github.com/rokucommunity/brighterscript/issues/1003.
+     */
+    private static MaxFunctionNameLength = 89;
+
+    private validateFunctionNameLength(node: FunctionStatement, name: string) {
+        if (name && name.length > BrsFileValidator.MaxFunctionNameLength) {
+            this.event.file.addDiagnostic({
+                ...DiagnosticMessages.functionNameTooLong(name, name.length, BrsFileValidator.MaxFunctionNameLength),
+                range: node.name.range
+            });
+        }
     }
 
     private validateFunctionParameterCount(func: FunctionExpression) {
