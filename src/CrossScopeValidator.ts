@@ -263,6 +263,11 @@ export class CrossScopeValidator {
     getRequiredMap(scope: Scope) {
         const map = new Map<SymbolLookupKeys, UnresolvedSymbol>();
         scope.enumerateBrsFiles((file) => {
+            //typedef files (.d.bs) are ambient declarations only - never validated for diagnostics,
+            //so don't flag their own unresolved type references as missing symbols
+            if (file.isTypedef) {
+                return;
+            }
             for (const symbol of file.requiredSymbols) {
                 const symbolKeysArray = this.symbolMapKeys(symbol);
                 for (const symbolKeys of symbolKeysArray) {
