@@ -1434,6 +1434,9 @@ export class Program {
 
 
             })
+            .once('detect diagnostic filter issues', () => {
+                this.diagnostics.detectPathLikeDiagnosticFilterCodes(this.options, { tags: [ProgramValidatorDiagnosticsTag] });
+            })
             .onCancel(() => {
                 logValidateEnd('cancelled');
             })
