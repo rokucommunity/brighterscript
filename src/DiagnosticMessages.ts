@@ -1166,6 +1166,12 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'rsg-version-removed'
     }),
+    deprecatedBsConfigOption: (optionName: string) => ({
+        message: `'${optionName}' is deprecated at the top level of bsconfig.json. Move it into 'compilerOptions.${optionName}' instead`,
+        legacyCode: 1155,
+        severity: DiagnosticSeverity.Warning,
+        code: 'deprecated-bsconfig-option'
+    }),
     diagnosticFilterLooksLikeFilePath: (value: string) => ({
         message: `Diagnostic filter "${value}" looks like a file path or glob, not a diagnostic code. To filter diagnostics by file, use the "files" property instead: { "files": ["${value}"] }`,
         severity: DiagnosticSeverity.Warning,

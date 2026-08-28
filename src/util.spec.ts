@@ -159,6 +159,7 @@ describe('util', () => {
                 '_ancestors': [
                     s`${rootDir}/child.json`
                 ],
+                '_deprecationDiagnostics': [],
                 'cwd': s`${rootDir}/cwd`,
                 'rootDir': s`${rootDir}/rootDir`
             });
@@ -489,6 +490,105 @@ describe('util', () => {
             expect(
                 util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` }).noEmit
             ).to.be.true;
+        });
+
+        describe('compilerOptions', () => {
+            it('honors a deprecated top-level option from a loaded project file', () => {
+                fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                    sourceMap: true
+                });
+                const result = util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` });
+                expect(result.sourceMap).to.be.true;
+                expect(result.compilerOptions.sourceMap).to.be.true;
+            });
+
+            it('flags a deprecated top-level option from a loaded project file with a warning diagnostic', () => {
+                fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                    sourceMap: true
+                });
+                const result = util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` });
+                const diagnostics = (result as any)._deprecationDiagnostics as Array<{ code: string }>;
+                expect(diagnostics.map(d => d.code)).to.include('deprecated-bsconfig-option');
+            });
+
+            it('does not flag options set only in compilerOptions', () => {
+                fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                    compilerOptions: {
+                        sourceMap: true
+                    }
+                });
+                const result = util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` });
+                expect(result.sourceMap).to.be.true;
+                const diagnostics = (result as any)._deprecationDiagnostics as Array<{ code: string }>;
+                expect(diagnostics).to.be.empty;
+            });
+
+            it('prefers compilerOptions over a deprecated top-level option in the same file', () => {
+                fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                    strict: false,
+                    compilerOptions: {
+                        strict: true
+                    }
+                });
+                const result = util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` });
+                expect(result.strict).to.be.true;
+                expect(result.compilerOptions.strict).to.be.true;
+            });
+
+            it('does not flag options passed programmatically (not from a bsconfig.json file)', () => {
+                const result = util.normalizeAndResolveConfig({
+                    sourceMap: true
+                });
+                const diagnostics = (result as any)._deprecationDiagnostics as Array<{ code: string }> | undefined;
+                expect(diagnostics ?? []).to.be.empty;
+            });
+
+            it('deep-merges compilerOptions across an extends chain', () => {
+                fsExtra.outputJsonSync(s`${rootDir}/parent.json`, {
+                    compilerOptions: {
+                        sourceMap: true,
+                        strict: true
+                    }
+                });
+                fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                    extends: 'parent.json',
+                    compilerOptions: {
+                        strictCallFunc: true
+                    }
+                });
+                const result = util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` });
+                expect(result.compilerOptions.sourceMap).to.be.true;
+                expect(result.compilerOptions.strict).to.be.true;
+                expect(result.compilerOptions.strictCallFunc).to.be.true;
+            });
+
+            it('lets a child compilerOptions value override the parent', () => {
+                fsExtra.outputJsonSync(s`${rootDir}/parent.json`, {
+                    compilerOptions: {
+                        strict: true
+                    }
+                });
+                fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                    extends: 'parent.json',
+                    compilerOptions: {
+                        strict: false
+                    }
+                });
+                const result = util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` });
+                expect(result.compilerOptions.strict).to.be.false;
+                expect(result.strict).to.be.false;
+            });
+
+            it('resolves a compilerOptions.sourceRoot relative to the bsconfig file that declared it', () => {
+                fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                    compilerOptions: {
+                        sourceRoot: './src',
+                        resolveSourceRoot: true
+                    }
+                });
+                const result = util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` });
+                expect(result.sourceRoot).to.eql(s`${rootDir}/src`);
+            });
         });
     });
 

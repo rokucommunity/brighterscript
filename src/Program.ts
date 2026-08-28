@@ -9,7 +9,7 @@ import { Scope } from './Scope';
 import type { NamespaceContainer, NamespaceFileContribution } from './Scope';
 import { SymbolTable } from './SymbolTable';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeAddFileEvent, BeforeRemoveFileEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData, ProvideSelectionRangesEvent, ProvideInlayHintsEvent, ProvideSourceFixAllCodeActionsEvent } from './interfaces';
+import type { BsDiagnostic, FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeAddFileEvent, BeforeRemoveFileEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData, ProvideSelectionRangesEvent, ProvideInlayHintsEvent, ProvideSourceFixAllCodeActionsEvent } from './interfaces';
 import type { SourceFixAllCodeAction } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
 import { standardizePath as s, util } from './util';
@@ -91,6 +91,13 @@ export class Program {
         this.logger = logger ?? createLogger(options);
         this.plugins = plugins || new PluginInterface([], { logger: this.logger });
         this.diagnostics = diagnosticsManager || new DiagnosticManager();
+
+        //surface warnings for any deprecated bsconfig options that were used to build `this.options`
+        const deprecationDiagnostics = (this.options as any)._deprecationDiagnostics as BsDiagnostic[];
+        if (deprecationDiagnostics?.length > 0) {
+            this.diagnostics.register(deprecationDiagnostics);
+        }
+        delete (this.options as any)._deprecationDiagnostics;
 
         //try to find a location for the diagnostic if it doesn't have one
         this.diagnostics.locationResolver = (args) => {

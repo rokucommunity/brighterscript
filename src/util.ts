@@ -7,7 +7,8 @@ import { rokuDeploy, DefaultFiles } from 'roku-deploy';
 import type { Diagnostic, Position, DiagnosticRelatedInformation } from 'vscode-languageserver';
 import { Range, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
-import type { BsConfig, FinalizedBsConfig } from './BsConfig';
+import type { BsConfig, BsConfigCompilerOptions, FinalizedBsConfig } from './BsConfig';
+import { deprecatedCompilerOptionKeys } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, Plugin, ExpressionInfo, TranspileResult, MaybePromise, DisposableLike, ExtraSymbolData, GetTypeOptions, TypeChainProcessResult, PluginFactory, TypeCircularReferenceInfo } from './interfaces';
 import { TypeChainEntry } from './interfaces';
@@ -228,11 +229,21 @@ export class Util {
             util.resolvePathsRelativeTo(projectConfig, 'require', projectFileCwd);
 
             let result: BsConfig;
+            let baseProjectConfigDeprecationDiagnostics: BsDiagnostic[] | undefined;
             //if the project has a base file, load it
             if (projectConfig && typeof projectConfig.extends === 'string') {
                 let baseProjectConfig = this.loadConfigFile(projectConfig.extends, [...parentProjectPaths, configFilePath], projectFileCwd);
                 //extend the base config with the current project settings
                 result = { ...baseProjectConfig, ...projectConfig };
+                //`compilerOptions` is deep-merged (like TypeScript does), so a child config only
+                //overriding one option doesn't wipe out the rest of the options set by its parent(s)
+                if (baseProjectConfig?.compilerOptions || projectConfig.compilerOptions) {
+                    result.compilerOptions = {
+                        ...baseProjectConfig?.compilerOptions,
+                        ...projectConfig.compilerOptions
+                    };
+                }
+                baseProjectConfigDeprecationDiagnostics = (baseProjectConfig as any)?._deprecationDiagnostics;
             } else {
                 result = projectConfig;
                 let ancestors = parentProjectPaths ? parentProjectPaths : [];
@@ -259,8 +270,35 @@ export class Util {
             if (result.cwd) {
                 result.cwd = path.resolve(projectFileCwd, result.cwd);
             }
-            if (result.sourceRoot && result.resolveSourceRoot) {
-                result.sourceRoot = path.resolve(projectFileCwd, result.sourceRoot);
+
+            //flag any deprecated top-level `compilerOptions` options used directly in THIS config file
+            //(this is deliberately scoped to options loaded from an actual bsconfig.json file; options
+            //passed programmatically to `Program`/`ProgramBuilder` are not flagged)
+            const deprecationDiagnostics: BsDiagnostic[] = [...((baseProjectConfigDeprecationDiagnostics) ?? [])];
+            for (const key of deprecatedCompilerOptionKeys) {
+                if (key in projectConfig) {
+                    deprecationDiagnostics.push({
+                        ...DiagnosticMessages.deprecatedBsConfigOption(key),
+                        location: {
+                            uri: this.pathToUri(configFilePath),
+                            range: this.createRange(0, 0, 0, 0)
+                        }
+                    });
+                }
+            }
+            (result as any)._deprecationDiagnostics = deprecationDiagnostics;
+
+            //`sourceRoot`/`resolveSourceRoot` may live at the top level (deprecated) or in `compilerOptions`.
+            //resolve whichever location actually holds the value, relative to THIS config file
+            const sourceRootValue = result.compilerOptions?.sourceRoot ?? result.sourceRoot;
+            const resolveSourceRootValue = result.compilerOptions?.resolveSourceRoot ?? result.resolveSourceRoot;
+            if (sourceRootValue && resolveSourceRootValue) {
+                const resolvedSourceRoot = path.resolve(projectFileCwd, sourceRootValue);
+                if (result.compilerOptions?.sourceRoot !== undefined) {
+                    result.compilerOptions.sourceRoot = resolvedSourceRoot;
+                } else {
+                    result.sourceRoot = resolvedSourceRoot;
+                }
             }
             return result;
         }
@@ -331,6 +369,21 @@ export class Util {
 
         const cwd = config.cwd ?? process.cwd();
 
+        //Resolve `compilerOptions`: values set there win over their deprecated top-level counterparts.
+        //(deprecation diagnostics for options loaded directly from a bsconfig.json file are collected
+        //separately, in `loadConfigFile`, and simply carried through on `config._deprecationDiagnostics`)
+        const compilerOptions: BsConfigCompilerOptions = { ...(config.compilerOptions ?? {}) };
+        for (const key of deprecatedCompilerOptionKeys) {
+            if (!(key in compilerOptions) && key in config) {
+                (compilerOptions as any)[key] = (config as any)[key];
+            }
+            //push the resolved (winning) value back onto the flat config so the rest of this function
+            //(and any code that still reads the deprecated flat option) sees the correct, resolved value
+            if (key in compilerOptions) {
+                (config as any)[key] = compilerOptions[key];
+            }
+        }
+
         let logLevel: LogLevel = LogLevel.log;
 
         if (typeof config.logLevel === 'string') {
@@ -396,7 +449,8 @@ export class Util {
             validate: config.validate === false ? false : true,
             strict: strictValue,
             strictCallFunc: (typeof config.strictCallFunc === 'boolean' ? config.strictCallFunc : strictValue),
-            strictNodeMembers: (typeof config.strictNodeMembers === 'boolean' ? config.strictNodeMembers : strictValue)
+            strictNodeMembers: (typeof config.strictNodeMembers === 'boolean' ? config.strictNodeMembers : strictValue),
+            compilerOptions: compilerOptions
         };
 
         //mutate `config` in case anyone is holding a reference to the incomplete one
