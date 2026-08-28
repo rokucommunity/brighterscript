@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import * as moment from 'moment';
+import { formatTimestamp } from './formatUtils';
 import { EventEmitter } from 'eventemitter3';
 import { Stopwatch } from './Stopwatch';
 import { LogLevelNumeric as LogLevel } from '@rokucommunity/logger';
@@ -41,7 +41,7 @@ export class Logger {
     private _logLevel = LogLevel.log;
 
     public getTimestamp() {
-        return '[' + chalk.grey(moment().format(`hh:mm:ss:SSSS A`)) + ']';
+        return '[' + chalk.grey(formatTimestamp()) + ']';
     }
 
     private writeToLog(method: (...consoleArgs: any[]) => void, ...args: any[]) {

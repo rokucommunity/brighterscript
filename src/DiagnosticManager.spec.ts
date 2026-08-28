@@ -253,4 +253,17 @@ describe('DiagnosticManager', () => {
         });
     });
 
+    describe('canSkipScopeValidationForFile', () => {
+        it('returns true if the DiagnosticFilterer says to filter the file', () => {
+            const file = program.setFile('source/main.brs', '') as BrsFile;
+            program.diagnostics['diagnosticFilterer'].isFileCompletelyFiltered = () => true;
+            expect(program.diagnostics.canSkipScopeValidationForFile(file)).to.be.true;
+        });
+
+        it('returns false if the DiagnosticFilterer says not to filter the file', () => {
+            const file = program.setFile('source/main.brs', '') as BrsFile;
+            program.diagnostics['diagnosticFilterer'].isFileCompletelyFiltered = () => false;
+            expect(program.diagnostics.canSkipScopeValidationForFile(file)).to.be.false;
+        });
+    });
 });

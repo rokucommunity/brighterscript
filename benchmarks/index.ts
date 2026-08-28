@@ -66,6 +66,10 @@ class Runner {
             }
             //store the file system path for the project
             this.options.project = projectDir;
+        } else {
+            //a local path was provided - resolve it to absolute so it's not silently
+            //misinterpreted relative to whatever cwd `target-runner.ts` happens to run with
+            this.options.project = path.resolve(this.options.project);
         }
     }
 
@@ -241,4 +245,16 @@ function clean() {
         }
     }
     fs.writeFileSync(`${cwd}/package.json`, JSON.stringify(packageJson, null, 4));
+
+    //regenerate package-lock.json to match the now-cleaned package.json. A hand-edited removal
+    //isn't safe here: npm's dedupe can hoist brighterscript's own transitive deps to the top level
+    //of node_modules, so there's no reliable way to tell "only needed by brighterscriptN" apart with
+    //a regex. Only bother if the lockfile actually still references a brighterscriptN dependency.
+    const packageLockPath = `${cwd}/package-lock.json`;
+    if (fs.existsSync(packageLockPath)) {
+        const packageLockText = fs.readFileSync(packageLockPath).toString();
+        if (/brighterscript\d+/.exec(packageLockText)) {
+            execSync('npm install --package-lock-only');
+        }
+    }
 }

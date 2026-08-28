@@ -2486,6 +2486,80 @@ describe('Scope', () => {
             });
         });
 
+        describe('types from XML components', () => {
+            it('allows using an assocArray from an XML component in a callfunc parameter', () => {
+                program.setFile('components/Parent.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Parent" extends="Group">
+                        <script uri="Parent.bs"/>
+                        <interface>
+                            <field id="myAA" type="assocArray" />
+                        </interface>
+                    </component>
+                `);
+                program.setFile('components/ParentTypes.bs', `
+                    interface iParent
+                        top as roSGNodeParent
+                        comp2 as roSGNodeComp2
+                    end interface
+                `);
+
+                program.setFile('components/Parent.bs', `
+                    import "pkg:/components/ParentTypes.bs"
+
+                    typecast m as iParent
+
+                    sub init()
+                        m.comp2 = createObject("roSGNode", "Comp2")
+                    end sub
+                `);
+
+                program.setFile('components/Comp.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Comp" extends="Parent">
+                        <script uri="Comp.bs"/>
+                    </component>
+                `);
+                program.setFile(s`components/Comp.bs`, `
+                    import "pkg:/components/CompTypes.bs"
+
+                    typecast m as iComp
+
+                    sub doSomething()
+                        m.comp2@.takesInterface({name: "example", data: m.top.myAA})
+                    end sub
+                `);
+                program.setFile(s`components/CompTypes.bs`, `
+                    import "pkg:/components/ParentTypes.bs"
+                    interface iComp extends iParent
+                        top as roSGNodeComp
+                    end interface
+                `);
+
+                program.setFile('components/Comp2.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Comp2" extends="Group">
+                        <script uri="Comp2.bs"/>
+                        <interface>
+                            <function name="takesInterface" />
+                        </interface>
+                    </component>
+                `);
+                program.setFile(s`components/Comp2.bs`, `
+                    interface IfaceOptions
+                        name as string
+                        optional data as roAssociativeArray
+                    end interface
+
+                    sub takesInterface(aa as IfaceOptions)
+                        print aa
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+        });
+
         describe('revalidations', () => {
             it('revalidates dependent files when a file is changed', () => {
                 program.setFile('source/common.bs', `

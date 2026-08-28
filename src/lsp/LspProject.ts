@@ -1,4 +1,4 @@
-import type { Diagnostic, Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList, SelectionRange, TextEdit } from 'vscode-languageserver-protocol';
+import type { Diagnostic, Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList, SelectionRange, TextEdit, InlayHint } from 'vscode-languageserver-protocol';
 import type { Hover, MaybePromise, SemanticToken } from '../interfaces';
 import type { DocumentAction, DocumentActionWithStatus } from './DocumentManager';
 import type { FileTranspileResult, SignatureInfoObj } from '../Program';
@@ -174,6 +174,11 @@ export interface LspProject {
      * Get the selection ranges for the given positions in the specified file
      */
     getSelectionRanges(options: { srcPath: string; positions: Position[] }): MaybePromise<SelectionRange[]>;
+
+    /**
+     * Get the inlay hints for the given range in the specified file
+     */
+    getInlayHints(options: { srcPath: string; range: Range }): MaybePromise<InlayHint[]>;
 
     /**
      * Get the completions for the specified file and position

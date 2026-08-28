@@ -1,4 +1,4 @@
-import type { Range, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol, Disposable, FileChangeType, CodeDescription, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, SelectionRange } from 'vscode-languageserver-protocol';
+import type { Range, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol, Disposable, FileChangeType, CodeDescription, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, SelectionRange, InlayHint } from 'vscode-languageserver-protocol';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -22,6 +22,7 @@ import { TokenKind } from './lexer/TokenKind';
 import type { BscTypeKind } from './types/BscTypeKind';
 import { createToken } from './astUtils/creators';
 import type { SourceFixAllCodeAction } from './CodeActionUtil';
+import type { Availability } from './RokuConstants';
 
 export interface BsDiagnostic {
     /**
@@ -116,7 +117,17 @@ export interface Callable {
      * The range of the name of this callable
      */
     nameRange?: Range;
+    /**
+     * @deprecated Use `availability` instead, which carries firmware/rsg_version thresholds for
+     * deprecation and removal.
+     */
     isDeprecated?: boolean;
+    /**
+     * Optional availability metadata relative to Roku OS firmware and/or manifest rsg_version.
+     * When set, the validator emits deprecation/removal diagnostics if the project's effective
+     * values cross the listed thresholds.
+     */
+    availability?: Availability;
     getName: (parseMode: ParseMode) => string;
     /**
      * Indicates whether or not this callable has an associated namespace
@@ -214,7 +225,21 @@ export interface CommentFlag {
      * The range that this flag applies to (i.e. the lines that should be suppressed/re-enabled)
      */
     affectedRange: Range;
-    codes: DiagnosticCode[] | null;
+    /**
+     * Codes this flag suppresses.
+     * - `null`: every code (the flag suppresses everything in its `affectedRange`)
+     * - array: only those specific codes
+     * - `undefined` (or omitted): no codes (the flag suppresses nothing on its own; useful when the suppression decision is fully delegated to `enableCodes`)
+     */
+    codes?: DiagnosticCode[] | null;
+    /**
+     * Codes explicitly re-enabled (carved out) within this flag's `affectedRange`.
+     * A diagnostic matched by `codes` is NOT suppressed if it is also matched by `enableCodes`.
+     * - `null`: every code is re-enabled (nothing in the range is suppressed)
+     * - array: only those specific codes are carved out
+     * - `undefined` (or omitted): no carve-outs; suppression is governed entirely by `codes`
+     */
+    enableCodes?: DiagnosticCode[] | null;
 }
 
 export interface PluginFactoryOptions {
@@ -410,6 +435,20 @@ export interface Plugin {
      * Called after `provideSelectionRanges`. Use this if you want to intercept or sanitize the selection range data provided by bsc or other plugins.
      */
     afterProvideSelectionRanges?(event: AfterProvideSelectionRangesEvent): any;
+
+
+    /**
+     * Called before the `provideInlayHints` hook
+     */
+    beforeProvideInlayHints?(event: BeforeProvideInlayHintsEvent): any;
+    /**
+     * Provide inlay hints (e.g. parameter names at call sites, inferred type annotations) for the given range.
+     */
+    provideInlayHints?(event: ProvideInlayHintsEvent): any;
+    /**
+     * Called after `provideInlayHints`. Use this if you want to intercept or sanitize the inlay hints provided by bsc or other plugins.
+     */
+    afterProvideInlayHints?(event: AfterProvideInlayHintsEvent): any;
 
     //scope events
     beforeValidateScope?(event: BeforeValidateScopeEvent): any;
@@ -865,6 +904,29 @@ export interface ProvideSelectionRangesEvent<TFile = BscFile> {
 export type BeforeProvideSelectionRangesEvent<TFile = BscFile> = ProvideSelectionRangesEvent<TFile>;
 export type AfterProvideSelectionRangesEvent<TFile = BscFile> = ProvideSelectionRangesEvent<TFile>;
 
+export interface ProvideInlayHintsEvent<TFile = BscFile> {
+    program: Program;
+    /**
+     * The file that the `inlayHint` request was invoked in
+     */
+    file: TFile;
+    /**
+     * The range of the document for which inlay hints should be computed
+     */
+    range: Range;
+    /**
+     * The list of scopes that this file is a member of
+     */
+    scopes: Scope[];
+    /**
+     * The result list of inlay hints. Plugins push hints into this array.
+     */
+    inlayHints: InlayHint[];
+}
+export type BeforeProvideInlayHintsEvent<TFile = BscFile> = ProvideInlayHintsEvent<TFile>;
+export type AfterProvideInlayHintsEvent<TFile = BscFile> = ProvideInlayHintsEvent<TFile>;
+
+
 export type BeforeValidateFileEvent = ValidateFileEvent;
 export interface ValidateFileEvent<T extends BscFile = BscFile> {
     program: Program;
@@ -1209,6 +1271,11 @@ export interface GetTypeOptions {
      * If this is true, AA's, objects, nodes, etc, do not return dynamic if no member is found
      */
     ignoreDefaultDynamicMembers?: boolean;
+    /**
+     * If this is true, AA's, objects, nodes, etc will return dynamic for unknown members, instead of ReferenceType.
+     * This is useful for validating in contexts when members could be anything
+     */
+    changeUnknownNodeMemberToDynamic?: boolean;
 }
 
 export class TypeChainEntry {

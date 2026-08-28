@@ -1094,6 +1094,82 @@ export let DiagnosticMessages = {
         legacyCode: 1146,
         severity: DiagnosticSeverity.Error,
         code: 'requires-min-firmware-version'
+    }),
+    reservedBuiltinUsedAsValue: (name: string) => ({
+        message: `'${name}' is a reserved builtin and can only be used as a function call (e.g. '${name}(...)')`,
+        legacyCode: 1147,
+        severity: DiagnosticSeverity.Error,
+        code: 'reserved-builtin-used-as-value'
+    }),
+    /**
+     * Emitted when a block recovers from a wrong terminator (e.g. `while ... next` or `for ... end while`).
+     * `expected` lists the legal terminators in preferred-first order; `found` is the actual text.
+     * Quick fixes consume the structured `data` to build "Convert '<found>' to '<expected[i]>'" actions.
+     */
+    mismatchedEndingToken: (expected: string[] = [], found = '') => {
+        const expectedList = Array.isArray(expected) ? expected : [];
+        return {
+            message: `Expected ${expectedList.map(text => `'${text}'`).join(' or ')} but found '${found}'`,
+            legacyCode: 1148,
+            data: {
+                expected: expectedList,
+                found: found
+            },
+            severity: DiagnosticSeverity.Error,
+            code: 'mismatched-ending-token'
+        };
+    },
+    /**
+     * Callable was marked removed in `availability.os` or `availability.rsg`, and the project's
+     * effective firmware/rsg_version meets that threshold. The call is a hard error on device.
+     */
+    globalCallableRemoved: (name = '', axis: AvailabilityAxis = 'os', threshold = '', current = '') => ({
+        message: `'${name}' is removed in ${formatAvailabilityAxis(axis, threshold)} or higher (current target is ${current})`,
+        legacyCode: 1149,
+        data: { name: name, axis: axis, threshold: threshold, current: current },
+        severity: DiagnosticSeverity.Error,
+        code: 'global-callable-removed'
+    }),
+    /**
+     * Callable was marked deprecated in `availability.os` or `availability.rsg`, and the project's
+     * effective firmware/rsg_version meets that threshold. The call still works but should
+     * be migrated.
+     */
+    globalCallableDeprecated: (name = '', axis: AvailabilityAxis = 'os', threshold = '', current = '') => ({
+        message: `'${name}' is deprecated as of ${formatAvailabilityAxis(axis, threshold)} (current target is ${current})`,
+        legacyCode: 1150,
+        data: { name: name, axis: axis, threshold: threshold, current: current },
+        severity: DiagnosticSeverity.Warning,
+        code: 'global-callable-deprecated'
+    }),
+    rsgVersionRequiresMinFirmware: (rsgVersion: string, requiredFirmware: string, configuredFirmware: string) => ({
+        message: `rsg_version=${rsgVersion} requires Roku firmware version ${requiredFirmware} or higher (current target is ${configuredFirmware})`,
+        legacyCode: 1151,
+        severity: DiagnosticSeverity.Error,
+        code: 'rsg-version-requires-min-firmware'
+    }),
+    invalidRsgVersionFormat: (value: string) => ({
+        message: `'${value}' is not a valid rsg_version (expected value like '1.2' or '1.3')`,
+        legacyCode: 1152,
+        severity: DiagnosticSeverity.Warning,
+        code: 'invalid-rsg-version-format'
+    }),
+    rsgVersionDeprecated: (rsgVersion: string, suggestedReplacement: string) => ({
+        message: `rsg_version=${rsgVersion} is deprecated; consider upgrading to rsg_version=${suggestedReplacement}`,
+        legacyCode: 1153,
+        severity: DiagnosticSeverity.Warning,
+        code: 'rsg-version-deprecated'
+    }),
+    rsgVersionRemoved: (rsgVersion: string, removedAt: string, replacement: string) => ({
+        message: `rsg_version=${rsgVersion} was removed in firmware ${removedAt}; use rsg_version=${replacement}`,
+        legacyCode: 1154,
+        severity: DiagnosticSeverity.Error,
+        code: 'rsg-version-removed'
+    }),
+    diagnosticFilterLooksLikeFilePath: (value: string) => ({
+        message: `Diagnostic filter "${value}" looks like a file path or glob, not a diagnostic code. To filter diagnostics by file, use the "files" property instead: { "files": ["${value}"] }`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'diagnostic-filter-looks-like-file-path'
     })
 };
 export const defaultMaximumTruncationLength = 160;
@@ -1189,6 +1265,12 @@ export function incompatibleSymbolMessage(symbolName: string, options: { scopes?
     return message;
 }
 
+export type AvailabilityAxis = 'os' | 'rsg';
+
+function formatAvailabilityAxis(axis: AvailabilityAxis, version: string): string {
+    return axis === 'os' ? `Roku OS ${version}` : `rsg_version=${version}`;
+}
+
 export const DiagnosticCodeMap = {} as Record<keyof (typeof DiagnosticMessages), string>;
 export const DiagnosticLegacyCodeMap = {} as Record<keyof (typeof DiagnosticMessages), number>;
 export let diagnosticCodes = [] as string[];
@@ -1214,3 +1296,14 @@ export type DiagnosticMessageType<K extends keyof D, D extends Record<string, (.
     ReturnType<D[K]> &
     //include the missing properties from BsDiagnostic
     Pick<BsDiagnostic, 'code' | 'location' | 'relatedInformation' | 'tags'>;
+
+/**
+ * Refines a diagnostic to its concrete `DiagnosticMessageType<K>` shape (including the typed `data`
+ * payload) when its code matches `DiagnosticCodeMap[key]`.
+ */
+export function isDiagnosticOfType<K extends keyof typeof DiagnosticMessages>(
+    diagnostic: { code?: number | string },
+    key: K
+): diagnostic is DiagnosticMessageType<K> {
+    return diagnostic.code === DiagnosticCodeMap[key];
+}

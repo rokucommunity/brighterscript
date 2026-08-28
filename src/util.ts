@@ -47,7 +47,6 @@ import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
 import { FunctionType } from './types/FunctionType';
 import type { AssignmentStatement, NamespaceStatement } from './parser/Statement';
-import type { BscFile } from './files/BscFile';
 import type { NamespaceType } from './types/NamespaceType';
 import { getUniqueType } from './types/helpers';
 import { InvalidType } from './types/InvalidType';
@@ -248,6 +247,15 @@ export class Util {
             if (result.outDir) {
                 result.outDir = path.resolve(projectFileCwd, result.outDir);
             }
+            //map the deprecated staging options to `outDir` (relative to THIS config file).
+            //the deprecated options themselves are left as-is so consumers that still read them keep working
+            if (!('outDir' in projectConfig)) {
+                if (projectConfig.stagingFolderPath) {
+                    result.outDir = path.resolve(projectFileCwd, projectConfig.stagingFolderPath);
+                } else if (projectConfig.stagingDir) {
+                    result.outDir = path.resolve(projectFileCwd, projectConfig.stagingDir);
+                }
+            }
             if (result.cwd) {
                 result.cwd = path.resolve(projectFileCwd, result.cwd);
             }
@@ -285,27 +293,32 @@ export class Util {
      * @param config a bsconfig object to use as the baseline for the resulting config
      */
     public normalizeAndResolveConfig(config: BsConfig | undefined): FinalizedBsConfig {
-        let result = this.normalizeConfig({
-            ...config
-        });
-
         if (config?.noProject) {
-            return result;
+            return this.normalizeConfig({
+                ...config
+            });
         }
 
+        let project: string | undefined;
         //if no options were provided, try to find a bsconfig.json file
         if (!config || !config.project) {
-            result.project = this.getConfigFilePath(config?.cwd);
+            project = this.getConfigFilePath(config?.cwd);
         } else {
             //use the config's project link
-            result.project = config.project;
+            project = config.project;
         }
-        if (result.project) {
-            let configFile = this.loadConfigFile(result.project, undefined, config?.cwd);
-            result = Object.assign(result, configFile);
+
+        let mergedConfig = { ...config };
+        if (project) {
+            let configFile = this.loadConfigFile(project, undefined, config?.cwd);
+            //the project file values are the defaults; the provided options override them
+            mergedConfig = { ...configFile, ...config };
         }
-        //override the defaults with the specified options
-        result = Object.assign(result, config);
+
+        //set defaults and map deprecated options AFTER merging the project file, so that
+        //deprecated options (i.e. `stagingFolderPath`, `copyToStaging`) from the project file are properly honored
+        let result = this.normalizeConfig(mergedConfig);
+        result.project = project;
         return result;
     }
 
@@ -322,6 +335,8 @@ export class Util {
 
         if (typeof config.logLevel === 'string') {
             logLevel = LogLevel[(config.logLevel as string).toLowerCase()] ?? LogLevel.log;
+        } else if (typeof config.logLevel === 'number') {
+            logLevel = config.logLevel;
         }
 
         let bslibDestinationDir = config.bslibDestinationDir ?? 'source';
@@ -350,6 +365,8 @@ export class Util {
             outDir = './out'; //default case
         }
 
+        const strictValue = !!config.strict;
+
         const configWithDefaults: Omit<FinalizedBsConfig, 'rootDir'> = {
             cwd: cwd,
             //use default files array from rokuDeploy
@@ -376,7 +393,10 @@ export class Util {
             logLevel: logLevel,
             bslibDestinationDir: bslibDestinationDir,
             legacyCallfuncHandling: config.legacyCallfuncHandling === true ? true : false,
-            validate: config.validate === false ? false : true
+            validate: config.validate === false ? false : true,
+            strict: strictValue,
+            strictCallFunc: (typeof config.strictCallFunc === 'boolean' ? config.strictCallFunc : strictValue),
+            strictNodeMembers: (typeof config.strictNodeMembers === 'boolean' ? config.strictNodeMembers : strictValue)
         };
 
         //mutate `config` in case anyone is holding a reference to the incomplete one
@@ -651,6 +671,107 @@ export class Util {
             return 1;
         }
         return 0;
+    }
+
+    /**
+     * Convert a file path into a `file://` URL string (e.g. `file:///C:/projects/file.brs`).
+     * Mirrors the `file-url` package: resolves the path, normalizes slashes, prefixes a leading slash
+     * (required for Windows drive letters), and escapes per RFC 3986.
+     */
+    public fileUrl(filePath: string) {
+        let pathName = path.resolve(filePath).replace(/\\/g, '/');
+        //Windows drive letter must be prefixed with a slash
+        if (!pathName.startsWith('/')) {
+            pathName = `/${pathName}`;
+        }
+        //escape required characters for path components
+        return encodeURI(`file://${pathName}`).replace(/[?#]/g, encodeURIComponent);
+    }
+
+    /**
+     * `JSON.stringify` that is safe against circular references and throwing getters. Replaces the
+     * `safe-json-stringify` package.
+     */
+    public safeJsonStringify(data: any, replacer?: (key: string, value: any) => any, space?: string | number) {
+        const seen: any[] = [];
+        const throwsMessage = (err: any) => '[Throws: ' + (err ? err.message : '?') + ']';
+        const safeGetValue = (obj: any, property: string) => {
+            try {
+                return obj[property];
+            } catch (err) {
+                return throwsMessage(err);
+            }
+        };
+        const visit = (obj: any) => {
+            if (obj === null || typeof obj !== 'object') {
+                return obj;
+            }
+            if (seen.includes(obj)) {
+                return '[Circular]';
+            }
+            seen.push(obj);
+            try {
+                if (typeof obj.toJSON === 'function') {
+                    try {
+                        return visit(obj.toJSON());
+                    } catch (err) {
+                        return throwsMessage(err);
+                    }
+                }
+                if (Array.isArray(obj)) {
+                    return obj.map(visit);
+                }
+                return Object.keys(obj).reduce((result, prop) => {
+                    result[prop] = visit(safeGetValue(obj, prop));
+                    return result;
+                }, {});
+            } finally {
+                seen.pop();
+            }
+        };
+        return JSON.stringify(visit(data), replacer, space);
+    }
+
+    /**
+     * Serialize an error (or any thrown value) into a plain object suitable for `JSON.stringify`,
+     * handling circular references. Replaces the `serialize-error` package.
+     */
+    public serializeError(value: any) {
+        const commonProperties = ['name', 'message', 'stack', 'code'];
+        const destroyCircular = (from: any, seen: any[]) => {
+            const to: any = Array.isArray(from) ? [] : {};
+            seen.push(from);
+            for (const [key, val] of Object.entries(from)) {
+                if (typeof val === 'function') {
+                    continue;
+                }
+                if (!val || typeof val !== 'object') {
+                    to[key] = val;
+                    continue;
+                }
+                if (!seen.includes(from[key])) {
+                    to[key] = destroyCircular(from[key], seen.slice());
+                    continue;
+                }
+                to[key] = '[Circular]';
+            }
+            for (const property of commonProperties) {
+                if (typeof from[property] === 'string') {
+                    to[property] = from[property];
+                }
+            }
+            return to;
+        };
+
+        if (typeof value === 'object' && value !== null) {
+            return destroyCircular(value, []);
+        }
+        //people sometimes throw things besides Error objects…
+        if (typeof value === 'function') {
+            //`JSON.stringify()` discards functions. We do too, unless a function is thrown directly.
+            return `[Function: ${(value.name || 'anonymous')}]`;
+        }
+        return value;
     }
 
     /**
@@ -996,7 +1117,7 @@ export class Util {
     /**
      * Helper for creating `Location` objects from a file and range
      */
-    public createLocationFromFileRange(file: BscFile, range: Range): Location {
+    public createLocationFromFileRange(file: { srcPath: string }, range: Range): Location {
         return this.createLocationFromRange(this.pathToUri(file?.srcPath), range);
     }
 
@@ -1429,7 +1550,15 @@ export class Util {
             rightType = this.getHighestPriorityType(rightType.types);
         }
 
-        if (isVoidType(leftType) || isVoidType(rightType) || isUninitializedType(leftType) || isUninitializedType(rightType)) {
+        if (isUninitializedType(leftType) || isUninitializedType(rightType)) {
+            return undefined;
+        }
+        if (isVoidType(leftType) || isVoidType(rightType)) {
+            // = and <> can still be used to check a possibly-void value against invalid/dynamic
+            if ((operator.kind === TokenKind.Equal || operator.kind === TokenKind.LessGreater) &&
+                (isInvalidTypeLike(leftType) || isInvalidTypeLike(rightType) || isDynamicType(leftType) || isDynamicType(rightType))) {
+                return BooleanType.instance;
+            }
             return undefined;
         }
 
@@ -2364,7 +2493,7 @@ export class Util {
             }
         }
 
-        // no usable sourceMappingURL — try co-located <srcPath>.map
+        // no usable sourceMappingURL; try co-located <srcPath>.map
         const colocated = `${srcPath}.map`;
         if (await fsExtra.pathExists(colocated)) {
             return JSON.parse(await fsExtra.readFile(colocated, 'utf8')) as RawSourceMap;
@@ -2413,10 +2542,13 @@ export class Util {
         return false;
     }
 
-    public isGenericNodeType(type: BscType) {
+    public isGenericNodeType(type: BscType, mustBeCallfuncAble: boolean) {
         if (isComponentType(type)) {
             const lowerName = type.toString().toLowerCase();
             if (lowerName === 'rosgnode' || lowerName === 'rosgnodenode') {
+                return true;
+            }
+            if (!mustBeCallfuncAble && (lowerName === 'rosgnodecontentnode')) {
                 return true;
             }
         }

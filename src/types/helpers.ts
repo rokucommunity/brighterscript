@@ -1,5 +1,5 @@
-import type { TypeCompatibilityData } from '../interfaces';
-import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isAssociativeArrayTypeLike, isCompoundType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isIntersectionType, isObjectType, isReferenceType, isTypePropertyReferenceType, isTypeStatementType, isUnionType, isUnionTypeOf, isVoidType } from '../astUtils/reflection';
+import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
+import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isAssociativeArrayTypeLike, isComponentType, isCompoundType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isIntersectionType, isObjectType, isReferenceType, isTypePropertyReferenceType, isTypeStatementType, isUnionType, isUnionTypeOf, isVoidType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import type { UnionType } from './UnionType';
 import type { SymbolTable } from '../SymbolTable';
@@ -337,9 +337,12 @@ export function joinTypesString(types: BscType[], separator: string, thisTypeKin
 }
 
 
-export function isTypeWithPotentialDefaultDynamicMember(type: BscType): boolean {
-    return (isInheritableType(type) && type.changeUnknownMemberToDynamic) ||
-        isAssociativeArrayTypeLike(type) ||
-        isObjectType(type) ||
-        isUnionTypeOf(type, isTypeWithPotentialDefaultDynamicMember);
+export function isTypeWithPotentialDefaultDynamicMember(options: GetTypeOptions): (BscType) => boolean {
+    return (type: BscType) => {
+        return (isInheritableType(type) && options.changeUnknownNodeMemberToDynamic) ||
+            isAssociativeArrayTypeLike(type) ||
+            isComponentType(type) ||
+            isObjectType(type) ||
+            isUnionTypeOf(type, isTypeWithPotentialDefaultDynamicMember(options));
+    };
 }

@@ -1,6 +1,6 @@
 import type { BsDiagnostic } from './interfaces';
 import * as path from 'path';
-import * as minimatch from 'minimatch';
+import * as micromatch from 'micromatch';
 import type { BsConfig } from './BsConfig';
 import util, { standardizePath as s } from './util';
 import { URI } from 'vscode-uri';
@@ -71,7 +71,7 @@ export class DiagnosticFilterer {
      * Should this file be completely ignored?
      * If the file diagnostics are ignored, we do not need to validate this file
      */
-    public isFileFiltered(file: { srcPath: string; destPath: string }) {
+    public isFileCompletelyFiltered(file: { srcPath: string; destPath: string }) {
         if (!this.options || !this.filters) {
             return false;
         }
@@ -162,17 +162,30 @@ export class DiagnosticFilterer {
             path.isAbsolute(filter.src) ? filter.src : `${this.rootDir}/${filter.src}`
         );
 
-        let matchedFileUris = minimatch.match(fileUris, src, {
+        //micromatch (picomatch) treats backslashes as escape chars, but standardizePath produces
+        //backslashes on Windows. Match against forward-slash-normalized copies of the paths (and pattern),
+        //then map the matches back to the original paths.
+        const originalByNormalized = new Map<string, string>();
+        for (const filePath of fileUris) {
+            originalByNormalized.set(filePath.replace(/\\/g, '/'), filePath);
+        }
+        let matchedFileUris = micromatch([...originalByNormalized.keys()], src.replace(/\\/g, '/'), {
             nocase: true
-        }).map(src => util.pathToUri(src).toLowerCase());
+        }).map(normalized => util.pathToUri(originalByNormalized.get(normalized)).toLowerCase());
 
         return matchedFileUris;
     }
 
     private matchFileDestUris(filter: NormalizedFilter, fileUris: string[]): string[] {
-        let matchedFileUris = minimatch.match(fileUris, filter.dest, {
+        //micromatch (picomatch) treats backslashes as escape chars; normalize both the paths and the
+        //pattern to forward slashes, then map the matches back to the original dest paths.
+        const originalByNormalized = new Map<string, string>();
+        for (const destPath of fileUris) {
+            originalByNormalized.set(destPath.replace(/\\/g, '/'), destPath);
+        }
+        let matchedFileUris = micromatch([...originalByNormalized.keys()], filter.dest.replace(/\\/g, '/'), {
             nocase: true
-        });
+        }).map(normalized => originalByNormalized.get(normalized));
         return matchedFileUris;
     }
 
@@ -403,5 +416,58 @@ export class DiagnosticFilterer {
             }
         }
 
+    }
+
+    /**
+     * Does this diagnostic filter "code" value look like a file path/glob instead of a diagnostic code?
+     * v0-style `diagnosticFilters` entries were file globs, but v1 treats bare string/number entries as codes.
+     * This heuristic catches the common glob patterns left over from a v0-style config, as well as any value
+     * that exactly matches the destPath of a file actually in the project (if `knownDestPaths` is provided).
+     */
+    public isCodeValuePathLike(value: number | string, knownDestPaths?: Set<string>): boolean {
+        if (typeof value !== 'string') {
+            return false;
+        }
+        const lowerValue = value.toLowerCase();
+        if (knownDestPaths?.has(lowerValue.replace(/\\/g, '/'))) {
+            return true;
+        }
+        return (
+            value.includes('./') ||
+            value.includes('.\\') ||
+            value.includes('**') ||
+            lowerValue.endsWith('.bs') ||
+            lowerValue.endsWith('.brs') ||
+            lowerValue.endsWith('.xml')
+        );
+    }
+
+    /**
+     * Scan the (non-v0-compat) `diagnosticFilters` config for entries that look like file paths/globs
+     * rather than diagnostic codes, to help teams migrating from the v0-style config.
+     * @param config the program config, containing the `diagnosticFilters` to scan
+     * @param knownDestPaths the lower-cased, forward-slash destPaths of files actually in the project. When
+     * provided, a filter entry that exactly matches one of these paths is flagged even if it doesn't match
+     * the glob-like heuristics (e.g. a bare `source/main.json`).
+     */
+    public getPathLikeDiagnosticFilterCodes(config: BsConfig, knownDestPaths?: Set<string>): (number | string)[] {
+        if (config.diagnosticFiltersV0Compatibility) {
+            return [];
+        }
+        const result = new Set<number | string>();
+        for (let filter of config.diagnosticFilters ?? []) {
+            if ((typeof filter === 'string' || typeof filter === 'number') && this.isCodeValuePathLike(filter, knownDestPaths)) {
+                result.add(filter);
+                continue;
+            }
+            if (filter && typeof filter === 'object' && 'codes' in filter && Array.isArray(filter.codes)) {
+                for (const code of filter.codes) {
+                    if (this.isCodeValuePathLike(code, knownDestPaths)) {
+                        result.add(code);
+                    }
+                }
+            }
+        }
+        return [...result];
     }
 }

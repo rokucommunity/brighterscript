@@ -24,7 +24,6 @@ import { tempDir, rootDir } from '../testHelpers.spec';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { ClassType, EnumType, FloatType, InterfaceType } from '../types';
 import type { StandardizedFileEntry } from 'roku-deploy';
-import * as fileUrl from 'file-url';
 import type { AALiteralExpression } from '../parser/Expression';
 import { CallExpression, FunctionExpression, LiteralExpression } from '../parser/Expression';
 import { Logger } from '@rokucommunity/logger';
@@ -884,6 +883,134 @@ describe('BrsFile', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
+            });
+        });
+
+        describe('bs:disable / bs:enable block directives', () => {
+            it('a bare bs:disable with no closing bs:enable suppresses every diagnostic in the file', () => {
+                let file = program.setFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                    'bs:disable
+                    sub Main()
+                        name = "bob
+                    end sub
+                `);
+                const blockFlag = file.commentFlags.find(flag => flag.codes === null && flag.affectedRange.end.line === Number.MAX_SAFE_INTEGER);
+                expect(blockFlag, 'a bs:disable flag should be emitted').to.exist;
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('suppresses only the listed codes', () => {
+                program.setFile('source/main.brs', `
+                    'bs:disable: 1083
+                    sub Main()
+                        name = "bob
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('does not suppress unlisted codes', () => {
+                program.setFile('source/main.brs', `
+                    'bs:disable: 9999
+                    sub Main()
+                        name = "bob
+                    end sub
+                `);
+                program.validate();
+                expectHasDiagnostics(program);
+            });
+
+            it('honors a directive that follows other comment-only lines and blank lines', () => {
+                program.setFile('source/main.brs', `
+                    'leading comment
+                    'bs:disable
+                    sub Main()
+                        name = "bob
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('a bs:enable closes the bs:disable block, leaving later code un-suppressed', () => {
+                program.setFile('source/main.brs', `
+                    'bs:disable
+                    'bs:enable
+                    sub Main()
+                        name = "bob
+                    end sub
+                `);
+                program.validate();
+                expectHasDiagnostics(program);
+            });
+
+            it('bs:enable: <code> after a bare bs:disable carves out an exception for that code', () => {
+                program.setFile('source/main.brs', `
+                    'bs:disable
+                    'bs:enable: 1083
+                    sub Main()
+                        name = "bob
+                    end sub
+                `);
+                //code 1083 is now re-enabled, so the diagnostic surfaces
+                program.validate();
+                expectHasDiagnostics(program);
+            });
+        });
+
+        describe('unknown diagnostic codes', () => {
+            it('reports an unknown-code warning for bs:disable-next-line: <unknown>', () => {
+                program.setFile('source/main.brs', `
+                    sub main()
+                        'bs:disable-next-line: 999999
+                        print "hi"
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.unknownDiagnosticCode(999999)
+                }]);
+            });
+
+            it('reports an unknown-code warning for bs:disable: <unknown> (block directive)', () => {
+                program.setFile('source/main.brs', `
+                    'bs:disable: 999999
+                    sub main()
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.unknownDiagnosticCode(999999)
+                }]);
+            });
+
+            it('reports an unknown-code warning for bs:enable: <unknown>', () => {
+                program.setFile('source/main.brs', `
+                    'bs:disable
+                    'bs:enable: 999999
+                    sub main()
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.unknownDiagnosticCode(999999)
+                }]);
+            });
+
+            it('still suppresses the valid code when an unknown code is mixed in', () => {
+                program.setFile('source/main.brs', `
+                    sub Main()
+                        'bs:disable-next-line: 1083 999999
+                        name = "bob
+                    end sub
+                `);
+                program.validate();
+                //the unterminated string (1083) is suppressed; 999999 is still reported as unknown
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.unknownDiagnosticCode(999999)
+                }]);
             });
         });
     });
@@ -2380,7 +2507,7 @@ describe('BrsFile', () => {
             });
 
             it('handles source literals properly', () => {
-                const pathUrl = fileUrl(rootDir);
+                const pathUrl = util.fileUrl(rootDir);
                 let text = `"${pathUrl.substring(0, 4)}" + "${pathUrl.substring(4)}`;
                 doTest(`
                     sub test()
@@ -3498,6 +3625,21 @@ describe('BrsFile', () => {
                     print "main"
                 end sub
             `, undefined, 'source/main.bs');
+        });
+
+        it('does not crash when annotation has undefined leadingTrivia', async () => {
+            //the lexer emits leadingTrivia as `undefined` (rather than `[]`) when a token has no preceding trivia,
+            //so an `@annotation` whose `at` token has no preceding whitespace/comments/newlines produces
+            //`at.leadingTrivia === undefined`. `AnnotationExpression.transpile` forwards that directly to
+            //`state.transpileComments`, which must tolerate a nullish input rather than crashing on `.filter`
+            //of undefined. Feed source that starts at column 0 with no leading newline to ensure no trivia
+            //is attached to the `@` token.
+            program.setFile('source/main.bs', `@annotation\nsub main()\n    print "main"\nend sub`);
+            program.validate();
+            expectZeroDiagnostics(program);
+            //this should not throw
+            const result = await program.getTranspiledFileContents('source/main.bs');
+            expect(result.code).to.include('sub main()');
         });
 
         it('includes annotation comments for class', async () => {
@@ -5028,6 +5170,100 @@ describe('BrsFile', () => {
                         sub new()
                         end sub
                     end class
+                end namespace
+            `);
+        });
+
+        it('uses namespace-qualified type names for function params/returns referencing a same-namespace class', () => {
+            testTypedef(`
+                namespace Shapes
+                    class Circle
+                    end class
+                    sub defineCircle(newCircle as Circle)
+                    end sub
+                    function getCircle() as Circle
+                    end function
+                end namespace
+            `, trim`
+                namespace Shapes
+                    class Circle
+                        sub new()
+                        end sub
+                    end class
+                    sub defineCircle(newCircle as Shapes.Circle)
+                    end sub
+                    function getCircle() as Shapes.Circle
+                    end function
+                end namespace
+            `);
+        });
+
+        it('uses namespace-qualified type names for function params/returns referencing a fully-qualified class', () => {
+            testTypedef(`
+                namespace Shapes
+                    class Circle
+                    end class
+                    sub defineCircle(newCircle as Shapes.Circle)
+                    end sub
+                    function getCircle() as Shapes.Circle
+                    end function
+                end namespace
+            `, trim`
+                namespace Shapes
+                    class Circle
+                        sub new()
+                        end sub
+                    end class
+                    sub defineCircle(newCircle as Shapes.Circle)
+                    end sub
+                    function getCircle() as Shapes.Circle
+                    end function
+                end namespace
+            `);
+        });
+
+        it('includes type alias statements', () => {
+            testTypedef(`
+                type fooFunc = function(a as string, b as integer) as boolean
+                function doFunc(f as fooFunc) as boolean
+                end function
+            `, trim`
+                type fooFunc = function (a as string, b as integer) as boolean
+                function doFunc(f as fooFunc) as boolean
+                end function
+            `);
+        });
+
+        it('includes namespaced type alias statements', () => {
+            testTypedef(`
+                namespace Shapes
+                    type fooFunc = function() as integer
+                    function doFunc(f as fooFunc) as integer
+                    end function
+                end namespace
+            `, trim`
+                namespace Shapes
+                    type fooFunc = function () as integer
+                    function doFunc(f as fooFunc) as integer
+                    end function
+                end namespace
+            `);
+        });
+
+        it('uses namespace-qualified type names for classes referenced by a type alias', () => {
+            testTypedef(`
+                namespace Shapes
+                    class Circle
+                    end class
+                    type circleMaker = function() as Circle
+                end namespace
+            `, trim`
+                namespace Shapes
+                    class Circle
+                        sub new()
+                        end sub
+                    end class
+                    type circleMaker = function () as Shapes.Circle
                 end namespace
             `);
         });

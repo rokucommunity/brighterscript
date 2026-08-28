@@ -2,32 +2,49 @@
 
 While a minimal `bsconfig.json` file is sufficient for getting started, `bsc` supports a range of helpful options.
 
-- [allowBrighterScriptInBrightScript](#allowBrighterScriptInBrightScript)
-- [autoImportComponentScript](#autoImportComponentScript)
-- [bslibDestinationDir](#bslibDestinationDir)
-- [cwd](#cwd)
-- [diagnosticFilters](#diagnosticFilters)
-- [diagnosticLevel](#diagnosticLevel)
-- [diagnosticSeverityOverrides](#diagnosticSeverityOverrides)
-- [emitDefinitions](#emitDefinitions)
-- [emitFullPaths](#emitFullPaths)
-- [extends](#extends)
-- [files](#files)
-- [host](#host)
-- [minFirmwareVersion](#minFirmwareVersion)
-- [outFile](#outFile)
-- [password](#password)
-- [plugins](#plugins)
-- [project](#project)
-- [pruneEmptyCodeFiles](#pruneEmptyCodeFiles)
-- [removeParameterTypes](#removeParameterTypes)
-- [require](#require)
-- [rootDir](#rootDir)
-- [sourceMap](#sourceMap)
-- [relativeSourceMaps](#relativeSourceMaps)
-- [sourceRoot](#sourceRoot)
-- [outDir](#outDir)
-- [watch](#watch)
+- [bsconfig.json options](#bsconfigjson-options)
+  - [`allowBrighterScriptInBrightScript`](#allowbrighterscriptinbrightscript)
+  - [`autoImportComponentScript`](#autoimportcomponentscript)
+  - [`bslibDestinationDir`](#bslibdestinationdir)
+  - [`cwd`](#cwd)
+  - [`deploy`](#deploy)
+  - [`diagnosticFilters`](#diagnosticfilters)
+    - [Negative patterns in `diagnosticFilters`](#negative-patterns-in-diagnosticfilters)
+  - [`diagnosticLevel`](#diagnosticlevel)
+  - [`diagnosticReporters`](#diagnosticreporters)
+  - [`diagnosticSeverityOverrides`](#diagnosticseverityoverrides)
+  - [`emitDefinitions`](#emitdefinitions)
+  - [`emitFullPaths`](#emitfullpaths)
+  - [`extends`](#extends)
+    - [Optional `extends` and `project`](#optional-extends-and-project)
+  - [`files`](#files)
+    - [Excluding files](#excluding-files)
+    - [File pattern resolution](#file-pattern-resolution)
+    - [Specifying file destinations](#specifying-file-destinations)
+    - [File collision handling](#file-collision-handling)
+  - [`host`](#host)
+  - [`minFirmwareVersion`](#minfirmwareversion)
+    - [Line continuation in `.brs` files](#line-continuation-in-brs-files)
+  - [`outFile`](#outfile)
+  - [`password`](#password)
+  - [`plugins`](#plugins)
+  - [`project`](#project)
+  - [`pruneEmptyCodeFiles`](#pruneemptycodefiles)
+  - [`removeParameterTypes`](#removeparametertypes)
+  - [`require`](#require)
+  - [`retainStagingDir`](#retainstagingdir)
+  - [`rootDir`](#rootdir)
+  - [`sourceMap`](#sourcemap)
+  - [`relativeSourceMaps`](#relativesourcemaps)
+    - [`relativeSourceMaps: false` (default)](#relativesourcemaps-false-default)
+    - [`relativeSourceMaps: true`](#relativesourcemaps-true)
+  - [`sourceRoot`](#sourceroot)
+  - [`stagingDir`](#stagingdir)
+  - [`strict`](#strict)
+    - [`strictCallFunc`](#strictCallFunc)
+    - [`strictNodeMembers`](#strictNodeMembers)
+  - [`username`](#username)
+  - [`watch`](#watch)
 
 ## `allowBrighterScriptInBrightScript`
 
@@ -130,6 +147,58 @@ The semantics of overriding match the way `git` treats `.gitignore` files: Negat
 Type: `"hint" | "info" | "warn" | "error"`
 
 Specify what diagnostic levels are printed to the console. This has no effect on what diagnostics are reported in the LanguageServer. Defaults to `"warn"`.
+
+## `diagnosticReporters`
+
+Type: `string | { type: string; format?: string } | Array<string | { type: string; format?: string }>`
+
+Specify how diagnostics are reported to the console. Accepts a single value or an array; when given an array, each diagnostic is rendered once per entry (so you can, for example, emit detailed terminal output and GitHub Actions PR annotations from a single run). Defaults to `"detailed"`.
+
+Each value can be:
+
+- A **preset name**: `"detailed"` (the default rich, multi-line, colored output) or `"github-actions"` (one-line workflow commands like `::error file=...,line=...::message` so the GitHub Actions runner surfaces them as PR annotations).
+- A **custom template string** containing at least one of the known placeholders. The placeholders supported are:
+
+  | Placeholder      | Value |
+  |------------------|---|
+  | `{file}`         | file path (respects `emitFullPaths`) |
+  | `{line}` / `{col}` | 1-based start line / column |
+  | `{endLine}` / `{endCol}` | 1-based end line / column |
+  | `{severity}`     | `error` / `warning` / `info` / `hint` |
+  | `{severityCode}` | numeric LSP severity (1=error, 2=warning, 3=info, 4=hint) |
+  | `{code}`         | diagnostic code (e.g. `1001`) |
+  | `{message}`      | diagnostic message |
+  | `{source}`       | diagnostic source (e.g. `brs`) |
+
+  Unknown placeholders pass through unchanged so typos surface visually.
+- An **explicit object** with `type`: `{ "type": "detailed" }`, `{ "type": "github-actions" }`, or `{ "type": "custom", "format": "<template>" }`.
+
+Examples:
+
+```jsonc
+"diagnosticReporters": "detailed"
+
+"diagnosticReporters": "github-actions"
+
+// custom template
+"diagnosticReporters": "{file}:{line}:{col} {severity} BS{code}: {message}"
+
+// emit detailed terminal output AND github-actions annotations from the same run
+"diagnosticReporters": ["detailed", "github-actions"]
+
+// explicit object form (also accepts the same shapes inside an array)
+"diagnosticReporters": { "type": "custom", "format": "{file}:{line}: {message}" }
+```
+
+If a value is invalid (typo'd preset, custom template with no known placeholders, etc.) it is logged as a warning and skipped. Duplicate entries are dropped with a warning message. If every configured reporter is invalid, the build falls back to `"detailed"` rather than failing.
+
+The CLI accepts the same value (single or repeated):
+
+```bash
+bsc --diagnosticReporters detailed
+bsc --diagnosticReporters detailed github-actions
+bsc --diagnosticReporters '{file}:{line}: {message}'
+```
 
 ## `diagnosticSeverityOverrides`
 
@@ -520,6 +589,54 @@ The exact behavior depends on whether [`relativeSourceMaps`](#relativesourcemaps
 - **`relativeSourceMaps: true`:** The map file's `sourceRoot` field is set to this value, and `sources[]` entries are relative to `sourceRoot`. The `rootDir` portion of each source path is still replaced with `sourceRoot` when computing the relative path.
 
 In both cases, `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals embedded in the transpiled output will reflect the `sourceRoot`-substituted path at runtime.
+
+## `strict`
+
+Type: `boolean`
+
+Enables a set of stricter type-checking rules and language features. When set, this acts as a default value for other `strict`-related options. Defaults to false.
+
+For example, in order to turn all all `strict` options, but disable `strictCallFunc`, you could specify:
+
+```json
+{
+    "strict": true,
+    "strictCallFunc": false
+}
+```
+
+### `strictCallFunc`
+
+Type: `boolean`
+
+Enables stricter type-checking for callfunc() invocations. When true, callfunc() invocations will not be allowed on generic Node types. Defaults to false.
+
+For example, if this were true:
+
+```brighterscript
+sub example(node as roSGNode)
+  node@.someFunction() ' error because roSGNode itself does not have any available call func's
+end sub
+```
+
+### `strictNodeMembers`
+
+Type: `boolean`
+
+Enables stricter type-checking for Node members. When true, unknown members on Node types will be treated as errors instead of dynamic values. Defaults to false.
+
+For example, if this were true:
+
+```brighterscript
+sub example()
+  myPoster = createObject("roSGNode", "Poster")
+  ' update the node with a new field
+  myPoster.update({
+    data: 1234
+  , true})
+  print myPoster.data ' error because "Poster" does not have the "data" field
+end sub
+```
 
 ## `outDir`
 Type: `string`

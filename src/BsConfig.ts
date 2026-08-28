@@ -51,6 +51,21 @@ export interface BsConfig {
     noEmit?: boolean;
 
     /**
+     * @deprecated packaging is handled outside of `BsConfig`
+     */
+    createPackage?: boolean;
+
+    /**
+     * @deprecated deployment is handled outside of `BsConfig`
+     */
+    deploy?: boolean;
+
+    /**
+     * @deprecated staging copy behavior is handled outside of `BsConfig`
+     */
+    copyToStaging?: boolean;
+
+    /**
      * If true, the server will keep running and will watch and recompile on every file change
      * @default false
      */
@@ -114,6 +129,28 @@ export interface BsConfig {
      */
     diagnosticLevel?: 'info' | 'hint' | 'warn' | 'error';
 
+    /**
+     * Specify how diagnostics should be reported to the console.
+     * Accepts a single value or an array. When given an array, each diagnostic is rendered
+     * once per entry (so you can, for example, get both detailed terminal output and
+     * github-actions PR annotations from a single run).
+     *
+     * Each value may be a preset name ('detailed', 'github-actions'), a custom template string
+     * (any string containing a `{` placeholder), or an object with explicit `type`.
+     *
+     * Custom templates support the following placeholders, replaced per diagnostic:
+     *   {file}, {line}, {col}, {endLine}, {endCol}, {severity}, {code}, {message}, {source}
+     *
+     * Examples:
+     *   "detailed"
+     *   "github-actions"
+     *   "{file}:{line}:{col} {severity} {code}: {message}"
+     *   { type: "custom", format: "{file}:{line}: {message}" }
+     *   ["detailed", "github-actions"]
+     *
+     * @default "detailed"
+     */
+    diagnosticReporters?: DiagnosticReporter | DiagnosticReporter[];
     /**
      * A list of scripts or modules to add extra diagnostics or transform the AST
      */
@@ -225,7 +262,48 @@ export interface BsConfig {
      * @default true
      */
     validate?: boolean;
+
+    /**
+     * When true, enables all strict mode options (strictCallFunc, strictNodeMembers, and any future options added that are considered "strict"). This is a convenient way to enable strict mode without having to set each option individually.
+     * @default false
+     */
+    strict?: boolean;
+
+    /**
+     * Enables stricter type-checking for callfunc() invocations. When true, callfunc() invocations will not be allowed on generic Node types.
+     * @default false
+     */
+    strictCallFunc?: boolean;
+
+    /**
+     * Enables stricter type-checking for Node members. When true, unknown members on Node types will be treated as errors instead of dynamic values.
+     * @default false
+     */
+    strictNodeMembers?: boolean;
 }
+
+/**
+ * Discriminated union describing how diagnostics are rendered to the console.
+ * - String shorthand: a preset name ('detailed' | 'github-actions') or a template string
+ *   (any string containing a `{` is treated as a custom template).
+ * - Object form: explicit `type` so config files can stay strictly typed.
+ */
+export type DiagnosticReporter =
+    | 'detailed'
+    | 'github-actions'
+    // eslint-disable-next-line @typescript-eslint/ban-types -- string & {} preserves autocomplete for the literals above
+    | (string & {})
+    | { type: 'detailed' }
+    | { type: 'github-actions' }
+    | { type: 'custom'; format: string };
+
+/**
+ * Object form of `DiagnosticReporter` after string shorthand has been resolved.
+ */
+export type NormalizedDiagnosticReporter =
+    | { type: 'detailed' }
+    | { type: 'github-actions' }
+    | { type: 'custom'; format: string };
 
 type OptionalBsConfigFields =
     | '_ancestors'
@@ -236,11 +314,15 @@ type OptionalBsConfigFields =
     | 'extends'
     | 'require'
     | 'outDir'
+    | 'createPackage'
+    | 'deploy'
+    | 'copyToStaging'
     | 'diagnosticLevel'
     | 'rootDir'
     | 'stagingDir'
     | 'stagingFolderPath'
-    | 'minFirmwareVersion';
+    | 'minFirmwareVersion'
+    | 'diagnosticReporters';
 
 export type FinalizedBsConfig =
     Omit<Required<BsConfig>, OptionalBsConfigFields>

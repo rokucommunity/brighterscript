@@ -12,7 +12,7 @@ import { NamespaceType } from './types/NamespaceType';
 import { ClassType } from './types/ClassType';
 import { ReferenceType } from './types/ReferenceType';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
-import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InterfaceType, InvalidType, LongIntegerType, ObjectType, StringType, TypedFunctionType, UnionType, VoidType } from './types';
+import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InterfaceType, InvalidType, LongIntegerType, ObjectType, StringType, TypedFunctionType, UninitializedType, UnionType, VoidType } from './types';
 import { TokenKind } from './lexer/TokenKind';
 import { createToken } from './astUtils/creators';
 import { createDottedIdentifier, createVariableExpression } from './astUtils/creators';
@@ -394,6 +394,102 @@ describe('util', () => {
                 outDir: './out'
             });
         });
+
+        it('honors stagingFolderPath from a loaded project file', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                stagingFolderPath: './staging'
+            });
+            expect(
+                util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` }).outDir
+            ).to.eql(
+                s`${rootDir}/staging`
+            );
+        });
+
+        it('honors stagingDir from a loaded project file', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                stagingDir: './staging'
+            });
+            expect(
+                util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` }).outDir
+            ).to.eql(
+                s`${rootDir}/staging`
+            );
+        });
+
+        it('prefers outDir over stagingFolderPath when both are in the project file', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                outDir: './modern',
+                stagingFolderPath: './legacy'
+            });
+            expect(
+                util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` }).outDir
+            ).to.eql(
+                s`${rootDir}/modern`
+            );
+        });
+
+        it('prefers a provided outDir option over the project file stagingFolderPath', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                stagingFolderPath: './legacy'
+            });
+            expect(
+                util.normalizeAndResolveConfig({
+                    project: s`${rootDir}/bsconfig.json`,
+                    outDir: './cli-out'
+                }).outDir
+            ).to.eql(
+                './cli-out'
+            );
+        });
+
+        it('resolves stagingFolderPath relative to the bsconfig file that declared it', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/folder1/parent.json`, {
+                stagingFolderPath: './staging'
+            });
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                extends: 'folder1/parent.json'
+            });
+            expect(
+                util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` }).outDir
+            ).to.eql(
+                s`${rootDir}/folder1/staging`
+            );
+        });
+
+        it('lets a child config stagingFolderPath override the parent outDir', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/parent.json`, {
+                outDir: './parent-out'
+            });
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                extends: 'parent.json',
+                stagingFolderPath: './child-staging'
+            });
+            expect(
+                util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` }).outDir
+            ).to.eql(
+                s`${rootDir}/child-staging`
+            );
+        });
+
+        it('passes deprecated staging options from project files through to the final options', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                stagingFolderPath: './staging',
+                stagingDir: './staging'
+            });
+            const result = util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` });
+            expect(result.stagingFolderPath).to.eql('./staging');
+            expect(result.stagingDir).to.eql('./staging');
+        });
+
+        it('honors copyToStaging from a loaded project file', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                copyToStaging: false
+            });
+            expect(
+                util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` }).noEmit
+            ).to.be.true;
+        });
     });
 
     describe('normalizeConfig', () => {
@@ -547,6 +643,27 @@ describe('util', () => {
         it('uses outDir when stagingFolderPath and stagingDir are provided', () => {
             let config = util.normalizeConfig({ outDir: 'outTest', stagingDir: 'staging', stagingFolderPath: 'stagingPath' } as any);
             expect(config.outDir).to.equal('outTest');
+        });
+
+        it('sets correct strict* values when strict is true', () => {
+            let config = util.normalizeConfig({ strict: true } as any);
+            expect(config.strict).to.be.true;
+            expect(config.strictCallFunc).to.be.true;
+            expect(config.strictNodeMembers).to.be.true;
+        });
+
+        it('allows strict* values to override strict', () => {
+            let config = util.normalizeConfig({ strict: true, strictCallFunc: false, strictNodeMembers: false } as any);
+            expect(config.strict).to.be.true;
+            expect(config.strictCallFunc).to.be.false;
+            //expect(config.strictNodeMembers).to.be.false;
+        });
+
+        it('defaults strict* values to false when strict is not set', () => {
+            let config = util.normalizeConfig({} as any);
+            expect(config.strict).to.be.false;
+            expect(config.strictCallFunc).to.be.false;
+            expect(config.strictNodeMembers).to.be.false;
         });
     });
 
@@ -1376,6 +1493,32 @@ describe('util', () => {
 
         it('handles object Types', () => {
             expectTypeToBe(util.binaryOperatorResultType(new ObjectType(), createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+        });
+
+        it('allows = and <> comparisons of a void type against invalid', () => {
+            expectTypeToBe(util.binaryOperatorResultType(VoidType.instance, createToken(TokenKind.Equal), InvalidType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.Equal), VoidType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(VoidType.instance, createToken(TokenKind.LessGreater), InvalidType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.LessGreater), VoidType.instance), BooleanType);
+        });
+
+        it('allows = and <> comparisons of a void type against dynamic', () => {
+            expectTypeToBe(util.binaryOperatorResultType(VoidType.instance, createToken(TokenKind.Equal), DynamicType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(VoidType.instance, createToken(TokenKind.LessGreater), DynamicType.instance), BooleanType);
+        });
+
+        it('still disallows non-comparison operators on a void type', () => {
+            expect(util.binaryOperatorResultType(VoidType.instance, createToken(TokenKind.Plus), InvalidType.instance)).to.be.undefined;
+            expect(util.binaryOperatorResultType(VoidType.instance, createToken(TokenKind.Less), InvalidType.instance)).to.be.undefined;
+        });
+
+        it('still disallows comparisons of a void type against non-invalid/dynamic types', () => {
+            expect(util.binaryOperatorResultType(VoidType.instance, createToken(TokenKind.Equal), StringType.instance)).to.be.undefined;
+        });
+
+        it('still disallows = and <> comparisons of an uninitialized type against invalid', () => {
+            expect(util.binaryOperatorResultType(UninitializedType.instance, createToken(TokenKind.Equal), InvalidType.instance)).to.be.undefined;
+            expect(util.binaryOperatorResultType(UninitializedType.instance, createToken(TokenKind.LessGreater), InvalidType.instance)).to.be.undefined;
         });
     });
 

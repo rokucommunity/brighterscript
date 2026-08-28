@@ -1,14 +1,15 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CodeAction, Position, Range, SignatureInformation, Location, DocumentSymbol, CancellationToken, SelectionRange } from 'vscode-languageserver';
+import * as semver from 'semver';
+import type { CodeAction, Position, Range, SignatureInformation, Location, DocumentSymbol, CancellationToken, SelectionRange, InlayHint } from 'vscode-languageserver';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import type { NamespaceContainer, NamespaceFileContribution } from './Scope';
 import { SymbolTable } from './SymbolTable';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeAddFileEvent, BeforeRemoveFileEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData, ProvideSelectionRangesEvent, ProvideSourceFixAllCodeActionsEvent } from './interfaces';
+import type { FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeAddFileEvent, BeforeRemoveFileEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData, ProvideSelectionRangesEvent, ProvideInlayHintsEvent, ProvideSourceFixAllCodeActionsEvent } from './interfaces';
 import type { SourceFixAllCodeAction } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
 import { standardizePath as s, util } from './util';
@@ -18,7 +19,9 @@ import type { Logger } from './logging';
 import { LogLevel, createLogger } from './logging';
 import chalk from 'chalk';
 import { globalCallables, globalFile } from './globalCallables';
-import { parseManifest, getBsConst } from './preprocessor/Manifest';
+import { parseManifest, parseManifestEntries, getBsConst } from './preprocessor/Manifest';
+import type { ManifestEntry } from './preprocessor/Manifest';
+import { DEFAULT_MIN_FIRMWARE_VERSION, RSG_VERSIONS } from './RokuConstants';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement, isReferenceType } from './astUtils/reflection';
@@ -761,6 +764,7 @@ export class Program {
             file: file,
             program: this
         };
+        this.scopesPerFile.clear();
 
         this.plugins.emit('beforeAddFile', fileAddEvent);
 
@@ -780,6 +784,7 @@ export class Program {
     private unassignFile<T extends BscFile = BscFile>(file: T) {
         delete this.files[file.srcPath.toLowerCase()];
         this.destMap.delete(file.destPath.toLowerCase());
+        this.scopesPerFile.clear();
         return file;
     }
 
@@ -1104,6 +1109,7 @@ export class Program {
         xmlFilesValidated: XmlFile[];
         changedSymbols: Map<SymbolTypeFlag, Set<string>>;
         changedComponentTypes: string[];
+        scopesToInvalidate: Scope[];
         scopesToValidate: Scope[];
         filesToBeValidatedInScopeContext: Set<BscFile>;
 
@@ -1112,6 +1118,7 @@ export class Program {
             xmlFilesValidated: [],
             changedSymbols: new Map<SymbolTypeFlag, Set<string>>(),
             changedComponentTypes: [],
+            scopesToInvalidate: [],
             scopesToValidate: [],
             filesToBeValidatedInScopeContext: new Set<BscFile>()
         };
@@ -1169,6 +1176,7 @@ export class Program {
         const xmlFilesValidated: XmlFile[] = this.validationDetails.xmlFilesValidated;
         const changedSymbols = this.validationDetails.changedSymbols;
         const changedComponentTypes = this.validationDetails.changedComponentTypes;
+        const scopesToInvalidate = this.validationDetails.scopesToInvalidate;
         const scopesToValidate = this.validationDetails.scopesToValidate;
         const filesToBeValidatedInScopeContext = this.validationDetails.filesToBeValidatedInScopeContext;
 
@@ -1176,7 +1184,7 @@ export class Program {
 
         let logValidateEnd = (status?: string) => { };
 
-        //will be populated later on during the correspnding sequencer event
+        //will be populated later on during the corresponding sequencer event
         let filesToProcess: BscFile[];
 
         const sequencer = new Sequencer({
@@ -1249,7 +1257,7 @@ export class Program {
             .forEach('do deferred component creation', () => [...brsFilesValidated, ...xmlFilesValidated], (file) => {
                 if (isXmlFile(file)) {
                     this.addDeferredComponentTypeSymbolCreation(file);
-                } else if (isBrsFile(file)) {
+                } else if (isBrsFile(file) && !this.isFirstValidation) {
                     const fileHasChanges = file.providedSymbols.changes.get(SymbolTypeFlag.runtime).size > 0 || file.providedSymbols.changes.get(SymbolTypeFlag.typetime).size > 0;
                     if (fileHasChanges) {
                         for (const scope of this.getScopesForFile(file)) {
@@ -1364,9 +1372,11 @@ export class Program {
                 this.logger.time(LogLevel.info, ['addDiagnosticsForScopes'], () => {
                     this.crossScopeValidation.addDiagnosticsForScopes(scopesToCheck);
                 });
-                const filesToRevalidate = this.crossScopeValidation.getFilesRequiringChangedSymbol(scopesToCheck, changedSymbols);
-                for (const file of filesToRevalidate) {
-                    filesToBeValidatedInScopeContext.add(file);
+                if (!this.isFirstValidation) {
+                    const filesToRevalidate = this.crossScopeValidation.getFilesRequiringChangedSymbol(scopesToCheck, changedSymbols);
+                    for (const file of filesToRevalidate) {
+                        filesToBeValidatedInScopeContext.add(file);
+                    }
                 }
 
                 this.currentScopeValidationOptions = {
@@ -1379,18 +1389,28 @@ export class Program {
                 //can reset changedComponent types
                 this.validationDetails.changedComponentTypes = [];
             })
-            .forEach('invalidate affected scopes', () => filesToBeValidatedInScopeContext, (file) => {
+            .forEach('invalidating file segments', () => filesToBeValidatedInScopeContext, (file) => {
                 if (isBrsFile(file)) {
                     file.validationSegmenter.unValidateAllSegments();
-                    for (const scope of this.getScopesForFile(file)) {
+                    if (!this.isFirstValidation) {
+                        scopesToInvalidate.push(...this.getScopesForFile(file));
+                    }
+                }
+            })
+            .once('invalidate affected scopes', () => {
+                if (this.isFirstValidation) {
+                    for (const scope of this.getAllUserScopes()) {
+                        scope.invalidate();
+                    }
+                } else {
+                    for (const scope of scopesToInvalidate) {
                         scope.invalidate();
                     }
                 }
             })
             .once('checking scopes to validate', () => {
                 //sort the scope names so we get consistent results
-                for (const scopeName of this.getSortedScopeNames()) {
-                    let scope = this.scopes[scopeName];
+                for (const scope of this.getAllUserScopes()) {
                     if (scope.shouldValidate(this.currentScopeValidationOptions)) {
                         scopesToValidate.push(scope);
                     }
@@ -1414,19 +1434,24 @@ export class Program {
             })
             .once('detect duplicate component names', () => {
                 this.detectDuplicateComponentNames();
-                this.isFirstValidation = false;
 
-                // can reset other validation details
-                this.validationDetails.changedSymbols = new Map<SymbolTypeFlag, Set<string>>();
-                this.validationDetails.scopesToValidate = [];
-                this.validationDetails.filesToBeValidatedInScopeContext = new Set<BscFile>();
 
+            })
+            .once('detect diagnostic filter issues', () => {
+                this.diagnostics.detectPathLikeDiagnosticFilterCodes(this.options, { tags: [ProgramValidatorDiagnosticsTag] });
             })
             .onCancel(() => {
                 logValidateEnd('cancelled');
             })
             .onSuccess(() => {
                 logValidateEnd();
+                this.isFirstValidation = false;
+
+                // can reset other validation details
+                this.validationDetails.changedSymbols = new Map<SymbolTypeFlag, Set<string>>();
+                this.validationDetails.scopesToInvalidate = [];
+                this.validationDetails.scopesToValidate = [];
+                this.validationDetails.filesToBeValidatedInScopeContext = new Set<BscFile>();
             })
             .onComplete(() => {
                 //if we emitted the beforeValidateProgram hook, emit the afterValidateProgram hook as well
@@ -1465,8 +1490,7 @@ export class Program {
 
     private getScopesForCrossScopeValidation(someComponentTypeChanged: boolean, didProvidedSymbolChange: boolean) {
         const scopesForCrossScopeValidation: Scope[] = [];
-        for (let scopeName of this.getSortedScopeNames()) {
-            let scope = this.scopes[scopeName];
+        for (let scope of this.getAllUserScopes()) {
             if (this.globalScope === scope) {
                 continue;
             }
@@ -1615,12 +1639,25 @@ export class Program {
         return this.sortedScopeNames;
     }
 
+    public getAllUserScopes() {
+        return Object.values(this.scopes).filter(s => s.name !== 'global');
+    }
+
+
+    private scopesPerFile: Map<BscFile, Scope[]> = new Map();
+
+
     /**
      * Get a list of all scopes the file is loaded into
      * @param file the file
      */
     public getScopesForFile(file: BscFile | string) {
         const resolvedFile = typeof file === 'string' ? this.getFile(file) : file;
+
+        const cachedResult = this.scopesPerFile.get(resolvedFile);
+        if (cachedResult) {
+            return cachedResult;
+        }
 
         let result = [] as Scope[];
         if (resolvedFile) {
@@ -1633,6 +1670,7 @@ export class Program {
                 }
             }
         }
+        this.scopesPerFile.set(resolvedFile, result);
         return result;
     }
 
@@ -1855,6 +1893,27 @@ export class Program {
             this.plugins.emit('provideSelectionRanges', event);
             this.plugins.emit('afterProvideSelectionRanges', event);
             return event.selectionRanges;
+        }
+        return [];
+    }
+
+    /**
+     * Get inlay hints for the given file and range.
+     */
+    public getInlayHints(srcPath: string, range: Range): InlayHint[] {
+        const file = this.getFile(srcPath);
+        if (file) {
+            const event: ProvideInlayHintsEvent = {
+                program: this,
+                file: file,
+                range: range,
+                scopes: this.getScopesForFile(file),
+                inlayHints: []
+            };
+            this.plugins.emit('beforeProvideInlayHints', event);
+            this.plugins.emit('provideInlayHints', event);
+            this.plugins.emit('afterProvideInlayHints', event);
+            return event.inlayHints;
         }
         return [];
     }
@@ -2362,6 +2421,7 @@ export class Program {
     }
 
     private _manifest: Map<string, string>;
+    private _manifestEntries: ManifestEntry[];
 
     /**
      * The absolute source path to the manifest file. Set when loadManifest is called.
@@ -2419,8 +2479,12 @@ export class Program {
             const parsedManifest = parseManifest(contents);
             this.buildBsConstsIntoParsedManifest(parsedManifest);
             this._manifest = parsedManifest;
+            this._manifestEntries = parseManifestEntries(contents);
+            this._manifestPath = manifestPath;
         } catch (e) {
             this._manifest = new Map();
+            this._manifestEntries = [];
+            this._manifestPath = undefined;
         }
     }
 
@@ -2432,6 +2496,96 @@ export class Program {
             this.loadManifest();
         }
         return this._manifest;
+    }
+
+    /**
+     * Get the manifest as a list of `{ key, value, range }` entries with line/column ranges
+     * suitable for attaching diagnostics to specific manifest lines.
+     *
+     * NOTE: protected for now. The shape of this data is likely to evolve as we build out
+     * more manifest-aware features (validation rules, autocomplete, etc.). External plugins
+     * shouldn't depend on this until we commit to a stable API.
+     */
+    protected getManifestEntries(): ManifestEntry[] {
+        if (!this._manifestEntries) {
+            this.loadManifest();
+        }
+        return this._manifestEntries;
+    }
+
+    private _manifestPath: string | undefined;
+
+    /**
+     * Returns the absolute path of the loaded manifest file, or undefined if no manifest was found.
+     *
+     * NOTE: protected for now. Once brighterscript treats the manifest as a proper file
+     * (with editor / BscFile integration) callers should consume that instead of poking at
+     * the Program. External plugins shouldn't depend on this in the meantime.
+     */
+    protected getManifestPath(): string | undefined {
+        if (!this._manifest) {
+            this.loadManifest();
+        }
+        return this._manifestPath;
+    }
+
+    private _minFirmwareVersion: string | undefined;
+
+    /**
+     * The minimum Roku firmware version brighterscript should assume the user is targeting.
+     * If `options.minFirmwareVersion` is set AND parseable as semver, the canonical coerced
+     * form ("15.0" → "15.0.0") wins; otherwise (unset or unparseable) falls back to
+     * {@link DEFAULT_MIN_FIRMWARE_VERSION}. The return is always a valid semver string so
+     * downstream callers can pass it directly to `semver.gte`/`semver.lt` without re-coercing.
+     * Cached after first call.
+     */
+    public getMinFirmwareVersion(): string {
+        if (this._minFirmwareVersion === undefined) {
+            const userValue = this.options.minFirmwareVersion;
+            const coerced = userValue ? semver.coerce(userValue) : undefined;
+            this._minFirmwareVersion = coerced ? coerced.version : DEFAULT_MIN_FIRMWARE_VERSION;
+        }
+        return this._minFirmwareVersion;
+    }
+
+    private _rsgVersion: string | undefined;
+
+    /**
+     * Returns the effective `rsg_version` for this program in canonical semver form (e.g. "1.2"
+     * → "1.2.0"). If the manifest declares a value explicitly and it's parseable, the canonical
+     * form wins; otherwise (manifest silent OR value is malformed) we fall back to the highest
+     * known rsg_version whose `becameDefaultAt` is `<=` the effective minimum firmware version,
+     * driven by {@link RSG_VERSIONS}. Cached after first call.
+     *
+     * Manifest validation (format errors, etc.) happens in `ProgramValidator` against the raw
+     * entry — that path doesn't go through this method.
+     */
+    public getRsgVersion(): string {
+        if (this._rsgVersion !== undefined) {
+            return this._rsgVersion;
+        }
+        const explicit = this.getManifest().get('rsg_version');
+        const explicitCoerced = explicit !== undefined ? semver.coerce(explicit.trim()) : undefined;
+        if (explicitCoerced) {
+            this._rsgVersion = explicitCoerced.version;
+            return this._rsgVersion;
+        }
+        //walk known rsg_versions in descending order (newest first) and return the first whose
+        //becameDefaultAt <= effective firmware. As long as some entry has becameDefaultAt: '0.0.0'
+        //(currently `1.1`), this loop always finds a match.
+        const minFirmwareVersion = this.getMinFirmwareVersion();
+        const candidates = Object.entries(RSG_VERSIONS)
+            .filter(([, info]) => info.becameDefaultAt !== undefined)
+            .sort(([a], [b]) => semver.rcompare(semver.coerce(a)!, semver.coerce(b)!));
+        for (const [version, info] of candidates) {
+            if (semver.gte(minFirmwareVersion, info.becameDefaultAt!)) {
+                this._rsgVersion = semver.coerce(version)!.version;
+                return this._rsgVersion;
+            }
+        }
+        //unreachable as long as RSG_VERSIONS contains an entry with becameDefaultAt: '0.0.0'
+        this._rsgVersion = DEFAULT_MIN_FIRMWARE_VERSION;
+        return this._rsgVersion;
     }
 
     public dispose() {

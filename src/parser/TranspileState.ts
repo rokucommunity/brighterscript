@@ -141,6 +141,9 @@ export class TranspileState {
 
     public transpileComments(tokens: TranspileToken[], prepNextLine = false): Array<string | SourceNode> {
         const leadingCommentsSourceNodes = [];
+        if (!tokens) {
+            return leadingCommentsSourceNodes;
+        }
         const justComments = tokens.filter(t => t.kind === TokenKind.Comment || t.kind === TokenKind.Newline);
         let newLinesSinceComment = 0;
 

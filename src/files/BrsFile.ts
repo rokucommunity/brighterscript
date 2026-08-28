@@ -5,7 +5,7 @@ import { CancellationTokenSource } from 'vscode-languageserver';
 import { CompletionItemKind } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
-import { DiagnosticCodeMap, diagnosticCodes, DiagnosticLegacyCodeMap, DiagnosticMessages } from '../DiagnosticMessages';
+import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import type { NamespaceFileContribution } from '../Scope';
 import { SymbolTable } from '../SymbolTable';
 import { FunctionScope } from '../FunctionScope';
@@ -20,7 +20,6 @@ import type { ClassStatement, NamespaceStatement, MethodStatement, FieldStatemen
 import type { Program } from '../Program';
 import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
-import { serializeError } from 'serialize-error';
 import { isClassStatement, isDottedGetExpression, isFunctionExpression, isNamespaceStatement, isVariableExpression, isImportStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType, isFunctionStatement, isEnumStatement, isConstStatement } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyChangedEvent, DependencyGraph } from '../DependencyGraph';
@@ -469,7 +468,7 @@ export class BrsFile implements BscFile {
             this._parser = new Parser();
             diagnostics.push({
                 location: util.createLocationFromFileRange(this, util.createRange(0, 0, 0, Number.MAX_VALUE)),
-                ...DiagnosticMessages.genericParserMessage('Critical error parsing file: ' + JSON.stringify(serializeError(e)))
+                ...DiagnosticMessages.genericParserMessage('Critical error parsing file: ' + JSON.stringify(util.serializeError(e)))
             });
         }
         this.program?.diagnostics.register(diagnostics);
@@ -523,7 +522,7 @@ export class BrsFile implements BscFile {
      * @param tokens - an array of tokens of which to find `TokenKind.Comment` from
      */
     public getCommentFlags(tokens: Token[]) {
-        const processor = new CommentFlagProcessor(this, ['rem', `'`], diagnosticCodes, [DiagnosticCodeMap.unknownDiagnosticCode, DiagnosticLegacyCodeMap.unknownDiagnosticCode]);
+        const processor = new CommentFlagProcessor(this, ['rem', `'`], diagnosticCodes);
 
         this.commentFlags = [];
         for (let lexerToken of tokens) {
@@ -533,6 +532,7 @@ export class BrsFile implements BscFile {
                 }
             }
         }
+        processor.finalize();
         this.commentFlags.push(...processor.commentFlags);
         this.program?.diagnostics.register(processor.diagnostics);
     }

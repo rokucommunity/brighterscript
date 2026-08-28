@@ -1,7 +1,6 @@
 import type { CancellationToken } from 'vscode-languageserver-protocol';
 import { CancellationTokenSource } from 'vscode-languageserver-protocol';
 import { Deferred } from '../deferred';
-import * as safeJsonStringify from 'safe-json-stringify';
 import { EventEmitter } from 'eventemitter3';
 import util from '../util';
 
@@ -102,7 +101,7 @@ export class ActionQueue {
     }
 
     private stringifyJson(data: any) {
-        return safeJsonStringify(
+        return util.safeJsonStringify(
             data,
             (_, value) => {
                 return typeof value === 'bigint' ? value.toString() : value;
