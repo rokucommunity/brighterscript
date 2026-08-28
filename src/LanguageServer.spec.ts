@@ -26,6 +26,7 @@ import { standardizePath } from 'roku-deploy';
 import undent from 'undent';
 import { ProjectManager } from './lsp/ProjectManager';
 import type { WorkspaceConfig } from './lsp/ProjectManager';
+import { workerPool } from './lsp/worker/WorkerThreadProject';
 
 const sinon = createSandbox();
 
@@ -489,6 +490,53 @@ describe('LanguageServer', () => {
         });
     });
 
+    describe('syncMaxWorkerThreads', () => {
+        function makeConfig(workspaceFolder: string, maxWorkerThreads?: number): WorkspaceConfig {
+            return {
+                languageServer: {
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
+                    logLevel: 'info',
+                    ...(maxWorkerThreads !== undefined ? { maxWorkerThreads: maxWorkerThreads } : {})
+                },
+                workspaceFolder: workspaceFolder,
+                excludePatterns: []
+            };
+        }
+
+        it('defaults to LanguageServer.maxWorkerThreadsDefault when no workspaces are configured', () => {
+            server['workspaceConfigsCache'] = new Map();
+            server['syncMaxWorkerThreads']();
+            expect(workerPool.maxWorkers).to.eql(LanguageServer.maxWorkerThreadsDefault);
+        });
+
+        it('reads the limit from a single workspace config', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 4)]
+            ]);
+            server['syncMaxWorkerThreads']();
+            expect(workerPool.maxWorkers).to.eql(4);
+        });
+
+        it('uses the smallest limit from multiple workspace folders', () => {
+            const folder2 = s`${tempDir}/project2`;
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 10)],
+                [folder2, makeConfig(folder2, 2)]
+            ]);
+            server['syncMaxWorkerThreads']();
+            expect(workerPool.maxWorkers).to.eql(2);
+        });
+
+        it('defaults to 1 when the configured value is less than 1', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 0)]
+            ]);
+            server['syncMaxWorkerThreads']();
+            expect(workerPool.maxWorkers).to.eql(1);
+        });
+    });
+
     describe('sendDiagnostics', () => {
         it('dedupes diagnostics found at same location from multiple projects', async () => {
             fsExtra.outputFileSync(s`${rootDir}/common/lib.brs`, `
@@ -523,6 +571,27 @@ describe('LanguageServer', () => {
             await sendDiagnosticsDeferred.promise;
 
             expect(stub.getCall(0).args?.[0]?.diagnostics).to.be.lengthOf(1);
+        });
+    });
+
+    describe('critical-failure', () => {
+        it('notifies the client when a project reports a critical failure', async () => {
+            server['connection'] = connection as any;
+            const deferred = new Deferred<any>();
+            const stub = sinon.stub(server['connection'], 'sendNotification').callsFake((...args: any[]) => {
+                deferred.resolve(args);
+                return Promise.resolve();
+            });
+
+            server['projectManager']['emit']('critical-failure', {
+                project: server['projectManager'].projects[0],
+                message: 'worker thread crashed unexpectedly'
+            });
+
+            const args = await deferred.promise;
+            expect(args[0]).to.eql('critical-failure');
+            expect(args[1]).to.include('worker thread crashed unexpectedly');
+            stub.restore();
         });
     });
 
@@ -761,7 +830,8 @@ describe('LanguageServer', () => {
                         projectDiscoveryMaxDepth: 15,
                         projectDiscoveryExclude: undefined,
                         logLevel: 'info',
-                        projectActivationConcurrencyLimit: undefined
+                        projectActivationConcurrencyLimit: undefined,
+                        maxWorkerThreads: undefined
                     }
                 }
             ]);
