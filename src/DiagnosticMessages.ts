@@ -1171,6 +1171,11 @@ export let DiagnosticMessages = {
         legacyCode: 1155,
         severity: DiagnosticSeverity.Warning,
         code: 'deprecated-bsconfig-option'
+    }),
+    diagnosticFilterLooksLikeFilePath: (value: string) => ({
+        message: `Diagnostic filter "${value}" looks like a file path or glob, not a diagnostic code. To filter diagnostics by file, use the "files" property instead: { "files": ["${value}"] }`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'diagnostic-filter-looks-like-file-path'
     })
 };
 export const defaultMaximumTruncationLength = 160;

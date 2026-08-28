@@ -223,9 +223,9 @@ export class SymbolTable implements SymbolTypeGetter {
             // look in our map first
             let currentResults = currentTable.symbolMap.get(key);
             if (currentResults) {
+                const lookupFilter = this.getSymbolLookupFilter(currentTable, maxStatementIndex, memberOfAncestor);
                 // eslint-disable-next-line no-bitwise
-                currentResults = currentResults.filter(symbol => symbol.flags & bitFlags)
-                    .filter(this.getSymbolLookupFilter(currentTable, maxStatementIndex, memberOfAncestor));
+                currentResults = currentResults.filter(symbol => (symbol.flags & bitFlags) && lookupFilter(symbol));
             }
 
             let precedingAssignmentIndex = -1;
@@ -550,27 +550,36 @@ export class SymbolTable implements SymbolTypeGetter {
      * Get list of all symbols declared in this SymbolTable (includes parent SymbolTable).
      */
     public getAllSymbols(bitFlags: SymbolTypeFlag): BscSymbol[] {
-        let symbols: BscSymbol[] = [].concat(...this.symbolMap.values());
-        //look through any sibling maps next
-        for (let sibling of this.siblings) {
-            symbols = symbols.concat(sibling.getAllSymbols(bitFlags));
-        }
-
-        if (this.parent && !this.hasCircularReferenceWithAncestor()) {
-            symbols = symbols.concat(this.parent.getAllSymbols(bitFlags));
-        }
+        //gather every symbol from this table, its siblings, and its ancestors first, unfiltered.
+        //Filtering (and deduping) is deferred to a single pass at the end - since filter/dedup both
+        //distribute over concatenation, doing it once here produces the same result as doing it at
+        //every level of the recursion, without the redundant repeated passes over the same symbols
+        const symbols = this.collectAllSymbolsUnfiltered();
         // eslint-disable-next-line no-bitwise
-        symbols = symbols.filter(symbol => symbol.flags & bitFlags);
+        const filteredSymbols = symbols.filter(symbol => symbol.flags & bitFlags);
 
         //remove duplicate symbols
         const symbolsMap = new Map<string, BscSymbol>();
-        for (const symbol of symbols) {
+        for (const symbol of filteredSymbols) {
             const lowerSymbolName = symbol.name.toLowerCase();
             if (!symbolsMap.has(lowerSymbolName)) {
                 symbolsMap.set(lowerSymbolName, symbol);
             }
         }
         return [...symbolsMap.values()];
+    }
+
+    private collectAllSymbolsUnfiltered(): BscSymbol[] {
+        let symbols: BscSymbol[] = [].concat(...this.symbolMap.values());
+        //look through any sibling maps next
+        for (let sibling of this.siblings) {
+            symbols = symbols.concat(sibling.collectAllSymbolsUnfiltered());
+        }
+
+        if (this.parent && !this.hasCircularReferenceWithAncestor()) {
+            symbols = symbols.concat(this.parent.collectAllSymbolsUnfiltered());
+        }
+        return symbols;
     }
 
     private resetTypeCache() {

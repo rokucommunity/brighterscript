@@ -10,7 +10,7 @@ import { ParseMode } from './Parser';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallableType, isCallExpression, isCallfuncExpression, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -2693,9 +2693,16 @@ export class TypeExpression extends Expression implements TypedefProvider {
          * The standard AST expression that represents the type for this TypeExpression.
          */
         expression: Expression;
+        /**
+         * An already-known type for this TypeExpression, bypassing resolution of `expression`
+         * via symbol table lookup. Useful when `expression` is not attached to (or can't resolve
+         * against) a real symbol table - e.g. a type reference synthesized for a detached AST node.
+         */
+        resolvedType?: BscType;
     }) {
         super();
         this.expression = options.expression;
+        this.resolvedType = options.resolvedType;
         this.location = util.cloneLocation(this.expression?.location);
     }
 
@@ -2705,6 +2712,12 @@ export class TypeExpression extends Expression implements TypedefProvider {
      * The standard AST expression that represents the type for this TypeExpression.
      */
     public readonly expression: Expression;
+
+    /**
+     * An already-known type for this TypeExpression. When set, `getType()` returns this
+     * directly instead of resolving `expression` via symbol table lookup.
+     */
+    public readonly resolvedType?: BscType;
 
     public readonly location: Location;
 
@@ -2729,12 +2742,22 @@ export class TypeExpression extends Expression implements TypedefProvider {
     }
 
     public getType(options: GetTypeOptions): BscType {
-        return this.expression.getType({ ...options, flags: SymbolTypeFlag.typetime });
+        return this.resolvedType ?? this.expression.getType({ ...options, flags: SymbolTypeFlag.typetime });
     }
 
     getTypedef(state: TranspileState): TranspileResult {
+        // classes and enums always know their own fully-namespace-qualified name, regardless
+        // of how they were referenced in source (bare same-namespace shorthand, fully-qualified,
+        // etc.) - use that instead of the raw written text, which would otherwise be flattened
+        // to the type's compiled runtime symbol name (e.g. `Namespace_Type`) for class references
+        const exprType = this.getType({ flags: SymbolTypeFlag.typetime });
+        if (isClassType(exprType) || isEnumType(exprType)) {
+            return [exprType.toString()];
+        }
         // TypeDefs should pass through any valid type names
-        return this.expression.transpile(state as BrsTranspileState);
+        return this.expression.getTypedef
+            ? this.expression.getTypedef(state as BrsTranspileState)
+            : this.expression.transpile(state as BrsTranspileState);
     }
 
     getName(parseMode = ParseMode.BrighterScript): string {
@@ -2750,7 +2773,8 @@ export class TypeExpression extends Expression implements TypedefProvider {
     public clone() {
         return this.finalizeClone(
             new TypeExpression({
-                expression: this.expression?.clone()
+                expression: this.expression?.clone(),
+                resolvedType: this.resolvedType
             }),
             ['expression']
         );
@@ -3069,6 +3093,12 @@ export class TypedFunctionTypeExpression extends Expression {
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [this.getType({ flags: SymbolTypeFlag.typetime }).toTypeString()];
+    }
+
+    public getTypedef(state: BrsTranspileState): TranspileResult {
+        //preserve the full signature (param names/types, return type) in typedefs,
+        //rather than the generic runtime type name used by `transpile()`
+        return [this.getType({ flags: SymbolTypeFlag.typetime }).toString()];
     }
 
     public walk(visitor: WalkVisitor, options: WalkOptions) {

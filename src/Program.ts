@@ -9,7 +9,7 @@ import { Scope } from './Scope';
 import type { NamespaceContainer, NamespaceFileContribution } from './Scope';
 import { SymbolTable } from './SymbolTable';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { BsDiagnostic, FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeAddFileEvent, BeforeRemoveFileEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData, ProvideSelectionRangesEvent, ProvideInlayHintsEvent, OnGetSourceFixAllCodeActionsEvent } from './interfaces';
+import type { BsDiagnostic, FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeAddFileEvent, BeforeRemoveFileEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData, ProvideSelectionRangesEvent, ProvideInlayHintsEvent, ProvideSourceFixAllCodeActionsEvent } from './interfaces';
 import type { SourceFixAllCodeAction } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
 import { standardizePath as s, util } from './util';
@@ -778,6 +778,8 @@ export class Program {
         this.files[file.srcPath.toLowerCase()] = file;
         this.destMap.set(file.destPath.toLowerCase(), file);
 
+        this.plugins.emit('addFile', fileAddEvent);
+
         this.plugins.emit('afterAddFile', fileAddEvent);
 
         return file;
@@ -1048,6 +1050,7 @@ export class Program {
 
             const event: BeforeRemoveFileEvent = { file: file, program: this };
             this.plugins.emit('beforeRemoveFile', event);
+            this.plugins.emit('removeFile', event);
 
             //if there is a scope named the same as this file's path, remove it (i.e. xml scopes)
             let scope = this.scopes[file.destPath];
@@ -1440,6 +1443,9 @@ export class Program {
                 this.detectDuplicateComponentNames();
 
 
+            })
+            .once('detect diagnostic filter issues', () => {
+                this.diagnostics.detectPathLikeDiagnosticFilterCodes(this.options, { tags: [ProgramValidatorDiagnosticsTag] });
             })
             .onCancel(() => {
                 logValidateEnd('cancelled');
@@ -1969,8 +1975,9 @@ export class Program {
 
     /**
      * Compute "source fix all" code actions for the given file.
-     * Fires the `onGetSourceFixAllCodeActions` plugin event with all diagnostics for the file (no range filter),
-     * then converts each contributed SourceFixAllCodeAction into an LSP CodeAction.
+     * Fires the `provideSourceFixAllCodeActions` plugin event (along with its before/after variants)
+     * with all diagnostics for the file (no range filter), then converts each contributed
+     * SourceFixAllCodeAction into an LSP CodeAction.
      */
     public getSourceFixAllCodeActions(srcPath: string): CodeAction[] {
         const actions: SourceFixAllCodeAction[] = [];
@@ -1981,13 +1988,16 @@ export class Program {
                 .getDiagnostics()
                 .filter(x => x.location?.uri === fileUri);
             const scopes = this.getScopesForFile(file);
-            this.plugins.emit('onGetSourceFixAllCodeActions', {
+            const event: ProvideSourceFixAllCodeActionsEvent = {
                 program: this,
                 file: file,
                 diagnostics: diagnostics,
                 scopes: scopes,
                 actions: actions
-            } as OnGetSourceFixAllCodeActionsEvent);
+            };
+            this.plugins.emit('beforeProvideSourceFixAllCodeActions', event);
+            this.plugins.emit('provideSourceFixAllCodeActions', event);
+            this.plugins.emit('afterProvideSourceFixAllCodeActions', event);
         }
         return actions.map(action => codeActionUtil.createCodeAction({
             ...action,
@@ -2258,6 +2268,9 @@ export class Program {
             files: files,
             outDir: outDir
         });
+
+        await this.plugins.emitAsync('writeProgram', programEvent);
+
         //empty the out directory
         await fsExtra.emptyDir(outDir);
 
@@ -2300,6 +2313,8 @@ export class Program {
                 editor: this.editor,
                 files: options?.files ?? Object.values(this.files)
             });
+
+            await this.plugins.emitAsync('buildProgram', event);
 
             //prepare the program (and files) for building
             event.files = await this.prepare(event.files);

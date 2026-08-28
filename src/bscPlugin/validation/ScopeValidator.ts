@@ -28,6 +28,7 @@ import type { XmlScope } from '../../XmlScope';
 import type { XmlFile } from '../../files/XmlFile';
 import { SGFieldTypes } from '../../parser/SGTypes';
 import { DynamicType } from '../../types/DynamicType';
+import { getAllTypesFromCompoundType } from '../../types/helpers';
 import { BscTypeKind } from '../../types/BscTypeKind';
 import type { BrsDocWithType } from '../../parser/BrightScriptDocParser';
 import brsDocParser from '../../parser/BrightScriptDocParser';
@@ -153,7 +154,7 @@ export class ScopeValidator {
 
         //do many per-file checks for every file in this (and parent) scopes
         this.event.scope.enumerateBrsFiles((file) => {
-            if (!isBrsFile(file)) {
+            if (!isBrsFile(file) || file.isTypedef) {
                 return;
             }
 
@@ -167,6 +168,11 @@ export class ScopeValidator {
 
         this.event.scope.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
+
+                //typedef files (.d.bs) are ambient declarations only - never validated for diagnostics
+                if (file.isTypedef) {
+                    return;
+                }
 
                 if (this.event.program.diagnostics.canSkipScopeValidationForFile(file)) {
                     return;
@@ -276,9 +282,6 @@ export class ScopeValidator {
                         });
                     },
                     FunctionExpression: (func) => {
-                        if (file.isTypedef) {
-                            return;
-                        }
                         this.addValidationKindMetric('FunctionExpression', () => {
                             this.validateFunctionExpressionForReturn(func);
                         });
@@ -995,9 +998,23 @@ export class ScopeValidator {
             rightTypeToTest = rightType.underlyingType;
         }
 
-        if (isUnionType(leftType) || isUnionType(rightType)) {
-            // TODO: it is possible to validate based on innerTypes, but more complicated
-            // Because you need to verify each combination of types
+        if (isUnionType(leftTypeToTest) || isUnionType(rightTypeToTest)) {
+            // validate every combination of the union's inner types - if any combination is invalid,
+            // then it's possible for this operation to fail at runtime, so flag it
+            const leftTypesToTest = isUnionType(leftTypeToTest) ? getAllTypesFromCompoundType(leftTypeToTest) : [leftTypeToTest];
+            const rightTypesToTest = isUnionType(rightTypeToTest) ? getAllTypesFromCompoundType(rightTypeToTest) : [rightTypeToTest];
+
+            for (const leftInnerType of leftTypesToTest) {
+                for (const rightInnerType of rightTypesToTest) {
+                    if (!util.binaryOperatorResultType(leftInnerType, binaryExpr.tokens.operator, rightInnerType)) {
+                        this.addMultiScopeDiagnostic({
+                            ...DiagnosticMessages.operatorTypeMismatch(binaryExpr.tokens.operator.text, leftType.toString(), rightType.toString()),
+                            location: binaryExpr.location
+                        });
+                        return;
+                    }
+                }
+            }
             return;
         }
         const opResult = util.binaryOperatorResultType(leftTypeToTest, binaryExpr.tokens.operator, rightTypeToTest);

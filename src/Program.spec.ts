@@ -411,6 +411,29 @@ describe('Program', () => {
             }]);
         });
 
+        it('flags diagnosticFilters entries that look like file paths', () => {
+            program.options.diagnosticFilters = ['source/vendor/**/*'] as any;
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.diagnosticFilterLooksLikeFilePath('source/vendor/**/*')
+            ]);
+        });
+
+        it('does not flag diagnosticFilters entries that are actual codes', () => {
+            program.options.diagnosticFilters = [1000, 'lint-1000'] as any;
+            program.validate();
+            expectDiagnostics(program, []);
+        });
+
+        it('flags diagnosticFilters entries that exactly match a known project file, even without a glob-like pattern', () => {
+            program.setFile('manifest', '');
+            program.options.diagnosticFilters = ['manifest'] as any;
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.diagnosticFilterLooksLikeFilePath('manifest')
+            ]);
+        });
+
         it('does not produce duplicate parse errors for different component scopes', () => {
             //add a file with a parse error
             program.setFile('components/lib.brs', `

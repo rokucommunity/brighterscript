@@ -4013,6 +4013,19 @@ describe('ScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('does not report cannot-find-name for unresolvable types referenced in .d.bs files', () => {
+            //simulates a .d.bs typedef whose namespace-qualified types don't actually resolve
+            //(e.g. produced by a buggy third-party rewrite tool), which should never produce diagnostics
+            program.setFile('source/util.d.bs', `
+                namespace SomeNamespace
+                    function getSomething(a as SomeNamespace.ifDraw2d) as SomeNamespace.roAssociativeArray
+                    end function
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('assignmentTypeMismatch', () => {
@@ -4896,6 +4909,79 @@ describe('ScopeValidator', () => {
                     i1 = i + 5
                     i2 = 5 + i
                 end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('detects when a union contains an incompatible type', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                function test(x as string or integer)
+                    print x + "world"
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.operatorTypeMismatch('+', 'string or integer', 'string').message
+            ]);
+        });
+
+        it('allows comparing a void value against a dynamic value with =', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub logEvent(name as string)
+                    print name
+                end sub
+
+                sub main(input as dynamic)
+                    result = logEvent("started")
+                    if result = input
+                        print "same"
+                    else
+                        print "different"
+                    end if
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows comparing a void value against invalid with <>', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub getConfig()
+                end sub
+
+                sub main()
+                    config = getConfig()
+                    if config <> invalid
+                        print "config exists"
+                    else
+                        print "no config"
+                    end if
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows comparing a "void or <type>" union against invalid with <>', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub fetchChannelData()
+                end sub
+
+                sub main()
+                    channel = fetchChannelData()
+                    if true
+                        channel = {
+                            title: "Home"
+                        }
+                    end if
+
+                    if channel <> invalid
+                        print channel.title
+                    else
+                        print "no channel"
+                    end if
+                end sub
             `);
             program.validate();
             expectZeroDiagnostics(program);
