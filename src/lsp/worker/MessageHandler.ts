@@ -54,6 +54,8 @@ export class MessageHandler<T, TRequestName = MethodNames<T>> {
 
     private emitter = new EventEmitter();
 
+    private isDisposed = false;
+
     private activeRequests = new Map<number, {
         id: number;
         deferred: Deferred<any>;
@@ -94,6 +96,9 @@ export class MessageHandler<T, TRequestName = MethodNames<T>> {
      * @param options.id an id for this request
      */
     public async sendRequest<R>(name: TRequestName, options?: { data: any[]; id?: number }) {
+        if (this.isDisposed) {
+            throw new Error(`Cannot send request '${name}' because MessageHandler is disposed`);
+        }
         const request: WorkerMessage = {
             type: 'request',
             name: name as any,
@@ -162,11 +167,16 @@ export class MessageHandler<T, TRequestName = MethodNames<T>> {
     }
 
     public dispose() {
+        if (this.isDisposed) {
+            return;
+        }
+        this.isDisposed = true;
         util.applyDispose(this.disposables);
         //reject all active requests
         for (const request of this.activeRequests.values()) {
             request.deferred.reject(new Error(`Request ${request.id} has been rejected because MessageHandler is now disposed`));
         }
+        this.activeRequests.clear();
     }
 }
 
