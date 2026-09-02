@@ -596,6 +596,10 @@ export class Program {
                 }
                 if (builtInNode.extends?.name) {
                     walk(builtInNode.extends.name, 'inherited');
+                } else if (lowerName !== 'node') {
+                    //some scraped node entries are missing `extends` data, but every SceneGraph node
+                    //ultimately descends from Node, so fall back to Node to keep its universal fields
+                    walk('Node', 'inherited');
                 }
             }
         };

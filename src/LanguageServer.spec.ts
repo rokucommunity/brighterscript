@@ -2,7 +2,7 @@ import { expect } from './chai-config.spec';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
 import type { ConfigurationItem, DidChangeWatchedFilesParams, Location, PublishDiagnosticsParams, WorkspaceFolder } from 'vscode-languageserver';
-import { FileChangeType } from 'vscode-languageserver';
+import { CompletionTriggerKind, FileChangeType } from 'vscode-languageserver';
 import { Deferred } from './deferred';
 import type { BrightScriptClientConfiguration } from './LanguageServer';
 import { CustomCommands, LanguageServer } from './LanguageServer';
@@ -1721,6 +1721,67 @@ describe('LanguageServer', () => {
                 items: [],
                 isIncomplete: false
             });
+        });
+
+        it('ignores the `<` trigger character in non-xml files', async () => {
+            const stub = sinon.stub(server['projectManager'], 'getCompletions').callsFake(() => Promise.resolve({ items: [{ label: 'someCompletion' }], isIncomplete: false }));
+            //`<` is the less-than operator in brightscript, so it should not trigger completions there
+            expect(
+                await (server['onCompletion'] as any)({
+                    textDocument: {
+                        uri: util.pathToUri(s`${rootDir}/source/main.brs`)
+                    },
+                    position: util.createPosition(0, 0),
+                    context: {
+                        triggerKind: CompletionTriggerKind.TriggerCharacter,
+                        triggerCharacter: '<'
+                    }
+                } as any)
+            ).to.eql({
+                items: [],
+                isIncomplete: false
+            });
+            expect(stub.called).to.be.false;
+        });
+
+        it('honors the `<` trigger character in xml files', async () => {
+            const stub = sinon.stub(server['projectManager'], 'getCompletions').callsFake(() => Promise.resolve({ items: [{ label: 'someCompletion' }], isIncomplete: false }));
+            expect(
+                await (server['onCompletion'] as any)({
+                    textDocument: {
+                        uri: util.pathToUri(s`${rootDir}/components/widget.xml`)
+                    },
+                    position: util.createPosition(0, 0),
+                    context: {
+                        triggerKind: CompletionTriggerKind.TriggerCharacter,
+                        triggerCharacter: '<'
+                    }
+                } as any)
+            ).to.eql({
+                items: [{ label: 'someCompletion' }],
+                isIncomplete: false
+            });
+            expect(stub.called).to.be.true;
+        });
+
+        it('still processes non-trigger-character completions in non-xml files', async () => {
+            const stub = sinon.stub(server['projectManager'], 'getCompletions').callsFake(() => Promise.resolve({ items: [{ label: 'someCompletion' }], isIncomplete: false }));
+            expect(
+                await (server['onCompletion'] as any)({
+                    textDocument: {
+                        uri: util.pathToUri(s`${rootDir}/source/main.brs`)
+                    },
+                    position: util.createPosition(0, 0),
+                    context: {
+                        triggerKind: CompletionTriggerKind.TriggerCharacter,
+                        triggerCharacter: '.'
+                    }
+                } as any)
+            ).to.eql({
+                items: [{ label: 'someCompletion' }],
+                isIncomplete: false
+            });
+            expect(stub.called).to.be.true;
         });
     });
 

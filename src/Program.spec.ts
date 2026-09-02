@@ -94,6 +94,21 @@ describe('Program', () => {
             //inherited field from the built-in Group (via Node)
             expect(inherited?.origin).to.equal('inherited');
         });
+
+        it('getSceneGraphNodeFields falls back to Node for built-in nodes missing `extends` data', () => {
+            //several node entries in the scraped roku-types data have no `extends` key (and some have
+            //no fields of their own), but every SceneGraph node ultimately descends from Node, so
+            //universal Node fields like `id` and `focusable` must still be returned
+            for (const nodeName of ['MonospaceLabel', 'InfoPane', 'ParentalControlPinPad', 'TimeGrid', 'ZoomRowList']) {
+                const fieldNames = program.getSceneGraphNodeFields(nodeName).map(x => x.name);
+                expect(fieldNames, nodeName).to.include('id');
+                expect(fieldNames, nodeName).to.include('focusable');
+            }
+        });
+
+        it('getSceneGraphNodeFields returns no fields for unknown nodes', () => {
+            expect(program.getSceneGraphNodeFields('NotARealNode')).to.eql([]);
+        });
     });
 
     it('does not throw exception after calling validate() after dispose()', () => {
