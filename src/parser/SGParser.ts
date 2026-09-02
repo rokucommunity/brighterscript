@@ -179,6 +179,7 @@ interface IToken {
 
 function mapElement({ children }: ElementCstNode, diagnostics: Diagnostic[]): SGTag {
     const nameToken = children.Name[0];
+    const closingNameToken = children.END_NAME?.[0];
     let range: Range;
     const selfClosing = !!children.SLASH_CLOSE;
     if (selfClosing) {
@@ -189,37 +190,39 @@ function mapElement({ children }: ElementCstNode, diagnostics: Diagnostic[]): SG
         range = rangeFromTokens(nameToken, endToken);
     }
     const name = mapToken(nameToken);
+    const closingName = closingNameToken ? mapToken(closingNameToken) : undefined;
+
     const attributes = mapAttributes(children.attribute);
     const content = children.content?.[0];
     switch (name.text) {
         case 'component':
             const componentContent = mapElements(content, ['interface', 'script', 'children', 'customization'], diagnostics);
-            return new SGComponent(name, attributes, componentContent, range);
+            return new SGComponent(name, attributes, componentContent, range, closingName);
         case 'interface':
             const interfaceContent = mapElements(content, ['field', 'function'], diagnostics);
-            return new SGInterface(name, interfaceContent, range);
+            return new SGInterface(name, interfaceContent, range, closingName);
         case 'field':
             if (hasElements(content)) {
                 reportUnexpectedChildren(name, diagnostics);
             }
-            return new SGField(name, attributes, range);
+            return new SGField(name, attributes, range, closingName);
         case 'function':
             if (hasElements(content)) {
                 reportUnexpectedChildren(name, diagnostics);
             }
-            return new SGFunction(name, attributes, range);
+            return new SGFunction(name, attributes, range, closingName);
         case 'script':
             if (hasElements(content)) {
                 reportUnexpectedChildren(name, diagnostics);
             }
             const cdata = getCdata(content);
-            return new SGScript(name, attributes, cdata, range);
+            return new SGScript(name, attributes, cdata, range, closingName);
         case 'children':
             const childrenContent = mapNodes(content);
-            return new SGChildren(name, childrenContent, range);
+            return new SGChildren(name, childrenContent, range, closingName);
         default:
             const nodeContent = mapNodes(content);
-            return new SGNode(name, attributes, nodeContent, range);
+            return new SGNode(name, attributes, nodeContent, range, closingName);
     }
 }
 
@@ -236,6 +239,7 @@ function mapNode({ children }: ElementCstNode): SGNode | undefined {
     if (!nameToken) {
         return undefined;
     }
+    const closingNameToken = children.END_NAME?.[0];
     let range: Range;
     const selfClosing = !!children.SLASH_CLOSE;
     if (selfClosing) {
@@ -246,10 +250,12 @@ function mapNode({ children }: ElementCstNode): SGNode | undefined {
         range = rangeFromTokens(nameToken, endToken);
     }
     const name = mapToken(nameToken);
+    const closingName = closingNameToken ? mapToken(closingNameToken) : undefined;
+
     const attributes = mapAttributes(children.attribute);
     const content = children.content?.[0];
     const nodeContent = mapNodes(content);
-    return new SGNode(name, attributes, nodeContent, range);
+    return new SGNode(name, attributes, nodeContent, range, closingName);
 }
 
 function mapElements(content: ContentCstNode, allow: string[], diagnostics: Diagnostic[]): SGTag[] {

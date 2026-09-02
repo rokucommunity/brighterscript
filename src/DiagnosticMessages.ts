@@ -843,6 +843,11 @@ export let DiagnosticMessages = {
         message: `Function name '${name}' is ${length} characters long, which exceeds the maximum of ${maxLength}. It will be truncated when converted with ToStr()`,
         code: 1155,
         severity: DiagnosticSeverity.Warning
+    }),
+    xmlTagMismatch: (openingTag: string, closingTag: string) => ({
+        message: `Mismatched closing tag: expected '</${openingTag}>' but found '</${closingTag}>'`,
+        code: 1156,
+        severity: DiagnosticSeverity.Error
     })
 };
 
