@@ -26,7 +26,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike, isGroupingExpression, isInlineInterfaceExpression, isTypedFunctionTypeExpression } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode, SourceMapConsumer } from 'source-map';
 import type { RawSourceMap, SourceMapGenerator } from 'source-map';
@@ -2243,6 +2243,71 @@ export class Util {
         }
         return result;
         /* eslint-enable no-var */
+    }
+
+    /**
+     * Reconstruct the written name of a "complex" type expression - one that isn't a plain
+     * dotted-get chain, so `getAllDottedGetPartsAsString` can't represent it. Handles
+     * unions/intersections, inline interfaces, typed arrays, typed function types, and groupings.
+     * Returns `undefined` for anything it can't render.
+     */
+    public getTypeExpressionName(node: Expression, parseMode = ParseMode.BrighterScript): string {
+        if (isTypeExpression(node)) {
+            return this.getTypeExpressionName(node.expression, parseMode);
+        }
+        if (isBinaryExpression(node)) {
+            //union (`or`) / intersection (`and`) types
+            const left = this.getTypeExpressionName(node.left, parseMode);
+            const right = this.getTypeExpressionName(node.right, parseMode);
+            if (left === undefined || right === undefined) {
+                return undefined;
+            }
+            return `${left} ${node.tokens.operator?.text ?? 'or'} ${right}`;
+        }
+        if (isGroupingExpression(node)) {
+            const inner = this.getTypeExpressionName(node.expression, parseMode);
+            return inner === undefined ? undefined : `(${inner})`;
+        }
+        if (isTypedArrayExpression(node)) {
+            const inner = this.getTypeExpressionName(node.innerType, parseMode);
+            return inner === undefined ? undefined : `${inner}[]`;
+        }
+        if (isInlineInterfaceExpression(node)) {
+            const members = [];
+            for (const member of node.members ?? []) {
+                const memberType = member.typeExpression
+                    ? this.getTypeExpressionName(member.typeExpression, parseMode)
+                    : undefined;
+                members.push([
+                    member.isOptional ? 'optional ' : '',
+                    member.tokens.name?.text ?? '',
+                    memberType === undefined ? '' : ` as ${memberType}`
+                ].join(''));
+            }
+            return `{ ${members.join(', ')} }`;
+        }
+        if (isTypedFunctionTypeExpression(node)) {
+            const params = [];
+            for (const param of node.params ?? []) {
+                const paramType = param.typeExpression
+                    ? this.getTypeExpressionName(param.typeExpression, parseMode)
+                    : undefined;
+                params.push([
+                    param.tokens.name?.text ?? '',
+                    paramType === undefined ? '' : ` as ${paramType}`
+                ].join(''));
+            }
+            const returnType = node.returnType
+                ? this.getTypeExpressionName(node.returnType, parseMode)
+                : undefined;
+            return [
+                node.tokens.functionType?.text ?? 'function',
+                `(${params.join(', ')})`,
+                returnType === undefined ? '' : ` as ${returnType}`
+            ].join('');
+        }
+        //fall back to the dotted-get chain (variable/dotted-get leaves of the type expression)
+        return this.getAllDottedGetPartsAsString(node, parseMode);
     }
 
     /**
