@@ -6,6 +6,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.73.1](https://github.com/rokucommunity/brighterscript/compare/0.73.0...v0.73.1) - 2026-09-02
+### Added
+ - Add <field> and <function> completions in xml interfaces ([#1748](https://github.com/rokucommunity/brighterscript/pull/1748))
+ - Add warning for function names that exceed the truncation limit ([#1777](https://github.com/rokucommunity/brighterscript/pull/1777))
+ - Add SceneGraph XML element and attribute completions ([#1741](https://github.com/rokucommunity/brighterscript/pull/1741))
+### Changed
+ - Security enhancements ([#1782](https://github.com/rokucommunity/brighterscript/pull/1782))
+ - Keep synthesized Tokens on the lexer's hidden class ([#1781](https://github.com/rokucommunity/brighterscript/pull/1781))
+ - Report mismatched XML element pairs ([#1746](https://github.com/rokucommunity/brighterscript/pull/1746))
+ - Cap LSP worker thread pool to fix memory scaling with project count ([#1776](https://github.com/rokucommunity/brighterscript/pull/1776))
+ - Security enhancements ([#1775](https://github.com/rokucommunity/brighterscript/pull/1775))
+ - Bump brace-expansion in /benchmarks ([#1774](https://github.com/rokucommunity/brighterscript/pull/1774))
+ - Security enhancements ([#1773](https://github.com/rokucommunity/brighterscript/pull/1773))
+ - Bump qs from 6.14.2 to 6.15.3 ([#1766](https://github.com/rokucommunity/brighterscript/pull/1766))
+ - Bump postcss from 8.5.10 to 8.5.25 ([#1764](https://github.com/rokucommunity/brighterscript/pull/1764))
+ - Bump fast-uri from 3.1.2 to 3.1.4 ([#1763](https://github.com/rokucommunity/brighterscript/pull/1763))
+ - upgrade to [@rokucommunity/logger@0.4.2](https://github.com/rokucommunity/logger/blob/master/CHANGELOG.md#042---2026-09-02). Notable changes since 0.4.0:
+     - Security enhancements ([#39](https://github.com/rokucommunity/logger/pull/39))
+     - Security enhancements ([#38](https://github.com/rokucommunity/logger/pull/38))
+     - chore: Simplify create-vsix inputs and improve branch resolution ([#36](https://github.com/rokucommunity/logger/pull/36))
+     - chore: Give fork PRs a clear create-vsix failure message ([#35](https://github.com/rokucommunity/logger/pull/35))
+     - Serialize Error.cause (recursively) when logging ([#33](https://github.com/rokucommunity/logger/pull/33))
+     - chore: Update create-vsix to support multi-vsix and shared bot logic ([#32](https://github.com/rokucommunity/logger/pull/32))
+ - upgrade to [roku-deploy@3.18.4](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3184---2026-09-02). Notable changes since 3.17.6:
+     - fix: signed .pkg downloads are corrupted by utf8 decoding ([#359](https://github.com/rokucommunity/roku-deploy/pull/359))
+     - chore: Hard-reboot device via smart switch for device tests ([#354](https://github.com/rokucommunity/roku-deploy/pull/354))
+     - Add 1s breathing room between device tests ([#346](https://github.com/rokucommunity/roku-deploy/pull/346))
+     - Security enhancements ([#345](https://github.com/rokucommunity/roku-deploy/pull/345))
+     - chore: Fix mocha/ts-node breaking on Node 22+ ([#342](https://github.com/rokucommunity/roku-deploy/pull/342))
+     - chore: Simplify create-vsix inputs and improve branch resolution ([#340](https://github.com/rokucommunity/roku-deploy/pull/340))
+     - chore: Give fork PRs a clear create-vsix failure message ([#339](https://github.com/rokucommunity/roku-deploy/pull/339))
+     - Restore dist/Logger as a compatibility shim ([#327](https://github.com/rokucommunity/roku-deploy/pull/327))
+     - Fix write EPIPE when uploading large zips through digest auth ([#324](https://github.com/rokucommunity/roku-deploy/pull/324))
+     - Migrate to @rokucommunity/logger ([#318](https://github.com/rokucommunity/roku-deploy/pull/318))
+     - Fix device test timeout durations and remove dead code ([#319](https://github.com/rokucommunity/roku-deploy/pull/319))
+     - Better undersized zip error handling ([#312](https://github.com/rokucommunity/roku-deploy/pull/312))
+     - Add deleteAllSideloadedPlugins, expose listSideloadedPlugins ([#309](https://github.com/rokucommunity/roku-deploy/pull/309))
+     - Migrate networking library from `postman-request` to `needle` ([#282](https://github.com/rokucommunity/roku-deploy/pull/282))
+     - chore: Update create-vsix to support multi-vsix and shared bot logic ([#305](https://github.com/rokucommunity/roku-deploy/pull/305))
+     - Extract normalizeDeviceInfo helper from getDeviceInfo ([#300](https://github.com/rokucommunity/roku-deploy/pull/300))
+     - Fix: potential crash in normalizeDeviceInfoFieldValue when supplied non-string values ([#301](https://github.com/rokucommunity/roku-deploy/pull/301))
+     - Declare picomatch as a direct dependency ([#299](https://github.com/rokucommunity/roku-deploy/pull/299))
+     - Inline lodash.camelCase and temp-dir into util ([#298](https://github.com/rokucommunity/roku-deploy/pull/298))
+     - Consolidate date libraries into dependency-free helpers ([#297](https://github.com/rokucommunity/roku-deploy/pull/297))
+     - Bump form-data from 2.5.5 to 2.5.6 ([#293](https://github.com/rokucommunity/roku-deploy/pull/293))
+### Fixed
+ - Fix compile break against roku-deploy 3.18 ([#1752](https://github.com/rokucommunity/brighterscript/pull/1752))
+
+
+
 ## [0.73.0](https://github.com/rokucommunity/brighterscript/compare/0.72.5...v0.73.0) - 2026-06-29
 ### Changed
  - Validate eval/rsg_version against firmware lifecycle ([#1698](https://github.com/rokucommunity/brighterscript/pull/1698))
