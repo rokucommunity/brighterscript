@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.73.1](https://github.com/rokucommunity/brighterscript/compare/0.73.0...v0.73.1) - 2026-09-02
+### Added
+ - Add <field> and <function> completions in xml interfaces ([#1748](https://github.com/rokucommunity/brighterscript/pull/1748))
+ - Add warning for function names that exceed the truncation limit ([#1777](https://github.com/rokucommunity/brighterscript/pull/1777))
+ - Add SceneGraph XML element and attribute completions ([#1741](https://github.com/rokucommunity/brighterscript/pull/1741))
+ - Report mismatched XML element pairs ([#1746](https://github.com/rokucommunity/brighterscript/pull/1746))
+### Changed
+ - Security enhancements (([#1773](https://github.com/rokucommunity/brighterscript/pull/1773), [#1775](https://github.com/rokucommunity/brighterscript/pull/1775), [#1782](https://github.com/rokucommunity/brighterscript/pull/1782))
+ - Keep synthesized Tokens on the lexer's hidden class ([#1781](https://github.com/rokucommunity/brighterscript/pull/1781))
+ - Cap LSP worker thread pool to fix memory scaling with project count ([#1776](https://github.com/rokucommunity/brighterscript/pull/1776))
+ - upgrade to [@rokucommunity/logger@0.4.2](https://github.com/rokucommunity/logger/blob/master/CHANGELOG.md#042---2026-09-02). Notable changes since 0.4.0:
+     - Security enhancements ([#38](https://github.com/rokucommunity/logger/pull/38), [#39](https://github.com/rokucommunity/logger/pull/39))
+     - Serialize Error.cause (recursively) when logging ([#33](https://github.com/rokucommunity/logger/pull/33))
+ - upgrade to [roku-deploy@3.18.4](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3184---2026-09-02). Notable changes since 3.17.6:
+     - Migrate networking library from `postman-request` to `needle` ([#282](https://github.com/rokucommunity/roku-deploy/pull/282))
+### Fixed
+ - Fix compile break against roku-deploy 3.18 ([#1752](https://github.com/rokucommunity/brighterscript/pull/1752))
+
+
+
 ## [0.73.0](https://github.com/rokucommunity/brighterscript/compare/0.72.5...v0.73.0) - 2026-06-29
 ### Changed
  - Validate eval/rsg_version against firmware lifecycle ([#1698](https://github.com/rokucommunity/brighterscript/pull/1698))
