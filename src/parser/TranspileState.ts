@@ -22,15 +22,14 @@ export class TranspileState {
     constructor(
         /**
          * The absolute path to the source location of this file. If sourceRoot is specified,
-         * this path will be full path to the file in sourceRoot instead of rootDir.
+         * this path will be the full path to the file under sourceRoot instead of rootDir.
          * If the file resides outside of rootDir, then no changes will be made to this path.
+         * Used for runtime source literals (SOURCE_FILE_PATH, SOURCE_LOCATION).
          */
         public srcPath: string,
         public options: BsConfig
     ) {
-        this.srcPath = srcPath;
-
-        //if a sourceRoot is specified, use that instead of the rootDir
+        //if a sourceRoot is specified, swap rootDir for sourceRoot in the path for runtime literals
         if (this.options.sourceRoot) {
             this.srcPath = this.srcPath.replace(
                 this.options.rootDir,
@@ -114,6 +113,9 @@ export class TranspileState {
 
     public transpileLeadingCommentsForAstNode(node: { leadingTrivia?: Token[] }) {
         const leadingTrivia = node?.leadingTrivia ?? [];
+        if (!leadingTrivia || leadingTrivia.length === 0) {
+            return [];
+        }
         const leadingCommentsSourceNodes = this.transpileComments(leadingTrivia);
         if (leadingCommentsSourceNodes.length > 0) {
             // indent in preparation for next text
@@ -124,7 +126,10 @@ export class TranspileState {
     }
 
     public transpileLeadingComments(token: TranspileToken) {
-        const leadingTrivia = (token?.leadingTrivia ?? []);
+        const leadingTrivia = token?.leadingTrivia ?? [];
+        if (!leadingTrivia || leadingTrivia.length === 0) {
+            return [];
+        }
         const leadingCommentsSourceNodes = this.transpileComments(leadingTrivia);
         if (leadingCommentsSourceNodes.length > 0 && token.text) {
             // indent in preparation for next text
@@ -136,6 +141,9 @@ export class TranspileState {
 
     public transpileComments(tokens: TranspileToken[], prepNextLine = false): Array<string | SourceNode> {
         const leadingCommentsSourceNodes = [];
+        if (!tokens) {
+            return leadingCommentsSourceNodes;
+        }
         const justComments = tokens.filter(t => t.kind === TokenKind.Comment || t.kind === TokenKind.Newline);
         let newLinesSinceComment = 0;
 

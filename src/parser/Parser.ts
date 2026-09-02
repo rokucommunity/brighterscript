@@ -66,6 +66,7 @@ import type { DiagnosticInfo } from '../DiagnosticMessages';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { util } from '../util';
 import {
+    AAIndexedMemberExpression,
     AALiteralExpression,
     AAMemberExpression,
     AnnotationExpression,
@@ -102,15 +103,21 @@ import {
 import type { Range } from 'vscode-languageserver';
 import type { Logger } from '../logging';
 import { createLogger } from '../logging';
-import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression, isConditionalCompileStatement, isLiteralBoolean, isTypecastExpression } from '../astUtils/reflection';
+import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression, isConditionalCompileStatement, isLiteralBoolean, isTypecastExpression, isXmlAttributeGetExpression } from '../astUtils/reflection';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { Expression, Statement } from './AstNode';
 import type { BsDiagnostic, DeepWriteable } from '../interfaces';
-
+import * as semver from 'semver';
 
 const declarableTypesLower = DeclarableTypes.map(tokenKind => tokenKind.toLowerCase());
 
 export class Parser {
+    /**
+     * The minimum Roku firmware version that added native support for multi-line expressions
+     * (line continuation) in plain BrightScript (`.brs`) files.
+     */
+    private static readonly LINE_CONTINUATION_MIN_FIRMWARE_VERSION = '15.3.0';
+
     /**
      * The array of tokens passed to `parse()`
      */
@@ -155,6 +162,22 @@ export class Parser {
      */
     public options: ParseOptions;
 
+    /**
+     * Whether line continuation after binary operators is allowed.
+     * Enabled in BrighterScript mode, or when minFirmwareVersion >= 15.3.
+     */
+    private allowLineContinuation: boolean;
+
+    /**
+     * If line continuation is enabled, consumes all immediately following Newline tokens.
+     * Call this after matching a binary operator to allow the right-hand operand on the next line.
+     */
+    private consumeNewlinesIfAllowed() {
+        if (this.allowLineContinuation) {
+            while (this.match(TokenKind.Newline)) { }
+        }
+    }
+
     private globalTerminators = [] as TokenKind[][];
 
     /**
@@ -191,6 +214,8 @@ export class Parser {
         this.logger = options?.logger ?? createLogger();
         options = this.sanitizeParseOptions(options);
         this.options = options;
+        const coercedMinFirmwareVersion = semver.coerce(this.options.minFirmwareVersion);
+        this.allowLineContinuation = options.mode === ParseMode.BrighterScript || (!!coercedMinFirmwareVersion && semver.gte(coercedMinFirmwareVersion, Parser.LINE_CONTINUATION_MIN_FIRMWARE_VERSION));
 
         let tokens: Token[];
         if (typeof toParse === 'string') {
@@ -1118,6 +1143,10 @@ export class Parser {
             return this.aliasStatement();
         }
 
+        if (this.checkTypeStatement()) {
+            return this.typeStatement();
+        }
+
         if (this.check(TokenKind.Stop)) {
             return this.stopStatement();
         }
@@ -1247,18 +1276,26 @@ export class Parser {
 
         this.consumeStatementSeparators();
 
-        const whileBlock = this.block(TokenKind.EndWhile);
+        const whileBlock = this.block(TokenKind.EndWhile, TokenKind.Next);
         let endWhile: Token;
-        if (!whileBlock || this.peek().kind !== TokenKind.EndWhile) {
+        if (whileBlock && this.peek().kind === TokenKind.EndWhile) {
+            endWhile = this.advance();
+        } else if (whileBlock && this.peek().kind === TokenKind.Next) {
+            //recover: a stray `next` is a common mistake when the user means `end while`.
+            //emit a targeted diagnostic and consume the `next` so the rest of the file parses cleanly.
+            this.diagnostics.push({
+                ...DiagnosticMessages.mismatchedEndingToken(['end while'], 'next'),
+                location: this.peek()?.location
+            });
+            endWhile = this.advance();
+        } else {
             this.diagnostics.push({
                 ...DiagnosticMessages.couldNotFindMatchingEndKeyword('while'),
-                location: this.peek().location
+                location: this.peek()?.location
             });
             if (!whileBlock) {
                 throw this.lastDiagnosticAsError();
             }
-        } else {
-            endWhile = this.advance();
         }
 
         return new WhileStatement({
@@ -1328,18 +1365,25 @@ export class Parser {
 
         this.consumeStatementSeparators();
 
-        let body = this.block(TokenKind.EndFor, TokenKind.Next);
+        let body = this.block(TokenKind.EndFor, TokenKind.Next, TokenKind.EndWhile);
         let endForToken: Token;
-        if (!body || !this.checkAny(TokenKind.EndFor, TokenKind.Next)) {
+        if (body && this.checkAny(TokenKind.EndFor, TokenKind.Next)) {
+            endForToken = this.advance();
+        } else if (body && this.peek().kind === TokenKind.EndWhile) {
+            //recover: a stray `end while` is a common mistake when the user means `end for`.
+            this.diagnostics.push({
+                ...DiagnosticMessages.mismatchedEndingToken(['end for', 'next'], 'end while'),
+                location: this.peek()?.location
+            });
+            endForToken = this.advance();
+        } else {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedEndForOrNextToTerminateForLoop(forToken.text),
-                location: this.peek().location
+                location: this.peek()?.location
             });
             if (!body) {
                 throw this.lastDiagnosticAsError();
             }
-        } else {
-            endForToken = this.advance();
         }
 
         // WARNING: BrightScript doesn't delete the loop initial value after a for/to loop! It just
@@ -1391,24 +1435,31 @@ export class Parser {
 
         this.consumeStatementSeparators();
 
-        let body = this.block(TokenKind.EndFor, TokenKind.Next);
-        let endForToken: Token;
-        if (!body || !this.checkAny(TokenKind.EndFor, TokenKind.Next)) {
-
+        let body = this.block(TokenKind.EndFor, TokenKind.Next, TokenKind.EndWhile);
+        let endFor: Token;
+        if (body && this.checkAny(TokenKind.EndFor, TokenKind.Next)) {
+            endFor = this.advance();
+        } else if (body && this.peek().kind === TokenKind.EndWhile) {
+            //recover: a stray `end while` is a common mistake when the user means `end for`.
+            this.diagnostics.push({
+                ...DiagnosticMessages.mismatchedEndingToken(['end for', 'next'], 'end while'),
+                location: this.peek()?.location
+            });
+            endFor = this.advance();
+        } else {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedEndForOrNextToTerminateForLoop(forEach.text),
                 location: this.peek().location
             });
             throw this.lastDiagnosticAsError();
         }
-        endForToken = this.advance();
 
         return new ForEachStatement({
             forEach: forEach,
             as: asToken,
             typeExpression: typeExpression,
             in: maybeIn,
-            endFor: endForToken,
+            endFor: endFor,
             item: name,
             target: target,
             body: body
@@ -2454,7 +2505,36 @@ export class Parser {
             expr = new BinaryExpression({ left: expr, operator: this.advance(), right: this.expression() });
         }
 
-        //at this point, it's probably an error. However, we recover a little more gracefully by creating an inclosing ExpressionStatement
+
+        //you're not allowed to do dottedGet or XmlAttrGet after a function call
+        if (isDottedGetExpression(expr)) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.propAccessNotPermittedAfterFunctionCallInExpressionStatement('Property'),
+                location: util.createBoundingLocation(expr.tokens.dot, expr.tokens.name)
+            });
+            //we can recover gracefully here even though it's invalid syntax
+            return new ExpressionStatement({ expression: expr });
+
+            //you're not allowed to do indexedGet expressions after a function call
+        } else if (isIndexedGetExpression(expr)) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.propAccessNotPermittedAfterFunctionCallInExpressionStatement('Index'),
+                location: util.createBoundingLocation(expr.tokens.openingSquare, ...expr.indexes, expr.tokens.closingSquare)
+            });
+            //we can recover gracefully here even though it's invalid syntax
+            return new ExpressionStatement({ expression: expr });
+            //you're not allowed to do XmlAttrGet after a function call
+        } else if (isXmlAttributeGetExpression(expr)) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.propAccessNotPermittedAfterFunctionCallInExpressionStatement('XML attribute'),
+                location: util.createBoundingLocation(expr.tokens.at, expr.tokens.name)
+            });
+            //we can recover gracefully here even though it's invalid syntax
+            return new ExpressionStatement({ expression: expr });
+        }
+
+
+        //at this point, it's probably an error. However, we recover a little more gracefully by creating an assignment
         this.diagnostics.push({
             ...DiagnosticMessages.expectedStatement(),
             location: expressionStart.location
@@ -2762,6 +2842,7 @@ export class Parser {
 
         while (this.matchAny(TokenKind.And, TokenKind.Or)) {
             let operator = this.previous();
+            this.consumeNewlinesIfAllowed();
             let right = this.relational();
             expr = new BinaryExpression({ left: expr, operator: operator, right: right });
         }
@@ -2783,6 +2864,7 @@ export class Parser {
             )
         ) {
             let operator = this.previous();
+            this.consumeNewlinesIfAllowed();
             let right = this.additive();
             expr = new BinaryExpression({ left: expr, operator: operator, right: right });
         }
@@ -2797,6 +2879,7 @@ export class Parser {
 
         while (this.matchAny(TokenKind.Plus, TokenKind.Minus)) {
             let operator = this.previous();
+            this.consumeNewlinesIfAllowed();
             let right = this.multiplicative();
             expr = new BinaryExpression({ left: expr, operator: operator, right: right });
         }
@@ -2816,6 +2899,7 @@ export class Parser {
             TokenKind.RightShift
         )) {
             let operator = this.previous();
+            this.consumeNewlinesIfAllowed();
             let right = this.exponential();
             expr = new BinaryExpression({ left: expr, operator: operator, right: right });
         }
@@ -2828,6 +2912,7 @@ export class Parser {
 
         while (this.match(TokenKind.Caret)) {
             let operator = this.previous();
+            this.consumeNewlinesIfAllowed();
             let right = this.prefixUnary();
             expr = new BinaryExpression({ left: expr, operator: operator, right: right });
         }
@@ -3006,11 +3091,11 @@ export class Parser {
 
     private finishCall(openingParen: Token, callee: Expression, addToCallExpressionList = true) {
         let args = [] as Expression[];
-        while (this.match(TokenKind.Newline)) { }
+        this.consumeNewlinesIfAllowed();
 
         if (!this.check(TokenKind.RightParen)) {
             do {
-                while (this.match(TokenKind.Newline)) { }
+                this.consumeNewlinesIfAllowed();
 
                 if (args.length >= CallExpression.MaximumArguments) {
                     this.diagnostics.push({
@@ -3018,6 +3103,21 @@ export class Parser {
                         location: this.peek()?.location
                     });
                     throw this.lastDiagnosticAsError();
+                }
+                //if a newline appears where we'd next read an argument and line continuation isn't
+                //allowed in this mode, peek past the newlines: if the following token can't begin an
+                //argument expression (e.g. `end function`, `end sub`, EOF), this is clearly an
+                //unclosed-paren situation and we swallow the newlines so the diagnostic from
+                //expression() reports the surprising token rather than the newline itself.
+                if (!this.allowLineContinuation && this.check(TokenKind.Newline)) {
+                    let lookahead = this.current;
+                    while (this.tokens[lookahead]?.kind === TokenKind.Newline) {
+                        lookahead++;
+                    }
+                    const followingKind = this.tokens[lookahead]?.kind;
+                    if (followingKind === TokenKind.EndFunction || followingKind === TokenKind.EndSub || followingKind === TokenKind.Eof) {
+                        while (this.match(TokenKind.Newline)) { }
+                    }
                 }
                 try {
                     args.push(this.expression());
@@ -3029,7 +3129,17 @@ export class Parser {
             } while (this.match(TokenKind.Comma));
         }
 
-        while (this.match(TokenKind.Newline)) { }
+        this.consumeNewlinesIfAllowed();
+
+        //if no closing `)` is in sight (e.g. we hit a newline that line-continuation is not allowed
+        //to swallow), consume newlines anyway as part of error recovery so the unmatched-left-token
+        //diagnostic points at the surprising token (e.g. `end sub`) rather than the `\n`. This also
+        //ensures the surrounding block sees a non-separator next token and emits its own
+        //`expectedNewlineOrColon` diagnostic.
+        const recoveredFromMissingRightParen = !this.check(TokenKind.RightParen);
+        if (recoveredFromMissingRightParen) {
+            while (this.match(TokenKind.Newline)) { }
+        }
 
         const closingParen = this.tryConsume(
             DiagnosticMessages.unmatchedLeftToken(openingParen.text, 'function call arguments'),
@@ -3120,10 +3230,14 @@ export class Parser {
             expr = new VariableExpression({ name: this.advance() as Identifier });
         } else {
             if (this.options.mode === ParseMode.BrightScript && !declarableTypesLower.includes(this.peek()?.text?.toLowerCase())) {
-                // custom types arrays not allowed in Brightscript
-                this.warnIfNotBrighterScriptMode('custom types');
-                this.advance(); // skip custom type token
-                return expr;
+                //inline interfaces have their own diagnostic ('inline interface'); let `{`
+                //flow through to the matcher below so it fires the more-specific warning.
+                if (!this.check(TokenKind.LeftCurlyBrace)) {
+                    // custom types arrays not allowed in Brightscript
+                    this.warnIfNotBrighterScriptMode('custom types');
+                    this.advance(); // skip custom type token
+                    return expr;
+                }
             }
 
             if (this.match(TokenKind.LeftCurlyBrace)) {
@@ -3215,6 +3329,7 @@ export class Parser {
     private inlineInterface() {
         let expr: InlineInterfaceExpression;
         const openToken = this.previous();
+        this.warnIfNotBrighterScriptMode('inline interface');
         const members: InlineInterfaceMemberExpression[] = [];
         while (this.match(TokenKind.Newline)) { }
         while (this.checkAny(TokenKind.Identifier, ...AllowedProperties, TokenKind.StringLiteral, TokenKind.Optional)) {
@@ -3404,15 +3519,23 @@ export class Parser {
 
     private aaLiteral() {
         let openingBrace = this.previous();
-        let members: Array<AAMemberExpression> = [];
+        let members: Array<AAMemberExpression | AAIndexedMemberExpression> = [];
 
         let key = () => {
             let result = {
-                colonToken: null as Token,
+                colon: null as Token,
                 keyToken: null as Token,
+                key: null as Expression,
+                leftBracket: null as Token,
+                rightBracket: null as Token,
                 range: null as Range
             };
-            if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
+            if (this.check(TokenKind.LeftSquareBracket)) {
+                // Computed key: [expr]
+                result.leftBracket = this.advance();
+                result.key = this.expression();
+                result.rightBracket = this.tryConsumeToken(TokenKind.RightSquareBracket);
+            } else if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
                 result.keyToken = this.identifier(...AllowedProperties);
             } else if (this.check(TokenKind.StringLiteral)) {
                 result.keyToken = this.advance();
@@ -3424,26 +3547,28 @@ export class Parser {
                 throw this.lastDiagnosticAsError();
             }
 
-            result.colonToken = this.consume(
+            result.colon = this.consume(
                 DiagnosticMessages.expectedColonBetweenAAKeyAndvalue(),
                 TokenKind.Colon
             );
-            result.range = util.createBoundingRange(result.keyToken, result.colonToken);
+            result.range = util.createBoundingRange(result.keyToken ?? result.leftBracket, result.colon);
             return result;
         };
 
         while (this.match(TokenKind.Newline)) { }
         let closingBrace: Token;
         if (!this.match(TokenKind.RightCurlyBrace)) {
-            let lastAAMember: AAMemberExpression;
+            let lastAAMember: AAMemberExpression | AAIndexedMemberExpression;
             try {
                 let k = key();
                 let expr = this.expression();
-                lastAAMember = new AAMemberExpression({
-                    key: k.keyToken,
-                    colon: k.colonToken,
-                    value: expr
-                });
+                lastAAMember = k.key
+                    ? new AAIndexedMemberExpression({ leftBracket: k.leftBracket, key: k.key, rightBracket: k.rightBracket, colon: k.colon, value: expr })
+                    : new AAMemberExpression({
+                        key: k.keyToken,
+                        colon: k.colon,
+                        value: expr
+                    });
                 members.push(lastAAMember);
 
                 while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
@@ -3459,11 +3584,13 @@ export class Parser {
                     }
                     let k = key();
                     let expr = this.expression();
-                    lastAAMember = new AAMemberExpression({
-                        key: k.keyToken,
-                        colon: k.colonToken,
-                        value: expr
-                    });
+                    lastAAMember = k.key
+                        ? new AAIndexedMemberExpression({ leftBracket: k.leftBracket, key: k.key, rightBracket: k.rightBracket, colon: k.colon, value: expr })
+                        : new AAMemberExpression({
+                            key: k.keyToken,
+                            colon: k.colon,
+                            value: expr
+                        });
                     members.push(lastAAMember);
 
                 }
@@ -3754,9 +3881,17 @@ export interface ParseOptions {
      */
     trackLocations?: boolean;
     /**
-     *
+     * A map of BrightScript constants. If a constant is present in this map, it will be treated as a compile-time constant.
      */
     bsConsts?: Map<string, boolean>;
+
+    /**
+     * The minimum Roku firmware version required to run this project.
+     * When set to '15.3' or higher, line continuation (multi-line expressions in `.brs` files)
+     * is enabled even in BrightScript mode because Roku OS 15.3 added native support for it.
+     * Should be a semver-compatible string (e.g. '15.3.0').
+     */
+    minFirmwareVersion?: string;
 }
 
 

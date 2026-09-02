@@ -20,12 +20,14 @@
         "lib": [
             "es2017",
             "es2019.array",
+            "es2021.promise",
+            "es2022.error",
             "dom"
         ]
     },
     "include": [
         "src/**/*.ts"
-, "src/bscPlugin/transpile/BrsFilePreTranspileProcessor.ts"    ],
+    ],
     "exclude": [
         "node_modules/**/*"
     ],

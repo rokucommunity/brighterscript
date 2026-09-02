@@ -6,7 +6,7 @@ import type { BrsFile } from '../files/BrsFile';
 import type { Position } from 'vscode-languageserver-protocol';
 import { util } from '../util';
 import { ParseMode } from '../parser/Parser';
-import type { NamespaceContainer } from '../interfaces';
+import type { NamespaceContainer } from '../Scope';
 
 
 export enum CallExpressionType {
@@ -150,7 +150,7 @@ export class CallExpressionInfo {
 
     private getNamespace(): NamespaceContainer {
         let scope = this.file.program.getFirstScopeForFile(this.file);
-        return scope.namespaceLookup.get(this.dotPart)?.firstInstance;
+        return scope.namespaceLookup.get(this.dotPart);
     }
 
     private getParameterIndex() {

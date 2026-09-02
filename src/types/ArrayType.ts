@@ -77,7 +77,9 @@ export class ArrayType extends BscType {
     }
 
     public toTypeString(): string {
-        return 'object';
+        //typed arrays have no first-class representation in BrightScript; collapse to
+        //`dynamic` at transpile so the runtime accepts arbitrary array values.
+        return 'dynamic';
     }
 
     public isEqual(targetType: BscType): boolean {

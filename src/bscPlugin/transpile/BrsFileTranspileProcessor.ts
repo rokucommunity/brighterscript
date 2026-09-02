@@ -1,6 +1,6 @@
 import { createAssignmentStatement, createBlock, createDottedSetStatement, createIfStatement, createIndexedSetStatement, createToken } from '../../astUtils/creators';
 import type { Editor } from '../../astUtils/Editor';
-import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression, isAliasStatement, isCallExpression, isCallfuncExpression, isEnumType, isAssignmentStatement, isBlock, isBody, isDottedSetStatement, isGroupingExpression, isIndexedSetStatement, isAugmentedAssignmentStatement } from '../../astUtils/reflection';
+import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression, isAliasStatement, isCallExpression, isCallfuncExpression, isEnumType, isAssignmentStatement, isBlock, isBody, isDottedSetStatement, isGroupingExpression, isIndexedSetStatement, isAugmentedAssignmentStatement, isNamespaceStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, OnPrepareFileEvent } from '../../interfaces';
@@ -9,6 +9,7 @@ import type { Expression, Statement } from '../../parser/AstNode';
 import type { TernaryExpression } from '../../parser/Expression';
 import { LiteralExpression, VariableExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
+import type { ConstStatement, NamespaceStatement } from '../../parser/Statement';
 import { AugmentedAssignmentStatement, type AliasStatement, type IfStatement } from '../../parser/Statement';
 import type { Scope } from '../../Scope';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
@@ -341,7 +342,7 @@ export class BrsFilePreTranspileProcessor {
         return { value: value, isCircular: false };
     }
 
-    private processExpression(expression: Expression, scope: Scope | undefined) {
+    private processExpression(expression: Expression, scope: Scope | undefined, visitedConsts: Set<ConstStatement> = new Set()) {
         if (expression.findAncestor(isAliasStatement)) {
             // skip any changes in an Alias Statement
             return;
@@ -402,6 +403,18 @@ export class BrsFilePreTranspileProcessor {
             }
 
             if (value && !isCircular) {
+                //If the const's value is a complex expression (e.g. an aa literal containing
+                //enum refs), recursively process inner refs so they're inlined too. Without
+                //this step, cross-file const usage leaves nested enum/const refs unresolved
+                //because the consumer file's pre-transpile pass never visits the inlined
+                //value's children (they live in the const's defining file).
+                if (constStatement && !isLiteralExpression(value)) {
+                    if (visitedConsts.has(constStatement)) {
+                        return;
+                    }
+                    this.processInlinedConstValue(value, scope, constStatement, visitedConsts);
+                }
+
                 //override the transpile for this item.
                 this.event.editor.setProperty(part, 'transpile', (state) => {
 
@@ -413,6 +426,81 @@ export class BrsFilePreTranspileProcessor {
                     }
                 });
                 //we are finished handling this expression
+                return;
+            }
+        }
+    }
+
+    private processInlinedConstValue(value: Expression, scope: Scope | undefined, constStatement: ConstStatement, visitedConsts: Set<ConstStatement>) {
+        //skip if we've already walked this const's value during the current outer
+        //inline. Guards against unbounded recursion for circular aggregate references
+        //(const A = { x: B }; const B = { y: A }) and avoids redundant work for
+        //diamond reference graphs.
+        if (visitedConsts.has(constStatement)) {
+            return;
+        }
+        visitedConsts.add(constStatement);
+        const innerNamespace = constStatement.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+        value.walk(createVisitor({
+            VariableExpression: (varExpr) => {
+                if (isDottedGetExpression(varExpr.parent)) {
+                    return;
+                }
+                this.processExpressionForInlinedValue(varExpr, scope, innerNamespace, visitedConsts);
+            },
+            DottedGetExpression: (dottedExpr) => {
+                if (isDottedGetExpression(dottedExpr.parent)) {
+                    return;
+                }
+                this.processExpressionForInlinedValue(dottedExpr, scope, innerNamespace, visitedConsts);
+            }
+        }), { walkMode: WalkMode.visitExpressionsRecursive });
+    }
+
+    /**
+     * Mirrors processExpression but treats `containingNamespace` as the namespace of the
+     * const that produced this inlined value (not the consumer file's namespace), since
+     * the expression we're rewriting was authored in the const's file.
+     */
+    private processExpressionForInlinedValue(expression: Expression, scope: Scope | undefined, containingNamespace: string | undefined, visitedConsts: Set<ConstStatement>) {
+        const parts = util.splitExpression(expression);
+        const processedNames: string[] = [];
+        for (let part of parts) {
+            let entityName: string;
+            if (isVariableExpression(part) || isDottedGetExpression(part)) {
+                processedNames.push(part?.tokens.name?.text?.toLowerCase());
+                entityName = processedNames.join('.');
+            } else {
+                return;
+            }
+
+            let value: Expression;
+            let isCircular = false;
+            const constStatement = scope?.getConstFileLink(entityName, containingNamespace)?.item;
+            if (constStatement) {
+                const resolved = this.resolveConstValue(constStatement.value, scope, containingNamespace);
+                value = resolved.value;
+                isCircular = resolved.isCircular;
+            } else {
+                const enumInfo = this.getEnumInfo(entityName, containingNamespace, scope);
+                if (enumInfo?.value) {
+                    value = enumInfo.value;
+                }
+            }
+
+            if (value && !isCircular) {
+                if (constStatement && !isLiteralExpression(value)) {
+                    if (visitedConsts.has(constStatement)) {
+                        return;
+                    }
+                    this.processInlinedConstValue(value, scope, constStatement, visitedConsts);
+                }
+                this.event.editor.setProperty(part, 'transpile', (state) => {
+                    if (isLiteralExpression(value)) {
+                        return value.transpile(state);
+                    }
+                    return ['(', ...value.transpile(state), ')'];
+                });
                 return;
             }
         }

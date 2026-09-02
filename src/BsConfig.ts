@@ -12,6 +12,9 @@ export interface BsConfig {
      */
     project?: string;
 
+    /**
+     * @deprecated Moved to `compilerOptions.manifest`. If both are present, `compilerOptions.manifest` wins.
+     */
     manifest?: {
         bs_const?: Record<string, boolean | null>;
     };
@@ -51,6 +54,21 @@ export interface BsConfig {
     noEmit?: boolean;
 
     /**
+     * @deprecated packaging is handled outside of `BsConfig`
+     */
+    createPackage?: boolean;
+
+    /**
+     * @deprecated deployment is handled outside of `BsConfig`
+     */
+    deploy?: boolean;
+
+    /**
+     * @deprecated staging copy behavior is handled outside of `BsConfig`
+     */
+    copyToStaging?: boolean;
+
+    /**
      * If true, the server will keep running and will watch and recompile on every file change
      * @default false
      */
@@ -83,19 +101,17 @@ export interface BsConfig {
     diagnosticSeverityOverrides?: Record<number | string, 'error' | 'warn' | 'info' | 'hint'>;
 
     /**
-     * Emit full paths to files when printing diagnostics to the console. Defaults to false
+     * @deprecated Moved to `compilerOptions.emitFullPaths`. If both are present, `compilerOptions.emitFullPaths` wins.
      */
     emitFullPaths?: boolean;
 
     /**
-     * Emit type definition files (`d.bs`)
-     * @default false
+     * @deprecated Moved to `compilerOptions.emitDefinitions`. If both are present, `compilerOptions.emitDefinitions` wins.
      */
     emitDefinitions?: boolean;
 
     /**
-     * If true, removes the explicit type to function's parameters and return (i.e. the `as type` syntax); otherwise keep this information.
-     * @default false
+     * @deprecated Moved to `compilerOptions.removeParameterTypes`. If both are present, `compilerOptions.removeParameterTypes` wins.
      */
     removeParameterTypes?: boolean;
 
@@ -115,6 +131,28 @@ export interface BsConfig {
     diagnosticLevel?: 'info' | 'hint' | 'warn' | 'error';
 
     /**
+     * Specify how diagnostics should be reported to the console.
+     * Accepts a single value or an array. When given an array, each diagnostic is rendered
+     * once per entry (so you can, for example, get both detailed terminal output and
+     * github-actions PR annotations from a single run).
+     *
+     * Each value may be a preset name ('detailed', 'github-actions'), a custom template string
+     * (any string containing a `{` placeholder), or an object with explicit `type`.
+     *
+     * Custom templates support the following placeholders, replaced per diagnostic:
+     *   {file}, {line}, {col}, {endLine}, {endCol}, {severity}, {code}, {message}, {source}
+     *
+     * Examples:
+     *   "detailed"
+     *   "github-actions"
+     *   "{file}:{line}:{col} {severity} {code}: {message}"
+     *   { type: "custom", format: "{file}:{line}: {message}" }
+     *   ["detailed", "github-actions"]
+     *
+     * @default "detailed"
+     */
+    diagnosticReporters?: DiagnosticReporter | DiagnosticReporter[];
+    /**
      * A list of scripts or modules to add extra diagnostics or transform the AST
      */
     plugins?: Array<string>;
@@ -125,8 +163,7 @@ export interface BsConfig {
     require?: Array<string>;
 
     /**
-     * When enabled, every xml component will search for a .bs or .brs file with the same name
-     * in the same folder, and add it as a script import if found. Disabled by default"
+     * @deprecated Moved to `compilerOptions.autoImportComponentScript`. If both are present, `compilerOptions.autoImportComponentScript` wins.
      */
     autoImportComponentScript?: boolean;
     /**
@@ -140,37 +177,95 @@ export interface BsConfig {
      * @default LogLevel.log
      */
     logLevel?: LogLevel | 'error' | 'warn' | 'log' | 'info' | 'debug' | 'trace' | 'off';
+
     /**
-     * Override the path to source files in source maps. Use this if you have a preprocess step and want
-     * to ensure the source maps point to the original location.
-     * This will only alter source maps for files within rootDir. Any files found outside of rootDir will not
-     * have their source maps changed. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.
+     * @deprecated Moved to `compilerOptions.sourceRoot`. If both are present, `compilerOptions.sourceRoot` wins.
      */
     sourceRoot?: string;
     /**
-     * Should the `sourceRoot` property be resolve to an absolute path (relative to the bsconfig it's defined in)
-     * @default false
+     * @deprecated Moved to `compilerOptions.resolveSourceRoot`. If both are present, `compilerOptions.resolveSourceRoot` wins.
      */
     resolveSourceRoot?: boolean;
     /**
-     * Enables generating sourcemap files, which allow debugging tools to show the original source code while running the emitted files.
-     * @default true
+     * @deprecated Moved to `compilerOptions.sourceMap`. If both are present, `compilerOptions.sourceMap` wins.
      */
     sourceMap?: boolean;
     /**
-     * Excludes empty files from being included in the output. Some Brighterscript files
-     * are left empty or with only comments after transpilation to Brightscript.
-     * The default behavior is to write these to disk after transpilation.
-     * Setting this flag to `true` will prevent empty files being written and will
-     * remove associated script tags from XML
-     * @default false
+     * @deprecated Moved to `compilerOptions.relativeSourceMaps`. If both are present, `compilerOptions.relativeSourceMaps` wins.
+     */
+    relativeSourceMaps?: boolean;
+    /**
+     * @deprecated Moved to `compilerOptions.pruneEmptyCodeFiles`. If both are present, `compilerOptions.pruneEmptyCodeFiles` wins.
      */
     pruneEmptyCodeFiles?: boolean;
+    /**
+     * @deprecated Moved to `compilerOptions.allowBrighterScriptInBrightScript`. If both are present, `compilerOptions.allowBrighterScriptInBrightScript` wins.
+     */
+    allowBrighterScriptInBrightScript?: boolean;
+
+    /**
+     * @deprecated Moved to `compilerOptions.bslibDestinationDir`. If both are present, `compilerOptions.bslibDestinationDir` wins.
+     */
+    bslibDestinationDir?: string;
+
+    /**
+     * @deprecated Moved to `compilerOptions.legacyCallfuncHandling`. If both are present, `compilerOptions.legacyCallfuncHandling` wins.
+     */
+    legacyCallfuncHandling?: boolean;
+
+    /**
+     * @deprecated Moved to `compilerOptions.minFirmwareVersion`. If both are present, `compilerOptions.minFirmwareVersion` wins.
+     */
+    minFirmwareVersion?: string;
+
+    /**
+     * When set to false, validation is skipped entirely. This can speed up builds when diagnostics
+     * are not needed (e.g. when using the VSCode extension which already surfaces diagnostics in the
+     * editor). Note that skipping validation may cause transpilation to fail or produce incorrect
+     * output if the project contains errors that would normally be caught during validation.
+     * @default true
+     */
+    validate?: boolean;
+
+    /**
+     * @deprecated Moved to `compilerOptions.strict`. If both are present, `compilerOptions.strict` wins.
+     */
+    strict?: boolean;
+
+    /**
+     * @deprecated Moved to `compilerOptions.strictCallFunc`. If both are present, `compilerOptions.strictCallFunc` wins.
+     */
+    strictCallFunc?: boolean;
+
+    /**
+     * @deprecated Moved to `compilerOptions.strictNodeMembers`. If both are present, `compilerOptions.strictNodeMembers` wins.
+     */
+    strictNodeMembers?: boolean;
+
+    /**
+     * Options that control how BrighterScript interprets, validates, and compiles your code
+     * (as opposed to top-level options, which control project structure, file discovery, and
+     * tooling/reporting behavior). Similar in spirit to TypeScript's `compilerOptions`.
+     *
+     * Several of these options used to live at the top level of `bsconfig.json`. Those top-level
+     * options still work, but are deprecated: if an option is set in both places, the value in
+     * `compilerOptions` wins, and a deprecation warning is emitted for the top-level usage.
+     */
+    compilerOptions?: BsConfigCompilerOptions;
+}
+
+export interface BsConfigCompilerOptions {
     /**
      * Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.
      * @default false
      */
     allowBrighterScriptInBrightScript?: boolean;
+
+    /**
+     * When enabled, every xml component will search for a .bs or .brs file with the same name
+     * in the same folder, and add it as a script import if found. Disabled by default"
+     */
+    autoImportComponentScript?: boolean;
 
     /**
      * Override the destination directory for the bslib.brs file.  Use this if
@@ -180,12 +275,160 @@ export interface BsConfig {
      */
     bslibDestinationDir?: string;
 
+    /**
+     * Emit type definition files (`d.bs`)
+     * @default false
+     */
+    emitDefinitions?: boolean;
+
+    /**
+     * Emit full paths to files when printing diagnostics to the console. Defaults to false
+     */
+    emitFullPaths?: boolean;
+
     /* Legacy RokuOS versions required at least one argument in callfunc() invocations.
      * Previous brighterscript versions handled this by inserting invalid as an argument when no other args are present.
      * This is not necessary in modern RokuOS versions.
      */
     legacyCallfuncHandling?: boolean;
+
+    manifest?: {
+        bs_const?: Record<string, boolean | null>;
+    };
+
+    /**
+     * The minimum Roku firmware version required to run this project.
+     * When set, BrightScript (.brs) files are always validated against the version restriction.
+     * BrighterScript (.bs) files are only validated for features that BrighterScript does not
+     * transpile — for example, optional chaining is emitted as-is, so it is subject to the
+     * restriction. Features that BrighterScript fully transpiles (such as classes) are not
+     * restricted, since the transpiled output is compatible with older firmware.
+     * Should be a semver-compatible string (e.g. "11.0.0").
+     */
+    minFirmwareVersion?: string;
+
+    /**
+     * Excludes empty files from being included in the output. Some Brighterscript files
+     * are left empty or with only comments after transpilation to Brightscript.
+     * The default behavior is to write these to disk after transpilation.
+     * Setting this flag to `true` will prevent empty files being written and will
+     * remove associated script tags from XML
+     * @default false
+     */
+    pruneEmptyCodeFiles?: boolean;
+
+    /**
+     * If true, file paths in sourcemap `sources[]` will be written as relative paths instead of absolute.
+     * Only has an effect when `sourceMap` is true.
+     *
+     * When false (default): `sources[]` contains absolute paths. If `sourceRoot` is set, the `rootDir`
+     * portion is replaced with `sourceRoot` in-place; the map's `sourceRoot` field is never written.
+     *
+     * When true: `sources[]` entries are relative to the map file's directory, making sourcemaps
+     * portable across machines. If `sourceRoot` is also set, the map's `sourceRoot` field is written
+     * and `sources[]` entries are instead relative to `sourceRoot` (per the sourcemap spec — consumers
+     * reconstruct the full path as `path.resolve(sourceRoot, sources[0])`).
+     * @default false
+     */
+    relativeSourceMaps?: boolean;
+
+    /**
+     * If true, removes the explicit type to function's parameters and return (i.e. the `as type` syntax); otherwise keep this information.
+     * @default false
+     */
+    removeParameterTypes?: boolean;
+
+    /**
+     * Should the `sourceRoot` property be resolve to an absolute path (relative to the bsconfig it's defined in)
+     * @default false
+     */
+    resolveSourceRoot?: boolean;
+
+    /**
+     * Enables generating sourcemap files, which allow debugging tools to show the original source code while running the emitted files.
+     * @default true
+     */
+    sourceMap?: boolean;
+
+    /**
+     * Overrides where source files appear to live, in both sourcemaps and the `SOURCE_FILE_PATH` /
+     * `SOURCE_LOCATION` runtime literals. Only applies to files within `rootDir`.
+     *
+     * When `relativeSourceMaps` is false (default): the `rootDir` portion of each source path is
+     * replaced with `sourceRoot` directly in `sources[]`. The map's `sourceRoot` field is not written.
+     *
+     * When `relativeSourceMaps` is true: the map's `sourceRoot` field is set to this value, and
+     * `sources[]` entries are relative to `sourceRoot` (per the sourcemap spec).
+     *
+     * In both modes, `SOURCE_FILE_PATH` and `SOURCE_LOCATION` reflect the `sourceRoot`-substituted path.
+     */
+    sourceRoot?: string;
+
+    /**
+     * When true, enables all strict mode options (strictCallFunc, strictNodeMembers, and any future options added that are considered "strict"). This is a convenient way to enable strict mode without having to set each option individually.
+     * @default false
+     */
+    strict?: boolean;
+
+    /**
+     * Enables stricter type-checking for callfunc() invocations. When true, callfunc() invocations will not be allowed on generic Node types.
+     * @default false
+     */
+    strictCallFunc?: boolean;
+
+    /**
+     * Enables stricter type-checking for Node members. When true, unknown members on Node types will be treated as errors instead of dynamic values.
+     * @default false
+     */
+    strictNodeMembers?: boolean;
 }
+
+/**
+ * The list of `BsConfig` keys that were moved into `compilerOptions`. Kept in one place so the
+ * legacy-option shimming/deprecation logic in `util.ts` and the JSON schema stay in sync.
+ */
+export const deprecatedCompilerOptionKeys: ReadonlyArray<keyof BsConfigCompilerOptions & keyof BsConfig> = [
+    'allowBrighterScriptInBrightScript',
+    'autoImportComponentScript',
+    'bslibDestinationDir',
+    'emitDefinitions',
+    'emitFullPaths',
+    'legacyCallfuncHandling',
+    'manifest',
+    'minFirmwareVersion',
+    'pruneEmptyCodeFiles',
+    'relativeSourceMaps',
+    'removeParameterTypes',
+    'resolveSourceRoot',
+    'sourceMap',
+    'sourceRoot',
+    'strict',
+    'strictCallFunc',
+    'strictNodeMembers'
+];
+
+/**
+ * Discriminated union describing how diagnostics are rendered to the console.
+ * - String shorthand: a preset name ('detailed' | 'github-actions') or a template string
+ *   (any string containing a `{` is treated as a custom template).
+ * - Object form: explicit `type` so config files can stay strictly typed.
+ */
+export type DiagnosticReporter =
+    | 'detailed'
+    | 'github-actions'
+    // eslint-disable-next-line @typescript-eslint/ban-types -- string & {} preserves autocomplete for the literals above
+    | (string & {})
+    | { type: 'detailed' }
+    | { type: 'github-actions' }
+    | { type: 'custom'; format: string };
+
+/**
+ * Object form of `DiagnosticReporter` after string shorthand has been resolved.
+ */
+export type NormalizedDiagnosticReporter =
+    | { type: 'detailed' }
+    | { type: 'github-actions' }
+    | { type: 'custom'; format: string };
 
 type OptionalBsConfigFields =
     | '_ancestors'
@@ -196,10 +439,16 @@ type OptionalBsConfigFields =
     | 'extends'
     | 'require'
     | 'outDir'
+    | 'createPackage'
+    | 'deploy'
+    | 'copyToStaging'
     | 'diagnosticLevel'
     | 'rootDir'
     | 'stagingDir'
-    | 'stagingFolderPath';
+    | 'stagingFolderPath'
+    | 'minFirmwareVersion'
+    | 'diagnosticReporters'
+    | 'compilerOptions';
 
 export type FinalizedBsConfig =
     Omit<Required<BsConfig>, OptionalBsConfigFields>

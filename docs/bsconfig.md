@@ -2,28 +2,96 @@
 
 While a minimal `bsconfig.json` file is sufficient for getting started, `bsc` supports a range of helpful options.
 
-- [allowBrighterScriptInBrightScript](#allowBrighterScriptInBrightScript)
-- [autoImportComponentScript](#autoImportComponentScript)
-- [bslibDestinationDir](#bslibDestinationDir)
-- [cwd](#cwd)
-- [diagnosticFilters](#diagnosticFilters)
-- [diagnosticLevel](#diagnosticLevel)
-- [diagnosticSeverityOverrides](#diagnosticSeverityOverrides)
-- [emitDefinitions](#emitDefinitions)
-- [emitFullPaths](#emitFullPaths)
-- [extends](#extends)
-- [files](#files)
-- [plugins](#plugins)
-- [project](#project)
-- [pruneEmptyCodeFiles](#pruneEmptyCodeFiles)
-- [removeParameterTypes](#removeParameterTypes)
-- [require](#require)
-- [rootDir](#rootDir)
-- [sourceRoot](#sourceRoot)
-- [outDir](#outDir)
-- [watch](#watch)
+- [bsconfig.json options](#bsconfigjson-options)
+  - [`compilerOptions`](#compileroptions)
+  - [`allowBrighterScriptInBrightScript`](#allowbrighterscriptinbrightscript)
+  - [`autoImportComponentScript`](#autoimportcomponentscript)
+  - [`bslibDestinationDir`](#bslibdestinationdir)
+  - [`cwd`](#cwd)
+  - [`deploy`](#deploy)
+  - [`diagnosticFilters`](#diagnosticfilters)
+    - [Negative patterns in `diagnosticFilters`](#negative-patterns-in-diagnosticfilters)
+  - [`diagnosticLevel`](#diagnosticlevel)
+  - [`diagnosticReporters`](#diagnosticreporters)
+  - [`diagnosticSeverityOverrides`](#diagnosticseverityoverrides)
+  - [`emitDefinitions`](#emitdefinitions)
+  - [`emitFullPaths`](#emitfullpaths)
+  - [`extends`](#extends)
+    - [Optional `extends` and `project`](#optional-extends-and-project)
+  - [`files`](#files)
+    - [Excluding files](#excluding-files)
+    - [File pattern resolution](#file-pattern-resolution)
+    - [Specifying file destinations](#specifying-file-destinations)
+    - [File collision handling](#file-collision-handling)
+  - [`host`](#host)
+  - [`minFirmwareVersion`](#minfirmwareversion)
+    - [Line continuation in `.brs` files](#line-continuation-in-brs-files)
+  - [`outFile`](#outfile)
+  - [`password`](#password)
+  - [`plugins`](#plugins)
+  - [`project`](#project)
+  - [`pruneEmptyCodeFiles`](#pruneemptycodefiles)
+  - [`removeParameterTypes`](#removeparametertypes)
+  - [`require`](#require)
+  - [`retainStagingDir`](#retainstagingdir)
+  - [`rootDir`](#rootdir)
+  - [`sourceMap`](#sourcemap)
+  - [`relativeSourceMaps`](#relativesourcemaps)
+    - [`relativeSourceMaps: false` (default)](#relativesourcemaps-false-default)
+    - [`relativeSourceMaps: true`](#relativesourcemaps-true)
+  - [`sourceRoot`](#sourceroot)
+  - [`stagingDir`](#stagingdir)
+  - [`strict`](#strict)
+    - [`strictCallFunc`](#strictCallFunc)
+    - [`strictNodeMembers`](#strictNodeMembers)
+  - [`username`](#username)
+  - [`watch`](#watch)
+
+## `compilerOptions`
+
+Type: `object`
+
+A dedicated group for options that control how BrighterScript interprets, validates, and compiles your code — as opposed to the other top-level `bsconfig.json` options, which mostly control project structure, file discovery, and tooling/reporting behavior. This mirrors how TypeScript's `tsconfig.json` separates `compilerOptions` from the rest of the config. For example:
+
+```jsonc
+{
+    "rootDir": "src",
+    "outDir": "out",
+    "compilerOptions": {
+        "strict": true,
+        "sourceMap": true,
+        "autoImportComponentScript": true
+    }
+}
+```
+
+The following options live inside `compilerOptions`:
+
+- [`allowBrighterScriptInBrightScript`](#allowbrighterscriptinbrightscript)
+- [`autoImportComponentScript`](#autoimportcomponentscript)
+- [`bslibDestinationDir`](#bslibdestinationdir)
+- [`emitDefinitions`](#emitdefinitions)
+- [`emitFullPaths`](#emitfullpaths)
+- `legacyCallfuncHandling`
+- `manifest`
+- [`minFirmwareVersion`](#minfirmwareversion)
+- [`pruneEmptyCodeFiles`](#pruneemptycodefiles)
+- [`relativeSourceMaps`](#relativesourcemaps)
+- [`removeParameterTypes`](#removeparametertypes)
+- [`resolveSourceRoot`](#sourceroot)
+- [`sourceMap`](#sourcemap)
+- [`sourceRoot`](#sourceroot)
+- [`strict`](#strict)
+- [`strictCallFunc`](#strictCallFunc)
+- [`strictNodeMembers`](#strictNodeMembers)
+
+Each of these options used to live at the top level of `bsconfig.json`. Those top-level locations still work for backwards compatibility, but are **deprecated** — using one emits a `deprecated-bsconfig-option` warning diagnostic pointing you at the `compilerOptions` equivalent. If an option is set in both places, the value in `compilerOptions` wins.
+
+`extends` deep-merges `compilerOptions` across the config chain (a child config that only sets one option under `compilerOptions` does not wipe out the other options set by a parent config it extends) — this is different from every other `bsconfig.json` option, where the child's value completely replaces the parent's.
 
 ## `allowBrighterScriptInBrightScript`
+
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.allowBrighterScriptInBrightScript`). The top-level location still works but is deprecated and emits a warning.
 
 Type: `boolean`
 
@@ -31,11 +99,15 @@ Allow BrighterScript features (classes, interfaces, etc...) to be included in Br
 
 ## `autoImportComponentScript`
 
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.autoImportComponentScript`). The top-level location still works but is deprecated and emits a warning.
+
 Type: `bool`
 
 BrighterScript only: will automatically import a script at transpile-time for a component with the same name if it exists. Defaults to `false`.
 
 ## `bslibDestinationDir`
+
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.bslibDestinationDir`). The top-level location still works but is deprecated and emits a warning.
 
 Type: `string`
 
@@ -125,6 +197,58 @@ Type: `"hint" | "info" | "warn" | "error"`
 
 Specify what diagnostic levels are printed to the console. This has no effect on what diagnostics are reported in the LanguageServer. Defaults to `"warn"`.
 
+## `diagnosticReporters`
+
+Type: `string | { type: string; format?: string } | Array<string | { type: string; format?: string }>`
+
+Specify how diagnostics are reported to the console. Accepts a single value or an array; when given an array, each diagnostic is rendered once per entry (so you can, for example, emit detailed terminal output and GitHub Actions PR annotations from a single run). Defaults to `"detailed"`.
+
+Each value can be:
+
+- A **preset name**: `"detailed"` (the default rich, multi-line, colored output) or `"github-actions"` (one-line workflow commands like `::error file=...,line=...::message` so the GitHub Actions runner surfaces them as PR annotations).
+- A **custom template string** containing at least one of the known placeholders. The placeholders supported are:
+
+  | Placeholder      | Value |
+  |------------------|---|
+  | `{file}`         | file path (respects `emitFullPaths`) |
+  | `{line}` / `{col}` | 1-based start line / column |
+  | `{endLine}` / `{endCol}` | 1-based end line / column |
+  | `{severity}`     | `error` / `warning` / `info` / `hint` |
+  | `{severityCode}` | numeric LSP severity (1=error, 2=warning, 3=info, 4=hint) |
+  | `{code}`         | diagnostic code (e.g. `1001`) |
+  | `{message}`      | diagnostic message |
+  | `{source}`       | diagnostic source (e.g. `brs`) |
+
+  Unknown placeholders pass through unchanged so typos surface visually.
+- An **explicit object** with `type`: `{ "type": "detailed" }`, `{ "type": "github-actions" }`, or `{ "type": "custom", "format": "<template>" }`.
+
+Examples:
+
+```jsonc
+"diagnosticReporters": "detailed"
+
+"diagnosticReporters": "github-actions"
+
+// custom template
+"diagnosticReporters": "{file}:{line}:{col} {severity} BS{code}: {message}"
+
+// emit detailed terminal output AND github-actions annotations from the same run
+"diagnosticReporters": ["detailed", "github-actions"]
+
+// explicit object form (also accepts the same shapes inside an array)
+"diagnosticReporters": { "type": "custom", "format": "{file}:{line}: {message}" }
+```
+
+If a value is invalid (typo'd preset, custom template with no known placeholders, etc.) it is logged as a warning and skipped. Duplicate entries are dropped with a warning message. If every configured reporter is invalid, the build falls back to `"detailed"` rather than failing.
+
+The CLI accepts the same value (single or repeated):
+
+```bash
+bsc --diagnosticReporters detailed
+bsc --diagnosticReporters detailed github-actions
+bsc --diagnosticReporters '{file}:{line}: {message}'
+```
+
 ## `diagnosticSeverityOverrides`
 
 Type: `Record<string | number, 'hint' | 'info' | 'warn' | 'error'>`
@@ -140,11 +264,15 @@ A map of error codes and severity levels that will override diagnostics' severit
 
 ## `emitDefinitions`
 
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.emitDefinitions`). The top-level location still works but is deprecated and emits a warning.
+
 Type: `boolean`
 
 Emit type definition files (`d.bs`) during transpile. Defaults to `false`.
 
 ## `emitFullPaths`
+
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.emitFullPaths`). The top-level location still works but is deprecated and emits a warning.
 
 Type: `boolean`
 
@@ -352,6 +480,74 @@ For example, if you have a base project and a child project that wants to overri
 }
 ```
 
+## `host`
+
+Type: `string`
+
+The host of the Roku that this project will deploy to when the [`deploy`](#deploy) field is set to `true`. Defaults to `undefined`.
+
+## `minFirmwareVersion`
+
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.minFirmwareVersion`). The top-level location still works but is deprecated and emits a warning.
+
+Type: `string`
+
+The minimum Roku firmware version required to run this project. When set, files are validated to ensure they only use language features available in that firmware version or earlier. BrightScript (`.brs`) files are always validated against the version restriction. BrighterScript (`.bs`) files are only validated for features that BrighterScript does not transpile — for example, optional chaining is emitted as-is rather than transpiled down, so it is subject to the version restriction. BrighterScript features that are fully transpiled (such as classes) are not restricted, since the transpiled output is compatible with older firmware.
+
+Should be a semver-compatible string (e.g. `"11.0.0"` or `"11.0"`). Defaults to `undefined` (no version restriction).
+
+**Example:**
+
+```json
+{
+    "minFirmwareVersion": "11.0.0"
+}
+```
+
+With this setting, using optional chaining (`?.`) without the version requirement being met will produce an error like:
+
+> BrightScript feature 'optional chaining' requires Roku firmware version 11.0.0 or higher, but 'minFirmwareVersion' is set to 10.0.0
+
+**Features gated by firmware version:**
+
+| Feature | Minimum Version |
+|---------|----------------|
+| Optional chaining (`?.`, `?[`, `?(`) | 11.0.0 |
+| Multi-line expressions / line continuation in `.brs` files | 15.3.0 |
+
+### Line continuation in `.brs` files
+
+In BrighterScript (`.bs`) files, multi-line expressions are supported because those constructs are transpiled away before reaching the device. In plain BrightScript (`.brs`) files, Roku OS 15.3 added native support for the same feature.
+
+When `minFirmwareVersion` is set to `15.3` or higher, line continuation is enabled for `.brs` files as well:
+
+```brs
+' allowed in .brs files when minFirmwareVersion >= 15.3
+sub main()
+    result = firstValue +
+             secondValue
+
+    someFunction(
+        arg1,
+        arg2
+    )
+end sub
+```
+
+When `minFirmwareVersion` is below `15.3` (or is not set), line continuation in `.brs` files is still a parse error, while `.bs` files continue to support it regardless of the firmware version setting (because the output is transpiled).
+
+## `outFile`
+
+Type: `string`
+
+The path (including filename) where the output file should be placed. Defaults to `"./out/${WORKSPACE_FOLDER_NAME}.zip"`.
+
+## `password`
+
+Type: `string`
+
+The password that will be used to deploy to the Roku device when the [`deploy`](#deploy) field is set to `true`. Defaults to `undefined`.
+
 ## `plugins`
 
 Type: `Array<string>`
@@ -368,11 +564,15 @@ A path to a project file. This is really only passed in from the command line or
 
 ## `pruneEmptyCodeFiles`
 
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.pruneEmptyCodeFiles`). The top-level location still works but is deprecated and emits a warning.
+
 Type: `boolean`
 
 Remove files from the final package which would be empty or consist entirely of comments after compilation. Also removes imports of any such empty scripts from XML files. This can speed up sideloading packages during development. Defaults to `false`.
 
 ## `removeParameterTypes`
+
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.removeParameterTypes`). The top-level location still works but is deprecated and emits a warning.
 
 Type: `boolean`
 
@@ -392,11 +592,118 @@ Type: `string`
 
 The root directory of your roku project. Defaults to `process.cwd()`.
 
+## `sourceMap`
+
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.sourceMap`). The top-level location still works but is deprecated and emits a warning.
+
+Type: `boolean`
+
+Enables generating sourcemap files (`.map`), which allow debugging tools to show the original source code while running the emitted files. Defaults to `false`.
+
+## `relativeSourceMaps`
+
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.relativeSourceMaps`). The top-level location still works but is deprecated and emits a warning.
+
+Type: `boolean`
+
+If `true`, file paths in the sourcemap `sources` array will be written as relative paths instead of absolute paths, and the behavior of [`sourceRoot`](#sourceroot) changes. Defaults to `false`.
+
+This option only has an effect when [`sourceMap`](#sourcemap) is `true`.
+
+### `relativeSourceMaps: false` (default)
+
+This is the legacy behavior. Each entry in `sources[]` is an absolute path. If [`sourceRoot`](#sourceroot) is set, the `rootDir` portion of the path is replaced with `sourceRoot` directly inside `sources[]`. The map file's `sourceRoot` field is never written.
+
+```jsonc
+// sources[] with relativeSourceMaps: false, sourceRoot: undefined
+"sources": ["/absolute/path/to/rootDir/source/main.bs"]
+
+// sources[] with relativeSourceMaps: false, sourceRoot: "/my/source/server"
+"sources": ["/my/source/server/source/main.bs"]  // rootDir swapped for sourceRoot
+```
+
+### `relativeSourceMaps: true`
+
+Each entry in `sources[]` is a path relative to the map file's location. This makes sourcemaps portable across machines — useful when publishing build output as an npm package or sharing artifacts across CI environments.
+
+If [`sourceRoot`](#sourceroot) is also set, the map file's `sourceRoot` field is written, and `sources[]` entries are made relative to `sourceRoot` instead of relative to the map file. Per the sourcemap spec, consumers reconstruct the full source path as `path.resolve(sourceRoot, sources[0])`.
+
+```jsonc
+// sources[] with relativeSourceMaps: true, sourceRoot: undefined
+// map is at stagingDir/source/main.brs.map
+"sources": ["../../rootDir/source/main.bs"]  // relative to the map file
+
+// sources[] with relativeSourceMaps: true, sourceRoot: "/my/source/server"
+"sourceRoot": "/my/source/server",
+"sources": ["source/main.bs"]  // relative to sourceRoot; resolves to /my/source/server/source/main.bs
+```
+
 ## `sourceRoot`
+
+> **Deprecated:** move this option (and `resolveSourceRoot`) into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.sourceRoot` / `compilerOptions.resolveSourceRoot`). The top-level location still works but is deprecated and emits a warning.
 
 Type: `string`
 
-Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within [`rootDir`](#rootdir). This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.
+Overrides where source files appear to live, both in sourcemaps and in the `SOURCE_FILE_PATH` / `SOURCE_LOCATION` runtime literals. Only applies to files within [`rootDir`](#rootdir) — files outside `rootDir` are unaffected.
+
+The primary use case is preprocessing: if you transform files before passing them to BrighterScript, `sourceRoot` lets you point debuggers and runtime literals back to the original pre-processed sources.
+
+The exact behavior depends on whether [`relativeSourceMaps`](#relativesourcemaps) is set:
+
+- **`relativeSourceMaps: false` (default):** The `rootDir` portion of each source path is replaced with `sourceRoot` directly in `sources[]`. The map file's `sourceRoot` field is not written.
+- **`relativeSourceMaps: true`:** The map file's `sourceRoot` field is set to this value, and `sources[]` entries are relative to `sourceRoot`. The `rootDir` portion of each source path is still replaced with `sourceRoot` when computing the relative path.
+
+In both cases, `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals embedded in the transpiled output will reflect the `sourceRoot`-substituted path at runtime.
+
+## `strict`
+
+> **Deprecated:** move this option (and `strictCallFunc`/`strictNodeMembers`) into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.strict`). The top-level location still works but is deprecated and emits a warning.
+
+Type: `boolean`
+
+Enables a set of stricter type-checking rules and language features. When set, this acts as a default value for other `strict`-related options. Defaults to false.
+
+For example, in order to turn all all `strict` options, but disable `strictCallFunc`, you could specify:
+
+```json
+{
+    "strict": true,
+    "strictCallFunc": false
+}
+```
+
+### `strictCallFunc`
+
+Type: `boolean`
+
+Enables stricter type-checking for callfunc() invocations. When true, callfunc() invocations will not be allowed on generic Node types. Defaults to false.
+
+For example, if this were true:
+
+```brighterscript
+sub example(node as roSGNode)
+  node@.someFunction() ' error because roSGNode itself does not have any available call func's
+end sub
+```
+
+### `strictNodeMembers`
+
+Type: `boolean`
+
+Enables stricter type-checking for Node members. When true, unknown members on Node types will be treated as errors instead of dynamic values. Defaults to false.
+
+For example, if this were true:
+
+```brighterscript
+sub example()
+  myPoster = createObject("roSGNode", "Poster")
+  ' update the node with a new field
+  myPoster.update({
+    data: 1234
+  , true})
+  print myPoster.data ' error because "Poster" does not have the "data" field
+end sub
+```
 
 ## `outDir`
 Type: `string`

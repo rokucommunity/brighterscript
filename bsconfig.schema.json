@@ -8,6 +8,53 @@
             "password"
         ]
     },
+    "definitions": {
+        "diagnosticReporterValue": {
+            "oneOf": [
+                {
+                    "type": "string",
+                    "description": "Either a preset name ('detailed' or 'github-actions') or a custom template string containing at least one known placeholder."
+                },
+                {
+                    "type": "object",
+                    "required": ["type"],
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "enum": ["detailed"]
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                {
+                    "type": "object",
+                    "required": ["type"],
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "enum": ["github-actions"]
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                {
+                    "type": "object",
+                    "required": ["type", "format"],
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "enum": ["custom"]
+                        },
+                        "format": {
+                            "type": "string",
+                            "description": "Template string. Supported placeholders: {file}, {line}, {col}, {endLine}, {endCol}, {severity}, {severityCode}, {code}, {message}, {source}."
+                        }
+                    },
+                    "additionalProperties": false
+                }
+            ]
+        }
+    },
     "properties": {
         "extends": {
             "description": "Relative or absolute path to another bsconfig.json file that this file should use as a base and then override. Prefix with a question mark (?) to prevent throwing an exception if the file does not exist.",
@@ -23,6 +70,8 @@
         },
         "manifest": {
             "description": "A entry to modify manifest values",
+            "deprecated": true,
+            "deprecationMessage": "Deprecated starting in v1. Use `compilerOptions.manifest` instead.",
             "type": "object",
             "properties": {
                 "bs_const": {
@@ -100,6 +149,15 @@
         },
         "sourceMap": {
             "description": "Enables generating sourcemap files, which allow debugging tools to show the original source code while running the emitted files.",
+            "deprecated": true,
+            "deprecationMessage": "Deprecated starting in v1. Use `compilerOptions.sourceMap` instead.",
+            "type": "boolean",
+            "default": false
+        },
+        "relativeSourceMaps": {
+            "description": "If true, source file paths in generated sourcemaps will be relative to the map file location instead of absolute. This makes sourcemaps portable across different machines and environments.",
+            "deprecated": true,
+            "deprecationMessage": "Deprecated starting in v1. Use `compilerOptions.relativeSourceMaps` instead.",
             "type": "boolean",
             "default": false
         },
@@ -206,16 +264,22 @@
         },
         "emitFullPaths": {
             "description": "Emit full paths to files when printing diagnostics to the console.",
+            "deprecated": true,
+            "deprecationMessage": "Deprecated starting in v1. Use `compilerOptions.emitFullPaths` instead.",
             "type": "boolean",
             "default": false
         },
         "emitDefinitions": {
             "description": "Emit type definition files (`d.bs`) during transpile",
+            "deprecated": true,
+            "deprecationMessage": "Deprecated starting in v1. Use `compilerOptions.emitDefinitions` instead.",
             "type": "boolean",
             "default": false
         },
         "removeParameterTypes": {
             "description": "Removes the explicit type to function's parameters and return (i.e. the `as type` syntax) ",
+            "deprecated": true,
+            "deprecationMessage": "Deprecated starting in v1. Use `compilerOptions.removeParameterTypes` instead.",
             "type": "boolean",
             "default": false
         },
@@ -291,6 +355,8 @@
         },
         "autoImportComponentScript": {
             "description": "When enabled, every xml component will search for a .bs or .brs file with the same name in the same folder, and add it as a script import if found. Disabled by default",
+            "deprecated": true,
+            "deprecationMessage": "Deprecated starting in v1. Use `compilerOptions.autoImportComponentScript` instead.",
             "type": "boolean",
             "default": false
         },
@@ -309,10 +375,14 @@
         },
         "sourceRoot": {
             "description": "Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within rootDir. This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.",
+            "deprecated": true,
+            "deprecationMessage": "Deprecated starting in v1. Use `compilerOptions.sourceRoot` instead.",
             "type": "string"
         },
         "resolveSourceRoot": {
             "description": "Should the `sourceRoot` property be resolve to an absolute path (relative to the bsconfig it's defined in)",
+            "deprecated": true,
+            "deprecationMessage": "Deprecated starting in v1. Use `compilerOptions.resolveSourceRoot` instead.",
             "type": "boolean",
             "default": false
         },
@@ -327,15 +397,171 @@
                 "error"
             ]
         },
+        "diagnosticReporters": {
+            "description": "Specify how diagnostics are reported to the console. Accepts a single value or an array; each diagnostic is rendered once per entry. Each value is either a preset name ('detailed', 'github-actions'), a custom template string containing at least one known placeholder ({file}, {line}, {col}, {endLine}, {endCol}, {severity}, {severityCode}, {code}, {message}, {source}), or an object with explicit `type`. Defaults to 'detailed'.",
+            "default": "detailed",
+            "oneOf": [
+                {
+                    "$ref": "#/definitions/diagnosticReporterValue"
+                },
+                {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/diagnosticReporterValue"
+                    }
+                }
+            ]
+        },
         "allowBrighterScriptInBrightScript": {
             "description": "Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.",
+            "deprecated": true,
+            "deprecationMessage": "Deprecated starting in v1. Use `compilerOptions.allowBrighterScriptInBrightScript` instead.",
             "type": "boolean",
             "default": false
         },
         "legacyCallfuncHandling": {
             "description": "Legacy RokuOS versions required at least one argument in callfunc() invocations. Previous brighterscript versions handled this by inserting invalid as an argument when no other args are present. This is not necessary in modern RokuOS versions.",
+            "deprecated": true,
+            "deprecationMessage": "Deprecated starting in v1. Use `compilerOptions.legacyCallfuncHandling` instead.",
             "type": "boolean",
             "default": false
+        },
+        "minFirmwareVersion": {
+            "description": "The minimum Roku firmware version required to run this project. When set, BrightScript (.brs) files will be validated to ensure they only use language features available in that firmware version or earlier. BrighterScript (.bs) files are always allowed to use all features since they are transpiled. Should be a semver-compatible string (e.g. \"11.0.0\").",
+            "deprecated": true,
+            "deprecationMessage": "Deprecated starting in v1. Use `compilerOptions.minFirmwareVersion` instead.",
+            "type": "string",
+            "examples": [
+                "11.0.0",
+                "12.0.0"
+            ]
+        },
+        "strict": {
+            "description": "Enables a set of stricter type-checking rules and language features. When set, this acts as a default value for other `strict`-related options. Defaults to false.",
+            "deprecated": true,
+            "deprecationMessage": "Deprecated starting in v1. Use `compilerOptions.strict` instead.",
+            "type": "boolean",
+            "default": false
+        },
+        "strictCallFunc": {
+            "description": "Enables stricter type-checking for callfunc() invocations. When true, callfunc() invocations will not be allowed on generic Node types. Defaults to false.",
+            "deprecated": true,
+            "deprecationMessage": "Deprecated starting in v1. Use `compilerOptions.strictCallFunc` instead.",
+            "type": "boolean",
+            "default": false
+        },
+        "strictNodeMembers": {
+            "description": "Enables stricter type-checking for Node members. When true, unknown members on Node types will be treated as errors instead of dynamic values. Defaults to false.",
+            "deprecated": true,
+            "deprecationMessage": "Deprecated starting in v1. Use `compilerOptions.strictNodeMembers` instead.",
+            "type": "boolean",
+            "default": false
+        },
+        "compilerOptions": {
+            "description": "Options that control how BrighterScript interprets, validates, and compiles your code (as opposed to the top-level options, which control project structure, file discovery, and tooling/reporting behavior). Similar in spirit to TypeScript's `compilerOptions`. If an option is set both here and at the top level (deprecated location), the value here wins.",
+            "type": "object",
+            "properties": {
+                "allowBrighterScriptInBrightScript": {
+                    "description": "Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.",
+                    "type": "boolean",
+                    "default": false
+                },
+                "autoImportComponentScript": {
+                    "description": "When enabled, every xml component will search for a .bs or .brs file with the same name in the same folder, and add it as a script import if found. Disabled by default",
+                    "type": "boolean",
+                    "default": false
+                },
+                "bslibDestinationDir": {
+                    "description": "Override the destination directory for the bslib.brs file. Use this if you want to customize where the bslib.brs file is located in the staging directory. Note that using a location outside of `source` will break scripts inside `source` that depend on bslib.brs. Defaults to `source`.",
+                    "type": "string",
+                    "default": "source"
+                },
+                "emitDefinitions": {
+                    "description": "Emit type definition files (`d.bs`) during transpile",
+                    "type": "boolean",
+                    "default": false
+                },
+                "emitFullPaths": {
+                    "description": "Emit full paths to files when printing diagnostics to the console.",
+                    "type": "boolean",
+                    "default": false
+                },
+                "legacyCallfuncHandling": {
+                    "description": "Legacy RokuOS versions required at least one argument in callfunc() invocations. Previous brighterscript versions handled this by inserting invalid as an argument when no other args are present. This is not necessary in modern RokuOS versions.",
+                    "type": "boolean",
+                    "default": false
+                },
+                "manifest": {
+                    "description": "A entry to modify manifest values",
+                    "type": "object",
+                    "properties": {
+                        "bs_const": {
+                            "description": "A dictionary of bs_consts to change or add to the manifest. Each entry ",
+                            "type": "object",
+                            "patternProperties": {
+                                "^.+$": {
+                                    "type": [
+                                        "boolean",
+                                        "null"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                },
+                "minFirmwareVersion": {
+                    "description": "The minimum Roku firmware version required to run this project. When set, BrightScript (.brs) files will be validated to ensure they only use language features available in that firmware version or earlier. BrighterScript (.bs) files are always allowed to use all features since they are transpiled. Should be a semver-compatible string (e.g. \"11.0.0\").",
+                    "type": "string",
+                    "examples": [
+                        "11.0.0",
+                        "12.0.0"
+                    ]
+                },
+                "pruneEmptyCodeFiles": {
+                    "description": "Excludes empty files from being included in the output. Some Brighterscript files are left empty or with only comments after transpilation to Brightscript. The default behavior is to write these to disk after transpilation. Setting this flag to `true` will prevent empty files being written and will remove associated script tags from XML.",
+                    "type": "boolean",
+                    "default": false
+                },
+                "relativeSourceMaps": {
+                    "description": "If true, source file paths in generated sourcemaps will be relative to the map file location instead of absolute. This makes sourcemaps portable across different machines and environments.",
+                    "type": "boolean",
+                    "default": false
+                },
+                "removeParameterTypes": {
+                    "description": "Removes the explicit type to function's parameters and return (i.e. the `as type` syntax) ",
+                    "type": "boolean",
+                    "default": false
+                },
+                "resolveSourceRoot": {
+                    "description": "Should the `sourceRoot` property be resolve to an absolute path (relative to the bsconfig it's defined in)",
+                    "type": "boolean",
+                    "default": false
+                },
+                "sourceMap": {
+                    "description": "Enables generating sourcemap files, which allow debugging tools to show the original source code while running the emitted files.",
+                    "type": "boolean",
+                    "default": false
+                },
+                "sourceRoot": {
+                    "description": "Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within rootDir. This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.",
+                    "type": "string"
+                },
+                "strict": {
+                    "description": "Enables a set of stricter type-checking rules and language features. When set, this acts as a default value for other `strict`-related options. Defaults to false.",
+                    "type": "boolean",
+                    "default": false
+                },
+                "strictCallFunc": {
+                    "description": "Enables stricter type-checking for callfunc() invocations. When true, callfunc() invocations will not be allowed on generic Node types. Defaults to false.",
+                    "type": "boolean",
+                    "default": false
+                },
+                "strictNodeMembers": {
+                    "description": "Enables stricter type-checking for Node members. When true, unknown members on Node types will be treated as errors instead of dynamic values. Defaults to false.",
+                    "type": "boolean",
+                    "default": false
+                }
+            }
         }
     }
 }

@@ -1,6 +1,6 @@
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
-import type { Location, Position } from 'vscode-languageserver';
+import type { Location, Position, Range } from 'vscode-languageserver';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { InternalWalkMode } from '../astUtils/visitors';
 import type { SymbolTable } from '../SymbolTable';
@@ -22,6 +22,13 @@ export abstract class AstNode {
      *  The starting and ending location of the node.
      */
     public abstract location?: Location | undefined;
+
+    /**
+     * @deprecated use `location.range` instead
+     */
+    public get range(): Range | undefined {
+        return this.location?.range;
+    }
 
     public abstract transpile(state: BrsTranspileState): TranspileResult;
 
@@ -299,6 +306,7 @@ export enum AstNodeKind {
     ArrayLiteralExpression = 'ArrayLiteralExpression',
     AAMemberExpression = 'AAMemberExpression',
     AALiteralExpression = 'AALiteralExpression',
+    AAIndexedMemberExpression = 'AAIndexedMemberExpression',
     UnaryExpression = 'UnaryExpression',
     VariableExpression = 'VariableExpression',
     SourceLiteralExpression = 'SourceLiteralExpression',

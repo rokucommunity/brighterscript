@@ -1,4 +1,4 @@
-import type { Range, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol, Disposable, FileChangeType, CodeDescription, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag } from 'vscode-languageserver-protocol';
+import type { Range, CodeAction, Position, CompletionItem, Location, DocumentSymbol, WorkspaceSymbol, Disposable, FileChangeType, CodeDescription, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, SelectionRange, InlayHint } from 'vscode-languageserver-protocol';
 import type { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -6,14 +6,13 @@ import type { TypedFunctionType } from './types/TypedFunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program } from './Program';
 import type { ProgramBuilder } from './ProgramBuilder';
-import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
+import type { FunctionStatement } from './parser/Statement';
 import type { AstNode, Expression } from './parser/AstNode';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
-import type { Identifier, Token } from './lexer/Token';
+import type { Token } from './lexer/Token';
 import type { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-languageserver';
-import type { SymbolTable } from './SymbolTable';
 import type { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { Editor } from './astUtils/Editor';
 import type { BscFile } from './files/BscFile';
@@ -22,6 +21,8 @@ import type { LazyFileData } from './files/LazyFileData';
 import { TokenKind } from './lexer/TokenKind';
 import type { BscTypeKind } from './types/BscTypeKind';
 import { createToken } from './astUtils/creators';
+import type { SourceFixAllCodeAction } from './CodeActionUtil';
+import type { Availability } from './RokuConstants';
 
 export interface BsDiagnostic {
     /**
@@ -116,7 +117,17 @@ export interface Callable {
      * The range of the name of this callable
      */
     nameRange?: Range;
+    /**
+     * @deprecated Use `availability` instead, which carries firmware/rsg_version thresholds for
+     * deprecation and removal.
+     */
     isDeprecated?: boolean;
+    /**
+     * Optional availability metadata relative to Roku OS firmware and/or manifest rsg_version.
+     * When set, the validator emits deprecation/removal diagnostics if the project's effective
+     * values cross the listed thresholds.
+     */
+    availability?: Availability;
     getName: (parseMode: ParseMode) => string;
     /**
      * Indicates whether or not this callable has an associated namespace
@@ -214,7 +225,21 @@ export interface CommentFlag {
      * The range that this flag applies to (i.e. the lines that should be suppressed/re-enabled)
      */
     affectedRange: Range;
-    codes: DiagnosticCode[] | null;
+    /**
+     * Codes this flag suppresses.
+     * - `null`: every code (the flag suppresses everything in its `affectedRange`)
+     * - array: only those specific codes
+     * - `undefined` (or omitted): no codes (the flag suppresses nothing on its own; useful when the suppression decision is fully delegated to `enableCodes`)
+     */
+    codes?: DiagnosticCode[] | null;
+    /**
+     * Codes explicitly re-enabled (carved out) within this flag's `affectedRange`.
+     * A diagnostic matched by `codes` is NOT suppressed if it is also matched by `enableCodes`.
+     * - `null`: every code is re-enabled (nothing in the range is suppressed)
+     * - array: only those specific codes are carved out
+     * - `undefined` (or omitted): no carve-outs; suppression is governed entirely by `codes`
+     */
+    enableCodes?: DiagnosticCode[] | null;
 }
 
 export interface PluginFactoryOptions {
@@ -280,6 +305,22 @@ export interface Plugin {
     beforeRemoveProgram?(event: BeforeRemoveProgramEvent): any;
     removeProgram?(event: RemoveProgramEvent): any;
     afterRemoveProgram?(event: AfterRemoveProgramEvent): any;
+
+    /**
+     * Called before the `provideSourceFixAllCodeActions` hook.
+     */
+    beforeProvideSourceFixAllCodeActions?(event: BeforeProvideSourceFixAllCodeActionsEvent): any;
+    /**
+     * Emitted when VS Code requests "source fix all" source actions for a file.
+     * Plugins push one or more `SourceFixAllCodeAction` objects onto `event.actions`,
+     * each representing a distinct named group that will appear in the Source Actions menu.
+     * Plugins are responsible for assembling and merging all changes within each action.
+     */
+    provideSourceFixAllCodeActions?(event: ProvideSourceFixAllCodeActionsEvent): any;
+    /**
+     * Called after `provideSourceFixAllCodeActions`. Use this to intercept or sanitize the actions before they are converted to LSP CodeActions.
+     */
+    afterProvideSourceFixAllCodeActions?(event: AfterProvideSourceFixAllCodeActionsEvent): any;
 
     /**
      * Emitted before the program starts collecting completions
@@ -381,6 +422,34 @@ export interface Plugin {
      */
     afterProvideWorkspaceSymbols?(event: AfterProvideWorkspaceSymbolsEvent): any;
 
+
+    /**
+     * Called before the `provideSelectionRanges` hook
+     */
+    beforeProvideSelectionRanges?(event: BeforeProvideSelectionRangesEvent): any;
+    /**
+     * Provide the selection ranges for the given positions in a file. Used for expand/shrink selection.
+     */
+    provideSelectionRanges?(event: ProvideSelectionRangesEvent): any;
+    /**
+     * Called after `provideSelectionRanges`. Use this if you want to intercept or sanitize the selection range data provided by bsc or other plugins.
+     */
+    afterProvideSelectionRanges?(event: AfterProvideSelectionRangesEvent): any;
+
+
+    /**
+     * Called before the `provideInlayHints` hook
+     */
+    beforeProvideInlayHints?(event: BeforeProvideInlayHintsEvent): any;
+    /**
+     * Provide inlay hints (e.g. parameter names at call sites, inferred type annotations) for the given range.
+     */
+    provideInlayHints?(event: ProvideInlayHintsEvent): any;
+    /**
+     * Called after `provideInlayHints`. Use this if you want to intercept or sanitize the inlay hints provided by bsc or other plugins.
+     */
+    afterProvideInlayHints?(event: AfterProvideInlayHintsEvent): any;
+
     //scope events
     beforeValidateScope?(event: BeforeValidateScopeEvent): any;
     validateScope?(event: ValidateScopeEvent): any;
@@ -416,6 +485,11 @@ export interface Plugin {
      */
     beforeAddFile?(event: BeforeAddFileEvent): any;
     /**
+     * Called while a file is being added to the program. This is the central event fired between `beforeAddFile` and `afterAddFile`.
+     * Includes physical files as well as any virtual files produced by `provideFile` events
+     */
+    addFile?(event: AddFileEvent): any;
+    /**
      * Called after a file has been added to the program.
      * Includes physical files as well as any virtual files produced by `provideFile` events
      */
@@ -425,6 +499,11 @@ export interface Plugin {
      * Called before a file is removed from the program. This includes physical and virtual files
      */
     beforeRemoveFile?(event: BeforeRemoveFileEvent): any;
+    /**
+     * Called while a file is being removed from the program. This is the central event fired between `beforeRemoveFile` and `afterRemoveFile`.
+     * This includes physical and virtual files
+     */
+    removeFile?(event: RemoveFileEvent): any;
     /**
      * Called after a file has been removed from the program. This includes physical and virtual files
      */
@@ -449,6 +528,10 @@ export interface Plugin {
      * Called right before the program builds (i.e. generates the code and puts it in the outDir
      */
     beforeBuildProgram?(event: BeforeBuildProgramEvent): any;
+    /**
+     * Called while the program builds. This is the central event fired between `beforeBuildProgram` and `afterBuildProgram`.
+     */
+    buildProgram?(event: BuildProgramEvent): any;
     /**
      * Called right after the program builds (i.e. generates the code and puts it in the outDir
      */
@@ -501,6 +584,10 @@ export interface Plugin {
      * Called before any files are written
      */
     beforeWriteProgram?(event: BeforeWriteProgramEvent): any;
+    /**
+     * Called while files are being written. This is the central event fired between `beforeWriteProgram` and `afterWriteProgram`.
+     */
+    writeProgram?(event: WriteProgramEvent): any;
     /**
      * Called after all files are written
      */
@@ -570,6 +657,25 @@ export interface AfterValidateProgramEvent extends BeforeValidateProgramEvent {
     wasCancelled: boolean;
 }
 
+export interface ProvideSourceFixAllCodeActionsEvent {
+    program: Program;
+    file: BscFile;
+    /** All diagnostics for this file (not range-filtered) */
+    diagnostics: BsDiagnostic[];
+    scopes: Scope[];
+    /**
+     * Plugins push one or more SourceFixAllCodeAction objects here.
+     * Each becomes a distinct named entry in VS Code's Source Actions menu.
+     */
+    actions: SourceFixAllCodeAction[];
+}
+export type BeforeProvideSourceFixAllCodeActionsEvent = ProvideSourceFixAllCodeActionsEvent;
+export type AfterProvideSourceFixAllCodeActionsEvent = ProvideSourceFixAllCodeActionsEvent;
+/**
+ * @deprecated use `ProvideSourceFixAllCodeActionsEvent` instead
+ */
+export type OnGetSourceFixAllCodeActionsEvent = ProvideSourceFixAllCodeActionsEvent;
+
 
 export interface ProvideCompletionsEvent<TFile extends BscFile = BscFile> {
     program: Program;
@@ -590,6 +696,7 @@ export interface BeforeBuildProgramEvent {
     files: BscFile[];
     editor: Editor;
 }
+export type BuildProgramEvent = BeforeBuildProgramEvent;
 export type AfterBuildProgramEvent = BeforeBuildProgramEvent;
 
 export interface ProvideHoverEvent {
@@ -778,6 +885,48 @@ export interface AfterProvideSemanticTokensEvent<T extends BscFile = BscFile> {
     semanticTokens: SemanticToken[];
 }
 
+export interface ProvideSelectionRangesEvent<TFile = BscFile> {
+    program: Program;
+    /**
+     * The file that the `selectionRange` request was invoked in
+     */
+    file: TFile;
+    /**
+     * The list of positions for which selection ranges are requested
+     */
+    positions: Position[];
+    /**
+     * The result list of selection ranges. One entry per position in `positions`.
+     * Each SelectionRange is a linked list from innermost to outermost via the `.parent` property.
+     */
+    selectionRanges: SelectionRange[];
+}
+export type BeforeProvideSelectionRangesEvent<TFile = BscFile> = ProvideSelectionRangesEvent<TFile>;
+export type AfterProvideSelectionRangesEvent<TFile = BscFile> = ProvideSelectionRangesEvent<TFile>;
+
+export interface ProvideInlayHintsEvent<TFile = BscFile> {
+    program: Program;
+    /**
+     * The file that the `inlayHint` request was invoked in
+     */
+    file: TFile;
+    /**
+     * The range of the document for which inlay hints should be computed
+     */
+    range: Range;
+    /**
+     * The list of scopes that this file is a member of
+     */
+    scopes: Scope[];
+    /**
+     * The result list of inlay hints. Plugins push hints into this array.
+     */
+    inlayHints: InlayHint[];
+}
+export type BeforeProvideInlayHintsEvent<TFile = BscFile> = ProvideInlayHintsEvent<TFile>;
+export type AfterProvideInlayHintsEvent<TFile = BscFile> = ProvideInlayHintsEvent<TFile>;
+
+
 export type BeforeValidateFileEvent = ValidateFileEvent;
 export interface ValidateFileEvent<T extends BscFile = BscFile> {
     program: Program;
@@ -872,12 +1021,14 @@ export interface BeforeAddFileEvent<TFile extends BscFile = BscFile> {
     file: TFile;
     program: Program;
 }
+export type AddFileEvent<TFile extends BscFile = BscFile> = BeforeAddFileEvent<TFile>;
 export type AfterAddFileEvent<TFile extends BscFile = BscFile> = BeforeAddFileEvent<TFile>;
 
 export interface BeforeRemoveFileEvent<TFile extends BscFile = BscFile> {
     file: TFile;
     program: Program;
 }
+export type RemoveFileEvent<TFile extends BscFile = BscFile> = BeforeRemoveFileEvent<TFile>;
 export type AfterRemoveFileEvent<TFile extends BscFile = BscFile> = BeforeRemoveFileEvent<TFile>;
 
 export type BeforePrepareProgramEvent = PrepareProgramEvent;
@@ -966,6 +1117,7 @@ export interface BeforeWriteProgramEvent {
     outDir: string;
     files: Map<BscFile, SerializedFile[]>;
 }
+export type WriteProgramEvent = BeforeWriteProgramEvent;
 export type AfterWriteProgramEvent = BeforeWriteProgramEvent;
 
 
@@ -1119,6 +1271,11 @@ export interface GetTypeOptions {
      * If this is true, AA's, objects, nodes, etc, do not return dynamic if no member is found
      */
     ignoreDefaultDynamicMembers?: boolean;
+    /**
+     * If this is true, AA's, objects, nodes, etc will return dynamic for unknown members, instead of ReferenceType.
+     * This is useful for validating in contexts when members could be anything
+     */
+    changeUnknownNodeMemberToDynamic?: boolean;
 }
 
 export class TypeChainEntry {
@@ -1216,26 +1373,6 @@ export interface TypeCompatibilityData {
     expectedType?: BscType;
     allowNameEquality?: boolean;
     unresolveableTarget?: string;
-}
-
-export interface NamespaceContainer {
-    file: BscFile;
-    fullName: string;
-    fullNameLower: string;
-    parentNameLower: string;
-    nameParts: Identifier[];
-    nameRange: Range;
-    lastPartName: string;
-    lastPartNameLower: string;
-    isTopLevel: boolean;
-    namespaceStatements?: NamespaceStatement[];
-    symbolTable: SymbolTable;
-}
-
-export interface ScopeNamespaceContainer {
-    namespaceContainers: NamespaceContainer[];
-    symbolTable: SymbolTable;
-    firstInstance: NamespaceContainer;
 }
 
 /**

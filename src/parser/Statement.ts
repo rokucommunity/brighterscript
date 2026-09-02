@@ -1,8 +1,8 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import type { DottedGetExpression, FunctionParameterExpression, LiteralExpression, TypecastExpression, TypeExpression } from './Expression';
-import { FunctionExpression } from './Expression';
+import type { DottedGetExpression, LiteralExpression, TypecastExpression } from './Expression';
+import { FunctionExpression, FunctionParameterExpression, TypeExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import type { Location } from 'vscode-languageserver';
@@ -10,10 +10,10 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isCallExpression, isCatchStatement, isConditionalCompileStatement, isEnumMemberStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isUninitializedType, isVoidType, isWhileStatement } from '../astUtils/reflection';
+import { isCallExpression, isCatchStatement, isClassType, isConditionalCompileStatement, isEnumMemberStatement, isEnumType, isEnumStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isUninitializedType, isVoidType, isWhileStatement } from '../astUtils/reflection';
 import type { GetTypeOptions } from '../interfaces';
 import { TypeChainEntry, type TranspileResult, type TypedefProvider } from '../interfaces';
-import { createIdentifier, createInvalidLiteral, createMethodStatement, createToken } from '../astUtils/creators';
+import { createDottedIdentifier, createIdentifier, createInvalidLiteral, createMethodStatement, createToken, createVariableExpression } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { SymbolTable } from '../SymbolTable';
@@ -499,6 +499,12 @@ export class ExpressionStatement extends Statement {
         ];
     }
 
+    getTypedef(state: BrsTranspileState): TranspileResult {
+        //ExpressionStatements should not be included in typedefs
+        //as they represent code execution which is not part of the type definition
+        return [];
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'expression', visitor, options);
@@ -922,14 +928,14 @@ export class PrintStatement extends Statement {
         ] as TranspileResult;
 
         //if the first expression has no leading whitespace, add a single space between the `print` and the expression
-        if (this.expressions.length > 0 && !this.expressions[0].leadingTrivia.find(t => t?.kind === TokenKind.Whitespace)) {
+        if (this.expressions.length > 0 && !this.expressions[0].leadingTrivia?.find(t => t?.kind === TokenKind.Whitespace)) {
             result.push(' ');
         }
 
         // eslint-disable-next-line @typescript-eslint/prefer-for-of
         for (let i = 0; i < this.expressions.length; i++) {
             const expression = this.expressions[i];
-            let leadingWhitespace = expression.leadingTrivia.find(t => t?.kind === TokenKind.Whitespace)?.text;
+            let leadingWhitespace = expression.leadingTrivia?.find(t => t?.kind === TokenKind.Whitespace)?.text;
             if (leadingWhitespace) {
                 result.push(leadingWhitespace);
                 //if the previous expression was NOT a separator, and this one is not also, add a space between them
@@ -2862,6 +2868,31 @@ export class ClassStatement extends Statement implements TypedefProvider {
     }
 
     /**
+     * Clone a parent constructor's parameter for use in a synthesized subclass constructor.
+     * The clone is detached from the AST (no parent), so if the parameter's type is a class
+     * or enum, its type reference can't be re-resolved by symbol name once cloned - especially
+     * since the subclass may live in a different namespace than the one the parameter's type
+     * was originally declared in, where even a fully-qualified reference has no symbol table
+     * to resolve against. Resolve the type now (while the original is still properly attached),
+     * and bake the fully-qualified name/type directly into the clone.
+     */
+    private cloneConstructorParam(param: FunctionParameterExpression): FunctionParameterExpression {
+        const exprType = param.typeExpression?.getType({ flags: SymbolTypeFlag.typetime });
+        if (!isClassType(exprType) && !isEnumType(exprType)) {
+            return param.clone();
+        }
+        const nameParts = exprType.toString().split('.');
+        const qualifiedExpression = nameParts.length > 1 ? createDottedIdentifier(nameParts) : createVariableExpression(nameParts[0]);
+        return new FunctionParameterExpression({
+            name: param.tokens.name,
+            equals: param.tokens.equals,
+            defaultValue: param.defaultValue?.clone(),
+            as: param.tokens.as,
+            typeExpression: new TypeExpression({ expression: qualifiedExpression, resolvedType: exprType })
+        });
+    }
+
+    /**
      * Determine if the specified field was declared in one of the ancestor classes
      */
     public isFieldDeclaredByAncestor(fieldName: string, ancestors: ClassStatement[]) {
@@ -2930,7 +2961,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 state.classStatement = this;
                 state.skipLeadingComments = true;
                 //add leading comments
-                if (statement.leadingTrivia.filter(token => token.kind === TokenKind.Comment).length > 0) {
+                if ((statement.leadingTrivia?.filter(token => token.kind === TokenKind.Comment) ?? []).length > 0) {
                     result.push(
                         ...state.transpileComments(statement.leadingTrivia),
                         state.indent()
@@ -2993,7 +3024,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                         modifiers: [],
                         name: createIdentifier('new'),
                         func: new FunctionExpression({
-                            parameters: params.map(x => x.clone()),
+                            parameters: params.map(x => this.cloneConstructorParam(x)),
                             body: new Block({ statements: [call] }),
                             functionType: createToken(TokenKind.Sub),
                             endFunctionType: createToken(TokenKind.EndSub),
@@ -3974,6 +4005,17 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
         return this.tokens.name.leadingTrivia;
     }
 
+    /**
+     * Get the value of this enum. Requires that `.parent` is set
+     */
+    public getValue() {
+        if (isEnumStatement(this.parent)) {
+            return (this.parent as EnumStatement)?.getMemberValue(this.name);
+        }
+        return undefined;
+    }
+
+
     public transpile(state: BrsTranspileState): TranspileResult {
         return [];
     }
@@ -4593,7 +4635,7 @@ export class ConditionalCompileConstStatement extends Statement {
 }
 
 
-export class TypeStatement extends Statement {
+export class TypeStatement extends Statement implements TypedefProvider {
     constructor(options: {
         type?: Token;
         name: Token;
@@ -4629,16 +4671,29 @@ export class TypeStatement extends Statement {
     public readonly location: Location;
 
     transpile(state: BrsTranspileState) {
-        //transpile to a comment just for debugging purposes
-        return [
-            state.transpileToken(this.tokens.type, 'type', true),
+        //type statements have no runtime representation, so they're stripped entirely
+        return [];
+    }
+
+    getTypedef(state: BrsTranspileState): TranspileResult {
+        const result: TranspileResult = [];
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
+        result.push(
+            this.tokens.type ? state.tokenToSourceNode(this.tokens.type) : 'type',
             ' ',
-            state.transpileToken(this.tokens.name),
+            state.tokenToSourceNode(this.tokens.name),
             ' ',
-            state.transpileToken(this.tokens.equals, '='),
+            this.tokens.equals ? state.tokenToSourceNode(this.tokens.equals) : '=',
             ' ',
-            this.value.transpile(state)
-        ];
+            ...this.value.getTypedef(state)
+        );
+        return result;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {

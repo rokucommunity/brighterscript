@@ -3,7 +3,7 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { AALiteralExpression, DottedGetExpression, FunctionExpression } from '../../parser/Expression';
 import type { AssignmentStatement, ClassStatement, ForEachStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
-import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, rootDir } from '../../testHelpers.spec';
+import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, rootDir, tempDir, trim } from '../../testHelpers.spec';
 import { Program } from '../../Program';
 import { isAssignmentStatement, isClassStatement, isForEachStatement, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isNamespaceStatement, isPrintStatement, isReturnStatement } from '../../astUtils/reflection';
 import { util, standardizePath as s } from '../../util';
@@ -22,6 +22,7 @@ import type { ExtraSymbolData } from '../../interfaces';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { EnumType } from '../../types';
 import { TypeStatementType } from '../../types/TypeStatementType';
+import * as fsExtra from 'fs-extra';
 
 describe('BrsFileValidator', () => {
     let program: Program;
@@ -1799,6 +1800,510 @@ describe('BrsFileValidator', () => {
                 },
                 DiagnosticMessages.returnTypeMismatch('void', 'integer', {})
             ]);
+        });
+    });
+
+    describe('minFirmwareVersion', () => {
+        describe('optional chaining', () => {
+            it('allows optional chaining in .brs files when minFirmwareVersion is not set', () => {
+                program.setFile('source/main.brs', `
+                    sub main()
+                        obj = {}
+                        value = obj?.name
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows optional chaining in .bs files when minFirmwareVersion is not set', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        obj = {}
+                        value = obj?.name
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows optional chaining in .brs files when minFirmwareVersion is 11.0.0', () => {
+                program = new Program({ minFirmwareVersion: '11.0.0' });
+                program.setFile('source/main.brs', `
+                    sub main()
+                        obj = {}
+                        value = obj?.name
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows optional chaining in .bs files when minFirmwareVersion is 11.0.0', () => {
+                program = new Program({ minFirmwareVersion: '11.0.0' });
+                program.setFile('source/main.bs', `
+                    sub main()
+                        obj = {}
+                        value = obj?.name
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows optional chaining in .brs files when minFirmwareVersion is above 11.0.0', () => {
+                program = new Program({ minFirmwareVersion: '12.0.0' });
+                program.setFile('source/main.brs', `
+                    sub main()
+                        obj = {}
+                        value = obj?.name
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('flags optional chaining (dotted get) in .brs files when minFirmwareVersion is below 11.0.0', () => {
+                program = new Program({ minFirmwareVersion: '10.0.0' });
+                program.setFile('source/main.brs', `
+                    sub main()
+                        obj = {}
+                        value = obj?.name
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.featureRequiresMinFirmwareVersion('optional chaining', '11.0.0', '10.0.0')
+                }]);
+            });
+
+            it('flags optional chaining (dotted get) in .bs files when minFirmwareVersion is below 11.0.0', () => {
+                program = new Program({ minFirmwareVersion: '10.0.0' });
+                program.setFile('source/main.bs', `
+                    sub main()
+                        obj = {}
+                        value = obj?.name
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.featureRequiresMinFirmwareVersion('optional chaining', '11.0.0', '10.0.0')
+                }]);
+            });
+
+            it('flags optional chaining (indexed get) in .brs files when minFirmwareVersion is below 11.0.0', () => {
+                program = new Program({ minFirmwareVersion: '10.0.0' });
+                program.setFile('source/main.brs', `
+                    sub main()
+                        arr = []
+                        value = arr?[0]
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.featureRequiresMinFirmwareVersion('optional chaining', '11.0.0', '10.0.0')
+                }]);
+            });
+
+            it('flags optional chaining (call expression) in .brs files when minFirmwareVersion is below 11.0.0', () => {
+                program = new Program({ minFirmwareVersion: '10.0.0' });
+                program.setFile('source/main.brs', `
+                    sub main()
+                        obj = {}
+                        obj.doSomething?()
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.featureRequiresMinFirmwareVersion('optional chaining', '11.0.0', '10.0.0')
+                }]);
+            });
+        });
+    });
+
+    describe('eval deprecation', () => {
+        beforeEach(() => {
+            fsExtra.ensureDirSync(tempDir);
+            fsExtra.emptyDirSync(tempDir);
+        });
+        afterEach(() => {
+            fsExtra.emptyDirSync(tempDir);
+        });
+
+        function setupProgram(opts: { rsgVersion?: string; minFirmwareVersion?: string }) {
+            const manifestContents = opts.rsgVersion
+                ? trim`
+                    title=t
+                    rsg_version=${opts.rsgVersion}
+                `
+                : trim`title=t`;
+            fsExtra.writeFileSync(`${tempDir}/manifest`, manifestContents);
+            program.dispose();
+            program = new Program({
+                rootDir: tempDir,
+                minFirmwareVersion: opts.minFirmwareVersion
+            });
+        }
+
+        it('flags `eval(...)` under default settings (no manifest rsg_version, default minFirmwareVersion)', () => {
+            //default minFirmwareVersion is 15.0.0, so effective rsg_version is 1.2
+            setupProgram({});
+            program.setFile('source/main.brs', `
+                sub main()
+                    eval("print 1")
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.globalCallableRemoved('eval', 'rsg', '1.2.0', '1.2.0')
+            }]);
+        });
+
+        it('flags `eval(...)` when manifest declares rsg_version=1.2', () => {
+            setupProgram({ rsgVersion: '1.2' });
+            program.setFile('source/main.brs', `
+                sub main()
+                    eval("print 1")
+                end sub
+            `);
+            program.validate();
+            const evalDiags = program.getDiagnostics().filter(d => d.code === DiagnosticMessages.globalCallableRemoved('eval', 'rsg', '1.2.0').code
+            );
+            expect(evalDiags).to.be.lengthOf(1);
+        });
+
+        it('flags `eval(...)` when manifest declares rsg_version=1.3', () => {
+            setupProgram({ rsgVersion: '1.3' });
+            program.setFile('source/main.brs', `
+                sub main()
+                    eval("print 1")
+                end sub
+            `);
+            program.validate();
+            const evalDiags = program.getDiagnostics().filter(d => d.code === DiagnosticMessages.globalCallableRemoved('eval', 'rsg', '1.2.0').code
+            );
+            expect(evalDiags).to.be.lengthOf(1);
+        });
+
+        it('flags `eval(...)` via os axis when manifest declares rsg_version=1.1 on modern firmware', () => {
+            //rsg=1.1 explicit on default firmware (15.0) is an invalid manifest entry — rsg=1.1
+            //was removed at OS 14.5. The manifest validator separately flags that. With rsg axis
+            //silent (1.1 < 1.2), the os.deprecated fallback fires as a secondary nudge.
+            setupProgram({ rsgVersion: '1.1' });
+            program.setFile('source/main.brs', `
+                sub main()
+                    eval("print 1")
+                end sub
+            `);
+            program.validate();
+            const evalDiags = program.getDiagnostics().filter(d => d.code === DiagnosticMessages.globalCallableDeprecated().code
+            );
+            expect(evalDiags).to.be.lengthOf(1);
+            expect((evalDiags[0] as any).data?.axis).to.equal('os');
+        });
+
+        it('does NOT flag `eval(...)` when minFirmwareVersion is set below 9.3.0 and manifest is silent', () => {
+            setupProgram({ minFirmwareVersion: '8.0.0' });
+            program.setFile('source/main.brs', `
+                sub main()
+                    eval("print 1")
+                end sub
+            `);
+            program.validate();
+            const evalDiags = program.getDiagnostics().filter(d => d.code === DiagnosticMessages.globalCallableRemoved('eval', 'rsg', '1.2.0').code
+            );
+            expect(evalDiags).to.be.lengthOf(0);
+        });
+
+        it('does NOT flag `m.eval(...)` (method call on object)', () => {
+            setupProgram({});
+            program.setFile('source/main.brs', `
+                sub main()
+                    m.eval("print 1")
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does NOT flag `alpha.eval(...)` (namespaced call via dotted-get)', () => {
+            setupProgram({});
+            program.setFile('source/main.brs', `
+                sub main()
+                    alpha.eval("print 1")
+                end sub
+            `);
+            program.validate();
+            const evalDiags = program.getDiagnostics().filter(d => d.code === DiagnosticMessages.globalCallableRemoved('eval', 'rsg', '1.2.0').code
+            );
+            expect(evalDiags).to.be.lengthOf(0);
+        });
+
+        it('flags eval case-insensitively (Eval, EVAL)', () => {
+            setupProgram({});
+            program.setFile('source/main.brs', `
+                sub main()
+                    Eval("print 1")
+                end sub
+            `);
+            program.validate();
+            const evalDiags = program.getDiagnostics().filter(d => d.code === DiagnosticMessages.globalCallableRemoved('eval', 'rsg', '1.2.0').code
+            );
+            expect(evalDiags).to.be.lengthOf(1);
+        });
+    });
+
+    describe('unreferencable builtins', () => {
+        const reservedBuiltinCode = DiagnosticMessages.reservedBuiltinUsedAsValue('').code;
+
+        function reservedBuiltinDiagnostics() {
+            return program.getDiagnostics().filter(diagnostic => diagnostic.code === reservedBuiltinCode);
+        }
+
+        function expectFlagged(names: string[]) {
+            expect(
+                reservedBuiltinDiagnostics().map(diagnostic => diagnostic.message)
+            ).to.eql(
+                names.map(name => DiagnosticMessages.reservedBuiltinUsedAsValue(name).message)
+            );
+        }
+
+        function expectNotFlagged() {
+            expect(reservedBuiltinDiagnostics()).to.eql([]);
+        }
+
+        it('flags `x = ObjFun` (RHS value read)', () => {
+            program.setFile('source/main.brs', `
+                sub a()
+                    x = ObjFun
+                    print x
+                end sub
+            `);
+            program.validate();
+            expectFlagged(['ObjFun']);
+        });
+
+        it('flags `print type(ObjFun)` (passed as argument)', () => {
+            program.setFile('source/main.brs', `
+                sub a()
+                    print type(ObjFun)
+                end sub
+            `);
+            program.validate();
+            expectFlagged(['ObjFun']);
+        });
+
+        it('flags `f(ObjFun, 2)` (passed by value)', () => {
+            program.setFile('source/main.brs', `
+                sub a()
+                    f(ObjFun, 2)
+                end sub
+                sub f(arg1, arg2)
+                end sub
+            `);
+            program.validate();
+            expectFlagged(['ObjFun']);
+        });
+
+        it('flags `x = type` (RHS value read)', () => {
+            program.setFile('source/main.brs', `
+                sub a()
+                    x = type
+                    print x
+                end sub
+            `);
+            program.validate();
+            expectFlagged(['type']);
+        });
+
+        it('does not flag `ObjFun(m)` (canonical call)', () => {
+            program.setFile('source/main.brs', `
+                sub a()
+                    ObjFun(m, "")
+                end sub
+            `);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('does not flag `type(123)` (canonical call)', () => {
+            program.setFile('source/main.brs', `
+                sub a()
+                    print type(123)
+                end sub
+            `);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('does not flag `m.ObjFun = 1` (property assignment)', () => {
+            program.setFile('source/main.brs', `
+                sub a()
+                    m.ObjFun = 1
+                end sub
+            `);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('does not flag `m.type = 1` (property assignment)', () => {
+            program.setFile('source/main.brs', `
+                sub a()
+                    m.type = 1
+                end sub
+            `);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('does not flag `{ ObjFun: 1 }` (AA literal key)', () => {
+            program.setFile('source/main.brs', `
+                sub a()
+                    aa = { ObjFun: 1 }
+                end sub
+            `);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('does not flag `{ type: 1 }` (AA literal key)', () => {
+            program.setFile('source/main.brs', `
+                sub a()
+                    aa = { type: 1 }
+                end sub
+            `);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('does not flag a BrighterScript `type Name = ...` statement', () => {
+            program.setFile('source/main.bs', `
+                type MyAlias = string or integer
+            `);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('case-insensitive match for OBJFUN, ObjFun, objfun', () => {
+            program.setFile('source/main.brs', `
+                sub a()
+                    x = OBJFUN
+                    y = objfun
+                end sub
+            `);
+            program.validate();
+            expectFlagged(['OBJFUN', 'objfun']);
+        });
+
+        //per-builtin coverage for each device-verified entry in UnreferencableBuiltins.
+        //each pair: (1) bare value read flags, (2) canonical call form does not flag.
+
+        it('flags `x = Box` (RHS value read)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = Box\nend sub`);
+            program.validate();
+            expectFlagged(['Box']);
+        });
+
+        it('does not flag `Box(1)` (canonical call)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = Box(1)\nend sub`);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('flags `x = CreateObject` (RHS value read)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = CreateObject\nend sub`);
+            program.validate();
+            expectFlagged(['CreateObject']);
+        });
+
+        it('does not flag `CreateObject("roSGNode", "Node")` (canonical call)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = CreateObject("roSGNode", "Node")\nend sub`);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('flags `x = GetGlobalAA` (RHS value read)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = GetGlobalAA\nend sub`);
+            program.validate();
+            expectFlagged(['GetGlobalAA']);
+        });
+
+        it('does not flag `GetGlobalAA()` (canonical call)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = GetGlobalAA()\nend sub`);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('flags `x = GetLastRunCompileError` (RHS value read)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = GetLastRunCompileError\nend sub`);
+            program.validate();
+            expectFlagged(['GetLastRunCompileError']);
+        });
+
+        it('does not flag `GetLastRunCompileError()` (canonical call)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = GetLastRunCompileError()\nend sub`);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('flags `x = GetLastRunRunTimeError` (RHS value read)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = GetLastRunRunTimeError\nend sub`);
+            program.validate();
+            expectFlagged(['GetLastRunRunTimeError']);
+        });
+
+        it('does not flag `GetLastRunRunTimeError()` (canonical call)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = GetLastRunRunTimeError()\nend sub`);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('flags `x = Pos` (RHS value read)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = Pos\nend sub`);
+            program.validate();
+            expectFlagged(['Pos']);
+        });
+
+        it('does not flag `Pos(0)` (canonical call)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = Pos(0)\nend sub`);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('flags `x = Run` (RHS value read)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = Run\nend sub`);
+            program.validate();
+            expectFlagged(['Run']);
+        });
+
+        it('does not flag `Run("pkg:/source/foo.brs")` (canonical call)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = Run("pkg:/source/foo.brs")\nend sub`);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('flags `x = Tab` (RHS value read)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = Tab\nend sub`);
+            program.validate();
+            expectFlagged(['Tab']);
+        });
+
+        it('does not flag `Tab(5)` (canonical call)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = Tab(5)\nend sub`);
+            program.validate();
+            expectNotFlagged();
+        });
+
+        it('flags `x = eval` (RHS value read)', () => {
+            program.setFile('source/main.brs', `sub a()\nx = eval\nend sub`);
+            program.validate();
+            expectFlagged(['eval']);
+        });
+
+        it('does not flag `eval("print 1")` (canonical call)', () => {
+            program.setFile('source/main.brs', `sub a()\neval("print 1")\nend sub`);
+            program.validate();
+            expectNotFlagged();
         });
     });
 });

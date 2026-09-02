@@ -263,6 +263,11 @@ export class CrossScopeValidator {
     getRequiredMap(scope: Scope) {
         const map = new Map<SymbolLookupKeys, UnresolvedSymbol>();
         scope.enumerateBrsFiles((file) => {
+            //typedef files (.d.bs) are ambient declarations only - never validated for diagnostics,
+            //so don't flag their own unresolved type references as missing symbols
+            if (file.isTypedef) {
+                return;
+            }
             for (const symbol of file.requiredSymbols) {
                 const symbolKeysArray = this.symbolMapKeys(symbol);
                 for (const symbolKeys of symbolKeysArray) {
@@ -278,7 +283,7 @@ export class CrossScopeValidator {
             return this.providedTreeMap.get(scope.name);
         }
         const providedTree = new ProvidedNode('', this.componentsMap);
-        const duplicatesMap = new Map<string, Set<FileSymbolPair>>();
+        let duplicatesMap: Map<string, Set<FileSymbolPair>> = null;
 
         const referenceTypesMap = new Map<{ symbolName: string; file: BscFile; symbolObj: ProvidedSymbol }, Array<{ name: string; namespacedName?: string }>>();
 
@@ -289,9 +294,12 @@ export class CrossScopeValidator {
             const symbolIsNamespace = providedTree.getNamespace(symbolName);
             const isDupe = providedTree.addSymbol(symbolName, { file: file, symbol: symbolObj.symbol });
             if (symbolIsNamespace || globalSymbol || isDupe || symbolObj.duplicates.length > 0) {
-                let dupesSet = duplicatesMap.get(symbolName);
+                let dupesSet = duplicatesMap?.get(symbolName) ?? null;
                 if (!dupesSet) {
                     dupesSet = new Set<{ file: BrsFile; symbol: BscSymbol }>();
+                    if (!duplicatesMap) {
+                        duplicatesMap = new Map<string, Set<FileSymbolPair>>();
+                    }
                     duplicatesMap.set(symbolName, dupesSet);
                     const existing = providedTree.getSymbol(symbolName);
                     if (existing) {
@@ -539,7 +547,7 @@ export class CrossScopeValidator {
             });
 
             const { missingSymbols, duplicatesMap } = this.getIssuesForScope(scope);
-            if (addDuplicateSymbolDiagnostics) {
+            if (addDuplicateSymbolDiagnostics && duplicatesMap) {
                 for (const [_flag, dupeSet] of duplicatesMap.entries()) {
                     if (dupeSet.size > 1) {
 
@@ -631,6 +639,12 @@ export class CrossScopeValidator {
         // If symbols are missing in SOME scopes, add diagnostic
         for (const [symbol, scopeList] of missingSymbolInScope.entries()) {
             const typeChainResult = util.processTypeChain(symbol.typeChain);
+
+            //roku built-in type names (rosgnode*, etc.) aren't tracked in any symbol table;
+            //skip cannot-find-name when the symbol's name is one of those built-ins.
+            if (typeChainResult.itemName && util.isBuiltInType(typeChainResult.itemName)) {
+                continue;
+            }
 
             for (const scope of scopeList) {
                 this.program.diagnostics.register({

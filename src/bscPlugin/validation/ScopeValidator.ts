@@ -1,3 +1,4 @@
+import * as path from 'path';
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
 import { isAliasStatement, isArrayType, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallFuncableTypeLike, isCallableType, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isIterableType, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypeStatementType, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
@@ -5,7 +6,7 @@ import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BsDiagnostic, CallableContainer, ExtraSymbolData, FileReference, GetTypeOptions, ValidateScopeEvent, TypeChainEntry, TypeChainProcessResult, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
-import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, DottedSetStatement, ForEachStatement, ForStatement, IncrementStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
+import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConstStatement, DottedSetStatement, ForEachStatement, ForStatement, IncrementStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
 import { util } from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
@@ -13,7 +14,7 @@ import type { Token } from '../../lexer/Token';
 import { AstNodeKind } from '../../parser/AstNode';
 import type { AstNode } from '../../parser/AstNode';
 import type { Expression } from '../../parser/AstNode';
-import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallfuncExpression } from '../../parser/Expression';
+import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallfuncExpression, AAIndexedMemberExpression } from '../../parser/Expression';
 import { CallExpression } from '../../parser/Expression';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BscType } from '../../types/BscType';
@@ -27,6 +28,7 @@ import type { XmlScope } from '../../XmlScope';
 import type { XmlFile } from '../../files/XmlFile';
 import { SGFieldTypes } from '../../parser/SGTypes';
 import { DynamicType } from '../../types/DynamicType';
+import { getAllTypesFromCompoundType } from '../../types/helpers';
 import { BscTypeKind } from '../../types/BscTypeKind';
 import type { BrsDocWithType } from '../../parser/BrightScriptDocParser';
 import brsDocParser from '../../parser/BrightScriptDocParser';
@@ -37,6 +39,7 @@ import { LogLevel } from '../../Logger';
 import { Stopwatch } from '../../Stopwatch';
 import chalk from 'chalk';
 import { IntegerType } from '../../types/IntegerType';
+import type { Scope } from '../../Scope';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -83,7 +86,8 @@ export class ScopeValidator {
             flagDuplicateFunctionTime: '',
             classValidationTime: '',
             scriptImportValidationTime: '',
-            xmlValidationTime: ''
+            xmlValidationTime: '',
+            circularConstTime: ''
         };
         this.segmentsMetrics.clear();
         this.validationKindsMetrics.clear();
@@ -110,6 +114,9 @@ export class ScopeValidator {
                     //validate component interface
                     this.validateXmlInterface(this.event.scope);
                 }
+            }).durationText;
+            metrics.circularConstTime = validationStopwatch.getDurationTextFor(() => {
+                this.detectCircularConstReferences();
             }).durationText;
         });
         logger.debug(this.event.scope.name, 'segment metrics:');
@@ -147,7 +154,7 @@ export class ScopeValidator {
 
         //do many per-file checks for every file in this (and parent) scopes
         this.event.scope.enumerateBrsFiles((file) => {
-            if (!isBrsFile(file)) {
+            if (!isBrsFile(file) || file.isTypedef) {
                 return;
             }
 
@@ -162,7 +169,12 @@ export class ScopeValidator {
         this.event.scope.enumerateOwnFiles((file) => {
             if (isBrsFile(file)) {
 
-                if (this.event.program.diagnostics.shouldFilterFile(file)) {
+                //typedef files (.d.bs) are ambient declarations only - never validated for diagnostics
+                if (file.isTypedef) {
+                    return;
+                }
+
+                if (this.event.program.diagnostics.canSkipScopeValidationForFile(file)) {
                     return;
                 }
 
@@ -270,9 +282,6 @@ export class ScopeValidator {
                         });
                     },
                     FunctionExpression: (func) => {
-                        if (file.isTypedef) {
-                            return;
-                        }
                         this.addValidationKindMetric('FunctionExpression', () => {
                             this.validateFunctionExpressionForReturn(func);
                         });
@@ -280,6 +289,11 @@ export class ScopeValidator {
                     ForStatement: (forStmt) => {
                         this.addValidationKindMetric('ForStatement', () => {
                             this.validateForStatement(file, forStmt);
+                        });
+                    },
+                    AAIndexedMemberExpression: (member) => {
+                        this.addValidationKindMetric('AAIndexedMemberExpression', () => {
+                            this.validateAAIndexedMemberExpression(file, member);
                         });
                     },
                     AstNode: (node) => {
@@ -341,6 +355,91 @@ export class ScopeValidator {
         this.validationKindsMetrics.set(name, { timeMs: timeData.timeMs + validationKindStopWatch.totalMilliseconds, count: timeData.count + 1 });
     }
 
+
+    private validateAAIndexedMemberExpression(file: BrsFile, member: AAIndexedMemberExpression) {
+        const scope = this.event.scope;
+        // Direct string literal (e.g. ["my-key"]) is valid
+        if (isLiteralExpression(member.key)) {
+            if (member.key.tokens.value.kind !== TokenKind.StringLiteral) {
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.computedAAKeyMustBeStringExpression(),
+                    location: member.key.location
+                });
+            }
+            return;
+        }
+        const parts = util.getAllDottedGetParts(member.key);
+        //getAllDottedGetParts returns undefined for keys that aren't dotted-get / variable
+        //chains (e.g. arithmetic expressions like `[1 + 2]: "value"`). Those are not
+        //compile-time constants, so the diagnostic still applies.
+        if (!parts || parts.length === 0) {
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.computedPropertyKeyMustBeConstantExpression(),
+                location: member.key.location
+            });
+            return;
+        }
+        const enclosingNamespace = member.key.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase();
+        const entityName = parts.map(p => p.text.toLowerCase()).join('.');
+        // Check enum member
+        const memberLink = scope.getEnumMemberFileLink(entityName, enclosingNamespace);
+        if (memberLink) {
+            const value = memberLink.item.getValue();
+            if (!value?.startsWith('"')) {
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.computedAAKeyMustBeStringExpression(),
+                    location: member.key.location
+                });
+            }
+            return;
+        }
+        // Check const — follow the chain to find the root literal type
+        const constLink = scope.getConstFileLink(entityName, enclosingNamespace);
+        if (constLink) {
+            if (!this.constResolvesToString(constLink.item.value, enclosingNamespace, scope)) {
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.computedAAKeyMustBeStringExpression(),
+                    location: member.key.location
+                });
+            }
+            return;
+        }
+        this.addMultiScopeDiagnostic({
+            ...DiagnosticMessages.computedPropertyKeyMustBeConstantExpression(),
+            location: member.key.location
+        });
+    }
+
+
+    /**
+     * Recursively resolve a const/enum reference to determine if its ultimate value is a string.
+     * Returns true only if the value is confirmed to be a string.
+     */
+    private constResolvesToString(value: Expression, enclosingNamespace: string, scope: Scope, visited = new Set<string>()): boolean {
+        if (isLiteralExpression(value)) {
+            return value.tokens.value.kind === TokenKind.StringLiteral;
+        }
+        const parts = util.getAllDottedGetParts(value);
+        if (parts.length === 0) {
+            return false;
+        }
+        const entityName = parts.map(p => p.text.toLowerCase()).join('.');
+        if (visited.has(entityName)) {
+            return false; // circular reference — cannot confirm string
+        }
+        visited.add(entityName);
+        const constLink = scope.getConstFileLink(entityName, enclosingNamespace);
+        if (constLink) {
+            return this.constResolvesToString(constLink.item.value, enclosingNamespace, scope, visited);
+        }
+        const memberLink = scope.getEnumMemberFileLink(entityName, enclosingNamespace);
+        if (memberLink) {
+            return this.constResolvesToString(memberLink.item.value, enclosingNamespace, scope, visited);
+        }
+        return false;
+    }
+
+
     private doesFileProvideChangedSymbol(file: BrsFile, changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
         if (!changedSymbols) {
             return true;
@@ -401,6 +500,84 @@ export class ScopeValidator {
     }
 
     /**
+     * Flag circular references between consts (e.g. const A = B; const B = A, or
+     * aggregate cycles like const A = { x: B }; const B = { y: A }). Without this
+     * check, the transpile pass silently emits unresolved refs at the cycle break
+     * point, producing code that fails at runtime.
+     *
+     * Mirrors the existing class-hierarchy circular-reference detection: each const
+     * starts its own walk, and an N-cycle produces N diagnostics (one rooted at
+     * each member of the cycle).
+     */
+    private detectCircularConstReferences() {
+        const scope = this.event.scope;
+
+        const followConstRef = (
+            expression: Expression,
+            namespace: string | undefined,
+            chain: ConstStatement[]
+        ) => {
+            const parts = util.splitExpression(expression);
+            const processedNames: string[] = [];
+            for (const part of parts) {
+                if (!isVariableExpression(part) && !isDottedGetExpression(part)) {
+                    return;
+                }
+                processedNames.push(part.tokens.name?.text?.toLowerCase());
+                const link = scope.getConstFileLink(processedNames.join('.'), namespace);
+                if (link) {
+                    walkConst(link.item, link.file, chain);
+                    return;
+                }
+            }
+        };
+
+        const walkConst = (
+            constStatement: ConstStatement,
+            file: BrsFile,
+            chain: ConstStatement[]
+        ) => {
+            const cycleStart = chain.indexOf(constStatement);
+            if (cycleStart >= 0) {
+                const items = chain.slice(cycleStart).map(c => c.fullName).concat(constStatement.fullName);
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.circularReferenceDetected(items),
+                    location: constStatement.tokens.name.location
+                });
+                return;
+            }
+            chain.push(constStatement);
+            const innerNamespace = constStatement.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+            const value = constStatement.value;
+            if (value) {
+                if (isVariableExpression(value) || isDottedGetExpression(value)) {
+                    followConstRef(value, innerNamespace, chain);
+                } else {
+                    value.walk(createVisitor({
+                        VariableExpression: (varExpr) => {
+                            if (isDottedGetExpression(varExpr.parent)) {
+                                return;
+                            }
+                            followConstRef(varExpr, innerNamespace, chain);
+                        },
+                        DottedGetExpression: (dottedExpr) => {
+                            if (isDottedGetExpression(dottedExpr.parent)) {
+                                return;
+                            }
+                            followConstRef(dottedExpr, innerNamespace, chain);
+                        }
+                    }), { walkMode: WalkMode.visitExpressionsRecursive });
+                }
+            }
+            chain.pop();
+        };
+
+        for (const [, link] of scope.getConstMap()) {
+            walkConst(link.item, link.file, []);
+        }
+    }
+
+    /**
      * Validate every function call to `CreateObject`.
      * Ideally we would create better type checking/handling for this, but in the mean time, we know exactly
      * what these calls are supposed to look like, and this is a very common thing for brs devs to do, so just
@@ -409,7 +586,10 @@ export class ScopeValidator {
     protected validateCreateObjectCall(file: BrsFile, call: CallExpression) {
 
         //skip non CreateObject function calls
-        const callName = util.getAllDottedGetPartsAsString(call.callee)?.toLowerCase();
+        if (!isVariableExpression(call.callee)) {
+            return;
+        }
+        const callName = call.callee.tokens.name?.text?.toLowerCase();
         if (callName !== 'createobject' || !isLiteralExpression(call?.args[0])) {
             return;
         }
@@ -501,7 +681,7 @@ export class ScopeValidator {
         const firstArgToken = call?.args[0]?.tokens.value;
         if (callName === 'createchild') {
             this.checkComponentName(firstArgToken);
-        } else if (callName === 'callfunc' && !util.isGenericNodeType(callerType)) {
+        } else if (callName === 'callfunc' && (!util.isGenericNodeType(callerType, true) || this.event.program.options.strictCallFunc)) {
             const funcType = util.getCallFuncType(call, firstArgToken, { flags: SymbolTypeFlag.runtime, ignoreCall: true });
             if (!funcType?.isResolvable()) {
                 const functionName = firstArgToken.text.replace(/"/g, '');
@@ -536,9 +716,12 @@ export class ScopeValidator {
         }
         const methodToken = expression.tokens.methodName;
         const methodName = methodToken?.text ?? '';
+        if (!methodName) {
+            return;
+        }
         const functionFullname = `${callerType.toString()}@.${methodName}`;
         const callErrorLocation = expression.location;
-        if (util.isGenericNodeType(callerType) || isObjectType(callerType) || isDynamicType(callerType)) {
+        if ((util.isGenericNodeType(callerType, true) && !this.event.program.options.strictCallFunc) || isObjectType(callerType) || isDynamicType(callerType)) {
             // ignore "general" node
             return;
         }
@@ -561,13 +744,21 @@ export class ScopeValidator {
         while (isTypeStatementType(funcType)) {
             funcType = funcType.wrappedType;
         }
+        let _funcName: string;
+        // Only get the function name if we need it for a diagnostic, since it can be expensive to calculate for complex expressions
+        function getFuncName() {
+            if (_funcName) {
+                return _funcName;
+            }
+            _funcName = util.getAllDottedGetPartsAsString(callee, ParseMode.BrighterScript, isCallfuncExpression(callee) ? '@.' : '.');
+            return _funcName;
+        }
         if (!funcType?.isResolvable() || !isCallableType(funcType) || isCompoundType(funcType)) {
-            const funcName = util.getAllDottedGetPartsAsString(callee, ParseMode.BrighterScript, isCallfuncExpression(callee) ? '@.' : '.');
             if (isUnionType(funcType)) {
                 if (!util.isUnionOfFunctions(funcType) && !isCallfuncExpression(callee)) {
                     // union of func and non func. not callable
                     this.addMultiScopeDiagnostic({
-                        ...DiagnosticMessages.notCallable(funcName),
+                        ...DiagnosticMessages.notCallable(getFuncName()),
                         location: callErrorLocation
                     });
                     return;
@@ -587,7 +778,7 @@ export class ScopeValidator {
                             // param differences!
                             this.addMultiScopeDiagnostic({
                                 ...DiagnosticMessages.incompatibleSymbolDefinition(
-                                    funcName,
+                                    getFuncName(),
                                     { isUnion: true, data: compatibilityData }),
                                 location: callErrorLocation
                             });
@@ -600,17 +791,16 @@ export class ScopeValidator {
 
             }
             if (funcType && !isCallableType(funcType) && !isReferenceType(funcType)) {
-                const globalFuncWithVarName = globalCallableMap.get(funcName.toLowerCase());
+                const globalFuncWithVarName = globalCallableMap.get(getFuncName().toLowerCase());
                 if (globalFuncWithVarName) {
                     funcType = globalFuncWithVarName.type;
                 } else {
                     this.addMultiScopeDiagnostic({
-                        ...DiagnosticMessages.notCallable(funcName),
+                        ...DiagnosticMessages.notCallable(getFuncName()),
                         location: callErrorLocation
                     });
                     return;
                 }
-
             }
         }
 
@@ -646,15 +836,13 @@ export class ScopeValidator {
         }
         let paramIndex = 0;
         for (let arg of argsForCall) {
-            const data = {} as ExtraSymbolData;
-            let argType = this.getNodeTypeWrapper(file, arg, { flags: SymbolTypeFlag.runtime, data: data });
-
             const paramType = funcType.params[paramIndex]?.type;
             if (!paramType) {
                 // unable to find a paramType -- maybe there are more args than params
                 break;
             }
-
+            const data = {} as ExtraSymbolData;
+            let argType = this.getNodeTypeWrapper(file, arg, { flags: SymbolTypeFlag.runtime, data: data });
             if (isCallableType(paramType) && isClassType(argType) && isClassStatement(data.definingNode)) {
                 argType = data.definingNode.getConstructorType();
             }
@@ -720,7 +908,6 @@ export class ScopeValidator {
         const expectedLHSType = this.getNodeTypeWrapper(file, dottedSetStmt, { ...getTypeOpts, data: {}, typeChain: typeChainExpectedLHS });
         const actualRHSType = this.getNodeTypeWrapper(file, dottedSetStmt?.value, getTypeOpts);
         const compatibilityData: TypeCompatibilityData = {};
-        const typeChainScan = util.processTypeChain(typeChainExpectedLHS);
         // check if anything in typeChain is an AA - if so, just allow it
         if (typeChainExpectedLHS.find(typeChainItem => isAssociativeArrayType(typeChainItem.type))) {
             // something in the chain is an AA
@@ -728,6 +915,7 @@ export class ScopeValidator {
             return;
         }
         if (!expectedLHSType || !expectedLHSType?.isResolvable()) {
+            const typeChainScan = util.processTypeChain(typeChainExpectedLHS);
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
                 location: typeChainScan?.location
@@ -810,9 +998,23 @@ export class ScopeValidator {
             rightTypeToTest = rightType.underlyingType;
         }
 
-        if (isUnionType(leftType) || isUnionType(rightType)) {
-            // TODO: it is possible to validate based on innerTypes, but more complicated
-            // Because you need to verify each combination of types
+        if (isUnionType(leftTypeToTest) || isUnionType(rightTypeToTest)) {
+            // validate every combination of the union's inner types - if any combination is invalid,
+            // then it's possible for this operation to fail at runtime, so flag it
+            const leftTypesToTest = isUnionType(leftTypeToTest) ? getAllTypesFromCompoundType(leftTypeToTest) : [leftTypeToTest];
+            const rightTypesToTest = isUnionType(rightTypeToTest) ? getAllTypesFromCompoundType(rightTypeToTest) : [rightTypeToTest];
+
+            for (const leftInnerType of leftTypesToTest) {
+                for (const rightInnerType of rightTypesToTest) {
+                    if (!util.binaryOperatorResultType(leftInnerType, binaryExpr.tokens.operator, rightInnerType)) {
+                        this.addMultiScopeDiagnostic({
+                            ...DiagnosticMessages.operatorTypeMismatch(binaryExpr.tokens.operator.text, leftType.toString(), rightType.toString()),
+                            location: binaryExpr.location
+                        });
+                        return;
+                    }
+                }
+            }
             return;
         }
         const opResult = util.binaryOperatorResultType(leftTypeToTest, binaryExpr.tokens.operator, rightTypeToTest);
@@ -915,6 +1117,12 @@ export class ScopeValidator {
             // This is used in a TypeExpression - only look up types from SymbolTable
             symbolType = SymbolTypeFlag.typetime;
             oppositeSymbolType = SymbolTypeFlag.runtime;
+
+            //roku built-in type names (rosgnode*, ifArray, etc.) aren't tracked in any
+            //symbol table; skip cannot-find-name validation when used as a type.
+            if (isVariableExpression(expression) && util.isBuiltInType(expression.tokens.name.text)) {
+                return;
+            }
         }
 
         // Do a complete type check on all DottedGet and Variable expressions
@@ -1037,9 +1245,9 @@ export class ScopeValidator {
             }
         } else if (isDynamicType(exprType) && isEnumType(parentTypeInfo?.type) && isDottedGetExpression(expression)) {
             const enumFileLink = this.event.scope.getEnumFileLink(util.getAllDottedGetPartsAsString(expression.obj));
-            const typeChainScanForItem = util.processTypeChain(typeChain);
-            const typeChainScanForParent = util.processTypeChain(typeChain.slice(0, -1));
             if (enumFileLink) {
+                const typeChainScanForItem = util.processTypeChain(typeChain);
+                const typeChainScanForParent = util.processTypeChain(typeChain.slice(0, -1));
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.cannotFindName(lastTypeInfo?.name, typeChainScanForItem.fullChainName, typeChainScanForParent.fullNameOfItem, 'enum'),
                     location: lastTypeInfo?.location,
@@ -1284,8 +1492,16 @@ export class ScopeValidator {
                 }, ScopeValidatorDiagnosticTag.Imports);
                 //if the character casing of the script import path does not match that of the actual path
             } else if (scriptImport.destPath !== referencedFile.destPath) {
+                //preserve the original import shape (pkg:/... vs relative) when reporting the
+                //correct path so the quick-fix replacement matches what the user authored.
+                const correctUri = scriptImport.text.startsWith('pkg:/')
+                    ? util.sanitizePkgPath(referencedFile.destPath)
+                    : path.posix.relative(
+                        path.dirname(scriptImport.sourceFile.destPath).replace(/\\/g, '/'),
+                        referencedFile.destPath.replace(/\\/g, '/')
+                    );
                 this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.scriptImportCaseMismatch(referencedFile.destPath),
+                    ...DiagnosticMessages.scriptImportCaseMismatch(referencedFile.destPath, correctUri),
                     location: util.createLocationFromFileRange(scriptImport.sourceFile, scriptImport.filePathRange)
                 }, ScopeValidatorDiagnosticTag.Imports);
             }
@@ -1584,7 +1800,9 @@ export class ScopeValidator {
      * @returns the processed result type
      */
     private getNodeTypeWrapper(file: BrsFile, node: AstNode, getTypeOpts: GetTypeOptions) {
-        const type = node?.getType(getTypeOpts);
+        const isBrightScriptMode = file.parseMode === ParseMode.BrightScript;
+
+        const type = node?.getType({ ...getTypeOpts, changeUnknownNodeMemberToDynamic: isBrightScriptMode || !this.event.program.options.strictNodeMembers });
 
         if (file.parseMode === ParseMode.BrightScript) {
             // this is a brightscript file
@@ -1601,11 +1819,6 @@ export class ScopeValidator {
             if (isUnionType(type)) {
                 //this is a union
                 return DynamicType.instance;
-            }
-
-            if (isComponentType(type)) {
-                // modify type to allow any member access for Node types
-                type.changeUnknownMemberToDynamic = true;
             }
         }
 

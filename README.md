@@ -3,9 +3,10 @@
 A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 
 [![build status](https://img.shields.io/github/actions/workflow/status/rokucommunity/brighterscript/build.yml?branch=master&logo=github)](https://github.com/rokucommunity/brighterscript/actions?query=branch%3Amaster+workflow%3Abuild)
+[![security](https://img.shields.io/github/actions/workflow/status/rokucommunity/brighterscript/security-audit.yml?branch=master&label=security&logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiI+PHJlY3QgeD0iMyIgeT0iOCIgd2lkdGg9IjEwIiBoZWlnaHQ9IjciIHJ4PSIxIiBmaWxsPSJ3aGl0ZSIvPjxwYXRoIGQ9Ik01IDhWNWEzIDMgMCAwIDEgNiAwdjMiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMiIvPjwvc3ZnPg==)](https://github.com/rokucommunity/brighterscript/actions/workflows/security-audit.yml)
 [![coverage status](https://img.shields.io/coveralls/github/rokucommunity/brighterscript?logo=coveralls)](https://coveralls.io/github/rokucommunity/brighterscript?branch=master)
-[![monthly downloads](https://img.shields.io/npm/dm/brighterscript.svg?sanitize=true&logo=npm&logoColor=)](https://npmcharts.com/compare/brighterscript?minimal=true)
-[![npm version](https://img.shields.io/npm/v/brighterscript.svg?logo=npm)](https://www.npmjs.com/package/brighterscript)
+[![monthly downloads](https://img.shields.io/npm/dm/brighterscript.svg?sanitize=true&logo=npm&logoColor=&label=npm)](https://npmcharts.com/compare/brighterscript?minimal=true)
+[![npm version](https://img.shields.io/npm/v/brighterscript.svg?logo=npm&label=npm)](https://www.npmjs.com/package/brighterscript)
 [![license](https://img.shields.io/npm/l/brighterscript.svg)](LICENSE)
 [![Slack](https://img.shields.io/badge/Slack-RokuCommunity-4A154B?logo=slack)](https://join.slack.com/t/rokudevelopers/shared_invite/zt-4vw7rg6v-NH46oY7hTktpRIBM_zGvwA)
 
@@ -103,6 +104,9 @@ BrighterScript adds several new features to the BrightScript language such as na
     <a href="https://www.haystack.tv/">
       <img height="38" src="https://user-images.githubusercontent.com/2544493/192610056-d1b5a382-edf4-47b9-a6a5-d2d3ee9094cb.png">
     </a>&nbsp;&nbsp;&nbsp;
+    <a href="https://www.tksssoftware.com/">
+      <img height="38" alt="TKSS Software Inc" src="https://github.com/user-attachments/assets/332d692f-7386-495d-b29d-c2ed7d3d2e2f" />
+    </a>&nbsp;&nbsp;&nbsp;
 </p>
 <br/>
 
@@ -182,9 +186,11 @@ The presence of a `bsconfig.json` file in a directory indicates that the directo
         "**/*"
     ],
     "outDir": "out",
-    //this flag tells BrighterScript that for every xml file, try to import a .bs file with the same name and location
-    "autoImportComponentScript": true,
-    "sourceMap": true
+    "compilerOptions": {
+        //this flag tells BrighterScript that for every xml file, try to import a .bs file with the same name and location
+        "autoImportComponentScript": true,
+        "sourceMap": true
+    }
 }
 ```
 
@@ -218,6 +224,10 @@ ropm install @rokucommunity/bslib
 ## Language Server Protocol
 
 This project also contributes a class that aligns with Microsoft's [Language Server Protocol](https://microsoft.github.io/language-server-protocol/), which makes it easy to integrate `BrightScript` and `BrighterScript` with any IDE that supports the protocol. We won't go into more detail here, but you can use the `LanguageServer` class from this project to integrate into your IDE. The [vscode-BrightScript-language](https://github.com/rokucommunity/vscode-BrightScript-language) extension uses this LanguageServer class to bring `BrightScript` and `BrighterScript` language support to Visual Studio Code.
+
+## Accepted security advisories
+
+Dependencies flagged by `npm audit` that we have reviewed and chosen not to upgrade are tracked in [audit-ci.jsonc](https://github.com/RokuCommunity/brighterscript/blob/master/audit-ci.jsonc). Each entry includes the advisory ID, the date it was added, and the reason it does not apply to this project.
 
 ## Changelog
 [Click here](CHANGELOG.md) to view the changelog.

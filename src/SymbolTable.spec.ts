@@ -85,6 +85,43 @@ describe('SymbolTable', () => {
             otherTable.addSymbol('foo', null, new IntegerType(), SymbolTypeFlag.runtime);
             st.mergeSymbolTable(otherTable);
         });
+
+        it('shares symbol object references with the source rather than cloning', () => {
+            const source = new SymbolTable('Source');
+            source.addSymbol('foo', null as any, new StringType(), SymbolTypeFlag.runtime);
+            const destination = new SymbolTable('Destination');
+            destination.mergeSymbolTable(source);
+
+            expect(destination.getSymbol('foo', SymbolTypeFlag.runtime)![0]).to.equal(source.getSymbol('foo', SymbolTypeFlag.runtime)![0]);
+        });
+
+        it('keeps destination isolated from later mutations to source', () => {
+            const source = new SymbolTable('Source');
+            source.addSymbol('foo', null as any, new StringType(), SymbolTypeFlag.runtime);
+            const destination = new SymbolTable('Destination');
+            destination.mergeSymbolTable(source);
+
+            //adding to source after the merge must not leak into destination
+            source.addSymbol('foo', null as any, new IntegerType(), SymbolTypeFlag.runtime);
+
+            expect(destination.getSymbol('foo', SymbolTypeFlag.runtime)!.length).to.eq(1);
+            expect(destination.getSymbol('foo', SymbolTypeFlag.runtime)![0].type.toString()).to.eq('string');
+        });
+
+        it('accumulates symbols when merging multiple sources sharing a key', () => {
+            const sourceA = new SymbolTable('SourceA');
+            sourceA.addSymbol('foo', null as any, new StringType(), SymbolTypeFlag.runtime);
+            const sourceB = new SymbolTable('SourceB');
+            sourceB.addSymbol('foo', null as any, new IntegerType(), SymbolTypeFlag.runtime);
+
+            const destination = new SymbolTable('Destination');
+            destination.mergeSymbolTable(sourceA);
+            destination.mergeSymbolTable(sourceB);
+
+            expect(
+                destination.getSymbol('foo', SymbolTypeFlag.runtime)!.map(symbol => symbol.type.toString())
+            ).to.eql(['string', 'integer']);
+        });
     });
 
     it('searches siblings before parents', () => {

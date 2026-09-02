@@ -159,6 +159,82 @@ describe('DiagnosticFilterer', () => {
                 ).to.eql([5]);
             });
         });
+
+        describe('slash handling and roku-deploy-style patterns', () => {
+            //the matcher must behave identically regardless of slash style, because file srcPaths are
+            //backslashes on Windows but globs are conventionally written with forward slashes. It must
+            //also support the full roku-deploy glob syntax (braces, ?, character classes).
+
+            it('matches backslash-style src paths against forward-slash globs', () => {
+                expect(
+                    filterer.filter(options, [
+                        //explicitly backslash paths (the Windows-normalized form)
+                        getDiagnostic(11, `${rootDir}\\lib\\a.brs`), //remove (matches lib/**/*.brs)
+                        getDiagnostic(12, `${rootDir}\\lib\\a\\b\\b.brs`), //remove
+                        getDiagnostic(10, `${rootDir}\\source\\common.brs`) //keep
+                    ]).map(x => x.code)
+                ).to.eql([10]);
+            });
+
+            it('matches forward-slash src paths against forward-slash globs', () => {
+                expect(
+                    filterer.filter(options, [
+                        getDiagnostic(11, `${rootDir}/lib/a.brs`), //remove
+                        getDiagnostic(10, `${rootDir}/source/common.brs`) //keep
+                    ]).map(x => x.code)
+                ).to.eql([10]);
+            });
+
+            it('matches mixed forward/backslash src paths', () => {
+                expect(
+                    filterer.filter(options, [
+                        getDiagnostic(11, `${rootDir}/lib\\a/b\\c.brs`), //remove (matches lib/**/*.brs)
+                        getDiagnostic(10, `${rootDir}\\source/common.brs`) //keep
+                    ]).map(x => x.code)
+                ).to.eql([10]);
+            });
+
+            it('supports brace-expansion patterns', () => {
+                let braceOptions = {
+                    rootDir: rootDir,
+                    diagnosticFilters: [{ files: 'lib/**/*.{brs,bs}' }]
+                };
+                expect(
+                    filterer.filter(braceOptions, [
+                        getDiagnostic(11, `${rootDir}/lib/a.brs`), //remove
+                        getDiagnostic(12, `${rootDir}/lib/a.bs`), //remove
+                        getDiagnostic(10, `${rootDir}/lib/a.xml`) //keep
+                    ]).map(x => x.code)
+                ).to.eql([10]);
+            });
+
+            it('supports single-char (?) patterns', () => {
+                let questionOptions = {
+                    rootDir: rootDir,
+                    diagnosticFilters: [{ files: 'lib/?.brs' }]
+                };
+                expect(
+                    filterer.filter(questionOptions, [
+                        getDiagnostic(11, `${rootDir}/lib/a.brs`), //remove (single char)
+                        getDiagnostic(10, `${rootDir}/lib/ab.brs`) //keep (two chars)
+                    ]).map(x => x.code)
+                ).to.eql([10]);
+            });
+
+            it('supports character-class patterns', () => {
+                let classOptions = {
+                    rootDir: rootDir,
+                    diagnosticFilters: [{ files: 'lib/[ab].brs' }]
+                };
+                expect(
+                    filterer.filter(classOptions, [
+                        getDiagnostic(11, `${rootDir}/lib/a.brs`), //remove
+                        getDiagnostic(12, `${rootDir}/lib/b.brs`), //remove
+                        getDiagnostic(10, `${rootDir}/lib/c.brs`) //keep
+                    ]).map(x => x.code)
+                ).to.eql([10]);
+            });
+        });
     });
     describe('standardizeDiagnosticFilters', () => {
         it('handles null and falsey diagnostic filters', () => {
@@ -326,11 +402,11 @@ describe('DiagnosticFilterer', () => {
         ]);
     });
 
-    describe('isFileFiltered', () => {
+    describe('isFileCompletelyFiltered', () => {
         it('should find files that are completely filtered by src', () => {
             filterer.options = options;
-            expect(filterer.isFileFiltered({ srcPath: `${rootDir}/lib/some/file.brs`, destPath: `source/some/file.brs` })).true;
-            expect(filterer.isFileFiltered({ srcPath: `${rootDir}/notlib/other/file.brs`, destPath: `source/other/file.brs` })).false;
+            expect(filterer.isFileCompletelyFiltered({ srcPath: `${rootDir}/lib/some/file.brs`, destPath: `source/some/file.brs` })).true;
+            expect(filterer.isFileCompletelyFiltered({ srcPath: `${rootDir}/notlib/other/file.brs`, destPath: `source/other/file.brs` })).false;
         });
 
         it('should find files that are completely filtered by dest', () => {
@@ -340,8 +416,8 @@ describe('DiagnosticFilterer', () => {
                     { files: [{ dest: 'source/remove/**/*.*' }] }
                 ]
             };
-            expect(filterer.isFileFiltered({ srcPath: `${rootDir}/source/some/file.brs`, destPath: `source/remove/some/file.brs` })).true;
-            expect(filterer.isFileFiltered({ srcPath: `${rootDir}/source/other/file.brs`, destPath: `source/keep/other/file.brs` })).false;
+            expect(filterer.isFileCompletelyFiltered({ srcPath: `${rootDir}/source/some/file.brs`, destPath: `source/remove/some/file.brs` })).true;
+            expect(filterer.isFileCompletelyFiltered({ srcPath: `${rootDir}/source/other/file.brs`, destPath: `source/keep/other/file.brs` })).false;
         });
 
         it('should find files that are completely filtered by src, with negative filtering', () => {
@@ -354,8 +430,8 @@ describe('DiagnosticFilterer', () => {
                     { files: '!lib/special/**/*.brs' }
                 ]
             };
-            expect(filterer.isFileFiltered({ srcPath: `${rootDir}/lib/some/file.brs`, destPath: `source/some/file.brs` })).true;
-            expect(filterer.isFileFiltered({ srcPath: `${rootDir}/lib/special/file.brs`, destPath: `source/special/file.brs` })).false;
+            expect(filterer.isFileCompletelyFiltered({ srcPath: `${rootDir}/lib/some/file.brs`, destPath: `source/some/file.brs` })).true;
+            expect(filterer.isFileCompletelyFiltered({ srcPath: `${rootDir}/lib/special/file.brs`, destPath: `source/special/file.brs` })).false;
         });
     });
 
@@ -630,6 +706,75 @@ describe('DiagnosticFilterer', () => {
                 util.pathToUri(s`${rootDir.toLowerCase()}/source/common1.brs`).toLowerCase(),
                 util.pathToUri(s`${rootDir.toLowerCase()}/source/common2.brs`).toLowerCase()
             ]);
+        });
+    });
+
+    describe('getPathLikeDiagnosticFilterCodes', () => {
+        it('flags entries with `./`', () => {
+            expect(filterer.getPathLikeDiagnosticFilterCodes({
+                diagnosticFilters: ['./source/main.brs']
+            })).to.eql(['./source/main.brs']);
+        });
+
+        it('flags entries with `../`', () => {
+            expect(filterer.getPathLikeDiagnosticFilterCodes({
+                diagnosticFilters: ['../vendor/lib.bs']
+            })).to.eql(['../vendor/lib.bs']);
+        });
+
+        it('flags entries with a globstar', () => {
+            expect(filterer.getPathLikeDiagnosticFilterCodes({
+                diagnosticFilters: ['source/vendor/**/*']
+            })).to.eql(['source/vendor/**/*']);
+        });
+
+        it('flags entries ending in .bs, .brs, or .xml', () => {
+            expect(filterer.getPathLikeDiagnosticFilterCodes({
+                diagnosticFilters: ['source/main.brs', 'source/lib.bs', 'components/Widget.xml']
+            })).to.eql(['source/main.brs', 'source/lib.bs', 'components/Widget.xml']);
+        });
+
+        it('flags path-like codes nested in a `codes` array', () => {
+            expect(filterer.getPathLikeDiagnosticFilterCodes({
+                diagnosticFilters: [{ codes: [1, 'lint-1000', 'source/vendor/**/*'] }]
+            })).to.eql(['source/vendor/**/*']);
+        });
+
+        it('does not flag actual diagnostic codes', () => {
+            expect(filterer.getPathLikeDiagnosticFilterCodes({
+                diagnosticFilters: [1000, 'lint-1000', { codes: [1, 'lint-1000'] }, { files: 'source/vendor/**/*' }]
+            })).to.eql([]);
+        });
+
+        it('does not flag anything when diagnosticFiltersV0Compatibility is true', () => {
+            expect(filterer.getPathLikeDiagnosticFilterCodes({
+                diagnosticFiltersV0Compatibility: true,
+                diagnosticFilters: ['source/vendor/**/*']
+            } as any)).to.eql([]);
+        });
+
+        it('does not duplicate repeated offenders', () => {
+            expect(filterer.getPathLikeDiagnosticFilterCodes({
+                diagnosticFilters: ['source/vendor/**/*', 'source/vendor/**/*']
+            })).to.eql(['source/vendor/**/*']);
+        });
+
+        it('flags entries with windows-style `.\\`', () => {
+            expect(filterer.getPathLikeDiagnosticFilterCodes({
+                diagnosticFilters: ['.\\source\\main.brs', '..\\vendor\\lib.bs']
+            })).to.eql(['.\\source\\main.brs', '..\\vendor\\lib.bs']);
+        });
+
+        it('flags entries that exactly match a known project file destPath', () => {
+            expect(filterer.getPathLikeDiagnosticFilterCodes({
+                diagnosticFilters: ['source/main.json']
+            }, new Set(['source/main.json']))).to.eql(['source/main.json']);
+        });
+
+        it('does not flag entries that only partially match a known project file destPath', () => {
+            expect(filterer.getPathLikeDiagnosticFilterCodes({
+                diagnosticFilters: ['lint-1000']
+            }, new Set(['source/main.json']))).to.eql([]);
         });
     });
 

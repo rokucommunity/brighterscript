@@ -16,6 +16,7 @@ export function referenceTypeFactory(memberKey: string, fullName, flags: SymbolT
 
 export class ReferenceType extends BscType {
 
+
     /**
      * ReferenceTypes are used when the actual type may be resolved later from a Symbol table
      * @param memberKey which key do we use to look up this type in the given table?
@@ -266,7 +267,7 @@ export class ReferenceType extends BscType {
                 this.referenceChain.add(resolvedType);
                 resolvedType = (resolvedType as any)?.getTarget?.();
             }
-            this.tableProvider().setCachedType(this.memberKey, { type: resolvedType }, { flags: this.flags });
+            symbolTable.setCachedType(this.memberKey, { type: resolvedType }, { flags: this.flags });
         }
 
         if (resolvedType && !isAnyReferenceType(resolvedType)) {
@@ -627,6 +628,12 @@ export class ParamTypeFromValueReferenceType extends BscType {
                         }
                     } else {
                         resultType = util.getDefaultTypeFromValueType(this.objType);
+                        //if the default-type lookup just hands back another wrapper of the same
+                        //objType (e.g. an unresolvable IntersectionType keeps re-wrapping), the
+                        //proxy chain would loop forever via Reflect.get. Bail to DynamicType.
+                        if (isParamTypeFromValueReferenceType(resultType) && (resultType as ParamTypeFromValueReferenceType).objType === this.objType) {
+                            resultType = DynamicType.instance;
+                        }
                         this.cachedType = resultType;
                     }
 

@@ -13,6 +13,8 @@ import type { Logger } from './logging';
 import { LogLevel, createLogger } from './logging';
 import type { Program } from './Program';
 import type { BrsFile } from './files/BrsFile';
+import { DiagnosticCodeMap, DiagnosticMessages } from './DiagnosticMessages';
+import * as path from 'path';
 
 interface DiagnosticWithContexts {
     diagnostic: BsDiagnosticWithKey;
@@ -207,18 +209,37 @@ export class DiagnosticManager {
         const diagnosticLegacyCode = typeof diagnostic.legacyCode === 'string' ? diagnostic.legacyCode.toLowerCase() : diagnostic.legacyCode;
         const file = this.program?.getFile(diagnostic.location?.uri);
 
+        if (diagnosticCode === DiagnosticCodeMap.unknownDiagnosticCode) {
+            return false;
+        }
+
         for (let flag of file?.commentFlags ?? []) {
-            //this diagnostic is affected by this flag
-            if (diagnostic.location.range && util.rangeContains(flag.affectedRange, diagnostic.location.range.start)) {
-                //if the flag acts upon this diagnostic's code
-                const diagCodeSuppressed = (diagnosticCode !== undefined && flag.codes?.includes(diagnosticCode)) ||
-                    (diagnosticLegacyCode !== undefined && flag.codes?.includes(diagnosticLegacyCode));
-                if (flag.codes === null || diagCodeSuppressed) {
-                    return true;
-                }
+
+            if (!diagnostic.location?.range || !util.rangeContains(flag.affectedRange, diagnostic.location.range.start)) {
+                continue;
+            }
+            //if this flag explicitly re-enables the code, it's not suppressed here, keep looking
+            const isEnabled = flag.enableCodes === null || this.doesCodeListIncludeCode(flag.enableCodes, diagnosticCode, diagnosticLegacyCode);
+            if (isEnabled) {
+                continue;
+            }
+
+            //if this flag disables the code, it's suppressed
+            const isDisabled = flag.codes === null || this.doesCodeListIncludeCode(flag.codes, diagnosticCode, diagnosticLegacyCode);
+            if (isDisabled) {
+                return true;
             }
         }
         return false;
+    }
+
+    private doesCodeListIncludeCode(codes: (string | number)[] | null, code: string | number | undefined, legacyCode: string | number | undefined) {
+        const codeLower = typeof code === 'string' ? code.toLowerCase() : code.toString();
+        const legacyCodeLower = typeof legacyCode === 'string' ? legacyCode.toLowerCase() : legacyCode?.toString();
+        return codes?.some((c) => {
+            const cLower = typeof c === 'string' ? c.toLowerCase() : c.toString();
+            return cLower === codeLower || cLower === legacyCodeLower;
+        });
     }
 
     private filterDiagnostics(diagnostics: BsDiagnostic[]) {
@@ -458,14 +479,39 @@ export class DiagnosticManager {
         }
     }
 
-    public shouldFilterFile(file: BrsFile): boolean {
+    /**
+     * Are the diagnostics for this file completely filtered?
+     * If so, we can skip any Scope-based validation on this file at all, which can save a lot of time for large files
+     * with many diagnostics that are being ignored
+     */
+    public canSkipScopeValidationForFile(file: BrsFile): boolean {
         if (this.diagnosticFilterer.options !== this.options) {
             this.diagnosticFilterer.options = this.options;
         }
-        this.diagnosticFilterer.isFileFiltered(file);
-        return false;
+        return this.diagnosticFilterer.isFileCompletelyFiltered(file);
     }
 
+    /**
+     * Flag `diagnosticFilters` entries that look like file paths/globs rather than diagnostic codes.
+     * This is a common mistake when migrating a bsconfig.json from the v0-style filters (which were file globs)
+     */
+    public detectPathLikeDiagnosticFilterCodes(config: FinalizedBsConfig, context?: DiagnosticContext) {
+        const knownDestPaths = this.program ? new Set(
+            Object.values(this.program.files).map(file => file.destPath.toLowerCase().replace(/\\/g, '/'))
+        ) : undefined;
+        const pathLikeCodes = this.diagnosticFilterer.getPathLikeDiagnosticFilterCodes(config, knownDestPaths);
+        if (pathLikeCodes.length === 0) {
+            return;
+        }
+        const location = util.createLocationFromRange(
+            util.pathToUri(config.project ?? path.join(config.cwd, 'bsconfig.json')),
+            util.createRange(0, 0, 0, 0)
+        );
+        this.register(pathLikeCodes.map(code => ({
+            ...DiagnosticMessages.diagnosticFilterLooksLikeFilePath(code.toString()),
+            location: location
+        })), context);
+    }
 }
 
 interface DiagnosticContextFilter {

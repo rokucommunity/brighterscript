@@ -397,6 +397,19 @@ export default class SGParser {
     }
 }
 
+//make range not including quotes
+export function rangeFromTokenValue(token: IToken) {
+    if (!token) {
+        return undefined;
+    }
+    return util.createRange(
+        token.startLine - 1,
+        token.startColumn,
+        token.endLine - 1,
+        token.endColumn - 1
+    );
+}
+
 //not exposed by @xml-tools/parser
 interface IToken {
     image: string;

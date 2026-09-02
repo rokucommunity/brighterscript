@@ -206,7 +206,13 @@ export class SymbolTable implements SymbolTypeGetter {
         const key = name?.toLowerCase();
         let result: BscSymbol[];
         let memberOfAncestor = false;
-        const addAncestorInfo = (symbol: BscSymbol) => ({ ...symbol, data: { ...symbol.data, memberOfAncestor: memberOfAncestor } });
+        //only clone the symbol when we actually need to attach the `memberOfAncestor` flag
+        //(i.e., we walked up to a parent table). Returning the original reference for own-table
+        //hits keeps identity stable, which downstream consumers (and one symbol-table spec)
+        //rely on.
+        const addAncestorInfo = (symbol: BscSymbol) => (memberOfAncestor
+            ? { ...symbol, data: { ...symbol.data, memberOfAncestor: true } }
+            : symbol);
         let maxStatementIndex = Number.isInteger(additionalOptions?.maxStatementIndex) ? additionalOptions.maxStatementIndex : Number.MAX_SAFE_INTEGER;
         do {
 
@@ -217,9 +223,9 @@ export class SymbolTable implements SymbolTypeGetter {
             // look in our map first
             let currentResults = currentTable.symbolMap.get(key);
             if (currentResults) {
+                const lookupFilter = this.getSymbolLookupFilter(currentTable, maxStatementIndex, memberOfAncestor);
                 // eslint-disable-next-line no-bitwise
-                currentResults = currentResults.filter(symbol => symbol.flags & bitFlags)
-                    .filter(this.getSymbolLookupFilter(currentTable, maxStatementIndex, memberOfAncestor));
+                currentResults = currentResults.filter(symbol => (symbol.flags & bitFlags) && lookupFilter(symbol));
             }
 
             let precedingAssignmentIndex = -1;
@@ -456,29 +462,30 @@ export class SymbolTable implements SymbolTypeGetter {
     }
 
     /**
-     * Adds all the symbols from another table to this one
-     * It will overwrite any existing symbols in this table
+     * Adds all the symbols from another table to this one.
+     * Source symbols are shared by reference (not cloned) since BscSymbol is treated as immutable.
+     * The destination still owns its own array per key, so subsequent addSymbol calls on either
+     * table do not leak across.
      */
     mergeSymbolTable(symbolTable: SymbolTable) {
-        function mergeTables(intoTable: SymbolTable, fromTable: SymbolTable) {
-            for (let [, value] of fromTable.symbolMap) {
-                for (const symbol of value) {
-                    if (symbol.data?.doNotMerge) {
-                        continue;
-                    }
-                    intoTable.addSymbol(
-                        symbol.name,
-                        symbol.data,
-                        symbol.type,
-                        symbol.flags
-                    );
-                }
+        for (const [key, sourceSymbols] of symbolTable.symbolMap) {
+            //skip symbols flagged `doNotMerge` (e.g. typecast/alias bindings) so they stay
+            //local to their declaring block instead of bleeding into sibling tables that
+            //share the same merge target (e.g. the per-namespace aggregate symbol table).
+            const symbolsToMerge = sourceSymbols.filter(symbol => !symbol.data?.doNotMerge);
+            if (symbolsToMerge.length === 0) {
+                continue;
             }
+            let destSymbols = this.symbolMap.get(key);
+            if (!destSymbols) {
+                destSymbols = [];
+                this.symbolMap.set(key, destSymbols);
+            }
+            destSymbols.push(...symbolsToMerge);
         }
 
-        mergeTables(this, symbolTable);
         for (let pocketTable of symbolTable.pocketTables) {
-            mergeTables(this, pocketTable.table);
+            this.mergeSymbolTable(pocketTable.table);
         }
     }
 
@@ -543,27 +550,36 @@ export class SymbolTable implements SymbolTypeGetter {
      * Get list of all symbols declared in this SymbolTable (includes parent SymbolTable).
      */
     public getAllSymbols(bitFlags: SymbolTypeFlag): BscSymbol[] {
-        let symbols: BscSymbol[] = [].concat(...this.symbolMap.values());
-        //look through any sibling maps next
-        for (let sibling of this.siblings) {
-            symbols = symbols.concat(sibling.getAllSymbols(bitFlags));
-        }
-
-        if (this.parent && !this.hasCircularReferenceWithAncestor()) {
-            symbols = symbols.concat(this.parent.getAllSymbols(bitFlags));
-        }
+        //gather every symbol from this table, its siblings, and its ancestors first, unfiltered.
+        //Filtering (and deduping) is deferred to a single pass at the end - since filter/dedup both
+        //distribute over concatenation, doing it once here produces the same result as doing it at
+        //every level of the recursion, without the redundant repeated passes over the same symbols
+        const symbols = this.collectAllSymbolsUnfiltered();
         // eslint-disable-next-line no-bitwise
-        symbols = symbols.filter(symbol => symbol.flags & bitFlags);
+        const filteredSymbols = symbols.filter(symbol => symbol.flags & bitFlags);
 
         //remove duplicate symbols
         const symbolsMap = new Map<string, BscSymbol>();
-        for (const symbol of symbols) {
+        for (const symbol of filteredSymbols) {
             const lowerSymbolName = symbol.name.toLowerCase();
             if (!symbolsMap.has(lowerSymbolName)) {
                 symbolsMap.set(lowerSymbolName, symbol);
             }
         }
         return [...symbolsMap.values()];
+    }
+
+    private collectAllSymbolsUnfiltered(): BscSymbol[] {
+        let symbols: BscSymbol[] = [].concat(...this.symbolMap.values());
+        //look through any sibling maps next
+        for (let sibling of this.siblings) {
+            symbols = symbols.concat(sibling.collectAllSymbolsUnfiltered());
+        }
+
+        if (this.parent && !this.hasCircularReferenceWithAncestor()) {
+            symbols = symbols.concat(this.parent.collectAllSymbolsUnfiltered());
+        }
+        return symbols;
     }
 
     private resetTypeCache() {
@@ -695,6 +711,11 @@ export class SymbolTable implements SymbolTypeGetter {
     }
 }
 
+/**
+ * A symbol entry stored in a SymbolTable.
+ * Treated as immutable once added: range and type must not be reassigned, and the object
+ * may be shared by reference across multiple symbol tables (e.g. via mergeSymbolTable).
+ */
 export interface BscSymbol {
     name: string;
     data: ExtraSymbolData;

@@ -7,7 +7,8 @@ import { rokuDeploy, DefaultFiles } from 'roku-deploy';
 import type { Diagnostic, Position, DiagnosticRelatedInformation } from 'vscode-languageserver';
 import { Range, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
-import type { BsConfig, FinalizedBsConfig } from './BsConfig';
+import type { BsConfig, BsConfigCompilerOptions, FinalizedBsConfig } from './BsConfig';
+import { deprecatedCompilerOptionKeys } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, Plugin, ExpressionInfo, TranspileResult, MaybePromise, DisposableLike, ExtraSymbolData, GetTypeOptions, TypeChainProcessResult, PluginFactory, TypeCircularReferenceInfo } from './interfaces';
 import { TypeChainEntry } from './interfaces';
@@ -25,9 +26,10 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
-import { SourceNode } from 'source-map';
+import { SourceNode, SourceMapConsumer } from 'source-map';
+import type { RawSourceMap, SourceMapGenerator } from 'source-map';
 import * as requireRelative from 'require-relative';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -46,7 +48,6 @@ import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
 import { FunctionType } from './types/FunctionType';
 import type { AssignmentStatement, NamespaceStatement } from './parser/Statement';
-import type { BscFile } from './files/BscFile';
 import type { NamespaceType } from './types/NamespaceType';
 import { getUniqueType } from './types/helpers';
 import { InvalidType } from './types/InvalidType';
@@ -228,11 +229,21 @@ export class Util {
             util.resolvePathsRelativeTo(projectConfig, 'require', projectFileCwd);
 
             let result: BsConfig;
+            let baseProjectConfigDeprecationDiagnostics: BsDiagnostic[] | undefined;
             //if the project has a base file, load it
             if (projectConfig && typeof projectConfig.extends === 'string') {
                 let baseProjectConfig = this.loadConfigFile(projectConfig.extends, [...parentProjectPaths, configFilePath], projectFileCwd);
                 //extend the base config with the current project settings
                 result = { ...baseProjectConfig, ...projectConfig };
+                //`compilerOptions` is deep-merged (like TypeScript does), so a child config only
+                //overriding one option doesn't wipe out the rest of the options set by its parent(s)
+                if (baseProjectConfig?.compilerOptions || projectConfig.compilerOptions) {
+                    result.compilerOptions = {
+                        ...baseProjectConfig?.compilerOptions,
+                        ...projectConfig.compilerOptions
+                    };
+                }
+                baseProjectConfigDeprecationDiagnostics = (baseProjectConfig as any)?._deprecationDiagnostics;
             } else {
                 result = projectConfig;
                 let ancestors = parentProjectPaths ? parentProjectPaths : [];
@@ -247,11 +258,47 @@ export class Util {
             if (result.outDir) {
                 result.outDir = path.resolve(projectFileCwd, result.outDir);
             }
+            //map the deprecated staging options to `outDir` (relative to THIS config file).
+            //the deprecated options themselves are left as-is so consumers that still read them keep working
+            if (!('outDir' in projectConfig)) {
+                if (projectConfig.stagingFolderPath) {
+                    result.outDir = path.resolve(projectFileCwd, projectConfig.stagingFolderPath);
+                } else if (projectConfig.stagingDir) {
+                    result.outDir = path.resolve(projectFileCwd, projectConfig.stagingDir);
+                }
+            }
             if (result.cwd) {
                 result.cwd = path.resolve(projectFileCwd, result.cwd);
             }
-            if (result.sourceRoot && result.resolveSourceRoot) {
-                result.sourceRoot = path.resolve(projectFileCwd, result.sourceRoot);
+
+            //flag any deprecated top-level `compilerOptions` options used directly in THIS config file
+            //(this is deliberately scoped to options loaded from an actual bsconfig.json file; options
+            //passed programmatically to `Program`/`ProgramBuilder` are not flagged)
+            const deprecationDiagnostics: BsDiagnostic[] = [...((baseProjectConfigDeprecationDiagnostics) ?? [])];
+            for (const key of deprecatedCompilerOptionKeys) {
+                if (key in projectConfig) {
+                    deprecationDiagnostics.push({
+                        ...DiagnosticMessages.deprecatedBsConfigOption(key),
+                        location: {
+                            uri: this.pathToUri(configFilePath),
+                            range: this.createRange(0, 0, 0, 0)
+                        }
+                    });
+                }
+            }
+            (result as any)._deprecationDiagnostics = deprecationDiagnostics;
+
+            //`sourceRoot`/`resolveSourceRoot` may live at the top level (deprecated) or in `compilerOptions`.
+            //resolve whichever location actually holds the value, relative to THIS config file
+            const sourceRootValue = result.compilerOptions?.sourceRoot ?? result.sourceRoot;
+            const resolveSourceRootValue = result.compilerOptions?.resolveSourceRoot ?? result.resolveSourceRoot;
+            if (sourceRootValue && resolveSourceRootValue) {
+                const resolvedSourceRoot = path.resolve(projectFileCwd, sourceRootValue);
+                if (result.compilerOptions?.sourceRoot !== undefined) {
+                    result.compilerOptions.sourceRoot = resolvedSourceRoot;
+                } else {
+                    result.sourceRoot = resolvedSourceRoot;
+                }
             }
             return result;
         }
@@ -284,27 +331,32 @@ export class Util {
      * @param config a bsconfig object to use as the baseline for the resulting config
      */
     public normalizeAndResolveConfig(config: BsConfig | undefined): FinalizedBsConfig {
-        let result = this.normalizeConfig({
-            ...config
-        });
-
         if (config?.noProject) {
-            return result;
+            return this.normalizeConfig({
+                ...config
+            });
         }
 
+        let project: string | undefined;
         //if no options were provided, try to find a bsconfig.json file
         if (!config || !config.project) {
-            result.project = this.getConfigFilePath(config?.cwd);
+            project = this.getConfigFilePath(config?.cwd);
         } else {
             //use the config's project link
-            result.project = config.project;
+            project = config.project;
         }
-        if (result.project) {
-            let configFile = this.loadConfigFile(result.project, undefined, config?.cwd);
-            result = Object.assign(result, configFile);
+
+        let mergedConfig = { ...config };
+        if (project) {
+            let configFile = this.loadConfigFile(project, undefined, config?.cwd);
+            //the project file values are the defaults; the provided options override them
+            mergedConfig = { ...configFile, ...config };
         }
-        //override the defaults with the specified options
-        result = Object.assign(result, config);
+
+        //set defaults and map deprecated options AFTER merging the project file, so that
+        //deprecated options (i.e. `stagingFolderPath`, `copyToStaging`) from the project file are properly honored
+        let result = this.normalizeConfig(mergedConfig);
+        result.project = project;
         return result;
     }
 
@@ -317,10 +369,27 @@ export class Util {
 
         const cwd = config.cwd ?? process.cwd();
 
+        //Resolve `compilerOptions`: values set there win over their deprecated top-level counterparts.
+        //(deprecation diagnostics for options loaded directly from a bsconfig.json file are collected
+        //separately, in `loadConfigFile`, and simply carried through on `config._deprecationDiagnostics`)
+        const compilerOptions: BsConfigCompilerOptions = { ...(config.compilerOptions ?? {}) };
+        for (const key of deprecatedCompilerOptionKeys) {
+            if (!(key in compilerOptions) && key in config) {
+                (compilerOptions as any)[key] = (config as any)[key];
+            }
+            //push the resolved (winning) value back onto the flat config so the rest of this function
+            //(and any code that still reads the deprecated flat option) sees the correct, resolved value
+            if (key in compilerOptions) {
+                (config as any)[key] = compilerOptions[key];
+            }
+        }
+
         let logLevel: LogLevel = LogLevel.log;
 
         if (typeof config.logLevel === 'string') {
             logLevel = LogLevel[(config.logLevel as string).toLowerCase()] ?? LogLevel.log;
+        } else if (typeof config.logLevel === 'number') {
+            logLevel = config.logLevel;
         }
 
         let bslibDestinationDir = config.bslibDestinationDir ?? 'source';
@@ -349,12 +418,15 @@ export class Util {
             outDir = './out'; //default case
         }
 
+        const strictValue = !!config.strict;
+
         const configWithDefaults: Omit<FinalizedBsConfig, 'rootDir'> = {
             cwd: cwd,
             //use default files array from rokuDeploy
             files: config.files ?? [...DefaultFiles],
             outDir: outDir,
             sourceMap: config.sourceMap === true,
+            relativeSourceMaps: config.relativeSourceMaps === true,
             watch: config.watch === true ? true : false,
             emitFullPaths: config.emitFullPaths === true ? true : false,
             noEmit: noEmit,
@@ -373,7 +445,12 @@ export class Util {
             removeParameterTypes: config.removeParameterTypes === true ? true : false,
             logLevel: logLevel,
             bslibDestinationDir: bslibDestinationDir,
-            legacyCallfuncHandling: config.legacyCallfuncHandling === true ? true : false
+            legacyCallfuncHandling: config.legacyCallfuncHandling === true ? true : false,
+            validate: config.validate === false ? false : true,
+            strict: strictValue,
+            strictCallFunc: (typeof config.strictCallFunc === 'boolean' ? config.strictCallFunc : strictValue),
+            strictNodeMembers: (typeof config.strictNodeMembers === 'boolean' ? config.strictNodeMembers : strictValue),
+            compilerOptions: compilerOptions
         };
 
         //mutate `config` in case anyone is holding a reference to the incomplete one
@@ -465,6 +542,29 @@ export class Util {
             }
         }
         return result.join(path.sep);
+    }
+
+    /**
+     * Compute the replacement text for a file-path string (used in `import` statements and XML `<script uri>` attributes)
+     * when the target file is being renamed. Preserves the original path style: `pkg:/...` stays `pkg:/...`,
+     * relative paths stay relative (recomputed from the containing file's pkg path).
+     *
+     * @param originalText the path string as it appears in source (no surrounding quotes)
+     * @param containingFilePkgPath pkg path of the file containing the reference
+     * @param newTargetPkgPath pkg path of the renamed file (path-separator agnostic)
+     * @returns the new path string, or `null` if the original style is unsupported
+     */
+    public computeRenamedReferencePath(originalText: string, containingFilePkgPath: string, newTargetPkgPath: string): string | null {
+        if (!originalText) {
+            return null;
+        }
+        const newPkgPathForwardSlash = path.normalize(newTargetPkgPath).split(path.sep).join('/');
+        const schemeMatch = /^(pkg|libpkg):\//i.exec(originalText);
+        if (schemeMatch) {
+            return `${schemeMatch[1]}:/${newPkgPathForwardSlash}`;
+        }
+        const relative = this.getRelativePath(containingFilePkgPath, newTargetPkgPath);
+        return relative.split(path.sep).join('/');
     }
 
     /**
@@ -628,6 +728,107 @@ export class Util {
     }
 
     /**
+     * Convert a file path into a `file://` URL string (e.g. `file:///C:/projects/file.brs`).
+     * Mirrors the `file-url` package: resolves the path, normalizes slashes, prefixes a leading slash
+     * (required for Windows drive letters), and escapes per RFC 3986.
+     */
+    public fileUrl(filePath: string) {
+        let pathName = path.resolve(filePath).replace(/\\/g, '/');
+        //Windows drive letter must be prefixed with a slash
+        if (!pathName.startsWith('/')) {
+            pathName = `/${pathName}`;
+        }
+        //escape required characters for path components
+        return encodeURI(`file://${pathName}`).replace(/[?#]/g, encodeURIComponent);
+    }
+
+    /**
+     * `JSON.stringify` that is safe against circular references and throwing getters. Replaces the
+     * `safe-json-stringify` package.
+     */
+    public safeJsonStringify(data: any, replacer?: (key: string, value: any) => any, space?: string | number) {
+        const seen: any[] = [];
+        const throwsMessage = (err: any) => '[Throws: ' + (err ? err.message : '?') + ']';
+        const safeGetValue = (obj: any, property: string) => {
+            try {
+                return obj[property];
+            } catch (err) {
+                return throwsMessage(err);
+            }
+        };
+        const visit = (obj: any) => {
+            if (obj === null || typeof obj !== 'object') {
+                return obj;
+            }
+            if (seen.includes(obj)) {
+                return '[Circular]';
+            }
+            seen.push(obj);
+            try {
+                if (typeof obj.toJSON === 'function') {
+                    try {
+                        return visit(obj.toJSON());
+                    } catch (err) {
+                        return throwsMessage(err);
+                    }
+                }
+                if (Array.isArray(obj)) {
+                    return obj.map(visit);
+                }
+                return Object.keys(obj).reduce((result, prop) => {
+                    result[prop] = visit(safeGetValue(obj, prop));
+                    return result;
+                }, {});
+            } finally {
+                seen.pop();
+            }
+        };
+        return JSON.stringify(visit(data), replacer, space);
+    }
+
+    /**
+     * Serialize an error (or any thrown value) into a plain object suitable for `JSON.stringify`,
+     * handling circular references. Replaces the `serialize-error` package.
+     */
+    public serializeError(value: any) {
+        const commonProperties = ['name', 'message', 'stack', 'code'];
+        const destroyCircular = (from: any, seen: any[]) => {
+            const to: any = Array.isArray(from) ? [] : {};
+            seen.push(from);
+            for (const [key, val] of Object.entries(from)) {
+                if (typeof val === 'function') {
+                    continue;
+                }
+                if (!val || typeof val !== 'object') {
+                    to[key] = val;
+                    continue;
+                }
+                if (!seen.includes(from[key])) {
+                    to[key] = destroyCircular(from[key], seen.slice());
+                    continue;
+                }
+                to[key] = '[Circular]';
+            }
+            for (const property of commonProperties) {
+                if (typeof from[property] === 'string') {
+                    to[property] = from[property];
+                }
+            }
+            return to;
+        };
+
+        if (typeof value === 'object' && value !== null) {
+            return destroyCircular(value, []);
+        }
+        //people sometimes throw things besides Error objects…
+        if (typeof value === 'function') {
+            //`JSON.stringify()` discards functions. We do too, unless a function is thrown directly.
+            return `[Function: ${(value.name || 'anonymous')}]`;
+        }
+        return value;
+    }
+
+    /**
      * Is the inner range completely enclosed in the outer range
      */
     public isRangeInRange(inner: Range, outer: Range) {
@@ -766,10 +967,14 @@ export class Util {
     public pathToUri(filePath: string) {
         if (!filePath) {
             return filePath;
+        } else if (this.pathToURICache.has(filePath)) {
+            return this.pathToURICache.get(filePath);
         } else if (this.isUriLike(filePath)) {
             return filePath;
         } else {
-            return URI.file(filePath).toString();
+            const uri = URI.file(filePath).toString();
+            this.pathToURICache.set(filePath, uri);
+            return uri;
         }
     }
 
@@ -966,7 +1171,7 @@ export class Util {
     /**
      * Helper for creating `Location` objects from a file and range
      */
-    public createLocationFromFileRange(file: BscFile, range: Range): Location {
+    public createLocationFromFileRange(file: { srcPath: string }, range: Range): Location {
         return this.createLocationFromRange(this.pathToUri(file?.srcPath), range);
     }
 
@@ -1051,7 +1256,7 @@ export class Util {
                 text: token.text,
                 isReserved: token.isReserved,
                 leadingWhitespace: token.leadingWhitespace,
-                leadingTrivia: token.leadingTrivia.map(x => this.cloneToken(x))
+                leadingTrivia: token.leadingTrivia ? token.leadingTrivia.map(x => this.cloneToken(x)) : undefined
             } as Token;
             //handle those tokens that have charCode
             if ('charCode' in token) {
@@ -1399,7 +1604,15 @@ export class Util {
             rightType = this.getHighestPriorityType(rightType.types);
         }
 
-        if (isVoidType(leftType) || isVoidType(rightType) || isUninitializedType(leftType) || isUninitializedType(rightType)) {
+        if (isUninitializedType(leftType) || isUninitializedType(rightType)) {
+            return undefined;
+        }
+        if (isVoidType(leftType) || isVoidType(rightType)) {
+            // = and <> can still be used to check a possibly-void value against invalid/dynamic
+            if ((operator.kind === TokenKind.Equal || operator.kind === TokenKind.LessGreater) &&
+                (isInvalidTypeLike(leftType) || isInvalidTypeLike(rightType) || isDynamicType(leftType) || isDynamicType(rightType))) {
+                return BooleanType.instance;
+            }
             return undefined;
         }
 
@@ -1811,6 +2024,8 @@ export class Util {
     private isWindows = process.platform === 'win32';
     private standardizePathCache = new Map<string, string>();
 
+    private pathToURICache = new Map<string, string>();
+
     /**
      * Converts a path into a standardized format (drive letter to lower, remove extra slashes, use single slash type, resolve relative parts, etc...)
      */
@@ -2019,7 +2234,12 @@ export class Util {
         const parts = this.getAllDottedGetParts(node) ?? [];
         var result = parts[0]?.text;
         for (var i = 1; i < parts.length; i++) {
-            result += (i === parts.length - 1 && parseMode === ParseMode.BrighterScript ? lastSep : sep) + parts[i].text;
+            //some parts can be undefined (e.g. an unfinished `widget@.` callfunc with no method name)
+            const part = parts[i];
+            if (!part) {
+                continue;
+            }
+            result += (i === parts.length - 1 && parseMode === ParseMode.BrighterScript ? lastSep : sep) + part.text;
         }
         return result;
         /* eslint-enable no-var */
@@ -2297,10 +2517,92 @@ export class Util {
         return false;
     }
 
-    public isGenericNodeType(type: BscType) {
+
+    /**
+     * Parse the `sourceMappingURL` comment from file contents and resolve it to a RawSourceMap.
+     * Handles inline base64 data URIs, absolute paths, relative paths (resolved against srcPath's
+     * directory), and falls back to a co-located `<srcPath>.map` file.
+     * Supports both BrightScript-style comments (`'//# sourceMappingURL=...`) and XML-style
+     * comments (`<!--//# sourceMappingURL=... -->`).
+     * Returns undefined if no map can be found.
+     */
+    public async resolveInputSourceMap(fileContents: string, srcPath: string): Promise<RawSourceMap | undefined> {
+        // Match sourceMappingURL - [^\s]+ stops at whitespace (safe, no backtracking risk).
+        // Strip any trailing XML comment close (either --> or --!>) that may have been captured
+        // when the URL is not followed by a space in an XML comment like <!--//# ...=url-->.
+        const match = /['"]?\/\/# sourceMappingURL=([^\s]+)/m.exec(fileContents);
+        if (match) {
+            const url = match[1].replace(/--!?>$/, '').trim();
+            if (url.startsWith('data:')) {
+                // inline base64: data:application/json;base64,<b64>
+                const b64Match = /base64,([A-Za-z0-9+/=]+)$/.exec(url);
+                if (b64Match) {
+                    return JSON.parse(Buffer.from(b64Match[1], 'base64').toString('utf8')) as RawSourceMap;
+                }
+            } else {
+                const mapPath = path.isAbsolute(url) ? url : path.resolve(path.dirname(srcPath), url);
+                if (await fsExtra.pathExists(mapPath)) {
+                    return JSON.parse(await fsExtra.readFile(mapPath, 'utf8')) as RawSourceMap;
+                }
+            }
+        }
+
+        // no usable sourceMappingURL; try co-located <srcPath>.map
+        const colocated = `${srcPath}.map`;
+        if (await fsExtra.pathExists(colocated)) {
+            return JSON.parse(await fsExtra.readFile(colocated, 'utf8')) as RawSourceMap;
+        }
+        return undefined;
+    }
+
+    /**
+     * Apply an input sourcemap to a generated SourceMapGenerator, chaining mappings so the
+     * output traces back through the input map to the original source.
+     */
+    public async applySourceMap(generator: SourceMapGenerator, inputMap: RawSourceMap, sourceFile: string) {
+        await SourceMapConsumer.with(inputMap, null, (consumer) => {
+            generator.applySourceMap(consumer, sourceFile);
+        });
+    }
+
+    /**
+     * Chain a prebuild input sourcemap (loaded from a co-located `.map` file or a
+     * `sourceMappingURL` comment in the file contents) onto an existing serialized output
+     * sourcemap. Returns the chained sourcemap as a JSON string. If no input map is found,
+     * the original output map JSON is returned unchanged.
+     */
+    public async chainInputSourceMap(outputMapJson: string, file: { fileContents?: string; srcPath: string }): Promise<string> {
+        const inputMap = await this.resolveInputSourceMap(file.fileContents ?? '', file.srcPath);
+        if (!inputMap) {
+            return outputMapJson;
+        }
+        const { SourceMapConsumer: Consumer, SourceMapGenerator: Generator } = await import('source-map');
+        const outputMap = JSON.parse(outputMapJson) as RawSourceMap;
+        return Consumer.with(outputMap, null, async (outputConsumer) => {
+            const generator = Generator.fromSourceMap(outputConsumer);
+            await Consumer.with(inputMap, null, (inputConsumer) => {
+                generator.applySourceMap(inputConsumer, file.srcPath);
+            });
+            return generator.toString();
+        });
+    }
+
+    public isBuiltInType(typeName: string) {
+        const typeNameLower = typeName.toLowerCase();
+        if (typeNameLower.startsWith('rosgnode')) {
+            // NOTE: this is unsafe and only used to avoid validation errors in backported v1 type syntax
+            return true;
+        }
+        return false;
+    }
+
+    public isGenericNodeType(type: BscType, mustBeCallfuncAble: boolean) {
         if (isComponentType(type)) {
             const lowerName = type.toString().toLowerCase();
             if (lowerName === 'rosgnode' || lowerName === 'rosgnodenode') {
+                return true;
+            }
+            if (!mustBeCallfuncAble && (lowerName === 'rosgnodecontentnode')) {
                 return true;
             }
         }
@@ -2417,7 +2719,7 @@ export class Util {
 
     public hasLeadingComments(input: Token | AstNode) {
         const leadingTrivia = isToken(input) ? input?.leadingTrivia : input?.leadingTrivia ?? [];
-        return !!leadingTrivia.find(t => t?.kind === TokenKind.Comment);
+        return !!leadingTrivia?.find(t => t?.kind === TokenKind.Comment);
     }
 
     public getLeadingComments(input: Token | AstNode) {
@@ -2494,6 +2796,13 @@ export class Util {
         let result: BscType;
         let methodName = methodNameToken?.text?.replace(/"/g, ''); // remove quotes if it was the first arg of .callFunc()
 
+        //bail early when there's no method name (e.g. an unfinished `widget@.` callfunc).
+        //downstream getCallFuncType / ReferenceType paths assume a non-empty member name and
+        //will eventually try `name.toLowerCase()` on undefined and crash.
+        if (!methodName) {
+            return undefined;
+        }
+
         // a little hacky here with checking options.ignoreCall because callFuncExpression has the method name
         // It's nicer for CallExpression, because it's a call on any expression.
         let calleeType: BscType;
@@ -2502,7 +2811,7 @@ export class Util {
         } else if (isCallExpression(callExpr) && isDottedGetExpression(callExpr.callee)) {
             calleeType = callExpr.callee.obj.getType({ ...options, flags: SymbolTypeFlag.runtime, ignoreCall: false });
         }
-        const funcType = calleeType.getCallFuncType?.(methodName, options);
+        const funcType = calleeType?.getCallFuncType?.(methodName, options);
         if (funcType) {
             options.typeChain?.push(new TypeChainEntry({
                 name: methodName,
@@ -2727,6 +3036,9 @@ export class Util {
         if (!resultType.isResolvable()) {
             if (isUnionType(resultType)) {
                 resultType = DynamicType.instance;
+            } else if (isParamTypeFromValueReferenceType(resultType)) {
+                //already wrapped — wrapping again would build a recursive proxy chain whose
+                //get handlers loop forever via Reflect.get
             } else {
                 resultType = new ParamTypeFromValueReferenceType(resultType);
             }

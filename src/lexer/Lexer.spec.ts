@@ -1456,7 +1456,7 @@ describe('lexer', () => {
             return tokens
                 //exclude the explicit triva tokens since they'll be included in the leading/trailing arrays
                 .filter(x => !AllowedTriviaTokens.includes(x.kind))
-                .flatMap(x => [...x.leadingTrivia, x])
+                .flatMap(x => [...x.leadingTrivia ?? [], x])
                 .map(x => x.text)
                 .join('');
         }
@@ -1476,13 +1476,37 @@ describe('lexer', () => {
             ).to.eql(input);
         });
 
+        it('tokens only have leadingTrivia array when they have at least one trivia item', () => {
+            const input = `
+                function   test(  )
+                    'comment
+                    print   "alpha"
+                    x = 1 + 2
+                    '  blabla
+                    print x
+                end function`;
+            const tokens = Lexer.scan(input).tokens;
+            let numWithTrivia = 0;
+            for (const token of tokens) {
+                if (token.leadingTrivia) {
+                    expect(token.leadingTrivia.length).to.greaterThan(0);
+                    numWithTrivia++;
+                } else {
+                    expect(token.leadingTrivia).to.be.undefined;
+                }
+
+            }
+            expect(numWithTrivia).to.be.lessThan(tokens.length);
+        });
+
+
         function expectTrivia(text: string, expected: Array<{ text: string; leadingTrivia?: string[]; trailingTrivia?: string[] }>) {
             const tokens = Lexer.scan(text).tokens.filter(x => !AllowedTriviaTokens.includes(x.kind));
             expect(
                 tokens.map(x => {
                     return {
                         text: x.text,
-                        leadingTrivia: x.leadingTrivia.map(x => x.text)
+                        leadingTrivia: x.leadingTrivia?.map(x => x.text) ?? []
                     };
                 })
             ).to.eql(

@@ -1,6 +1,7 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
-import type { Plugin, ValidateFileEvent, ProvideCodeActionsEvent, ProvideHoverEvent, ProvideSemanticTokensEvent, ValidateScopeEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, AfterProvideFileEvent, AfterValidateFileEvent, AfterValidateProgramEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, OnPrepareFileEvent, WriteFileEvent } from '../interfaces';
+import type { Plugin, ValidateFileEvent, ProvideCodeActionsEvent, ProvideHoverEvent, ProvideSemanticTokensEvent, ValidateScopeEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, AfterProvideFileEvent, AfterValidateFileEvent, AfterValidateProgramEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, OnPrepareFileEvent, WriteFileEvent, ProvideSourceFixAllCodeActionsEvent, ProvideSelectionRangesEvent, ProvideInlayHintsEvent } from '../interfaces';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
+import { FixAllCodeActionsProcessor } from './codeActions/FixAllCodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
 import { DefinitionProvider } from './definition/DefinitionProvider';
 import { DocumentSymbolProcessor } from './symbols/DocumentSymbolProcessor';
@@ -21,6 +22,8 @@ import { FileSerializer } from './serialize/FileSerializer';
 import { BrsFilePreTranspileProcessor } from './transpile/BrsFileTranspileProcessor';
 import { XmlFilePreTranspileProcessor } from './transpile/XmlFilePreTranspileProcessor';
 import { BrsFileAfterValidator } from './validation/BrsFileAfterValidator';
+import { SelectionRangesProcessor } from './selectionRanges/SelectionRangesProcessor';
+import { InlayHintProcessor } from './inlayHints/InlayHintProcessor';
 
 export class BscPlugin implements Plugin {
     public name = 'BscPlugin';
@@ -31,6 +34,10 @@ export class BscPlugin implements Plugin {
 
     public provideCodeActions(event: ProvideCodeActionsEvent) {
         new CodeActionsProcessor(event).process();
+    }
+
+    public provideSourceFixAllCodeActions(event: ProvideSourceFixAllCodeActionsEvent) {
+        new FixAllCodeActionsProcessor(event).process();
     }
 
     public provideHover(event: ProvideHoverEvent) {
@@ -55,6 +62,14 @@ export class BscPlugin implements Plugin {
 
     public provideReferences(event: ProvideReferencesEvent) {
         new ReferencesProvider(event).process();
+    }
+
+    public provideSelectionRanges(event: ProvideSelectionRangesEvent) {
+        new SelectionRangesProcessor(event).process();
+    }
+
+    public provideInlayHints(event: ProvideInlayHintsEvent) {
+        new InlayHintProcessor(event).process();
     }
 
     public provideSemanticTokens(event: ProvideSemanticTokensEvent) {
@@ -105,8 +120,8 @@ export class BscPlugin implements Plugin {
         }
     }
 
-    public afterSerializeFile(event: AfterSerializeFileEvent) {
-        new FileSerializer(event).process();
+    public async afterSerializeFile(event: AfterSerializeFileEvent) {
+        await new FileSerializer(event).process();
     }
 
     public async writeFile(event: WriteFileEvent) {

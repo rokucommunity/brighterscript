@@ -11,7 +11,10 @@ export function token(kind: TokenKind, text?: string): Token {
         kind: kind,
         text: text!,
         isReserved: ReservedWords.has((text ?? '').toLowerCase()),
-        location: null,
+        //synthetic test tokens used to default to `null`, but the parser does range arithmetic
+        //on token.location.range for paths like splitting `exitwhile` into two tokens. Give a
+        //zero-width location at (0,0) so those paths work without each test having to spell it out.
+        location: { uri: '', range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } } },
         leadingWhitespace: '',
         leadingTrivia: []
     };

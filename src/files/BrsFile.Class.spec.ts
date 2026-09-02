@@ -586,6 +586,132 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
+        it('does not crash synthesizing an implicit constructor whose inherited param is a class type declared in a different namespace', async () => {
+            await testTranspile(`
+                namespace Foo
+                    class Thing
+                    end class
+
+                    class Base
+                        sub new(t as Thing)
+                            m.thing = t
+                        end sub
+                        thing as Thing
+                    end class
+                end namespace
+
+                namespace Bar
+                    class DerivedImplicitCtor extends Foo.Base
+                        extra as integer = 2
+                    end class
+                end namespace
+            `, `
+                sub __Foo_Thing_method_new()
+                end sub
+                function __Foo_Thing_builder()
+                    instance = {}
+                    instance.new = __Foo_Thing_method_new
+                    return instance
+                end function
+                function Foo_Thing()
+                    instance = __Foo_Thing_builder()
+                    instance.new()
+                    return instance
+                end function
+                sub __Foo_Base_method_new(t as dynamic)
+                    m.thing = invalid
+                    m.thing = t
+                end sub
+                function __Foo_Base_builder()
+                    instance = {}
+                    instance.new = __Foo_Base_method_new
+                    return instance
+                end function
+                function Foo_Base(t as dynamic)
+                    instance = __Foo_Base_builder()
+                    instance.new(t)
+                    return instance
+                end function
+                sub __Bar_DerivedImplicitCtor_method_new(t as dynamic)
+                    m.super0_new(t)
+                    m.extra = 2
+                end sub
+                function __Bar_DerivedImplicitCtor_builder()
+                    instance = __Foo_Base_builder()
+                    instance.super0_new = instance.new
+                    instance.new = __Bar_DerivedImplicitCtor_method_new
+                    return instance
+                end function
+                function Bar_DerivedImplicitCtor(t as dynamic)
+                    instance = __Bar_DerivedImplicitCtor_builder()
+                    instance.new(t)
+                    return instance
+                end function
+            `, undefined, 'source/main.bs');
+        });
+
+        it('does not crash synthesizing an implicit constructor whose inherited param is a class type declared in the same namespace', async () => {
+            await testTranspile(`
+                namespace Foo
+                    class Thing
+                    end class
+
+                    class Base
+                        sub new(t as Thing)
+                            m.thing = t
+                        end sub
+                        thing as Thing
+                    end class
+
+                    class DerivedSameNs extends Base
+                        extra as integer = 2
+                    end class
+                end namespace
+            `, `
+                sub __Foo_Thing_method_new()
+                end sub
+                function __Foo_Thing_builder()
+                    instance = {}
+                    instance.new = __Foo_Thing_method_new
+                    return instance
+                end function
+                function Foo_Thing()
+                    instance = __Foo_Thing_builder()
+                    instance.new()
+                    return instance
+                end function
+                sub __Foo_Base_method_new(t as dynamic)
+                    m.thing = invalid
+                    m.thing = t
+                end sub
+                function __Foo_Base_builder()
+                    instance = {}
+                    instance.new = __Foo_Base_method_new
+                    return instance
+                end function
+                function Foo_Base(t as dynamic)
+                    instance = __Foo_Base_builder()
+                    instance.new(t)
+                    return instance
+                end function
+                sub __Foo_DerivedSameNs_method_new(t as dynamic)
+                    m.super0_new(t)
+                    m.extra = 2
+                end sub
+                function __Foo_DerivedSameNs_builder()
+                    instance = __Foo_Base_builder()
+                    instance.super0_new = instance.new
+                    instance.new = __Foo_DerivedSameNs_method_new
+                    return instance
+                end function
+                function Foo_DerivedSameNs(t as dynamic)
+                    instance = __Foo_DerivedSameNs_builder()
+                    instance.new(t)
+                    return instance
+                end function
+            `, undefined, 'source/main.bs');
+        });
+
         it('properly handles child class constructor override and super calls', async () => {
             await testTranspile(`
                 class Animal

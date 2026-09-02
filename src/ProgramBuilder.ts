@@ -104,6 +104,13 @@ export class ProgramBuilder {
                 this.logger.logLevel = this.options?.logLevel;
             }
 
+            //surface warnings for any deprecated bsconfig options that were used to build `this.options`
+            const deprecationDiagnostics = (this.options as any)._deprecationDiagnostics as BsDiagnostic[];
+            if (deprecationDiagnostics?.length > 0) {
+                this.diagnostics.register(deprecationDiagnostics);
+            }
+            delete (this.options as any)._deprecationDiagnostics;
+
             if (this.options.noProject) {
                 this.logger.log(`'noProject' flag is set so bsconfig.json loading is disabled'`);
             } else if (this.options.project) {
@@ -137,14 +144,7 @@ export class ProgramBuilder {
         await this.loadFiles();
     }
 
-    public async run(options: BsConfig & {
-        /**
-         * Should validation run? Default is `true`. You must set exlicitly to `false` to disable.
-         * @deprecated this is an experimental flag, and its behavior may change in a future release
-         * @default true
-         */
-        validate?: boolean;
-    }) {
+    public async run(options: BsConfig) {
         if (options?.logLevel) {
             this.logger.logLevel = options.logLevel;
         }
@@ -344,6 +344,19 @@ export class ProgramBuilder {
         //get printing options
         const options = diagnosticUtils.getPrintDiagnosticOptions(this.options);
         const { cwd, emitFullPaths } = options;
+        //custom-template reporters are pre-resolved once so we don't recompile them per diagnostic;
+        //the resolved function is stashed on the entry as `run` so we don't have to keep a parallel array.
+        //invalid entries are warned about and skipped (we never want to abort a build over a config typo).
+        const reporters = diagnosticUtils.normalizeDiagnosticReporters(
+            this.options?.diagnosticReporters,
+            this.logger
+        )
+            .map(reporter => (reporter.type === 'custom'
+                ? { ...reporter, run: diagnosticUtils.createCustomDiagnosticReporter(reporter.format) }
+                : reporter));
+        if (reporters.length === 0) {
+            return;
+        }
 
         let fileUris = Object.keys(diagnosticsByFile).sort();
         for (let fileUri of fileUris) {
@@ -379,8 +392,16 @@ export class ProgramBuilder {
                         message: x.message
                     };
                 });
-                //format output
-                diagnosticUtils.printDiagnostic(options, severity, filePath, lines, diagnostic, relatedInformation);
+                //format output once per configured reporter
+                for (const reporter of reporters) {
+                    if (reporter.type === 'github-actions') {
+                        diagnosticUtils.printDiagnosticGithubActions({ options: options, severity: severity, filePath: filePath, diagnostic: diagnostic });
+                    } else if (reporter.type === 'custom') {
+                        reporter.run({ options: options, severity: severity, filePath: filePath, diagnostic: diagnostic });
+                    } else {
+                        diagnosticUtils.printDiagnostic(options, severity, filePath, lines, diagnostic, relatedInformation);
+                    }
+                }
             }
         }
     }
@@ -396,8 +417,9 @@ export class ProgramBuilder {
             if (options?.cancellationToken?.isCanceled === true) {
                 return -1;
             }
-            //validate program. false means no, everything else (including missing) means true
-            if (options?.validate !== false) {
+            //the prop-drilled validate value takes precedence over this.options.validate.
+            //false means no, everything else (including missing) means true
+            if ((options?.validate ?? this.options.validate) !== false) {
                 this.validateProject();
             }
 

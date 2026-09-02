@@ -13,10 +13,11 @@ import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import undent from 'undent';
 import * as fsExtra from 'fs-extra';
 import { tempDir, rootDir } from '../../testHelpers.spec';
-import { isReturnStatement } from '../../astUtils/reflection';
+import { isFunctionStatement, isReturnStatement } from '../../astUtils/reflection';
 import { ScopeValidator } from './ScopeValidator';
-import type { ReturnStatement } from '../../parser/Statement';
+import type { FunctionStatement, ReturnStatement } from '../../parser/Statement';
 import { Logger } from '@rokucommunity/logger';
+import { ParseMode } from '../..';
 
 describe('ScopeValidator', () => {
 
@@ -2973,6 +2974,89 @@ describe('ScopeValidator', () => {
                 ]);
             });
         });
+
+        describe('arbitrary members on roSGNode and roSNodeContentNode', () => {
+            it('allows arbitrary member on node in BrightScript (brs) files', () => {
+                program.setFile('source/util.brs', `
+                    function doStuff()
+                        node = createObject("roSGNode", "Node")
+                        node.someArbitraryMember = "hello"
+                        return node
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows arbitrary member on node in BrightScript (bs) files', () => {
+                program.setFile('components/comp1.xml', `
+                    <component name="Comp1" extends="Group">
+                        <script uri="comp1.bs"/>
+                        <interface>
+                            <field id="myNode" type="node" />
+                        </interface>
+                    </component>
+                `);
+                program.setFile('components/comp1.bs', `
+                  function doStuff()
+                        node = createObject("roSGNode", "Node")
+                        node.someArbitraryMember = "hello"
+                        return node
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows arbitrary member on node as part of component interface', () => {
+                program.setFile('components/comp1.xml', `
+                    <component name="Comp1" extends="Group">
+                        <interface>
+                            <field id="myNode" type="node" />
+                        </interface>
+                    </component>
+                `);
+
+                program.setFile('source/util.bs', `
+                    function getComp1(node as roSGNode) as roSGNodeComp1
+                        comp1 = createObject("roSGNode", "Comp1")
+                        comp1.myNode = node
+                        comp1.myNode.someArbitraryMember = "hello"
+                        return comp1
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows arbitrary member on ContentNode', () => {
+                program.setFile('source/util.bs', `
+                    function buildContentNode(data as roAssociativeArray) as roSGNodeContentNode
+                        content = createObject("roSGNode", "ContentNode")
+                        content.update(data, true)
+                        content.arbitrary = 123
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('disallows arbitrary member on node when strictNodeMembers mode is on', () => {
+                program.options.strictNodeMembers = true;
+                program.setFile('source/util.bs', `
+                    function doStuff()
+                        node = createObject("roSGNode", "Node")
+                        node.someArbitraryMember = "hello"
+                        return node
+                    end function
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindName('someArbitraryMember', 'roSGNodeNode.someArbitraryMember', 'roSGNodeNode')
+                ]);
+            });
+        });
+
     });
 
     describe('itemCannotBeUsedAsVariable', () => {
@@ -3929,6 +4013,19 @@ describe('ScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('does not report cannot-find-name for unresolvable types referenced in .d.bs files', () => {
+            //simulates a .d.bs typedef whose namespace-qualified types don't actually resolve
+            //(e.g. produced by a buggy third-party rewrite tool), which should never produce diagnostics
+            program.setFile('source/util.d.bs', `
+                namespace SomeNamespace
+                    function getSomething(a as SomeNamespace.ifDraw2d) as SomeNamespace.roAssociativeArray
+                    end function
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('assignmentTypeMismatch', () => {
@@ -4816,6 +4913,79 @@ describe('ScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('detects when a union contains an incompatible type', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                function test(x as string or integer)
+                    print x + "world"
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.operatorTypeMismatch('+', 'string or integer', 'string').message
+            ]);
+        });
+
+        it('allows comparing a void value against a dynamic value with =', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub logEvent(name as string)
+                    print name
+                end sub
+
+                sub main(input as dynamic)
+                    result = logEvent("started")
+                    if result = input
+                        print "same"
+                    else
+                        print "different"
+                    end if
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows comparing a void value against invalid with <>', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub getConfig()
+                end sub
+
+                sub main()
+                    config = getConfig()
+                    if config <> invalid
+                        print "config exists"
+                    else
+                        print "no config"
+                    end if
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows comparing a "void or <type>" union against invalid with <>', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub fetchChannelData()
+                end sub
+
+                sub main()
+                    channel = fetchChannelData()
+                    if true
+                        channel = {
+                            title: "Home"
+                        }
+                    end if
+
+                    if channel <> invalid
+                        print channel.title
+                    else
+                        print "no channel"
+                    end if
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('memberAccessibilityMismatch', () => {
@@ -5127,10 +5297,16 @@ describe('ScopeValidator', () => {
                 end sub
             `);
             program.validate();
+            //v1's circular detection reports both the full 3-cycle (A->B->C->A and its
+            //rotations) and the pair-wise B<->C cycle that emerges once each const is
+            //resolved through the next.
             expectDiagnostics(program, [
+                DiagnosticMessages.circularReferenceDetected(['A', 'B', 'C', 'A']).message,
+                DiagnosticMessages.circularReferenceDetected(['B', 'C', 'A', 'B']).message,
                 DiagnosticMessages.circularReferenceDetected(['B', 'C', 'B']).message,
                 DiagnosticMessages.circularReferenceDetected(['B', 'C', 'B']).message,
                 DiagnosticMessages.circularReferenceDetected(['B', 'C', 'B']).message,
+                DiagnosticMessages.circularReferenceDetected(['C', 'A', 'B', 'C']).message,
                 DiagnosticMessages.circularReferenceDetected(['C', 'B', 'C']).message
             ]);
         });
@@ -6895,6 +7071,19 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.notCallable('node@.getName').message
             ]);
         });
+
+        it('disallows callfunc on generic node when strictCallFunc mode is enabled', () => {
+            program.options.strictCallFunc = true;
+            program.setFile('source/test.bs', `
+                sub doCallfunc(node as roSGNode)
+                    node.callfunc("someFunc", 1, 2, 3)
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindCallFuncFunction('someFunc', 'roSGNodeNode@.someFunc', 'roSGNodeNode').message
+            ]);
+        });
     });
 
     describe('notIterable', () => {
@@ -7040,6 +7229,35 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
+        });
+    });
+
+
+    describe('file filter', () => {
+        it('should not walk files if the DiagnosticFilterer says not to', () => {
+            const program = new Program({
+                rootDir: rootDir + '/src',
+                files: [
+                    `/source/**/*.*`,
+                    `/components/**/*.*`
+                ],
+                diagnosticFilters: [
+                    { files: `source/doNotValidate.brs` }
+                ]
+            });
+
+            const fileNotValidated = program.setFile<BrsFile>('source/doNotValidate.brs', `
+                sub doStuff()
+                    a = 1 + "hello" ' obviously wrong, but should not be reported because of the filter
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            const unvalidatedSegments = fileNotValidated.validationSegmenter.getAllUnvalidatedSegments();
+            expect(unvalidatedSegments).to.lengthOf(1);
+            expect(isFunctionStatement(unvalidatedSegments[0])).to.be.true;
+            expect((unvalidatedSegments[0] as FunctionStatement).getName(ParseMode.BrighterScript)).to.equal('doStuff');
         });
     });
 });

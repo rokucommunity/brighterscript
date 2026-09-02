@@ -30,7 +30,7 @@ export interface Token {
     /**
      * Any tokens starting on the next line of the previous token, up to the start of this token
      */
-    leadingTrivia: Token[];
+    leadingTrivia?: Token[];
 }
 
 /**

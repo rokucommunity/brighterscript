@@ -186,6 +186,9 @@ export class CachedLookups {
                 propertyHints[name.toLowerCase()] = name;
             } else {
                 for (const member of item.elements) {
+                    if (!isAAMemberExpression(member)) {
+                        continue;
+                    }
                     const name = member.tokens.key.text;
                     if (!name.startsWith('"')) {
                         propertyHints[name.toLowerCase()] = name;
