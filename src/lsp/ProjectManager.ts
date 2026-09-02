@@ -1131,6 +1131,11 @@ export interface WorkspaceConfig {
          * The maximum number of projects that can be activated concurrently
          */
         projectActivationConcurrencyLimit?: number;
+        /**
+         * The maximum number of worker threads to use for running LSP projects. Once this limit is reached,
+         * additional projects are multiplexed onto existing worker threads rather than spawning new ones.
+         */
+        maxWorkerThreads?: number;
     };
 }
 

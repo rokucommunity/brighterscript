@@ -36,6 +36,18 @@ describe('XmlFile', () => {
     });
 
     describe('parse', () => {
+        it('does not crash on malformed child elements (e.g. a lone `<` while typing)', () => {
+            //this used to throw in SGParser.mapNode because the element had no tag name
+            file = program.setFile('components/malformed.xml', trim`
+                <component name="Main" extends="Group">
+                    <children>
+                        <
+                    </children>
+                </component>
+            `);
+            expect(isXmlFile(file)).to.be.true;
+        });
+
         it('allows modifying the parsed XML model', () => {
             const expected = 'OtherName';
             program.plugins.add({
@@ -384,7 +396,7 @@ describe('XmlFile', () => {
         });
 
         //TODO - refine this test once cdata scripts are supported
-        it('prevents scope completions entirely', () => {
+        it('does not provide node completions outside of <children>', () => {
             program.setFile('components/component1.brs', ``);
 
             let xmlFile = program.setFile('components/component1.xml', trim`
@@ -394,7 +406,112 @@ describe('XmlFile', () => {
                 </component>
             `);
 
+            //at the component root (not inside <children>) we should not spew node/scope completions
             expect(program.getCompletions(xmlFile.srcPath, Position.create(1, 1))).to.be.empty;
+        });
+
+        /**
+         * Find the (line, character) position immediately after the first occurrence of `marker` in the file
+         */
+        function positionAfter(fileContents: string, marker: string): Position {
+            const index = fileContents.indexOf(marker);
+            const before = fileContents.substring(0, index + marker.length);
+            const lines = before.split('\n');
+            return Position.create(lines.length - 1, lines[lines.length - 1].length);
+        }
+
+        it('provides element completions for scenegraph nodes and project components after `<`', () => {
+            program.setFile('components/widget.xml', trim`
+                <component name="Widget" extends="Group">
+                </component>
+            `);
+            const xmlFile = program.setFile<XmlFile>('components/main.xml', trim`
+                <component name="Main" extends="Group">
+                    <children>
+                        <
+                    </children>
+                </component>
+            `);
+            //position the caret right after the lone `<` inside <children>
+            const lines = xmlFile.fileContents.split('\n');
+            const lineIndex = lines.findIndex(line => line.trim() === '<');
+            const completions = xmlFile.getCompletions(Position.create(lineIndex, lines[lineIndex].indexOf('<') + 1));
+            const labels = completions.map(x => x.label);
+            //built-in node
+            expect(labels).to.include('Label');
+            //project component
+            expect(labels).to.include('Widget');
+            //a component can't contain itself
+            expect(labels).not.to.include('Main');
+            expect(completions.every(x => x.kind === CompletionItemKind.Class)).to.be.true;
+        });
+
+        it('provides <field>/<function> completions inside <interface> (not nodes)', () => {
+            const xmlFile = program.setFile<XmlFile>('components/main.xml', trim`
+                <component name="Main" extends="Group">
+                    <interface>
+                        <
+                    </interface>
+                </component>
+            `);
+            const lines = xmlFile.fileContents.split('\n');
+            const lineIndex = lines.findIndex(line => line.trim() === '<');
+            const labels = xmlFile.getCompletions(Position.create(lineIndex, lines[lineIndex].indexOf('<') + 1)).map(x => x.label);
+            expect(labels).to.include.members(['field', 'function']);
+            //nodes/components are only valid inside <children>, not inside <interface>
+            expect(labels).not.to.include('Label');
+        });
+
+        it('provides attribute completions inside a <field> tag', () => {
+            const xmlFile = program.setFile<XmlFile>('components/main.xml', trim`
+                <component name="Main" extends="Group">
+                    <interface>
+                        <field id="thing" >
+                    </interface>
+                </component>
+            `);
+            const labels = xmlFile.getCompletions(positionAfter(xmlFile.fileContents, '<field id="thing" ')).map(x => x.label);
+            expect(labels).to.include.members(['type', 'value', 'onChange', 'alias']);
+            //`id` is already present, so it should not be suggested again
+            expect(labels).not.to.include('id');
+        });
+
+        it('provides attribute completions inside a <function> tag', () => {
+            const xmlFile = program.setFile<XmlFile>('components/main.xml', trim`
+                <component name="Main" extends="Group">
+                    <interface>
+                        <function >
+                    </interface>
+                </component>
+            `);
+            const labels = xmlFile.getCompletions(positionAfter(xmlFile.fileContents, '<function ')).map(x => x.label);
+            expect(labels).to.eql(['name']);
+        });
+
+        it('provides field completions inside an open element tag', () => {
+            const xmlFile = program.setFile<XmlFile>('components/main.xml', trim`
+                <component name="Main" extends="Group">
+                    <children>
+                        <Label text="hi" >
+                    </children>
+                </component>
+            `);
+            const completions = xmlFile.getCompletions(positionAfter(xmlFile.fileContents, '<Label text="hi" '));
+            const labels = completions.map(x => x.label);
+            //Label has a `color` field
+            expect(labels).to.include('color');
+            //`text` is already present on the tag, so it should not be suggested again
+            expect(labels).not.to.include('text');
+            expect(completions.every(x => x.kind === CompletionItemKind.Field)).to.be.true;
+        });
+
+        it('getTokenAt returns the token whose range contains the position', () => {
+            const xmlFile = program.setFile<XmlFile>('components/main.xml', trim`
+                <component name="Main" extends="Group">
+                </component>
+            `);
+            const token = xmlFile.getTokenAt(positionAfter(xmlFile.fileContents, '<compon'));
+            expect(token?.image).to.equal('component');
         });
     });
 
