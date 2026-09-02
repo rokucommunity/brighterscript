@@ -105,8 +105,8 @@ export class Lexer {
 
         this.tokens.push({
             kind: TokenKind.Eof,
-            isReserved: false,
             text: '',
+            isReserved: false,
             range: this.options.trackLocations
                 ? util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1)
                 : undefined,
@@ -1056,6 +1056,9 @@ export class Lexer {
      */
     private addToken(kind: TokenKind) {
         let text = this.source.slice(this.start, this.current);
+        //this is the canonical Token field order. Every other place that synthesizes a
+        //Token should use this same order (and set every field) so all tokens share a
+        //single V8 hidden class instead of forcing megamorphic property access downstream
         let token: Token = {
             kind: kind,
             text: text,

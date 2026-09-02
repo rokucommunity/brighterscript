@@ -1198,11 +1198,13 @@ export class Util {
      */
     public cloneToken<T extends Token>(token: T) {
         if (token) {
+            //keep this field order identical to `Lexer.addToken` so cloned tokens
+            //share the same V8 hidden class as lexer-produced tokens
             const result = {
                 kind: token.kind,
-                range: this.cloneRange(token.range),
                 text: token.text,
                 isReserved: token.isReserved,
+                range: this.cloneRange(token.range),
                 leadingWhitespace: token.leadingWhitespace
             } as T;
             //handle those tokens that have charCode
