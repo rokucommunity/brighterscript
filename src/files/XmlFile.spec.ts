@@ -910,6 +910,134 @@ describe('XmlFile', () => {
             ]);
         });
 
+        it('emits a mismatch diagnostic for a mismatched <component> tag', () => {
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                </komponent>
+            `);
+            program.validate();
+            expectDiagnostics(file, [
+                DiagnosticMessages.xmlTagMismatch('component', 'komponent')
+            ]);
+        });
+
+        it('emits a mismatch diagnostic for a mismatched <interface> tag', () => {
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <interface>
+                        <field id="foo" type="string" />
+                    </interfase>
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(file, [
+                DiagnosticMessages.xmlTagMismatch('interface', 'interfase')
+            ]);
+        });
+
+        it('emits a mismatch diagnostic for a mismatched <children> tag', () => {
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup" />
+                    </kids>
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(file, [
+                DiagnosticMessages.xmlTagMismatch('children', 'kids')
+            ]);
+        });
+
+        it('emits a diagnostic for each mismatch when several are nested', () => {
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="outer">
+                            <Rectangle id="inner">
+                                <Label text="hello" />
+                            </Rectangel>
+                        </LayoutGroup>
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(file, [
+                DiagnosticMessages.xmlTagMismatch('Group', 'LayoutGroup'),
+                DiagnosticMessages.xmlTagMismatch('Rectangle', 'Rectangel')
+            ]);
+        });
+
+        it('treats a closing tag differing only by case as a mismatch', () => {
+            //XML is case-sensitive, and the Roku compiler rejects `<Group></group>`
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup">
+                        </group>
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(file, [
+                DiagnosticMessages.xmlTagMismatch('Group', 'group')
+            ]);
+        });
+
+        it('points the diagnostic range at the closing tag', () => {
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup">
+                        </LayoutGroup>
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expect(file.diagnostics).to.have.lengthOf(1);
+            //the squiggle must land on `LayoutGroup` (line 4), not on the opening tag
+            expect(file.diagnostics[0].range).to.eql(
+                Range.create(4, 10, 4, 21)
+            );
+        });
+
+        it('still emits the mismatch diagnostic when the file is not transpiled', () => {
+            //validation must not depend on needsTranspiled being set
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup">
+                        </LayoutGroup>
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(file, [
+                DiagnosticMessages.xmlTagMismatch('Group', 'LayoutGroup')
+            ]);
+        });
+
+        it('does not emit a mismatch diagnostic for a script tag with a cdata body', () => {
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <script type="text/brightscript"><![CDATA[
+                        sub init()
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(file);
+        });
+
         it('does not include additional bslib script if already there ', () => {
             testTranspile(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
