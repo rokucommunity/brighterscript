@@ -324,7 +324,15 @@ export class SGElement {
             chunks.push(
                 state.indentText,
                 state.transpileToken(this.tokens.endTagOpen, '</'),
-                state.transpileToken(this.tokens.endTagName ?? this.tokens.startTagName),
+                //always emit the opening tag's name. A mismatched closing tag (i.e.
+                //`<Group></LayoutGroup>`) is a hard compile error on device, so emit valid
+                //xml rather than faithfully reproducing the broken closing tag. The mismatch
+                //itself is reported by XmlFileValidator.
+                state.transpileToken(
+                    this.tokens.endTagName
+                        ? createSGToken(this.tokens.startTagName.text, this.tokens.endTagName.location)
+                        : this.tokens.startTagName
+                ),
                 state.transpileToken(this.tokens.endTagClose, '>'),
                 state.newline
             );
