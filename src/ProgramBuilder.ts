@@ -1,7 +1,7 @@
 import * as debounce from 'debounce-promise';
 import * as path from 'path';
 import { rokuDeploy } from 'roku-deploy';
-import type { LogLevel as RokuDeployLogLevel } from 'roku-deploy/dist/Logger';
+import type { RokuDeployOptions } from 'roku-deploy';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import type { BscFile, BsDiagnostic, FileObj, FileResolver } from './interfaces';
 import { Program } from './Program';
@@ -452,7 +452,7 @@ export class ProgramBuilder {
                 await this.logger.time(LogLevel.log, [`Creating package at ${this.options.outFile}`], async () => {
                     await rokuDeploy.zipPackage({
                         ...this.options,
-                        logLevel: this.options.logLevel as unknown as RokuDeployLogLevel,
+                        logLevel: this.options.logLevel as unknown as RokuDeployOptions['logLevel'],
                         outDir: util.getOutDir(this.options),
                         outFile: path.basename(this.options.outFile)
                     });
@@ -470,7 +470,7 @@ export class ProgramBuilder {
             let options = util.cwdWork(this.options.cwd, () => {
                 return rokuDeploy.getOptions({
                     ...this.options,
-                    logLevel: this.options.logLevel as unknown as RokuDeployLogLevel,
+                    logLevel: this.options.logLevel as unknown as RokuDeployOptions['logLevel'],
                     outDir: util.getOutDir(this.options),
                     outFile: path.basename(this.options.outFile)
 
@@ -518,7 +518,7 @@ export class ProgramBuilder {
             await this.logger.time(LogLevel.log, ['Deploying package to', this.options.host], async () => {
                 await rokuDeploy.publish({
                     ...this.options,
-                    logLevel: this.options.logLevel as unknown as RokuDeployLogLevel,
+                    logLevel: this.options.logLevel as unknown as RokuDeployOptions['logLevel'],
                     outDir: util.getOutDir(this.options),
                     outFile: path.basename(this.options.outFile)
                 });

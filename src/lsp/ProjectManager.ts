@@ -6,7 +6,7 @@ import type { FileRenameTextEdit, LspDiagnostic, LspProject, ProjectConfig } fro
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
 import { FileChangeType } from 'vscode-languageserver-protocol';
-import type { Hover, Position, Range, Location, SignatureHelp, DocumentSymbol, SymbolInformation, WorkspaceSymbol, CompletionList, CancellationToken, SelectionRange } from 'vscode-languageserver-protocol';
+import type { Hover, Position, Range, Location, SignatureHelp, DocumentSymbol, SymbolInformation, WorkspaceSymbol, CompletionList, CancellationToken, SelectionRange, InlayHint } from 'vscode-languageserver-protocol';
 import { Deferred } from '../deferred';
 import type { DocumentActionWithStatus, FlushEvent } from './DocumentManager';
 import { DocumentManager } from './DocumentManager';
@@ -803,6 +803,20 @@ export class ProjectManager {
         return result ?? [];
     }
 
+    @TrackBusyStatus
+    public async getInlayHints(options: { srcPath: string; range: Range }): Promise<InlayHint[]> {
+        //wait for all pending syncs to finish
+        await this.onIdle();
+
+        //Ask every project for inlay hints, keep whichever one responds first with a non-empty result
+        let result = await util.promiseRaceMatch(
+            this.projects.map(x => x.getInlayHints(options)),
+            //keep the first non-empty result
+            (result) => result?.length > 0
+        );
+        return result ?? [];
+    }
+
     /**
      * Scan a given workspace for all `bsconfig.json` files. If at least one is found, then only folders who have bsconfig.json are returned.
      * If none are found, then the workspaceFolder itself is treated as a project
@@ -1117,6 +1131,11 @@ export interface WorkspaceConfig {
          * The maximum number of projects that can be activated concurrently
          */
         projectActivationConcurrencyLimit?: number;
+        /**
+         * The maximum number of worker threads to use for running LSP projects. Once this limit is reached,
+         * additional projects are multiplexed onto existing worker threads rather than spawning new ones.
+         */
+        maxWorkerThreads?: number;
     };
 }
 

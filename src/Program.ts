@@ -1,7 +1,8 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, DocumentSymbol, CancellationToken, SelectionRange } from 'vscode-languageserver';
+import * as semver from 'semver';
+import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, DocumentSymbol, CancellationToken, SelectionRange, InlayHint } from 'vscode-languageserver';
 import { CancellationTokenSource, CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
@@ -10,7 +11,7 @@ import { SymbolTable } from './SymbolTable';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, ProvideSelectionRangesEvent, OnGetSourceFixAllCodeActionsEvent } from './interfaces';
+import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, ProvideSelectionRangesEvent, ProvideInlayHintsEvent, OnGetSourceFixAllCodeActionsEvent } from './interfaces';
 import type { SourceFixAllCodeAction } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
 import { standardizePath as s, util } from './util';
@@ -21,7 +22,9 @@ import type { Logger } from './logging';
 import { LogLevel, createLogger } from './logging';
 import chalk from 'chalk';
 import { globalFile } from './globalCallables';
-import { parseManifest, getBsConst } from './preprocessor/Manifest';
+import { parseManifest, parseManifestEntries, getBsConst } from './preprocessor/Manifest';
+import type { ManifestEntry } from './preprocessor/Manifest';
+import { DEFAULT_MIN_FIRMWARE_VERSION, RSG_VERSIONS } from './RokuConstants';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement } from './astUtils/reflection';
@@ -35,10 +38,17 @@ import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
 import { Sequencer } from './common/Sequencer';
 import { Deferred } from './deferred';
+import { nodes as builtInSceneGraphNodeData } from './roku-types';
+import type { SGNodeData } from './roku-types';
 
 const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
+
+/**
+ * The built-in Roku SceneGraph nodes, keyed by their lower-case name
+ */
+const builtInSceneGraphNodes = builtInSceneGraphNodeData as unknown as Record<string, SGNodeData>;
 
 export interface SourceObj {
     /**
@@ -485,6 +495,117 @@ export class Program {
      */
     public getComponentScope(componentName: string) {
         return this.getComponent(componentName)?.scope;
+    }
+
+    /**
+     * Get the names of all known SceneGraph nodes: the built-in Roku nodes plus every component
+     * defined in this program. Names keep their original casing and are deduplicated by lower-case name.
+     */
+    public getSceneGraphNodeNames(): string[] {
+        const namesByLowerName = new Map<string, string>();
+        for (const node of Object.values(builtInSceneGraphNodes)) {
+            namesByLowerName.set(node.name.toLowerCase(), node.name);
+        }
+        for (const componentName in this.components) {
+            const displayName = this.components[componentName][0]?.file.componentName?.text;
+            if (displayName) {
+                namesByLowerName.set(displayName.toLowerCase(), displayName);
+            }
+        }
+        return [...namesByLowerName.values()];
+    }
+
+    /**
+     * Determine whether a SceneGraph node with the given name exists, either as a built-in Roku node
+     * or as a component defined in this program.
+     */
+    public hasSceneGraphNode(nodeName: string): boolean {
+        if (!nodeName) {
+            return false;
+        }
+        return !!builtInSceneGraphNodes[nodeName.toLowerCase()] || !!this.getComponent(nodeName);
+    }
+
+    /**
+     * Get the built-in Roku node data and/or the project component file backing a SceneGraph node name.
+     * Returns `undefined` when no node or component matches.
+     */
+    public getSceneGraphNode(nodeName: string): SceneGraphNodeLookup | undefined {
+        if (!nodeName) {
+            return undefined;
+        }
+        const builtInNode = builtInSceneGraphNodes[nodeName.toLowerCase()];
+        const componentFile = this.getComponent(nodeName)?.file;
+        if (!builtInNode && !componentFile) {
+            return undefined;
+        }
+        return { builtInNode: builtInNode, componentFile: componentFile };
+    }
+
+    /**
+     * Get every field available on a SceneGraph node, walking the full `extends` chain across both
+     * built-in Roku nodes and project components. Fields declared closer to the node take precedence
+     * over inherited fields with the same name.
+     */
+    public getSceneGraphNodeFields(nodeName: string): ResolvedSceneGraphField[] {
+        const fieldsByLowerName = new Map<string, ResolvedSceneGraphField>();
+        const visitedNodeNames = new Set<string>();
+
+        const addField = (field: ResolvedSceneGraphField) => {
+            if (!field.name) {
+                return;
+            }
+            const lowerName = field.name.toLowerCase();
+            //the first definition we encounter is the closest one, so it wins
+            if (!fieldsByLowerName.has(lowerName)) {
+                fieldsByLowerName.set(lowerName, field);
+            }
+        };
+
+        const walk = (currentNodeName: string, origin: SceneGraphFieldOrigin) => {
+            const lowerName = currentNodeName?.toLowerCase();
+            if (!lowerName || visitedNodeNames.has(lowerName)) {
+                return;
+            }
+            visitedNodeNames.add(lowerName);
+
+            //prefer a project component (a project component can shadow a built-in of the same name)
+            const component = this.getComponent(currentNodeName);
+            if (component) {
+                for (const field of component.file.ast.component?.api?.fields ?? []) {
+                    addField({ name: field.id, type: field.type, default: field.value, origin: origin });
+                }
+                const parentName = component.file.ast.component?.extends;
+                if (parentName) {
+                    walk(parentName, 'inherited');
+                }
+                return;
+            }
+
+            const builtInNode = builtInSceneGraphNodes[lowerName];
+            if (builtInNode) {
+                for (const field of builtInNode.fields ?? []) {
+                    addField({
+                        name: field.name,
+                        type: field.type,
+                        default: field.default,
+                        description: field.description,
+                        accessPermission: field.accessPermission,
+                        origin: origin
+                    });
+                }
+                if (builtInNode.extends?.name) {
+                    walk(builtInNode.extends.name, 'inherited');
+                } else if (lowerName !== 'node') {
+                    //some scraped node entries are missing `extends` data, but every SceneGraph node
+                    //ultimately descends from Node, so fall back to Node to keep its universal fields
+                    walk('Node', 'inherited');
+                }
+            }
+        };
+
+        walk(nodeName, 'own');
+        return [...fieldsByLowerName.values()];
     }
 
     /**
@@ -1234,6 +1355,27 @@ export class Program {
     }
 
     /**
+     * Get inlay hints for the given file and range.
+     */
+    public getInlayHints(srcPath: string, range: Range): InlayHint[] {
+        const file = this.getFile(srcPath);
+        if (file) {
+            const event: ProvideInlayHintsEvent = {
+                program: this,
+                file: file,
+                range: range,
+                scopes: this.getScopesForFile(file),
+                inlayHints: []
+            };
+            this.plugins.emit('beforeProvideInlayHints', event);
+            this.plugins.emit('provideInlayHints', event);
+            this.plugins.emit('afterProvideInlayHints', event);
+            return event.inlayHints;
+        }
+        return [];
+    }
+
+    /**
      * Compute code actions for the given file and range
      */
     public getCodeActions(srcPath: string, range: Range) {
@@ -1718,6 +1860,7 @@ export class Program {
     }
 
     private _manifest: Map<string, string>;
+    private _manifestEntries: ManifestEntry[];
 
     /**
      * The absolute source path to the manifest file. Set when loadManifest is called.
@@ -1775,8 +1918,12 @@ export class Program {
             const parsedManifest = parseManifest(contents);
             this.buildBsConstsIntoParsedManifest(parsedManifest);
             this._manifest = parsedManifest;
+            this._manifestEntries = parseManifestEntries(contents);
+            this._manifestPath = manifestPath;
         } catch (e) {
             this._manifest = new Map();
+            this._manifestEntries = [];
+            this._manifestPath = undefined;
         }
     }
 
@@ -1788,6 +1935,96 @@ export class Program {
             this.loadManifest();
         }
         return this._manifest;
+    }
+
+    /**
+     * Get the manifest as a list of `{ key, value, range }` entries with line/column ranges
+     * suitable for attaching diagnostics to specific manifest lines.
+     *
+     * NOTE: protected for now. The shape of this data is likely to evolve as we build out
+     * more manifest-aware features (validation rules, autocomplete, etc.). External plugins
+     * shouldn't depend on this until we commit to a stable API.
+     */
+    protected getManifestEntries(): ManifestEntry[] {
+        if (!this._manifestEntries) {
+            this.loadManifest();
+        }
+        return this._manifestEntries;
+    }
+
+    private _manifestPath: string | undefined;
+
+    /**
+     * Returns the absolute path of the loaded manifest file, or undefined if no manifest was found.
+     *
+     * NOTE: protected for now. Once brighterscript treats the manifest as a proper file
+     * (with editor / BscFile integration) callers should consume that instead of poking at
+     * the Program. External plugins shouldn't depend on this in the meantime.
+     */
+    protected getManifestPath(): string | undefined {
+        if (!this._manifest) {
+            this.loadManifest();
+        }
+        return this._manifestPath;
+    }
+
+    private _minFirmwareVersion: string | undefined;
+
+    /**
+     * The minimum Roku firmware version brighterscript should assume the user is targeting.
+     * If `options.minFirmwareVersion` is set AND parseable as semver, the canonical coerced
+     * form ("15.0" → "15.0.0") wins; otherwise (unset or unparseable) falls back to
+     * {@link DEFAULT_MIN_FIRMWARE_VERSION}. The return is always a valid semver string so
+     * downstream callers can pass it directly to `semver.gte`/`semver.lt` without re-coercing.
+     * Cached after first call.
+     */
+    public getMinFirmwareVersion(): string {
+        if (this._minFirmwareVersion === undefined) {
+            const userValue = this.options.minFirmwareVersion;
+            const coerced = userValue ? semver.coerce(userValue) : undefined;
+            this._minFirmwareVersion = coerced ? coerced.version : DEFAULT_MIN_FIRMWARE_VERSION;
+        }
+        return this._minFirmwareVersion;
+    }
+
+    private _rsgVersion: string | undefined;
+
+    /**
+     * Returns the effective `rsg_version` for this program in canonical semver form (e.g. "1.2"
+     * → "1.2.0"). If the manifest declares a value explicitly and it's parseable, the canonical
+     * form wins; otherwise (manifest silent OR value is malformed) we fall back to the highest
+     * known rsg_version whose `becameDefaultAt` is `<=` the effective minimum firmware version,
+     * driven by {@link RSG_VERSIONS}. Cached after first call.
+     *
+     * Manifest validation (format errors, etc.) happens in `ProgramValidator` against the raw
+     * entry — that path doesn't go through this method.
+     */
+    public getRsgVersion(): string {
+        if (this._rsgVersion !== undefined) {
+            return this._rsgVersion;
+        }
+        const explicit = this.getManifest().get('rsg_version');
+        const explicitCoerced = explicit !== undefined ? semver.coerce(explicit.trim()) : undefined;
+        if (explicitCoerced) {
+            this._rsgVersion = explicitCoerced.version;
+            return this._rsgVersion;
+        }
+        //walk known rsg_versions in descending order (newest first) and return the first whose
+        //becameDefaultAt <= effective firmware. As long as some entry has becameDefaultAt: '0.0.0'
+        //(currently `1.1`), this loop always finds a match.
+        const minFirmwareVersion = this.getMinFirmwareVersion();
+        const candidates = Object.entries(RSG_VERSIONS)
+            .filter(([, info]) => info.becameDefaultAt !== undefined)
+            .sort(([a], [b]) => semver.rcompare(semver.coerce(a)!, semver.coerce(b)!));
+        for (const [version, info] of candidates) {
+            if (semver.gte(minFirmwareVersion, info.becameDefaultAt!)) {
+                this._rsgVersion = semver.coerce(version)!.version;
+                return this._rsgVersion;
+            }
+        }
+        //unreachable as long as RSG_VERSIONS contains an entry with becameDefaultAt: '0.0.0'
+        this._rsgVersion = DEFAULT_MIN_FIRMWARE_VERSION;
+        return this._rsgVersion;
     }
 
     public dispose() {
@@ -1810,4 +2047,30 @@ export interface FileTranspileResult {
     code: string;
     map: SourceMapGenerator;
     typedef: string;
+}
+
+/**
+ * Where a resolved SceneGraph field was declared, relative to the node it was resolved for:
+ * `own` = declared on the node itself, `inherited` = declared on an ancestor in the `extends` chain
+ */
+export type SceneGraphFieldOrigin = 'own' | 'inherited';
+
+/**
+ * A field available on a SceneGraph node, resolved across the node's full `extends` chain
+ */
+export interface ResolvedSceneGraphField {
+    name: string;
+    type?: string;
+    default?: string;
+    description?: string;
+    accessPermission?: string;
+    origin: SceneGraphFieldOrigin;
+}
+
+/**
+ * The built-in Roku node data and/or project component file backing a SceneGraph node name
+ */
+export interface SceneGraphNodeLookup {
+    builtInNode?: SGNodeData;
+    componentFile?: XmlFile;
 }

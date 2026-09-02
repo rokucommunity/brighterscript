@@ -1086,6 +1086,9 @@ export class Lexer {
                 }
             }
         }
+        //this is the canonical Token field order. Every other place that synthesizes a
+        //Token should use this same order (and set every field) so all tokens share a
+        //single V8 hidden class instead of forcing megamorphic property access downstream
         let token: Token = {
             kind: kind,
             text: text,

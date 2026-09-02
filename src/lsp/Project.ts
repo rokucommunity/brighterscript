@@ -10,7 +10,7 @@ import { URI } from 'vscode-uri';
 import { Deferred } from '../deferred';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import { rokuDeploy } from 'roku-deploy';
-import type { DocumentSymbol, Position, Range, Location, WorkspaceSymbol } from 'vscode-languageserver-protocol';
+import type { DocumentSymbol, Position, Range, Location, WorkspaceSymbol, InlayHint } from 'vscode-languageserver-protocol';
 import { CompletionList } from 'vscode-languageserver-protocol';
 import { CancellationTokenSource } from 'vscode-languageserver-protocol';
 import type { DocumentAction, DocumentActionWithStatus } from './DocumentManager';
@@ -516,6 +516,13 @@ export class Project implements LspProject {
         await this.onIdle();
         if (this.builder.program.hasFile(options.srcPath)) {
             return this.builder.program.getSelectionRanges(options.srcPath, options.positions);
+        }
+    }
+
+    public async getInlayHints(options: { srcPath: string; range: Range }): Promise<InlayHint[]> {
+        await this.onIdle();
+        if (this.builder.program.hasFile(options.srcPath)) {
+            return this.builder.program.getInlayHints(options.srcPath, options.range);
         }
     }
 

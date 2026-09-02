@@ -1,5 +1,5 @@
 import * as path from 'path';
-import 'array-flat-polyfill';
+import * as os from 'os';
 import type {
     CompletionItem,
     Connection,
@@ -30,7 +30,9 @@ import type {
     SelectionRangeParams,
     RenameFilesParams,
     WorkspaceEdit,
-    TextEdit
+    TextEdit,
+    InlayHint,
+    InlayHintParams
 } from 'vscode-languageserver/node';
 import {
     SemanticTokensRequest,
@@ -75,6 +77,13 @@ export class LanguageServer {
      * The default number of projects that are permitted to activate concurrently.
      */
     private static projectActivationConcurrencyLimitDefault = 3;
+
+    /**
+     * The default maximum number of worker threads to use for running LSP projects. Can be overridden by
+     * per-workspace settings. Once this limit is reached, additional projects are spread evenly across the
+     * existing worker threads instead of each getting a dedicated one.
+     */
+    public static maxWorkerThreadsDefault = Math.max(1, os.cpus().length);
 
     /**
      * The language server protocol connection, used to send and receive all requests and responses
@@ -129,6 +138,13 @@ export class LanguageServer {
             this.sendDiagnostics(event).catch(logAndIgnoreError);
         });
 
+        //notify the client if a project's worker thread crashes unexpectedly
+        this.projectManager.on('critical-failure', (event) => {
+            const message = `[${util.getProjectLogName(event.project)}] ${event.message}`;
+            this.logger.error(message);
+            this.sendCriticalFailure(message);
+        });
+
         // Send all open document changes whenever a project is activated. This is necessary because at project startup, the project loads files from disk
         // and may not have the latest unsaved file changes. Any existing projects that already use these files will just ignore the changes
         // because the file contents haven't changed.
@@ -177,6 +193,9 @@ export class LanguageServer {
         //Register semantic token requests. TODO switch to a more specific connection function call once they actually add it
         this.connection.onRequest(SemanticTokensRequest.method, this.onFullSemanticTokens.bind(this));
 
+        //Register inlay hint requests. Inlay hints live under connection.languages and aren't picked up by the on* auto-bind loop above
+        this.connection.languages.inlayHint.on(this.onInlayHint.bind(this));
+
         //file-operation requests live under connection.workspace, so they aren't picked up by the on* auto-bind loop above
         this.connection.workspace.onWillRenameFiles(this.onWillRenameFiles.bind(this));
 
@@ -215,8 +234,8 @@ export class LanguageServer {
                 // Tell the client that the server supports code completion
                 completionProvider: {
                     resolveProvider: false,
-                    //anytime the user types a period, auto-show the completion results
-                    triggerCharacters: ['.'],
+                    //`.` auto-shows brightscript completions; `<` auto-shows xml element completions
+                    triggerCharacters: ['.', '<'],
                     allCommitCharacters: ['.', '@']
                 },
                 documentSymbolProvider: true,
@@ -239,6 +258,7 @@ export class LanguageServer {
                 definitionProvider: true,
                 hoverProvider: true,
                 selectionRangeProvider: true,
+                inlayHintProvider: true,
                 executeCommandProvider: {
                     commands: [
                         CustomCommands.TranspileFile
@@ -276,6 +296,7 @@ export class LanguageServer {
         await this.syncLogLevel();
 
         this.syncProjectActivationConcurrencyLimit();
+        this.syncMaxWorkerThreads();
 
         try {
             if (this.hasConfigurationCapability) {
@@ -398,6 +419,29 @@ export class LanguageServer {
         this.projectManager.projectActivationConcurrencyLimit = concurrencyLimit;
     }
 
+    /**
+     * Get the max worker threads setting from all workspaces and set the worker pool's cap to the lowest value found.
+     * This ensures that if the user has multiple workspaces open with different limits,
+     * we respect the most restrictive limit to avoid overwhelming the user's machine.
+     */
+    private syncMaxWorkerThreads() {
+        const limits = [...this.workspaceConfigsCache]
+            .map(x => x?.[1]?.languageServer?.maxWorkerThreads)
+            .filter(x => typeof x === 'number');
+
+        //if we don't have any limits defined, use our default value
+        if (limits.length === 0) {
+            limits.push(LanguageServer.maxWorkerThreadsDefault);
+        }
+
+        let maxWorkerThreads = Math.min(...limits);
+        //we must always support at least 1 worker, otherwise no threaded projects could ever activate
+        if (!(maxWorkerThreads >= 1)) {
+            this.logger.log(`maxWorkerThreads was set to ${maxWorkerThreads}, which is not a valid value. Defaulting to 1.`);
+            maxWorkerThreads = 1;
+        }
+        workerPool.maxWorkers = maxWorkerThreads;
+    }
 
     @AddStackToErrorMessage
     private async onTextDocumentDidChangeContent(event: TextDocumentChangeEvent<TextDocument>) {
@@ -525,6 +569,16 @@ export class LanguageServer {
         this.logger.debug('onCompletion', params, cancellationToken);
 
         const srcPath = util.uriToPath(params.textDocument.uri);
+
+        //`<` is registered as a trigger character for xml element completions, but it's the less-than
+        //operator everywhere else, so ignore it for non-xml files
+        if (params.context?.triggerCharacter === '<' && !srcPath.toLowerCase().endsWith('.xml')) {
+            return {
+                items: [],
+                isIncomplete: false
+            };
+        }
+
         const completions = await this.projectManager.getCompletions({
             srcPath: srcPath,
             position: params.position,
@@ -553,7 +607,8 @@ export class LanguageServer {
                         projectDiscoveryMaxDepth: brightscriptConfig?.languageServer?.projectDiscoveryMaxDepth ?? 15,
                         projectDiscoveryExclude: brightscriptConfig?.languageServer?.projectDiscoveryExclude,
                         logLevel: brightscriptConfig?.languageServer?.logLevel,
-                        projectActivationConcurrencyLimit: brightscriptConfig?.languageServer?.projectActivationConcurrencyLimit
+                        projectActivationConcurrencyLimit: brightscriptConfig?.languageServer?.projectActivationConcurrencyLimit,
+                        maxWorkerThreads: brightscriptConfig?.languageServer?.maxWorkerThreads
                     }
                 };
             })
@@ -596,6 +651,7 @@ export class LanguageServer {
             this.workspaceConfigsCache = configs;
 
             this.syncProjectActivationConcurrencyLimit();
+            this.syncMaxWorkerThreads();
 
             //if configuration changed, rebuild the path filterer
             await this.rebuildPathFilterer();
@@ -629,6 +685,15 @@ export class LanguageServer {
 
         const srcPath = util.uriToPath(params.textDocument.uri);
         return this.projectManager.getSelectionRanges({ srcPath: srcPath, positions: params.positions });
+    }
+
+    @AddStackToErrorMessage
+    public async onInlayHint(params: InlayHintParams): Promise<InlayHint[]> {
+        this.logger.debug('onInlayHint', params);
+
+        const srcPath = util.uriToPath(params.textDocument.uri);
+        const result = await this.projectManager.getInlayHints({ srcPath: srcPath, range: params.range });
+        return result ?? [];
     }
 
     @AddStackToErrorMessage
@@ -1014,6 +1079,7 @@ export interface BrightScriptClientConfiguration {
         logLevel: LogLevel | string;
         projectDiscoveryMaxDepth?: number;
         projectActivationConcurrencyLimit?: number;
+        maxWorkerThreads?: number;
     };
 }
 

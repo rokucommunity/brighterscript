@@ -26,7 +26,6 @@ import * as fsExtra from 'fs-extra';
 import { URI } from 'vscode-uri';
 import undent from 'undent';
 import { tempDir, rootDir } from '../testHelpers.spec';
-import * as fileUrl from 'file-url';
 import { LiteralExpression } from '../parser/Expression';
 
 let sinon = sinonImport.createSandbox();
@@ -2899,7 +2898,7 @@ describe('BrsFile', () => {
             });
 
             it('handles source literals properly', () => {
-                const pathUrl = fileUrl(rootDir);
+                const pathUrl = util.fileUrl(rootDir);
                 let text = `"${pathUrl.substring(0, 4)}" + "${pathUrl.substring(4)}`;
                 doTest(`
                     sub test()

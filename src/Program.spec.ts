@@ -5,6 +5,7 @@ import * as sinonImport from 'sinon';
 import { CancellationTokenSource, CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
+import { DEFAULT_MIN_FIRMWARE_VERSION } from './RokuConstants';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import type { BsConfig } from './BsConfig';
@@ -47,6 +48,67 @@ describe('Program', () => {
         fsExtra.ensureDirSync(tempDir);
         fsExtra.emptyDirSync(tempDir);
         program.dispose();
+    });
+
+    describe('scenegraph node metadata', () => {
+        it('getSceneGraphNodeNames includes built-in nodes and project components', () => {
+            program.setFile('components/widget.xml', trim`
+                <component name="Widget" extends="Group">
+                </component>
+            `);
+            const names = program.getSceneGraphNodeNames();
+            expect(names).to.include('Label');
+            expect(names).to.include('Widget');
+        });
+
+        it('hasSceneGraphNode recognizes built-in nodes and project components (case-insensitive)', () => {
+            program.setFile('components/widget.xml', trim`
+                <component name="Widget" extends="Group">
+                </component>
+            `);
+            expect(program.hasSceneGraphNode('label')).to.be.true;
+            expect(program.hasSceneGraphNode('widget')).to.be.true;
+            expect(program.hasSceneGraphNode('NotARealNode')).to.be.false;
+        });
+
+        it('getSceneGraphNodeFields walks the extends chain of a built-in node', () => {
+            //Label extends LabelBase extends ... eventually Node; `id` comes from Node
+            const fieldNames = program.getSceneGraphNodeFields('Label').map(x => x.name);
+            expect(fieldNames).to.include('text');
+            expect(fieldNames).to.include('id');
+        });
+
+        it('getSceneGraphNodeFields walks from a project component into its built-in parent', () => {
+            program.setFile('components/widget.xml', trim`
+                <component name="Widget" extends="Group">
+                    <interface>
+                        <field id="caption" type="string" />
+                    </interface>
+                </component>
+            `);
+            const fields = program.getSceneGraphNodeFields('Widget');
+            const own = fields.find(x => x.name === 'caption');
+            const inherited = fields.find(x => x.name === 'visible');
+            //own field from the component's interface
+            expect(own?.origin).to.equal('own');
+            //inherited field from the built-in Group (via Node)
+            expect(inherited?.origin).to.equal('inherited');
+        });
+
+        it('getSceneGraphNodeFields falls back to Node for built-in nodes missing `extends` data', () => {
+            //several node entries in the scraped roku-types data have no `extends` key (and some have
+            //no fields of their own), but every SceneGraph node ultimately descends from Node, so
+            //universal Node fields like `id` and `focusable` must still be returned
+            for (const nodeName of ['MonospaceLabel', 'InfoPane', 'ParentalControlPinPad', 'TimeGrid', 'ZoomRowList']) {
+                const fieldNames = program.getSceneGraphNodeFields(nodeName).map(x => x.name);
+                expect(fieldNames, nodeName).to.include('id');
+                expect(fieldNames, nodeName).to.include('focusable');
+            }
+        });
+
+        it('getSceneGraphNodeFields returns no fields for unknown nodes', () => {
+            expect(program.getSceneGraphNodeFields('NotARealNode')).to.eql([]);
+        });
     });
 
     it('does not throw exception after calling validate() after dispose()', () => {
@@ -3813,5 +3875,119 @@ describe('Program', () => {
             expect(manifest.get('build_version')).to.equal('0');
             expect(manifest.get('supports_input_launch')).to.equal('1');
         }
+    });
+
+    describe('getMinFirmwareVersion', () => {
+        it(`returns DEFAULT_MIN_FIRMWARE_VERSION when minFirmwareVersion is unset`, () => {
+            program.dispose();
+            program = new Program({});
+            expect(program.getMinFirmwareVersion()).to.equal(DEFAULT_MIN_FIRMWARE_VERSION);
+        });
+
+        it(`returns the user's value when minFirmwareVersion is set`, () => {
+            program.dispose();
+            program = new Program({ minFirmwareVersion: '11.5.0' });
+            expect(program.getMinFirmwareVersion()).to.equal('11.5.0');
+        });
+
+        it('returns DEFAULT when minFirmwareVersion is set to garbage', () => {
+            program.dispose();
+            program = new Program({ minFirmwareVersion: 'banana' });
+            expect(program.getMinFirmwareVersion()).to.equal(DEFAULT_MIN_FIRMWARE_VERSION);
+        });
+
+        it('returns DEFAULT when minFirmwareVersion is an empty string', () => {
+            program.dispose();
+            program = new Program({ minFirmwareVersion: '' });
+            expect(program.getMinFirmwareVersion()).to.equal(DEFAULT_MIN_FIRMWARE_VERSION);
+        });
+
+        it(`returns the canonical coerced semver form when the user's value parses but is non-strict`, () => {
+            program.dispose();
+            program = new Program({ minFirmwareVersion: '11.5' });
+            expect(program.getMinFirmwareVersion()).to.equal('11.5.0');
+        });
+    });
+
+    describe('getRsgVersion', () => {
+        function setupWith(manifestContents: string | undefined, minFirmwareVersion?: string) {
+            if (manifestContents !== undefined) {
+                fsExtra.writeFileSync(`${tempDir}/manifest`, manifestContents);
+            }
+            program.dispose();
+            program = new Program({
+                rootDir: tempDir,
+                minFirmwareVersion: minFirmwareVersion
+            });
+        }
+
+        it(`returns the manifest's explicit value coerced to canonical semver`, () => {
+            setupWith(trim`
+                title=t
+                rsg_version=1.1
+            `);
+            expect(program.getRsgVersion()).to.equal('1.1.0');
+        });
+
+        it(`returns '1.2.0' when manifest is silent and effective firmware >= 9.3.0 (the default)`, () => {
+            setupWith(trim`title=t`);
+            expect(program.getRsgVersion()).to.equal('1.2.0');
+        });
+
+        it(`returns '1.1.0' when manifest is silent and minFirmwareVersion is between 7.5.0 and 9.3.0`, () => {
+            setupWith(trim`title=t`, '8.0.0');
+            expect(program.getRsgVersion()).to.equal('1.1.0');
+        });
+
+        it(`returns '1.0.0' when manifest is silent and minFirmwareVersion is below 7.5.0 (pre-1.1 firmware)`, () => {
+            setupWith(trim`title=t`, '7.0.0');
+            expect(program.getRsgVersion()).to.equal('1.0.0');
+        });
+
+        it(`returns '1.3.0' when manifest is silent and minFirmwareVersion is >= 15.1.0`, () => {
+            //1.3.becameDefaultAt is 15.1.0 (Roku's cert-policy "expected default" for new development at this firmware)
+            setupWith(trim`title=t`, '15.1.0');
+            expect(program.getRsgVersion()).to.equal('1.3.0');
+        });
+
+        it(`is data-driven: a forward-compat unknown rsg_version from the manifest is coerced and returned`, () => {
+            //we don't know about 1.5 in RSG_VERSIONS, but the manifest's explicit value still wins
+            setupWith(trim`
+                title=t
+                rsg_version=1.5
+            `);
+            expect(program.getRsgVersion()).to.equal('1.5.0');
+        });
+
+        it(`falls back to the default firmware (and its rsg_version) when minFirmwareVersion is unparseable garbage`, () => {
+            //getMinFirmwareVersion sanitizes garbage input → DEFAULT (15.0.0)
+            //→ getRsgVersion picks the highest matching default → '1.2.0'
+            setupWith(trim`title=t`, 'not-a-version');
+            expect(program.getRsgVersion()).to.equal('1.2.0');
+        });
+    });
+
+    describe('getManifestEntries', () => {
+        it('returns line-aware entries for each manifest line', () => {
+            fsExtra.writeFileSync(`${tempDir}/manifest`, trim`
+                title=t
+                rsg_version=1.2
+            `);
+            program.dispose();
+            program = new Program({ rootDir: tempDir });
+            //getManifestEntries is protected; use bracket access for tests
+            // eslint-disable-next-line @typescript-eslint/dot-notation
+            const entries = program['getManifestEntries']();
+            expect(entries).to.have.lengthOf(2);
+            expect(entries[1]).to.deep.include({ key: 'rsg_version', value: '1.2' });
+            expect(entries[1].range.start.line).to.equal(1);
+        });
+
+        it('returns an empty array when no manifest exists', () => {
+            program.dispose();
+            program = new Program({ rootDir: tempDir });
+            // eslint-disable-next-line @typescript-eslint/dot-notation
+            expect(program['getManifestEntries']()).to.eql([]);
+        });
     });
 });
