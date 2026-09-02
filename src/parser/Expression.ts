@@ -2761,8 +2761,13 @@ export class TypeExpression extends Expression implements TypedefProvider {
     }
 
     getName(parseMode = ParseMode.BrighterScript): string {
-        //TODO: this may not support Complex Types, eg. generics or Unions
-        return util.getAllDottedGetPartsAsString(this.expression, parseMode);
+        const dottedName = util.getAllDottedGetPartsAsString(this.expression, parseMode);
+        if (dottedName !== undefined) {
+            return dottedName;
+        }
+        //complex types (unions/intersections, inline interfaces, typed arrays, typed function
+        //types, groupings) aren't dotted-get chains, so reconstruct their written name instead
+        return util.getTypeExpressionName(this.expression, parseMode);
     }
 
     getNameParts(): string[] {

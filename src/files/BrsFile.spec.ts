@@ -4848,6 +4848,58 @@ describe('BrsFile', () => {
                     end function
                 `);
             });
+
+            it('handles this complicated typecast with intersection and inline interfaces', async () => {
+                const file = program.setFile<BrsFile>('source/main.bs', `
+                    sub someFunc()
+                        typecast m as { top as roSGNode, optional subscreen as SomeInterface, mainGroup as roSGNodeCustomComponent, config as roAssociativeArray } and SomeOtherInterface
+                        print m.top.title
+                    end sub
+                `);
+
+                await testTranspile(file, `
+                    sub someFunc()
+                        'typecast m as { top as roSGNode, optional subscreen as SomeInterface, mainGroup as roSGNodeCustomComponent, config as roAssociativeArray } and SomeOtherInterface
+                        print m.top.title
+                    end sub
+                `, undefined, undefined, false);
+            });
+
+            it('handles typecasts to other complex types', async () => {
+                const file = program.setFile<BrsFile>('source/main.bs', `
+                    sub arrays()
+                        typecast m as SomeInterface[][]
+                        print m
+                    end sub
+
+                    sub unions()
+                        typecast m as (SomeInterface or SomeOtherInterface) and { name as string }
+                        print m
+                    end sub
+
+                    sub functions()
+                        typecast m as function(a as integer, b as SomeInterface) as string
+                        print m
+                    end sub
+                `);
+
+                await testTranspile(file, `
+                    sub arrays()
+                        'typecast m as SomeInterface[][]
+                        print m
+                    end sub
+
+                    sub unions()
+                        'typecast m as (SomeInterface or SomeOtherInterface) and { name as string }
+                        print m
+                    end sub
+
+                    sub functions()
+                        'typecast m as function(a as integer, b as SomeInterface) as string
+                        print m
+                    end sub
+                `, undefined, undefined, false);
+            });
         });
     });
 
