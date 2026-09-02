@@ -1298,7 +1298,10 @@ describe('CrossScopeValidator', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('works for multi-scope usage, with namespaced consts name changes', () => {
+        it('works for multi-scope usage, with namespaced consts name changes', function () {
+            //this test builds 100 components and validates the whole program twice, so the
+            //default 2s timeout leaves no headroom on slower/loaded CI runners
+            this.timeout(30_000);
             program.options.autoImportComponentScript = true;
             program.logger.logLevel = 'info';
             //set a baseline where everyone is happy
