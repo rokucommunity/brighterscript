@@ -1176,6 +1176,11 @@ export let DiagnosticMessages = {
         message: `Diagnostic filter "${value}" looks like a file path or glob, not a diagnostic code. To filter diagnostics by file, use the "files" property instead: { "files": ["${value}"] }`,
         severity: DiagnosticSeverity.Warning,
         code: 'diagnostic-filter-looks-like-file-path'
+    }),
+    xmlTagMismatch: (openingTag: string, closingTag: string) => ({
+        message: `Mismatched closing tag: expected '</${openingTag}>' but found '</${closingTag}>'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'xml-tag-mismatch'
     })
 };
 export const defaultMaximumTruncationLength = 160;

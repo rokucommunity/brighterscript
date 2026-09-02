@@ -14,6 +14,8 @@ import { LogLevel } from '../logging';
 import { isXmlFile } from '../astUtils/reflection';
 import { tempDir, rootDir, outDir } from '../testHelpers.spec';
 import type { BrsFile } from './BrsFile';
+import { SGNode } from '../parser/SGTypes';
+import { TranspileState } from '../parser/TranspileState';
 
 describe('XmlFile', () => {
 
@@ -508,6 +510,213 @@ describe('XmlFile', () => {
             expectDiagnostics(program, [
                 DiagnosticMessages.xmlComponentMissingExtendsAttribute()
             ]);
+        });
+    });
+
+    describe('mismatched tags', () => {
+        it('emits a diagnostic for a mismatched node tag', () => {
+            program.setFile('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup">
+                            <Label text="hello" />
+                        </LayoutGroup>
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.xmlTagMismatch('Group', 'LayoutGroup').message
+            ]);
+        });
+
+        it('emits a diagnostic for a mismatched <component> tag', () => {
+            program.setFile('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                </komponent>
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.xmlTagMismatch('component', 'komponent').message
+            ]);
+        });
+
+        it('emits a diagnostic for a mismatched <interface> tag', () => {
+            program.setFile('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <interface>
+                        <field id="foo" type="string" />
+                    </interfase>
+                </component>
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.xmlTagMismatch('interface', 'interfase').message
+            ]);
+        });
+
+        it('emits a diagnostic for a mismatched <children> tag', () => {
+            program.setFile('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup" />
+                    </kids>
+                </component>
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.xmlTagMismatch('children', 'kids').message
+            ]);
+        });
+
+        it('emits a diagnostic for each mismatch when several are nested', () => {
+            program.setFile('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="outer">
+                            <Rectangle id="inner">
+                                <Label text="hello" />
+                            </Rectangel>
+                        </LayoutGroup>
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.xmlTagMismatch('Group', 'LayoutGroup').message,
+                DiagnosticMessages.xmlTagMismatch('Rectangle', 'Rectangel').message
+            ]);
+        });
+
+        it('treats a closing tag differing only by case as a mismatch', () => {
+            //XML is case-sensitive, and the Roku compiler rejects `<Group></group>`
+            program.setFile('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup">
+                        </group>
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.xmlTagMismatch('Group', 'group').message
+            ]);
+        });
+
+        it('points the diagnostic location at the closing tag', () => {
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup">
+                        </LayoutGroup>
+                    </children>
+                </component>
+            `);
+            program.validate();
+            const diagnostic = program.getDiagnostics().find(
+                x => x.message === DiagnosticMessages.xmlTagMismatch('Group', 'LayoutGroup').message
+            );
+            //the squiggle must land on `LayoutGroup` (line 4), not on the opening tag
+            expect(diagnostic?.location?.range).to.eql(Range.create(4, 10, 4, 21));
+            expect(diagnostic?.location?.uri).to.eql(util.pathToUri(file.srcPath));
+        });
+
+        it('does not emit a mismatch diagnostic for well-formed matching tags', () => {
+            program.setFile('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup">
+                            <Label text="hello" />
+                        </Group>
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not emit a mismatch diagnostic for self-closing tags', () => {
+            program.setFile('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup" />
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not emit a mismatch diagnostic for a script tag with a cdata body', () => {
+            program.setFile('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <script type="text/brightscript"><![CDATA[
+                        sub init()
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not emit a mismatch diagnostic for AST built programmatically without end tokens', () => {
+            //plugins build SGElements with no endTagName; that must remain valid
+            const element = new SGNode({
+                startTagName: { text: 'Group' },
+                elements: [
+                    new SGNode({ startTagName: { text: 'Label' } })
+                ]
+            });
+            expect(element.tokens.endTagName).to.be.undefined;
+            //the closing tag falls back to the opening tag name when endTagName is absent
+            expect(
+                element.transpile(new TranspileState('pkg:/components/Comp.xml', {})).toString()
+            ).to.equal(trim`
+                <Group>
+                    <Label>
+                    </Label>
+                </Group>
+            ` + '\n');
+        });
+
+        it('transpiles the opening tag name when the closing tag mismatches', () => {
+            //the device rejects mismatched tags, so emit valid xml rather than
+            //faithfully reproducing the broken closing tag
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup">
+                            <Label text="hello" />
+                        </LayoutGroup>
+                    </children>
+                </component>
+            `);
+            //force the AST-based transpile path (otherwise the raw file contents are emitted verbatim)
+            file.needsTranspiled = true;
+            program.validate();
+            expect(trimMap(file.transpile().code)).to.equal(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup">
+                            <Label text="hello" />
+                        </Group>
+                    </children>
+                </component>
+            `);
         });
     });
 
