@@ -375,6 +375,22 @@ describe('XmlFile', () => {
             expect(file.getCompletions(Position.create(99, 99))).to.be.empty;
         });
 
+        it('does not throw when a token is missing its tokenType', () => {
+            const xmlFile = program.setFile<XmlFile>('components/component1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Component1" extends="Group">
+                    <children>
+                        <Label />
+                    </children>
+                </component>
+            `);
+            //`IToken.tokenType` is optional, so a token lacking it must not blow up a completion request
+            for (const token of xmlFile.parser.tokens as any[]) {
+                delete token.tokenType;
+            }
+            expect(() => xmlFile.getCompletions(positionAfter(xmlFile.fileContents, '<Label '))).to.not.throw();
+        });
+
         //TODO - refine this test once cdata scripts are supported
         it('does not provide node completions outside of <children>', () => {
             program.setFile('components/component1.brs', ``);

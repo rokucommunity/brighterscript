@@ -377,6 +377,53 @@ describe('BrsFileValidator', () => {
                 location: { range: util.createRange(2, 24, 2, 24 + shortName.length) }
             }]);
         });
+
+        it('allows a class method whose transpiled name is exactly the max length', () => {
+            //`__Klass_method_` is 15 chars, so 74 more lands exactly on the 89-char limit
+            const methodName = 'c'.repeat(74);
+            program.setFile('source/main.bs', `
+                class Klass
+                    sub ${methodName}()
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags a class method whose transpiled name exceeds the max length', () => {
+            const methodName = 'c'.repeat(75);
+            program.setFile('source/main.bs', `
+                class Klass
+                    sub ${methodName}()
+                    end sub
+                end class
+            `);
+            program.validate();
+            const transpiledName = `__Klass_method_${methodName}`;
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.functionNameTooLong(transpiledName, transpiledName.length, 89),
+                location: { range: util.createRange(2, 24, 2, 24 + methodName.length) }
+            }]);
+        });
+
+        it('flags a namespaced class method whose transpiled name exceeds the max length', () => {
+            const methodName = 'c'.repeat(70);
+            program.setFile('source/main.bs', `
+                namespace alpha
+                    class Klass
+                        sub ${methodName}()
+                        end sub
+                    end class
+                end namespace
+            `);
+            program.validate();
+            const transpiledName = `__alpha_Klass_method_${methodName}`;
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.functionNameTooLong(transpiledName, transpiledName.length, 89),
+                location: { range: util.createRange(3, 28, 3, 28 + methodName.length) }
+            }]);
+        });
     });
 
     describe('for each', () => {

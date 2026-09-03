@@ -494,7 +494,7 @@ export class XmlFile implements BscFile {
      */
     public getCompletions(position: Position): CompletionItem[] {
         //don't provide completions inside an attribute value string (e.g. `text="|"`); reserved for future work
-        if (this.getTokenAt(position)?.tokenType.name === XmlTokenName.string) {
+        if (this.getTokenAt(position)?.tokenType?.name === XmlTokenName.string) {
             return [];
         }
 
@@ -510,7 +510,7 @@ export class XmlFile implements BscFile {
             if (position.line < startLine || (position.line === startLine && position.character <= startCharacter)) {
                 break;
             }
-            const tokenName = tokens[i].tokenType.name;
+            const tokenName = tokens[i].tokenType?.name;
             if (tokenName === XmlTokenName.open || tokenName === XmlTokenName.slashOpen || tokenName === XmlTokenName.close || tokenName === XmlTokenName.slashClose) {
                 boundaryIndex = i;
             }
@@ -518,10 +518,10 @@ export class XmlFile implements BscFile {
         const boundary = boundaryIndex >= 0 ? tokens[boundaryIndex] : undefined;
 
         //cursor is inside an open start tag: `<` tagName [attributes...]
-        if (boundary?.tokenType.name === XmlTokenName.open) {
+        if (boundary?.tokenType?.name === XmlTokenName.open) {
             const tagNameToken = tokens[boundaryIndex + 1];
             //no tag name yet, or the cursor is still on/within the tag name -> complete element names
-            if (tagNameToken?.tokenType.name !== XmlTokenName.name || util.comparePositionToRange(position, this.getTokenRange(tagNameToken)) <= 0) {
+            if (tagNameToken?.tokenType?.name !== XmlTokenName.name || util.comparePositionToRange(position, this.getTokenRange(tagNameToken)) <= 0) {
                 return this.getElementCompletions(position, false);
             }
             //otherwise complete attribute (field) names for the enclosing node
@@ -529,7 +529,7 @@ export class XmlFile implements BscFile {
         }
 
         //cursor is in element content (right after a `>` / `/>`) -> complete child element names
-        if (boundary?.tokenType.name === XmlTokenName.close || boundary?.tokenType.name === XmlTokenName.slashClose) {
+        if (boundary?.tokenType?.name === XmlTokenName.close || boundary?.tokenType?.name === XmlTokenName.slashClose) {
             return this.getElementCompletions(position, true);
         }
 
@@ -650,12 +650,12 @@ export class XmlFile implements BscFile {
         const names: string[] = [];
         const tokens = (this.parser.tokens ?? []) as unknown as IToken[];
         for (let i = startIndex; i < tokens.length; i++) {
-            const tokenName = tokens[i].tokenType.name;
+            const tokenName = tokens[i].tokenType?.name;
             //inside a start tag the only token kinds are attribute names, `=`, and values; anything else ends the tag
             if (tokenName !== XmlTokenName.name && tokenName !== XmlTokenName.equals && tokenName !== XmlTokenName.string) {
                 break;
             }
-            if (tokenName === XmlTokenName.name && tokens[i + 1]?.tokenType.name === XmlTokenName.equals) {
+            if (tokenName === XmlTokenName.name && tokens[i + 1]?.tokenType?.name === XmlTokenName.equals) {
                 names.push(tokens[i].image);
             }
         }
@@ -681,7 +681,7 @@ export class XmlFile implements BscFile {
             if (position.line < startLine || (position.line === startLine && position.character <= startCharacter)) {
                 break;
             }
-            switch (token.tokenType.name) {
+            switch (token.tokenType?.name) {
                 case XmlTokenName.open:
                     expectingTagName = true;
                     isCloseTag = false;

@@ -7,7 +7,7 @@ import { TokenKind, UnreferencableBuiltins } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import { CallExpression, type FunctionExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement } from '../../parser/Statement';
+import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { DynamicType } from '../../types/DynamicType';
@@ -68,6 +68,7 @@ export class BrsFileValidator {
                     const parentClassType = node.parent.parentClassName.getType({ flags: SymbolTypeFlag.typetime, data: data });
                     node.func.body.getSymbolTable().addSymbol('super', { ...data, isInstance: true }, parentClassType, SymbolTypeFlag.runtime);
                 }
+                this.validateFunctionNameLength(node, this.getMethodRuntimeName(node));
             },
             CallfuncExpression: (node) => {
                 if (node.args.length > 5) {
@@ -508,6 +509,24 @@ export class BrsFileValidator {
      * Verified on real devices running Roku OS 15.x. See https://github.com/rokucommunity/brighterscript/issues/1003.
      */
     private static MaxFunctionNameLength = 89;
+
+    /**
+     * Compute the runtime name of a class method. Methods are transpiled onto the class builder as
+     * `__<transpiledClassName>_method_<methodName>`, so the effective name is meaningfully longer than
+     * the name written in source.
+     */
+    private getMethodRuntimeName(node: MethodStatement): string | undefined {
+        const methodName = node.tokens.name?.text;
+        const classStatement = node.findAncestor<ClassStatement>(isClassStatement);
+        if (!methodName || !classStatement) {
+            return undefined;
+        }
+        const className = classStatement.getName(ParseMode.BrightScript)?.replace(/\./g, '_');
+        if (!className) {
+            return undefined;
+        }
+        return `__${className}_method_${methodName}`;
+    }
 
     private validateFunctionNameLength(node: FunctionStatement, name: string) {
         if (name && name.length > BrsFileValidator.MaxFunctionNameLength) {

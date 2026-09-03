@@ -138,19 +138,23 @@ describe('WorkerPool', () => {
     });
 
     describe('worker crash handling', () => {
-        it('removes a crashed worker from the pool so it is not selected again', () => {
+        it('does not select a crashed worker again', () => {
             const { worker } = pool.assignProject();
             expect(pool['workers']).to.be.lengthOf(1);
 
-            //simulate the worker crashing/exiting unexpectedly
+            //simulate the worker crashing/exiting unexpectedly. The entry stays tracked (its project hasn't
+            //released its slot yet) but is marked dead so it can't be handed out or counted toward maxWorkers
             emitExit(worker as any);
-
-            expect(pool['workers']).to.be.lengthOf(0);
+            expect(pool['workers'].filter(x => !x.isDead)).to.be.lengthOf(0);
 
             //a subsequent assignment should create a brand new worker instead of reusing the dead one
             const { worker: newWorker } = pool.assignProject();
             expect(newWorker).to.not.equal(worker);
-            expect(pool['workers']).to.be.lengthOf(1);
+            expect(pool['workers'].filter(x => !x.isDead)).to.be.lengthOf(1);
+
+            //once the crashed worker's project releases its slot, the dead entry is dropped entirely
+            pool.releaseProject(worker);
+            expect(pool['workers'].some(x => x.worker === worker)).to.be.false;
         });
 
         it('does not double-splice or re-terminate when releaseProject already removed the entry', () => {
@@ -169,16 +173,33 @@ describe('WorkerPool', () => {
             pool.assignProject();
             expect(pool['workers']).to.be.lengthOf(1);
 
-            //the worker crashes while two projects are still attached to it
+            //the worker crashes while two projects are still attached to it. The entry stays tracked so the
+            //surviving tenants can still release their slots, but is dead so it's never handed out again
             emitExit(worker as any);
-            expect(pool['workers']).to.be.lengthOf(0);
+            expect(pool['workers'].filter(x => !x.isDead)).to.be.lengthOf(0);
+            expect(pool['workers'][0].projectCount).to.eql(2);
 
             //each sibling project disposing afterward calls releaseProject with the now-dead worker - neither should
             //throw, resurrect the entry, or re-terminate the worker
             expect(() => pool.releaseProject(worker)).to.not.throw();
+            expect(pool['workers'][0].projectCount).to.eql(1);
             expect(() => pool.releaseProject(worker)).to.not.throw();
+            //the last tenant releasing drops the dead entry entirely
             expect(pool['workers']).to.be.lengthOf(0);
             expect((worker.terminate as sinon.SinonStub).called).to.be.false;
+        });
+
+        it('frees a maxWorkers slot as soon as a worker crashes, even while tenants remain', () => {
+            pool.maxWorkers = 1;
+            const { worker } = pool.assignProject();
+            expect(pool['workers']).to.be.lengthOf(1);
+
+            //the worker crashes while its project is still attached
+            emitExit(worker as any);
+
+            //the dead worker must not consume the only maxWorkers slot, so a new project gets a live worker
+            const { worker: newWorker } = pool.assignProject();
+            expect(newWorker).to.not.equal(worker);
         });
     });
 
