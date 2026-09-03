@@ -712,17 +712,8 @@ export const PreceedingRegexTypes = new Set([
  * allocations across an entire build. Excludes any kind whose text could legitimately
  * vary by case (keywords like `Function`/`function`) or content (identifiers, literals,
  * comments, whitespace, multi-form sequences like Newline).
- *
- * Wrapped in a null-prototype object on purpose. `TokenKind` values are strings, so a
- * plain object literal with this many computed string keys lands in V8's dictionary
- * mode, where every *miss* costs a hash lookup plus a walk up the prototype chain to
- * `Object.prototype`. The lexer misses on the majority of tokens (identifiers, literals
- * and keywords are all excluded above), so the miss path is the hot path. Dropping the
- * prototype makes misses substantially cheaper and keeps the table a fast lookup rather
- * than a per-token tax. Measured at ~2.1x faster lookups over a real token stream, and
- * up to 1.6x faster whole-lexer throughput on punctuation-dense source.
  */
-export const FixedTokenText: Partial<Record<TokenKind, string>> = Object.assign(Object.create(null), {
+export const FixedTokenText: Partial<Record<TokenKind, string>> = {
     [TokenKind.LeftParen]: '(',
     [TokenKind.RightParen]: ')',
     [TokenKind.LeftSquareBracket]: '[',
@@ -767,7 +758,7 @@ export const FixedTokenText: Partial<Record<TokenKind, string>> = Object.assign(
     [TokenKind.QuestionAt]: '?@',
     [TokenKind.Dollar]: '$',
     [TokenKind.Eof]: ''
-});
+};
 
 /**
  * Lazy intern table for `Newline` and `Whitespace` token text. Real source uses
