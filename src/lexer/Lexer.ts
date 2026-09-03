@@ -393,13 +393,20 @@ export class Lexer {
             this.advance();
         }
         if (this.options.includeWhitespace === false) {
-            //skip the Token + Range allocations entirely; we only need the canonical
-            //text so subsequent tokens can reference it as their leadingWhitespace
+            //This is the default path, so it is worth keeping cheap. The caller does not
+            //want Whitespace tokens in the output at all -- we only need the text, so the
+            //next token can record it as its `leadingWhitespace`. Calling `addToken` here
+            //would allocate a Token plus a Range (which is itself 3 objects: the range and
+            //its two Position endpoints) only for us to immediately discard the Token, so
+            //take the text directly instead. `internText` hands back a single shared string
+            //instance per distinct indent, so N occurrences of the same indent reference
+            //one string rather than N copies of it.
             this.leadingWhitespace = this.internText(
                 this.source.slice(this.start, this.current)
             );
-            //match what addToken's sync() would have done so the next token's range
-            //starts after the whitespace rather than where it began
+            //`addToken` would have called `sync()` on our behalf; since we skipped it,
+            //advance the same three fields by hand so the *next* token's range starts
+            //after this whitespace run instead of at the start of it.
             this.start = this.current;
             this.lineBegin = this.lineEnd;
             this.columnBegin = this.columnEnd;
@@ -1060,9 +1067,11 @@ export class Lexer {
     }
 
     /**
-     * Returns the canonical instance of `text`, so repeated occurrences share one string
-     * object instead of a fresh sliced wrapper each time. Only worth calling for kinds
-     * with a bounded set of valid values (`Newline`, `Whitespace`).
+     * Returns a single shared string instance for `text`, so that repeated occurrences of
+     * the same text all reference one string rather than each holding its own copy from
+     * `source.slice()`. Only worth calling for token kinds with a small, bounded set of
+     * possible values (`Newline`, `Whitespace`) -- for something like `Identifier` the set
+     * is unbounded and the table would just grow without ever paying off.
      *
      * The table is capped: interning is a pure optimization, so once it is full we hand
      * back the original slice rather than growing a process-lifetime cache without bound.
