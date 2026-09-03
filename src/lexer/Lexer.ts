@@ -1,5 +1,5 @@
 /* eslint-disable func-names */
-import { TokenKind, ReservedWords, Keywords, PreceedingRegexTypes, FixedTokenText, LexerTextCache } from './TokenKind';
+import { TokenKind, ReservedWords, Keywords, PreceedingRegexTypes, FixedTokenText, LexerTextCache, LEXER_TEXT_CACHE_MAX_ENTRIES } from './TokenKind';
 import type { Token } from './Token';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
 import type { Range, Diagnostic } from 'vscode-languageserver';
@@ -395,14 +395,9 @@ export class Lexer {
         if (this.options.includeWhitespace === false) {
             //skip the Token + Range allocations entirely; we only need the canonical
             //text so subsequent tokens can reference it as their leadingWhitespace
-            let text = this.source.slice(this.start, this.current);
-            const cached = LexerTextCache.get(text);
-            if (cached !== undefined) {
-                text = cached;
-            } else {
-                LexerTextCache.set(text, text);
-            }
-            this.leadingWhitespace = text;
+            this.leadingWhitespace = this.internText(
+                this.source.slice(this.start, this.current)
+            );
             //match what addToken's sync() would have done so the next token's range
             //starts after the whitespace rather than where it began
             this.start = this.current;
@@ -1065,6 +1060,26 @@ export class Lexer {
     }
 
     /**
+     * Returns the canonical instance of `text`, so repeated occurrences share one string
+     * object instead of a fresh sliced wrapper each time. Only worth calling for kinds
+     * with a bounded set of valid values (`Newline`, `Whitespace`).
+     *
+     * The table is capped: interning is a pure optimization, so once it is full we hand
+     * back the original slice rather than growing a process-lifetime cache without bound.
+     * See `LEXER_TEXT_CACHE_MAX_ENTRIES`.
+     */
+    private internText(text: string) {
+        const cached = LexerTextCache.get(text);
+        if (cached !== undefined) {
+            return cached;
+        }
+        if (LexerTextCache.size < LEXER_TEXT_CACHE_MAX_ENTRIES) {
+            LexerTextCache.set(text, text);
+        }
+        return text;
+    }
+
+    /**
      * Creates a `Token` and adds it to the `tokens` array.
      * @param kind the type of token to produce.
      */
@@ -1078,12 +1093,7 @@ export class Lexer {
             //canonicalize tokens with a bounded set of valid text values so repeated
             //occurrences share a single string instance instead of fresh sliced wrappers
             if (kind === TokenKind.Newline || kind === TokenKind.Whitespace) {
-                const cached = LexerTextCache.get(text);
-                if (cached !== undefined) {
-                    text = cached;
-                } else {
-                    LexerTextCache.set(text, text);
-                }
+                text = this.internText(text);
             }
         }
         //this is the canonical Token field order. Every other place that synthesizes a
