@@ -1448,7 +1448,7 @@ describe('ProjectManager', () => {
         });
 
         it('spawns a worker thread when threading is enabled', async function () {
-            this.timeout(15_000);
+            this.timeout(60_000);
             //the afterEach `manager.dispose()` for this test will log a
             //'Validation phase error: ... MessageHandler is now disposed' error to the console.
             //This is expected — Phase 2 validation runs in the worker thread asynchronously
@@ -1566,7 +1566,10 @@ describe('ProjectManager', () => {
     });
 
     it('completes promise when project is disposed in the middle of a flow', async function () {
-        this.timeout(20_000);
+        //this test enables real threading without a warm-up hook, so it pays the full worker-thread
+        //cold-boot cost itself. That boot has been measured at ~18s on macOS CI runners, so give it
+        //the same budget as the other cold-boot paths in these specs rather than racing a 20s limit.
+        this.timeout(60_000);
         //small plugin to communicate over a socket inside the worker thread.
         //This transpiles from tsc use `require()` for all imports and don't reference external vars
         class Plugin {

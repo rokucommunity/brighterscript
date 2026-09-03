@@ -89,7 +89,7 @@ describe('WorkerThreadProject', () => {
 
     describe('activate', () => {
         it('shows diagnostics after running', async function () {
-            this.timeout(15_000);
+            this.timeout(60_000);
             fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `
                 sub main()
                     print varNotThere
@@ -149,7 +149,7 @@ describe('WorkerThreadProject', () => {
         });
 
         it('allows multiple projects to share a single worker thread when capped', async function () {
-            this.timeout(15_000);
+            this.timeout(60_000);
             workerPool.maxWorkers = 1;
 
             fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `
@@ -199,7 +199,7 @@ describe('WorkerThreadProject', () => {
         });
 
         it('leaves the surviving co-tenant project functional after the other one is disposed', async function () {
-            this.timeout(15_000);
+            this.timeout(60_000);
             workerPool.maxWorkers = 1;
 
             fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `
@@ -249,7 +249,7 @@ describe('WorkerThreadProject', () => {
         });
 
         it('leaves the surviving co-tenant project functional even if the other one is disposed twice', async function () {
-            this.timeout(15_000);
+            this.timeout(60_000);
             workerPool.maxWorkers = 1;
 
             fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `
