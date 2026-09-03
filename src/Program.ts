@@ -71,6 +71,11 @@ import { roFunctionType } from './types/roFunctionType';
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
 
+/**
+ * The built-in Roku SceneGraph nodes, keyed by their lower-case name
+ */
+const builtInSceneGraphNodes = nodes as unknown as Record<string, SGNodeData>;
+
 export interface SignatureInfoObj {
     index: number;
     key: string;
@@ -761,6 +766,117 @@ export class Program {
      */
     public getComponentScope(componentName: string) {
         return this.getComponent(componentName)?.scope;
+    }
+
+    /**
+     * Get the names of all known SceneGraph nodes: the built-in Roku nodes plus every component
+     * defined in this program. Names keep their original casing and are deduplicated by lower-case name.
+     */
+    public getSceneGraphNodeNames(): string[] {
+        const namesByLowerName = new Map<string, string>();
+        for (const node of Object.values(builtInSceneGraphNodes)) {
+            namesByLowerName.set(node.name.toLowerCase(), node.name);
+        }
+        for (const componentName in this.components) {
+            const displayName = this.components[componentName][0]?.file.componentName?.text;
+            if (displayName) {
+                namesByLowerName.set(displayName.toLowerCase(), displayName);
+            }
+        }
+        return [...namesByLowerName.values()];
+    }
+
+    /**
+     * Determine whether a SceneGraph node with the given name exists, either as a built-in Roku node
+     * or as a component defined in this program.
+     */
+    public hasSceneGraphNode(nodeName: string): boolean {
+        if (!nodeName) {
+            return false;
+        }
+        return !!builtInSceneGraphNodes[nodeName.toLowerCase()] || !!this.getComponent(nodeName);
+    }
+
+    /**
+     * Get the built-in Roku node data and/or the project component file backing a SceneGraph node name.
+     * Returns `undefined` when no node or component matches.
+     */
+    public getSceneGraphNode(nodeName: string): SceneGraphNodeLookup | undefined {
+        if (!nodeName) {
+            return undefined;
+        }
+        const builtInNode = builtInSceneGraphNodes[nodeName.toLowerCase()];
+        const componentFile = this.getComponent(nodeName)?.file;
+        if (!builtInNode && !componentFile) {
+            return undefined;
+        }
+        return { builtInNode: builtInNode, componentFile: componentFile };
+    }
+
+    /**
+     * Get every field available on a SceneGraph node, walking the full `extends` chain across both
+     * built-in Roku nodes and project components. Fields declared closer to the node take precedence
+     * over inherited fields with the same name.
+     */
+    public getSceneGraphNodeFields(nodeName: string): ResolvedSceneGraphField[] {
+        const fieldsByLowerName = new Map<string, ResolvedSceneGraphField>();
+        const visitedNodeNames = new Set<string>();
+
+        const addField = (field: ResolvedSceneGraphField) => {
+            if (!field.name) {
+                return;
+            }
+            const lowerName = field.name.toLowerCase();
+            //the first definition we encounter is the closest one, so it wins
+            if (!fieldsByLowerName.has(lowerName)) {
+                fieldsByLowerName.set(lowerName, field);
+            }
+        };
+
+        const walk = (currentNodeName: string, origin: SceneGraphFieldOrigin) => {
+            const lowerName = currentNodeName?.toLowerCase();
+            if (!lowerName || visitedNodeNames.has(lowerName)) {
+                return;
+            }
+            visitedNodeNames.add(lowerName);
+
+            //prefer a project component (a project component can shadow a built-in of the same name)
+            const component = this.getComponent(currentNodeName);
+            if (component) {
+                for (const field of component.file.ast.componentElement?.interfaceElement?.fields ?? []) {
+                    addField({ name: field.id, type: field.type, default: field.value, origin: origin });
+                }
+                const parentName = component.file.ast.componentElement?.extends;
+                if (parentName) {
+                    walk(parentName, 'inherited');
+                }
+                return;
+            }
+
+            const builtInNode = builtInSceneGraphNodes[lowerName];
+            if (builtInNode) {
+                for (const field of builtInNode.fields ?? []) {
+                    addField({
+                        name: field.name,
+                        type: field.type,
+                        default: field.default,
+                        description: field.description,
+                        accessPermission: field.accessPermission,
+                        origin: origin
+                    });
+                }
+                if (builtInNode.extends?.name) {
+                    walk(builtInNode.extends.name, 'inherited');
+                } else if (lowerName !== 'node') {
+                    //some scraped node entries are missing `extends` data, but every SceneGraph node
+                    //ultimately descends from Node, so fall back to Node to keep its universal fields
+                    walk('Node', 'inherited');
+                }
+            }
+        };
+
+        walk(nodeName, 'own');
+        return [...fieldsByLowerName.values()];
     }
 
     /**
@@ -2647,4 +2763,30 @@ export interface ProgramBuildOptions {
      * Typically you will want to leave this blank
      */
     files?: BscFile[];
+}
+
+/**
+ * Where a resolved SceneGraph field was declared, relative to the node it was resolved for:
+ * `own` = declared on the node itself, `inherited` = declared on an ancestor in the `extends` chain
+ */
+export type SceneGraphFieldOrigin = 'own' | 'inherited';
+
+/**
+ * A field available on a SceneGraph node, resolved across the node's full `extends` chain
+ */
+export interface ResolvedSceneGraphField {
+    name: string;
+    type?: string;
+    default?: string;
+    description?: string;
+    accessPermission?: string;
+    origin: SceneGraphFieldOrigin;
+}
+
+/**
+ * The built-in Roku node data and/or project component file backing a SceneGraph node name
+ */
+export interface SceneGraphNodeLookup {
+    builtInNode?: SGNodeData;
+    componentFile?: XmlFile;
 }

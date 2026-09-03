@@ -7,7 +7,7 @@ import type { SinonStub } from 'sinon';
 import { createSandbox } from 'sinon';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
-import { getWakeWorkerThreadPromise } from './worker/WorkerThreadProject.spec';
+import { getWakeWorkerThreadPromise, preloadAndWaitUntilReady } from './worker/WorkerThreadProject.spec';
 import type { LspDiagnostic } from './LspProject';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { FileChangeType } from 'vscode-languageserver-protocol';
@@ -43,10 +43,14 @@ describe('ProjectManager', () => {
         });
     });
 
-    afterEach(() => {
+    afterEach(async function keepWorkerPoolWarm() {
+        //defensive fallback in case the pool ends up empty; give it a cold-boot-sized budget
+        this.timeout(60_000);
         fsExtra.emptyDirSync(tempDir);
         sinon.restore();
         manager.dispose();
+        //keep a spare worker warm for the next real-threading test (see WorkerThreadProject.spec.ts)
+        await preloadAndWaitUntilReady(1);
     });
     let diagnosticsListeners: Array<(diagnostics: LspDiagnostic[]) => void> = [];
     let diagnosticsResponses: Array<LspDiagnostic[]> = [];
@@ -1443,7 +1447,8 @@ describe('ProjectManager', () => {
             await getWakeWorkerThreadPromise();
         });
 
-        it('spawns a worker thread when threading is enabled', async () => {
+        it('spawns a worker thread when threading is enabled', async function () {
+            this.timeout(15_000);
             //the afterEach `manager.dispose()` for this test will log a
             //'Validation phase error: ... MessageHandler is now disposed' error to the console.
             //This is expected — Phase 2 validation runs in the worker thread asynchronously

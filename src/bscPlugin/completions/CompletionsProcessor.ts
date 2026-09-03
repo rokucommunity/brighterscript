@@ -106,9 +106,9 @@ export class CompletionsProcessor {
         let scriptImport = util.getScriptImportAtPosition(file.scriptTagImports, position);
         if (scriptImport) {
             return this.getScriptImportCompletions(file.program, file.pkgPath, scriptImport);
-        } else {
-            return [];
         }
+        //xml element/attribute completions (scenegraph nodes, interface field/function, node fields)
+        return file.getCompletions(position);
     }
 
     /**

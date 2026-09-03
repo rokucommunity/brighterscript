@@ -12,6 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'create-vsix')
     steps:
+      # GitHub withholds repository secrets from fork-triggered runs, so fail fast with a clear message
+      - name: Reject fork PRs
+        if: github.event.pull_request.head.repo.fork
+        run: |
+          echo "::error::Could not build a .vsix because fork PRs can't access the required secrets. Ask a maintainer to dispatch it manually for PR #${{ github.event.pull_request.number }}: https://github.com/${{ github.repository }}/actions/workflows/create-vsix.yml"
+          exit 1
       # Get a bot token so the bot's name shows up on all our actions
       - name: Get Token From roku-ci-token Application
         uses: tibdex/github-app-token@v1
@@ -21,8 +27,18 @@ jobs:
           private_key: ${{ secrets.BOT_PRIVATE_KEY }}
       - name: Set New GitHub Token
         run: echo "TOKEN=${{ steps.generate-token.outputs.token }}" >> $GITHUB_ENV
-      # Trigger the build on vscode-brightscript-language. That workflow interprets these
-      # inputs, builds the .vsix files, and posts the download links back on the PR
+      # Resolve the input to a full PR URL (a bare PR number refers to this repo)
+      - name: Resolve PR URL
+        id: pr
+        run: |
+          input="${{ github.event.pull_request.html_url || github.event.inputs.pr }}"
+          if [[ "$input" =~ ^[0-9]+$ ]]; then
+            input="https://github.com/${{ github.repository }}/pull/$input"
+          fi
+          echo "url=$input" >> "$GITHUB_OUTPUT"
+      # Trigger the build on vscode-brightscript-language. That workflow looks up the PR, builds the
+      # .vsix files (preferring same-named branches attached to open PRs across all the projects),
+      # and posts the download links back on the PR
       - name: Build vsix
         uses: aurelien-baudet/workflow-dispatch@v2.1.1
         id: create-vsix
@@ -33,4 +49,4 @@ jobs:
           display-workflow-run-url: true
           repo: rokucommunity/vscode-brightscript-language
           token: ${{ env.TOKEN }}
-          inputs: '{ "branch": "${{ github.head_ref }}", "pr": "${{ github.event.pull_request.html_url || github.event.inputs.pr }}", "repo": "${{ github.repository }}" }'
+          inputs: '{ "pr": "${{ steps.pr.outputs.url }}" }'

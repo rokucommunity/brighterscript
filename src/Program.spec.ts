@@ -51,6 +51,67 @@ describe('Program', () => {
         program.dispose();
     });
 
+    describe('scenegraph node metadata', () => {
+        it('getSceneGraphNodeNames includes built-in nodes and project components', () => {
+            program.setFile('components/widget.xml', trim`
+                <component name="Widget" extends="Group">
+                </component>
+            `);
+            const names = program.getSceneGraphNodeNames();
+            expect(names).to.include('Label');
+            expect(names).to.include('Widget');
+        });
+
+        it('hasSceneGraphNode recognizes built-in nodes and project components (case-insensitive)', () => {
+            program.setFile('components/widget.xml', trim`
+                <component name="Widget" extends="Group">
+                </component>
+            `);
+            expect(program.hasSceneGraphNode('label')).to.be.true;
+            expect(program.hasSceneGraphNode('widget')).to.be.true;
+            expect(program.hasSceneGraphNode('NotARealNode')).to.be.false;
+        });
+
+        it('getSceneGraphNodeFields walks the extends chain of a built-in node', () => {
+            //Label extends LabelBase extends ... eventually Node; `id` comes from Node
+            const fieldNames = program.getSceneGraphNodeFields('Label').map(x => x.name);
+            expect(fieldNames).to.include('text');
+            expect(fieldNames).to.include('id');
+        });
+
+        it('getSceneGraphNodeFields walks from a project component into its built-in parent', () => {
+            program.setFile('components/widget.xml', trim`
+                <component name="Widget" extends="Group">
+                    <interface>
+                        <field id="caption" type="string" />
+                    </interface>
+                </component>
+            `);
+            const fields = program.getSceneGraphNodeFields('Widget');
+            const own = fields.find(x => x.name === 'caption');
+            const inherited = fields.find(x => x.name === 'visible');
+            //own field from the component's interface
+            expect(own?.origin).to.equal('own');
+            //inherited field from the built-in Group (via Node)
+            expect(inherited?.origin).to.equal('inherited');
+        });
+
+        it('getSceneGraphNodeFields falls back to Node for built-in nodes missing `extends` data', () => {
+            //several node entries in the scraped roku-types data have no `extends` key (and some have
+            //no fields of their own), but every SceneGraph node ultimately descends from Node, so
+            //universal Node fields like `id` and `focusable` must still be returned
+            for (const nodeName of ['MonospaceLabel', 'InfoPane', 'ParentalControlPinPad', 'TimeGrid', 'ZoomRowList']) {
+                const fieldNames = program.getSceneGraphNodeFields(nodeName).map(x => x.name);
+                expect(fieldNames, nodeName).to.include('id');
+                expect(fieldNames, nodeName).to.include('focusable');
+            }
+        });
+
+        it('getSceneGraphNodeFields returns no fields for unknown nodes', () => {
+            expect(program.getSceneGraphNodeFields('NotARealNode')).to.eql([]);
+        });
+    });
+
     it('does not throw exception after calling validate() after dispose()', () => {
         program.setFile('source/themes/alpha.bs', `
             sub main()

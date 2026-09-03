@@ -854,9 +854,9 @@ export class Parser {
                 });
                 //TODO we should probably eliminate this entirely, since it's not present in the source code
                 functionType = {
-                    isReserved: true,
                     kind: TokenKind.Function,
                     text: 'function',
+                    isReserved: true,
                     //zero-length location means derived
                     location: this.peek().location,
                     leadingWhitespace: '',
