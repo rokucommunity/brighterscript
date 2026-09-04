@@ -73,7 +73,7 @@ describe('XmlScope', () => {
             `);
             const definition = program.getDefinition(childXmlFile.srcPath, Position.create(1, 48));
             expect(definition).to.be.lengthOf(1);
-            expect(definition[0].uri).to.equal(util.pathToUri(parentXmlFile.srcPath));
+            expect((definition[0] as any).uri).to.equal(util.pathToUri(parentXmlFile.srcPath));
         });
     });
 
