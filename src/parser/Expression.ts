@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import type { Block, CommentStatement, FunctionStatement, NamespaceStatement } from './Statement';
+import type { Block, CommentStatement, FunctionStatement } from './Statement';
 import type { Range } from 'vscode-languageserver';
 import util from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';
@@ -98,7 +98,7 @@ export class CallExpression extends Expression {
      * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
      */
     public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+        return this.findAncestor(isNamespaceStatement)?.nameExpression;
     }
 
     transpile(state: BrsTranspileState, nameOverride?: string) {
@@ -186,7 +186,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
      * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
      */
     public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+        return this.findAncestor(isNamespaceStatement)?.nameExpression;
     }
 
     /**
@@ -194,7 +194,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
      * @deprecated use `.findAncestor(isFunctionExpression)` instead.
      */
     public get parentFunction() {
-        return this.findAncestor<FunctionExpression>(isFunctionExpression);
+        return this.findAncestor(isFunctionExpression);
     }
 
     /**
@@ -1208,7 +1208,7 @@ export class VariableExpression extends Expression {
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
-        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        const namespace = this.findAncestor(isNamespaceStatement);
         //if the callee is the name of a known namespace function
         if (namespace && state.file.calleeIsKnownNamespaceFunction(this, namespace.getName(ParseMode.BrighterScript))) {
             result.push(
@@ -1258,7 +1258,7 @@ export class SourceLiteralExpression extends Expression {
     public readonly range: Range;
 
     private getFunctionName(state: BrsTranspileState, parseMode: ParseMode) {
-        let func = this.findAncestor<FunctionExpression>(isFunctionExpression);
+        let func = this.findAncestor(isFunctionExpression);
         let nameParts = [] as TranspileResult;
         while (func.parentFunction) {
             let index = func.parentFunction.childFunctionExpressions.indexOf(func);
@@ -1391,7 +1391,7 @@ export class NewExpression extends Expression {
     }
 
     public transpile(state: BrsTranspileState) {
-        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        const namespace = this.findAncestor(isNamespaceStatement);
         const cls = state.file.getClassFileLink(
             this.className.getName(ParseMode.BrighterScript),
             namespace?.getName(ParseMode.BrighterScript)
@@ -1450,7 +1450,7 @@ export class CallfuncExpression extends Expression {
      * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
      */
     public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+        return this.findAncestor(isNamespaceStatement)?.nameExpression;
     }
 
     public transpile(state: BrsTranspileState) {

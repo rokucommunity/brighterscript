@@ -9,7 +9,7 @@ import type { Expression, Statement } from '../../parser/AstNode';
 import type { TernaryExpression } from '../../parser/Expression';
 import { LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { ConstStatement, IfStatement, NamespaceStatement } from '../../parser/Statement';
+import type { ConstStatement, IfStatement } from '../../parser/Statement';
 import type { Scope } from '../../Scope';
 import util from '../../util';
 
@@ -361,7 +361,7 @@ export class BrsFilePreTranspileProcessor {
             return;
         }
         visitedConsts.add(constStatement);
-        const innerNamespace = constStatement.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+        const innerNamespace = constStatement.findAncestor(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
         value.walk(createVisitor({
             VariableExpression: (varExpr) => {
                 if (isDottedGetExpression(varExpr.parent)) {

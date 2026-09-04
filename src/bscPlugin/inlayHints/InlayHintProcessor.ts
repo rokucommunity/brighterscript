@@ -15,7 +15,7 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { ProvideInlayHintsEvent } from '../../interfaces';
 import type { CallExpression, CallfuncExpression, FunctionParameterExpression } from '../../parser/Expression';
 import type { Expression } from '../../parser/AstNode';
-import type { ClassStatement, FunctionStatement, MethodStatement, NamespaceStatement } from '../../parser/Statement';
+import type { FunctionStatement, MethodStatement } from '../../parser/Statement';
 import { ParseMode } from '../../parser/Parser';
 import { util } from '../../util';
 import type { XmlScope } from '../../XmlScope';
@@ -102,7 +102,7 @@ export class InlayHintProcessor {
         //plain function call: `foo(...)`
         if (isVariableExpression(callee)) {
             const name = callee.name.text;
-            const containingNamespace = callee.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+            const containingNamespace = callee.findAncestor(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
             return this.lookupFunctionParameters(file, name, containingNamespace);
         }
 
@@ -149,7 +149,7 @@ export class InlayHintProcessor {
      */
     private lookupClassMethodParameters(file: BrsFile, callee: { obj?: Expression }, name: string): FunctionParameterExpression[] | undefined {
         if (isVariableExpression(callee.obj) && callee.obj.name.text === 'm') {
-            const enclosingClass = callee.obj.findAncestor<ClassStatement>(isClassStatement);
+            const enclosingClass = callee.obj.findAncestor(isClassStatement);
             if (enclosingClass) {
                 const method = file.getClassMethod(enclosingClass, name, true);
                 if (method) {
