@@ -52,7 +52,9 @@ export abstract class AstNode {
     /**
      * Walk upward and return the first node that results in `true` from the matcher
      */
-    public findAncestor<TNode extends AstNode = AstNode>(matcher: (node: AstNode) => boolean | undefined) {
+    public findAncestor<TNode extends AstNode = AstNode>(matcher: (node: AstNode) => node is TNode): TNode | undefined;
+    public findAncestor<TNode extends AstNode = AstNode>(matcher: (node: AstNode) => boolean | undefined): TNode | undefined;
+    public findAncestor<TNode extends AstNode = AstNode>(matcher: (node: AstNode) => boolean | undefined): TNode | undefined {
         let node = this.parent;
         while (node) {
             if (matcher(node)) {

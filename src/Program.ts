@@ -20,7 +20,7 @@ import { parseManifest } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import { isBrsFile, isXmlFile, isMethodStatement, isXmlScope, isNamespaceStatement } from './astUtils/reflection';
-import type { FunctionStatement, NamespaceStatement } from './parser/Statement';
+import type { FunctionStatement } from './parser/Statement';
 import { ParseMode } from './parser/Parser';
 import { TokenKind } from './lexer/TokenKind';
 import { BscPlugin } from './bscPlugin/BscPlugin';
@@ -842,7 +842,7 @@ export class Program {
                 filesSearched.add(file);
 
                 for (const statement of [...file.parser.references.functionStatements, ...file.parser.references.classStatements.flatMap((cs) => cs.methods)]) {
-                    let parentNamespaceName = statement.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(originFile.parseMode)?.toLowerCase();
+                    let parentNamespaceName = statement.findAncestor(isNamespaceStatement)?.getName(originFile.parseMode)?.toLowerCase();
                     if (statement.name.text.toLowerCase() === lowerName && (!parentNamespaceName || parentNamespaceName === lowerNamespaceName)) {
                         if (!results.has(statement)) {
                             results.set(statement, { item: statement, file: file });

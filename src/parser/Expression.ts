@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import type { Block, CommentStatement, FunctionStatement, NamespaceStatement } from './Statement';
+import type { Block, CommentStatement, FunctionStatement } from './Statement';
 import type { Range } from 'vscode-languageserver';
 import util from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';
@@ -764,7 +764,7 @@ export class VariableExpression extends Expression {
 
     transpile(state: BrsTranspileState) {
         let result = [];
-        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        const namespace = this.findAncestor(isNamespaceStatement);
         //if the callee is the name of a known namespace function
         if (state.file.calleeIsKnownNamespaceFunction(this, namespace?.getName(ParseMode.BrighterScript))) {
             result.push(
@@ -891,7 +891,7 @@ export class NewExpression extends Expression {
     public readonly range: Range;
 
     public transpile(state: BrsTranspileState) {
-        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        const namespace = this.findAncestor(isNamespaceStatement);
         const cls = state.file.getClassFileLink(
             this.className.getName(ParseMode.BrighterScript),
             namespace?.getName(ParseMode.BrighterScript)

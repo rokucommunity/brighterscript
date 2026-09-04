@@ -822,7 +822,7 @@ export class Scope {
             if (isCustomType(func.returnType) && func.returnTypeToken) {
                 // check if this custom type is in our class map
                 const returnTypeName = func.returnType.name;
-                const currentNamespaceName = func.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+                const currentNamespaceName = func.findAncestor(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
                 if (!this.hasClass(returnTypeName, currentNamespaceName) && !this.hasInterface(returnTypeName) && !this.hasEnum(returnTypeName)) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.invalidFunctionReturnType(returnTypeName),
@@ -835,7 +835,7 @@ export class Scope {
             for (let param of func.parameters) {
                 if (isCustomType(param.type) && param.typeToken) {
                     const paramTypeName = param.type.name;
-                    const currentNamespaceName = func.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+                    const currentNamespaceName = func.findAncestor(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
                     if (!this.hasClass(paramTypeName, currentNamespaceName) && !this.hasInterface(paramTypeName) && !this.hasEnum(paramTypeName)) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.functionParameterTypeIsInvalid(param.name.text, paramTypeName),

@@ -2,7 +2,7 @@ import type { Scope } from '../Scope';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { CallExpression } from '../parser/Expression';
 import { ParseMode } from '../parser/Parser';
-import type { ClassStatement, MethodStatement, NamespaceStatement } from '../parser/Statement';
+import type { ClassStatement, MethodStatement } from '../parser/Statement';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
@@ -60,7 +60,7 @@ export class BsClassValidator {
             let newExpressions = file.parser.references.newExpressions;
             for (let newExpression of newExpressions) {
                 let className = newExpression.className.getName(ParseMode.BrighterScript);
-                const namespaceName = newExpression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+                const namespaceName = newExpression.findAncestor(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
                 let newableClass = this.getClassByName(
                     className,
                     namespaceName
@@ -90,7 +90,7 @@ export class BsClassValidator {
         for (const [className, classStatement] of this.classes) {
             //catch namespace class collision with global class
             let nonNamespaceClass = this.classes.get(util.getTextAfterFinalDot(className).toLowerCase());
-            const namespace = classStatement.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const namespace = classStatement.findAncestor(isNamespaceStatement);
             if (namespace && nonNamespaceClass) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.namespacedClassCannotShareNamewithNonNamespacedClass(
@@ -305,7 +305,7 @@ export class BsClassValidator {
                         const fieldTypeName = fieldType.name;
                         const lowerFieldTypeName = fieldTypeName?.toLowerCase();
                         if (lowerFieldTypeName) {
-                            const namespace = classStatement.findAncestor<NamespaceStatement>(isNamespaceStatement);
+                            const namespace = classStatement.findAncestor(isNamespaceStatement);
                             const currentNamespaceName = namespace?.getName(ParseMode.BrighterScript);
                             //check if this custom type is in our class map
                             if (!this.getClassByName(lowerFieldTypeName, currentNamespaceName) && !this.scope.hasInterface(lowerFieldTypeName) && !this.scope.hasEnum(lowerFieldTypeName)) {
@@ -405,7 +405,7 @@ export class BsClassValidator {
                     //compute the relative name of the parent class and prepend the current class's namespace
                     //to the beginning of the parent class's name
                 } else {
-                    const namespace = classStatement.findAncestor<NamespaceStatement>(isNamespaceStatement);
+                    const namespace = classStatement.findAncestor(isNamespaceStatement);
                     if (namespace) {
                         absoluteName = `${namespace.getName(ParseMode.BrighterScript)}.${parentClassName}`;
                     } else {
