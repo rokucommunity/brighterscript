@@ -24,68 +24,118 @@ export function walkStatements(
 export type WalkVisitor = <T = AstNode>(node: AstNode, parent?: AstNode, owner?: any, key?: any) => void | T;
 
 /**
+ * The outcome of walking a single slot, used by `walkArray` to decide what to do next.
+ */
+interface WalkSlotResult {
+    /**
+     * The node that was actually descended into (i.e. the one whose children were walked), or undefined if nothing was walked.
+     */
+    walkedNode?: AstNode;
+    /**
+     * True when the original node was swapped out for a different node *in this same slot*
+     * (either by the visitor returning a node, or by the visitor assigning the slot directly).
+     * A node that merely got pushed to a different index by an insertion is NOT a replacement.
+     */
+    wasReplaced?: boolean;
+}
+
+/**
  * A helper function for Statement and Expression `walkAll` calls.
  * @returns a new AstNode if it was changed by returning from the visitor, or undefined if not
  */
 export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: WalkOptions, parent?: AstNode): AstNode | void {
-    let returnValue: AstNode | void;
+    return walkSlot(owner, key, visitor, options, parent).walkedNode;
+}
 
+/**
+ * The full-fidelity version of `walk`. Walks a single `owner[key]` slot and reports exactly what happened,
+ * so array walkers can tell an in-place *replacement* apart from the node simply being *displaced* by an insertion.
+ */
+function walkSlot<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: WalkOptions, parent?: AstNode): WalkSlotResult {
     //stop processing if canceled
     if (options.cancel?.isCancellationRequested) {
-        return returnValue;
+        return {};
     }
 
     //the object we're visiting
-    let element = owner[key] as any as AstNode;
+    const element = owner[key] as any as AstNode;
     if (!element) {
-        return returnValue;
+        return {};
     }
+    const result: WalkSlotResult = {};
+    //remember the array size so we can tell an insertion/deletion apart from an in-place replacement
+    const ownerIsArray = Array.isArray(owner);
+    const originalLength = ownerIsArray ? (owner as any[]).length : 0;
 
     //link this node to its parent
     parent = parent ?? owner as unknown as AstNode;
     element.parent = parent;
 
-
     //notify the visitor of this element
     if (element.visitMode & options.walkMode) {
-        returnValue = visitor?.(element, element.parent, owner, key);
+        const visitorResult = visitor?.(element, element.parent, owner, key);
 
         //replace the value on the parent if the visitor returned a Statement or Expression (this is how visitors can edit AST)
-        if (returnValue && (isExpression(returnValue) || isStatement(returnValue))) {
+        if (visitorResult && (isExpression(visitorResult) || isStatement(visitorResult))) {
             //if we have an editor, use that to modify the AST
             if (options.editor) {
-                //`T[K]` can't be statically unified with the now-narrowed `returnValue` because `T`/`K` are unresolved generics here;
+                //`T[K]` can't be statically unified with the now-narrowed `visitorResult` because `T`/`K` are unresolved generics here;
                 //callers only ever pass AST-shaped values, so this is safe in practice
-                options.editor.setProperty(owner, key, returnValue as unknown as T[keyof T]);
+                options.editor.setProperty(owner, key, visitorResult as unknown as T[keyof T]);
 
                 //we don't have an editor, modify the AST directly
             } else {
-                (owner as any)[key] = returnValue;
+                (owner as any)[key] = visitorResult;
             }
         }
     }
 
     //stop processing if canceled
     if (options.cancel?.isCancellationRequested) {
-        return returnValue;
+        return result;
     }
 
-    //get the element again in case it was replaced by the visitor
-    element = owner[key] as any as AstNode;
-    if (!element) {
-        return returnValue;
+    //Figure out which node we should actually descend into. The visitor may have mutated the AST in one of several ways:
+    // 1. replaced this slot with a different node -> descend into the new node, and report it as a replacement
+    // 2. inserted node(s) above this one in an array -> this node merely moved; descend into the ORIGINAL node so its children still get walked
+    // 3. removed this node entirely -> there is nothing left to descend into
+    let elementToWalk = owner[key] as any as AstNode;
+
+    if (elementToWalk !== element) {
+        const displacedIndex = ownerIsArray ? (owner as any[]).indexOf(element) : -1;
+
+        if (displacedIndex > -1) {
+            //case 2: the original node is still in the array, just at a different index (something was inserted above it).
+            //Walk IT rather than whatever landed in our slot; the array walker will reach that other node on its own.
+            elementToWalk = element;
+            key = displacedIndex as any as keyof T;
+
+        } else if (ownerIsArray && (owner as any[]).length < originalLength) {
+            //case 3: the array shrank and our node is gone -> it was deleted, not replaced. Nothing to descend into.
+            //Whatever slid into this slot still needs its own visit, so do NOT claim it here.
+            return result;
+
+        } else {
+            //case 1: the original node was swapped out in place -> a genuine replacement
+            result.wasReplaced = true;
+        }
     }
 
-    //set the parent of this new expression
-    element.parent = parent;
+    if (!elementToWalk) {
+        return result;
+    }
 
-    if (!element.walk) {
+    //set the parent of this expression
+    elementToWalk.parent = parent;
+
+    if (!elementToWalk.walk) {
         throw new Error(`${owner.constructor.name}["${String(key)}"]${parent ? ` for ${parent.constructor.name}` : ''} does not contain a "walk" method`);
     }
     //walk the child expressions
-    element.walk(visitor, options);
+    elementToWalk.walk(visitor, options);
 
-    return returnValue;
+    result.walkedNode = elementToWalk;
+    return result;
 }
 
 /**
@@ -97,27 +147,37 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
  * @param filter a function used to filter items from the array. return true if that item should be walked
  */
 export function walkArray<T extends AstNode = AstNode>(array: Array<T>, visitor: WalkVisitor, options: WalkOptions, parent?: AstNode, filter?: (element: T) => boolean) {
+    //every node we have already visited during this array walk, so a restart never double-visits
     let processedNodes = new Set<AstNode>();
 
     for (let i = 0; i < array?.length; i++) {
-        if (!filter || filter(array[i])) {
-            let item = array[i];
-            //skip already processed nodes for this array walk
-            if (processedNodes.has(item)) {
-                continue;
-            }
-            processedNodes.add(item);
+        if (options.cancel?.isCancellationRequested) {
+            return;
+        }
+        if (filter && !filter(array[i])) {
+            continue;
+        }
+        const item = array[i];
+        //skip already processed nodes for this array walk
+        if (!item || processedNodes.has(item)) {
+            continue;
+        }
 
-            //if the walk produced a new node, we will assume the original node was handled, and the new node's children were walked, so we can skip it if we enter recovery mode
-            const newNode = walk(array, i, visitor, options, parent);
-            if (newNode) {
-                processedNodes.add(newNode);
-            }
+        //mark the item as processed BEFORE walking it. The visitor sees this node exactly once, no matter
+        //how it mutates the array afterwards (moving it, replacing it, or deleting it).
+        processedNodes.add(item);
 
-            //if the current item changed, restart the entire loop (we'll skip any already-processed items)
-            if (array[i] !== item) {
-                i = -1;
-            }
+        const { walkedNode, wasReplaced } = walkSlot(array, i, visitor, options, parent);
+
+        //a node that replaced this slot had its children walked already, so don't visit it a second time
+        if (wasReplaced && walkedNode) {
+            processedNodes.add(walkedNode);
+        }
+
+        //if the array shifted under us, restart the scan. Already-processed nodes are skipped,
+        //so this only picks up nodes that were inserted or that we haven't reached yet.
+        if (array[i] !== item) {
+            i = -1;
         }
     }
 }
