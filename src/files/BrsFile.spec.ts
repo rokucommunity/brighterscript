@@ -3529,6 +3529,34 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('replaces existing trailing sourceMappingURL comment instead of appending a second one', () => {
+            program.options.sourceMap = true;
+            //file already has a sourceMappingURL comment at the bottom (e.g. ingested from a previous build)
+            const file = program.setFile('source/main.bs', undent`
+                sub main()
+                end sub
+                '//# sourceMappingURL=./some-old-path.brs.map
+            `);
+            file.needsTranspiled = false;
+            const code = file.transpile().code;
+            //should only contain a single sourceMappingURL comment (the new one)
+            expect(code.match(/sourceMappingURL=/g)?.length).to.eql(1);
+            expect(code.endsWith(`'//# sourceMappingURL=./main.brs.map`)).to.be.true;
+        });
+
+        it('replaces existing trailing sourceMappingURL comment when AST-transpiling', () => {
+            program.options.sourceMap = true;
+            const file = program.setFile('source/main.bs', undent`
+                sub main()
+                end sub
+                '//# sourceMappingURL=./some-old-path.brs.map
+            `);
+            file.needsTranspiled = true;
+            const code = file.transpile().code;
+            expect(code.match(/sourceMappingURL=/g)?.length).to.eql(1);
+            expect(code.endsWith(`'//# sourceMappingURL=./main.brs.map`)).to.be.true;
+        });
+
         it('includes sourcemap.name property', () => {
             program.options.sourceMap = true;
             const file = program.setFile('source/main.bs', `
