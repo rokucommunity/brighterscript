@@ -700,9 +700,11 @@ export const PreceedingRegexTypes = new Set([
     TokenKind.To,
     TokenKind.Newline,
     TokenKind.Throw,
-    TokenKind.Throw,
     TokenKind.Colon,
-    TokenKind.Semicolon
+    TokenKind.Semicolon,
+    TokenKind.Comma,
+    //a regex may open a template string expression (i.e. `${/hello/g}`)
+    TokenKind.TemplateStringExpressionBegin
 ]);
 
 /**
