@@ -132,6 +132,51 @@ export abstract class AstNode {
     }
 
     /**
+     * The child that this node reaches through, for nodes like `a.b` that wrap another
+     * expression. Overridden by dotted/indexed gets, calls, etc. Everything else returns undefined.
+     *
+     * Given `a.b`, the `DottedGetExpression` for `a.b` returns the `VariableExpression` for `a`.
+     *
+     * Only the wrapped expression counts. Call args and index values are excluded, because
+     * they're separate expressions that merely sit inside this one:
+     * ```
+     * a.b(c)      //CallExpression.chainChild is `a.b`,  NOT `c`
+     * a[c]        //IndexedGetExpression.chainChild is `a`, NOT `c`
+     * ```
+     */
+    public get chainChild(): AstNode | undefined {
+        return undefined;
+    }
+
+    /**
+     * Is this node the outermost node of its expression? (i.e. is nothing else reaching down
+     * through it via `chainChild`)
+     *
+     * Statements are always terminal. Use this to find whole expressions while walking, instead
+     * of also matching the fragments inside them.
+     *
+     * ```
+     * print a.b.c(1)
+     * // a.b.c(1)  terminal - the whole expression
+     * // a.b.c     no       - a.b.c(1) reaches through it
+     * // a.b       no       - a.b.c reaches through it
+     * // a         no       - a.b reaches through it
+     * // 1         terminal - an argument, so its own expression
+     * ```
+     *
+     * Note that an inner node can still be terminal when it's an argument rather than something
+     * being reached through. Here `a.b` is terminal even though it's nested inside the call:
+     * ```
+     * print doSomething(a.b)
+     * ```
+     *
+     * Requires `parent` to be set, so the node must already be linked (see `link()`).
+     */
+    public isTerminal(): boolean {
+        return this.parent?.chainChild !== this;
+    }
+
+    /**
      * Clone this node and all of its children. This creates a completely detached and identical copy of the AST.
      * All tokens, statements, expressions, range, and location are cloned.
      */

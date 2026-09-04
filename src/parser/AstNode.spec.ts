@@ -11,6 +11,8 @@ import type { ClassStatement, FunctionStatement, InterfaceFieldStatement, Interf
 import { AssignmentStatement, EmptyStatement } from './Statement';
 import { ParseMode, Parser } from './Parser';
 import type { AstNode } from './AstNode';
+import { WalkMode } from '../astUtils/visitors';
+import { isStatement } from '../astUtils/reflection';
 
 type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };
 
@@ -1862,6 +1864,285 @@ describe('AstNode', () => {
             `).ast;
 
             testClone(original);
+        });
+    });
+    describe('chains', () => {
+        /**
+         * Parse `code` and return every node in the AST, in walk order, already linked to its parent
+         */
+        function parseNodes(code: string) {
+            const { ast } = Parser.parse(code);
+            const nodes: AstNode[] = [];
+            ast.walk((node) => {
+                nodes.push(node);
+            }, { walkMode: WalkMode.visitAllRecursive });
+            return nodes;
+        }
+
+        /**
+         * Render a node as the exact source text it spans. This gives the tests a readable,
+         * unambiguous label for each node without depending on transpile behavior.
+         */
+        function getText(code: string, node: AstNode) {
+            const lines = code.split(/\r?\n/);
+            const { start, end } = node.range;
+            if (start.line === end.line) {
+                return lines[start.line].slice(start.character, end.character);
+            }
+            return [
+                lines[start.line].slice(start.character),
+                ...lines.slice(start.line + 1, end.line),
+                lines[end.line].slice(0, end.character)
+            ].join('\n').replace(/\s+/g, ' ');
+        }
+
+        /**
+         * Assert every terminal expression in `code`, each followed by the nodes it reaches
+         * through via `chainChild` (innermost first). Statements are excluded so these tests
+         * stay focused on expression boundaries.
+         */
+        function expectChains(code: string, expected: Array<[string, string[]]>) {
+            const actual = parseNodes(code)
+            //only expressions (skip the root Body) that are the outermost node of their expression
+                .filter(node => node.parent && node.isTerminal() && !isStatement(node))
+                .map(node => {
+                    //collect this node and everything it reaches down through
+                    const links: string[] = [];
+                    for (let link: AstNode | undefined = node; link; link = link.chainChild) {
+                        links.unshift(getText(code, link));
+                    }
+                    return [getText(code, node), links];
+                });
+            expect(actual).to.eql(expected);
+        }
+
+        /**
+         * Assert `[text, isTerminal]` for every node in `code`
+         */
+        function expectTerminals(code: string, expected: Array<[string, boolean]>) {
+            const actual = parseNodes(code)
+                .filter(node => node.parent)
+                .map(node => [getText(code, node), node.isTerminal()]);
+            expect(actual).to.eql(expected);
+        }
+
+        it('treats a lone variable as a complete chain', () => {
+            expectChains('print alpha', [
+                ['alpha', ['alpha']]
+            ]);
+        });
+
+        it('walks a simple dotted get chain', () => {
+            expectChains('print alpha.beta.charlie', [
+                ['alpha.beta.charlie', ['alpha', 'alpha.beta', 'alpha.beta.charlie']]
+            ]);
+        });
+
+        it('stops at the boundary when a chain is used as a call argument', () => {
+            expectChains('print doSomething(alpha.beta.charlie)', [
+                ['doSomething(alpha.beta.charlie)', ['doSomething', 'doSomething(alpha.beta.charlie)']],
+                ['alpha.beta.charlie', ['alpha', 'alpha.beta', 'alpha.beta.charlie']]
+            ]);
+        });
+
+        it('finds chains in nested function calls', () => {
+            expectChains('print alpha(beta.charlie(1 + 2))', [
+                ['alpha(beta.charlie(1 + 2))', ['alpha', 'alpha(beta.charlie(1 + 2))']],
+                ['beta.charlie(1 + 2)', ['beta', 'beta.charlie', 'beta.charlie(1 + 2)']],
+                ['1 + 2', ['1 + 2']],
+                ['1', ['1']],
+                ['2', ['2']]
+            ]);
+        });
+
+        it('treats a call of a call as one chain', () => {
+            expectChains('print alpha()()', [
+                ['alpha()()', ['alpha', 'alpha()', 'alpha()()']]
+            ]);
+        });
+
+        it('includes indexed gets in the chain but not their index', () => {
+            expectChains('print alpha.beta[charlie.delta]', [
+                ['alpha.beta[charlie.delta]', ['alpha', 'alpha.beta', 'alpha.beta[charlie.delta]']],
+                ['charlie.delta', ['charlie', 'charlie.delta']]
+            ]);
+        });
+
+        it('includes xml attribute gets in the chain', () => {
+            expectChains('print alpha.beta@charlie', [
+                ['alpha.beta@charlie', ['alpha', 'alpha.beta', 'alpha.beta@charlie']]
+            ]);
+        });
+
+        it('includes callfunc in the chain but not its args', () => {
+            expectChains('print alpha.beta@.charlie(delta.echo)', [
+                ['alpha.beta@.charlie(delta.echo)', ['alpha', 'alpha.beta', 'alpha.beta@.charlie(delta.echo)']],
+                ['delta.echo', ['delta', 'delta.echo']]
+            ]);
+        });
+
+        it('handles a long mixed chain', () => {
+            expectChains('print alpha.beta[1].charlie(2).delta@echo', [
+                [
+                    'alpha.beta[1].charlie(2).delta@echo',
+                    [
+                        'alpha',
+                        'alpha.beta',
+                        'alpha.beta[1]',
+                        'alpha.beta[1].charlie',
+                        'alpha.beta[1].charlie(2)',
+                        'alpha.beta[1].charlie(2).delta',
+                        'alpha.beta[1].charlie(2).delta@echo'
+                    ]
+                ],
+                ['1', ['1']],
+                ['2', ['2']]
+            ]);
+        });
+
+        it('treats a grouping as a boundary in both directions', () => {
+            expectChains('print (alpha.beta).charlie', [
+                ['(alpha.beta).charlie', ['(alpha.beta)', '(alpha.beta).charlie']],
+                ['alpha.beta', ['alpha', 'alpha.beta']]
+            ]);
+        });
+
+        it('treats each operand of a binary expression as its own chain', () => {
+            expectChains('print alpha.beta > charlie.delta', [
+                ['alpha.beta > charlie.delta', ['alpha.beta > charlie.delta']],
+                ['alpha.beta', ['alpha', 'alpha.beta']],
+                ['charlie.delta', ['charlie', 'charlie.delta']]
+            ]);
+        });
+
+        it('treats the operand of a unary expression as its own chain', () => {
+            expectChains('print not alpha.beta', [
+                ['not alpha.beta', ['not alpha.beta']],
+                ['alpha.beta', ['alpha', 'alpha.beta']]
+            ]);
+        });
+
+        it('treats array literal elements as their own chains', () => {
+            expectChains('print [alpha.beta, charlie.delta]', [
+                ['[alpha.beta, charlie.delta]', ['[alpha.beta, charlie.delta]']],
+                ['alpha.beta', ['alpha', 'alpha.beta']],
+                ['charlie.delta', ['charlie', 'charlie.delta']]
+            ]);
+        });
+
+        it('treats aa literal member values as their own chains', () => {
+            expectChains('print {alpha: beta.charlie}', [
+                ['{alpha: beta.charlie}', ['{alpha: beta.charlie}']],
+                ['alpha: beta.charlie', ['alpha: beta.charlie']],
+                ['beta.charlie', ['beta', 'beta.charlie']]
+            ]);
+        });
+
+        it('treats each part of a ternary as its own chain', () => {
+            expectChains('print alpha.beta ? charlie.delta : echo.foxtrot', [
+                [
+                    'alpha.beta ? charlie.delta : echo.foxtrot',
+                    ['alpha.beta ? charlie.delta : echo.foxtrot']
+                ],
+                ['alpha.beta', ['alpha', 'alpha.beta']],
+                ['charlie.delta', ['charlie', 'charlie.delta']],
+                ['echo.foxtrot', ['echo', 'echo.foxtrot']]
+            ]);
+        });
+
+        it('treats each part of a null coalescing expression as its own chain', () => {
+            expectChains('print alpha.beta ?? charlie.delta', [
+                ['alpha.beta ?? charlie.delta', ['alpha.beta ?? charlie.delta']],
+                ['alpha.beta', ['alpha', 'alpha.beta']],
+                ['charlie.delta', ['charlie', 'charlie.delta']]
+            ]);
+        });
+
+        it('treats template string interpolations as their own chains', () => {
+            /* eslint-disable no-template-curly-in-string */
+            expectChains('print `hello ${alpha.beta} world`', [
+                ['`hello ${alpha.beta} world`', ['`hello ${alpha.beta} world`']],
+                ['hello ', ['hello ']],
+                ['hello ', ['hello ']],
+                ['alpha.beta', ['alpha', 'alpha.beta']],
+                [' world', [' world']],
+                [' world', [' world']]
+            ]);
+            /* eslint-enable no-template-curly-in-string */
+        });
+
+        it('includes the wrapped call in a new expression chain', () => {
+            expectChains('print new Alpha.Beta(charlie.delta)', [
+                [
+                    'new Alpha.Beta(charlie.delta)',
+                    [
+                        'Alpha',
+                        'Alpha.Beta',
+                        'Alpha.Beta',
+                        'Alpha.Beta(charlie.delta)',
+                        'new Alpha.Beta(charlie.delta)'
+                    ]
+                ],
+                ['charlie.delta', ['charlie', 'charlie.delta']]
+            ]);
+        });
+
+        it('treats the parts of a dotted set statement as separate chains', () => {
+            expectChains('alpha.beta.charlie = delta.echo', [
+                ['alpha.beta', ['alpha', 'alpha.beta']],
+                ['delta.echo', ['delta', 'delta.echo']]
+            ]);
+        });
+
+        it('treats the parts of an indexed set statement as separate chains', () => {
+            expectChains('alpha.beta[charlie.delta] = echo.foxtrot', [
+                ['alpha.beta', ['alpha', 'alpha.beta']],
+                ['charlie.delta', ['charlie', 'charlie.delta']],
+                ['echo.foxtrot', ['echo', 'echo.foxtrot']]
+            ]);
+        });
+
+        it('finds chains in statement expressions', () => {
+            expectChains([
+                'for each item in alpha.beta.charlie',
+                'end for'
+            ].join('\n'), [
+                ['alpha.beta.charlie', ['alpha', 'alpha.beta', 'alpha.beta.charlie']]
+            ]);
+        });
+
+        describe('isTerminal', () => {
+            it('is true only for the outermost node of each expression', () => {
+                expectTerminals('print alpha.beta(charlie)', [
+                    ['print alpha.beta(charlie)', true],
+                    //the whole call
+                    ['alpha.beta(charlie)', true],
+                    //the callee, reached through by the call
+                    ['alpha.beta', false],
+                    //reached through by `alpha.beta`
+                    ['alpha', false],
+                    //an argument, so its own expression
+                    ['charlie', true]
+                ]);
+            });
+
+            it('is true for a nested expression that is only an argument', () => {
+                //`alpha.beta` is terminal even though it sits inside the call
+                expectTerminals('print doSomething(alpha.beta)', [
+                    ['print doSomething(alpha.beta)', true],
+                    ['doSomething(alpha.beta)', true],
+                    ['doSomething', false],
+                    ['alpha.beta', true],
+                    ['alpha', false]
+                ]);
+            });
+
+            it('is true for statements', () => {
+                expectTerminals('alpha = 1', [
+                    ['alpha = 1', true],
+                    ['1', true]
+                ]);
+            });
         });
     });
 });

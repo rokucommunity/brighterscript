@@ -88,6 +88,11 @@ export class CallExpression extends Expression {
 
     public readonly range: Range | undefined;
 
+    /** the `a.b` in `a.b()` */
+    public get chainChild() {
+        return this.callee;
+    }
+
     /**
      * Get the name of the wrapping namespace (if it exists)
      * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
@@ -503,6 +508,11 @@ export class NamespacedVariableNameExpression extends Expression {
     }
     range: Range | undefined;
 
+    /** the `Alpha.Beta` inside this wrapper */
+    public get chainChild() {
+        return this.expression;
+    }
+
     transpile(state: BrsTranspileState) {
         return [
             state.sourceNode(this, this.getName(ParseMode.BrightScript))
@@ -571,6 +581,11 @@ export class DottedGetExpression extends Expression {
 
     public readonly range: Range | undefined;
 
+    /** the `a` in `a.b` */
+    public get chainChild() {
+        return this.obj;
+    }
+
     transpile(state: BrsTranspileState) {
         //if the callee starts with a namespace name, transpile the name
         if (state.file.calleeStartsWithNamespace(this)) {
@@ -626,6 +641,11 @@ export class XmlAttributeGetExpression extends Expression {
 
     public readonly range: Range | undefined;
 
+    /** the `a` in `a@b` */
+    public get chainChild() {
+        return this.obj;
+    }
+
     transpile(state: BrsTranspileState) {
         return [
             ...this.obj.transpile(state),
@@ -673,6 +693,11 @@ export class IndexedGetExpression extends Expression {
     }
 
     public readonly range: Range | undefined;
+
+    /** the `a` in `a[1]` (not the index) */
+    public get chainChild() {
+        return this.obj;
+    }
 
     transpile(state: BrsTranspileState) {
         const result = [];
@@ -1360,6 +1385,11 @@ export class NewExpression extends Expression {
 
     public readonly range: Range | undefined;
 
+    /** the `Alpha.Beta()` in `new Alpha.Beta()` */
+    public get chainChild() {
+        return this.call;
+    }
+
     public transpile(state: BrsTranspileState) {
         const namespace = this.findAncestor(isNamespaceStatement);
         const cls = state.file.getClassFileLink(
@@ -1409,6 +1439,11 @@ export class CallfuncExpression extends Expression {
     }
 
     public readonly range: Range | undefined;
+
+    /** the `a` in `a@.b()` */
+    public get chainChild() {
+        return this.callee;
+    }
 
     /**
      * Get the name of the wrapping namespace (if it exists)
