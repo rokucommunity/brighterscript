@@ -63,7 +63,9 @@ describe('globalCallables', () => {
         ).to.eql([
             '```brightscript',
             'function Mid(s as string, p as integer, n? as integer) as string',
-            '```'
+            '```',
+            '***',
+            'Returns a substring of s with length n and starting at position p.\nn may be omitted, in which case the string starting at p and ending at the end of the string is returned.\nUnlike the ifString.Mid() method, the first character in the string is position 1.'
         ].join('\n'));
     });
 
