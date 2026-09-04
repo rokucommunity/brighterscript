@@ -707,6 +707,106 @@ describe('lexer', () => {
             ]);
         });
 
+        it('ignores curly braces inside strings within an expression', () => {
+            //the `}` here belongs to the string, so it must not end the expression
+            let tokens = Lexer.scan('thing = `${{ "a}b": "{" }}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.StringLiteral,
+                TokenKind.Colon,
+                TokenKind.StringLiteral,
+                TokenKind.RightCurlyBrace,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('ignores curly braces inside a comment within an expression', () => {
+            let tokens = Lexer.scan('thing = `${1 \'}\n}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.IntegerLiteral,
+                TokenKind.Comment,
+                TokenKind.Newline,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('supports an associative array literal spanning multiple lines', () => {
+            let tokens = Lexer.scan('thing = `${{\n    b: 1\n}}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.Newline,
+                TokenKind.Identifier,
+                TokenKind.Colon,
+                TokenKind.IntegerLiteral,
+                TokenKind.Newline,
+                TokenKind.RightCurlyBrace,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('supports an inline function containing braces in an expression', () => {
+            let tokens = Lexer.scan('thing = `${sub()\nprint {}\nend sub}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.Sub,
+                TokenKind.LeftParen,
+                TokenKind.RightParen,
+                TokenKind.Newline,
+                TokenKind.Print,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.RightCurlyBrace,
+                TokenKind.Newline,
+                TokenKind.EndSub,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('supports an empty expression', () => {
+            let tokens = Lexer.scan('thing = `${}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
         it('flags an unterminated template string expression', () => {
             const { diagnostics } = Lexer.scan('thing = `${{}`');
             expect(diagnostics).to.be.lengthOf(1);
