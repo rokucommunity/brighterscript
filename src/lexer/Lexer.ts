@@ -68,38 +68,6 @@ export class Lexer {
     private leadingWhitespace = '';
 
     /**
-     * Stack to track nested template string expression state.
-     * Each entry contains the brace depth for that template expression level.
-     * Empty stack means we're not in any template expression.
-     */
-    private templateExpressionStack: number[] = [];
-
-    /**
-     * Returns true if we're currently inside any template string expression
-     */
-    private get isInTemplateExpression(): boolean {
-        return this.templateExpressionStack.length > 0;
-    }
-
-    /**
-     * Returns the current template expression brace depth (0 if not in template expression)
-     */
-    private get templateExpressionBraceDepth(): number {
-        return this.templateExpressionStack.length > 0 
-            ? this.templateExpressionStack[this.templateExpressionStack.length - 1] 
-            : 0;
-    }
-
-    /**
-     * Sets the current template expression brace depth
-     */
-    private set templateExpressionBraceDepth(depth: number) {
-        if (this.templateExpressionStack.length > 0) {
-            this.templateExpressionStack[this.templateExpressionStack.length - 1] = depth;
-        }
-    }
-
-    /**
      * A convenience function, equivalent to `new Lexer().scan(toScan)`, that converts a string
      * containing BrightScript code to an array of `Token` objects that will later be used to build
      * an abstract syntax tree.
@@ -179,27 +147,6 @@ export class Lexer {
         '"': Lexer.prototype.string,
         '\'': Lexer.prototype.comment,
         '`': Lexer.prototype.templateString,
-        '{': function (this: Lexer) {
-            if (this.isInTemplateExpression) {
-                this.templateExpressionBraceDepth++;
-            }
-            this.addToken(TokenKind.LeftCurlyBrace);
-        },
-        '}': function (this: Lexer) {
-            if (this.isInTemplateExpression) {
-                if (this.templateExpressionBraceDepth > 0) {
-                    this.templateExpressionBraceDepth--;
-                    this.addToken(TokenKind.RightCurlyBrace);
-                } else {
-                    // This is the closing brace for the template expression
-                    // Pop the current template expression level from the stack
-                    this.templateExpressionStack.pop();
-                    this.addToken(TokenKind.TemplateStringExpressionEnd);
-                }
-            } else {
-                this.addToken(TokenKind.RightCurlyBrace);
-            }
-        },
         '.': function (this: Lexer) {
             // this might be a float/double literal, because decimals without a leading 0
             // are allowed
@@ -385,6 +332,8 @@ export class Lexer {
         ')': TokenKind.RightParen,
         '=': TokenKind.Equal,
         ',': TokenKind.Comma,
+        '{': TokenKind.LeftCurlyBrace,
+        '}': TokenKind.RightCurlyBrace,
         '[': TokenKind.LeftSquareBracket,
         ']': TokenKind.RightSquareBracket,
         '^': TokenKind.Caret,
@@ -679,16 +628,7 @@ export class Lexer {
                 this.advance();
                 this.advance();
                 this.addToken(TokenKind.TemplateStringExpressionBegin);
-
-                // Enter template expression mode by pushing a new level onto the stack
-                this.templateExpressionStack.push(0);
-
-                while (!this.isAtEnd() && this.isInTemplateExpression) {
-                    this.start = this.current;
-                    this.scanToken();
-                }
-
-                this.start = this.current;
+                this.templateStringExpression();
             } else {
                 this.advance();
             }
@@ -702,6 +642,46 @@ export class Lexer {
             this.advance();
             this.addToken(TokenKind.BackTick);
         }
+    }
+
+    /**
+     * Scans the contents of a `${...}` template string expression, stopping just after the `}` that closes it.
+     * Assumes the `${` has already been consumed and its token emitted.
+     *
+     * All actual token scanning is delegated to `scanToken`, so this method's only job is deciding
+     * which `}` terminates the expression. A `}` that closes a brace opened _inside_ the expression
+     * (an associative array literal, for example) is not the terminator, so we track how many
+     * unclosed `{` we've scanned past and only stop at a `}` seen at depth zero.
+     *
+     * Nested template strings need no special handling here: `scanToken` routes a backtick back into
+     * `templateString`, which recurses into this method for its own expressions. Each level therefore
+     * gets its own `depth` local, so arbitrarily deep nesting works without any shared state.
+     */
+    private templateStringExpression() {
+        let depth = 0;
+        while (!this.isAtEnd()) {
+            if (this.check('}')) {
+                if (depth === 0) {
+                    //this is the `}` that closes the expression
+                    this.advance();
+                    this.addToken(TokenKind.TemplateStringExpressionEnd);
+                    this.start = this.current;
+                    return;
+                }
+                depth--;
+            } else if (this.check('{')) {
+                depth++;
+            }
+            this.start = this.current;
+            this.scanToken();
+        }
+
+        //we hit the end of the file before finding the closing `}`
+        this.diagnostics.push({
+            ...DiagnosticMessages.unexpectedConditionalCompilationString(),
+            range: this.rangeOf()
+        });
+        this.start = this.current;
     }
 
     private templateQuasiString() {
