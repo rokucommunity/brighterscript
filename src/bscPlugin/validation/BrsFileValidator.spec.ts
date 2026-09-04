@@ -338,6 +338,94 @@ describe('BrsFileValidator', () => {
         }]);
     });
 
+    describe('function name length', () => {
+        it('allows a function name at exactly the max length', () => {
+            const name = 'a'.repeat(89);
+            program.setFile('source/main.brs', `
+                sub ${name}()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags a function name that exceeds the max length', () => {
+            const name = 'a'.repeat(90);
+            program.setFile('source/main.brs', `
+                sub ${name}()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.functionNameTooLong(name, 90, 89),
+                location: { range: util.createRange(1, 20, 1, 20 + name.length) }
+            }]);
+        });
+
+        it('flags a namespaced function whose flattened name exceeds the max length', () => {
+            const shortName = 'b'.repeat(85);
+            program.setFile('source/main.bs', `
+                namespace alpha
+                    sub ${shortName}()
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            const flattenedName = `alpha_${shortName}`;
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.functionNameTooLong(flattenedName, flattenedName.length, 89),
+                location: { range: util.createRange(2, 24, 2, 24 + shortName.length) }
+            }]);
+        });
+
+        it('allows a class method whose transpiled name is exactly the max length', () => {
+            //`__Klass_method_` is 15 chars, so 74 more lands exactly on the 89-char limit
+            const methodName = 'c'.repeat(74);
+            program.setFile('source/main.bs', `
+                class Klass
+                    sub ${methodName}()
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags a class method whose transpiled name exceeds the max length', () => {
+            const methodName = 'c'.repeat(75);
+            program.setFile('source/main.bs', `
+                class Klass
+                    sub ${methodName}()
+                    end sub
+                end class
+            `);
+            program.validate();
+            const transpiledName = `__Klass_method_${methodName}`;
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.functionNameTooLong(transpiledName, transpiledName.length, 89),
+                location: { range: util.createRange(2, 24, 2, 24 + methodName.length) }
+            }]);
+        });
+
+        it('flags a namespaced class method whose transpiled name exceeds the max length', () => {
+            const methodName = 'c'.repeat(70);
+            program.setFile('source/main.bs', `
+                namespace alpha
+                    class Klass
+                        sub ${methodName}()
+                        end sub
+                    end class
+                end namespace
+            `);
+            program.validate();
+            const transpiledName = `__alpha_Klass_method_${methodName}`;
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.functionNameTooLong(transpiledName, transpiledName.length, 89),
+                location: { range: util.createRange(3, 28, 3, 28 + methodName.length) }
+            }]);
+        });
+    });
+
     describe('for each', () => {
         it('handles getting default type of array of AAs with reference types', () => {
             const mainFile = program.setFile<BrsFile>('source/main.bs', `

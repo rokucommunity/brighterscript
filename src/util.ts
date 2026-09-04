@@ -1250,11 +1250,13 @@ export class Util {
      */
     public cloneToken<T extends Token>(token: T): T {
         if (token) {
+            //keep this field order identical to `Lexer.addToken` so cloned tokens
+            //share the same V8 hidden class as lexer-produced tokens
             const result = {
                 kind: token.kind,
-                location: this.cloneLocation(token.location),
                 text: token.text,
                 isReserved: token.isReserved,
+                location: this.cloneLocation(token.location),
                 leadingWhitespace: token.leadingWhitespace,
                 leadingTrivia: token.leadingTrivia ? token.leadingTrivia.map(x => this.cloneToken(x)) : undefined
             } as Token;

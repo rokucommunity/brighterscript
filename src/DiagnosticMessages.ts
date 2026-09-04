@@ -1181,6 +1181,16 @@ export let DiagnosticMessages = {
         message: `Mismatched closing tag: expected '</${openingTag}>' but found '</${closingTag}>'`,
         severity: DiagnosticSeverity.Error,
         code: 'xml-tag-mismatch'
+    }),
+    /**
+     * @param name the full name of the function, including namespace
+     * @param length the actual length of `name`
+     * @param maxLength the maximum length a function name may be before it gets truncated by the device at runtime
+     */
+    functionNameTooLong: (name: string, length: number, maxLength: number) => ({
+        message: `Function name '${name}' is ${length} characters long, which exceeds the maximum of ${maxLength}. It will be truncated when converted with ToStr()`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'function-name-too-long'
     })
 };
 export const defaultMaximumTruncationLength = 160;

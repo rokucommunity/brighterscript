@@ -240,12 +240,17 @@ export default class SGParser {
         }
     }
 
-    mapNode({ children }: ElementCstNode): SGNode {
+    mapNode({ children }: ElementCstNode): SGNode | undefined {
+        const nameToken = children.Name?.[0];
+        //skip malformed elements that have no tag name (e.g. a lone `<` while the user is still typing)
+        if (!nameToken) {
+            return undefined;
+        }
         return new SGNode({
             //<
             startTagOpen: this.mapToken(children.OPEN[0]),
             // TagName
-            startTagName: this.mapToken(children.Name[0]),
+            startTagName: this.mapToken(nameToken),
             attributes: this.mapAttributes(children.attribute),
             // > or />
             startTagClose: this.mapToken((children.SLASH_CLOSE ?? children.START_CLOSE)?.[0]),
@@ -290,7 +295,9 @@ export default class SGParser {
             return [];
         }
         const { element } = content.children;
-        return element?.map(element => this.mapNode(element));
+        return element
+            ?.map(element => this.mapNode(element))
+            .filter((node): node is SGNode => !!node);
     }
 
     hasElements(content: ContentCstNode): boolean {
@@ -419,6 +426,10 @@ interface IToken {
     endOffset?: number;
     endLine?: number;
     endColumn?: number;
+    /**
+     * The lexer token type. Present on tokens produced by `@xml-tools`; used to classify cursor context.
+     */
+    tokenType?: { name: string };
 }
 
 export interface CstNodeLocation {
