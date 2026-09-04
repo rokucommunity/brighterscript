@@ -26,13 +26,25 @@ export class Sequencer {
     // eslint-disable-next-line @typescript-eslint/ban-types
     private actions: Array<{ args: any[]; func: Function }> = [];
 
-    public forEach<T>(items: T[], func: (item: T) => any) {
-        for (const item of items) {
-            this.actions.push({
-                args: [item],
-                func: func
-            });
-        }
+    public forEach<T>(itemsOrFactory: Iterable<T> | (() => Iterable<T>), func: (item: T) => any) {
+        //register a single action for now, we will fetch the full list and register their actions later
+        const primaryAction = {
+            args: [],
+            func: (data) => {
+                const items = typeof itemsOrFactory === 'function' ? itemsOrFactory() : itemsOrFactory;
+                const actions: Sequencer['actions'] = [];
+                for (const item of items) {
+                    actions.push({
+                        args: [item],
+                        func: func
+                    });
+                }
+                let primaryActionIndex = this.actions.indexOf(primaryAction);
+                //insert all of these item actions immediately after this action
+                this.actions.splice(primaryActionIndex + 1, 0, ...actions);
+            }
+        };
+        this.actions.push(primaryAction);
         return this;
     }
 

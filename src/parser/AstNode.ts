@@ -21,6 +21,13 @@ export abstract class AstNode {
     public abstract transpile(state: BrsTranspileState): TranspileResult;
 
     /**
+     * Get the typedef for this node. (defaults to transpiling the node, should be overridden by subclasses if there's a more specific typedef requirement)
+     */
+    public getTypedef(state: BrsTranspileState) {
+        return this.transpile(state);
+    }
+
+    /**
      * When being considered by the walk visitor, this describes what type of element the current class is.
      */
     public visitMode = InternalWalkMode.visitStatements;

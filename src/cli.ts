@@ -3,6 +3,7 @@ import * as yargs from 'yargs';
 import * as path from 'path';
 import { ProgramBuilder } from './ProgramBuilder';
 import { DiagnosticSeverity } from 'vscode-languageserver';
+import { normalizeDiagnosticReporters } from './diagnosticUtils';
 import util from './util';
 import { LanguageServer } from './LanguageServer';
 import chalk from 'chalk';
@@ -24,6 +25,11 @@ let options = yargs
     .option('cwd', { type: 'string', description: 'Override the current working directory.' })
     .option('copy-to-staging', { type: 'boolean', defaultDescription: 'true', description: 'Copy project files into the staging folder, ready to be packaged.' })
     .option('diagnostic-level', { type: 'string', defaultDescription: '"warn"', description: 'Specify what diagnostic types should be printed to the console. Value can be "error", "warn", "hint", "info".' })
+    .option('diagnostic-reporters', {
+        type: 'array',
+        defaultDescription: '"detailed"',
+        description: 'Specify the diagnostic reporter(s). Each value can be "detailed", "github-actions", or a template string containing placeholders like {file}, {line}, {col}, {endLine}, {endCol}, {severity}, {code}, {message}, {source}. Pass the flag multiple times (or list values after a single flag) to enable multiple reporters simultaneously.'
+    })
     .option('plugins', { type: 'array', alias: 'plugin', description: 'A list of scripts or modules to add extra diagnostics or transform the AST.' })
     .option('deploy', { type: 'boolean', defaultDescription: 'false', description: 'Deploy to a Roku device if compilation succeeds. When in watch mode, this will deploy on every change.' })
     .option('emit-full-paths', { type: 'boolean', defaultDescription: 'false', description: 'Emit full paths to files when encountering diagnostics.' })
@@ -42,6 +48,7 @@ let options = yargs
     .option('source-root', { type: 'string', description: 'Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within rootDir. This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files.' })
     .option('watch', { type: 'boolean', defaultDescription: 'false', description: 'Watch input files.' })
     .option('require', { type: 'array', description: 'A list of modules to require() on startup. Useful for doing things like ts-node registration.' })
+    .option('validate', { type: 'boolean', defaultDescription: 'true', description: 'Whether to run validation during the build. Setting to false skips all validation (diagnostics), which can speed up builds when diagnostics are already surfaced elsewhere (e.g. a running language server).' })
     .option('profile', { type: 'boolean', defaultDescription: 'false', description: 'Generate a cpuprofile report during this run' })
     .option('lsp', { type: 'boolean', defaultDescription: 'false', description: 'Run brighterscript as a language server.' })
     .check(argv => {
@@ -49,6 +56,12 @@ let options = yargs
         //if we have the diagnostic level and it's not a known value, then fail
         if (diagnosticLevel && ['error', 'warn', 'hint', 'info'].includes(diagnosticLevel) === false) {
             throw new Error(`Invalid diagnostic level "${diagnosticLevel}". Value can be "error", "warn", "hint", "info".`);
+        }
+        const diagnosticReporters = argv.diagnosticReporters as string[] | undefined;
+        if (diagnosticReporters !== undefined) {
+            //surface preset typos at startup. this never throws: bad reporters are warned about
+            //via console.warn and ignored so the build still runs with whatever's left (or the default).
+            normalizeDiagnosticReporters(diagnosticReporters);
         }
         const cwd = path.resolve(process.cwd(), argv.cwd ?? process.cwd());
         //cli-provided plugin paths should be relative to cwd

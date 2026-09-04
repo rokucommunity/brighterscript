@@ -1,14 +1,19 @@
 import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, DocumentSymbol, CancellationToken } from 'vscode-languageserver';
+import * as semver from 'semver';
+import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, DocumentSymbol, CancellationToken, SelectionRange, InlayHint } from 'vscode-languageserver';
 import { CancellationTokenSource, CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
+import type { NamespaceContainer, NamespaceFileContribution } from './Scope';
+import { SymbolTable } from './SymbolTable';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
 import { XmlFile } from './files/XmlFile';
-import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent } from './interfaces';
+import type { BsDiagnostic, File, FileReference, FileObj, BscFile, SemanticToken, AfterFileTranspileEvent, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, ProvideSelectionRangesEvent, ProvideInlayHintsEvent, OnGetSourceFixAllCodeActionsEvent } from './interfaces';
+import type { SourceFixAllCodeAction } from './CodeActionUtil';
+import { codeActionUtil } from './CodeActionUtil';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
@@ -17,7 +22,9 @@ import type { Logger } from './logging';
 import { LogLevel, createLogger } from './logging';
 import chalk from 'chalk';
 import { globalFile } from './globalCallables';
-import { parseManifest, getBsConst } from './preprocessor/Manifest';
+import { parseManifest, parseManifestEntries, getBsConst } from './preprocessor/Manifest';
+import type { ManifestEntry } from './preprocessor/Manifest';
+import { DEFAULT_MIN_FIRMWARE_VERSION, RSG_VERSIONS } from './RokuConstants';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement } from './astUtils/reflection';
@@ -31,10 +38,17 @@ import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
 import { Sequencer } from './common/Sequencer';
 import { Deferred } from './deferred';
+import { nodes as builtInSceneGraphNodeData } from './roku-types';
+import type { SGNodeData } from './roku-types';
 
 const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
+
+/**
+ * The built-in Roku SceneGraph nodes, keyed by their lower-case name
+ */
+const builtInSceneGraphNodes = builtInSceneGraphNodeData as unknown as Record<string, SGNodeData>;
 
 export interface SourceObj {
     /**
@@ -157,6 +171,141 @@ export class Program {
      */
     public files = {} as Record<string, BscFile>;
     private pkgMap = {} as Record<string, BscFile>;
+
+    /**
+     * Map from a lower-cased namespace name part to the set of `BrsFile`s that contribute
+     * to it. Built lazily, invalidated whenever any file is added, removed, or re-parsed
+     * (`setFile` and `removeFile` both clear it).
+     *
+     * Used by `ScopeNamespaceLookup` to resolve a namespace name to its contributing
+     * files in O(1), then intersect against the scope's file set.
+     */
+    private namespaceContributors: Map<string, Set<BrsFile>> | undefined;
+
+    /**
+     * Look up the set of `BrsFile`s that declare any part of the given namespace name
+     * (lowercased). Returns `undefined` when no file contributes.
+     * @internal
+     */
+    protected getNamespaceContributors(namespaceNameLower: string): Set<BrsFile> | undefined {
+        if (!this.namespaceContributors) {
+            this.namespaceContributors = this.buildNamespaceContributors();
+        }
+        return this.namespaceContributors.get(namespaceNameLower);
+    }
+
+    private buildNamespaceContributors(): Map<string, Set<BrsFile>> {
+        const contributors = new Map<string, Set<BrsFile>>();
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                // eslint-disable-next-line @typescript-eslint/dot-notation
+                for (const nameLower of file['getNamespaceContributions']().keys()) {
+                    let set = contributors.get(nameLower);
+                    if (!set) {
+                        set = new Set<BrsFile>();
+                        contributors.set(nameLower, set);
+                    }
+                    set.add(file);
+                }
+            }
+        }
+        return contributors;
+    }
+
+    /**
+     * Cached slow-path namespace aggregates, keyed by `(nameLower, sorted-contributor-pkgPaths)`.
+     * Two scopes with the same in-scope file set for a multi-contributor namespace share
+     * the same aggregate object (and therefore the same merged statement collections and
+     * symbolTable instance). Built lazily, invalidated alongside `namespaceContributors`.
+     *
+     * The aggregate is stored as a `NamespaceContainer` whose `namespaces` field is an
+     * empty Map: scopes always wrap the aggregate before returning to plugins, and the
+     * wrapper supplies its own scope-filtered children. Plugins never see the aggregate
+     * directly.
+     */
+    private aggregateNamespaceContainerCache: Map<string, NamespaceContainer> | undefined;
+
+    /**
+     * Get or build the shared aggregate for a namespace whose in-scope contributors
+     * include more than one file. The aggregate's heavy fields are computed once per
+     * unique `(nameLower, contributing-files-set)` and reused across every scope that
+     * sees the same set.
+     * @internal
+     */
+    protected getAggregateNamespaceContainer(nameLower: string, contributions: NamespaceFileContribution[]): NamespaceContainer {
+        if (!this.aggregateNamespaceContainerCache) {
+            this.aggregateNamespaceContainerCache = new Map<string, NamespaceContainer>();
+        }
+        //sorted pkgPaths ensure two scopes with the same contributor set hit the same key
+        const key = nameLower + '|' + contributions
+            .map(c => c.file.pkgPath.toLowerCase())
+            .sort()
+            .join('|');
+        let aggregate = this.aggregateNamespaceContainerCache.get(key);
+        if (!aggregate) {
+            aggregate = this.buildAggregateNamespaceContainer(contributions);
+            this.aggregateNamespaceContainerCache.set(key, aggregate);
+        }
+        return aggregate;
+    }
+
+    private buildAggregateNamespaceContainer(contributions: NamespaceFileContribution[]): NamespaceContainer {
+        const first = contributions[0];
+        //field order matches the NamespaceContainer interface declaration so aggregates
+        //share a single V8 hidden class with the per-scope wrapper containers
+        const aggregate: NamespaceContainer = {
+            file: first.file,
+            fullName: first.fullName,
+            nameRange: first.nameRange,
+            lastPartName: first.lastPartName,
+            namespaces: new Map(),
+            statements: undefined,
+            classStatements: undefined,
+            functionStatements: undefined,
+            enumStatements: undefined,
+            constStatements: undefined,
+            symbolTable: undefined
+        };
+        for (const contribution of contributions) {
+            if (contribution.statements?.length) {
+                (aggregate.statements ??= []).push(...contribution.statements);
+            }
+            if (contribution.classStatements) {
+                aggregate.classStatements = { ...(aggregate.classStatements ?? {}), ...contribution.classStatements };
+            }
+            if (contribution.functionStatements) {
+                aggregate.functionStatements = { ...(aggregate.functionStatements ?? {}), ...contribution.functionStatements };
+            }
+            if (contribution.enumStatements) {
+                aggregate.enumStatements ??= new Map();
+                for (const [key, value] of contribution.enumStatements) {
+                    aggregate.enumStatements.set(key, value);
+                }
+            }
+            if (contribution.constStatements) {
+                aggregate.constStatements ??= new Map();
+                for (const [key, value] of contribution.constStatements) {
+                    aggregate.constStatements.set(key, value);
+                }
+            }
+            if (contribution.symbolTable) {
+                aggregate.symbolTable ??= new SymbolTable(`Namespace Multi-File Aggregate: '${first.fullName}'`);
+                aggregate.symbolTable.mergeSymbolTable(contribution.symbolTable);
+            }
+        }
+        return aggregate;
+    }
+
+    /**
+     * Invalidate the program-level namespace contributors map and the slow-path aggregate
+     * cache. Called by `setFile` and `removeFile`; downstream scope namespace lookups
+     * already rebuild via the dependency-graph invalidation chain, so this only needs
+     * to drop the cached maps.
+     */
+    private invalidateNamespaceContributorCache() {
+        this.namespaceContributors = undefined;
+        this.aggregateNamespaceContainerCache = undefined;
+    }
 
     private scopes = {} as Record<string, Scope>;
 
@@ -349,6 +498,117 @@ export class Program {
     }
 
     /**
+     * Get the names of all known SceneGraph nodes: the built-in Roku nodes plus every component
+     * defined in this program. Names keep their original casing and are deduplicated by lower-case name.
+     */
+    public getSceneGraphNodeNames(): string[] {
+        const namesByLowerName = new Map<string, string>();
+        for (const node of Object.values(builtInSceneGraphNodes)) {
+            namesByLowerName.set(node.name.toLowerCase(), node.name);
+        }
+        for (const componentName in this.components) {
+            const displayName = this.components[componentName][0]?.file.componentName?.text;
+            if (displayName) {
+                namesByLowerName.set(displayName.toLowerCase(), displayName);
+            }
+        }
+        return [...namesByLowerName.values()];
+    }
+
+    /**
+     * Determine whether a SceneGraph node with the given name exists, either as a built-in Roku node
+     * or as a component defined in this program.
+     */
+    public hasSceneGraphNode(nodeName: string): boolean {
+        if (!nodeName) {
+            return false;
+        }
+        return !!builtInSceneGraphNodes[nodeName.toLowerCase()] || !!this.getComponent(nodeName);
+    }
+
+    /**
+     * Get the built-in Roku node data and/or the project component file backing a SceneGraph node name.
+     * Returns `undefined` when no node or component matches.
+     */
+    public getSceneGraphNode(nodeName: string): SceneGraphNodeLookup | undefined {
+        if (!nodeName) {
+            return undefined;
+        }
+        const builtInNode = builtInSceneGraphNodes[nodeName.toLowerCase()];
+        const componentFile = this.getComponent(nodeName)?.file;
+        if (!builtInNode && !componentFile) {
+            return undefined;
+        }
+        return { builtInNode: builtInNode, componentFile: componentFile };
+    }
+
+    /**
+     * Get every field available on a SceneGraph node, walking the full `extends` chain across both
+     * built-in Roku nodes and project components. Fields declared closer to the node take precedence
+     * over inherited fields with the same name.
+     */
+    public getSceneGraphNodeFields(nodeName: string): ResolvedSceneGraphField[] {
+        const fieldsByLowerName = new Map<string, ResolvedSceneGraphField>();
+        const visitedNodeNames = new Set<string>();
+
+        const addField = (field: ResolvedSceneGraphField) => {
+            if (!field.name) {
+                return;
+            }
+            const lowerName = field.name.toLowerCase();
+            //the first definition we encounter is the closest one, so it wins
+            if (!fieldsByLowerName.has(lowerName)) {
+                fieldsByLowerName.set(lowerName, field);
+            }
+        };
+
+        const walk = (currentNodeName: string, origin: SceneGraphFieldOrigin) => {
+            const lowerName = currentNodeName?.toLowerCase();
+            if (!lowerName || visitedNodeNames.has(lowerName)) {
+                return;
+            }
+            visitedNodeNames.add(lowerName);
+
+            //prefer a project component (a project component can shadow a built-in of the same name)
+            const component = this.getComponent(currentNodeName);
+            if (component) {
+                for (const field of component.file.ast.component?.api?.fields ?? []) {
+                    addField({ name: field.id, type: field.type, default: field.value, origin: origin });
+                }
+                const parentName = component.file.ast.component?.extends;
+                if (parentName) {
+                    walk(parentName, 'inherited');
+                }
+                return;
+            }
+
+            const builtInNode = builtInSceneGraphNodes[lowerName];
+            if (builtInNode) {
+                for (const field of builtInNode.fields ?? []) {
+                    addField({
+                        name: field.name,
+                        type: field.type,
+                        default: field.default,
+                        description: field.description,
+                        accessPermission: field.accessPermission,
+                        origin: origin
+                    });
+                }
+                if (builtInNode.extends?.name) {
+                    walk(builtInNode.extends.name, 'inherited');
+                } else if (lowerName !== 'node') {
+                    //some scraped node entries are missing `extends` data, but every SceneGraph node
+                    //ultimately descends from Node, so fall back to Node to keep its universal fields
+                    walk('Node', 'inherited');
+                }
+            }
+        };
+
+        walk(nodeName, 'own');
+        return [...fieldsByLowerName.values()];
+    }
+
+    /**
      * Update internal maps with this file reference
      */
     private assignFile<T extends BscFile = BscFile>(file: T) {
@@ -401,6 +661,10 @@ export class Program {
     public setFile<T extends BscFile>(fileParam: FileObj | string, fileContents: string): T {
         //normalize the file paths
         const { srcPath, pkgPath } = this.getPaths(fileParam, this.options.rootDir);
+
+        //namespace contributions for the new/replaced file may differ; force the
+        //program-level contributors map to rebuild on next query
+        this.invalidateNamespaceContributorCache();
 
         let file = this.logger.time(LogLevel.debug, ['Program.setFile()', chalk.green(srcPath)], () => {
             //if the file is already loaded, remove it
@@ -624,6 +888,10 @@ export class Program {
     public removeFile(filePath: string, normalizePath = true) {
         this.logger.debug('Program.removeFile()', filePath);
 
+        //namespace contributions may have included this file; force the program-level
+        //contributors map to rebuild on next query
+        this.invalidateNamespaceContributorCache();
+
         let file = this.getFile(filePath, normalizePath);
         if (file) {
             this.plugins.emit('beforeFileDispose', file);
@@ -727,7 +995,7 @@ export class Program {
                 this.plugins.emit('beforeProgramValidate', this);
                 beforeProgramValidateWasEmitted = true;
             })
-            .forEach(Object.values(this.files), (file) => {
+            .forEach(() => Object.values(this.files), (file) => {
                 if (!file.isValidated) {
                     this.plugins.emit('beforeFileValidate', {
                         program: this,
@@ -813,7 +1081,7 @@ export class Program {
                         relatedInformation: xmlFiles.filter(x => x !== xmlFile).map(x => {
                             return {
                                 location: util.createLocation(
-                                    URI.file(xmlFile.srcPath ?? xmlFile.srcPath).toString(),
+                                    URI.file(x.srcPath ?? xmlFile.srcPath).toString(),
                                     x.componentName.range
                                 ),
                                 message: 'Also defined here'
@@ -1065,6 +1333,49 @@ export class Program {
     }
 
     /**
+     * Get the selection ranges for the given positions in a file. Used for expand/shrink selection.
+     * @param srcPath path to the file
+     * @param positions the positions to get selection ranges for
+     */
+    public getSelectionRanges(srcPath: string, positions: Position[]): SelectionRange[] {
+        const file = this.getFile(srcPath);
+        if (file) {
+            const event: ProvideSelectionRangesEvent = {
+                program: this,
+                file: file,
+                positions: positions,
+                selectionRanges: []
+            };
+            this.plugins.emit('beforeProvideSelectionRanges', event);
+            this.plugins.emit('provideSelectionRanges', event);
+            this.plugins.emit('afterProvideSelectionRanges', event);
+            return event.selectionRanges;
+        }
+        return [];
+    }
+
+    /**
+     * Get inlay hints for the given file and range.
+     */
+    public getInlayHints(srcPath: string, range: Range): InlayHint[] {
+        const file = this.getFile(srcPath);
+        if (file) {
+            const event: ProvideInlayHintsEvent = {
+                program: this,
+                file: file,
+                range: range,
+                scopes: this.getScopesForFile(file),
+                inlayHints: []
+            };
+            this.plugins.emit('beforeProvideInlayHints', event);
+            this.plugins.emit('provideInlayHints', event);
+            this.plugins.emit('afterProvideInlayHints', event);
+            return event.inlayHints;
+        }
+        return [];
+    }
+
+    /**
      * Compute code actions for the given file and range
      */
     public getCodeActions(srcPath: string, range: Range) {
@@ -1091,6 +1402,33 @@ export class Program {
             });
         }
         return codeActions;
+    }
+
+    /**
+     * Compute "source fix all" code actions for the given file.
+     * Fires the `onGetSourceFixAllCodeActions` plugin event with all diagnostics for the file (no range filter),
+     * then converts each contributed SourceFixAllCodeAction into an LSP CodeAction.
+     */
+    public getSourceFixAllCodeActions(srcPath: string): CodeAction[] {
+        const actions: SourceFixAllCodeAction[] = [];
+        const file = this.getFile(srcPath);
+        if (file) {
+            const diagnostics = this
+                .getDiagnostics()
+                .filter(x => x.file === file);
+            const scopes = this.getScopesForFile(file);
+            this.plugins.emit('onGetSourceFixAllCodeActions', {
+                program: this,
+                file: file,
+                diagnostics: diagnostics,
+                scopes: scopes,
+                actions: actions
+            } as OnGetSourceFixAllCodeActionsEvent);
+        }
+        return actions.map(action => codeActionUtil.createCodeAction({
+            ...action,
+            kind: action.kind ?? 'source.fixAll.brighterscript' as any
+        }));
     }
 
     /**
@@ -1215,8 +1553,9 @@ export class Program {
         const result = this._getTranspiledFileContents(
             file
         );
+        await this._chainInputSourceMap(result, file);
         this.afterProgramTranspile(entries, astEditor);
-        return Promise.resolve(result);
+        return result;
     }
 
     /**
@@ -1268,6 +1607,20 @@ export class Program {
             map: event.map,
             typedef: event.typedef
         };
+    }
+
+    /**
+     * If the file has an incoming sourcemap (from a prebuild step), chain it into the
+     * generated sourcemap so the output map traces all the way back to the original source.
+     * This is async because SourceMapConsumer requires async initialisation in source-map v0.7.
+     */
+    private async _chainInputSourceMap(result: FileTranspileResult, file: BscFile): Promise<void> {
+        if (result.map) {
+            const inputMap = await util.resolveInputSourceMap(file.fileContents ?? '', file.srcPath);
+            if (inputMap) {
+                await util.applySourceMap(result.map, inputMap, file.srcPath);
+            }
+        }
     }
 
     private beforeProgramTranspile(fileEntries: FileObj[], stagingDir: string) {
@@ -1336,6 +1689,7 @@ export class Program {
                 }
 
                 const fileTranspileResult = this._getTranspiledFileContents(file, outputPath);
+                await this._chainInputSourceMap(fileTranspileResult, file);
 
                 //make sure the full dir path exists
                 await fsExtra.ensureDir(path.dirname(outputPath));
@@ -1343,7 +1697,7 @@ export class Program {
                 if (await fsExtra.pathExists(outputPath)) {
                     throw new Error(`Error while transpiling "${file.srcPath}". A file already exists at "${outputPath}" and will not be overwritten.`);
                 }
-                const writeMapPromise = fileTranspileResult.map ? fsExtra.writeFile(`${outputPath}.map`, fileTranspileResult.map.toString()) : null;
+                const writeMapPromise = fileTranspileResult.map ? fsExtra.writeFile(`${outputPath}.map`, this.serializeSourceMap(fileTranspileResult.map, outputPath)) : null;
                 await Promise.all([
                     fsExtra.writeFile(outputPath, fileTranspileResult.code),
                     writeMapPromise
@@ -1391,6 +1745,44 @@ export class Program {
     private afterProgramTranspile(entries: TranspileObj[], astEditor: AstEditor) {
         this.plugins.emit('afterProgramTranspile', this, entries, astEditor);
         astEditor.undoAll();
+    }
+
+    /**
+     * Serialize a source map to a JSON string, handling relativeSourceMaps and sourceRoot.
+     *
+     * relativeSourceMaps:false — legacy: sources[] has absolute paths (rootDir swapped for sourceRoot
+     * if set); map's sourceRoot field is never written.
+     *
+     * relativeSourceMaps:true, no sourceRoot — sources[] is relative to the map file directory.
+     *
+     * relativeSourceMaps:true, sourceRoot set — map's sourceRoot field is written; sources[] is
+     * relative to sourceRoot so that path.resolve(sourceRoot, sources[0]) gives the source file.
+     */
+    private serializeSourceMap(sourceMap: SourceMapGenerator, outputPath: string): string {
+        const { relativeSourceMaps, sourceRoot } = this.options;
+
+        if (!relativeSourceMaps) {
+            return sourceMap.toString();
+        }
+
+        const mapJson = sourceMap.toJSON();
+
+        if (sourceRoot) {
+            mapJson.sourceRoot = sourceRoot;
+            mapJson.sources = mapJson.sources.map((source: string) => {
+                const absolute = path.isAbsolute(source) ? source : path.resolve(path.dirname(outputPath), source);
+                return path.relative(sourceRoot, absolute).replace(/\\/g, '/');
+            });
+        } else {
+            const mapDir = path.dirname(outputPath);
+            mapJson.sources = mapJson.sources.map((source: string) => {
+                return path.isAbsolute(source)
+                    ? path.relative(mapDir, source).replace(/\\/g, '/')
+                    : source;
+            });
+        }
+
+        return JSON.stringify(mapJson);
     }
 
     /**
@@ -1468,6 +1860,12 @@ export class Program {
     }
 
     private _manifest: Map<string, string>;
+    private _manifestEntries: ManifestEntry[];
+
+    /**
+     * The absolute source path to the manifest file. Set when loadManifest is called.
+     */
+    public manifestPath: string;
 
     /**
      * Modify a parsed manifest map by reading `bs_const` and injecting values from `options.manifest.bs_const`
@@ -1511,14 +1909,21 @@ export class Program {
             ? manifestFileObj.src
             : path.join(this.options.rootDir, 'manifest');
 
+        //store the resolved manifest path so it can be used externally for change detection
+        this.manifestPath = util.standardizePath(manifestPath);
+
         try {
             // we only load this manifest once, so do it sync to improve speed downstream
             const contents = fsExtra.readFileSync(manifestPath, 'utf-8');
             const parsedManifest = parseManifest(contents);
             this.buildBsConstsIntoParsedManifest(parsedManifest);
             this._manifest = parsedManifest;
+            this._manifestEntries = parseManifestEntries(contents);
+            this._manifestPath = manifestPath;
         } catch (e) {
             this._manifest = new Map();
+            this._manifestEntries = [];
+            this._manifestPath = undefined;
         }
     }
 
@@ -1530,6 +1935,96 @@ export class Program {
             this.loadManifest();
         }
         return this._manifest;
+    }
+
+    /**
+     * Get the manifest as a list of `{ key, value, range }` entries with line/column ranges
+     * suitable for attaching diagnostics to specific manifest lines.
+     *
+     * NOTE: protected for now. The shape of this data is likely to evolve as we build out
+     * more manifest-aware features (validation rules, autocomplete, etc.). External plugins
+     * shouldn't depend on this until we commit to a stable API.
+     */
+    protected getManifestEntries(): ManifestEntry[] {
+        if (!this._manifestEntries) {
+            this.loadManifest();
+        }
+        return this._manifestEntries;
+    }
+
+    private _manifestPath: string | undefined;
+
+    /**
+     * Returns the absolute path of the loaded manifest file, or undefined if no manifest was found.
+     *
+     * NOTE: protected for now. Once brighterscript treats the manifest as a proper file
+     * (with editor / BscFile integration) callers should consume that instead of poking at
+     * the Program. External plugins shouldn't depend on this in the meantime.
+     */
+    protected getManifestPath(): string | undefined {
+        if (!this._manifest) {
+            this.loadManifest();
+        }
+        return this._manifestPath;
+    }
+
+    private _minFirmwareVersion: string | undefined;
+
+    /**
+     * The minimum Roku firmware version brighterscript should assume the user is targeting.
+     * If `options.minFirmwareVersion` is set AND parseable as semver, the canonical coerced
+     * form ("15.0" → "15.0.0") wins; otherwise (unset or unparseable) falls back to
+     * {@link DEFAULT_MIN_FIRMWARE_VERSION}. The return is always a valid semver string so
+     * downstream callers can pass it directly to `semver.gte`/`semver.lt` without re-coercing.
+     * Cached after first call.
+     */
+    public getMinFirmwareVersion(): string {
+        if (this._minFirmwareVersion === undefined) {
+            const userValue = this.options.minFirmwareVersion;
+            const coerced = userValue ? semver.coerce(userValue) : undefined;
+            this._minFirmwareVersion = coerced ? coerced.version : DEFAULT_MIN_FIRMWARE_VERSION;
+        }
+        return this._minFirmwareVersion;
+    }
+
+    private _rsgVersion: string | undefined;
+
+    /**
+     * Returns the effective `rsg_version` for this program in canonical semver form (e.g. "1.2"
+     * → "1.2.0"). If the manifest declares a value explicitly and it's parseable, the canonical
+     * form wins; otherwise (manifest silent OR value is malformed) we fall back to the highest
+     * known rsg_version whose `becameDefaultAt` is `<=` the effective minimum firmware version,
+     * driven by {@link RSG_VERSIONS}. Cached after first call.
+     *
+     * Manifest validation (format errors, etc.) happens in `ProgramValidator` against the raw
+     * entry — that path doesn't go through this method.
+     */
+    public getRsgVersion(): string {
+        if (this._rsgVersion !== undefined) {
+            return this._rsgVersion;
+        }
+        const explicit = this.getManifest().get('rsg_version');
+        const explicitCoerced = explicit !== undefined ? semver.coerce(explicit.trim()) : undefined;
+        if (explicitCoerced) {
+            this._rsgVersion = explicitCoerced.version;
+            return this._rsgVersion;
+        }
+        //walk known rsg_versions in descending order (newest first) and return the first whose
+        //becameDefaultAt <= effective firmware. As long as some entry has becameDefaultAt: '0.0.0'
+        //(currently `1.1`), this loop always finds a match.
+        const minFirmwareVersion = this.getMinFirmwareVersion();
+        const candidates = Object.entries(RSG_VERSIONS)
+            .filter(([, info]) => info.becameDefaultAt !== undefined)
+            .sort(([a], [b]) => semver.rcompare(semver.coerce(a)!, semver.coerce(b)!));
+        for (const [version, info] of candidates) {
+            if (semver.gte(minFirmwareVersion, info.becameDefaultAt!)) {
+                this._rsgVersion = semver.coerce(version)!.version;
+                return this._rsgVersion;
+            }
+        }
+        //unreachable as long as RSG_VERSIONS contains an entry with becameDefaultAt: '0.0.0'
+        this._rsgVersion = DEFAULT_MIN_FIRMWARE_VERSION;
+        return this._rsgVersion;
     }
 
     public dispose() {
@@ -1552,4 +2047,30 @@ export interface FileTranspileResult {
     code: string;
     map: SourceMapGenerator;
     typedef: string;
+}
+
+/**
+ * Where a resolved SceneGraph field was declared, relative to the node it was resolved for:
+ * `own` = declared on the node itself, `inherited` = declared on an ancestor in the `extends` chain
+ */
+export type SceneGraphFieldOrigin = 'own' | 'inherited';
+
+/**
+ * A field available on a SceneGraph node, resolved across the node's full `extends` chain
+ */
+export interface ResolvedSceneGraphField {
+    name: string;
+    type?: string;
+    default?: string;
+    description?: string;
+    accessPermission?: string;
+    origin: SceneGraphFieldOrigin;
+}
+
+/**
+ * The built-in Roku node data and/or project component file backing a SceneGraph node name
+ */
+export interface SceneGraphNodeLookup {
+    builtInNode?: SGNodeData;
+    componentFile?: XmlFile;
 }

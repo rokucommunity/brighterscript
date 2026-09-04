@@ -1,19 +1,21 @@
 import { URI } from 'vscode-uri';
-import { isBrsFile, isCallExpression, isLiteralExpression, isNamespaceStatement, isXmlScope } from '../../astUtils/reflection';
+import { isBrsFile, isCallExpression, isDottedGetExpression, isLiteralExpression, isNamespaceStatement, isVariableExpression, isXmlScope } from '../../astUtils/reflection';
 import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile, BsDiagnostic, OnScopeValidateEvent } from '../../interfaces';
-import type { EnumStatement, NamespaceStatement } from '../../parser/Statement';
+import type { ConstStatement, EnumStatement, NamespaceStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
 import type { Token } from '../../lexer/Token';
+import { TokenKind } from '../../lexer/TokenKind';
 import type { Scope } from '../../Scope';
 import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
 import type { Expression } from '../../parser/AstNode';
 import type { VariableExpression, DottedGetExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
+import { createVisitor, WalkMode } from '../../astUtils/visitors';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -37,6 +39,7 @@ export class ScopeValidator {
         this.event = event;
         this.walkFiles();
         this.detectDuplicateEnums();
+        this.detectCircularConstReferences();
     }
 
     public reset() {
@@ -50,8 +53,97 @@ export class ScopeValidator {
             if (isBrsFile(file)) {
                 this.iterateFileExpressions(file);
                 this.validateCreateObjectCalls(file);
+                this.validateComputedAAKeys(file);
             }
         });
+    }
+
+    private validateComputedAAKeys(file: BrsFile) {
+        const { scope } = this.event;
+        file.ast.walk(createVisitor({
+            AAIndexedMemberExpression: (member) => {
+                // Direct string literal (e.g. ["my-key"]) is valid
+                if (isLiteralExpression(member.key)) {
+                    if (member.key.token.kind !== TokenKind.StringLiteral) {
+                        this.addMultiScopeDiagnostic({
+                            file: file,
+                            ...DiagnosticMessages.computedAAKeyMustBeStringExpression(),
+                            range: member.key.range
+                        });
+                    }
+                    return;
+                }
+                const parts = util.getDottedGetPath(member.key);
+                if (parts.length === 0) {
+                    this.addMultiScopeDiagnostic({
+                        file: file,
+                        ...DiagnosticMessages.computedPropertyKeyMustBeConstantExpression(),
+                        range: member.key.range
+                    });
+                    return;
+                }
+                const enclosingNamespace = member.key.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase();
+                const entityName = parts.map(p => p.name.text.toLowerCase()).join('.');
+                // Check enum member
+                const memberLink = scope.getEnumMemberFileLink(entityName, enclosingNamespace);
+                if (memberLink) {
+                    const value = memberLink.item.getValue();
+                    if (!value?.startsWith('"')) {
+                        this.addMultiScopeDiagnostic({
+                            file: file,
+                            ...DiagnosticMessages.computedAAKeyMustBeStringExpression(),
+                            range: member.key.range
+                        });
+                    }
+                    return;
+                }
+                // Check const — follow the chain to find the root literal type
+                const constLink = scope.getConstFileLink(entityName, enclosingNamespace);
+                if (constLink) {
+                    if (!this.constResolvesToString(constLink.item.value, enclosingNamespace, scope)) {
+                        this.addMultiScopeDiagnostic({
+                            file: file,
+                            ...DiagnosticMessages.computedAAKeyMustBeStringExpression(),
+                            range: member.key.range
+                        });
+                    }
+                    return;
+                }
+                this.addMultiScopeDiagnostic({
+                    file: file,
+                    ...DiagnosticMessages.computedPropertyKeyMustBeConstantExpression(),
+                    range: member.key.range
+                });
+            }
+        }), { walkMode: WalkMode.visitAllRecursive });
+    }
+
+    /**
+     * Recursively resolve a const/enum reference to determine if its ultimate value is a string.
+     * Returns true only if the value is confirmed to be a string.
+     */
+    private constResolvesToString(value: Expression, enclosingNamespace: string, scope: Scope, visited = new Set<string>()): boolean {
+        if (isLiteralExpression(value)) {
+            return value.token.kind === TokenKind.StringLiteral;
+        }
+        const parts = util.getDottedGetPath(value);
+        if (parts.length === 0) {
+            return false;
+        }
+        const entityName = parts.map(p => p.name.text.toLowerCase()).join('.');
+        if (visited.has(entityName)) {
+            return false; // circular reference — cannot confirm string
+        }
+        visited.add(entityName);
+        const constLink = scope.getConstFileLink(entityName, enclosingNamespace);
+        if (constLink) {
+            return this.constResolvesToString(constLink.item.value, enclosingNamespace, scope, visited);
+        }
+        const memberLink = scope.getEnumMemberFileLink(entityName, enclosingNamespace);
+        if (memberLink) {
+            return this.constResolvesToString(memberLink.item.value, enclosingNamespace, scope, visited);
+        }
+        return false;
     }
 
     private expressionsByFile = new Cache<BrsFile, Readonly<ExpressionInfo>[]>();
@@ -258,6 +350,87 @@ export class ScopeValidator {
             }
         }
         this.event.scope.addDiagnostics(diagnostics);
+    }
+
+    /**
+     * Flag circular references between consts (e.g. const A = B; const B = A, or
+     * aggregate cycles like const A = { x: B }; const B = { y: A }). Without this
+     * check, the transpile pass silently emits unresolved refs at the cycle break
+     * point, producing code that fails at runtime.
+     *
+     * Mirrors the existing class-hierarchy circular-reference detection: each const
+     * starts its own walk, and an N-cycle produces N diagnostics (one rooted at
+     * each member of the cycle).
+     */
+    private detectCircularConstReferences() {
+        const scope = this.event.scope;
+        const diagnostics: BsDiagnostic[] = [];
+
+        const followConstRef = (
+            expression: Expression,
+            namespace: string | undefined,
+            chain: ConstStatement[]
+        ) => {
+            const parts = util.splitExpression(expression);
+            const processedNames: string[] = [];
+            for (const part of parts) {
+                if (!isVariableExpression(part) && !isDottedGetExpression(part)) {
+                    return;
+                }
+                processedNames.push(part.name?.text?.toLowerCase());
+                const link = scope.getConstFileLink(processedNames.join('.'), namespace);
+                if (link) {
+                    walkConst(link.item, link.file, chain);
+                    return;
+                }
+            }
+        };
+
+        const walkConst = (
+            constStatement: ConstStatement,
+            file: BrsFile,
+            chain: ConstStatement[]
+        ) => {
+            const cycleStart = chain.indexOf(constStatement);
+            if (cycleStart >= 0) {
+                const items = chain.slice(cycleStart).map(c => c.fullName).concat(constStatement.fullName);
+                diagnostics.push({
+                    ...DiagnosticMessages.circularReferenceDetected(items, scope.name),
+                    file: file,
+                    range: constStatement.tokens.name.range
+                });
+                return;
+            }
+            chain.push(constStatement);
+            const innerNamespace = constStatement.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+            const value = constStatement.value;
+            if (value) {
+                if (isVariableExpression(value) || isDottedGetExpression(value)) {
+                    followConstRef(value, innerNamespace, chain);
+                } else {
+                    value.walk(createVisitor({
+                        VariableExpression: (varExpr) => {
+                            if (isDottedGetExpression(varExpr.parent)) {
+                                return;
+                            }
+                            followConstRef(varExpr, innerNamespace, chain);
+                        },
+                        DottedGetExpression: (dottedExpr) => {
+                            if (isDottedGetExpression(dottedExpr.parent)) {
+                                return;
+                            }
+                            followConstRef(dottedExpr, innerNamespace, chain);
+                        }
+                    }), { walkMode: WalkMode.visitExpressionsRecursive });
+                }
+            }
+            chain.pop();
+        };
+
+        for (const [, link] of scope.getConstMap()) {
+            walkConst(link.item, link.file, []);
+        }
+        scope.addDiagnostics(diagnostics);
     }
 
     /**

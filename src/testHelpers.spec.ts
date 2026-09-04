@@ -244,7 +244,7 @@ export function trimMap(source: string) {
     return source.replace(/('|<!--)\/\/# sourceMappingURL=.*$/m, '').trimEnd();
 }
 
-export function expectCodeActions(test: () => any, expected: CodeActionShorthand[]) {
+export function expectCodeActions(test: () => any, expected: CodeActionShorthand[], options?: { includeDisableDirectives?: boolean }) {
     const sinon = createSandbox();
     const stub = sinon.stub(codeActionUtil, 'createCodeAction');
     try {
@@ -253,7 +253,12 @@ export function expectCodeActions(test: () => any, expected: CodeActionShorthand
         sinon.restore();
     }
 
-    const args = stub.getCalls().map(x => x.args[0]);
+    let args = stub.getCalls().map(x => x.args[0]);
+    //the generic `Disable X for this line/file` actions show up for every diagnostic. Existing tests
+    //assert on specific fixes, so filter them out unless the caller opts in.
+    if (!options?.includeDisableDirectives) {
+        args = args.filter(arg => !/^Disable .+ for this (line|file)/.test(arg.title));
+    }
     //delete any `diagnostics` arrays to help with testing performance (since it's circular...causes all sorts of issues)
     for (let arg of args) {
         delete arg.diagnostics;
