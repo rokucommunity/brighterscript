@@ -15,7 +15,7 @@ export function walkStatements(
     visitor: (statement: Statement, parent?: Statement, owner?: any, key?: any) => Statement | void,
     cancel?: CancellationToken
 ): void {
-    statement.walk(visitor as any, {
+    statement.walk(visitor as unknown as WalkVisitor, {
         walkMode: WalkMode.visitStatements,
         cancel: cancel
     });
@@ -48,13 +48,15 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
 
     //notify the visitor of this element
     if (element.visitMode & options.walkMode) {
-        returnValue = visitor?.(element, element.parent as any, owner, key);
+        returnValue = visitor?.(element, element.parent, owner, key);
 
         //replace the value on the parent if the visitor returned a Statement or Expression (this is how visitors can edit AST)
         if (returnValue && (isExpression(returnValue) || isStatement(returnValue))) {
             //if we have an editor, use that to modify the AST
             if (options.editor) {
-                options.editor.setProperty(owner, key, returnValue as any);
+                //`T[K]` can't be statically unified with the now-narrowed `returnValue` because `T`/`K` are unresolved generics here;
+                //callers only ever pass AST-shaped values, so this is safe in practice
+                options.editor.setProperty(owner, key, returnValue as unknown as T[keyof T]);
 
                 //we don't have an editor, modify the AST directly
             } else {
@@ -94,7 +96,7 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
  * @param parent the parent AstNode of each item in the array
  * @param filter a function used to filter items from the array. return true if that item should be walked
  */
-export function walkArray<T extends AstNode = AstNode>(array: Array<T>, visitor: WalkVisitor, options: WalkOptions, parent?: AstNode, filter?: <T>(element: T) => boolean) {
+export function walkArray<T extends AstNode = AstNode>(array: Array<T>, visitor: WalkVisitor, options: WalkOptions, parent?: AstNode, filter?: (element: T) => boolean) {
     let processedNodes = new Set<AstNode>();
 
     for (let i = 0; i < array?.length; i++) {

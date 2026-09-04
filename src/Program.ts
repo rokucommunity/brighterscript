@@ -642,7 +642,7 @@ export class Program {
      */
     public addOrReplaceFile<T extends BscFile>(fileEntry: FileObj, fileContents: string): T;
     public addOrReplaceFile<T extends BscFile>(fileParam: FileObj | string, fileContents: string): T {
-        return this.setFile<T>(fileParam as any, fileContents);
+        return this.setFile<T>(fileParam as string, fileContents);
     }
 
     /**
@@ -773,7 +773,8 @@ export class Program {
             srcPath = s`${path.resolve(rootDir, fileParam)}`;
             pkgPath = s`${util.replaceCaseInsensitive(srcPath, rootDir, '')}`;
         } else {
-            let param: any = fileParam;
+            //`fileParam` here is `FileObj | { srcPath?: string; pkgPath?: string }`; duck-type across both shapes
+            let param = fileParam as { src?: string; srcPath?: string; dest?: string; pkgPath?: string };
 
             if (param.src) {
                 srcPath = s`${param.src}`;

@@ -667,8 +667,10 @@ export class Project implements LspProject {
     public on(eventName: 'diagnostics', handler: (data: { diagnostics: LspDiagnostic[] }) => MaybePromise<void>);
     public on(eventName: 'all', handler: (eventName: string, data: any) => MaybePromise<void>);
     public on(eventName: string, handler: (...args: any[]) => MaybePromise<void>) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         this.emitter.on(eventName, handler as any);
         return () => {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
             this.emitter.removeListener(eventName, handler as any);
         };
     }

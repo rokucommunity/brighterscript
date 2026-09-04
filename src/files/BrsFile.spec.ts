@@ -2139,6 +2139,25 @@ describe('BrsFile', () => {
                 text: 'isAlive'
             });
         });
+
+        it('finds arguments with dotted get values', () => {
+            let file = new BrsFile('absolute_path/file.brs', 'relative_path/file.brs', program);
+            file.parse(`
+                function Sum()
+                    DoSomething(person.name, m.top.id)
+                end function
+            `);
+            expect(file.functionCalls.length).to.equal(1);
+            //a DottedGetExpression arg should be described by the right-most name in the chain
+            expect(file.functionCalls[0].args[0]).deep.include({
+                type: new DynamicType(),
+                text: 'name'
+            });
+            expect(file.functionCalls[0].args[1]).deep.include({
+                type: new DynamicType(),
+                text: 'id'
+            });
+        });
     });
 
     describe('findCallables', () => {

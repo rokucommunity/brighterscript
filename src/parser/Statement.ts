@@ -332,7 +332,8 @@ export class CommentStatement extends Statement implements Expression, TypedefPr
             new CommentStatement(
                 this.comments?.map(x => util.cloneToken(x))
             ),
-            ['comments' as any]
+            //`propsToReparent`'s constraint resolves to `never` here because `comments` holds plain `Token`s, not `AstNode`s
+            ['comments' as never]
         );
     }
 }
@@ -589,7 +590,7 @@ export class IfStatement extends Statement {
         }
     }
 
-    public clone() {
+    public clone(): IfStatement {
         return this.finalizeClone(
             new IfStatement(
                 {
@@ -692,7 +693,7 @@ export class PrintStatement extends Statement {
                 result.push(...(expressionOrSeparator as ExpressionStatement).transpile(state));
             } else {
                 result.push(
-                    state.tokenToSourceNode(expressionOrSeparator)
+                    state.tokenToSourceNode(expressionOrSeparator as Token)
                 );
             }
             //if there's an expression after us, add a space
@@ -706,7 +707,7 @@ export class PrintStatement extends Statement {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             //sometimes we have semicolon Tokens in the expressions list (should probably fix that...), so only walk the actual expressions
-            walkArray(this.expressions as AstNode[], visitor, options, this, (item) => isExpression(item as any));
+            walkArray(this.expressions as AstNode[], visitor, options, this, (item) => isExpression(item));
         }
     }
 
@@ -717,14 +718,15 @@ export class PrintStatement extends Statement {
                     print: util.cloneToken(this.tokens.print)
                 },
                 this.expressions?.map(e => {
-                    if (isExpression(e as any)) {
+                    if (isExpression(e as AstNode)) {
                         return (e as Expression).clone();
                     } else {
-                        return util.cloneToken(e as Token);
+                        return util.cloneToken(e as PrintSeparatorTab | PrintSeparatorSpace);
                     }
                 })
             ),
-            ['expressions' as any]
+            //`propsToReparent`'s constraint resolves to `never` here because `expressions` mixes `Expression`s with plain separator `Token`s
+            ['expressions' as never]
         );
     }
 }
@@ -2365,7 +2367,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let result = [] as TranspileResult;
 
         const constructorFunction = this.getConstructorFunction();
-        let constructorParams = [];
+        let constructorParams: FunctionParameterExpression[] = [];
         if (constructorFunction) {
             constructorParams = constructorFunction.func.parameters;
         } else {
@@ -2563,7 +2565,7 @@ export class MethodStatement extends FunctionStatement {
                 //is a call statement
                 return isExpressionStatement(x) && isCallExpression(x.expression) &&
                     //is a call to super
-                    util.findBeginningVariableExpression(x.expression.callee as any)?.name.text.toLowerCase() === 'super';
+                    util.findBeginningVariableExpression(x.expression.callee)?.name.text.toLowerCase() === 'super';
             }) !== -1;
 
         //if a call to super exists, quit here

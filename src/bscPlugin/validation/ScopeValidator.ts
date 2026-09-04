@@ -448,7 +448,7 @@ export class ScopeValidator {
                 continue;
             }
             const firstParamToken = (call?.args[0]?.expression as any)?.token;
-            const firstParamStringValue = firstParamToken?.text?.replace(/"/g, '');
+            const firstParamStringValue: string = firstParamToken?.text?.replace(/"/g, '');
             //if this is a `createObject('roSGNode'` call, only support known sg node types
             if (firstParamStringValue?.toLowerCase() === 'rosgnode' && isLiteralExpression(call?.args[1]?.expression)) {
                 const componentName: Token = (call?.args[1]?.expression as any)?.token;
