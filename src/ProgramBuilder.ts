@@ -1,23 +1,35 @@
 import * as debounce from 'debounce-promise';
 import * as path from 'path';
-import * as rokuDeploy from 'roku-deploy';
-import type { BsConfig } from './BsConfig';
+import { rokuDeploy } from 'roku-deploy';
+import type { RokuDeployOptions } from 'roku-deploy';
+import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import type { BscFile, BsDiagnostic, FileObj, FileResolver } from './interfaces';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { Watcher } from './Watcher';
 import { DiagnosticSeverity } from 'vscode-languageserver';
-import { Logger, LogLevel } from './Logger';
+import type { Logger } from './logging';
+import { LogLevel, createLogger } from './logging';
 import PluginInterface from './PluginInterface';
 import * as diagnosticUtils from './diagnosticUtils';
 import * as fsExtra from 'fs-extra';
+import * as requireRelative from 'require-relative';
+import { Throttler } from './Throttler';
+import { URI } from 'vscode-uri';
 
 /**
  * A runner class that handles
  */
 export class ProgramBuilder {
 
-    public constructor() {
+    public constructor(
+        options?: {
+            logger?: Logger;
+        }
+    ) {
+        this.logger = options?.logger ?? createLogger();
+        this.plugins = new PluginInterface([], { logger: this.logger });
+
         //add the default file resolver (used to load source file contents).
         this.addFileResolver((filePath) => {
             return fsExtra.readFile(filePath).then((value) => {
@@ -30,16 +42,20 @@ export class ProgramBuilder {
      */
     public allowConsoleClearing = true;
 
-    public options: BsConfig;
+    public options: FinalizedBsConfig = util.normalizeConfig({});
     private isRunning = false;
-    private watcher: Watcher;
-    public program: Program;
-    public logger = new Logger();
-    public plugins: PluginInterface = new PluginInterface([], this.logger);
+    private watcher: Watcher | undefined;
+    public program: Program | undefined;
+    public logger: Logger;
+    public plugins: PluginInterface;
     private fileResolvers = [] as FileResolver[];
 
-    public addFileResolver(fileResolver: FileResolver) {
-        this.fileResolvers.push(fileResolver);
+    /**
+     * Add file resolvers that will be able to provide file contents before loading from the file system
+     * @param fileResolvers a list of file resolvers
+     */
+    public addFileResolver(...fileResolvers: FileResolver[]) {
+        this.fileResolvers.push(...fileResolvers);
     }
 
     /**
@@ -47,16 +63,16 @@ export class ProgramBuilder {
      * This walks backwards through the file resolvers until we get a value.
      * This allow the language server to provide file contents directly from memory.
      */
-    public async getFileContents(pathAbsolute: string) {
-        pathAbsolute = s`${pathAbsolute}`;
+    public async getFileContents(srcPath: string) {
+        srcPath = s`${srcPath}`;
         let reversedResolvers = [...this.fileResolvers].reverse();
         for (let fileResolver of reversedResolvers) {
-            let result = await fileResolver(pathAbsolute);
+            let result = await fileResolver(srcPath);
             if (typeof result === 'string') {
                 return result;
             }
         }
-        throw new Error(`Could not load file "${pathAbsolute}"`);
+        throw new Error(`Could not load file "${srcPath}"`);
     }
 
     /**
@@ -64,12 +80,16 @@ export class ProgramBuilder {
      */
     private staticDiagnostics = [] as BsDiagnostic[];
 
-    public addDiagnostic(filePathAbsolute: string, diagnostic: Partial<BsDiagnostic>) {
-        let file: BscFile = this.program.getFileByPathAbsolute(filePathAbsolute);
+    public addDiagnostic(srcPath: string, diagnostic: Partial<BsDiagnostic>) {
+        if (!this.program) {
+            throw new Error('Cannot call `ProgramBuilder.addDiagnostic` before `ProgramBuilder.run()`');
+        }
+        let file: BscFile | undefined = this.program.getFile(srcPath);
         if (!file) {
             file = {
-                pkgPath: this.program.getPkgPath(filePathAbsolute),
-                pathAbsolute: filePathAbsolute,
+                pkgPath: path.basename(srcPath),
+                pathAbsolute: srcPath, //keep this for backwards-compatibility. TODO remove in v1
+                srcPath: srcPath,
                 getDiagnostics: () => {
                     return [<any>diagnostic];
                 }
@@ -87,7 +107,9 @@ export class ProgramBuilder {
     }
 
     public async run(options: BsConfig) {
-        this.logger.logLevel = options.logLevel as LogLevel;
+        if (options?.logLevel) {
+            this.logger.logLevel = options.logLevel;
+        }
 
         if (this.isRunning) {
             throw new Error('Server is already running');
@@ -95,13 +117,25 @@ export class ProgramBuilder {
         this.isRunning = true;
         try {
             this.options = util.normalizeAndResolveConfig(options);
-            if (this.options.project) {
+            if (this.options?.logLevel !== undefined) {
+                this.logger.logLevel = this.options?.logLevel;
+            }
+
+            if (this.options.noProject) {
+                this.logger.log(`'no-project' flag is set so bsconfig.json loading is disabled'`);
+            } else if (this.options.project) {
                 this.logger.log(`Using config file: "${this.options.project}"`);
             } else {
                 this.logger.log(`No bsconfig.json file found, using default options`);
             }
+            this.loadRequires();
             this.loadPlugins();
         } catch (e: any) {
+            //For now, just use a default options object so we have a functioning program
+            this.options = util.normalizeConfig({
+                showDiagnosticsInConsole: options?.showDiagnosticsInConsole
+            });
+
             if (e?.file && e.message && e.code) {
                 let err = e as BsDiagnostic;
                 this.staticDiagnostics.push(err);
@@ -109,48 +143,59 @@ export class ProgramBuilder {
                 //if this is not a diagnostic, something else is wrong...
                 throw e;
             }
+
             this.printDiagnostics();
-
-            //we added diagnostics, so hopefully that draws attention to the underlying issues.
-            //For now, just use a default options object so we have a functioning program
-            this.options = util.normalizeConfig({});
         }
-        this.logger.logLevel = this.options.logLevel as LogLevel;
+        this.logger.logLevel = this.options.logLevel;
 
-        this.program = this.createProgram();
+        this.createProgram();
 
         //parse every file in the entire project
         await this.loadAllFilesAST();
 
         if (this.options.watch) {
             this.logger.log('Starting compilation in watch mode...');
-            await this.runOnce();
+            await this.runOnce({
+                validate: options?.validate
+            });
             this.enableWatchMode();
         } else {
-            await this.runOnce();
+            await this.runOnce({
+                validate: options?.validate
+            });
         }
     }
 
     protected createProgram() {
-        const program = new Program(this.options, undefined, this.plugins);
+        this.program = new Program(this.options, this.logger, this.plugins);
 
-        this.plugins.emit('afterProgramCreate', program);
-        return program;
+        this.plugins.emit('afterProgramCreate', this.program);
+
+        return this.program;
     }
 
     protected loadPlugins() {
         const cwd = this.options.cwd ?? process.cwd();
         const plugins = util.loadPlugins(
             cwd,
-            this.options.plugins,
+            this.options.plugins ?? [],
             (pathOrModule, err) => this.logger.error(`Error when loading plugin '${pathOrModule}':`, err)
         );
-        this.logger.log(`Loading ${this.options.plugins?.length ?? 0} plugins for cwd "${cwd}"`);
+        this.logger.log(`Loading ${this.options.plugins?.length ?? 0} plugins for cwd "${cwd}"`, this.options.plugins);
         for (let plugin of plugins) {
             this.plugins.add(plugin);
         }
 
         this.plugins.emit('beforeProgramCreate', this);
+    }
+
+    /**
+     * `require()` every options.require path
+     */
+    protected loadRequires() {
+        for (const dep of this.options.require ?? []) {
+            requireRelative(dep, this.options.cwd);
+        }
     }
 
     private clearConsole() {
@@ -163,7 +208,7 @@ export class ProgramBuilder {
      * A handle for the watch mode interval that keeps the process alive.
      * We need this so we can clear it if the builder is disposed
      */
-    private watchInterval: NodeJS.Timer;
+    private watchInterval: NodeJS.Timer | undefined;
 
     public enableWatchMode() {
         this.watcher = new Watcher(this.options);
@@ -194,6 +239,9 @@ export class ProgramBuilder {
 
         //on any file watcher event
         this.watcher.on('all', async (event: string, thePath: string) => { //eslint-disable-line @typescript-eslint/no-misused-promises
+            if (!this.program) {
+                throw new Error('Internal invariant exception: somehow file watcher ran before `ProgramBuilder.run()`');
+            }
             thePath = s`${path.resolve(this.rootDir, thePath)}`;
             if (event === 'add' || event === 'change') {
                 const fileObj = {
@@ -205,7 +253,7 @@ export class ProgramBuilder {
                         util.driveLetterToLower(this.rootDir)
                     )
                 };
-                this.program.addOrReplaceFile(
+                this.program.setFile(
                     fileObj,
                     await this.getFileContents(fileObj.src)
                 );
@@ -221,6 +269,9 @@ export class ProgramBuilder {
      * The rootDir for this program.
      */
     public get rootDir() {
+        if (!this.program) {
+            throw new Error('Cannot access `ProgramBuilder.rootDir` until after `ProgramBuilder.run()`');
+        }
         return this.program.options.rootDir;
     }
 
@@ -235,14 +286,17 @@ export class ProgramBuilder {
     /**
      * Run the entire process exactly one time.
      */
-    private runOnce() {
+    private runOnce(options?: { validate?: boolean }) {
         //clear the console
         this.clearConsole();
         let cancellationToken = { isCanceled: false };
         //wait for the previous run to complete
         let runPromise = this.cancelLastRun().then(() => {
             //start the new run
-            return this._runOnce(cancellationToken);
+            return this._runOnce({
+                cancellationToken: cancellationToken,
+                validate: options?.validate
+            });
         }) as any;
 
         //a function used to cancel this run
@@ -254,7 +308,7 @@ export class ProgramBuilder {
     }
 
     private printDiagnostics(diagnostics?: BsDiagnostic[]) {
-        if (this.options.showDiagnosticsInConsole === false) {
+        if (this.options?.showDiagnosticsInConsole === false) {
             return;
         }
         if (!diagnostics) {
@@ -264,62 +318,96 @@ export class ProgramBuilder {
         //group the diagnostics by file
         let diagnosticsByFile = {} as Record<string, BsDiagnostic[]>;
         for (let diagnostic of diagnostics) {
-            if (!diagnosticsByFile[diagnostic.file.pathAbsolute]) {
-                diagnosticsByFile[diagnostic.file.pathAbsolute] = [];
+            if (!diagnosticsByFile[diagnostic.file.srcPath]) {
+                diagnosticsByFile[diagnostic.file.srcPath] = [];
             }
-            diagnosticsByFile[diagnostic.file.pathAbsolute].push(diagnostic);
+            diagnosticsByFile[diagnostic.file.srcPath].push(diagnostic);
         }
 
         //get printing options
         const options = diagnosticUtils.getPrintDiagnosticOptions(this.options);
         const { cwd, emitFullPaths } = options;
+        //custom-template reporters are pre-resolved once so we don't recompile them per diagnostic;
+        //the resolved function is stashed on the entry as `run` so we don't have to keep a parallel array.
+        //invalid entries are warned about and skipped (we never want to abort a build over a config typo).
+        const reporters = diagnosticUtils.normalizeDiagnosticReporters(
+            this.options?.diagnosticReporters,
+            this.logger
+        )
+            .map(reporter => (reporter.type === 'custom'
+                ? { ...reporter, run: diagnosticUtils.createCustomDiagnosticReporter(reporter.format) }
+                : reporter));
+        if (reporters.length === 0) {
+            return;
+        }
 
-        let pathsAbsolute = Object.keys(diagnosticsByFile).sort();
-        for (let pathAbsolute of pathsAbsolute) {
-            let diagnosticsForFile = diagnosticsByFile[pathAbsolute];
+        let srcPaths = Object.keys(diagnosticsByFile).sort();
+        for (let srcPath of srcPaths) {
+            let diagnosticsForFile = diagnosticsByFile[srcPath];
             //sort the diagnostics in line and column order
             let sortedDiagnostics = diagnosticsForFile.sort((a, b) => {
                 return (
-                    a.range.start.line - b.range.start.line ||
-                    a.range.start.character - b.range.start.character
+                    (a.range?.start.line ?? -1) - (b.range?.start.line ?? -1) ||
+                    (a.range?.start.character ?? -1) - (b.range?.start.character ?? -1)
                 );
             });
 
-            let filePath = pathAbsolute;
+            let filePath = srcPath;
             if (!emitFullPaths) {
                 filePath = path.relative(cwd, filePath);
             }
             //load the file text
-            const file = this.program.getFileByPathAbsolute(pathAbsolute);
+            const file = this.program?.getFile(srcPath);
             //get the file's in-memory contents if available
             const lines = file?.fileContents?.split(/\r?\n/g) ?? [];
 
             for (let diagnostic of sortedDiagnostics) {
                 //default the severity to error if undefined
                 let severity = typeof diagnostic.severity === 'number' ? diagnostic.severity : DiagnosticSeverity.Error;
-                //format output
-                diagnosticUtils.printDiagnostic(options, severity, filePath, lines, diagnostic);
+                let relatedInformation = (diagnostic.relatedInformation ?? []).map(x => {
+                    let relatedInfoFilePath = URI.parse(x.location.uri).fsPath;
+                    if (!emitFullPaths) {
+                        relatedInfoFilePath = path.relative(cwd, relatedInfoFilePath);
+                    }
+                    return {
+                        filePath: relatedInfoFilePath,
+                        range: x.location.range,
+                        message: x.message
+                    };
+                });
+                //format output once per configured reporter
+                for (const reporter of reporters) {
+                    if (reporter.type === 'github-actions') {
+                        diagnosticUtils.printDiagnosticGithubActions({ options: options, severity: severity, filePath: filePath, diagnostic: diagnostic });
+                    } else if (reporter.type === 'custom') {
+                        reporter.run({ options: options, severity: severity, filePath: filePath, diagnostic: diagnostic });
+                    } else {
+                        diagnosticUtils.printDiagnostic(options, severity, filePath, lines, diagnostic, relatedInformation);
+                    }
+                }
             }
         }
     }
 
     /**
-     * Run the process once, allowing cancelability.
+     * Run the process once, allowing it to be cancelled.
      * NOTE: This should only be called by `runOnce`.
-     * @param cancellationToken
      */
-    private async _runOnce(cancellationToken: { isCanceled: any }) {
+    private async _runOnce(options: { cancellationToken: { isCanceled: any }; validate?: boolean }) {
         let wereDiagnosticsPrinted = false;
         try {
             //maybe cancel?
-            if (cancellationToken.isCanceled === true) {
+            if (options?.cancellationToken?.isCanceled === true) {
                 return -1;
             }
-            //validate program
-            this.validateProject();
+            //the prop-drilled validate value takes precedence over this.options.validate.
+            //false means no, everything else (including missing) means true
+            if ((options?.validate ?? this.options.validate) !== false) {
+                this.validateProject();
+            }
 
             //maybe cancel?
-            if (cancellationToken.isCanceled === true) {
+            if (options?.cancellationToken?.isCanceled === true) {
                 return -1;
             }
 
@@ -337,7 +425,7 @@ export class ProgramBuilder {
             await this.createPackageIfEnabled();
 
             //maybe cancel?
-            if (cancellationToken.isCanceled === true) {
+            if (options?.cancellationToken?.isCanceled === true) {
                 return -1;
             }
 
@@ -364,7 +452,7 @@ export class ProgramBuilder {
                 await this.logger.time(LogLevel.log, [`Creating package at ${this.options.outFile}`], async () => {
                     await rokuDeploy.zipPackage({
                         ...this.options,
-                        logLevel: this.options.logLevel as LogLevel,
+                        logLevel: this.options.logLevel as unknown as RokuDeployOptions['logLevel'],
                         outDir: util.getOutDir(this.options),
                         outFile: path.basename(this.options.outFile)
                     });
@@ -373,49 +461,55 @@ export class ProgramBuilder {
         }
     }
 
+    private transpileThrottler = new Throttler(0);
     /**
      * Transpiles the entire program into the staging folder
      */
     public async transpile() {
-        let options = util.cwdWork(this.options.cwd, () => {
-            return rokuDeploy.getOptions({
-                ...this.options,
-                logLevel: this.options.logLevel as LogLevel,
-                outDir: util.getOutDir(this.options),
-                outFile: path.basename(this.options.outFile)
+        await this.transpileThrottler.run(async () => {
+            let options = util.cwdWork(this.options.cwd, () => {
+                return rokuDeploy.getOptions({
+                    ...this.options,
+                    logLevel: this.options.logLevel as unknown as RokuDeployOptions['logLevel'],
+                    outDir: util.getOutDir(this.options),
+                    outFile: path.basename(this.options.outFile)
+
+                    //rokuDeploy's return type says all its fields can be nullable, but it sets values for all of them.
+                }) as any as Required<ReturnType<typeof rokuDeploy.getOptions>>;
             });
-        });
 
-        //get every file referenced by the files array
-        let fileMap = await rokuDeploy.getFilePaths(options.files, options.rootDir);
+            //get every file referenced by the files array
+            let fileMap = await rokuDeploy.getFilePaths(options.files, options.rootDir);
 
-        //remove files currently loaded in the program, we will transpile those instead (even if just for source maps)
-        let filteredFileMap = [] as FileObj[];
-        for (let fileEntry of fileMap) {
-            if (this.program.hasFile(fileEntry.src) === false) {
-                filteredFileMap.push(fileEntry);
+            //remove files currently loaded in the program, we will transpile those instead (even if just for source maps)
+            let filteredFileMap = [] as FileObj[];
+
+            for (let fileEntry of fileMap) {
+                if (this.program!.hasFile(fileEntry.src) === false) {
+                    filteredFileMap.push(fileEntry);
+                }
             }
-        }
 
-        this.plugins.emit('beforePrepublish', this, filteredFileMap);
+            this.plugins.emit('beforePrepublish', this, filteredFileMap);
 
-        await this.logger.time(LogLevel.log, ['Copying to staging directory'], async () => {
-            //prepublish all non-program-loaded files to staging
-            await rokuDeploy.prepublishToStaging({
-                ...options,
-                files: filteredFileMap
+            await this.logger.time(LogLevel.log, ['Copying to staging directory'], async () => {
+                //prepublish all non-program-loaded files to staging
+                await rokuDeploy.prepublishToStaging({
+                    ...options,
+                    files: filteredFileMap
+                });
             });
+
+            this.plugins.emit('afterPrepublish', this, filteredFileMap);
+            this.plugins.emit('beforePublish', this, fileMap);
+
+            await this.logger.time(LogLevel.log, ['Transpiling'], async () => {
+                //transpile any brighterscript files
+                await this.program!.transpile(fileMap, options.stagingDir);
+            });
+
+            this.plugins.emit('afterPublish', this, fileMap);
         });
-
-        this.plugins.emit('afterPrepublish', this, filteredFileMap);
-        this.plugins.emit('beforePublish', this, fileMap);
-
-        await this.logger.time(LogLevel.log, ['Transpiling'], async () => {
-            //transpile any brighterscript files
-            await this.program.transpile(fileMap, options.stagingFolderPath);
-        });
-
-        this.plugins.emit('afterPublish', this, fileMap);
     }
 
     private async deployPackageIfEnabled() {
@@ -424,7 +518,7 @@ export class ProgramBuilder {
             await this.logger.time(LogLevel.log, ['Deploying package to', this.options.host], async () => {
                 await rokuDeploy.publish({
                     ...this.options,
-                    logLevel: this.options.logLevel as LogLevel,
+                    logLevel: this.options.logLevel as unknown as RokuDeployOptions['logLevel'],
                     outDir: util.getOutDir(this.options),
                     outFile: path.basename(this.options.outFile)
                 });
@@ -437,73 +531,60 @@ export class ProgramBuilder {
      */
     private async loadAllFilesAST() {
         await this.logger.time(LogLevel.log, ['Parsing files'], async () => {
-            let errorCount = 0;
-            let files = await this.logger.time(LogLevel.debug, ['getFlePaths'], async () => {
+            let files = await this.logger.time(LogLevel.debug, ['getFilePaths'], async () => {
                 return util.getFilePaths(this.options);
             });
             this.logger.trace('ProgramBuilder.loadAllFilesAST() files:', files);
 
             const typedefFiles = [] as FileObj[];
-            const nonTypedefFiles = [] as FileObj[];
+            const sourceFiles = [] as FileObj[];
+            let manifestFile: FileObj | null = null;
+
             for (const file of files) {
-                const srcLower = file.src.toLowerCase();
-                if (srcLower.endsWith('.d.bs')) {
+                // source files (.brs, .bs, .xml)
+                if (/(?<!\.d)\.(bs|brs|xml)$/i.test(file.dest)) {
+                    sourceFiles.push(file);
+
+                    // typedef files (.d.bs)
+                } else if (/\.d\.bs$/i.test(file.dest)) {
                     typedefFiles.push(file);
-                } else {
-                    nonTypedefFiles.push(file);
+
+                    // manifest file
+                } else if (/^manifest$/i.test(file.dest)) {
+                    manifestFile = file;
                 }
             }
 
-            //preload every type definition file first, which eliminates duplicate file loading
-            await Promise.all(
-                typedefFiles.map(async (fileObj) => {
-                    try {
-                        this.program.addOrReplaceFile(
-                            fileObj,
-                            await this.getFileContents(fileObj.src)
-                        );
-                    } catch (e) {
-                        //log the error, but don't fail this process because the file might be fixable later
-                        this.logger.log(e);
-                    }
-                })
-            );
+            if (manifestFile) {
+                this.program!.loadManifest(manifestFile, false);
+            }
 
-            const acceptableExtensions = ['.bs', '.brs', '.xml'];
-            //parse every file other than the type definitions
-            await Promise.all(
-                nonTypedefFiles.map(async (fileObj) => {
-                    try {
-                        let fileExtension = path.extname(fileObj.src).toLowerCase();
-
-                        //only process certain file types
-                        if (acceptableExtensions.includes(fileExtension)) {
-                            this.program.addOrReplaceFile(
-                                fileObj,
-                                await this.getFileContents(fileObj.src)
-                            );
-                        }
-                    } catch (e) {
-                        //log the error, but don't fail this process because the file might be fixable later
-                        this.logger.log(e);
-                    }
-                })
-            );
-            return errorCount;
+            const loadFile = async (fileObj) => {
+                try {
+                    this.program!.setFile(fileObj, await this.getFileContents(fileObj.src));
+                } catch (e) {
+                    this.logger.log(e); // log the error, but don't fail this process because the file might be fixable later
+                }
+            };
+            await Promise.all(typedefFiles.map(loadFile)); // preload every type definition file, which eliminates duplicate file loading
+            await Promise.all(sourceFiles.map(loadFile)); // parse source files
         });
     }
 
     /**
      * Remove all files from the program that are in the specified folder path
-     * @param folderPathAbsolute
+     * @param srcPath the path to the folder to remove
      */
-    public removeFilesInFolder(folderPathAbsolute: string) {
+    public removeFilesInFolder(srcPath: string): boolean {
+        let removedSomeFiles = false;
         for (let filePath in this.program.files) {
             //if the file path starts with the parent path and the file path does not exactly match the folder path
-            if (filePath.startsWith(folderPathAbsolute) && filePath !== folderPathAbsolute) {
+            if (filePath.startsWith(srcPath) && filePath !== srcPath) {
                 this.program.removeFile(filePath);
+                removedSomeFiles = true;
             }
         }
+        return removedSomeFiles;
     }
 
     /**

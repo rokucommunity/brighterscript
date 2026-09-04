@@ -1,6 +1,12 @@
 import type { BscType } from './BscType';
 
 export class DynamicType implements BscType {
+    constructor(
+        public typeText?: string
+    ) { }
+
+    public static readonly instance = new DynamicType();
+
     public isAssignableTo(targetType: BscType) {
         //everything can be dynamic, so as long as a type is provided, this is true
         return !!targetType;
@@ -8,7 +14,6 @@ export class DynamicType implements BscType {
 
     /**
      * The dynamic type is convertible to everything.
-     * @param targetType
      */
     public isConvertibleTo(targetType: BscType) {
         //everything can be dynamic, so as long as a type is provided, this is true
@@ -16,10 +21,14 @@ export class DynamicType implements BscType {
     }
 
     public toString() {
-        return 'dynamic';
+        return this.typeText ?? 'dynamic';
     }
 
     public toTypeString(): string {
         return this.toString();
+    }
+
+    public clone() {
+        return new DynamicType(this.typeText);
     }
 }

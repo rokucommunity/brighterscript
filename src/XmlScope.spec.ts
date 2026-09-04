@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import { Position, Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { XmlFile } from './files/XmlFile';
@@ -25,7 +25,7 @@ describe('XmlScope', () => {
 
     describe('constructor', () => {
         it('listens for attach/detach parent events', () => {
-            let parentXmlFile = program.addOrReplaceFile<XmlFile>('components/parent.xml', trim`
+            let parentXmlFile = program.setFile<XmlFile>('components/parent.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Parent" extends="Scene">
                 </component>
@@ -35,12 +35,12 @@ describe('XmlScope', () => {
             //should default to global scope
             expect(scope.getParentScope()).to.equal(program.globalScope);
 
-            let childXmlFile = program.addOrReplaceFile<XmlFile>('components/child.xml', trim`
+            let childXmlFile = program.setFile<XmlFile>('components/child.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Child" extends="Parent">
                 </component>
             `);
-            let childScope = program.getComponentScope('Child');
+            let childScope = program.getComponentScope('Child')!;
 
             program.validate();
 
@@ -61,32 +61,31 @@ describe('XmlScope', () => {
 
     describe('getDefinition', () => {
         it('finds parent file', () => {
-            let parentXmlFile = program.addOrReplaceFile({ src: `${rootDir}/components/parent.xml`, dest: 'components/parent.xml' }, trim`
+            let parentXmlFile = program.setFile('components/parent.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentComponent">
                 </component>
             `);
-            let childXmlFile = program.addOrReplaceFile({ src: `${rootDir}/components/child.xml`, dest: 'components/child.xml' }, trim`
+            let childXmlFile = program.setFile('components/child.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ChildComponent" extends="ParentComponent">
                 </component>
             `);
-            let childScope = program.getScopesForFile(childXmlFile);
-            let definition = childScope[0].getDefinition(childXmlFile, Position.create(1, 48));
+            const definition = program.getDefinition(childXmlFile.srcPath, Position.create(1, 48));
             expect(definition).to.be.lengthOf(1);
-            expect(definition[0].uri).to.equal(util.pathToUri(parentXmlFile.pathAbsolute));
+            expect(definition[0].uri).to.equal(util.pathToUri(parentXmlFile.srcPath));
         });
     });
 
     describe('getFiles', () => {
         it('includes the xml file', () => {
-            let xmlFile = program.addOrReplaceFile('components/child.xml', trim`
+            let xmlFile = program.setFile('components/child.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Child">
                 </component>
             `);
             program.validate();
-            expect(program.getComponentScope('Child').getOwnFiles()[0]).to.equal(xmlFile);
+            expect(program.getComponentScope('Child')!.getOwnFiles()[0]).to.equal(xmlFile);
         });
     });
 
@@ -94,7 +93,7 @@ describe('XmlScope', () => {
         it('adds an error when an interface function cannot be found', () => {
             program = new Program({ rootDir: rootDir });
 
-            program.addOrReplaceFile('components/child.xml', trim`
+            program.setFile('components/child.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="child" extends="parent">
                     <interface>
@@ -103,16 +102,17 @@ describe('XmlScope', () => {
                         <function id="func3" />
                         <function name="" />
                         <function name />
+                        <field id="field1" type="string" onChange="func4" />
                     </interface>
                     <script uri="child.brs"/>
                 </component>
             `);
-            program.addOrReplaceFile(s`components/child.brs`, `
+            program.setFile(s`components/child.brs`, `
                 sub func1()
                 end sub
             `);
             program.validate();
-            let childScope = program.getComponentScope('child');
+            let childScope = program.getComponentScope('child')!;
             expectDiagnostics(childScope, [{
                 ...DiagnosticMessages.xmlFunctionNotFound('func2'),
                 range: Range.create(4, 24, 4, 29)
@@ -127,13 +127,16 @@ describe('XmlScope', () => {
                 range: Range.create(7, 9, 7, 17)
             }, { // syntax error expecting '=' but found '/>'
                 code: DiagnosticMessages.xmlGenericParseError('').code
+            }, { // onChange function
+                ...DiagnosticMessages.xmlFunctionNotFound('func4'),
+                range: Range.create(8, 51, 8, 56)
             }]);
         });
 
         it('adds an error when an interface field is invalid', () => {
             program = new Program({ rootDir: rootDir });
 
-            program.addOrReplaceFile('components/child.xml', trim`
+            program.setFile('components/child.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="child" extends="parent">
                     <interface>
@@ -148,12 +151,12 @@ describe('XmlScope', () => {
                     <script uri="child.brs"/>
                 </component>
             `);
-            program.addOrReplaceFile(s`components/child.brs`, `
+            program.setFile(s`components/child.brs`, `
                 sub init()
                 end sub
             `);
             program.validate();
-            expectDiagnostics(program.getComponentScope('child'), [{
+            expectDiagnostics(program.getComponentScope('child')!, [{
                 ...DiagnosticMessages.xmlInvalidFieldType('no'),
                 range: Range.create(4, 33, 4, 35)
             }, {

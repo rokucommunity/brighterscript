@@ -1,14 +1,10 @@
 import { Cache } from './Cache';
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 
 describe('Cache', () => {
     let cache: Cache;
     beforeEach(() => {
         cache = new Cache();
-    });
-    it('instantiates a new internal cache on construct', () => {
-        let cache = new Cache();
-        expect((cache as any).cache).to.exist;
     });
 
     describe('getOrAdd', () => {

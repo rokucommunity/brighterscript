@@ -7,14 +7,14 @@ These source literals are converted into inline variables at transpile-time, so 
 ## SOURCE_FILE_PATH
 The absolute path to the source file, including a leading `file:/` scheme indicator. i.e. `"file:/C:/projects/RokuApp/source/main.bs"`.
 
-```BrighterScript
+```vb
 print SOURCE_FILE_PATH
 ```
 
 transpiles to:
 
-```BrightScript
-print "file" + ":///c:/projects/roku/brighterscript/scripts/rootDir/source/main.bs"
+```vb
+print "file" + ":///C:/projects/RokuApp/source/main.bs"
 ```
 
 _note: the literal is concatenated to keep the roku static analysis tool happy_
@@ -142,10 +142,54 @@ function Human_Versus_Zombie_Eat()
 end function
 ```
 
+## SOURCE_NAMESPACE_NAME
+
+This works the same as SOURCE_FUNCTION_NAME except that it does not include the function name.
+
+The SOURCE_NAMESPACE_NAME can be a useful string for debug logs and logging filters.
+
+```BrighterScript
+namespace Human.Versus.Zombie
+    function Eat()
+        print SOURCE_NAMESPACE_NAME
+    end function
+end namespace
+```
+
+transpiles to:
+
+```BrightScript
+function Human_Versus_Zombie_Eat()
+    print "Human.Versus.Zombie"
+end function
+```
+
+## SOURCE_NAMESPACE_ROOT_NAME
+
+This works the same as SOURCE_NAMESPACE_NAME except that it only includes the lowest-level namespace.
+
+The SOURCE_NAMESPACE_ROOT_NAME can be a useful string for debug logs and logging filters.
+
+```BrighterScript
+namespace Human.Versus.Zombie
+    function Eat()
+        print SOURCE_NAMESPACE_ROOT_NAME
+    end function
+end namespace
+```
+
+transpiles to:
+
+```BrightScript
+function Human_Versus_Zombie_Eat()
+    print "Human"
+end function
+```
+
 ## SOURCE_LOCATION
 A combination of SOURCE_FILE_PATH and SOURCE_LINE_NUM.
 
-```BrighterScript
+```vb
 function main()
     print SOURCE_LOCATION
 end function
@@ -153,9 +197,9 @@ end function
 
 transpiles to:
 
-```BrightScript
+```vb
 function main()
-    print "file" + ":///c:/projects/roku/brighterscript/scripts/rootDir/source/main.bs:2"
+    print "file" + ":///C:/projects/RokuApp/source/main.bs:2"
 end function
 ```
 

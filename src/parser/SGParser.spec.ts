@@ -1,17 +1,16 @@
-import { expect } from 'chai';
+import { expect } from '../chai-config.spec';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { expectZeroDiagnostics, trim } from '../testHelpers.spec';
 import SGParser from './SGParser';
-import { standardizePath as s } from '../util';
 import { createSandbox } from 'sinon';
 import { Program } from '../Program';
 import type { XmlFile } from '../files/XmlFile';
+import { rootDir } from '../testHelpers.spec';
 
 let sinon = createSandbox();
 describe('SGParser', () => {
 
-    let rootDir = s`${process.cwd()}/.tmp/rootDir`;
     let program: Program;
 
     beforeEach(() => {
@@ -23,7 +22,7 @@ describe('SGParser', () => {
     });
 
     it('Parses well formed SG component', () => {
-        const file = program.addOrReplaceFile<XmlFile>('components/file.xml', trim`
+        const file = program.setFile<XmlFile>('components/file.xml', trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ParentScene" extends="GrandparentScene">
                 <interface>
@@ -54,7 +53,9 @@ describe('SGParser', () => {
         expectZeroDiagnostics(file);
 
         const output = file.transpile();
-        expect(output.code).to.equal(trim`
+        expect(
+            output.code.trimEnd()
+        ).to.equal(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="ParentScene" extends="GrandparentScene">
                 <interface>
@@ -156,5 +157,43 @@ describe('SGParser', () => {
             ...DiagnosticMessages.xmlGenericParseError('Syntax error: whitespace found before the XML prolog'),
             range: Range.create(0, 0, 1, 12)
         });
+    });
+
+    it('captures the closing tag name on the AST when it mismatches', () => {
+        const parser = new SGParser();
+        parser.parse(
+            'pkg:/components/ParentScene.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="ChildScene" extends="ParentScene">
+                <children>
+                    <Group id="myGroup">
+                    </LayoutGroup>
+                </children>
+            </component>
+        `);
+        //parsing does not emit the mismatch diagnostic; that happens at validation time
+        expect(parser.diagnostics).to.be.lengthOf(0);
+        //but the parser should capture the (mismatched) closing tag so validation can inspect it
+        const group = parser.ast.component.children.children[0];
+        expect(group.tag.text).to.equal('Group');
+        expect(group.closingTag?.text).to.equal('LayoutGroup');
+        expect(group.closingTag?.range).to.eql(Range.create(4, 10, 4, 21));
+    });
+
+    it('leaves closingTag undefined for self-closing tags', () => {
+        const parser = new SGParser();
+        parser.parse(
+            'pkg:/components/ParentScene.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="ChildScene" extends="ParentScene">
+                <children>
+                    <Group id="myGroup" />
+                </children>
+            </component>
+        `);
+        expect(parser.diagnostics).to.be.lengthOf(0);
+        const group = parser.ast.component.children.children[0];
+        expect(group.tag.text).to.equal('Group');
+        expect(group.closingTag).to.be.undefined;
     });
 });

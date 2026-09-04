@@ -1,27 +1,38 @@
-import 'array-flat-polyfill';
-import * as glob from 'glob';
 import * as path from 'path';
-import * as rokuDeploy from 'roku-deploy';
+import * as os from 'os';
 import type {
     CompletionItem,
     Connection,
     DidChangeWatchedFilesParams,
-    Hover,
     InitializeParams,
     ServerCapabilities,
     TextDocumentPositionParams,
-    Position,
     ExecuteCommandParams,
     WorkspaceSymbolParams,
-    SymbolInformation,
     DocumentSymbolParams,
     ReferenceParams,
-    SignatureHelp,
     SignatureHelpParams,
     CodeActionParams,
-    SemanticTokensOptions,
     SemanticTokens,
-    SemanticTokensParams
+    SemanticTokensParams,
+    TextDocumentChangeEvent,
+    HandlerResult,
+    InitializeError,
+    InitializeResult,
+    CompletionParams,
+    ResultProgressReporter,
+    WorkDoneProgressReporter,
+    SemanticTokensOptions,
+    CompletionList,
+    CancellationToken,
+    DidChangeConfigurationParams,
+    DidChangeConfigurationRegistrationOptions,
+    SelectionRangeParams,
+    RenameFilesParams,
+    WorkspaceEdit,
+    TextEdit,
+    InlayHint,
+    InlayHintParams
 } from 'vscode-languageserver/node';
 import {
     SemanticTokensRequest,
@@ -35,35 +46,54 @@ import {
 } from 'vscode-languageserver/node';
 import { URI } from 'vscode-uri';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import type { BsConfig } from './BsConfig';
-import { Deferred } from './deferred';
-import { DiagnosticMessages } from './DiagnosticMessages';
-import { ProgramBuilder } from './ProgramBuilder';
-import { standardizePath as s, util } from './util';
-import { Logger } from './Logger';
-import { Throttler } from './Throttler';
-import { KeyedThrottler } from './KeyedThrottler';
+import { util } from './util';
 import { DiagnosticCollection } from './DiagnosticCollection';
-import { isBrsFile } from './astUtils/reflection';
 import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
+import { LogLevel, createLogger, logger, setLspLoggerProps } from './logging';
+import ignore from 'ignore';
+import * as micromatch from 'micromatch';
+import type { LspProject, LspDiagnostic } from './lsp/LspProject';
+import { PathFilterer } from './lsp/PathFilterer';
+import type { WorkspaceConfig } from './lsp/ProjectManager';
+import { ProjectManager } from './lsp/ProjectManager';
+import * as fsExtra from 'fs-extra';
+import type { FileChange, MaybePromise } from './interfaces';
+import { Deferred } from './deferred';
+import { workerPool } from './lsp/worker/WorkerThreadProject';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import isEqual = require('lodash.isequal');
 
 export class LanguageServer {
+    /**
+     * The default threading setting for the language server. Can be overridden by per-workspace settings
+     */
+    public static enableThreadingDefault = true;
+    /**
+     * The default project discovery setting for the language server. Can be overridden by per-workspace settings
+     */
+    public static enableProjectDiscoveryDefault = true;
+
+    /**
+     * The default number of projects that are permitted to activate concurrently.
+     */
+    private static projectActivationConcurrencyLimitDefault = 3;
+
+    /**
+     * The default maximum number of worker threads to use for running LSP projects. Can be overridden by
+     * per-workspace settings. Once this limit is reached, additional projects are spread evenly across the
+     * existing worker threads instead of each getting a dedicated one.
+     */
+    public static maxWorkerThreadsDefault = Math.max(1, os.cpus().length);
+
+    /**
+     * The language server protocol connection, used to send and receive all requests and responses
+     */
     private connection = undefined as Connection;
 
-    public workspaces = [] as Workspace[];
-
     /**
-     * The number of milliseconds that should be used for language server typing debouncing
+     * Manages all projects for this language server
      */
-    private debounceTimeout = 150;
-
-    /**
-     * These workspaces are created on the fly whenever a file is opened that is not included
-     * in any of the workspace projects.
-     * Basically these are single-file workspaces to at least get parsing for standalone files.
-     * Also, they should only be created when the file is opened, and destroyed when the file is closed.
-     */
-    public standaloneFileWorkspaces = {} as Record<string, Workspace>;
+    private projectManager: ProjectManager;
 
     private hasConfigurationCapability = false;
 
@@ -78,100 +108,105 @@ export class LanguageServer {
      */
     private documents = new TextDocuments(TextDocument);
 
-    private createConnection() {
-        return createConnection(ProposedFeatures.all);
-    }
+    private loggerSubscription: () => void;
 
-    private loggerSubscription;
+    /**
+     * Used to filter paths based on include/exclude lists (like .gitignore or vscode's `files.exclude`).
+     * This is used to prevent the language server from being overwhelmed by files we don't actually want to handle
+     */
+    private pathFilterer: PathFilterer;
 
-    private keyedThrottler = new KeyedThrottler(this.debounceTimeout);
+    public logger = createLogger({
+        logLevel: LogLevel.log
+    });
 
-    public validateThrottler = new Throttler(0);
-    private boundValidateAll = this.validateAll.bind(this);
+    constructor() {
+        setLspLoggerProps();
+        //replace the workerPool logger with our own so logging info can be synced
+        workerPool.logger = this.logger.createLogger();
 
-    private validateAllThrottled() {
-        return this.validateThrottler.run(this.boundValidateAll);
+        this.pathFilterer = new PathFilterer({ logger: this.logger });
+
+        this.projectManager = new ProjectManager({
+            pathFilterer: this.pathFilterer,
+            logger: this.logger.createLogger()
+        });
+
+        //anytime a project emits a collection of diagnostics, send them to the client
+        this.projectManager.on('diagnostics', (event) => {
+            this.logger.debug(`Received ${event.diagnostics.length} diagnostics from project ${event.project.projectNumber}`);
+            this.sendDiagnostics(event).catch(logAndIgnoreError);
+        });
+
+        //notify the client if a project's worker thread crashes unexpectedly
+        this.projectManager.on('critical-failure', (event) => {
+            const message = `[${util.getProjectLogName(event.project)}] ${event.message}`;
+            this.logger.error(message);
+            this.sendCriticalFailure(message);
+        });
+
+        // Send all open document changes whenever a project is activated. This is necessary because at project startup, the project loads files from disk
+        // and may not have the latest unsaved file changes. Any existing projects that already use these files will just ignore the changes
+        // because the file contents haven't changed.
+
+        this.projectManager.on('project-activate', (event) => {
+            //keep logLevel in sync with the most verbose log level found across all projects
+            this.syncLogLevel().catch(logAndIgnoreError);
+
+            //resend all open document changes
+            const documents = [...this.documents.all()];
+            if (documents.length > 0) {
+                this.logger.log(`[${util.getProjectLogName(event.project)}] loaded or changed. Resending all open document changes.`, documents.map(x => x.uri));
+                for (const document of this.documents.all()) {
+                    this.onTextDocumentDidChangeContent({
+                        document: document
+                    }).catch(logAndIgnoreError);
+                }
+            }
+        });
+
+        this.projectManager.busyStatusTracker.on('active-runs-change', (event) => {
+            this.sendBusyStatus();
+        });
     }
 
     //run the server
     public run() {
         // Create a connection for the server. The connection uses Node's IPC as a transport.
-        // Also include all preview / proposed LSP features.
-        this.connection = this.createConnection();
+        this.connection = this.establishConnection();
+
+        //disable logger colors when running in LSP mode
+        logger.enableColor = false;
 
         //listen to all of the output log events and pipe them into the debug channel in the extension
-        this.loggerSubscription = Logger.subscribe((text) => {
-            this.connection.tracer.log(text);
+        this.loggerSubscription = logger.subscribe((message) => {
+            this.connection.tracer.log(message.argsText);
         });
 
-        this.connection.onInitialize(this.onInitialize.bind(this));
+        //bind all our on* methods that share the same name from connection
+        for (const name of Object.getOwnPropertyNames(LanguageServer.prototype)) {
+            if (/on+/.test(name) && typeof this.connection?.[name] === 'function') {
+                this.connection[name](this[name].bind(this));
+            }
+        }
 
-        this.connection.onInitialized(this.onInitialized.bind(this)); //eslint-disable-line
+        //Register semantic token requests. TODO switch to a more specific connection function call once they actually add it
+        this.connection.onRequest(SemanticTokensRequest.method, this.onFullSemanticTokens.bind(this));
 
-        this.connection.onDidChangeConfiguration(this.onDidChangeConfiguration.bind(this)); //eslint-disable-line
+        //Register inlay hint requests. Inlay hints live under connection.languages and aren't picked up by the on* auto-bind loop above
+        this.connection.languages.inlayHint.on(this.onInlayHint.bind(this));
 
-        this.connection.onDidChangeWatchedFiles(this.onDidChangeWatchedFiles.bind(this)); //eslint-disable-line
+        //file-operation requests live under connection.workspace, so they aren't picked up by the on* auto-bind loop above
+        this.connection.workspace.onWillRenameFiles(this.onWillRenameFiles.bind(this));
 
         // The content of a text document has changed. This event is emitted
         // when the text document is first opened, when its content has changed,
         // or when document is closed without saving (original contents are sent as a change)
         //
-        this.documents.onDidChangeContent(async (change) => {
-            await this.validateTextDocument(change.document);
-        });
+        this.documents.onDidChangeContent(this.onTextDocumentDidChangeContent.bind(this));
 
         //whenever a document gets closed
-        this.documents.onDidClose(async (change) => {
-            await this.onDocumentClose(change.document);
-        });
-
-        // This handler provides the initial list of the completion items.
-        this.connection.onCompletion(async (params: TextDocumentPositionParams) => {
-            return this.onCompletion(params.textDocument.uri, params.position);
-        });
-
-        // This handler resolves additional information for the item selected in
-        // the completion list.
-        this.connection.onCompletionResolve(this.onCompletionResolve.bind(this));
-
-        this.connection.onHover(this.onHover.bind(this));
-
-        this.connection.onExecuteCommand(this.onExecuteCommand.bind(this));
-
-        this.connection.onDefinition(this.onDefinition.bind(this));
-
-        this.connection.onDocumentSymbol(this.onDocumentSymbol.bind(this));
-
-        this.connection.onWorkspaceSymbol(this.onWorkspaceSymbol.bind(this));
-
-        this.connection.onSignatureHelp(this.onSignatureHelp.bind(this));
-
-        this.connection.onReferences(this.onReferences.bind(this));
-
-        this.connection.onCodeAction(this.onCodeAction.bind(this));
-
-        //TODO switch to a more specific connection function call once they actually add it
-        this.connection.onRequest(SemanticTokensRequest.method, this.onFullSemanticTokens.bind(this));
-
-        /*
-        this.connection.onDidOpenTextDocument((params) => {
-             // A text document got opened in VSCode.
-             // params.uri uniquely identifies the document. For documents stored on disk this is a file URI.
-             // params.text the initial full content of the document.
-            this.connection.console.log(`${params.textDocument.uri} opened.`);
-        });
-        this.connection.onDidChangeTextDocument((params) => {
-             // The content of a text document did change in VSCode.
-             // params.uri uniquely identifies the document.
-             // params.contentChanges describe the content changes to the document.
-            this.connection.console.log(`${params.textDocument.uri} changed: ${JSON.stringify(params.contentChanges)}`);
-        });
-        this.connection.onDidCloseTextDocument((params) => {
-             // A text document got closed in VSCode.
-             // params.uri uniquely identifies the document.
-            this.connection.console.log(`${params.textDocument.uri} closed.`);
-        });
-        */
+        this.documents.onDidClose(this.onDocumentClose.bind(this));
 
         // listen for open, change and close text document events
         this.documents.listen(this.connection);
@@ -182,10 +217,9 @@ export class LanguageServer {
 
     /**
      * Called when the client starts initialization
-     * @param params
      */
     @AddStackToErrorMessage
-    public onInitialize(params: InitializeParams) {
+    public onInitialize(params: InitializeParams): HandlerResult<InitializeResult, InitializeError> {
         let clientCapabilities = params.capabilities;
 
         // Does the client support the `workspace/configuration` request?
@@ -199,9 +233,9 @@ export class LanguageServer {
                 textDocumentSync: TextDocumentSyncKind.Full,
                 // Tell the client that the server supports code completion
                 completionProvider: {
-                    resolveProvider: true,
-                    //anytime the user types a period, auto-show the completion results
-                    triggerCharacters: ['.'],
+                    resolveProvider: false,
+                    //`.` auto-shows brightscript completions; `<` auto-shows xml element completions
+                    triggerCharacters: ['.', '<'],
                     allCommitCharacters: ['.', '@']
                 },
                 documentSymbolProvider: true,
@@ -212,66 +246,84 @@ export class LanguageServer {
                 } as SemanticTokensOptions,
                 referencesProvider: true,
                 codeActionProvider: {
-                    codeActionKinds: [CodeActionKind.Refactor]
+                    codeActionKinds: [
+                        CodeActionKind.QuickFix,
+                        CodeActionKind.Refactor,
+                        CodeActionKind.SourceFixAll
+                    ]
                 },
                 signatureHelpProvider: {
                     triggerCharacters: ['(', ',']
                 },
                 definitionProvider: true,
                 hoverProvider: true,
+                selectionRangeProvider: true,
+                inlayHintProvider: true,
                 executeCommandProvider: {
                     commands: [
                         CustomCommands.TranspileFile
                     ]
+                },
+                workspace: {
+                    fileOperations: {
+                        willRename: {
+                            filters: [{
+                                pattern: {
+                                    glob: '**/*.{bs,brs,xml}',
+                                    matches: 'file'
+                                }
+                            }]
+                        }
+                    }
                 }
             } as ServerCapabilities
         };
     }
 
-    private initialWorkspacesCreated: Promise<any>;
-
     /**
      * Called when the client has finished initializing
-     * @param params
      */
     @AddStackToErrorMessage
-    private async onInitialized() {
-        let workspaceCreatedDeferred = new Deferred();
-        this.initialWorkspacesCreated = workspaceCreatedDeferred.promise;
+    public async onInitialized() {
+        this.logger.log('onInitialized');
+
+        //cache a copy of all workspace configurations to use for comparison later
+        this.workspaceConfigsCache = new Map(
+            (await this.getWorkspaceConfigs()).map(x => [x.workspaceFolder, x])
+        );
+
+        //set our logger to the most verbose logLevel found across any project
+        await this.syncLogLevel();
+
+        this.syncProjectActivationConcurrencyLimit();
+        this.syncMaxWorkerThreads();
 
         try {
             if (this.hasConfigurationCapability) {
-                // Register for all configuration changes.
+                // register for when the user changes workspace or user settings
                 await this.connection.client.register(
                     DidChangeConfigurationNotification.type,
-                    undefined
+                    {
+                        //we only care about when these settings sections change
+                        section: [
+                            'brightscript',
+                            'files'
+                        ]
+                    } as DidChangeConfigurationRegistrationOptions
                 );
             }
 
-            //ask the client for all workspace folders
-            let workspaceFolders = await this.connection.workspace.getWorkspaceFolders() ?? [];
-            let workspacePaths = workspaceFolders.map((x) => {
-                return util.uriToPath(x.uri);
-            });
-            await this.createWorkspaces(workspacePaths);
+            //populate the path filterer with the client's include/exclude lists
+            await this.rebuildPathFilterer();
+
+            await this.syncProjects();
+
             if (this.clientHasWorkspaceFolderCapability) {
+                //if the client changes their workspaces, we need to get our projects in sync
                 this.connection.workspace.onDidChangeWorkspaceFolders(async (evt) => {
-                    //remove programs for removed workspace folders
-                    for (let removed of evt.removed) {
-                        let workspacePath = util.uriToPath(removed.uri);
-                        let workspace = this.workspaces.find((x) => x.workspacePath === workspacePath);
-                        if (workspace) {
-                            workspace.builder.dispose();
-                            this.workspaces.splice(this.workspaces.indexOf(workspace), 1);
-                        }
-                    }
-                    //create programs for new workspace folders
-                    await this.createWorkspaces(evt.added.map((x) => util.uriToPath(x.uri)));
+                    await this.syncProjects();
                 });
             }
-            await this.waitAllProgramFirstRuns(false);
-            workspaceCreatedDeferred.resolve();
-            await this.sendDiagnostics();
         } catch (e: any) {
             this.sendCriticalFailure(
                 `Critical failure during BrighterScript language server startup.
@@ -284,868 +336,692 @@ export class LanguageServer {
     }
 
     /**
-     * Send a critical failure notification to the client, which should show a notification of some kind
+     * Set our logLevel to the most verbose log level found across all projects and workspaces
      */
-    private sendCriticalFailure(message: string) {
-        this.connection.sendNotification('critical-failure', message);
-    }
+    private async syncLogLevel() {
+        /**
+         * helper to get the logLevel from a list of items and return the item and level (if found), or undefined if not
+         */
+        const getLogLevel = async<T>(
+            items: T[],
+            fetcher: (item: T) => MaybePromise<LogLevel | string>
+        ): Promise<{ logLevel: LogLevel; logLevelText: string; item: T }> => {
+            const logLevels = await Promise.all(
+                items.map(async (item) => {
+                    let value = await fetcher(item);
+                    //force string values to lower case (so we can support things like 'log' or 'Log' or 'LOG')
+                    if (typeof value === 'string') {
+                        value = value.toLowerCase();
+                    }
+                    const logLevelNumeric = this.logger.getLogLevelNumeric(value as any);
 
-    /**
-     * Wait for all programs' first run to complete
-     */
-    private async waitAllProgramFirstRuns(waitForFirstWorkSpace = true) {
-        if (waitForFirstWorkSpace) {
-            await this.initialWorkspacesCreated;
-        }
-
-        let status;
-        let workspaces = this.getWorkspaces();
-        for (let workspace of workspaces) {
-            try {
-                await workspace.firstRunPromise;
-            } catch (e: any) {
-                status = 'critical-error';
-                //the first run failed...that won't change unless we reload the workspace, so replace with resolved promise
-                //so we don't show this error again
-                workspace.firstRunPromise = Promise.resolve();
-                this.sendCriticalFailure(`BrighterScript language server failed to start: \n${e.message}`);
+                    if (typeof logLevelNumeric === 'number') {
+                        return logLevelNumeric;
+                    } else {
+                        return -1;
+                    }
+                })
+            );
+            let idx = logLevels.findIndex(x => x > -1);
+            if (idx > -1) {
+                const mostVerboseLogLevel = Math.max(...logLevels);
+                return {
+                    logLevel: mostVerboseLogLevel,
+                    logLevelText: this.logger.getLogLevelText(mostVerboseLogLevel),
+                    //find the first item having the most verbose logLevel
+                    item: items[logLevels.findIndex(x => x === mostVerboseLogLevel)]
+                };
             }
-        }
-        this.connection.sendNotification('build-status', status ? status : 'success');
-    }
+        };
 
-    /**
-     * Create project for each new workspace. If the workspace is already known,
-     * it is skipped.
-     * @param workspaceFolders
-     */
-    private async createWorkspaces(workspacePaths: string[]) {
-        return Promise.all(
-            workspacePaths.map(async (workspacePath) => this.createWorkspace(workspacePath))
-        );
-    }
+        const workspaces = await this.getWorkspaceConfigs();
 
-    /**
-     * Event handler for when the program wants to load file contents.
-     * anytime the program wants to load a file, check with our in-memory document cache first
-     */
-    private documentFileResolver(srcPath: string) {
-        let pathUri = URI.file(srcPath).toString();
-        let document = this.documents.get(pathUri);
-        if (document) {
-            return document.getText();
-        }
-    }
+        let workspaceResult = await getLogLevel(workspaces, workspace => workspace?.languageServer?.logLevel);
 
-    private async getConfigFilePath(workspacePath: string) {
-        let scopeUri: string;
-        if (workspacePath.startsWith('file:')) {
-            scopeUri = URI.parse(workspacePath).toString();
-        } else {
-            scopeUri = URI.file(workspacePath).toString();
-        }
-        //look for config group called "brightscript"
-        let config = await this.connection.workspace.getConfiguration({
-            scopeUri: scopeUri,
-            section: 'brightscript'
-        });
-        let configFilePath: string;
-
-        //if there's a setting, we need to find the file or show error if it can't be found
-        if (config?.configFile) {
-            configFilePath = path.resolve(workspacePath, config.configFile);
-            if (await util.pathExists(configFilePath)) {
-                return configFilePath;
-            } else {
-                this.sendCriticalFailure(`Cannot find config file specified in user/workspace settings at '${configFilePath}'`);
-            }
-        }
-
-        //default to config file path found in the root of the workspace
-        configFilePath = path.resolve(workspacePath, 'bsconfig.json');
-        if (await util.pathExists(configFilePath)) {
-            return configFilePath;
-        }
-
-        //look for the deprecated `brsconfig.json` file
-        configFilePath = path.resolve(workspacePath, 'brsconfig.json');
-        if (await util.pathExists(configFilePath)) {
-            return configFilePath;
-        }
-
-        //no config file could be found
-        return undefined;
-    }
-
-    private async createWorkspace(workspacePath: string) {
-        let workspace = this.workspaces.find((x) => x.workspacePath === workspacePath);
-        //skip this workspace if we already have it
-        if (workspace) {
+        if (workspaceResult) {
+            this.logger.info(`Setting global logLevel to '${workspaceResult.logLevelText}' based on configuration from workspace '${workspaceResult?.item?.workspaceFolder}'`);
+            this.logger.logLevel = workspaceResult.logLevel;
             return;
         }
 
-        let builder = new ProgramBuilder();
-
-        //prevent clearing the console on run...this isn't the CLI so we want to keep a full log of everything
-        builder.allowConsoleClearing = false;
-
-        //look for files in our in-memory cache before going to the file system
-        builder.addFileResolver(this.documentFileResolver.bind(this));
-
-        let configFilePath = await this.getConfigFilePath(workspacePath);
-
-        let cwd = workspacePath;
-
-        //if the config file exists, use it and its folder as cwd
-        if (configFilePath && await util.pathExists(configFilePath)) {
-            cwd = path.dirname(configFilePath);
-        } else {
-            //config file doesn't exist...let `brighterscript` resolve the default way
-            configFilePath = undefined;
+        let projectResult = await getLogLevel(this.projectManager.projects, (project) => project.logger.logLevel);
+        if (projectResult) {
+            this.logger.info(`Setting global logLevel to '${projectResult.logLevelText}' based on project #${projectResult?.item?.projectNumber}`);
+            this.logger.logLevel = projectResult.logLevel;
+            return;
         }
 
-        let firstRunPromise = builder.run({
-            cwd: cwd,
-            project: configFilePath,
-            watch: false,
-            createPackage: false,
-            deploy: false,
-            copyToStaging: false,
-            showDiagnosticsInConsole: false
-        });
-        firstRunPromise.catch((err) => {
-            console.error(err);
-        });
-
-        let newWorkspace: Workspace = {
-            builder: builder,
-            firstRunPromise: firstRunPromise,
-            workspacePath: workspacePath,
-            isFirstRunComplete: false,
-            isFirstRunSuccessful: false,
-            configFilePath: configFilePath,
-            isStandaloneFileWorkspace: false
-        };
-
-        this.workspaces.push(newWorkspace);
-
-        await firstRunPromise.then(() => {
-            newWorkspace.isFirstRunComplete = true;
-            newWorkspace.isFirstRunSuccessful = true;
-        }).catch(() => {
-            newWorkspace.isFirstRunComplete = true;
-            newWorkspace.isFirstRunSuccessful = false;
-        }).then(() => {
-            //if we found a deprecated brsconfig.json, add a diagnostic warning the user
-            if (configFilePath && path.basename(configFilePath) === 'brsconfig.json') {
-                builder.addDiagnostic(configFilePath, {
-                    ...DiagnosticMessages.brsConfigJsonIsDeprecated(),
-                    range: util.createRange(0, 0, 0, 0)
-                });
-                return this.sendDiagnostics();
-            }
-        });
-    }
-
-    private async createStandaloneFileWorkspace(filePathAbsolute: string) {
-        //skip this workspace if we already have it
-        if (this.standaloneFileWorkspaces[filePathAbsolute]) {
-            return this.standaloneFileWorkspaces[filePathAbsolute];
-        }
-
-        let builder = new ProgramBuilder();
-
-        //prevent clearing the console on run...this isn't the CLI so we want to keep a full log of everything
-        builder.allowConsoleClearing = false;
-
-        //look for files in our in-memory cache before going to the file system
-        builder.addFileResolver(this.documentFileResolver.bind(this));
-
-        //get the path to the directory where this file resides
-        let cwd = path.dirname(filePathAbsolute);
-
-        //get the closest config file and use most of the settings from that
-        let configFilePath = await util.findClosestConfigFile(filePathAbsolute);
-        let project: BsConfig = {};
-        if (configFilePath) {
-            project = util.normalizeAndResolveConfig({ project: configFilePath });
-        }
-        //override the rootDir and files array
-        project.rootDir = cwd;
-        project.files = [{
-            src: filePathAbsolute,
-            dest: path.basename(filePathAbsolute)
-        }];
-
-        let firstRunPromise = builder.run({
-            ...project,
-            cwd: cwd,
-            project: configFilePath,
-            watch: false,
-            createPackage: false,
-            deploy: false,
-            copyToStaging: false,
-            diagnosticFilters: [
-                //hide the "file not referenced by any other file" error..that's expected in a standalone file.
-                1013
-            ]
-        }).catch((err) => {
-            console.error(err);
-        });
-
-        let newWorkspace: Workspace = {
-            builder: builder,
-            firstRunPromise: firstRunPromise,
-            workspacePath: filePathAbsolute,
-            isFirstRunComplete: false,
-            isFirstRunSuccessful: false,
-            configFilePath: configFilePath,
-            isStandaloneFileWorkspace: true
-        };
-
-        this.standaloneFileWorkspaces[filePathAbsolute] = newWorkspace;
-
-        await firstRunPromise.then(() => {
-            newWorkspace.isFirstRunComplete = true;
-            newWorkspace.isFirstRunSuccessful = true;
-        }).catch(() => {
-            newWorkspace.isFirstRunComplete = true;
-            newWorkspace.isFirstRunSuccessful = false;
-        });
-        return newWorkspace;
-    }
-
-    private getWorkspaces() {
-        let workspaces = this.workspaces.slice();
-        for (let key in this.standaloneFileWorkspaces) {
-            workspaces.push(this.standaloneFileWorkspaces[key]);
-        }
-        return workspaces;
+        //use a default level if no other level was found
+        this.logger.logLevel = LogLevel.log;
     }
 
     /**
-     * Provide a list of completion items based on the current cursor position
-     * @param textDocumentPosition
+     * Get the project activation concurrency limit from all workspaces and set the project manager's concurrency limit to the lowest value found.
+     * This ensures that if the user has multiple workspaces open with different limits,
+     * we respect the most restrictive limit to avoid overwhelming the user's machine.
      */
-    @AddStackToErrorMessage
-    private async onCompletion(uri: string, position: Position) {
-        //ensure programs are initialized
-        await this.waitAllProgramFirstRuns();
+    private syncProjectActivationConcurrencyLimit() {
+        const limits = [...this.workspaceConfigsCache]
+            .map(x => x?.[1]?.languageServer?.projectActivationConcurrencyLimit)
+            .filter(x => typeof x === 'number');
 
-        let filePath = util.uriToPath(uri);
-
-        //wait until the file has settled
-        await this.keyedThrottler.onIdleOnce(filePath, true);
-
-        let completions = this
-            .getWorkspaces()
-            .flatMap(workspace => workspace.builder.program.getCompletions(filePath, position));
-
-        for (let completion of completions) {
-            completion.commitCharacters = ['.'];
+        //if we don't have any limits defined, use our default value
+        if (limits.length === 0) {
+            limits.push(LanguageServer.projectActivationConcurrencyLimitDefault);
         }
 
-        return completions;
+        let concurrencyLimit = Math.min(...limits);
+        //we must always at least support 1 project activating at a time, otherwise no projects would ever activate
+        if (!(concurrencyLimit >= 1)) {
+            this.logger.log(`projectActivationConcurrencyLimit was set to ${concurrencyLimit}, which is not a valid value. Defaulting to 1.`);
+            concurrencyLimit = 1;
+        }
+        this.projectManager.projectActivationConcurrencyLimit = concurrencyLimit;
     }
 
     /**
-     * Provide a full completion item from the selection
-     * @param item
+     * Get the max worker threads setting from all workspaces and set the worker pool's cap to the lowest value found.
+     * This ensures that if the user has multiple workspaces open with different limits,
+     * we respect the most restrictive limit to avoid overwhelming the user's machine.
      */
-    @AddStackToErrorMessage
-    private onCompletionResolve(item: CompletionItem): CompletionItem {
-        if (item.data === 1) {
-            item.detail = 'TypeScript details';
-            item.documentation = 'TypeScript documentation';
-        } else if (item.data === 2) {
-            item.detail = 'JavaScript details';
-            item.documentation = 'JavaScript documentation';
+    private syncMaxWorkerThreads() {
+        const limits = [...this.workspaceConfigsCache]
+            .map(x => x?.[1]?.languageServer?.maxWorkerThreads)
+            .filter(x => typeof x === 'number');
+
+        //if we don't have any limits defined, use our default value
+        if (limits.length === 0) {
+            limits.push(LanguageServer.maxWorkerThreadsDefault);
         }
-        return item;
+
+        let maxWorkerThreads = Math.min(...limits);
+        //we must always support at least 1 worker, otherwise no threaded projects could ever activate
+        if (!(maxWorkerThreads >= 1)) {
+            this.logger.log(`maxWorkerThreads was set to ${maxWorkerThreads}, which is not a valid value. Defaulting to 1.`);
+            maxWorkerThreads = 1;
+        }
+        workerPool.maxWorkers = maxWorkerThreads;
     }
 
     @AddStackToErrorMessage
-    private async onCodeAction(params: CodeActionParams) {
-        //ensure programs are initialized
-        await this.waitAllProgramFirstRuns();
+    private async onTextDocumentDidChangeContent(event: TextDocumentChangeEvent<TextDocument>) {
+        this.logger.debug('onTextDocumentDidChangeContent', event.document.uri);
 
-        let srcPath = util.uriToPath(params.textDocument.uri);
-
-        //wait until the file has settled
-        await this.keyedThrottler.onIdleOnce(srcPath, true);
-
-        const codeActions = this
-            .getWorkspaces()
-            //skip programs that don't have this file
-            .filter(x => x.builder?.program?.hasFile(srcPath))
-            .flatMap(workspace => workspace.builder.program.getCodeActions(srcPath, params.range));
-
-        //clone the diagnostics for each code action, since certain diagnostics can have circular reference properties that kill the language server if serialized
-        for (const codeAction of codeActions) {
-            if (codeAction.diagnostics) {
-                codeAction.diagnostics = codeAction.diagnostics.map(x => util.toDiagnostic(x));
-            }
-        }
-        return codeActions;
+        await this.projectManager.handleFileChanges([{
+            srcPath: URI.parse(event.document.uri).fsPath,
+            type: FileChangeType.Changed,
+            fileContents: event.document.getText(),
+            allowStandaloneProject: true
+        }]);
     }
 
     /**
-     * Reload all specified workspaces, or all workspaces if no workspaces are specified
+     * Pending file changes waiting to be flushed after the debounce period
      */
-    private async reloadWorkspaces(workspaces?: Workspace[]) {
-        workspaces = workspaces ? workspaces : this.getWorkspaces();
-        await Promise.all(
-            workspaces.map(async (workspace) => {
-                //ensure the workspace has finished starting up
-                try {
-                    await workspace.firstRunPromise;
-                } catch (e) { }
-
-                //handle standard workspace
-                if (workspace.isStandaloneFileWorkspace === false) {
-                    let idx = this.workspaces.indexOf(workspace);
-                    if (idx > -1) {
-                        //remove this workspace
-                        this.workspaces.splice(idx, 1);
-                        //dispose this workspace's resources
-                        workspace.builder.dispose();
-                    }
-
-                    //create a new workspace/brs program
-                    await this.createWorkspace(workspace.workspacePath);
-
-                    //handle temp workspace
-                } else {
-                    workspace.builder.dispose();
-                    delete this.standaloneFileWorkspaces[workspace.workspacePath];
-                    await this.createStandaloneFileWorkspace(workspace.workspacePath);
-                }
-            })
-        );
-        if (workspaces.length > 0) {
-            //wait for all of the programs to finish starting up
-            await this.waitAllProgramFirstRuns();
-
-            // valdiate all workspaces
-            this.validateAllThrottled(); //eslint-disable-line
-        }
-    }
-
-    private getRootDir(workspace: Workspace) {
-        let options = workspace?.builder?.program?.options;
-        return options?.rootDir ?? options?.cwd;
-    }
+    private pendingFileChanges: FileChange[] = [];
 
     /**
-     * Sometimes users will alter their bsconfig files array, and will include standalone files.
-     * If this is the case, those standalone workspaces should be removed because the file was
-     * included in an actual program now.
-     *
-     * Sometimes files that used to be included are now excluded, so those open files need to be re-processed as standalone
+     * Timer handle for the file change debounce
      */
-    private async synchronizeStandaloneWorkspaces() {
+    private fileChangeDebounceTimer: ReturnType<typeof setTimeout> | undefined;
 
-        //remove standalone workspaces that are now included in projects
-        for (let standaloneFilePath in this.standaloneFileWorkspaces) {
-            let standaloneWorkspace = this.standaloneFileWorkspaces[standaloneFilePath];
-            for (let workspace of this.workspaces) {
-                await standaloneWorkspace.firstRunPromise;
-
-                let dest = rokuDeploy.getDestPath(
-                    standaloneFilePath,
-                    workspace?.builder?.program?.options?.files ?? [],
-                    this.getRootDir(workspace)
-                );
-                //destroy this standalone workspace because the file has now been included in an actual workspace,
-                //or if the workspace wants the file
-                if (workspace?.builder?.program?.hasFile(standaloneFilePath) || dest) {
-                    standaloneWorkspace.builder.dispose();
-                    delete this.standaloneFileWorkspaces[standaloneFilePath];
-                }
-            }
-        }
-
-        //create standalone workspaces for open files that no longer have a project
-        let textDocuments = this.documents.all();
-        outer: for (let textDocument of textDocuments) {
-            let filePath = URI.parse(textDocument.uri).fsPath;
-            let workspaces = this.getWorkspaces();
-            for (let workspace of workspaces) {
-                let dest = rokuDeploy.getDestPath(
-                    filePath,
-                    workspace?.builder?.program?.options?.files ?? [],
-                    this.getRootDir(workspace)
-                );
-                //if this workspace has the file, or it wants the file, do NOT make a standalone workspace for this file
-                if (workspace?.builder?.program?.hasFile(filePath) || dest) {
-                    continue outer;
-                }
-            }
-            //if we got here, no workspace has this file, so make a standalone file workspace
-            let workspace = await this.createStandaloneFileWorkspace(filePath);
-            await workspace.firstRunPromise;
-        }
-    }
-
-    @AddStackToErrorMessage
-    private async onDidChangeConfiguration() {
-        if (this.hasConfigurationCapability) {
-            await this.reloadWorkspaces();
-            // Reset all cached document settings
-        } else {
-            // this.globalSettings = <ExampleSettings>(
-            //     (change.settings.languageServerExample || this.defaultSettings)
-            // );
-        }
-    }
+    /**
+     * How long to wait (in ms) after the last file change event before processing the batch.
+     * This prevents excessive revalidation during bulk operations like `git checkout` or package installs.
+     */
+    public fileChangeDebounceDelay = 300;
 
     /**
      * Called when watched files changed (add/change/delete).
      * The CLIENT is in charge of what files to watch, so all client
      * implementations should ensure that all valid project
      * file types are watched (.brs,.bs,.xml,manifest, and any json/text/image files)
-     * @param params
+     *
+     * File changes are debounced to batch rapid successive events (e.g. during builds or VCS operations)
+     * into a single processing pass, reducing redundant work across projects.
      */
     @AddStackToErrorMessage
-    private async onDidChangeWatchedFiles(params: DidChangeWatchedFilesParams) {
-        //ensure programs are initialized
-        await this.waitAllProgramFirstRuns();
+    public async onDidChangeWatchedFiles(params: DidChangeWatchedFilesParams) {
+        const workspacePaths = (await this.connection.workspace.getWorkspaceFolders()).map(x => util.uriToPath(x.uri));
 
-        this.connection.sendNotification('build-status', 'building');
-
-        let workspaces = this.getWorkspaces();
-
-        //convert all file paths to absolute paths
-        let changes = params.changes.map(x => {
-            return {
+        const changes = params.changes
+            .map(x => ({
+                srcPath: util.uriToPath(x.uri),
                 type: x.type,
-                pathAbsolute: s`${URI.parse(x.uri).fsPath}`
-            };
+                //if this is an open document, allow this file to be loaded in a standalone project (if applicable)
+                allowStandaloneProject: this.documents.get(x.uri) !== undefined
+            }))
+            //exclude all explicit top-level workspace folder paths (to fix a weird macos fs watcher bug that emits events for the workspace folder itself)
+            .filter(x => !workspacePaths.includes(x.srcPath));
+
+        this.logger.debug('onDidChangeWatchedFiles', changes);
+
+        //accumulate changes into the pending buffer
+        this.pendingFileChanges.push(...changes);
+
+        //reset the debounce timer so we batch rapid successive events
+        clearTimeout(this.fileChangeDebounceTimer);
+
+        //use a deferred so callers can await the completion of the flush
+        if (!this.pendingFileChangesDeferred) {
+            this.pendingFileChangesDeferred = new Deferred();
+        }
+        const deferred = this.pendingFileChangesDeferred;
+
+        this.fileChangeDebounceTimer = setTimeout(() => {
+            void this.flushFileChanges().then(
+                () => deferred.resolve(),
+                (err) => deferred.reject(err)
+            );
+        }, this.fileChangeDebounceDelay);
+
+        return deferred.promise;
+    }
+
+    /**
+     * Deferred for the current pending file changes batch
+     */
+    private pendingFileChangesDeferred: Deferred | undefined;
+
+    /**
+     * Flush all pending file changes accumulated during the debounce window
+     */
+    private async flushFileChanges() {
+        //grab all pending changes and clear the buffer, deduping by srcPath (last event wins)
+        const deduped = new Map<string, FileChange>();
+        for (const change of this.pendingFileChanges.splice(0, this.pendingFileChanges.length)) {
+            deduped.set(change.srcPath, change);
+        }
+        const changes = [...deduped.values()];
+        this.pendingFileChangesDeferred = undefined;
+
+        //if the client changed any files containing include/exclude patterns, rebuild the path filterer before processing these changes
+        if (
+            micromatch.some(changes.map(x => x.srcPath), [
+                '**/.gitignore',
+                '**/.vscode/settings.json',
+                '**/*bsconfig*.json'
+            ], {
+                dot: true
+            })
+        ) {
+            await this.rebuildPathFilterer();
+        }
+
+        //handle the file changes
+        await this.projectManager.handleFileChanges(changes);
+    }
+
+    @AddStackToErrorMessage
+    private async onDocumentClose(event: TextDocumentChangeEvent<TextDocument>): Promise<void> {
+        this.logger.debug('onDocumentClose', event.document.uri);
+
+        await this.projectManager.handleFileClose({
+            srcPath: util.uriToPath(event.document.uri)
         });
-
-        let keys = changes.map(x => x.pathAbsolute);
-
-        //filter the list of changes to only the ones that made it through the debounce unscathed
-        changes = changes.filter(x => keys.includes(x.pathAbsolute));
-
-        //if we have changes to work with
-        if (changes.length > 0) {
-
-            //reload any workspace whose bsconfig.json file has changed
-            {
-                let workspacesToReload = [] as Workspace[];
-                //get the file paths as a string array
-                let filePaths = changes.map((x) => x.pathAbsolute);
-
-                for (let workspace of workspaces) {
-                    if (workspace.configFilePath && filePaths.includes(workspace.configFilePath)) {
-                        workspacesToReload.push(workspace);
-                    }
-                }
-                if (workspacesToReload.length > 0) {
-                    //vsc can generate a ton of these changes, for vsc system files, so we need to bail if there's no work to do on any of our actual workspace files
-                    //reload any workspaces that need to be reloaded
-                    await this.reloadWorkspaces(workspacesToReload);
-                }
-
-                //set the list of workspaces to non-reloaded workspaces
-                workspaces = workspaces.filter(x => !workspacesToReload.includes(x));
-            }
-
-            //convert created folders into a list of files of their contents
-            const directoryChanges = changes
-                //get only creation items
-                .filter(change => change.type === FileChangeType.Created)
-                //keep only the directories
-                .filter(change => util.isDirectorySync(change.pathAbsolute));
-
-            //remove the created directories from the changes array (we will add back each of their files next)
-            changes = changes.filter(x => !directoryChanges.includes(x));
-
-            //look up every file in each of the newly added directories
-            const newFileChanges = directoryChanges
-                //take just the path
-                .map(x => x.pathAbsolute)
-                //exclude the roku deploy staging folder
-                .filter(dirPath => !dirPath.includes('.roku-deploy-staging'))
-                //get the files for each folder recursively
-                .flatMap(dirPath => {
-                    //create a glob pattern to match all files
-                    let pattern = rokuDeploy.util.toForwardSlashes(`${dirPath}/**/*`);
-                    let files = glob.sync(pattern, {
-                        absolute: true
-                    });
-                    return files.map(x => {
-                        return {
-                            type: FileChangeType.Created,
-                            pathAbsolute: s`${x}`
-                        };
-                    });
-                });
-
-            //add the new file changes to the changes array.
-            changes.push(...newFileChanges as any);
-
-            //give every workspace the chance to handle file changes
-            await Promise.all(
-                workspaces.map((workspace) => this.handleFileChanges(workspace, changes))
-            );
-        }
-        this.connection.sendNotification('build-status', 'success');
     }
 
     /**
-     * This only operates on files that match the specified files globs, so it is safe to throw
-     * any file changes you receive with no unexpected side-effects
-     * @param changes
+     * Provide a list of completion items based on the current cursor position
      */
-    public async handleFileChanges(workspace: Workspace, changes: { type: FileChangeType; pathAbsolute: string }[]) {
-        //this loop assumes paths are both file paths and folder paths, which eliminates the need to detect.
-        //All functions below can handle being given a file path AND a folder path, and will only operate on the one they are looking for
-        let consumeCount = 0;
-        await Promise.all(changes.map(async (change) => {
-            await this.keyedThrottler.run(change.pathAbsolute, async () => {
-                consumeCount += await this.handleFileChange(workspace, change) ? 1 : 0;
-            });
-        }));
-
-        if (consumeCount > 0) {
-            await this.validateAllThrottled();
-        }
-    }
-
-    /**
-     * This only operates on files that match the specified files globs, so it is safe to throw
-     * any file changes you receive with no unexpected side-effects
-     * @param changes
-     */
-    private async handleFileChange(workspace: Workspace, change: { type: FileChangeType; pathAbsolute: string }) {
-        const program = workspace.builder.program;
-        const options = workspace.builder.options;
-        const rootDir = workspace.builder.rootDir;
-
-        //deleted
-        if (change.type === FileChangeType.Deleted) {
-            //try to act on this path as a directory
-            workspace.builder.removeFilesInFolder(change.pathAbsolute);
-
-            //if this is a file loaded in the program, remove it
-            if (program.hasFile(change.pathAbsolute)) {
-                program.removeFile(change.pathAbsolute);
-                return true;
-            } else {
-                return false;
-            }
-
-            //created
-        } else if (change.type === FileChangeType.Created) {
-            // thanks to `onDidChangeWatchedFiles`, we can safely assume that all "Created" changes are file paths, (not directories)
-
-            //get the dest path for this file.
-            let destPath = rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir);
-
-            //if we got a dest path, then the program wants this file
-            if (destPath) {
-                program.addOrReplaceFile(
-                    {
-                        src: change.pathAbsolute,
-                        dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
-                    },
-                    await workspace.builder.getFileContents(change.pathAbsolute)
-                );
-                return true;
-            } else {
-                //no dest path means the program doesn't want this file
-                return false;
-            }
-
-            //changed
-        } else if (program.hasFile(change.pathAbsolute)) {
-            //sometimes "changed" events are emitted on files that were actually deleted,
-            //so determine file existance and act accordingly
-            if (await util.pathExists(change.pathAbsolute)) {
-                program.addOrReplaceFile(
-                    {
-                        src: change.pathAbsolute,
-                        dest: rokuDeploy.getDestPath(change.pathAbsolute, options.files, rootDir)
-                    },
-                    await workspace.builder.getFileContents(change.pathAbsolute)
-                );
-            } else {
-                program.removeFile(change.pathAbsolute);
-            }
-            return true;
-        }
-    }
-
     @AddStackToErrorMessage
-    private async onHover(params: TextDocumentPositionParams) {
-        //ensure programs are initialized
-        await this.waitAllProgramFirstRuns();
+    public async onCompletion(params: CompletionParams, cancellationToken: CancellationToken, workDoneProgress: WorkDoneProgressReporter, resultProgress: ResultProgressReporter<CompletionItem[]>): Promise<CompletionList> {
+        this.logger.debug('onCompletion', params, cancellationToken);
 
-        let pathAbsolute = util.uriToPath(params.textDocument.uri);
-        let workspaces = this.getWorkspaces();
-        let hovers = await Promise.all(
-            Array.prototype.concat.call([],
-                workspaces.map(async (x) => x.builder.program.getHover(pathAbsolute, params.position))
-            )
-        ) as Hover[];
+        const srcPath = util.uriToPath(params.textDocument.uri);
 
-        //return the first non-falsey hover. TODO is there a way to handle multiple hover results?
-        let hover = hovers.filter((x) => !!x)[0];
-
-        //TODO improve this to support more than just .brs files
-        if (hover?.contents) {
-            //create fenced code block to get colorization
-            hover.contents = {
-                //TODO - make the program.getHover call figure out what language this is for
-                language: 'brightscript',
-                value: hover.contents as string
+        //`<` is registered as a trigger character for xml element completions, but it's the less-than
+        //operator everywhere else, so ignore it for non-xml files
+        if (params.context?.triggerCharacter === '<' && !srcPath.toLowerCase().endsWith('.xml')) {
+            return {
+                items: [],
+                isIncomplete: false
             };
         }
-        return hover;
+
+        const completions = await this.projectManager.getCompletions({
+            srcPath: srcPath,
+            position: params.position,
+            cancellationToken: cancellationToken
+        });
+        return completions;
     }
 
-    @AddStackToErrorMessage
-    private async onDocumentClose(textDocument: TextDocument): Promise<void> {
-        let filePath = URI.parse(textDocument.uri).fsPath;
-        let standaloneFileWorkspace = this.standaloneFileWorkspaces[filePath];
-        //if this was a temp file, close it
-        if (standaloneFileWorkspace) {
-            await standaloneFileWorkspace.firstRunPromise;
-            standaloneFileWorkspace.builder.dispose();
-            delete this.standaloneFileWorkspaces[filePath];
-            await this.sendDiagnostics();
-        }
-    }
-
-    @AddStackToErrorMessage
-    private async validateTextDocument(textDocument: TextDocument): Promise<void> {
-        //ensure programs are initialized
-        await this.waitAllProgramFirstRuns();
-
-        let filePath = URI.parse(textDocument.uri).fsPath;
-
-        try {
-
-            //throttle file processing. first call is run immediately, and then the last call is processed.
-            await this.keyedThrottler.run(filePath, () => {
-
-                this.connection.sendNotification('build-status', 'building');
-
-                let documentText = textDocument.getText();
-                for (const workspace of this.getWorkspaces()) {
-                    //only add or replace existing files. All of the files in the project should
-                    //have already been loaded by other means
-                    if (workspace.builder.program.hasFile(filePath)) {
-                        let rootDir = workspace.builder.program.options.rootDir ?? workspace.builder.program.options.cwd;
-                        let dest = rokuDeploy.getDestPath(filePath, workspace.builder.program.options.files, rootDir);
-                        workspace.builder.program.addOrReplaceFile({
-                            src: filePath,
-                            dest: dest
-                        }, documentText);
+    /**
+     * Get a list of workspaces, and their configurations.
+     * Get only the settings for the workspace that are relevant to the language server. We do this so we can cache this object for use in change detection in the future.
+     */
+    private async getWorkspaceConfigs(): Promise<WorkspaceConfig[]> {
+        //get all workspace folders (we'll use these to get settings)
+        let workspaces = await Promise.all(
+            (await this.connection.workspace.getWorkspaceFolders() ?? []).map(async (x) => {
+                const workspaceFolder = util.uriToPath(x.uri);
+                const brightscriptConfig = await this.getClientConfiguration<BrightScriptClientConfiguration>(x.uri, 'brightscript');
+                return {
+                    workspaceFolder: workspaceFolder,
+                    excludePatterns: await this.getWorkspaceExcludeGlobs(workspaceFolder),
+                    projects: this.normalizeProjectPaths(workspaceFolder, brightscriptConfig?.projects),
+                    languageServer: {
+                        enableThreading: brightscriptConfig?.languageServer?.enableThreading ?? LanguageServer.enableThreadingDefault,
+                        enableProjectDiscovery: brightscriptConfig?.languageServer?.enableProjectDiscovery ?? LanguageServer.enableProjectDiscoveryDefault,
+                        projectDiscoveryMaxDepth: brightscriptConfig?.languageServer?.projectDiscoveryMaxDepth ?? 15,
+                        projectDiscoveryExclude: brightscriptConfig?.languageServer?.projectDiscoveryExclude,
+                        logLevel: brightscriptConfig?.languageServer?.logLevel,
+                        projectActivationConcurrencyLimit: brightscriptConfig?.languageServer?.projectActivationConcurrencyLimit,
+                        maxWorkerThreads: brightscriptConfig?.languageServer?.maxWorkerThreads
                     }
-                }
-            });
-            // validate all workspaces
-            await this.validateAllThrottled();
-        } catch (e: any) {
-            this.sendCriticalFailure(`Critical error parsing/ validating ${filePath}: ${e.message}`);
+                };
+            })
+        );
+        return workspaces;
+    }
+
+    /**
+     * Extract project paths from settings' projects list, expanding the workspaceFolder variable if necessary
+     */
+    private normalizeProjectPaths(workspaceFolder: string, projects: (string | BrightScriptProjectConfiguration)[]): BrightScriptProjectConfiguration[] | undefined {
+        return projects?.reduce((acc, project) => {
+            if (typeof project === 'string') {
+                acc.push({ path: project });
+            } else if (typeof project.path === 'string') {
+                acc.push(project);
+            }
+            return acc;
+        }, []).map(project => ({
+            ...project,
+            // eslint-disable-next-line no-template-curly-in-string
+            path: util.standardizePath(project.path.replace('${workspaceFolder}', workspaceFolder))
+        }));
+    }
+
+    private workspaceConfigsCache = new Map<string, WorkspaceConfig>();
+
+    @AddStackToErrorMessage
+    public async onDidChangeConfiguration(args: DidChangeConfigurationParams) {
+        this.logger.log('onDidChangeConfiguration', 'Reloading all projects');
+
+        const configs = new Map(
+            (await this.getWorkspaceConfigs()).map(x => [x.workspaceFolder, x])
+        );
+
+        //find any changed configs. This includes newly created workspaces, deleted workspaces, etc.
+        //TODO: enhance this to only reload specific projects, depending on the change
+        if (!isEqual(configs, this.workspaceConfigsCache)) {
+            //now that we've processed any config diffs, update the cached copy of them
+            this.workspaceConfigsCache = configs;
+
+            this.syncProjectActivationConcurrencyLimit();
+            this.syncMaxWorkerThreads();
+
+            //if configuration changed, rebuild the path filterer
+            await this.rebuildPathFilterer();
+
+            //if the user changes any user/workspace config settings, just mass-reload all projects
+            await this.syncProjects(true);
         }
     }
 
-    private async validateAll() {
-        try {
-            //synchronize parsing for open files that were included/excluded from projects
-            await this.synchronizeStandaloneWorkspaces();
 
-            let workspaces = this.getWorkspaces();
+    @AddStackToErrorMessage
+    public async onHover(params: TextDocumentPositionParams) {
+        this.logger.debug('onHover', params);
 
-            //validate all programs
-            await Promise.all(
-                workspaces.map((x) => x.builder.program.validate())
-            );
-
-            await this.sendDiagnostics();
-        } catch (e: any) {
-            this.connection.console.error(e);
-            this.sendCriticalFailure(`Critical error validating workspace: ${e.message}${e.stack ?? ''}`);
-        }
-
-        this.connection.sendNotification('build-status', 'success');
+        const srcPath = util.uriToPath(params.textDocument.uri);
+        const result = await this.projectManager.getHover({ srcPath: srcPath, position: params.position });
+        return result;
     }
 
     @AddStackToErrorMessage
     public async onWorkspaceSymbol(params: WorkspaceSymbolParams) {
-        await this.waitAllProgramFirstRuns();
+        this.logger.debug('onWorkspaceSymbol', params);
 
-        const results = util.flatMap(
-            await Promise.all(this.getWorkspaces().map(workspace => {
-                return workspace.builder.program.getWorkspaceSymbols();
-            })),
-            c => c
-        );
+        const result = await this.projectManager.getWorkspaceSymbol();
+        return result;
+    }
 
-        // Remove duplicates
-        const allSymbols = Object.values(results.reduce((map, symbol) => {
-            const key = symbol.location.uri + symbol.name;
-            map[key] = symbol;
-            return map;
-        }, {}));
-        return allSymbols as SymbolInformation[];
+    @AddStackToErrorMessage
+    public async onSelectionRanges(params: SelectionRangeParams) {
+        this.logger.debug('onSelectionRanges', params);
+
+        const srcPath = util.uriToPath(params.textDocument.uri);
+        return this.projectManager.getSelectionRanges({ srcPath: srcPath, positions: params.positions });
+    }
+
+    @AddStackToErrorMessage
+    public async onInlayHint(params: InlayHintParams): Promise<InlayHint[]> {
+        this.logger.debug('onInlayHint', params);
+
+        const srcPath = util.uriToPath(params.textDocument.uri);
+        const result = await this.projectManager.getInlayHints({ srcPath: srcPath, range: params.range });
+        return result ?? [];
     }
 
     @AddStackToErrorMessage
     public async onDocumentSymbol(params: DocumentSymbolParams) {
-        await this.waitAllProgramFirstRuns();
+        this.logger.debug('onDocumentSymbol', params);
 
-        await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
-
-        const pathAbsolute = util.uriToPath(params.textDocument.uri);
-        for (const workspace of this.getWorkspaces()) {
-            const file = workspace.builder.program.getFileByPathAbsolute(pathAbsolute);
-            if (isBrsFile(file)) {
-                return file.getDocumentSymbols();
-            }
-        }
+        const srcPath = util.uriToPath(params.textDocument.uri);
+        const result = await this.projectManager.getDocumentSymbol({ srcPath: srcPath });
+        return result;
     }
 
     @AddStackToErrorMessage
-    private async onDefinition(params: TextDocumentPositionParams) {
-        await this.waitAllProgramFirstRuns();
+    public async onDefinition(params: TextDocumentPositionParams) {
+        this.logger.debug('onDefinition', params);
 
-        const pathAbsolute = util.uriToPath(params.textDocument.uri);
+        const srcPath = util.uriToPath(params.textDocument.uri);
 
-        const results = util.flatMap(
-            await Promise.all(this.getWorkspaces().map(workspace => {
-                return workspace.builder.program.getDefinition(pathAbsolute, params.position);
-            })),
-            c => c
-        );
-        return results;
+        const result = this.projectManager.getDefinition({ srcPath: srcPath, position: params.position });
+        return result;
     }
 
     @AddStackToErrorMessage
-    private async onSignatureHelp(params: SignatureHelpParams) {
-        await this.waitAllProgramFirstRuns();
+    public async onSignatureHelp(params: SignatureHelpParams) {
+        this.logger.debug('onSignatureHelp', params);
 
-        const filepath = util.uriToPath(params.textDocument.uri);
-        await this.keyedThrottler.onIdleOnce(filepath, true);
-
-        try {
-            const signatures = util.flatMap(
-                await Promise.all(this.getWorkspaces().map(workspace => workspace.builder.program.getSignatureHelp(filepath, params.position)
-                )),
-                c => c
-            );
-
-            const activeSignature = signatures.length > 0 ? 0 : null;
-
-            const activeParameter = activeSignature >= 0 ? signatures[activeSignature]?.index : null;
-
-            let results: SignatureHelp = {
-                signatures: signatures.map((s) => s.signature),
-                activeSignature: activeSignature,
-                activeParameter: activeParameter
-            };
-            return results;
-        } catch (e: any) {
-            this.connection.console.error(`error in onSignatureHelp: ${e.stack ?? e.message ?? e}`);
+        const srcPath = util.uriToPath(params.textDocument.uri);
+        const result = await this.projectManager.getSignatureHelp({ srcPath: srcPath, position: params.position });
+        if (result) {
+            return result;
+        } else {
             return {
                 signatures: [],
-                activeSignature: 0,
-                activeParameter: 0
+                activeSignature: null,
+                activeParameter: null
             };
         }
+
     }
 
     @AddStackToErrorMessage
-    private async onReferences(params: ReferenceParams) {
-        await this.waitAllProgramFirstRuns();
+    public async onReferences(params: ReferenceParams) {
+        this.logger.debug('onReferences', params);
 
-        const position = params.position;
-        const pathAbsolute = util.uriToPath(params.textDocument.uri);
-
-        const results = util.flatMap(
-            await Promise.all(this.getWorkspaces().map(workspace => {
-                return workspace.builder.program.getReferences(pathAbsolute, position);
-            })),
-            c => c
-        );
-        return results.filter((r) => r);
+        const srcPath = util.uriToPath(params.textDocument.uri);
+        const result = await this.projectManager.getReferences({ srcPath: srcPath, position: params.position });
+        return result ?? [];
     }
+
+    @AddStackToErrorMessage
+    public async onWillRenameFiles(params: RenameFilesParams): Promise<WorkspaceEdit | null> {
+        this.logger.debug('onWillRenameFiles', params);
+
+        const changes: Record<string, TextEdit[]> = {};
+        for (const file of params.files ?? []) {
+            const oldSrcPath = util.uriToPath(file.oldUri);
+            const newSrcPath = util.uriToPath(file.newUri);
+            const edits = await this.projectManager.getFileRenameEdits({ oldSrcPath: oldSrcPath, newSrcPath: newSrcPath });
+            for (const edit of edits) {
+                (changes[edit.uri] ??= []).push({
+                    range: edit.range,
+                    newText: edit.newText
+                });
+            }
+        }
+
+        if (Object.keys(changes).length === 0) {
+            return null;
+        }
+        return { changes: changes };
+    }
+
 
     @AddStackToErrorMessage
     private async onFullSemanticTokens(params: SemanticTokensParams) {
-        await this.waitAllProgramFirstRuns();
-        await this.keyedThrottler.onIdleOnce(util.uriToPath(params.textDocument.uri), true);
+        this.logger.debug('onFullSemanticTokens', params);
 
         const srcPath = util.uriToPath(params.textDocument.uri);
-        for (const workspace of this.workspaces) {
-            //find the first program that has this file, since it would be incredibly inefficient to generate semantic tokens for the same file multiple times.
-            if (workspace.builder.program.hasFile(srcPath)) {
-                let semanticTokens = workspace.builder.program.getSemanticTokens(srcPath);
-                return {
-                    data: encodeSemanticTokens(semanticTokens)
-                } as SemanticTokens;
-            }
-        }
-    }
+        const result = await this.projectManager.getSemanticTokens({ srcPath: srcPath });
 
-    private diagnosticCollection = new DiagnosticCollection();
-
-    private async sendDiagnostics() {
-        //Get only the changes to diagnostics since the last time we sent them to the client
-        const patch = await this.diagnosticCollection.getPatch(this.workspaces);
-
-        for (let filePath in patch) {
-            const diagnostics = patch[filePath].map(d => util.toDiagnostic(d));
-
-            this.connection.sendDiagnostics({
-                uri: URI.file(filePath).toString(),
-                diagnostics: diagnostics
-            });
-        }
+        return {
+            data: encodeSemanticTokens(result)
+        } as SemanticTokens;
     }
 
     @AddStackToErrorMessage
+    public async onCodeAction(params: CodeActionParams) {
+        this.logger.debug('onCodeAction', params);
+
+        const srcPath = util.uriToPath(params.textDocument.uri);
+        const requestedKinds = params.context?.only ?? [];
+        const wantsAnyKind = requestedKinds.length === 0;
+
+        // Fix-all is opt-in and expensive, so only fetch when the client asks for it.
+        const fixAllKind = CodeActionKind.SourceFixAll;
+        const wantsFixAll = wantsAnyKind ||
+            requestedKinds.some(kind => kind.startsWith(fixAllKind) || fixAllKind.startsWith(kind));
+
+        // Standard actions (quickfix, refactor, etc.) all come through getCodeActions,
+        // so only skip that pipeline when the client explicitly asked for fix-all only.
+        const wantsStandardActions = wantsAnyKind ||
+            requestedKinds.some(kind => !kind.startsWith(fixAllKind));
+
+        const [standardActions, fixAllActions] = await Promise.all([
+            wantsStandardActions ? this.projectManager.getCodeActions({ srcPath: srcPath, range: params.range }) : [],
+            wantsFixAll ? this.projectManager.getFixAllCodeActions({ srcPath: srcPath }) : []
+        ]);
+
+        const result = [...(standardActions ?? []), ...(fixAllActions ?? [])];
+
+        // filter out any code actions with a kind that the client did not ask for (if the client specified any kinds at all)
+        if (!wantsAnyKind) {
+            return result.filter(x => x.kind && requestedKinds.some(only => x.kind === only || x.kind.startsWith(only + '.')));
+        }
+        return result;
+    }
+
+
+    @AddStackToErrorMessage
     public async onExecuteCommand(params: ExecuteCommandParams) {
-        await this.waitAllProgramFirstRuns();
+        this.logger.debug('onExecuteCommand', params);
+
         if (params.command === CustomCommands.TranspileFile) {
-            return this.transpileFile(params.arguments[0]);
+            const args = {
+                srcPath: params.arguments[0] as string
+            };
+            const result = await this.projectManager.transpileFile(args);
+            //back-compat: include `pathAbsolute` property so older vscode versions still work
+            (result as any).pathAbsolute = result.srcPath;
+            return result;
         }
     }
 
-    private async transpileFile(pathAbsolute: string) {
-        //wait all program first runs
-        await this.waitAllProgramFirstRuns();
-        let workspaces = this.getWorkspaces();
-        //find the first workspace that has this file
-        for (let workspace of workspaces) {
-            if (workspace.builder.program.hasFile(pathAbsolute)) {
-                return workspace.builder.program.getTranspiledFileContents(pathAbsolute);
+    /**
+     * Establish a connection to the client if not already connected
+     */
+    private establishConnection() {
+        if (!this.connection) {
+            this.connection = createConnection(ProposedFeatures.all);
+        }
+        return this.connection;
+    }
+
+    /**
+     * Send a new busy status notification to the client based on the current busy status
+     */
+    private sendBusyStatus() {
+        this.busyStatusIndex = ++this.busyStatusIndex <= 0 ? 0 : this.busyStatusIndex;
+
+        this.connection.sendNotification(NotificationName.busyStatus, {
+            status: this.projectManager.busyStatusTracker.status,
+            timestamp: Date.now(),
+            index: this.busyStatusIndex,
+            activeRuns: [
+                //extract only specific information from the active run so we know what's going on
+                ...this.projectManager.busyStatusTracker.activeRuns.map(x => ({
+                    scope: util.getProjectLogName(x.scope),
+                    label: x.label,
+                    startTime: x.startTime.getTime()
+                }))
+            ]
+        })?.catch(logAndIgnoreError);
+    }
+    private busyStatusIndex = -1;
+
+    private pathFiltererDisposables: Array<() => void> = [];
+
+    /**
+     * Populate the path filterer with the client's include/exclude lists and the projects include lists
+     * @returns the instance of the path filterer
+     */
+    private async rebuildPathFilterer() {
+        //dispose of any previous pathFilterer disposables
+        this.pathFiltererDisposables?.forEach(dispose => dispose());
+        //keep track of all the pathFilterer disposables so we can dispose them later
+        this.pathFiltererDisposables = [];
+
+        const workspaceConfigs = await this.getWorkspaceConfigs();
+        await Promise.all(workspaceConfigs.map(async (workspaceConfig) => {
+            const rootDir = util.uriToPath(workspaceConfig.workspaceFolder);
+
+            //always exclude everything from these common folders
+            this.pathFiltererDisposables.push(
+                this.pathFilterer.registerExcludeList(rootDir, [
+                    '**/node_modules/**/*',
+                    '**/.git/**/*',
+                    'out/**/*',
+                    '**/.roku-deploy-staging/**/*'
+                ])
+            );
+            //get any `files.exclude` patterns from the client from this workspace
+            this.pathFiltererDisposables.push(
+                this.pathFilterer.registerExcludeList(rootDir, workspaceConfig.excludePatterns)
+            );
+
+            //get any .gitignore patterns from the client from this workspace
+            const gitignorePath = path.resolve(rootDir, '.gitignore');
+            if (await fsExtra.pathExists(gitignorePath)) {
+                const matcher = ignore({ ignoreCase: true }).add(
+                    fsExtra.readFileSync(gitignorePath).toString()
+                );
+                this.pathFiltererDisposables.push(
+                    this.pathFilterer.registerExcludeMatcher((p: string) => {
+                        const relPath = path.relative(rootDir, p);
+                        if (ignore.isPathValid(relPath)) {
+                            return matcher.test(relPath).ignored;
+                        } else {
+                            //we do not have a valid relative path, so we cannot determine if it is ignored...thus it is NOT ignored
+                            return false;
+                        }
+                    })
+                );
             }
+        }));
+        this.logger.log('pathFilterer successfully reconstructed');
+
+        return this.pathFilterer;
+    }
+
+    /**
+     * Ask the client for the list of `files.exclude` and `files.watcherExclude` patterns. Useful when determining if we should process a file
+     */
+    private async getWorkspaceExcludeGlobs(workspaceFolder: string): Promise<string[]> {
+        const filesConfig = await this.getClientConfiguration<{ exclude: Record<string, boolean>; watcherExclude: Record<string, boolean> }>(workspaceFolder, 'files');
+        const searchConfig = await this.getClientConfiguration<{ exclude: Record<string, boolean> }>(workspaceFolder, 'search');
+        const languageServerConfig = await this.getClientConfiguration<BrightScriptClientConfiguration>(workspaceFolder, 'brightscript');
+
+        return [
+            ...this.extractExcludes(filesConfig?.exclude),
+            ...this.extractExcludes(filesConfig?.watcherExclude),
+            ...this.extractExcludes(searchConfig?.exclude),
+            ...this.extractExcludes(languageServerConfig?.languageServer?.projectDiscoveryExclude)
+        ];
+    }
+
+    private extractExcludes(exclude: Record<string, boolean>): string[] {
+        //if the exclude is not defined, return an empty array
+        if (!exclude) {
+            return [];
         }
+        return Object
+            .keys(exclude)
+            .filter(x => exclude[x])
+            //vscode files.exclude patterns support ignoring folders without needing to add `**/*`. So for our purposes, we need to
+            //append **/* to everything without a file extension or magic at the end
+            .map(pattern => {
+                const result = [
+                    //send the pattern as-is (this handles weird cases and exact file matches)
+                    pattern
+                ];
+                //treat the pattern as a directory (no harm in doing this because if it's a file, the pattern will just never match anything)
+                if (!pattern.endsWith('/**/*')) {
+                    result.push(`${pattern}/**/*`);
+                }
+                return result;
+            })
+            .flat(1);
     }
 
-    public dispose() {
+    /**
+     * Ask the project manager to sync all projects found within the list of workspaces
+     * @param forceReload if true, all projects are discarded and recreated from scratch
+     */
+    private async syncProjects(forceReload = false) {
+        const workspaces = await this.getWorkspaceConfigs();
+
+        await this.projectManager.syncProjects(workspaces, forceReload);
+
+        //set our logLevel to the most verbose log level found across all projects and workspaces
+        await this.syncLogLevel();
+    }
+
+    /**
+     * Given a workspaceFolder path, get the specified configuration from the client (if applicable).
+     * Be sure to use optional chaining to traverse the result in case that configuration doesn't exist or the client doesn't support `getConfiguration`
+     * @param workspaceFolder the folder for the workspace in the client
+     */
+    private async getClientConfiguration<T extends Record<string, any>>(workspaceFolder: string, section: string): Promise<T> {
+        const scopeUri = util.pathToUri(workspaceFolder);
+        let config = {};
+
+        //if the client supports configuration, look for config group called "brightscript"
+        if (this.hasConfigurationCapability) {
+            config = await this.connection.workspace.getConfiguration({
+                scopeUri: scopeUri,
+                section: section
+            });
+        }
+        return config as T;
+    }
+
+    /**
+     * Send a critical failure notification to the client, which should show a notification of some kind
+     */
+    private sendCriticalFailure(message: string) {
+        this.connection.sendNotification('critical-failure', message).catch(logAndIgnoreError);
+    }
+
+    /**
+     * Send diagnostics to the client
+     */
+    private async sendDiagnostics(options: { project: LspProject; diagnostics: LspDiagnostic[] }) {
+        const patch = this.diagnosticCollection.getPatch(options.project.projectNumber, options.diagnostics);
+
+        await Promise.all(Object.keys(patch).map(async (srcPath) => {
+            const uri = URI.file(srcPath).toString();
+            const diagnostics = patch[srcPath].map(d => util.toDiagnostic(d, uri));
+
+            await this.connection.sendDiagnostics({
+                uri: uri,
+                diagnostics: diagnostics
+            });
+        }));
+    }
+    private diagnosticCollection = new DiagnosticCollection();
+
+    protected dispose() {
+        clearTimeout(this.fileChangeDebounceTimer);
         this.loggerSubscription?.();
-        this.validateThrottler.dispose();
+        this.projectManager?.dispose?.();
     }
-}
-
-export interface Workspace {
-    firstRunPromise: Promise<any>;
-    builder: ProgramBuilder;
-    workspacePath: string;
-    isFirstRunComplete: boolean;
-    isFirstRunSuccessful: boolean;
-    configFilePath?: string;
-    isStandaloneFileWorkspace: boolean;
 }
 
 export enum CustomCommands {
     TranspileFile = 'TranspileFile'
+}
+
+export enum NotificationName {
+    busyStatus = 'busyStatus'
 }
 
 /**
@@ -1177,4 +1053,39 @@ function AddStackToErrorMessage(target: any, propertyKey: string, descriptor: Pr
             throw e;
         }
     };
+}
+
+type Handler<T> = {
+    [K in keyof T as K extends `on${string}` ? K : never]:
+    T[K] extends (arg: infer U) => void ? (arg: U) => void : never;
+};
+// Extracts the argument type from the function and constructs the desired interface
+export type OnHandler<T> = {
+    [K in keyof Handler<T>]: Handler<T>[K] extends (arg: infer U) => void ? U : never;
+};
+
+export interface BrightScriptProjectConfiguration {
+    name?: string;
+    path: string;
+    disabled?: boolean;
+}
+
+export interface BrightScriptClientConfiguration {
+    projects?: (string | BrightScriptProjectConfiguration)[];
+    languageServer: {
+        enableThreading: boolean;
+        enableProjectDiscovery: boolean;
+        projectDiscoveryExclude?: Record<string, boolean>;
+        logLevel: LogLevel | string;
+        projectDiscoveryMaxDepth?: number;
+        projectActivationConcurrencyLimit?: number;
+        maxWorkerThreads?: number;
+    };
+}
+
+function logAndIgnoreError(error: Error) {
+    if (error?.stack) {
+        error.message = error.stack;
+    }
+    console.error(error);
 }

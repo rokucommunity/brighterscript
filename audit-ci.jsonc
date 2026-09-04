@@ -1,0 +1,15 @@
+{
+    // Fail on high severity and above. See README "Accepted security advisories" for
+    // why each allowlisted entry is safe to defer.
+    "$schema": "https://github.com/IBM/audit-ci/raw/main/docs/schema.json",
+    "high": true,
+    "allowlist": [
+        {
+            "GHSA-w5hq-g745-h8pq": {
+                // Added: 2026-05-22
+                "active": true,
+                "notes": "`uuid` <11.1.1 (via `roku-deploy>postman-request` and dev-only `nyc>istanbul-lib-processinfo`): vulnerable code path is `v3()`/`v5()`/`v6()` when a caller-provided buffer is passed. Both consumers call only `v4()` (no buffer arg), so the vulnerable path is unreachable from this dep graph."
+            }
+        }
+    ]
+}

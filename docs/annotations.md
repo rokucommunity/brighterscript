@@ -24,7 +24,6 @@ Annotations can have parameters - these parameters should be a list of valid Bri
 ## Examples
 
 ```brighterscript
-@translate print "hello"
 
 @expose
 class MyComp
@@ -49,11 +48,11 @@ end
 transpiles to
 
 ```brightscript
-print "hello"
+sub __MyComp_method_new()
+end sub
 function __MyComp_builder()
     instance = {}
-    instance.new = sub()
-    end sub
+    instance.new = __MyComp_method_new
     return instance
 end function
 function MyComp()
@@ -64,6 +63,9 @@ end function
 
 function init()
 end function
+
+function main()
+end
 ```
 
 Notice the annotations were completely removed (because annotations are not available at runtime).

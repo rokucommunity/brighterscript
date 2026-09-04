@@ -7,22 +7,22 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 
 /** * Parses `Tokens` into chunks of tokens, excluding conditional compilation directives. */
 export class PreprocessorParser {
-    public diagnostics: Diagnostic[];
+    public diagnostics: Diagnostic[] = [];
 
-    public tokens: Token[];
+    public tokens: Token[] = [];
 
     private current = 0;
 
     /**
      * an array of chunks (conditional compilation directives and the associated BrightScript)
      */
-    public chunks: CC.Chunk[];
+    public chunks: CC.Chunk[] = [];
 
     /**
      * Parses an array of tokens into an array of "chunks" - conditional compilation directives and their
      * associated BrightScript.
      *
-     * @param toParse the array of tokens to parse
+     * @param tokens the array of tokens to parse
      */
     public parse(tokens: Token[]) {
         this.tokens = tokens;
@@ -105,7 +105,7 @@ export class PreprocessorParser {
      */
     private hashIf(): CC.Chunk | undefined {
         if (this.match(TokenKind.HashIf)) {
-            let startingLine = this.previous().range.start.line;
+            let startingLine = this.previous().range?.start?.line;
             let elseChunk: CC.Chunk[] | undefined;
 
             let ifCondition = this.advance();

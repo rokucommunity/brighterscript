@@ -13,7 +13,9 @@ export interface SGToken {
 
 export interface SGAttribute {
     key: SGToken;
+    openQuote?: SGToken;
     value: SGToken;
+    closeQuote?: SGToken;
     range?: Range;
 }
 
@@ -22,7 +24,8 @@ export class SGTag {
     constructor(
         public tag: SGToken,
         public attributes: SGAttribute[] = [],
-        public range?: Range
+        public range?: Range,
+        public closingTag?: SGToken
     ) { }
 
     get id() {
@@ -37,7 +40,7 @@ export class SGTag {
     }
 
     getAttributeValue(name: string): string | undefined {
-        return this.getAttribute(name)?.value?.text;
+        return this.getAttribute(name.toLowerCase())?.value?.text;
     }
 
     setAttribute(name: string, value: string) {
@@ -55,6 +58,15 @@ export class SGTag {
                 value: { text: value }
             });
         }
+    }
+
+    /**
+     * The nested tags directly contained by this tag. Base tags have no children;
+     * subclasses that contain other tags override this. Used for AST traversal
+     * (e.g. validation) so it works regardless of how the AST was constructed.
+     */
+    public getChildren(): SGTag[] {
+        return [];
     }
 
     transpile(state: TranspileState): SourceNode {
@@ -77,9 +89,10 @@ export class SGTag {
             result.push(
                 ' ',
                 state.transpileToken(attr.key),
-                '="',
+                '=',
+                state.transpileToken(attr.openQuote ?? { text: '"' }),
                 state.transpileToken(attr.value),
-                '"'
+                state.transpileToken(attr.closeQuote ?? { text: '"' })
             );
         }
         return result;
@@ -103,9 +116,14 @@ export class SGNode extends SGTag {
         tag: SGToken,
         attributes?: SGAttribute[],
         public children: SGNode[] = [],
-        range?: Range
+        range?: Range,
+        closingTag?: SGToken
     ) {
-        super(tag, attributes, range);
+        super(tag, attributes, range, closingTag);
+    }
+
+    public getChildren(): SGTag[] {
+        return this.children;
     }
 
     protected transpileBody(state: TranspileState): (string | SourceNode)[] {
@@ -127,9 +145,10 @@ export class SGChildren extends SGNode {
     constructor(
         tag: SGToken = { text: 'children' },
         children: SGNode[] = [],
-        range?: Range
+        range?: Range,
+        closingTag?: SGToken
     ) {
-        super(tag, [], children, range);
+        super(tag, [], children, range, closingTag);
     }
 }
 
@@ -139,9 +158,10 @@ export class SGScript extends SGTag {
         tag: SGToken = { text: 'script' },
         attributes?: SGAttribute[],
         public cdata?: SGToken,
-        range?: Range
+        range?: Range,
+        closingTag?: SGToken
     ) {
-        super(tag, attributes, range);
+        super(tag, attributes, range, closingTag);
         if (!attributes) {
             this.type = 'text/brightscript';
         }
@@ -213,9 +233,10 @@ export class SGField extends SGTag {
     constructor(
         tag: SGToken = { text: 'field' },
         attributes: SGAttribute[] = [],
-        range?: Range
+        range?: Range,
+        closingTag?: SGToken
     ) {
-        super(tag, attributes, range);
+        super(tag, attributes, range, closingTag);
     }
 
     get type() {
@@ -266,9 +287,10 @@ export class SGFunction extends SGTag {
     constructor(
         tag: SGToken = { text: 'function' },
         attributes: SGAttribute[] = [],
-        range?: Range
+        range?: Range,
+        closingTag?: SGToken
     ) {
-        super(tag, attributes, range);
+        super(tag, attributes, range, closingTag);
     }
 
     get name() {
@@ -287,9 +309,10 @@ export class SGInterface extends SGTag {
     constructor(
         tag: SGToken = { text: 'interface' },
         content?: SGTag[],
-        range?: Range
+        range?: Range,
+        closingTag?: SGToken
     ) {
-        super(tag, [], range);
+        super(tag, [], range, closingTag);
         if (content) {
             for (const tag of content) {
                 if (isSGField(tag)) {
@@ -333,6 +356,10 @@ export class SGInterface extends SGTag {
         }
     }
 
+    public getChildren(): SGTag[] {
+        return [...this.fields, ...this.functions];
+    }
+
     protected transpileBody(state: TranspileState): (string | SourceNode)[] {
         const body: (string | SourceNode)[] = ['>\n'];
         state.blockDepth++;
@@ -353,9 +380,10 @@ export class SGComponent extends SGTag {
         tag: SGToken = { text: 'component' },
         attributes?: SGAttribute[],
         content?: SGTag[],
-        range?: Range
+        range?: Range,
+        closingTag?: SGToken
     ) {
-        super(tag, attributes, range);
+        super(tag, attributes, range, closingTag);
         if (content) {
             for (const tag of content) {
                 if (isSGInterface(tag)) {
@@ -391,6 +419,19 @@ export class SGComponent extends SGTag {
     }
     set extends(value: string) {
         this.setAttribute('extends', value);
+    }
+
+    public getChildren(): SGTag[] {
+        const result: SGTag[] = [];
+        if (this.api) {
+            result.push(this.api);
+        }
+        result.push(...this.scripts);
+        if (this.children) {
+            result.push(this.children);
+        }
+        result.push(...this.customizations);
+        return result;
     }
 
     protected transpileBody(state: TranspileState): (string | SourceNode)[] {

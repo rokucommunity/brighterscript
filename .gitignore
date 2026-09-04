@@ -11,7 +11,7 @@ coverage
 graph.svg
 .history
 *.tgz
-benchmarks/*.json
 benchmarks/*.brs
 isolate-*
 v8*.log
+*.cpuprofile

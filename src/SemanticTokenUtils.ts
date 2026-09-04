@@ -58,7 +58,7 @@ export const semanticTokensLegend = {
 export function encodeSemanticTokens(tokens: SemanticToken[]) {
     util.sortByRange(tokens);
     const builder = new SemanticTokensBuilder();
-    for (const token of tokens) {
+    for (const token of tokens ?? []) {
         builder.push(
             token.range.start.line,
             token.range.start.character,

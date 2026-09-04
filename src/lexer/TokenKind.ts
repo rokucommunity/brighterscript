@@ -77,7 +77,10 @@ export enum TokenKind {
     Question = 'Question', // ?
     QuestionQuestion = 'QuestionQuestion', // ??
     BackTick = 'BackTick', // `
-
+    QuestionDot = 'QuestionDot', // ?.
+    QuestionLeftSquare = 'QuestionLeftSquare', // ?[
+    QuestionLeftParen = 'QuestionLeftParen', // ?(
+    QuestionAt = 'QuestionAt', // ?@
 
     // conditional compilation
     HashIf = 'HashIf', // #if
@@ -147,15 +150,21 @@ export enum TokenKind {
     EndClass = 'EndClass',
     Namespace = 'Namespace',
     EndNamespace = 'EndNamespace',
+    Enum = 'Enum',
+    EndEnum = 'EndEnum',
     Public = 'Public',
     Protected = 'Protected',
     Private = 'Private',
+    Optional = 'Optional',
     As = 'As',
     New = 'New',
     Override = 'Override',
     Import = 'Import',
     EndInterface = 'EndInterface',
+    Const = 'Const',
     Continue = 'Continue',
+    Typecast = 'Typecast',
+    Alias = 'Alias',
 
     //brighterscript source literals
     LineNumLiteral = 'LineNumLiteral',
@@ -163,6 +172,8 @@ export enum TokenKind {
     SourceLineNumLiteral = 'SourceLineNumLiteral',
     FunctionNameLiteral = 'FunctionNameLiteral',
     SourceFunctionNameLiteral = 'SourceFunctionNameLiteral',
+    SourceNamespaceNameLiteral = 'SourceNamespaceNameLiteral',
+    SourceNamespaceRootNameLiteral = 'SourceNamespaceRootNameLiteral',
     SourceLocationLiteral = 'SourceLocationLiteral',
     PkgPathLiteral = 'PkgPathLiteral',
     PkgLocationLiteral = 'PkgLocationLiteral',
@@ -287,11 +298,15 @@ export const Keywords: Record<string, TokenKind> = {
     class: TokenKind.Class,
     endclass: TokenKind.EndClass,
     'end class': TokenKind.EndClass,
+    enum: TokenKind.Enum,
+    endenum: TokenKind.EndEnum,
+    'end enum': TokenKind.EndEnum,
     public: TokenKind.Public,
     protected: TokenKind.Protected,
     private: TokenKind.Private,
     new: TokenKind.New,
     override: TokenKind.Override,
+    optional: TokenKind.Optional,
     namespace: TokenKind.Namespace,
     endnamespace: TokenKind.EndNamespace,
     'end namespace': TokenKind.EndNamespace,
@@ -301,6 +316,8 @@ export const Keywords: Record<string, TokenKind> = {
     'source_line_num': TokenKind.SourceLineNumLiteral,
     'function_name': TokenKind.FunctionNameLiteral,
     'source_function_name': TokenKind.SourceFunctionNameLiteral,
+    'source_namespace_name': TokenKind.SourceNamespaceNameLiteral,
+    'source_namespace_root_name': TokenKind.SourceNamespaceRootNameLiteral,
     'source_location': TokenKind.SourceLocationLiteral,
     'pkg_path': TokenKind.PkgPathLiteral,
     'pkg_location': TokenKind.PkgLocationLiteral,
@@ -310,7 +327,11 @@ export const Keywords: Record<string, TokenKind> = {
     'end try': TokenKind.EndTry,
     throw: TokenKind.Throw,
     'end interface': TokenKind.EndInterface,
-    endinterface: TokenKind.EndInterface
+    endinterface: TokenKind.EndInterface,
+    const: TokenKind.Const,
+    typecast: TokenKind.Typecast,
+    alias: TokenKind.Alias,
+    type: TokenKind.Type
 };
 //hide the constructor prototype method because it causes issues
 Keywords.constructor = undefined;
@@ -381,6 +402,7 @@ export const AllowedProperties = [
     TokenKind.If,
     TokenKind.Invalid,
     TokenKind.Let,
+    TokenKind.Mod,
     TokenKind.Next,
     TokenKind.Not,
     TokenKind.ObjFun,
@@ -416,6 +438,7 @@ export const AllowedProperties = [
     TokenKind.Class,
     TokenKind.New,
     TokenKind.Override,
+    TokenKind.Optional,
     TokenKind.Namespace,
     TokenKind.EndNamespace,
     TokenKind.Import,
@@ -424,6 +447,8 @@ export const AllowedProperties = [
     TokenKind.SourceLineNumLiteral,
     TokenKind.FunctionNameLiteral,
     TokenKind.SourceFunctionNameLiteral,
+    TokenKind.SourceNamespaceNameLiteral,
+    TokenKind.SourceNamespaceRootNameLiteral,
     TokenKind.SourceLocationLiteral,
     TokenKind.PkgPathLiteral,
     TokenKind.PkgLocationLiteral,
@@ -432,7 +457,10 @@ export const AllowedProperties = [
     TokenKind.EndTry,
     TokenKind.Throw,
     TokenKind.EndInterface,
-    TokenKind.Continue
+    TokenKind.Const,
+    TokenKind.Continue,
+    TokenKind.Typecast,
+    TokenKind.Alias
 ];
 
 /** List of TokenKind that are allowed as local var identifiers. */
@@ -459,13 +487,18 @@ export const AllowedLocalIdentifiers = [
     TokenKind.Class,
     TokenKind.New,
     TokenKind.Override,
+    TokenKind.Optional,
     TokenKind.Namespace,
     TokenKind.EndNamespace,
     TokenKind.Import,
     TokenKind.Try,
     TokenKind.Catch,
     TokenKind.EndTry,
-    TokenKind.Continue
+    TokenKind.Const,
+    TokenKind.Continue,
+    TokenKind.Typecast,
+    TokenKind.Alias,
+    TokenKind.Type
 ];
 
 export const BrighterScriptSourceLiterals = [
@@ -473,6 +506,8 @@ export const BrighterScriptSourceLiterals = [
     TokenKind.SourceLineNumLiteral,
     TokenKind.FunctionNameLiteral,
     TokenKind.SourceFunctionNameLiteral,
+    TokenKind.SourceNamespaceNameLiteral,
+    TokenKind.SourceNamespaceRootNameLiteral,
     TokenKind.SourceLocationLiteral,
     TokenKind.PkgPathLiteral,
     TokenKind.PkgLocationLiteral
@@ -529,6 +564,8 @@ export const DisallowedLocalIdentifiers = [
     TokenKind.SourceLineNumLiteral,
     TokenKind.FunctionNameLiteral,
     TokenKind.SourceFunctionNameLiteral,
+    TokenKind.SourceNamespaceNameLiteral,
+    TokenKind.SourceNamespaceRootNameLiteral,
     TokenKind.SourceLocationLiteral,
     TokenKind.PkgPathLiteral,
     TokenKind.PkgLocationLiteral,
@@ -538,6 +575,27 @@ export const DisallowedLocalIdentifiers = [
 export const DisallowedLocalIdentifiersText = new Set([
     'run',
     ...DisallowedLocalIdentifiers.map(x => x.toLowerCase())
+]);
+
+/**
+ * Reserved BrightScript builtins that cannot be referenced — they compile only when invoked as a function call.
+ * Any non-call reference (e.g. `x = type`, `print foo(ObjFun)`) is a device compile error
+ * (most produce `Syntax Error. Builtin function call expected`, hex code &h9d;
+ * `createobject` and `tab` produce a generic `Syntax Error` &h02 with the same outcome).
+ * Names are lowercased for case-insensitive matching.
+ */
+export const UnreferencableBuiltins = new Set([
+    'box',
+    'createobject',
+    'eval',
+    'getglobalaa',
+    'getlastruncompileerror',
+    'getlastrunruntimeerror',
+    'objfun',
+    'pos',
+    'run',
+    'tab',
+    'type'
 ]);
 
 /**
@@ -646,3 +704,77 @@ export const PreceedingRegexTypes = new Set([
     TokenKind.Colon,
     TokenKind.Semicolon
 ]);
+
+/**
+ * Token kinds whose source text is invariant (always the same character sequence).
+ * For these kinds the lexer can use the canonical string here instead of allocating
+ * a fresh substring/slice per token, which dramatically reduces per-token wrapper
+ * allocations across an entire build. Excludes any kind whose text could legitimately
+ * vary by case (keywords like `Function`/`function`) or content (identifiers, literals,
+ * comments, whitespace, multi-form sequences like Newline).
+ */
+export const FixedTokenText: Partial<Record<TokenKind, string>> = {
+    [TokenKind.LeftParen]: '(',
+    [TokenKind.RightParen]: ')',
+    [TokenKind.LeftSquareBracket]: '[',
+    [TokenKind.RightSquareBracket]: ']',
+    [TokenKind.LeftCurlyBrace]: '{',
+    [TokenKind.RightCurlyBrace]: '}',
+    [TokenKind.Caret]: '^',
+    [TokenKind.Minus]: '-',
+    [TokenKind.Plus]: '+',
+    [TokenKind.Star]: '*',
+    [TokenKind.Forwardslash]: '/',
+    [TokenKind.Backslash]: '\\',
+    [TokenKind.PlusPlus]: '++',
+    [TokenKind.MinusMinus]: '--',
+    [TokenKind.LeftShift]: '<<',
+    [TokenKind.RightShift]: '>>',
+    [TokenKind.MinusEqual]: '-=',
+    [TokenKind.PlusEqual]: '+=',
+    [TokenKind.StarEqual]: '*=',
+    [TokenKind.ForwardslashEqual]: '/=',
+    [TokenKind.BackslashEqual]: '\\=',
+    [TokenKind.LeftShiftEqual]: '<<=',
+    [TokenKind.RightShiftEqual]: '>>=',
+    [TokenKind.Less]: '<',
+    [TokenKind.LessEqual]: '<=',
+    [TokenKind.Greater]: '>',
+    [TokenKind.GreaterEqual]: '>=',
+    [TokenKind.Equal]: '=',
+    [TokenKind.LessGreater]: '<>',
+    [TokenKind.Dot]: '.',
+    [TokenKind.Comma]: ',',
+    [TokenKind.Colon]: ':',
+    [TokenKind.Semicolon]: ';',
+    [TokenKind.At]: '@',
+    [TokenKind.Callfunc]: '@.',
+    [TokenKind.Question]: '?',
+    [TokenKind.QuestionQuestion]: '??',
+    [TokenKind.BackTick]: '`',
+    [TokenKind.QuestionDot]: '?.',
+    [TokenKind.QuestionLeftSquare]: '?[',
+    [TokenKind.QuestionLeftParen]: '?(',
+    [TokenKind.QuestionAt]: '?@',
+    [TokenKind.Dollar]: '$',
+    [TokenKind.Eof]: ''
+};
+
+/**
+ * Lazy intern table for `Newline` and `Whitespace` token text. Real source uses
+ * a small number of unique values for each (3 valid newline forms, ~50 typical
+ * indent patterns), so canonicalizing on first sight collapses per-token sliced
+ * string wrappers without the per-call overhead that a full token-text interner
+ * would incur on the unbounded `Identifier` and literal token kinds.
+ *
+ * Measured across 1078 real files this settles at ~32 entries / ~2.3 KB. But the
+ * table is module-scope and lives for the whole process, which matters for the
+ * language server: a single generated or minified file whose every line has a
+ * distinct indent width can add thousands of entries (a synthetic 5000-line file
+ * with unique indents grows it to ~8.9 MB), and nothing would ever release them.
+ * `LEXER_TEXT_CACHE_MAX_ENTRIES` caps that worst case. Interning is a pure
+ * optimization, so once the cap is hit the lexer simply stops interning new text
+ * and keeps using the sliced string; behavior is identical either way.
+ */
+export const LEXER_TEXT_CACHE_MAX_ENTRIES = 512;
+export const LexerTextCache = new Map<string, string>();

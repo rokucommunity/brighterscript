@@ -13,12 +13,21 @@ module.exports = {
     plugins: [
         '@typescript-eslint',
         'no-only-tests',
-        'github'
+        'jsdoc',
+        'import'
     ],
     extends: [
         'eslint:all',
-        'plugin:@typescript-eslint/all'
+        'plugin:@typescript-eslint/all',
+        'plugin:jsdoc/recommended',
+        'plugin:import/typescript'
     ],
+    settings: {
+        'import/resolver': {
+            typescript: true,
+            node: true
+        }
+    },
     rules: {
         '@typescript-eslint/array-type': 'off',
         '@typescript-eslint/consistent-type-assertions': 'off',
@@ -26,6 +35,7 @@ module.exports = {
         '@typescript-eslint/explicit-member-accessibility': 'off',
         '@typescript-eslint/explicit-module-boundary-types': 'off',
         '@typescript-eslint/init-declarations': 'off',
+        '@typescript-eslint/parameter-properties': 'off',
         '@typescript-eslint/lines-between-class-members': 'off',
         '@typescript-eslint/member-ordering': 'off',
         '@typescript-eslint/method-signature-style': 'off',
@@ -40,6 +50,7 @@ module.exports = {
         '@typescript-eslint/no-implicit-any-catch': 'off',
         '@typescript-eslint/no-invalid-this': 'off',
         '@typescript-eslint/no-magic-numbers': 'off',
+        '@typescript-eslint/no-non-null-assertion': 'off',
         '@typescript-eslint/no-parameter-properties': 'off',
         //had to add this rule to prevent eslint from crashing
         '@typescript-eslint/no-restricted-imports': ['off', {}],
@@ -53,12 +64,12 @@ module.exports = {
         '@typescript-eslint/no-shadow': 'off',
         '@typescript-eslint/no-this-alias': 'off',
         //possibly disable this once we have converted all throw statements to actual errors
-        '@typescript-eslint/no-throw-literal': 'off',
         '@typescript-eslint/no-invalid-void': 'off',
         '@typescript-eslint/no-invalid-void-type': 'off',
         '@typescript-eslint/no-type-alias': 'off',
         '@typescript-eslint/no-unnecessary-boolean-literal-compare': 'off',
         '@typescript-eslint/no-unnecessary-condition': 'off',
+        '@typescript-eslint/no-unnecessary-type-assertion': 'off',
         '@typescript-eslint/no-unsafe-assignment': 'off',
         '@typescript-eslint/no-unsafe-call': 'off',
         '@typescript-eslint/no-unsafe-member-access': 'off',
@@ -66,7 +77,7 @@ module.exports = {
         '@typescript-eslint/no-unused-vars': 'off',
         '@typescript-eslint/no-unused-vars-experimental': 'off',
         '@typescript-eslint/no-use-before-define': 'off',
-        '@typescript-eslint/prefer-for-of': 'off',
+        '@typescript-eslint/prefer-for-of': 'error',
         '@typescript-eslint/prefer-readonly': 'off',
         '@typescript-eslint/prefer-readonly-parameter-types': 'off',
         '@typescript-eslint/promise-function-async': 'off',
@@ -82,10 +93,17 @@ module.exports = {
         '@typescript-eslint/restrict-template-expressions': 'off',
         '@typescript-eslint/sort-type-union-intersection-members': 'off',
         '@typescript-eslint/space-before-function-paren': 'off',
+        '@typescript-eslint/space-infix-ops': 'off',
         '@typescript-eslint/strict-boolean-expressions': 'off',
         '@typescript-eslint/typedef': 'off',
         '@typescript-eslint/unbound-method': 'off',
         '@typescript-eslint/unified-signatures': 'off',
+        'jsdoc/require-param': 'off',
+        'jsdoc/require-returns': 'off',
+        'jsdoc/require-param-type': 'off',
+        'jsdoc/newline-after-description': 'off',
+        'jsdoc/require-jsdoc': 'off',
+        'jsdoc/require-returns-type': 'off',
         'array-bracket-newline': 'off',
         'array-element-newline': 'off',
         'array-type': 'off',
@@ -105,9 +123,11 @@ module.exports = {
         'function-call-argument-newline': 'off',
         'function-paren-newline': 'off',
         'getter-return': 'off',
-        'github/array-foreach': 'error',
         'guard-for-in': 'off',
         'id-length': 'off',
+        'import/no-extraneous-dependencies': ['error', {
+            'devDependencies': ['**/*.spec.ts']
+        }],
         'indent': 'off',
         'init-declarations': 'off',
         'line-comment-position': 'off',
@@ -150,6 +170,7 @@ module.exports = {
         'no-underscore-dangle': 'off',
         'no-unneeded-ternary': 'off',
         'no-useless-escape': 'off',
+        'no-void': 'off',
         'no-warning-comments': 'off',
         'object-property-newline': 'off',
         'object-shorthand': [
@@ -172,6 +193,7 @@ module.exports = {
         'sort-imports': 'off',
         'sort-keys': 'off',
         'spaced-comment': 'off',
+        'space-infix-ops': 'off',
         'vars-on-top': 'off',
         'wrap-regex': 'off'
     },
@@ -198,7 +220,8 @@ module.exports = {
             '@typescript-eslint/no-unused-vars-experimental': 'off',
             '@typescript-eslint/dot-notation': 'off',
             '@typescript-eslint/no-unsafe-argument': 'off',
-            'github/array-foreach': 'off',
+            'import/no-extraneous-dependencies': 'off',
+            'func-names': 'off',
             'new-cap': 'off',
             'no-shadow': 'off',
             'no-void': 'off'
@@ -208,6 +231,33 @@ module.exports = {
         rules: {
             '@typescript-eslint/no-require-imports': 'off',
             '@typescript-eslint/no-var-requires': 'off'
+        }
+    }, {
+        files: ['src/roku-types/data.json'],
+        rules: {
+            '@typescript-eslint/no-unused-expressions': 'off',
+            '@typescript-eslint/quotes': 'off',
+            'no-template-curly-in-string': 'off',
+            'eol-last': 'off',
+            '@typescript-eslint/semi': 'off'
+        }
+    },
+    {
+        files: ['scripts/**/*.ts'],
+        rules: {
+            '@typescript-eslint/no-var-requires': 'off',
+            '@typescript-eslint/no-require-imports': 'off',
+            'camelcase': 'off'
+        }
+    },
+    {
+        files: ['benchmarks/**/*.ts'],
+        rules: {
+            '@typescript-eslint/dot-notation': 'off',
+            '@typescript-eslint/no-unnecessary-type-assertion': 'off',
+            '@typescript-eslint/no-non-null-assertion': 'off',
+            'no-var': 'off',
+            'camelcase': 'off'
         }
     }]
 };

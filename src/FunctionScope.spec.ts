@@ -1,6 +1,7 @@
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 
 import { FunctionScope } from './FunctionScope';
+import type { FunctionExpression } from './parser/Expression';
 import { Program } from './Program';
 
 describe('FunctionScope', () => {
@@ -9,7 +10,7 @@ describe('FunctionScope', () => {
     let program: Program;
     beforeEach(() => {
         program = new Program({ rootDir: rootDir });
-        scope = new FunctionScope(null);
+        scope = new FunctionScope(null as any as FunctionExpression);
     });
 
     afterEach(() => {
@@ -23,7 +24,7 @@ describe('FunctionScope', () => {
         });
 
         it('returns variables defined above the specified line number', () => {
-            let file = program.addOrReplaceFile({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+            let file = program.setFile('source/main.brs', `
                 sub main()
                     var1 = 1
                     var2 = 2

@@ -1,8 +1,10 @@
 /* eslint-disable no-bitwise */
 import type { CancellationToken } from 'vscode-languageserver';
-import type { Statement, Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, ClassMethodStatement, ClassFieldStatement } from '../parser/Statement';
-import type { AALiteralExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, EscapedCharCodeLiteralExpression, Expression, FunctionExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NamespacedVariableNameExpression, NewExpression, SourceLiteralExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression } from '../parser/Expression';
+import type { Body, AssignmentStatement, Block, ExpressionStatement, CommentStatement, ExitForStatement, ExitWhileStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, ClassMethodStatement, ClassFieldStatement, EnumStatement, EnumMemberStatement, DimStatement, TryCatchStatement, CatchStatement, ThrowStatement, InterfaceStatement, InterfaceFieldStatement, InterfaceMethodStatement, FieldStatement, MethodStatement, ConstStatement, ContinueStatement, TypeStatement } from '../parser/Statement';
+import type { AAIndexedMemberExpression, AALiteralExpression, AAMemberExpression, AnnotationExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, EscapedCharCodeLiteralExpression, FunctionExpression, FunctionParameterExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NamespacedVariableNameExpression, NewExpression, NullCoalescingExpression, RegexLiteralExpression, SourceLiteralExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression } from '../parser/Expression';
 import { isExpression, isStatement } from './reflection';
+import type { AstEditor } from './AstEditor';
+import type { Statement, Expression, AstNode } from '../parser/AstNode';
 
 
 /**
@@ -10,7 +12,7 @@ import { isExpression, isStatement } from './reflection';
  */
 export function walkStatements(
     statement: Statement,
-    visitor: (statement: Statement, parent?: Statement) => Statement | void,
+    visitor: (statement: Statement, parent?: Statement, owner?: any, key?: any) => Statement | void,
     cancel?: CancellationToken
 ): void {
     statement.walk(visitor as any, {
@@ -19,46 +21,103 @@ export function walkStatements(
     });
 }
 
-
-export type WalkVisitor = <T = Statement | Expression>(stmtExpr: Statement | Expression, parent?: Statement | Expression) => void | T;
+export type WalkVisitor = <T = AstNode>(node: AstNode, parent?: AstNode, owner?: any, key?: any) => void | T;
 
 /**
  * A helper function for Statement and Expression `walkAll` calls.
+ * @returns a new AstNode if it was changed by returning from the visitor, or undefined if not
  */
-export function walk<T>(keyParent: T, key: keyof T, visitor: WalkVisitor, options: WalkOptions, parent?: Expression | Statement) {
+export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: WalkOptions, parent?: AstNode): AstNode | void {
+    let returnValue: AstNode | void;
+
     //stop processing if canceled
     if (options.cancel?.isCancellationRequested) {
-        return;
+        return returnValue;
     }
 
     //the object we're visiting
-    let element = keyParent[key] as any as Statement | Expression;
+    let element = owner[key] as any as AstNode;
     if (!element) {
-        return;
+        return returnValue;
     }
+
+    //link this node to its parent
+    parent = parent ?? owner as unknown as AstNode;
+    element.parent = parent;
+
 
     //notify the visitor of this element
     if (element.visitMode & options.walkMode) {
-        const result = visitor(element, parent ?? keyParent as any);
+        returnValue = visitor?.(element, element.parent as any, owner, key);
 
         //replace the value on the parent if the visitor returned a Statement or Expression (this is how visitors can edit AST)
-        if (result && (isExpression(result) || isStatement(result))) {
-            (keyParent as any)[key] = result;
-            //don't walk the new element
-            return;
+        if (returnValue && (isExpression(returnValue) || isStatement(returnValue))) {
+            //if we have an editor, use that to modify the AST
+            if (options.editor) {
+                options.editor.setProperty(owner, key, returnValue as any);
+
+                //we don't have an editor, modify the AST directly
+            } else {
+                (owner as any)[key] = returnValue;
+            }
         }
     }
 
     //stop processing if canceled
     if (options.cancel?.isCancellationRequested) {
-        return;
+        return returnValue;
     }
 
+    //get the element again in case it was replaced by the visitor
+    element = owner[key] as any as AstNode;
+    if (!element) {
+        return returnValue;
+    }
+
+    //set the parent of this new expression
+    element.parent = parent;
+
     if (!element.walk) {
-        throw new Error(`${keyParent.constructor.name}["${key}"]${parent ? ` for ${parent.constructor.name}` : ''} does not contain a "walk" method`);
+        throw new Error(`${owner.constructor.name}["${String(key)}"]${parent ? ` for ${parent.constructor.name}` : ''} does not contain a "walk" method`);
     }
     //walk the child expressions
     element.walk(visitor, options);
+
+    return returnValue;
+}
+
+/**
+ * Helper for AST elements to walk arrays when visitors might change the array size (to delete/insert items).
+ * @param array the array to walk
+ * @param visitor the visitor function to call on match
+ * @param options the walk optoins
+ * @param parent the parent AstNode of each item in the array
+ * @param filter a function used to filter items from the array. return true if that item should be walked
+ */
+export function walkArray<T extends AstNode = AstNode>(array: Array<T>, visitor: WalkVisitor, options: WalkOptions, parent?: AstNode, filter?: <T>(element: T) => boolean) {
+    let processedNodes = new Set<AstNode>();
+
+    for (let i = 0; i < array?.length; i++) {
+        if (!filter || filter(array[i])) {
+            let item = array[i];
+            //skip already processed nodes for this array walk
+            if (processedNodes.has(item)) {
+                continue;
+            }
+            processedNodes.add(item);
+
+            //if the walk produced a new node, we will assume the original node was handled, and the new node's children were walked, so we can skip it if we enter recovery mode
+            const newNode = walk(array, i, visitor, options, parent);
+            if (newNode) {
+                processedNodes.add(newNode);
+            }
+
+            //if the current item changed, restart the entire loop (we'll skip any already-processed items)
+            if (array[i] !== item) {
+                i = -1;
+            }
+        }
+    }
 }
 
 /**
@@ -70,58 +129,92 @@ export function walk<T>(keyParent: T, key: keyof T, visitor: WalkVisitor, option
 export function createVisitor(
     visitor: {
         //statements
-        Body?: (statement: Body, parent?: Statement) => Statement | void;
-        AssignmentStatement?: (statement: AssignmentStatement, parent?: Statement) => Statement | void;
-        Block?: (statement: Block, parent?: Statement) => Statement | void;
-        ExpressionStatement?: (statement: ExpressionStatement, parent?: Statement) => Statement | void;
-        CommentStatement?: (statement: CommentStatement, parent?: Statement) => Statement | void;
-        ExitForStatement?: (statement: ExitForStatement, parent?: Statement) => Statement | void;
-        ExitWhileStatement?: (statement: ExitWhileStatement, parent?: Statement) => Statement | void;
-        FunctionStatement?: (statement: FunctionStatement, parent?: Statement) => Statement | void;
-        IfStatement?: (statement: IfStatement, parent?: Statement) => Statement | void;
-        IncrementStatement?: (statement: IncrementStatement, parent?: Statement) => Statement | void;
-        PrintStatement?: (statement: PrintStatement, parent?: Statement) => Statement | void;
-        GotoStatement?: (statement: GotoStatement, parent?: Statement) => Statement | void;
-        LabelStatement?: (statement: LabelStatement, parent?: Statement) => Statement | void;
-        ReturnStatement?: (statement: ReturnStatement, parent?: Statement) => Statement | void;
-        EndStatement?: (statement: EndStatement, parent?: Statement) => Statement | void;
-        StopStatement?: (statement: StopStatement, parent?: Statement) => Statement | void;
-        ForStatement?: (statement: ForStatement, parent?: Statement) => Statement | void;
-        ForEachStatement?: (statement: ForEachStatement, parent?: Statement) => Statement | void;
-        WhileStatement?: (statement: WhileStatement, parent?: Statement) => Statement | void;
-        DottedSetStatement?: (statement: DottedSetStatement, parent?: Statement) => Statement | void;
-        IndexedSetStatement?: (statement: IndexedSetStatement, parent?: Statement) => Statement | void;
-        LibraryStatement?: (statement: LibraryStatement, parent?: Statement) => Statement | void;
-        NamespaceStatement?: (statement: NamespaceStatement, parent?: Statement) => Statement | void;
-        ImportStatement?: (statement: ImportStatement, parent?: Statement) => Statement | void;
-        ClassStatement?: (statement: ClassStatement, parent?: Statement) => Statement | void;
-        ClassMethodStatement?: (statement: ClassMethodStatement, parent?: Statement) => Statement | void;
-        ClassFieldStatement?: (statement: ClassFieldStatement, parent?: Statement) => Statement | void;
+        Body?: (statement: Body, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        AssignmentStatement?: (statement: AssignmentStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        Block?: (statement: Block, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        ExpressionStatement?: (statement: ExpressionStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        CommentStatement?: (statement: CommentStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        ExitForStatement?: (statement: ExitForStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        ExitWhileStatement?: (statement: ExitWhileStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        FunctionStatement?: (statement: FunctionStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        IfStatement?: (statement: IfStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        IncrementStatement?: (statement: IncrementStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        PrintStatement?: (statement: PrintStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        DimStatement?: (statement: DimStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        GotoStatement?: (statement: GotoStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        LabelStatement?: (statement: LabelStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        ReturnStatement?: (statement: ReturnStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        EndStatement?: (statement: EndStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        StopStatement?: (statement: StopStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        ForStatement?: (statement: ForStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        ForEachStatement?: (statement: ForEachStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        WhileStatement?: (statement: WhileStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        DottedSetStatement?: (statement: DottedSetStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        IndexedSetStatement?: (statement: IndexedSetStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        LibraryStatement?: (statement: LibraryStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        NamespaceStatement?: (statement: NamespaceStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        ImportStatement?: (statement: ImportStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        InterfaceStatement?: (statement: InterfaceStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        InterfaceFieldStatement?: (statement: InterfaceFieldStatement, parent?: Statement) => Statement | void;
+        InterfaceMethodStatement?: (statement: InterfaceMethodStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        ClassStatement?: (statement: ClassStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        /**
+         * @deprecated use `MethodStatement`
+         */
+        ClassMethodStatement?: (statement: ClassMethodStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        /**
+         * @deprecated use `FieldStatement`
+         */
+        ClassFieldStatement?: (statement: ClassFieldStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        ContinueStatement?: (statement: ContinueStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        MethodStatement?: (statement: MethodStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        FieldStatement?: (statement: FieldStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        TryCatchStatement?: (statement: TryCatchStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        CatchStatement?: (statement: CatchStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        ThrowStatement?: (statement: ThrowStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        EnumStatement?: (statement: EnumStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        EnumMemberStatement?: (statement: EnumMemberStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        ConstStatement?: (statement: ConstStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
+        TypeStatement?: (statement: TypeStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
         //expressions
-        BinaryExpression?: (expression: BinaryExpression, parent?: Statement | Expression) => Expression | void;
-        CallExpression?: (expression: CallExpression, parent?: Statement | Expression) => Expression | void;
-        FunctionExpression?: (expression: FunctionExpression, parent?: Statement | Expression) => Expression | void;
-        NamespacedVariableNameExpression?: (expression: NamespacedVariableNameExpression, parent?: Statement | Expression) => Expression | void;
-        DottedGetExpression?: (expression: DottedGetExpression, parent?: Statement | Expression) => Expression | void;
-        XmlAttributeGetExpression?: (expression: XmlAttributeGetExpression, parent?: Statement | Expression) => Expression | void;
-        IndexedGetExpression?: (expression: IndexedGetExpression, parent?: Statement | Expression) => Expression | void;
-        GroupingExpression?: (expression: GroupingExpression, parent?: Statement | Expression) => Expression | void;
-        LiteralExpression?: (expression: LiteralExpression, parent?: Statement | Expression) => Expression | void;
-        EscapedCharCodeLiteralExpression?: (expression: EscapedCharCodeLiteralExpression, parent?: Statement | Expression) => Expression | void;
-        ArrayLiteralExpression?: (expression: ArrayLiteralExpression, parent?: Statement | Expression) => Expression | void;
-        AALiteralExpression?: (expression: AALiteralExpression, parent?: Statement | Expression) => Expression | void;
-        UnaryExpression?: (expression: UnaryExpression, parent?: Statement | Expression) => Expression | void;
-        VariableExpression?: (expression: VariableExpression, parent?: Statement | Expression) => Expression | void;
-        SourceLiteralExpression?: (expression: SourceLiteralExpression, parent?: Statement | Expression) => Expression | void;
-        NewExpression?: (expression: NewExpression, parent?: Statement | Expression) => Expression | void;
-        CallfuncExpression?: (expression: CallfuncExpression, parent?: Statement | Expression) => Expression | void;
-        TemplateStringQuasiExpression?: (expression: TemplateStringQuasiExpression, parent?: Statement | Expression) => Expression | void;
-        TemplateStringExpression?: (expression: TemplateStringExpression, parent?: Statement | Expression) => Expression | void;
-        TaggedTemplateStringExpression?: (expression: TaggedTemplateStringExpression, parent?: Statement | Expression) => Expression | void;
+        BinaryExpression?: (expression: BinaryExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        CallExpression?: (expression: CallExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        FunctionExpression?: (expression: FunctionExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        FunctionParameterExpression?: (expression: FunctionParameterExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        NamespacedVariableNameExpression?: (expression: NamespacedVariableNameExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        DottedGetExpression?: (expression: DottedGetExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        XmlAttributeGetExpression?: (expression: XmlAttributeGetExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        IndexedGetExpression?: (expression: IndexedGetExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        GroupingExpression?: (expression: GroupingExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        LiteralExpression?: (expression: LiteralExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        EscapedCharCodeLiteralExpression?: (expression: EscapedCharCodeLiteralExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        ArrayLiteralExpression?: (expression: ArrayLiteralExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        AAMemberExpression?: (expression: AAMemberExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        AAIndexedMemberExpression?: (expression: AAIndexedMemberExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        AALiteralExpression?: (expression: AALiteralExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        UnaryExpression?: (expression: UnaryExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        VariableExpression?: (expression: VariableExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        SourceLiteralExpression?: (expression: SourceLiteralExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        NewExpression?: (expression: NewExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        CallfuncExpression?: (expression: CallfuncExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        TemplateStringQuasiExpression?: (expression: TemplateStringQuasiExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        TemplateStringExpression?: (expression: TemplateStringExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        TaggedTemplateStringExpression?: (expression: TaggedTemplateStringExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        AnnotationExpression?: (expression: AnnotationExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        TernaryExpression?: (expression: TernaryExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        NullCoalescingExpression?: (expression: NullCoalescingExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        RegexLiteralExpression?: (expression: RegexLiteralExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
     }
 ) {
-    return <WalkVisitor>((statement: Statement, parent?: Statement): Statement | void => {
-        return visitor[statement.constructor.name]?.(statement, parent);
+    //remap some deprecated visitor names TODO remove this in v1
+    if (visitor.ClassFieldStatement) {
+        visitor.FieldStatement = visitor.ClassFieldStatement;
+    }
+    if (visitor.ClassMethodStatement) {
+        visitor.MethodStatement = visitor.ClassMethodStatement;
+    }
+    return <WalkVisitor>((statement: Statement, parent?: Statement, owner?: any, key?: any): Statement | void => {
+        return visitor[statement.constructor.name]?.(statement, parent, owner, key);
     });
 }
 
@@ -135,6 +228,10 @@ export interface WalkOptions {
      * A token that can be used to cancel the walk operation
      */
     cancel?: CancellationToken;
+    /**
+     * If provided, any AST replacements will be done using this AstEditor instead of directly against the AST itself
+     */
+    editor?: AstEditor;
 }
 
 /**

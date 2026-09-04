@@ -16,7 +16,6 @@ export class Watcher {
 
     /**
      * Watch the paths or globs
-     * @param paths
      */
     public watch(paths: string | string[]) {
         let watcher = chokidar.watch(paths, {
@@ -41,8 +40,6 @@ export class Watcher {
 
     /**
      * Be notified of all events
-     * @param event
-     * @param callback
      */
     public on(event: 'all', callback: (event, path, details) => void) {
         let watchers = [...this.watchers];

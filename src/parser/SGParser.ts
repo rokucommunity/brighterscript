@@ -171,10 +171,15 @@ interface IToken {
     endOffset?: number;
     endLine?: number;
     endColumn?: number;
+    /**
+     * The lexer token type. Present on tokens produced by `@xml-tools`; used to classify cursor context.
+     */
+    tokenType?: { name: string };
 }
 
 function mapElement({ children }: ElementCstNode, diagnostics: Diagnostic[]): SGTag {
     const nameToken = children.Name[0];
+    const closingNameToken = children.END_NAME?.[0];
     let range: Range;
     const selfClosing = !!children.SLASH_CLOSE;
     if (selfClosing) {
@@ -185,37 +190,39 @@ function mapElement({ children }: ElementCstNode, diagnostics: Diagnostic[]): SG
         range = rangeFromTokens(nameToken, endToken);
     }
     const name = mapToken(nameToken);
+    const closingName = closingNameToken ? mapToken(closingNameToken) : undefined;
+
     const attributes = mapAttributes(children.attribute);
     const content = children.content?.[0];
     switch (name.text) {
         case 'component':
             const componentContent = mapElements(content, ['interface', 'script', 'children', 'customization'], diagnostics);
-            return new SGComponent(name, attributes, componentContent, range);
+            return new SGComponent(name, attributes, componentContent, range, closingName);
         case 'interface':
             const interfaceContent = mapElements(content, ['field', 'function'], diagnostics);
-            return new SGInterface(name, interfaceContent, range);
+            return new SGInterface(name, interfaceContent, range, closingName);
         case 'field':
             if (hasElements(content)) {
                 reportUnexpectedChildren(name, diagnostics);
             }
-            return new SGField(name, attributes, range);
+            return new SGField(name, attributes, range, closingName);
         case 'function':
             if (hasElements(content)) {
                 reportUnexpectedChildren(name, diagnostics);
             }
-            return new SGFunction(name, attributes, range);
+            return new SGFunction(name, attributes, range, closingName);
         case 'script':
             if (hasElements(content)) {
                 reportUnexpectedChildren(name, diagnostics);
             }
             const cdata = getCdata(content);
-            return new SGScript(name, attributes, cdata, range);
+            return new SGScript(name, attributes, cdata, range, closingName);
         case 'children':
             const childrenContent = mapNodes(content);
-            return new SGChildren(name, childrenContent, range);
+            return new SGChildren(name, childrenContent, range, closingName);
         default:
             const nodeContent = mapNodes(content);
-            return new SGNode(name, attributes, nodeContent, range);
+            return new SGNode(name, attributes, nodeContent, range, closingName);
     }
 }
 
@@ -226,8 +233,13 @@ function reportUnexpectedChildren(name: SGToken, diagnostics: Diagnostic[]) {
     });
 }
 
-function mapNode({ children }: ElementCstNode): SGNode {
-    const nameToken = children.Name[0];
+function mapNode({ children }: ElementCstNode): SGNode | undefined {
+    const nameToken = children.Name?.[0];
+    //skip malformed elements that have no tag name (e.g. a lone `<` while the user is still typing)
+    if (!nameToken) {
+        return undefined;
+    }
+    const closingNameToken = children.END_NAME?.[0];
     let range: Range;
     const selfClosing = !!children.SLASH_CLOSE;
     if (selfClosing) {
@@ -238,10 +250,12 @@ function mapNode({ children }: ElementCstNode): SGNode {
         range = rangeFromTokens(nameToken, endToken);
     }
     const name = mapToken(nameToken);
+    const closingName = closingNameToken ? mapToken(closingNameToken) : undefined;
+
     const attributes = mapAttributes(children.attribute);
     const content = children.content?.[0];
     const nodeContent = mapNodes(content);
-    return new SGNode(name, attributes, nodeContent, range);
+    return new SGNode(name, attributes, nodeContent, range, closingName);
 }
 
 function mapElements(content: ContentCstNode, allow: string[], diagnostics: Diagnostic[]): SGTag[] {
@@ -276,7 +290,9 @@ function mapNodes(content: ContentCstNode): SGNode[] {
         return [];
     }
     const { element } = content.children;
-    return element?.map(element => mapNode(element));
+    return element
+        ?.map(element => mapNode(element))
+        .filter((node): node is SGNode => !!node);
 }
 
 function hasElements(content: ContentCstNode): boolean {
@@ -305,9 +321,27 @@ function mapAttributes(attributes: AttributeCstNode[]): SGAttribute[] {
     return attributes?.map(({ children }) => {
         const key = children.Name[0];
         const value = children.STRING?.[0];
+
+        let openQuote: SGToken;
+        let closeQuote: SGToken;
+        //capture the leading and trailing quote tokens
+        const match = /^(["']).*?(["'])$/.exec(value?.image);
+        if (match) {
+            const range = rangeFromTokenValue(value);
+            openQuote = {
+                text: match[1],
+                range: util.createRange(range.start.line, range.start.character, range.start.line, range.start.character + 1)
+            };
+            closeQuote = {
+                text: match[1],
+                range: util.createRange(range.end.line, range.end.character - 1, range.end.line, range.end.character)
+            };
+        }
         return {
             key: mapToken(key),
+            openQuote: openQuote,
             value: mapToken(value, true),
+            closeQuote: closeQuote,
             range: rangeFromTokens(key, value)
         };
     }) || [];

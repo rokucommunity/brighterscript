@@ -21,6 +21,11 @@ Those plugins will be loaded by the VSCode extension and can provide live diagno
 }
 ```
 
+### Usage on the CLI
+```bash
+npx bsc --plugins "./scripts/myPlugin.js" "@rokucommunity/bslint"
+```
+
 ### Programmatic configuration
 
 When using the compiler API directly, plugins can directly reference your code:
@@ -34,6 +39,13 @@ builder.addPlugin(myPlugin);
 builder.run(/*...*/);
 ```
 
+## Creating a plugin
+### Naming conventions
+While there are no restrictions on plugin names, it helps others to find your plugin on npm when you follow these naming conventions:
+
+- **Unscoped**: If your npm package name won’t be scoped (doesn’t begin with `@`), then the plugin name should begin with `bsc-plugin-`, such as `bsc-plugin-auto-findnode`.
+- **Scoped**: If your npm package name will be scoped, then the plugin name should be in the format of `@<scope>/bsc-plugin-<plugin-name>` such as `@rokucommunity/bsc-plugin-auto-findnode` or even `@<scope>/bsc-plugin` such as `@maestro/bsc-plugin`.
+
 ## Compiler events
 
 Full compiler lifecycle:
@@ -45,10 +57,14 @@ Full compiler lifecycle:
         - `beforeFileParse`
         - `afterFileParse`
         - `afterScopeCreate` (component scope)
-        - `afterFileValidate`
     - `beforeProgramValidate`
+    - For each file:
+        - `beforeFileValidate`
+        - `onFileValidate`
+        - `afterFileValidate`
     - For each scope:
         - `beforeScopeValidate`
+        - `onScopeValidate`
         - `afterScopeValidate`
     - `afterProgramValidate`
 - `beforePrepublish`
@@ -60,6 +76,7 @@ Full compiler lifecycle:
         - `afterFileTranspile`
     - `afterProgramTranspile`
 - `afterPublish`
+- `beforeProgramDispose`
 
 ### Language server
 
@@ -87,13 +104,31 @@ When any file is modified:
 After file addition/removal (note: throttled/debounced):
 
 - `beforeProgramValidate`
+- For each invalidated/not-yet-validated file
+    - `beforeFileValidate`
+    - `onFileValidate`
+    - `afterFileValidate`
 - For each invalidated scope:
     - `beforeScopeValidate`
     - `afterScopeValidate`
 - `afterProgramValidate`
 
 Code Actions
- - `onProgramGetCodeActions`
+ - `onGetCodeActions`
+
+Completions
+ - `beforeProvideCompletions`
+ - `provideCompletions`
+ - `afterProvideCompletions`
+
+Hovers
+ - `beforeProvideHover`
+ - `provideHover`
+ - `afterProvideHover`
+
+Semantic Tokens
+ - `onGetSemanticTokens`
+
 
 ## Compiler API
 
@@ -113,11 +148,14 @@ The top level object is the `ProgramBuilder` which runs the overall process: pre
 
 ### API definition
 
+Here are some important interfaces. You can view them in the code at [this link](https://github.com/rokucommunity/brighterscript/blob/ddcb7b2cd219bd9fecec93d52fbbe7f9b972816b/src/interfaces.ts#L190:~:text=export%20interface%20CompilerPlugin%20%7B).
+
 ```typescript
-export type CompilerPluginFactory = () => CompilierPlugin;
+export type CompilerPluginFactory = (options?: PluginFactoryOptions) => CompilierPlugin;
 
 export interface CompilerPlugin {
     name: string;
+    //program events
     beforeProgramCreate?: (builder: ProgramBuilder) => void;
     beforePrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
     afterPrepublish?: (builder: ProgramBuilder, files: FileObj[]) => void;
@@ -126,18 +164,126 @@ export interface CompilerPlugin {
     afterProgramCreate?: (program: Program) => void;
     beforeProgramValidate?: (program: Program) => void;
     afterProgramValidate?: (program: Program) => void;
-    beforeProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
-    afterProgramTranspile?: (program: Program, entries: TranspileObj[]) => void;
+    beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
+    afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
+    beforeProgramDispose?: PluginHandler<BeforeProgramDisposeEvent>;
+    onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
+
+    /**
+     * Emitted before the program starts collecting completions
+     */
+    beforeProvideCompletions?: PluginHandler<BeforeProvideCompletionsEvent>;
+    /**
+     * Use this event to contribute completions
+     */
+    provideCompletions?: PluginHandler<ProvideCompletionsEvent>;
+    /**
+     * Emitted after the program has finished collecting completions, but before they are sent to the client
+     */
+    afterProvideCompletions?: PluginHandler<AfterProvideCompletionsEvent>;
+
+    /**
+     * Called before the `provideHover` hook. Use this if you need to prepare any of the in-memory objects before the `provideHover` gets called
+     */
+    beforeProvideHover?: PluginHandler<BeforeProvideHoverEvent>;
+    /**
+     * Called when bsc looks for hover information. Use this if your plugin wants to contribute hover information.
+     */
+    provideHover?: PluginHandler<ProvideHoverEvent>;
+    /**
+     * Called after the `provideHover` hook. Use this if you want to intercept or sanitize the hover data (even from other plugins) before it gets sent to the client.
+     */
+    afterProvideHover?: PluginHandler<AfterProvideHoverEvent>;
+
+    /**
+     * Called before the `provideDefinition` hook
+     */
+    beforeProvideDefinition?(event: BeforeProvideDefinitionEvent): any;
+    /**
+     * Provide one or more `Location`s where the symbol at the given position was originally defined
+     * @param event
+     */
+    provideDefinition?(event: ProvideDefinitionEvent): any;
+    /**
+     * Called after `provideDefinition`. Use this if you want to intercept or sanitize the definition data provided by bsc or other plugins
+     * @param event
+     */
+    afterProvideDefinition?(event: AfterProvideDefinitionEvent): any;
+
+
+    /**
+     * Called before the `provideReferences` hook
+     */
+    beforeProvideReferences?(event: BeforeProvideReferencesEvent): any;
+    /**
+     * Provide all of the `Location`s where the symbol at the given position is located
+     * @param event
+     */
+    provideReferences?(event: ProvideReferencesEvent): any;
+    /**
+     * Called after `provideReferences`. Use this if you want to intercept or sanitize the references data provided by bsc or other plugins
+     * @param event
+     */
+    afterProvideReferences?(event: AfterProvideReferencesEvent): any;
+
+
+    /**
+     * Called before the `provideDocumentSymbols` hook
+     */
+    beforeProvideDocumentSymbols?(event: BeforeProvideDocumentSymbolsEvent): any;
+    /**
+     * Provide all of the `DocumentSymbol`s for the given file
+     * @param event
+     */
+    provideDocumentSymbols?(event: ProvideDocumentSymbolsEvent): any;
+    /**
+     * Called after `provideDocumentSymbols`. Use this if you want to intercept or sanitize the document symbols data provided by bsc or other plugins
+     * @param event
+     */
+    afterProvideDocumentSymbols?(event: AfterProvideDocumentSymbolsEvent): any;
+
+
+    /**
+     * Called before the `provideWorkspaceSymbols` hook
+     */
+    beforeProvideWorkspaceSymbols?(event: BeforeProvideWorkspaceSymbolsEvent): any;
+    /**
+     * Provide all of the workspace symbols for the entire project
+     * @param event
+     */
+    provideWorkspaceSymbols?(event: ProvideWorkspaceSymbolsEvent): any;
+    /**
+     * Called after `provideWorkspaceSymbols`. Use this if you want to intercept or sanitize the workspace symbols data provided by bsc or other plugins
+     * @param event
+     */
+    afterProvideWorkspaceSymbols?(event: AfterProvideWorkspaceSymbolsEvent): any;
+
+
+    onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
+    //scope events
     afterScopeCreate?: (scope: Scope) => void;
     beforeScopeDispose?: (scope: Scope) => void;
     afterScopeDispose?: (scope: Scope) => void;
     beforeScopeValidate?: ValidateHandler;
+    onScopeValidate?: PluginHandler<OnScopeValidateEvent>;
     afterScopeValidate?: ValidateHandler;
+    //file events
     beforeFileParse?: (source: SourceObj) => void;
     afterFileParse?: (file: BscFile) => void;
+    /**
+     * Called before each file is validated
+     */
+    beforeFileValidate?: PluginHandler<BeforeFileValidateEvent>;
+    /**
+     * Called during the file validation process. If your plugin contributes file validations, this is a good place to contribute them.
+     */
+    onFileValidate?: PluginHandler<OnFileValidateEvent>;
+    /**
+     * Called after each file is validated
+     */
     afterFileValidate?: (file: BscFile) => void;
-    beforeFileTranspile?: (entry: TranspileObj) => void;
-    afterFileTranspile?: (entry: TranspileObj) => void;
+    beforeFileTranspile?: PluginHandler<BeforeFileTranspileEvent>;
+    afterFileTranspile?: PluginHandler<AfterFileTranspileEvent>;
     beforeFileDispose?: (file: BscFile) => void;
     afterFileDispose?: (file: BscFile) => void;
 }
@@ -168,6 +314,39 @@ interface CallableContainer {
 }
 ```
 
+### PluginFactory
+To register a plugin, you need to have a default export that returns a factory. BrighterScript will call this factory once for every instance of a program that needs the plugin. This means that you might have multiple instances of a plugin in one NodeJS process (one for each brighterscript project).
+
+```typescript
+export default function () {
+    return {
+        name: 'Name of your plugin'
+    };
+}
+```
+
+### BrighterScript v1 compatability
+There is currently a v1 rewrite of BrighterScript which includes some significant breaking changes. This has caused challenges with brighterscript plugins, as you need to maintain separate versions for v0 and v1. You can utilize the `pluginOptions.version` property in your factory to determine what brighterscript version is running your plugin, and adjust accordingly.
+
+This options object is only available starting with brighterscript `v0.69.4` and `v1.0.0-alpha.45`. It's important to support backwards compatibility that an `undefined` `version` value be treated as a v0 plugin.
+
+Here's a small example:
+
+```typescript
+export default function (pluginOptions: PluginOptions) {
+    if(semver.major(pluginOptions?.version) === '1') {
+        return {
+            name: 'v1 version of your plugin!'
+        };
+    } else {
+        return {
+            name: 'v0 version of your plugin'
+        };
+    }
+}
+```
+
+
 ## Plugin API
 
 Plugins are JavaScript modules dynamically loaded by the compiler. Their entry point is a default function that returns an object that follows the `CompilerPlugin` interface.
@@ -178,9 +357,30 @@ To walk/modify the AST, a number of helpers are provided in `brighterscript/dist
 
 It is highly recommended to use TypeScript as intellisense helps greatly writing code against new APIs.
 
+### Using ts-node to transpile plugin dynamically
+The ts-node module can transpile typescript on the fly. This is by far the easiest way to develop a brighterscript plugin, as you can elimintate the manual typescript transpile step.
+
 ```bash
 # install modules needed to compile a plugin
-npm install brighterscript typescript @types/node
+npm install brighterscript typescript @types/node ts-node -D
+
+#run the brighterscript cli and use ts-node to dynamically transpile your plugin
+npx bsc --sourceMap --require ts-node/register --plugins myPlugin.ts
+```
+
+The `require` flag can also be set in the `bsconfig.json`, simplifying your bsc command arguments.
+```javascript
+{
+    "require": ["ts-node/register"]
+}
+```
+
+### Transpiling manually
+If you would prefer to transpile your plugin manually, you can follow these steps:
+
+```bash
+# install modules needed to compile a plugin
+npm install brighterscript typescript @types/node -D
 
 # transpile to JS (with source maps for debugging)
 npx tsc myPlugin.ts -m commonjs --sourceMap
@@ -188,6 +388,7 @@ npx tsc myPlugin.ts -m commonjs --sourceMap
 # add --watch for continuous transpilation
 npx tsc myPlugin.ts -m commonjs --sourceMap --watch
 ```
+
 
 ### Example diagnostic plugins
 
@@ -199,30 +400,28 @@ Diagnostics must run every time it is relevant:
 Note: in a language-server context, Scope validation happens every time a file changes.
 
 ```typescript
-// myDiagnosticPlugin.ts
-import { CompilerPlugin, BrsFile, XmlFile } from 'brighterscript';
-import { isBrsFile } from 'brighterscript/dist/parser/ASTUtils';
+// bsc-plugin-no-underscores.ts
+import { CompilerPlugin, BscFile, isBrsFile } from 'brighterscript';
 
 // plugin factory
 export default function () {
     return {
-        name: 'myDiagnosticPlugin',
+        name: 'no-underscores',
         // post-parsing validation
         afterFileValidate: (file: BscFile) => {
-            if (!isBrsFile(file)) {
-                return;
+            if (isBrsFile(file)) {
+                // visit function statements and validate their name
+                file.parser.references.functionStatements.forEach((fun) => {
+                    if (fun.name.text.includes('_')) {
+                        file.addDiagnostics([{
+                            code: 9000,
+                            message: 'Do not use underscores in function names',
+                            range: fun.name.range,
+                            file
+                        }]);
+                    }
+                });
             }
-            // visit function statements and validate their name
-            file.parser.functionStatements.forEach((fun) => {
-                if (fun.name.text.toLowerCase() === 'main') {
-                    file.addDiagnostics([{
-                        code: 9000,
-                        message: 'Use RunUserInterface as entry point',
-                        range: fun.name.range,
-                        file
-                    }]);
-                }
-            });
         }
     } as CompilerPlugin;
 };
@@ -243,12 +442,12 @@ end sub
 Here's the plugin:
 
 ```typescript
-import { CompilerPlugin, BeforeFileTranspileEvent, isBrsFile, WalkMode, createVisitor, TokenKind } from './';
+import { CompilerPlugin, BeforeFileTranspileEvent, isBrsFile, WalkMode, createVisitor, TokenKind } from 'brighterscript';
 
 // plugin factory
 export default function () {
     return {
-        name: 'removePrint',
+        name: 'replacePlaceholders',
         // transform AST before transpilation
         beforeFileTranspile: (event: BeforeFileTranspileEvent) => {
             if (isBrsFile(event.file)) {
@@ -269,3 +468,56 @@ export default function () {
 ```
 
 This plugin will search through every LiteralExpression in the entire project, and every time we find a string literal, we will replace `<FIRST_NAME>` with `world`. This is done with the `event.editor` object. `editor` allows you to apply edits to the AST, and then the brighterscript compiler will `undo` those edits once the file has been transpiled.
+
+## Remove Comment and Print Statements
+
+Another common use case is to remove print statements and comments. Here's a plugin to do that:
+```typescript
+import { isBrsFile, createVisitor, WalkMode, BeforeFileTranspileEvent, CompilerPlugin } from 'brighterscript';
+
+export default function plugin() {
+    return {
+        name: 'removeCommentAndPrintStatements',
+        beforeFileTranspile: (event: BeforeFileTranspileEvent) => {
+            if (isBrsFile(event.file)) {
+                // visit functions bodies and replace `PrintStatement` nodes with `EmptyStatement`
+                for (const func of event.file.parser.references.functionExpressions) {
+                    func.body.walk(createVisitor({
+                        PrintStatement: (statement) => {
+                            event.editor.overrideTranspileResult(statement, '');
+                        },
+                        CommentStatement: (statement) => {
+                            event.editor.overrideTranspileResult(statement, '');
+                        }
+                    }), {
+                        walkMode: WalkMode.visitStatements
+                    });
+                }
+            }
+        }
+    } as CompilerPlugin;
+}
+```
+
+## Modifying `bsconfig.json` via a plugin
+
+In some cases you may want to modify the project's configuration via a plugin, such as to change settings based on environment variables or to dynamically modify the project's `files` array. Plugins may do so in the `beforeProgramCreate` step. For example, here's a plugin which adds an additional file to the build:
+```typescript
+import { CompilerPlugin, ProgramBuilder } from 'brighterscript';
+
+export default function plugin() {
+    return {
+        name: 'addFilesDynamically',
+        beforeProgramCreate: (builder: ProgramBuilder) => {
+            if (!builder.options.files) {
+                builder.options.files = [];
+            }
+
+            builder.options.files.push({
+                src: "path/to/plugin/file.bs",
+                dest: "some/destination/path/goes/here"
+            })
+        }
+    } as CompilerPlugin;
+}
+```

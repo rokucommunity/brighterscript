@@ -3,13 +3,13 @@ import * as fsExtra from 'fs-extra';
 import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
-import * as rokuDeploy from 'roku-deploy';
-import type { Diagnostic, Position, Range } from 'vscode-languageserver';
+import { rokuDeploy, DefaultFiles } from 'roku-deploy';
+import type { Diagnostic, Position, Range, Location, DiagnosticRelatedInformation } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
-import type { BsConfig } from './BsConfig';
-import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo } from './interfaces';
+import type { BsConfig, FinalizedBsConfig } from './BsConfig';
+import { DiagnosticCodeMap, DiagnosticMessages } from './DiagnosticMessages';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, Plugin, ExpressionInfo, TranspileResult, MaybePromise, DisposableLike, PluginFactory } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
@@ -22,14 +22,21 @@ import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
-import type { DottedGetExpression, Expression, VariableExpression } from './parser/Expression';
-import { Logger, LogLevel } from './Logger';
-import type { Locatable, Token } from './lexer';
-import { TokenKind } from './lexer';
-import { isDottedGetExpression, isExpression, isVariableExpression, WalkMode } from './astUtils';
+import type { DottedGetExpression, VariableExpression } from './parser/Expression';
+import { LogLevel, createLogger } from './logging';
+import type { Identifier, Locatable, Token } from './lexer/Token';
+import { TokenKind } from './lexer/TokenKind';
+import { isAssignmentStatement, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isFunctionParameterExpression, isIndexedGetExpression, isNamespacedVariableNameExpression, isNewExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { WalkMode } from './astUtils/visitors';
 import { CustomType } from './types/CustomType';
-import { SourceNode } from 'source-map';
+import { SourceNode, SourceMapConsumer } from 'source-map';
+import type { RawSourceMap, SourceMapGenerator } from 'source-map';
 import type { SGAttribute } from './parser/SGTypes';
+import * as requireRelative from 'require-relative';
+import type { BrsFile } from './files/BrsFile';
+import type { XmlFile } from './files/XmlFile';
+import type { AstNode, Expression, Statement } from './parser/AstNode';
+import { components, events, interfaces } from './roku-types';
 
 export class Util {
     public clearConsole() {
@@ -37,8 +44,29 @@ export class Util {
     }
 
     /**
+     * Get the version of brighterscript
+     */
+    public getBrighterScriptVersion() {
+        try {
+            return fsExtra.readJsonSync(`${__dirname}/../package.json`).version;
+        } catch {
+            return undefined;
+        }
+    }
+
+    /**
+     * Returns the number of parent directories in the filPath
+     */
+    public getParentDirectoryCount(filePath: string | undefined) {
+        if (!filePath) {
+            return -1;
+        } else {
+            return filePath.replace(/^pkg:/, '').split(/[\\\/]/).length - 1;
+        }
+    }
+
+    /**
      * Determine if the file exists
-     * @param filePath
      */
     public async pathExists(filePath: string | undefined) {
         if (!filePath) {
@@ -50,7 +78,6 @@ export class Util {
 
     /**
      * Determine if the file exists
-     * @param filePath
      */
     public pathExistsSync(filePath: string | undefined) {
         if (!filePath) {
@@ -64,7 +91,43 @@ export class Util {
      * Determine if this path is a directory
      */
     public isDirectorySync(dirPath: string | undefined) {
-        return fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
+        try {
+            return dirPath !== undefined && fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
+        } catch (e) {
+            return false;
+        }
+    }
+
+    /**
+     * Read a file from disk. If a failure occurrs, simply return undefined
+     * @param filePath path to the file
+     * @returns the string contents, or undefined if the file doesn't exist
+     */
+    public readFileSync(filePath: string): Buffer | undefined {
+        try {
+            return fsExtra.readFileSync(filePath);
+        } catch (e) {
+            return undefined;
+        }
+    }
+
+    /**
+     * Given a pkg path of any kind, transform it to a roku-specific pkg path (i.e. "pkg:/some/path.brs")
+     */
+    public sanitizePkgPath(pkgPath: string) {
+        pkgPath = pkgPath.replace(/\\/g, '/');
+        //if there's no protocol, assume it's supposed to start with `pkg:/`
+        if (!this.startsWithProtocol(pkgPath)) {
+            pkgPath = 'pkg:/' + pkgPath;
+        }
+        return pkgPath;
+    }
+
+    /**
+     * Determine if the given path starts with a protocol
+     */
+    public startsWithProtocol(path: string) {
+        return !!/^[-a-z]+:\//i.exec(path);
     }
 
     /**
@@ -77,7 +140,6 @@ export class Util {
 
     /**
      * Given a path to a file/directory, replace all path separators with the current system's version.
-     * @param filePath
      */
     public pathSepNormalize(filePath: string, separator?: string) {
         if (!filePath) {
@@ -90,7 +152,7 @@ export class Util {
     /**
      * Find the path to the config file.
      * If the config file path doesn't exist
-     * @param configFilePath
+     * @param cwd the current working directory where the search for configs should begin
      */
     public getConfigFilePath(cwd?: string) {
         cwd = cwd ?? process.cwd();
@@ -129,10 +191,10 @@ export class Util {
     /**
      * Load the contents of a config file.
      * If the file extends another config, this will load the base config as well.
-     * @param configFilePath
-     * @param parentProjectPaths
+     * @param configFilePath the relative or absolute path to a brighterscript config json file
+     * @param parentProjectPaths a list of parent config files. This is used by this method to recursively build the config list
      */
-    public loadConfigFile(configFilePath: string, parentProjectPaths?: string[], cwd = process.cwd()) {
+    public loadConfigFile(configFilePath: string | undefined, parentProjectPaths?: string[], cwd = process.cwd()): BsConfig | undefined {
         if (configFilePath) {
             //if the config file path starts with question mark, then it's optional. return undefined if it doesn't exist
             if (configFilePath.startsWith('?')) {
@@ -153,21 +215,30 @@ export class Util {
             //load the project file
             let projectFileContents = fsExtra.readFileSync(configFilePath).toString();
             let parseErrors = [] as ParseError[];
-            let projectConfig = parseJsonc(projectFileContents, parseErrors) as BsConfig;
+            let projectConfig = parseJsonc(projectFileContents, parseErrors, {
+                allowEmptyContent: true,
+                allowTrailingComma: true,
+                disallowComments: false
+            }) as BsConfig ?? {};
             if (parseErrors.length > 0) {
                 let err = parseErrors[0];
                 let diagnostic = {
                     ...DiagnosticMessages.bsConfigJsonHasSyntaxErrors(printParseErrorCode(parseErrors[0].error)),
                     file: {
-                        pathAbsolute: configFilePath
+                        srcPath: configFilePath
                     },
                     range: this.getRangeFromOffsetLength(projectFileContents, err.offset, err.length)
                 } as BsDiagnostic;
                 throw diagnostic; //eslint-disable-line @typescript-eslint/no-throw-literal
             }
-            this.resolvePluginPaths(projectConfig, configFilePath);
 
             let projectFileCwd = path.dirname(configFilePath);
+
+            //`plugins` paths should be relative to the current bsconfig
+            this.resolvePathsRelativeTo(projectConfig, 'plugins', projectFileCwd);
+
+            //`require` paths should be relative to cwd
+            util.resolvePathsRelativeTo(projectConfig, 'require', projectFileCwd);
 
             let result: BsConfig;
             //if the project has a base file, load it
@@ -192,39 +263,43 @@ export class Util {
             if (result.cwd) {
                 result.cwd = path.resolve(projectFileCwd, result.cwd);
             }
-
+            if (result.stagingDir) {
+                result.stagingDir = path.resolve(projectFileCwd, result.stagingDir);
+            }
+            if (result.sourceRoot && result.resolveSourceRoot) {
+                result.sourceRoot = path.resolve(projectFileCwd, result.sourceRoot);
+            }
             return result;
         }
     }
 
     /**
-     * Relative paths to scripts in plugins should be resolved relatively to the bsconfig file
-     * and de-duplicated
-     * @param config Parsed configuration
-     * @param configFilePath Path of the configuration file
+     * Convert relative paths to absolute paths, relative to the given directory. Also de-dupes the paths. Modifies the array in-place
+     * @param collection usually a bsconfig.
+     * @param key a key of the config to read paths from (usually this is `'plugins'` or `'require'`)
+     * @param relativeDir the path to the folder where the paths should be resolved relative to. This should be an absolute path
      */
-    public resolvePluginPaths(config: BsConfig, configFilePath: string) {
-        if (config.plugins?.length > 0) {
-            const relPath = path.dirname(configFilePath);
-            const exists: Record<string, boolean> = {};
-            config.plugins = config.plugins.map(p => {
-                return p?.startsWith('.') ? path.resolve(relPath, p) : p;
-            }).filter(p => {
-                if (!p || exists[p]) {
-                    return false;
-                }
-                exists[p] = true;
-                return true;
-            });
+    public resolvePathsRelativeTo(collection: any, key: string, relativeDir: string) {
+        if (!collection[key]) {
+            return;
         }
+        const result = new Set<string>();
+        for (const p of collection[key] as string[] ?? []) {
+            if (p) {
+                result.add(
+                    p?.startsWith('.') ? path.resolve(relativeDir, p) : p
+                );
+            }
+        }
+        collection[key] = [...result];
     }
 
     /**
      * Do work within the scope of a changed current working directory
-     * @param targetCwd
-     * @param callback
+     * @param targetCwd the cwd where the work should be performed
+     * @param callback a function to call when the cwd has been changed to `targetCwd`
      */
-    public cwdWork<T>(targetCwd: string | null | undefined, callback: () => T) {
+    public cwdWork<T>(targetCwd: string | null | undefined, callback: () => T): T {
         let originalCwd = process.cwd();
         if (targetCwd) {
             process.chdir(targetCwd);
@@ -246,17 +321,22 @@ export class Util {
         if (err) {
             throw err;
         } else {
-            return result;
+            //justification: `result` is set as long as `err` is not set and vice versa
+            return result!;
         }
     }
 
     /**
      * Given a BsConfig object, start with defaults,
      * merge with bsconfig.json and the provided options.
-     * @param config
+     * @param config a bsconfig object to use as the baseline for the resulting config
      */
-    public normalizeAndResolveConfig(config: BsConfig) {
+    public normalizeAndResolveConfig(config: BsConfig | undefined): FinalizedBsConfig {
         let result = this.normalizeConfig({});
+
+        if (config?.noProject) {
+            return result;
+        }
 
         //if no options were provided, try to find a bsconfig.json file
         if (!config || !config.project) {
@@ -266,54 +346,80 @@ export class Util {
             result.project = config.project;
         }
         if (result.project) {
-            let configFile = this.loadConfigFile(result.project, null, config?.cwd);
+            let configFile = this.loadConfigFile(result.project, undefined, config?.cwd);
             result = Object.assign(result, configFile);
         }
-
         //override the defaults with the specified options
         result = Object.assign(result, config);
-
         return result;
     }
 
     /**
      * Set defaults for any missing items
-     * @param config
+     * @param config a bsconfig object to use as the baseline for the resulting config
      */
-    public normalizeConfig(config: BsConfig) {
-        config = config || {} as BsConfig;
-        config.deploy = config.deploy === true ? true : false;
-        //use default options from rokuDeploy
-        config.files = config.files ?? rokuDeploy.getOptions().files;
-        config.createPackage = config.createPackage === false ? false : true;
-        let rootFolderName = path.basename(process.cwd());
-        config.outFile = config.outFile ?? `./out/${rootFolderName}.zip`;
-        config.sourceMap = config.sourceMap === true;
-        config.username = config.username ?? 'rokudev';
-        config.watch = config.watch === true ? true : false;
-        config.emitFullPaths = config.emitFullPaths === true ? true : false;
-        config.retainStagingFolder = config.retainStagingFolder === true ? true : false;
-        config.copyToStaging = config.copyToStaging === false ? false : true;
-        config.ignoreErrorCodes = config.ignoreErrorCodes ?? [];
-        config.diagnosticFilters = config.diagnosticFilters ?? [];
-        config.plugins = config.plugins ?? [];
-        config.autoImportComponentScript = config.autoImportComponentScript === true ? true : false;
-        config.showDiagnosticsInConsole = config.showDiagnosticsInConsole === false ? false : true;
-        config.sourceRoot = config.sourceRoot ? standardizePath(config.sourceRoot) : undefined;
-        config.cwd = config.cwd ?? process.cwd();
-        config.emitDefinitions = config.emitDefinitions === true ? true : false;
+    public normalizeConfig(config: BsConfig | undefined): FinalizedBsConfig {
+        config = config ?? {} as BsConfig;
+
+        const cwd = config.cwd ?? process.cwd();
+        const rootFolderName = path.basename(cwd);
+        const retainStagingDir = (config.retainStagingDir ?? config.retainStagingFolder) === true ? true : false;
+
+        let logLevel: LogLevel = LogLevel.log;
+
         if (typeof config.logLevel === 'string') {
-            config.logLevel = LogLevel[(config.logLevel as string).toLowerCase()];
+            logLevel = LogLevel[(config.logLevel as string).toLowerCase()] ?? LogLevel.log;
         }
-        config.logLevel = config.logLevel ?? LogLevel.log;
-        return config;
+
+        let bslibDestinationDir = config.bslibDestinationDir ?? 'source';
+        if (bslibDestinationDir !== 'source') {
+            // strip leading and trailing slashes
+            bslibDestinationDir = bslibDestinationDir.replace(/^(\/*)(.*?)(\/*)$/, '$2');
+        }
+
+        const configWithDefaults: Omit<FinalizedBsConfig, 'rootDir'> = {
+            cwd: cwd,
+            deploy: config.deploy === true ? true : false,
+            //use default files array from rokuDeploy
+            files: config.files ?? [...DefaultFiles],
+            createPackage: config.createPackage === false ? false : true,
+            outFile: config.outFile ?? `./out/${rootFolderName}.zip`,
+            sourceMap: config.sourceMap === true,
+            relativeSourceMaps: config.relativeSourceMaps === true,
+            username: config.username ?? 'rokudev',
+            watch: config.watch === true ? true : false,
+            emitFullPaths: config.emitFullPaths === true ? true : false,
+            retainStagingDir: retainStagingDir,
+            retainStagingFolder: retainStagingDir,
+            copyToStaging: config.copyToStaging === false ? false : true,
+            ignoreErrorCodes: config.ignoreErrorCodes ?? [],
+            diagnosticSeverityOverrides: config.diagnosticSeverityOverrides ?? {},
+            diagnosticFilters: config.diagnosticFilters ?? [],
+            plugins: config.plugins ?? [],
+            pruneEmptyCodeFiles: config.pruneEmptyCodeFiles === true ? true : false,
+            autoImportComponentScript: config.autoImportComponentScript === true ? true : false,
+            showDiagnosticsInConsole: config.showDiagnosticsInConsole === false ? false : true,
+            sourceRoot: config.sourceRoot ? standardizePath(config.sourceRoot) : undefined,
+            resolveSourceRoot: config.resolveSourceRoot === true ? true : false,
+            allowBrighterScriptInBrightScript: config.allowBrighterScriptInBrightScript === true ? true : false,
+            emitDefinitions: config.emitDefinitions === true ? true : false,
+            removeParameterTypes: config.removeParameterTypes === true ? true : false,
+            logLevel: logLevel,
+            bslibDestinationDir: bslibDestinationDir,
+            validate: config.validate === false ? false : true
+        };
+
+        //mutate `config` in case anyone is holding a reference to the incomplete one
+        const merged: FinalizedBsConfig = Object.assign(config, configWithDefaults);
+
+        return merged;
     }
 
     /**
      * Get the root directory from options.
      * Falls back to options.cwd.
      * Falls back to process.cwd
-     * @param options
+     * @param options a bsconfig object
      */
     public getRootDir(options: BsConfig) {
         if (!options) {
@@ -329,19 +435,7 @@ export class Util {
     }
 
     /**
-     * Format a string with placeholders replaced by argument indexes
-     * @param subject
-     * @param params
-     */
-    public stringFormat(subject: string, ...args) {
-        return subject.replace(/{(\d+)}/g, (match, num) => {
-            return typeof args[num] !== 'undefined' ? args[num] : match;
-        });
-    }
-
-    /**
      * Given a list of callables as a dictionary indexed by their full name (namespace included, transpiled to underscore-separated.
-     * @param callables
      */
     public getCallableContainersByLowerName(callables: CallableContainer[]): CallableContainerMap {
         //find duplicate functions
@@ -363,7 +457,6 @@ export class Util {
 
     /**
      * Split a file by newline characters (LF or CRLF)
-     * @param text
      */
     public getLines(text: string) {
         return text.split(/\r?\n/);
@@ -372,20 +465,22 @@ export class Util {
     /**
      * Given an absolute path to a source file, and a target path,
      * compute the pkg path for the target relative to the source file's location
-     * @param containingFilePathAbsolute
-     * @param targetPath
      */
     public getPkgPathFromTarget(containingFilePathAbsolute: string, targetPath: string) {
-        //if the target starts with 'pkg:', it's an absolute path. Return as is
-        if (targetPath.startsWith('pkg:/')) {
-            targetPath = targetPath.substring(5);
+        // https://regex101.com/r/w7CG2N/1
+        const regexp = /^(?:pkg|libpkg):(\/)?/i;
+        const [fullScheme, slash] = regexp.exec(targetPath) ?? [];
+        //if the target starts with 'pkg:' or 'libpkg:' then it's an absolute path. Return as is
+        if (slash) {
+            targetPath = targetPath.substring(fullScheme.length);
             if (targetPath === '') {
                 return null;
             } else {
                 return path.normalize(targetPath);
             }
         }
-        if (targetPath === 'pkg:') {
+        //if the path is exactly `pkg:` or `libpkg:`
+        if (targetPath === fullScheme && !slash) {
             return null;
         }
 
@@ -413,17 +508,40 @@ export class Util {
     }
 
     /**
-     * Compute the relative path from the source file to the target file
-     * @param pkgSourcePathAbsolute  - the absolute path to the source relative to the package location
-     * @param pkgTargetPathAbsolute  - the absolute path ro the target relative to the package location
+     * Compute the replacement text for a file-path string (used in `import` statements and XML `<script uri>` attributes)
+     * when the target file is being renamed. Preserves the original path style: `pkg:/...` stays `pkg:/...`,
+     * relative paths stay relative (recomputed from the containing file's pkg path).
+     *
+     * @param originalText the path string as it appears in source (no surrounding quotes)
+     * @param containingFilePkgPath pkg path of the file containing the reference
+     * @param newTargetPkgPath pkg path of the renamed file (path-separator agnostic)
+     * @returns the new path string, or `null` if the original style is unsupported
      */
-    public getRelativePath(pkgSourcePathAbsolute: string, pkgTargetPathAbsolute: string) {
-        pkgSourcePathAbsolute = path.normalize(pkgSourcePathAbsolute);
-        pkgTargetPathAbsolute = path.normalize(pkgTargetPathAbsolute);
+    public computeRenamedReferencePath(originalText: string, containingFilePkgPath: string, newTargetPkgPath: string): string | null {
+        if (!originalText) {
+            return null;
+        }
+        const newPkgPathForwardSlash = path.normalize(newTargetPkgPath).split(path.sep).join('/');
+        const schemeMatch = /^(pkg|libpkg):\//i.exec(originalText);
+        if (schemeMatch) {
+            return `${schemeMatch[1]}:/${newPkgPathForwardSlash}`;
+        }
+        const relative = this.getRelativePath(containingFilePkgPath, newTargetPkgPath);
+        return relative.split(path.sep).join('/');
+    }
+
+    /**
+     * Compute the relative path from the source file to the target file
+     * @param pkgSrcPath  - the absolute path to the source, where cwd is the package location
+     * @param pkgTargetPath  - the absolute path to the target, where cwd is the package location
+     */
+    public getRelativePath(pkgSrcPath: string, pkgTargetPath: string) {
+        pkgSrcPath = path.normalize(pkgSrcPath);
+        pkgTargetPath = path.normalize(pkgTargetPath);
 
         //break by path separator
-        let sourceParts = pkgSourcePathAbsolute.split(path.sep);
-        let targetParts = pkgTargetPathAbsolute.split(path.sep);
+        let sourceParts = pkgSrcPath.split(path.sep);
+        let targetParts = pkgTargetPath.split(path.sep);
 
         let commonParts = [] as string[];
         //find their common root
@@ -467,9 +585,20 @@ export class Util {
     }
 
     /**
-     * Does a touch b in any way?
+     * Do `a` and `b` overlap by at least one character. This returns false if they are at the edges. Here's some examples:
+     * ```
+     * | true | true | true | true | true | false | false | false | false |
+     * |------|------|------|------|------|-------|-------|-------|-------|
+     * | aa   |  aaa |  aaa | aaa  |  a   |  aa   |    aa | a     |     a |
+     * |  bbb | bb   |  bbb |  b   | bbb  |    bb |  bb   |     b | a     |
+     * ```
      */
-    public rangesIntersect(a: Range, b: Range) {
+    public rangesIntersect(a: Range | undefined, b: Range | undefined) {
+        //stop if the either range is misisng
+        if (!a || !b) {
+            return false;
+        }
+
         // Check if `a` is before `b`
         if (a.end.line < b.start.line || (a.end.line === b.start.line && a.end.character <= b.start.character)) {
             return false;
@@ -485,16 +614,47 @@ export class Util {
     }
 
     /**
+     * Do `a` and `b` overlap by at least one character or touch at the edges
+     * ```
+     * | true | true | true | true | true | true  | true  | false | false |
+     * |------|------|------|------|------|-------|-------|-------|-------|
+     * | aa   |  aaa |  aaa | aaa  |  a   |  aa   |    aa | a     |     a |
+     * |  bbb | bb   |  bbb |  b   | bbb  |    bb |  bb   |     b | a     |
+     * ```
+     */
+    public rangesIntersectOrTouch(a: Range | undefined, b: Range | undefined) {
+        //stop if the either range is misisng
+        if (!a || !b) {
+            return false;
+        }
+        // Check if `a` is before `b`
+        if (a.end.line < b.start.line || (a.end.line === b.start.line && a.end.character < b.start.character)) {
+            return false;
+        }
+
+        // Check if `b` is before `a`
+        if (b.end.line < a.start.line || (b.end.line === a.start.line && b.end.character < a.start.character)) {
+            return false;
+        }
+
+        // These ranges must intersect
+        return true;
+    }
+
+    /**
      * Test if `position` is in `range`. If the position is at the edges, will return true.
      * Adapted from core vscode
-     * @param range
-     * @param position
      */
-    public rangeContains(range: Range, position: Position) {
+    public rangeContains(range: Range | undefined, position: Position | undefined) {
         return this.comparePositionToRange(position, range) === 0;
     }
 
-    public comparePositionToRange(position: Position, range: Range) {
+    public comparePositionToRange(position: Position | undefined, range: Range | undefined) {
+        //stop if the either range is misisng
+        if (!position || !range) {
+            return 0;
+        }
+
         if (position.line < range.start.line || (position.line === range.start.line && position.character < range.start.character)) {
             return -1;
         }
@@ -505,8 +665,108 @@ export class Util {
     }
 
     /**
+     * Convert a file path into a `file://` URL string (e.g. `file:///C:/projects/file.brs`).
+     * Mirrors the `file-url` package: resolves the path, normalizes slashes, prefixes a leading slash
+     * (required for Windows drive letters), and escapes per RFC 3986.
+     */
+    public fileUrl(filePath: string) {
+        let pathName = path.resolve(filePath).replace(/\\/g, '/');
+        //Windows drive letter must be prefixed with a slash
+        if (!pathName.startsWith('/')) {
+            pathName = `/${pathName}`;
+        }
+        //escape required characters for path components
+        return encodeURI(`file://${pathName}`).replace(/[?#]/g, encodeURIComponent);
+    }
+
+    /**
+     * `JSON.stringify` that is safe against circular references and throwing getters. Replaces the
+     * `safe-json-stringify` package.
+     */
+    public safeJsonStringify(data: any, replacer?: (key: string, value: any) => any, space?: string | number) {
+        const seen: any[] = [];
+        const throwsMessage = (err: any) => '[Throws: ' + (err ? err.message : '?') + ']';
+        const safeGetValue = (obj: any, property: string) => {
+            try {
+                return obj[property];
+            } catch (err) {
+                return throwsMessage(err);
+            }
+        };
+        const visit = (obj: any) => {
+            if (obj === null || typeof obj !== 'object') {
+                return obj;
+            }
+            if (seen.includes(obj)) {
+                return '[Circular]';
+            }
+            seen.push(obj);
+            try {
+                if (typeof obj.toJSON === 'function') {
+                    try {
+                        return visit(obj.toJSON());
+                    } catch (err) {
+                        return throwsMessage(err);
+                    }
+                }
+                if (Array.isArray(obj)) {
+                    return obj.map(visit);
+                }
+                return Object.keys(obj).reduce((result, prop) => {
+                    result[prop] = visit(safeGetValue(obj, prop));
+                    return result;
+                }, {});
+            } finally {
+                seen.pop();
+            }
+        };
+        return JSON.stringify(visit(data), replacer, space);
+    }
+
+    /**
+     * Serialize an error (or any thrown value) into a plain object suitable for `JSON.stringify`,
+     * handling circular references. Replaces the `serialize-error` package.
+     */
+    public serializeError(value: any) {
+        const commonProperties = ['name', 'message', 'stack', 'code'];
+        const destroyCircular = (from: any, seen: any[]) => {
+            const to: any = Array.isArray(from) ? [] : {};
+            seen.push(from);
+            for (const [key, val] of Object.entries(from)) {
+                if (typeof val === 'function') {
+                    continue;
+                }
+                if (!val || typeof val !== 'object') {
+                    to[key] = val;
+                    continue;
+                }
+                if (!seen.includes(from[key])) {
+                    to[key] = destroyCircular(from[key], seen.slice());
+                    continue;
+                }
+                to[key] = '[Circular]';
+            }
+            for (const property of commonProperties) {
+                if (typeof from[property] === 'string') {
+                    to[property] = from[property];
+                }
+            }
+            return to;
+        };
+
+        if (typeof value === 'object' && value !== null) {
+            return destroyCircular(value, []);
+        }
+        //people sometimes throw things besides Error objects…
+        if (typeof value === 'function') {
+            //`JSON.stringify()` discards functions. We do too, unless a function is thrown directly.
+            return `[Function: ${(value.name || 'anonymous')}]`;
+        }
+        return value;
+    }
+
+    /**
      * Parse an xml file and get back a javascript object containing its results
-     * @param text
      */
     public parseXml(text: string) {
         return new Promise<any>((resolve, reject) => {
@@ -539,25 +799,7 @@ export class Util {
     }
 
     /**
-     * Given a URI, convert that to a regular fs path
-     * @param uri
-     */
-    public uriToPath(uri: string) {
-        let parsedPath = URI.parse(uri).fsPath;
-
-        //Uri annoyingly coverts all drive letters to lower case...so this will bring back whatever case it came in as
-        let match = /\/\/\/([a-z]:)/i.exec(uri);
-        if (match) {
-            let originalDriveCasing = match[1];
-            parsedPath = originalDriveCasing + parsedPath.substring(2);
-        }
-        const normalizedPath = path.normalize(parsedPath);
-        return normalizedPath;
-    }
-
-    /**
      * Force the drive letter to lower case
-     * @param fullPath
      */
     public driveLetterToLower(fullPath: string) {
         if (fullPath) {
@@ -575,6 +817,19 @@ export class Util {
     }
 
     /**
+     * Replace the first instance of `search` in `subject` with `replacement`
+     */
+    public replaceCaseInsensitive(subject: string, search: string, replacement: string) {
+        let idx = subject.toLowerCase().indexOf(search.toLowerCase());
+        if (idx > -1) {
+            let result = subject.substring(0, idx) + replacement + subject.substring(idx + search.length);
+            return result;
+        } else {
+            return subject;
+        }
+    }
+
+    /**
      * Determine if two arrays containing primitive values are equal.
      * This considers order and compares by equality.
      */
@@ -589,19 +844,51 @@ export class Util {
         }
         return true;
     }
+    /**
+     * Does the string appear to be a uri (i.e. does it start with `file:`)
+     */
+    public isUriLike(filePath: string) {
+        return filePath?.indexOf('file:') === 0;// eslint-disable-line @typescript-eslint/prefer-string-starts-ends-with
+    }
 
     /**
      * Given a file path, convert it to a URI string
      */
-    public pathToUri(pathAbsolute: string) {
-        return URI.file(pathAbsolute).toString();
+    public pathToUri(filePath: string) {
+        if (!filePath) {
+            return filePath;
+        } else if (this.isUriLike(filePath)) {
+            return filePath;
+        } else {
+            return URI.file(filePath).toString();
+        }
     }
 
     /**
-     * Get the outDir from options, taking into account cwd and absolute outFile paths
-     * @param options
+     * Given a URI, convert that to a regular fs path
      */
-    public getOutDir(options: BsConfig) {
+    public uriToPath(uri: string) {
+        //if this doesn't look like a URI, then assume it's already a path
+        if (this.isUriLike(uri) === false) {
+            return uri;
+        }
+        let parsedPath = URI.parse(uri).fsPath;
+
+        //Uri annoyingly converts all drive letters to lower case...so this will bring back whatever case it came in as
+        let match = /\/\/\/([a-z]:)/i.exec(uri);
+        if (match) {
+            let originalDriveCasing = match[1];
+            parsedPath = originalDriveCasing + parsedPath.substring(2);
+        }
+        const normalizedPath = path.normalize(parsedPath);
+        return normalizedPath;
+    }
+
+
+    /**
+     * Get the outDir from options, taking into account cwd and absolute outFile paths
+     */
+    public getOutDir(options: FinalizedBsConfig) {
         options = this.normalizeConfig(options);
         let cwd = path.normalize(options.cwd ? options.cwd : process.cwd());
         if (path.isAbsolute(options.outFile)) {
@@ -614,7 +901,7 @@ export class Util {
     /**
      * Get paths to all files on disc that match this project's source list
      */
-    public async getFilePaths(options: BsConfig) {
+    public async getFilePaths(options: FinalizedBsConfig) {
         let rootDir = this.getRootDir(options);
 
         let files = await rokuDeploy.getFilePaths(options.files, rootDir);
@@ -639,26 +926,34 @@ export class Util {
 
     /**
      * Determine whether this diagnostic should be supressed or not, based on brs comment-flags
-     * @param diagnostic
      */
     public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
         const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code;
+        //the "unknown diagnostic code" warning is always surfaced. Otherwise typo'd codes in directive comments could silence themselves.
+        if (diagnosticCode === DiagnosticCodeMap.unknownDiagnosticCode) {
+            return false;
+        }
         for (let flag of diagnostic.file?.commentFlags ?? []) {
-            //this diagnostic is affected by this flag
-            if (this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
-                //if the flag acts upon this diagnostic's code
-                if (flag.codes === null || flag.codes.includes(diagnosticCode)) {
-                    return true;
-                }
+            if (!diagnostic.range || !this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
+                continue;
+            }
+            //if this flag explicitly re-enables the code, it's not suppressed here, keep looking
+            const isEnabled = flag.enableCodes === null || (diagnosticCode !== undefined && flag.enableCodes?.includes(diagnosticCode));
+            if (isEnabled) {
+                continue;
+            }
+            //if this flag disables the code, it's suppressed
+            const isDisabled = flag.codes === null || (diagnosticCode !== undefined && flag.codes?.includes(diagnosticCode));
+            if (isDisabled) {
+                return true;
             }
         }
     }
 
     /**
-     * Walks up the chain
-     * @param currentPath
+     * Walks up the chain to find the closest bsconfig.json file
      */
-    public async findClosestConfigFile(currentPath: string) {
+    public async findClosestConfigFile(currentPath: string): Promise<string | undefined> {
         //make the path absolute
         currentPath = path.resolve(
             path.normalize(
@@ -666,7 +961,7 @@ export class Util {
             )
         );
 
-        let previousPath: string;
+        let previousPath: string | undefined;
         //using ../ on the root of the drive results in the same file path, so that's how we know we reached the top
         while (previousPath !== currentPath) {
             previousPath = currentPath;
@@ -687,7 +982,7 @@ export class Util {
 
     /**
      * Set a timeout for the specified milliseconds, and resolve the promise once the timeout is finished.
-     * @param milliseconds
+     * @param milliseconds the minimum number of milliseconds to sleep for
      */
     public sleep(milliseconds: number) {
         return new Promise((resolve) => {
@@ -702,11 +997,11 @@ export class Util {
 
     /**
      * Given an array, map and then flatten
-     * @param arr
-     * @param cb
+     * @param array the array to flatMap over
+     * @param callback a function that is called for every array item
      */
-    public flatMap<T, R>(array: T[], cb: (arg: T) => R) {
-        return Array.prototype.concat.apply([], array.map(cb)) as never as R;
+    public flatMap<T, R>(array: T[], callback: (arg: T) => R[]): R[] {
+        return Array.prototype.concat.apply([], array.map(callback));
     }
 
     /**
@@ -737,14 +1032,19 @@ export class Util {
      * Get a location object back by extracting location information from other objects that contain location
      */
     public getRange(startObj: { range: Range }, endObj: { range: Range }): Range {
-        return util.createRangeFromPositions(startObj.range.start, endObj.range.end);
+        if (!startObj?.range || !endObj?.range) {
+            return undefined;
+        }
+        return util.createRangeFromPositions(startObj.range?.start, endObj.range?.end);
     }
 
     /**
      * If the two items both start on the same line
      */
     public sameStartLine(first: { range: Range }, second: { range: Range }) {
-        if (first && second && first.range.start.line === second.range.start.line) {
+        if (first && second && (first.range !== undefined) && (second.range !== undefined) &&
+            first.range.start.line === second.range.start.line
+        ) {
             return true;
         } else {
             return false;
@@ -753,11 +1053,9 @@ export class Util {
 
     /**
      * If the two items have lines that touch
-     * @param first
-     * @param second
      */
-    public linesTouch(first: { range: Range }, second: { range: Range }) {
-        if (first && second && (
+    public linesTouch(first: { range?: Range | undefined }, second: { range?: Range | undefined }) {
+        if (first && second && (first.range !== undefined) && (second.range !== undefined) && (
             first.range.start.line === second.range.start.line ||
             first.range.start.line === second.range.end.line ||
             first.range.end.line === second.range.start.line ||
@@ -785,9 +1083,10 @@ export class Util {
     /**
      * Find a script import that the current position touches, or undefined if not found
      */
-    public getScriptImportAtPosition(scriptImports: FileReference[], position: Position) {
+    public getScriptImportAtPosition(scriptImports: FileReference[], position: Position): FileReference | undefined {
         let scriptImport = scriptImports.find((x) => {
-            return x.filePathRange.start.line === position.line &&
+            return x.filePathRange &&
+                x.filePathRange.start.line === position.line &&
                 //column between start and end
                 position.character >= x.filePathRange.start.character &&
                 position.character <= x.filePathRange.end.character;
@@ -813,7 +1112,7 @@ export class Util {
         return string.split(/\r?\n/g);
     }
 
-    public getTextForRange(string: string | string[], range: Range) {
+    public getTextForRange(string: string | string[], range: Range): string {
         let lines: string[];
         if (Array.isArray(string)) {
             lines = string;
@@ -835,12 +1134,24 @@ export class Util {
             rangeLines.push(lines[i]);
         }
         const lastLine = rangeLines.pop();
-        rangeLines.push(lastLine.substring(0, endCharacter));
+        if (lastLine !== undefined) {
+            rangeLines.push(lastLine.substring(0, endCharacter));
+        }
         return rangeLines.join('\n');
     }
 
     /**
-     * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `util.createRange()` is significantly slower
+     * Helper for creating `Location` objects. Prefer using this function because vscode-languageserver's `Location.create()` is significantly slower at scale
+     */
+    public createLocation(uri: string, range: Range): Location {
+        return {
+            uri: uri,
+            range: range
+        };
+    }
+
+    /**
+     * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `Range.create()` is significantly slower
      */
     public createRange(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Range {
         return {
@@ -872,6 +1183,81 @@ export class Util {
     }
 
     /**
+     * Clone a range
+     */
+    public cloneRange(range: Range) {
+        if (range) {
+            return this.createRange(range.start.line, range.start.character, range.end.line, range.end.character);
+        } else {
+            return range;
+        }
+    }
+
+    /**
+     * Clone every token
+     */
+    public cloneToken<T extends Token>(token: T) {
+        if (token) {
+            //keep this field order identical to `Lexer.addToken` so cloned tokens
+            //share the same V8 hidden class as lexer-produced tokens
+            const result = {
+                kind: token.kind,
+                text: token.text,
+                isReserved: token.isReserved,
+                range: this.cloneRange(token.range),
+                leadingWhitespace: token.leadingWhitespace
+            } as T;
+            //handle those tokens that have charCode
+            if ('charCode' in token) {
+                (result as any).charCode = (token as any).charCode;
+            }
+            return result;
+        } else {
+            return token;
+        }
+    }
+
+    /**
+     * Given a list of ranges, create a range that starts with the first non-null lefthand range, and ends with the first non-null
+     * righthand range. Returns undefined if none of the items have a range.
+     */
+    public createBoundingRange(...locatables: Array<{ range?: Range } | null | undefined>): Range | undefined {
+        let leftmostRange: Range | undefined;
+        let rightmostRange: Range | undefined;
+
+        for (let i = 0; i < locatables.length; i++) {
+            //set the leftmost non-null-range item
+            const left = locatables[i];
+            //the range might be a getter, so access it exactly once
+            const leftRange = left?.range;
+            if (!leftmostRange && leftRange) {
+                leftmostRange = leftRange;
+            }
+
+            //set the rightmost non-null-range item
+            const right = locatables[locatables.length - 1 - i];
+            //the range might be a getter, so access it exactly once
+            const rightRange = right?.range;
+            if (!rightmostRange && rightRange) {
+                rightmostRange = rightRange;
+            }
+
+            //if we have both sides, quit
+            if (leftmostRange && rightmostRange) {
+                break;
+            }
+        }
+        if (leftmostRange) {
+            //if we don't have a rightmost range, use the leftmost range for both the start and end
+            return this.createRangeFromPositions(
+                leftmostRange.start,
+                rightmostRange ? rightmostRange.end : leftmostRange.end);
+        } else {
+            return undefined;
+        }
+    }
+
+    /**
      * Create a `Position` object. Prefer this over `Position.create` for performance reasons
      */
     public createPosition(line: number, character: number) {
@@ -887,8 +1273,7 @@ export class Util {
     public tokensToString(tokens: Token[]) {
         let result = '';
         //skip iterating the final token
-        for (let i = 0; i < tokens.length; i++) {
-            let token = tokens[i];
+        for (let token of tokens) {
             result += token.leadingWhitespace + token.text;
         }
         return result;
@@ -901,60 +1286,66 @@ export class Util {
         // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
         switch (token.kind) {
             case TokenKind.Boolean:
+                return new BooleanType(token.text);
             case TokenKind.True:
             case TokenKind.False:
                 return new BooleanType();
             case TokenKind.Double:
+                return new DoubleType(token.text);
             case TokenKind.DoubleLiteral:
                 return new DoubleType();
             case TokenKind.Dynamic:
-                return new DynamicType();
+                return new DynamicType(token.text);
             case TokenKind.Float:
+                return new FloatType(token.text);
             case TokenKind.FloatLiteral:
                 return new FloatType();
             case TokenKind.Function:
                 //TODO should there be a more generic function type without a signature that's assignable to all other function types?
-                return new FunctionType(new DynamicType());
+                return new FunctionType(new DynamicType(token.text));
             case TokenKind.Integer:
+                return new IntegerType(token.text);
             case TokenKind.IntegerLiteral:
                 return new IntegerType();
             case TokenKind.Invalid:
-                return new InvalidType();
+                return new InvalidType(token.text);
             case TokenKind.LongInteger:
+                return new LongIntegerType(token.text);
             case TokenKind.LongIntegerLiteral:
                 return new LongIntegerType();
             case TokenKind.Object:
-                return new ObjectType();
+                return new ObjectType(token.text);
             case TokenKind.String:
+                return new StringType(token.text);
             case TokenKind.StringLiteral:
             case TokenKind.TemplateStringExpressionBegin:
             case TokenKind.TemplateStringExpressionEnd:
             case TokenKind.TemplateStringQuasi:
                 return new StringType();
             case TokenKind.Void:
-                return new VoidType();
+                return new VoidType(token.text);
             case TokenKind.Identifier:
                 switch (token.text.toLowerCase()) {
                     case 'boolean':
-                        return new BooleanType();
+                        return new BooleanType(token.text);
                     case 'double':
-                        return new DoubleType();
+                        return new DoubleType(token.text);
                     case 'float':
-                        return new FloatType();
+                        return new FloatType(token.text);
                     case 'function':
-                        return new FunctionType(new DynamicType());
+                        return new FunctionType(new DynamicType(token.text));
                     case 'integer':
-                        return new IntegerType();
+                        return new IntegerType(token.text);
                     case 'invalid':
-                        return new InvalidType();
+                        return new InvalidType(token.text);
                     case 'longinteger':
-                        return new LongIntegerType();
+                        return new LongIntegerType(token.text);
                     case 'object':
-                        return new ObjectType();
+                        return new ObjectType(token.text);
                     case 'string':
-                        return new StringType();
+                        return new StringType(token.text);
                     case 'void':
-                        return new VoidType();
+                        return new VoidType(token.text);
                 }
                 if (allowCustomType) {
                     return new CustomType(token.text);
@@ -981,15 +1372,15 @@ export class Util {
     /**
      * Load and return the list of plugins
      */
-    public loadPlugins(cwd: string, pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void) {
-        const logger = new Logger();
-        return pathOrModules.reduce<CompilerPlugin[]>((acc, pathOrModule) => {
+    public loadPlugins(cwd: string, pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void): Plugin[] {
+        const logger = createLogger();
+        return pathOrModules.reduce<Plugin[]>((acc, pathOrModule) => {
             if (typeof pathOrModule === 'string') {
                 try {
-                    const loaded = this.resolveRequire(cwd, pathOrModule);
-                    const theExport: CompilerPlugin | CompilerPluginFactory = loaded.default ? loaded.default : loaded;
+                    const loaded = requireRelative(pathOrModule, cwd);
+                    const theExport: Plugin | PluginFactory = loaded.default ? loaded.default : loaded;
 
-                    let plugin: CompilerPlugin;
+                    let plugin: Plugin | undefined;
 
                     // legacy plugins returned a plugin object. If we find that, then add a warning
                     if (typeof theExport === 'object') {
@@ -998,7 +1389,12 @@ export class Util {
 
                         // the official plugin format is a factory function that returns a new instance of a plugin.
                     } else if (typeof theExport === 'function') {
-                        plugin = theExport();
+                        plugin = theExport({
+                            version: this.getBrighterScriptVersion()
+                        });
+                    } else {
+                        //this should never happen; somehow an invalid plugin has made it into here
+                        throw new Error(`TILT: Encountered an invalid plugin: ${String(plugin)}`);
                     }
 
                     if (!plugin.name) {
@@ -1017,28 +1413,11 @@ export class Util {
         }, []);
     }
 
-    public resolveRequire(cwd: string, pathOrModule: string) {
-        let target = pathOrModule;
-        if (!path.isAbsolute(pathOrModule)) {
-            const localPath = path.resolve(cwd, pathOrModule);
-            if (fs.existsSync(localPath)) {
-                target = localPath;
-            } else {
-                const modulePath = path.resolve(cwd, 'node_modules', pathOrModule);
-                if (fs.existsSync(modulePath)) {
-                    target = modulePath;
-                }
-            }
-        }
-        // eslint-disable-next-line
-        return require(target);
-    }
-
     /**
      * Gathers expressions, variables, and unique names from an expression.
      * This is mostly used for the ternary expression
      */
-    public getExpressionInfo(expression: Expression): ExpressionInfo {
+    public getExpressionInfo(expression: Expression, file: BrsFile): ExpressionInfo {
         const expressions = [expression];
         const variableExpressions = [] as VariableExpression[];
         const uniqueVarNames = new Set<string>();
@@ -1062,7 +1441,18 @@ export class Util {
         //handle the expression itself (for situations when expression is a VariableExpression)
         expressionWalker(expression);
 
-        return { expressions: expressions, varExpressions: variableExpressions, uniqueVarNames: [...uniqueVarNames] };
+        const scope = file.program.getFirstScopeForFile(file);
+        let filteredVarNames = [...uniqueVarNames];
+        if (scope) {
+            filteredVarNames = filteredVarNames.filter((varName: string) => {
+                const varNameLower = varName.toLowerCase();
+                // TODO: include namespaces in this filter
+                return !scope.getEnumMap().has(varNameLower) &&
+                    !scope.getConstMap().has(varNameLower);
+            });
+        }
+
+        return { expressions: expressions, varExpressions: variableExpressions, uniqueVarNames: filteredVarNames };
     }
 
 
@@ -1101,18 +1491,60 @@ export class Util {
         } as SGAttribute;
     }
 
+    private isWindows = process.platform === 'win32';
+    private standardizePathCache = new Map<string, string>();
+
+    /**
+     * Converts a path into a standardized format (drive letter to lower, remove extra slashes, use single slash type, resolve relative parts, etc...)
+     */
+    public standardizePath(thePath: string): string {
+        //if we have the value in cache already, return it
+        if (this.standardizePathCache.has(thePath)) {
+            return this.standardizePathCache.get(thePath);
+        }
+        const originalPath = thePath;
+
+        if (typeof thePath !== 'string') {
+            return thePath;
+        }
+
+        //windows path.normalize will convert all slashes to backslashes and remove duplicates
+        if (this.isWindows) {
+            thePath = path.win32.normalize(thePath);
+        } else {
+            //replace all windows or consecutive slashes with path.sep
+            thePath = thePath.replace(/[\/\\]+/g, '/');
+
+            // only use path.normalize if dots are present since it's expensive
+            if (thePath.includes('./')) {
+                thePath = path.posix.normalize(thePath);
+            }
+        }
+
+        // Lowercase drive letter on Windows-like paths (e.g., "C:/...")
+        if (thePath.charCodeAt(1) === 58 /* : */) {
+            // eslint-disable-next-line no-var
+            var firstChar = thePath.charCodeAt(0);
+            if (firstChar >= 65 && firstChar <= 90) {
+                thePath = String.fromCharCode(firstChar + 32) + thePath.slice(1);
+            }
+        }
+        this.standardizePathCache.set(originalPath, thePath);
+        return thePath;
+    }
+
     /**
      * Copy the version of bslib from local node_modules to the staging folder
      */
-    public async copyBslibToStaging(stagingDir: string) {
+    public async copyBslibToStaging(stagingDir: string, bslibDestinationDir = 'source') {
         //copy bslib to the output directory
-        await fsExtra.ensureDir(standardizePath(`${stagingDir}/source`));
+        await fsExtra.ensureDir(standardizePath(`${stagingDir}/${bslibDestinationDir}`));
         // eslint-disable-next-line
         const bslib = require('@rokucommunity/bslib');
         let source = bslib.source as string;
 
         //apply the `bslib_` prefix to the functions
-        let match: RegExpExecArray;
+        let match: RegExpExecArray | null;
         const positions = [] as number[];
         const regexp = /^(\s*(?:function|sub)\s+)([a-z0-9_]+)/mg;
         // eslint-disable-next-line no-cond-assign
@@ -1124,32 +1556,59 @@ export class Util {
             const position = positions[i];
             source = source.slice(0, position) + 'bslib_' + source.slice(position);
         }
-        await fsExtra.writeFile(`${stagingDir}/source/bslib.brs`, source);
+        await fsExtra.writeFile(`${stagingDir}/${bslibDestinationDir}/bslib.brs`, source);
     }
 
     /**
-     * Given a Diagnostic or BsDiagnostic, return a copy of the diagnostic
+     * Given a Diagnostic or BsDiagnostic, return a deep clone of the diagnostic.
+     * @param diagnostic the diagnostic to clone
+     * @param relatedInformationFallbackLocation a default location to use for all `relatedInformation` entries that are missing a location
      */
-    public toDiagnostic(diagnostic: Diagnostic | BsDiagnostic) {
+    public toDiagnostic(diagnostic: Diagnostic | BsDiagnostic, relatedInformationFallbackLocation: string): Diagnostic {
         return {
             severity: diagnostic.severity,
             range: diagnostic.range,
             message: diagnostic.message,
             relatedInformation: diagnostic.relatedInformation?.map(x => {
+
                 //clone related information just in case a plugin added circular ref info here
-                return { ...x };
-            }),
+                const clone = { ...x };
+                if (!clone.location) {
+                    // use the fallback location if available
+                    if (relatedInformationFallbackLocation) {
+                        clone.location = util.createLocation(relatedInformationFallbackLocation, diagnostic.range);
+                    } else {
+                        //remove this related information so it doesn't bring crash the language server
+                        return undefined;
+                    }
+                }
+                return clone;
+                //filter out null relatedInformation items
+            }).filter((x): x is DiagnosticRelatedInformation => Boolean(x)),
             code: diagnostic.code,
-            source: 'brs'
+            source: diagnostic.source ?? 'brs'
         };
+    }
+
+    /**
+     * Get the first locatable item found at the specified position
+     * @param locatables an array of items that have a `range` property
+     * @param position the position that the locatable must contain
+     */
+    public getFirstLocatableAt(locatables: Locatable[], position: Position) {
+        for (let token of locatables) {
+            if (util.rangeContains(token.range, position)) {
+                return token;
+            }
+        }
     }
 
     /**
      * Sort an array of objects that have a Range
      */
-    public sortByRange(locatables: Locatable[]) {
+    public sortByRange<T extends Locatable>(locatables: T[]) {
         //sort the tokens by range
-        return locatables.sort((a, b) => {
+        return locatables?.sort((a, b) => {
             //start line
             if (a.range.start.line < b.range.start.line) {
                 return -1;
@@ -1189,8 +1648,7 @@ export class Util {
         const chunks = text.split(separator);
         const result = [] as Array<{ text: string; range: Range }>;
         let offset = 0;
-        for (let i = 0; i < chunks.length; i++) {
-            const chunk = chunks[i];
+        for (let chunk of chunks) {
             //only keep nonzero chunks
             if (chunk.length > 0) {
                 result.push({
@@ -1207,6 +1665,319 @@ export class Util {
         }
         return result;
     }
+
+    /**
+     * Wrap the given code in a markdown code fence (with the language)
+     */
+    public mdFence(code: string, language = '') {
+        return '```' + language + '\n' + code + '\n```';
+    }
+
+    /**
+     * Gets each part of the dotted get.
+     * @param node any ast expression
+     * @returns an array of the parts of the dotted get. If not fully a dotted get, then returns undefined
+     */
+    public getAllDottedGetParts(node: Expression | Statement): Identifier[] | undefined {
+        const parts: Identifier[] = [];
+        let nextPart: AstNode | undefined = node;
+        while (nextPart) {
+            if (isAssignmentStatement(node)) {
+                return [node.name];
+            } else if (isDottedGetExpression(nextPart)) {
+                parts.push(nextPart?.name);
+                nextPart = nextPart.obj;
+            } else if (isNamespacedVariableNameExpression(nextPart)) {
+                nextPart = nextPart.expression;
+            } else if (isVariableExpression(nextPart)) {
+                parts.push(nextPart?.name);
+                break;
+            } else if (isFunctionParameterExpression(nextPart)) {
+                return [nextPart.name];
+            } else {
+                //we found a non-DottedGet expression, so return because this whole operation is invalid.
+                return undefined;
+            }
+        }
+        return parts.reverse();
+    }
+
+    /**
+     * Break an expression into each part.
+     */
+    public splitExpression(expression: Expression) {
+        const parts: Expression[] = [expression];
+        let nextPart = expression;
+        while (nextPart) {
+            if (isDottedGetExpression(nextPart) || isIndexedGetExpression(nextPart) || isXmlAttributeGetExpression(nextPart)) {
+                nextPart = nextPart.obj;
+
+            } else if (isCallExpression(nextPart) || isCallfuncExpression(nextPart)) {
+                nextPart = nextPart.callee;
+
+            } else if (isNamespacedVariableNameExpression(nextPart)) {
+                nextPart = nextPart.expression;
+            } else {
+                break;
+            }
+            parts.unshift(nextPart);
+        }
+        return parts;
+    }
+
+    /**
+     * Break an expression into each part, and return any VariableExpression or DottedGet expresisons from left-to-right.
+     */
+    public getDottedGetPath(expression: Expression): [VariableExpression, ...DottedGetExpression[]] {
+        let parts: Expression[] = [];
+        let nextPart = expression;
+        while (nextPart) {
+            if (isDottedGetExpression(nextPart)) {
+                parts.unshift(nextPart);
+                nextPart = nextPart.obj;
+
+            } else if (isIndexedGetExpression(nextPart) || isXmlAttributeGetExpression(nextPart)) {
+                nextPart = nextPart.obj;
+                parts = [];
+
+            } else if (isCallExpression(nextPart) || isCallfuncExpression(nextPart)) {
+                nextPart = nextPart.callee;
+                parts = [];
+
+            } else if (isNewExpression(nextPart)) {
+                nextPart = nextPart.call.callee;
+                parts = [];
+
+            } else if (isNamespacedVariableNameExpression(nextPart)) {
+                nextPart = nextPart.expression;
+
+            } else if (isVariableExpression(nextPart)) {
+                parts.unshift(nextPart);
+                break;
+            } else {
+                parts = [];
+                break;
+            }
+        }
+        return parts as any;
+    }
+
+    /**
+     * Returns an integer if valid, or undefined. Eliminates checking for NaN
+     */
+    public parseInt(value: any) {
+        const result = parseInt(value);
+        if (!isNaN(result)) {
+            return result;
+        } else {
+            return undefined;
+        }
+    }
+
+    /**
+     * Converts a range to a string in the format 1:2-3:4
+     */
+    public rangeToString(range: Range) {
+        return `${range?.start?.line}:${range?.start?.character}-${range?.end?.line}:${range?.end?.character}`;
+    }
+
+    public validateTooDeepFile(file: (BrsFile | XmlFile)) {
+        //find any files nested too deep
+        let pkgPath = file.pkgPath ?? (file.pkgPath as any).toString();
+        let rootFolder = pkgPath.replace(/^pkg:/, '').split(/[\\\/]/)[0].toLowerCase();
+
+        if (isBrsFile(file) && rootFolder !== 'source') {
+            return;
+        }
+
+        if (isXmlFile(file) && rootFolder !== 'components') {
+            return;
+        }
+
+        let fileDepth = this.getParentDirectoryCount(pkgPath);
+        if (fileDepth >= 8) {
+            file.addDiagnostics([{
+                ...DiagnosticMessages.detectedTooDeepFileSource(fileDepth),
+                file: file,
+                range: this.createRange(0, 0, 0, Number.MAX_VALUE)
+            }]);
+        }
+    }
+
+    /**
+     * Execute dispose for a series of disposable items
+     * @param disposables a list of functions or disposables
+     */
+    public applyDispose(disposables: DisposableLike[]) {
+        for (const disposable of disposables ?? []) {
+            if (typeof disposable === 'function') {
+                disposable();
+            } else {
+                disposable?.dispose?.();
+            }
+        }
+    }
+
+    /**
+     * Race a series of promises, and return the first one that resolves AND matches the matcher function.
+     * If all of the promises reject, then this will emit an AggregatreError with all of the errors.
+     * If at least one promise resolves, then this will log all of the errors to the console
+     * If at least one promise resolves but none of them match the matcher, then this will return undefined.
+     * @param promises all of the promises to race
+     * @param matcher a function that should return true if this value should be kept. Returning any value other than true means `false`
+     * @returns the first resolved value that matches the matcher, or undefined if none of them match
+     */
+    public async promiseRaceMatch<T>(promises: MaybePromise<T>[], matcher: (value: T) => boolean) {
+        const workingPromises = [
+            ...promises
+        ];
+
+        const results: Array<{ value: T; index: number } | { error: Error; index: number }> = [];
+        let returnValue: T;
+
+        while (workingPromises.length > 0) {
+            //race the promises. If any of them resolve, evaluate it against the matcher. If that passes, return the value. otherwise, eliminate this promise and try again
+            const result = await Promise.race(
+                workingPromises.map((promise, i) => {
+                    return Promise.resolve(promise)
+                        .then(value => ({ value: value, index: i }))
+                        .catch(error => ({ error: error, index: i }));
+                })
+            );
+            results.push(result);
+            //if we got a value and it matches the matcher, return it
+            if ('value' in result && matcher?.(result.value) === true) {
+                returnValue = result.value;
+                break;
+            }
+
+            //remove this non-matched (or errored) promise from the list and try again
+            workingPromises.splice(result.index, 1);
+        }
+
+        const errors = (results as Array<{ error: Error }>)
+            .filter(x => 'error' in x)
+            .map(x => x.error);
+
+        //if all of them crashed, then reject
+        if (promises.length > 0 && errors.length === promises.length) {
+            throw new AggregateError(errors, 'All requests failed. First error message: ' + errors[0].message);
+        } else {
+            //log all of the errors
+            for (const error of errors) {
+                console.error(error);
+            }
+        }
+
+        //return the matched value, or undefined if there wasn't one
+        return returnValue;
+    }
+
+    /**
+     * Wraps SourceNode's constructor to be compatible with the TranspileResult type
+     */
+    public sourceNodeFromTranspileResult(
+        line: number | null,
+        column: number | null,
+        source: string | null,
+        chunks?: string | SourceNode | TranspileResult,
+        name?: string
+    ): SourceNode {
+        // we can use a typecast rather than actually transforming the data because SourceNode
+        // accepts a more permissive type than its typedef states
+        return new SourceNode(line, column, source, chunks as any, name);
+    }
+
+    /**
+     * Strip a trailing `sourceMappingURL` comment (and the newline preceding it) from the end of a
+     * transpile result, so that appending a freshly-generated one doesn't produce a duplicate. A file
+     * can already carry a comment from a previous build, which is either preserved verbatim (for
+     * files that don't need transpiling) or re-emitted as a comment by the AST transpile.
+     *
+     * Handles both BrightScript-style (`'//# sourceMappingURL=...`) and XML-style
+     * (`<!--//# sourceMappingURL=... -->`) comments. Leaves the node untouched when no trailing
+     * sourceMappingURL comment is present.
+     */
+    public stripTrailingSourceMappingURLComment(node: SourceNode): SourceNode {
+        //`\S+` cannot backtrack across whitespace, so this stays linear-time on adversarial input
+        const pattern = /(?:\r?\n)?[ \t]*(?:'\/\/# sourceMappingURL=\S+|<!--[ \t]*\/\/# sourceMappingURL=\S+[ \t]*-->)\s*$/;
+        if (pattern.test(node.toString())) {
+            //`replaceRight` operates on the right-most leaf string, which is where a trailing comment
+            //lands in both the verbatim and AST-transpiled cases. The `source-map` typings declare the
+            //pattern as a string, but it is handed straight to `String.prototype.replace`, which
+            //accepts a RegExp
+            node.replaceRight(pattern as unknown as string, '');
+        }
+        return node;
+    }
+
+    /**
+     * Parse the `sourceMappingURL` comment from file contents and resolve it to a RawSourceMap.
+     * Handles inline base64 data URIs, absolute paths, relative paths (resolved against srcPath's
+     * directory), and falls back to a co-located `<srcPath>.map` file.
+     * Supports both BrightScript-style comments (`'//# sourceMappingURL=...`) and XML-style
+     * comments (`<!--//# sourceMappingURL=... -->`).
+     * Returns undefined if no map can be found.
+     */
+    public async resolveInputSourceMap(fileContents: string, srcPath: string): Promise<RawSourceMap | undefined> {
+        // Match sourceMappingURL - [^\s]+ stops at whitespace (safe, no backtracking risk).
+        // Strip any trailing XML comment close (either --> or --!>) that may have been captured
+        // when the URL is not followed by a space in an XML comment like <!--//# ...=url-->.
+        const match = /['"]?\/\/# sourceMappingURL=([^\s]+)/m.exec(fileContents);
+        if (match) {
+            const url = match[1].replace(/--!?>$/, '').trim();
+            if (url.startsWith('data:')) {
+                // inline base64: data:application/json;base64,<b64>
+                const b64Match = /base64,([A-Za-z0-9+/=]+)$/.exec(url);
+                if (b64Match) {
+                    return JSON.parse(Buffer.from(b64Match[1], 'base64').toString('utf8')) as RawSourceMap;
+                }
+            } else {
+                const mapPath = path.isAbsolute(url) ? url : path.resolve(path.dirname(srcPath), url);
+                if (await fsExtra.pathExists(mapPath)) {
+                    return JSON.parse(await fsExtra.readFile(mapPath, 'utf8')) as RawSourceMap;
+                }
+            }
+        }
+
+        // no usable sourceMappingURL; try co-located <srcPath>.map
+        const colocated = `${srcPath}.map`;
+        if (await fsExtra.pathExists(colocated)) {
+            return JSON.parse(await fsExtra.readFile(colocated, 'utf8')) as RawSourceMap;
+        }
+        return undefined;
+    }
+
+    /**
+     * Apply an input sourcemap to a generated SourceMapGenerator, chaining mappings so the
+     * output traces back through the input map to the original source.
+     */
+    public async applySourceMap(generator: SourceMapGenerator, inputMap: RawSourceMap, sourceFile: string) {
+        await SourceMapConsumer.with(inputMap, null, (consumer) => {
+            generator.applySourceMap(consumer, sourceFile);
+        });
+    }
+
+    public isBuiltInType(typeName: string) {
+        const typeNameLower = typeName.toLowerCase();
+        if (typeNameLower.startsWith('rosgnode')) {
+            // NOTE: this is unsafe and only used to avoid validation errors in backported v1 type syntax
+            return true;
+        }
+        return components[typeNameLower] || interfaces[typeNameLower] || events[typeNameLower];
+    }
+
+    /**
+     * Get a short name that can be used to reference the project in logs. (typically something like `prj1`, `prj8`, etc...)
+     */
+    public getProjectLogName(config: { projectNumber: number }) {
+        //if we have a project number, use it
+        if (config?.projectNumber !== undefined) {
+            return `prj${config.projectNumber}`;
+        }
+        //just return empty string so log functions don't crash with undefined project numbers
+        return '';
+    }
 }
 
 /**
@@ -1214,14 +1985,12 @@ export class Util {
  * we can't use `object.tag` syntax.
  */
 export function standardizePath(stringParts, ...expressions: any[]) {
-    let result = [];
-    for (let i = 0; i < stringParts.length; i++) {
+    let result: string[] = [];
+    for (let i = 0; i < stringParts?.length; i++) {
         result.push(stringParts[i], expressions[i]);
     }
-    return util.driveLetterToLower(
-        rokuDeploy.standardizePath(
-            result.join('')
-        )
+    return util.standardizePath(
+        result.join('')
     );
 }
 

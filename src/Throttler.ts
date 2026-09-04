@@ -16,6 +16,50 @@ export class Throttler {
         return !this.runningJobPromise;
     }
 
+    public on(eventName: 'idle' | 'run', callback: () => any) {
+        this.emitter.on(eventName, callback);
+        return () => {
+            this.emitter.off(eventName, callback);
+        };
+    }
+
+    /**
+     * Resolve a promise the next time the event fires
+     * @param eventName the name of the event to subscribe to
+     * @param timeout if the event doesn't fire within the specified time, the promise will auto-resolve itself
+     */
+    public once(eventName: 'idle' | 'run', timeout?: number) {
+        const promises: Promise<any>[] = [];
+
+        //register a timeout if specified
+        if (timeout > 0) {
+            promises.push(util.sleep(timeout));
+        }
+
+        //wait for the event
+        promises.push(
+            new Promise<void>((resolve) => {
+                const disconnect = this.on(eventName, () => {
+                    disconnect();
+                    resolve();
+                });
+            })
+        );
+
+        return Promise.race(promises);
+    }
+
+    /**
+     * Wait for the next 'run' event. Or resolve immediately if already running.
+     * @param timeout after this timeout, the promise resolves even if the 'run' event never fired
+     */
+    public async onRunOnce(timeout = 0) {
+        if (!this.isIdle) {
+            return;
+        }
+        return this.once('run', timeout);
+    }
+
     /**
      * Get a promise that resolves the next time the throttler becomes idle
      */
@@ -61,6 +105,9 @@ export class Throttler {
      * Private method to run a job after a delay.
      */
     private async runInternal(job) {
+        if (!this.pendingJob) {
+            this.emitter.emit('run');
+        }
         this.runningJobPromise = util.sleep(this.delay).then(() => {
             //run the job
             return job();

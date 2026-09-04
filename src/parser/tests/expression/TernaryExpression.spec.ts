@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-for-in-array */
-import { expect } from 'chai';
+import { expect } from '../../../chai-config.spec';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
-import { TokenKind } from '../../../lexer';
+import { TokenKind } from '../../../lexer/TokenKind';
 import { Parser, ParseMode } from '../../Parser';
 import { token, EOF } from '../Parser.spec';
 import type { PrintStatement } from '../../Statement';
@@ -253,7 +253,7 @@ describe('ternary expressions', () => {
         });
     });
 
-    describe('transpilation', () => {
+    describe('transpile', () => {
         let rootDir = process.cwd();
         let program: Program;
         let testTranspile = getTestTranspile(() => [program, rootDir]);
@@ -265,156 +265,690 @@ describe('ternary expressions', () => {
             program.dispose();
         });
 
+        it('transpiles top-level ternary expression', () => {
+            testTranspile(`
+                a += true ? 1 : 2
+            `, `
+                if true then
+                    a += 1
+                else
+                    a += 2
+                end if
+            `, undefined, undefined, false);
+        });
+
+        it('transpiles ternary in RHS of AssignmentStatement to IfStatement', () => {
+            testTranspile(`
+                sub main()
+                    a = true ? 1 : 2
+                end sub
+            `, `
+                sub main()
+                    if true then
+                        a = 1
+                    else
+                        a = 2
+                    end if
+                end sub
+            `);
+        });
+
+        it('transpiles ternary in RHS of incrementor AssignmentStatement to IfStatement', () => {
+            testTranspile(`
+                sub main()
+                    a += true ? 1 : 2
+                end sub
+            `, `
+                sub main()
+                    if true then
+                        a += 1
+                    else
+                        a += 2
+                    end if
+                end sub
+            `);
+        });
+
+        it('transpiles ternary in RHS of DottedSetStatement to IfStatement', () => {
+            testTranspile(`
+                sub main()
+                    m.a = true ? 1 : 2
+                end sub
+            `, `
+                sub main()
+                    if true then
+                        m.a = 1
+                    else
+                        m.a = 2
+                    end if
+                end sub
+            `);
+        });
+
+        it('transpiles ternary in RHS of incrementor DottedSetStatement to IfStatement', () => {
+            testTranspile(`
+                sub main()
+                    m.a += true ? 1 : 2
+                end sub
+            `, `
+                sub main()
+                    if true then
+                        m.a += 1
+                    else
+                        m.a += 2
+                    end if
+                end sub
+            `);
+        });
+
+        it('transpiles ternary in RHS of IndexedSetStatement to IfStatement', () => {
+            testTranspile(`
+                sub main()
+                    m["a"] = true ? 1 : 2
+                end sub
+            `, `
+                sub main()
+                    if true then
+                        m["a"] = 1
+                    else
+                        m["a"] = 2
+                    end if
+                end sub
+            `);
+        });
+
+        it('transpiles ternary in RHS of incrementor IndexedSetStatement to IfStatement', () => {
+            testTranspile(`
+                sub main()
+                    m["a"] += true ? 1 : 2
+                end sub
+            `, `
+                sub main()
+                    if true then
+                        m["a"] += 1
+                    else
+                        m["a"] += 2
+                    end if
+                end sub
+            `);
+        });
+
         it('uses the proper prefix when aliased package is installed', () => {
-            program.addOrReplaceFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
-            testTranspile(
-                `a = user = invalid ? "no user" : "logged in"`,
-                `a = rokucommunity_bslib_ternary(user = invalid, "no user", "logged in")`
-            );
+            program.setFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
+            testTranspile(`
+                sub main()
+                    user = {}
+                    result = [
+                        user = invalid ? "no user" : "logged in"
+                    ]
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    result = [
+                        rokucommunity_bslib_ternary(user = invalid, "no user", "logged in")
+                    ]
+                end sub
+            `);
         });
 
         it('simple consequents', () => {
-            testTranspile(
-                `a = user = invalid ? "no user" : "logged in"`,
-                `a = bslib_ternary(user = invalid, "no user", "logged in")`
-            );
+            testTranspile(`
+                sub main()
+                    user = {}
+                    a = user = invalid ? "no user" : "logged in"
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    if user = invalid then
+                        a = "no user"
+                    else
+                        a = "logged in"
+                    end if
+                end sub
+            `);
 
-            testTranspile(
-                `a = user = invalid ? 1 : "logged in"`,
-                `a = bslib_ternary(user = invalid, 1, "logged in")`
-            );
+            testTranspile(`
+                sub main()
+                    user = {}
+                    a = user = invalid ? 1 : "logged in"
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    if user = invalid then
+                        a = 1
+                    else
+                        a = "logged in"
+                    end if
+                end sub
+            `);
 
-            testTranspile(
-                `a = user = invalid ? 1.2 : "logged in"`,
-                `a = bslib_ternary(user = invalid, 1.2, "logged in")`
-            );
+            testTranspile(`
+                sub main()
+                    user = {}
+                    a = user = invalid ? 1.2 : "logged in"
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    if user = invalid then
+                        a = 1.2
+                    else
+                        a = "logged in"
+                    end if
+                end sub
+            `);
 
-            testTranspile(
-                `a = user = invalid ? [] : "logged in"`,
-                `a = bslib_ternary(user = invalid, [], "logged in")`
-            );
+            testTranspile(`
+                sub main()
+                    user = {}
+                    a = user = invalid ? {} : "logged in"
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    if user = invalid then
+                        a = {}
+                    else
+                        a = "logged in"
+                    end if
+                end sub
+            `);
 
-            testTranspile(
-                `a = user = invalid ? {} : "logged in"`,
-                `a = bslib_ternary(user = invalid, {}, "logged in")`
-            );
+            testTranspile(`
+                sub main()
+                    user = {}
+                    a = user = invalid ? [] : "logged in"
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    if user = invalid then
+                        a = []
+                    else
+                        a = "logged in"
+                    end if
+                end sub
+            `);
         });
 
         it('simple alternates', () => {
-            testTranspile(
-                `a = user = invalid ? "logged in" : "no user" `,
-                `a = bslib_ternary(user = invalid, "logged in", "no user")`
-            );
+            testTranspile(`
+                sub main()
+                    user = {}
+                    a = user = invalid ? "logged in" : "no user"
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    if user = invalid then
+                        a = "logged in"
+                    else
+                        a = "no user"
+                    end if
+                end sub
+            `);
 
-            testTranspile(
-                `a = user = invalid ? "logged in" : 1 `,
-                `a = bslib_ternary(user = invalid, "logged in", 1)`
-            );
+            testTranspile(`
+                sub main()
+                    user = {}
+                    a = user = invalid ? "logged in" : 1
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    if user = invalid then
+                        a = "logged in"
+                    else
+                        a = 1
+                    end if
+                end sub
+            `);
 
-            testTranspile(
-                `a = user = invalid ? "logged in" : 1.2 `,
-                `a = bslib_ternary(user = invalid, "logged in", 1.2)`
-            );
+            testTranspile(`
+                sub main()
+                    user = {}
+                    a = user = invalid ? "logged in" : 1.2
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    if user = invalid then
+                        a = "logged in"
+                    else
+                        a = 1.2
+                    end if
+                end sub
+            `);
 
-            testTranspile(
-                `a = user = invalid ? "logged in" :  [] `,
-                `a = bslib_ternary(user = invalid, "logged in", [])`
-            );
+            testTranspile(`
+                sub main()
+                    user = {}
+                    a = user = invalid ? "logged in" :  []
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    if user = invalid then
+                        a = "logged in"
+                    else
+                        a = []
+                    end if
+                end sub
+            `);
 
-            testTranspile(
-                `a = user = invalid ? "logged in" :  {} `,
-                `a = bslib_ternary(user = invalid, "logged in", {})`
-            );
+            testTranspile(`
+                sub main()
+                    user = {}
+                    a = user = invalid ? "logged in" :  {}
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    if user = invalid then
+                        a = "logged in"
+                    else
+                        a = {}
+                    end if
+                end sub
+            `);
+        });
+
+        it('does not capture restricted OS functions', () => {
+            //failOnDiagnostic=false: the bare `eval("print 1")` triggers the rsg_version=1.2
+            //deprecation diagnostic under default settings, which is unrelated to what this test covers.
+            testTranspile(`
+                sub main()
+                    test(true ? invalid : [
+                        createObject("roDeviceInfo")
+                        type(true)
+                        GetGlobalAA()
+                        box(1)
+                        run("file.brs", invalid)
+                        eval("print 1")
+                        GetLastRunCompileError()
+                        GetLastRunRuntimeError()
+                        Tab(1)
+                        Pos(0)
+                    ])
+                end sub
+                sub test(p1)
+                end sub
+            `, `
+                sub main()
+                    test((function(__bsCondition)
+                            if __bsCondition then
+                                return invalid
+                            else
+                                return [
+                                    createObject("roDeviceInfo")
+                                    type(true)
+                                    GetGlobalAA()
+                                    box(1)
+                                    run("file.brs", invalid)
+                                    eval("print 1")
+                                    GetLastRunCompileError()
+                                    GetLastRunRuntimeError()
+                                    Tab(1)
+                                    Pos(0)
+                                ]
+                            end if
+                        end function)(true))
+                end sub
+
+                sub test(p1)
+                end sub
+            `, 'trim', 'source/main.bs', false);
         });
 
         it('complex conditions do not cause scope capture', () => {
-            testTranspile(
-                `a = IsTrue() = true ? true : false `,
-                `a = bslib_ternary(IsTrue() = true, true, false)`
-            );
+            testTranspile(`
+                sub main()
+                    a = str("true") = "true" ? true : false
+                end sub
+            `, `
+                sub main()
+                    if str("true") = "true" then
+                        a = true
+                    else
+                        a = false
+                    end if
+                end sub
+            `);
 
-            testTranspile(
-                `a = m.top.service.IsTrue() ? true : false `,
-                `a = bslib_ternary(m.top.service.IsTrue(), true, false)`
-            );
+            testTranspile(`
+                sub main()
+                    a = m.top.service.IsTrue() ? true : false
+                end sub
+            `, `
+                sub main()
+                    if m.top.service.IsTrue() then
+                        a = true
+                    else
+                        a = false
+                    end if
+                end sub
+            `);
 
-            testTranspile(
-                `a = First(second(third(fourth(m.fifth()[123].truthy(1))))) ? true : false `,
-                `a = bslib_ternary(First(second(third(fourth(m.fifth()[123].truthy(1))))), true, false)`
-            );
+            testTranspile(`
+                sub test(param1)
+                end sub
+
+                sub main()
+                    a = test(test(test(test(m.fifth()[123].truthy(1))))) ? true : false
+                end sub
+            `, `
+                sub test(param1)
+                end sub
+
+                sub main()
+                    if test(test(test(test(m.fifth()[123].truthy(1))))) then
+                        a = true
+                    else
+                        a = false
+                    end if
+                end sub
+            `);
         });
 
         it('captures scope for function call conseqent', () => {
-            testTranspile(
-                `name = zombie.getName() <> invalid ? zombie.GetName() : "zombie"`,
-                `
-                    name = (function(__bsCondition, zombie)
-                            if __bsCondition then
-                                return zombie.GetName()
-                            else
-                                return "zombie"
-                            end if
-                        end function)(zombie.getName() <> invalid, zombie)
-                `
-            );
+            testTranspile(`
+                sub main()
+                    zombie = {}
+                    result = [
+                        zombie.getName() <> invalid ? zombie.GetName() : "zombie"
+                    ]
+                end sub
+            `, `
+                sub main()
+                    zombie = {}
+                    result = [
+                        (function(__bsCondition, zombie)
+                                if __bsCondition then
+                                    return zombie.GetName()
+                                else
+                                    return "zombie"
+                                end if
+                            end function)(zombie.getName() <> invalid, zombie)
+                    ]
+                end sub
+            `);
         });
 
         it('captures scope for function call alternate', () => {
+            testTranspile(`
+                sub main()
+                    zombie = {}
+                    result = [
+                        zombie.getName() = invalid ? "zombie" :  zombie.GetName()
+                    ]
+                end sub
+            `, `
+                sub main()
+                    zombie = {}
+                    result = [
+                        (function(__bsCondition, zombie)
+                                if __bsCondition then
+                                    return "zombie"
+                                else
+                                    return zombie.GetName()
+                                end if
+                            end function)(zombie.getName() = invalid, zombie)
+                    ]
+                end sub
+            `);
+        });
+
+        it('captures scope for complex consequent', () => {
+            testTranspile(`
+                sub main()
+                    settings = {}
+                    result = [
+                        {} ? m.defaults.getAccount(settings.name) : "no"
+                    ]
+                end sub
+            `, `
+                sub main()
+                    settings = {}
+                    result = [
+                        (function(__bsCondition, m, settings)
+                                if __bsCondition then
+                                    return m.defaults.getAccount(settings.name)
+                                else
+                                    return "no"
+                                end if
+                            end function)({}, m, settings)
+                    ]
+                end sub
+            `);
+        });
+
+        it('ignores enum variable names for scope capturing', () => {
+            testTranspile(`
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+                sub main()
+                    d = Direction.up
+                    result = [
+                        d = Direction.up ? Direction.up : false
+                    ]
+                end sub
+            `, `
+                sub main()
+                    d = "up"
+                    result = [
+                        (function(__bsCondition)
+                                if __bsCondition then
+                                    return "up"
+                                else
+                                    return false
+                                end if
+                            end function)(d = "up")
+                    ]
+                end sub
+            `);
+        });
+
+        it('ignores const variable names for scope capturing', () => {
+            testTranspile(`
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+                const UP = "up"
+                sub main()
+                    d = Direction.up
+                    result = [
+                        d = Direction.up ? UP : Direction.down
+                    ]
+                end sub
+            `, `
+                sub main()
+                    d = "up"
+                    result = [
+                        (function(__bsCondition)
+                                if __bsCondition then
+                                    return "up"
+                                else
+                                    return "down"
+                                end if
+                            end function)(d = "up")
+                    ]
+                end sub
+            `);
+        });
+
+        it('supports scope-captured outer, and simple inner', () => {
             testTranspile(
-                `name = zombie.getName() = invalid ? "zombie" :  zombie.GetName()`,
                 `
-                    name = (function(__bsCondition, zombie)
-                            if __bsCondition then
-                                return "zombie"
-                            else
-                                return zombie.GetName()
-                            end if
-                        end function)(zombie.getName() = invalid, zombie)
+                    sub main()
+                        zombie = {}
+                        human = {}
+                        result = zombie <> invalid ? zombie.Attack(human <> invalid ? human: zombie) : "zombie"
+                    end sub
+                `,
+                `
+                    sub main()
+                        zombie = {}
+                        human = {}
+                        if zombie <> invalid then
+                            result = zombie.Attack(bslib_ternary(human <> invalid, human, zombie))
+                        else
+                            result = "zombie"
+                        end if
+                    end sub
                 `
             );
         });
 
-        it('captures scope for complex consequent', () => {
+        it('supports nested ternary in assignment', () => {
             testTranspile(
-                `name = isLoggedIn ? m.defaults.getAccount(settings.name) : "no"`,
                 `
-                    name = (function(__bsCondition, m, settings)
-                            if __bsCondition then
-                                return m.defaults.getAccount(settings.name)
+                    sub main()
+                        result = true ? (false ? "one" : "two") : "three"
+                    end sub
+                `,
+                `
+                    sub main()
+                        if true then
+                            if false then
+                                result = "one"
                             else
-                                return "no"
+                                result = "two"
                             end if
-                        end function)(isLoggedIn, m, settings)
+                        else
+                            result = "three"
+                        end if
+                    end sub
+                `
+            );
+        });
+
+        it('supports nested ternary in DottedSet', () => {
+            testTranspile(
+                `
+                    sub main()
+                        m.result = true ? (false ? "one" : "two") : "three"
+                    end sub
+                `,
+                `
+                    sub main()
+                        if true then
+                            if false then
+                                m.result = "one"
+                            else
+                                m.result = "two"
+                            end if
+                        else
+                            m.result = "three"
+                        end if
+                    end sub
+                `
+            );
+        });
+
+        it('supports nested ternary in IndexedSet', () => {
+            testTranspile(
+                `
+                    sub main()
+                        m["result"] = true ? (false ? "one" : "two") : "three"
+                    end sub
+                `,
+                `
+                    sub main()
+                        if true then
+                            if false then
+                                m["result"] = "one"
+                            else
+                                m["result"] = "two"
+                            end if
+                        else
+                            m["result"] = "three"
+                        end if
+                    end sub
+                `
+            );
+        });
+
+        it('supports ternary in indexedSet key', () => {
+            testTranspile(
+                `
+                    sub main()
+                        m[m.isShiftPressed ? "a" : "b"] = 0
+                        m[m.useAltKey ? m.altKey : m.key] = 1
+                    end sub
+                `,
+                `
+                    sub main()
+                        m[bslib_ternary(m.isShiftPressed, "a", "b")] = 0
+                        m[(function(__bsCondition, m)
+                                if __bsCondition then
+                                    return m.altKey
+                                else
+                                    return m.key
+                                end if
+                            end function)(m.useAltKey, m)] = 1
+                    end sub
                 `
             );
         });
 
         it('supports scope-captured outer, and simple inner', () => {
             testTranspile(
-                `name = zombie <> invalid ? zombie.Attack(human <> invalid ? human: zombie) : "zombie"`,
                 `
-                    name = (function(__bsCondition, human, zombie)
-                            if __bsCondition then
-                                return zombie.Attack(bslib_ternary(human <> invalid, human, zombie))
-                            else
-                                return "zombie"
-                            end if
-                        end function)(zombie <> invalid, human, zombie)
+                    sub main()
+                        zombie = {}
+                        human = {}
+                        result = [
+                            zombie <> invalid ? zombie.Attack(human <> invalid ? human: zombie) : "zombie"
+                        ]
+                    end sub
+                `,
+                `
+                    sub main()
+                        zombie = {}
+                        human = {}
+                        result = [
+                            (function(__bsCondition, human, zombie)
+                                    if __bsCondition then
+                                        return zombie.Attack(bslib_ternary(human <> invalid, human, zombie))
+                                    else
+                                        return "zombie"
+                                    end if
+                                end function)(zombie <> invalid, human, zombie)
+                        ]
+                    end sub
                 `
             );
         });
 
         it('uses scope capture for property access', () => {
             testTranspile(
-                `name = person <> invalid ? person.name : "John Doe"`,
                 `
-                    name = (function(__bsCondition, person)
-                            if __bsCondition then
-                                return person.name
-                            else
-                                return "John Doe"
-                            end if
-                        end function)(person <> invalid, person)
+                    sub main()
+                        person = {}
+                        result = [
+                            person <> invalid ? person.name : "John Doe"
+                        ]
+                    end sub
+                    `,
+                `
+                    sub main()
+                        person = {}
+                        result = [
+                            (function(__bsCondition, person)
+                                    if __bsCondition then
+                                        return person.name
+                                    else
+                                        return "John Doe"
+                                    end if
+                                end function)(person <> invalid, person)
+                        ]
+                    end sub
                 `
             );
         });
@@ -439,7 +973,6 @@ describe('ternary expressions', () => {
                 `print bslib_ternary(name = "bob", invalid, invalid)`
                 , 'none', undefined, false);
         });
-
     });
 });
 

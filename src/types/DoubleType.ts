@@ -5,6 +5,10 @@ import { IntegerType } from './IntegerType';
 import { LongIntegerType } from './LongIntegerType';
 
 export class DoubleType implements BscType {
+    constructor(
+        public typeText?: string
+    ) { }
+
     public isAssignableTo(targetType: BscType) {
         return (
             targetType instanceof DoubleType ||
@@ -26,10 +30,14 @@ export class DoubleType implements BscType {
         }
     }
     public toString() {
-        return 'double';
+        return this.typeText ?? 'double';
     }
 
     public toTypeString(): string {
         return this.toString();
+    }
+
+    public clone() {
+        return new DoubleType(this.typeText);
     }
 }

@@ -1,125 +1,171 @@
-// import * as fsExtra from 'fs';
-// import { expect } from 'chai';
-// import { getManifest, getBsConst } from './Manifest';
-// import { createSandbox, SinonSandbox } from 'sinon';
-// let sinon: SinonSandbox;
+import * as fsExtra from 'fs';
+import { expect } from '../chai-config.spec';
+import { getManifest, getBsConst, parseManifest, parseManifestEntries } from './Manifest';
+import { createSandbox } from 'sinon';
+import { expectThrows, mapToObject, objectToMap, trim } from '../testHelpers.spec';
+const sinon = createSandbox();
 
-// describe('manifest support', () => {
-//     beforeEach(() => {
-//         sinon = createSandbox();
-//     });
-//     afterEach(() => {
-//         sinon.restore();
-//     });
+describe('manifest support', () => {
+    beforeEach(() => {
+        sinon.restore();
+    });
+    afterEach(() => {
+        sinon.restore();
+    });
 
-//     describe('manifest parser', () => {
-//         it('returns an empty map if manifest not found', async () => {
-//             // sinon.stub(fsExtra, 'readFile').returns(<any>
-//             //     Promise.reject(
-//             //         new Error('File not found')
-//             //     )
-//             // );
-//             sinon.stub(fsExtra, 'readFile').returns(<any>
-//                 Promise.reject(
-//                     new Error('File not found')
-//                 )
-//             );
+    describe('manifest parser', () => {
+        it('returns an empty map if manifest not found', async () => {
+            sinon.stub(fsExtra, 'readFile').returns(<any>
+                Promise.reject(
+                    new Error('File not found')
+                )
+            );
 
-//             return expect(await getManifest('/no/manifest/here')).to.eql(new Map());
-//         });
+            return expect(await getManifest('/no/manifest/here')).to.eql(new Map());
+        });
 
-//         it('rejects key-value pairs with no \'=\'', () => {
-//             fs.readFile.mockImplementation((filename, encoding, cb) => cb(/* no error */ null, 'no_equal')
-//             );
+        it('rejects key-value pairs with no \'=\'', () => {
+            expectThrows(() => {
+                parseManifest('key');
+            });
+        });
 
-//             return expect(getManifest('/has/key/but/no/equal')).rejects.toThrowError(
-//                 'No \'=\' detected'
-//             );
-//         });
+        it('ignores comments', () => {
+            return expect(parseManifest('')).to.eql(new Map());
+        });
 
-//         it('ignores comments', () => {
-//             fs.readFile.mockImplementation((filename, encoding, cb) => cb(/* no error */ null, '# this line is ignored!')
-//             );
+        it('retains whitespace for keys and values', () => {
+            expect(
+                mapToObject(
+                    parseManifest(' leading interum and trailing key spaces = value ')
+                )
+            ).to.eql({
+                ' leading interum and trailing key spaces ': ' value '
+            });
+        });
 
-//             return expect(getManifest('/has/a/manifest')).resolves.to.eql(new Map());
-//         });
+        it('does not convert values to primitives', () => {
+            expect(
+                mapToObject(
+                    parseManifest(trim`
+                        name=bob
+                        age=12
+                        enabled=true
+                        height=1.5
+                    `)
+                )
+            ).to.eql({
+                name: 'bob',
+                age: '12',
+                enabled: 'true',
+                height: '1.5'
+            });
+        });
+    });
 
-//         it('ignores empty keys and values', () => {
-//             fs.readFile.mockImplementation((filename, encoding, cb) => cb(/* no error */ null, ['  =lorem', 'ipsum=  '].join('\n'))
-//             );
+    describe('parseManifestEntries (line-aware)', () => {
+        it('returns entries with key, value, and a range that covers just the value', () => {
+            const entries = parseManifestEntries(trim`
+                title=t
+                rsg_version=1.2
+            `);
+            expect(entries).to.have.lengthOf(2);
+            expect(entries[0]).to.deep.include({ key: 'title', value: 't' });
+            expect(entries[0].range.start).to.eql({ line: 0, character: 6 });
+            expect(entries[0].range.end).to.eql({ line: 0, character: 7 });
+            expect(entries[1]).to.deep.include({ key: 'rsg_version', value: '1.2' });
+            expect(entries[1].range.start).to.eql({ line: 1, character: 12 });
+            expect(entries[1].range.end).to.eql({ line: 1, character: 15 });
+        });
 
-//             return expect(getManifest('/has/blank/keys/and/values')).resolves.to.eql(new Map());
-//         });
+        it('skips empty lines and comments without breaking line numbers', () => {
+            const entries = parseManifestEntries(trim`
+                # comment
 
-//         it('trims whitespace from keys and values', () => {
-//             fs.readFile.mockImplementation((filename, encoding, cb) => cb(/* no error */ null, '    key = value    ')
-//             );
+                title=t
+                # another
+                rsg_version=1.3
+            `);
+            expect(entries).to.have.lengthOf(2);
+            expect(entries[0].key).to.equal('title');
+            expect(entries[0].range.start.line).to.equal(2);
+            expect(entries[1].key).to.equal('rsg_version');
+            expect(entries[1].range.start.line).to.equal(4);
+        });
 
-//             return expect(getManifest('/has/extra/whitespace')).resolves.to.eql(
-//                 new Map([['key', 'value']])
-//             );
-//         });
+        it('handles CRLF line endings', () => {
+            //CRLF must be a literal `\r\n` in the source — template-literal whitespace stripping
+            //cannot reliably produce CRLF, so keep the explicit form here.
+            const entries = parseManifestEntries(`title=t\r\nrsg_version=1.2\r\n`);
+            expect(entries).to.have.lengthOf(2);
+            expect(entries[1].range.start.line).to.equal(1);
+        });
 
-//         it('parses key-value pairs', () => {
-//             fs.readFile.mockImplementation((filename, encoding, cb) => cb(
-//                 /* no error */ null,
-//                 ['foo=bar=baz', 'lorem=true', 'five=5', 'six=6.000', 'version=1.2.3'].join('\n')
-//             )
-//             );
+        it('throws on lines with no equals sign', () => {
+            expect(() => parseManifestEntries('not_a_key_value_line')).to.throw(/No '=' detected/);
+        });
 
-//             return expect(getManifest('/has/a/manifest')).resolves.to.eql(
-//                 new Map([
-//                     ['foo', 'bar=baz'],
-//                     ['lorem', true],
-//                     ['five', 5],
-//                     ['six', 6],
-//                     ['version', '1.2.3']
-//                 ])
-//             );
-//         });
-//     });
+        it('parseManifest is consistent with parseManifestEntries', () => {
+            const contents = trim`
+                title=t
+                rsg_version=1.2
+                bs_const=DEBUG=true
+            `;
+            const map = parseManifest(contents);
+            const entries = parseManifestEntries(contents);
+            //every entry's key should be in the map with the same value
+            for (const entry of entries) {
+                expect(map.get(entry.key)).to.equal(entry.value);
+            }
+            //and the map's size matches entry count
+            expect(map.size).to.equal(entries.length);
+        });
+    });
 
-//     describe('bs_const parser', () => {
-//         it('returns an empty map if \'bs_const\' isn\'t found', () => {
-//             let manifest = new Map([['containsBsConst', false]]);
-//             expect(getBsConst(manifest)).to.eql(new Map());
-//         });
+    describe('bs_const parser', () => {
+        function test(manifest: string, expected) {
+            expect(
+                getBsConst(
+                    parseManifest(manifest)
+                )
+            ).to.eql(
+                objectToMap(expected)
+            );
+        }
 
-//         it('requires a string value for \'bs_const\' attributes', () => {
-//             let manifest = new Map([['bs_const', 1.2345]]);
-//             expect(() => getBsConst(manifest)).toThrowError('Invalid bs_const right-hand side');
-//         });
+        it('returns an empty map if \'bs_const\' isn\'t found', () => {
+            test('', new Map());
+        });
 
-//         it('ignores empty key-value pairs', () => {
-//             let manifest = new Map([['bs_const', ';;;;']]);
-//             expect(getBsConst(manifest)).to.eql(new Map());
-//         });
+        it('ignores empty key-value pairs', () => {
+            test('bs_const=;;;;', new Map());
+        });
 
-//         it('rejects key-value pairs with no \'=\'', () => {
-//             let manifest = new Map([['bs_const', 'i-have-no-equal']]);
-//             expect(() => getBsConst(manifest)).toThrowError('No \'=\' detected');
-//         });
+        it('rejects key-value pairs with no \'=\'', () => {
+            expectThrows(() => test(`bs_const=i-have-no-equal`, {}), `No '=' detected for key i-have-no-equal.  bs_const constants must be of the form 'key=value'.`);
+        });
 
-//         it('trims whitespace from keys and values', () => {
-//             let manifest = new Map([['bs_const', '   key   =  true  ']]);
-//             expect(getBsConst(manifest)).to.eql(new Map([['key', true]]));
-//         });
+        it('trims whitespace from keys and values', () => {
+            let manifest = new Map([['bs_const', '   key   =  true  ']]);
+            expect(getBsConst(manifest)).to.eql(new Map([['key', true]]));
+        });
 
-//         it('rejects non-boolean values', () => {
-//             let manifest = new Map([['bs_const', 'string=word']]);
+        it('rejects non-boolean values', () => {
+            const manifest = new Map([['bs_const', 'string=word']]);
+            expectThrows(() => {
+                getBsConst(manifest);
+            });
+        });
 
-//             expect(() => getBsConst(manifest)).to.throw;
-//         });
+        it('allows case-insensitive booleans', () => {
+            let manifest = new Map([['bs_const', 'foo=true;bar=FalSE']]);
 
-//         it('allows case-insensitive booleans', () => {
-//             let manifest = new Map([['bs_const', 'foo=true;bar=FalSE']]);
-
-//             expect(getBsConst(manifest)).to.eql(
-//                 new Map([
-//                     ['foo', true],
-//                     ['bar', false]
-//                 ])
-//             );
-//         });
-//     });
-// });
+            expect(getBsConst(manifest)).to.eql(
+                new Map([
+                    ['foo', true],
+                    ['bar', false]
+                ])
+            );
+        });
+    });
+});

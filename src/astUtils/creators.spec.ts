@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from '../chai-config.spec';
 import { createStringLiteral } from './creators';
 
 describe('creators', () => {

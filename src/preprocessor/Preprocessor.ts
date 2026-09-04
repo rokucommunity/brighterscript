@@ -1,5 +1,5 @@
-import type { Token } from '../lexer';
-import { TokenKind } from '../lexer';
+import type { Token } from '../lexer/Token';
+import { TokenKind } from '../lexer/TokenKind';
 import type * as CC from './Chunk';
 import type { Diagnostic } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -17,12 +17,12 @@ export class Preprocessor implements CC.Visitor {
     /** The set of errors encountered when pre-processing conditional compilation directives. */
     public diagnostics = [] as Diagnostic[];
 
-    public processedTokens: Token[];
+    public processedTokens: Token[] = [];
 
     /**
      * Filters the tokens contained within a set of chunks based on a set of constants.
-     * @param chunks the chunks from which to retrieve tokens
-     * @param bsConst the set of constants defined in a BrightScript `manifest` file's `bs_const` property
+     * @param tokens the tokens
+     * @param manifest a manifest used to extract bs_const properties from
      * @returns an object containing an array of `errors` and an array of `processedTokens` filtered by conditional
      *          compilation directives included within
      */
@@ -85,7 +85,8 @@ export class Preprocessor implements CC.Visitor {
      * @returns an empty array, since `#const` directives are always removed from the evaluated script.
      */
     public visitDeclaration(chunk: CC.DeclarationChunk) {
-        if (this.constants.has(chunk.name.text)) {
+        const nameLower = chunk.name?.text?.toLocaleLowerCase();
+        if (this.constants.has(nameLower)) {
             this.addError({
                 ...DiagnosticMessages.duplicateConstDeclaration(chunk.name.text),
                 range: chunk.name.range
@@ -101,8 +102,8 @@ export class Preprocessor implements CC.Visitor {
                 value = false;
                 break;
             case TokenKind.Identifier:
-                if (this.constants.has(chunk.value.text)) {
-                    value = this.constants.get(chunk.value.text);
+                if (this.constants.has(nameLower)) {
+                    value = this.constants.get(nameLower);
                     break;
                 }
 
@@ -118,7 +119,7 @@ export class Preprocessor implements CC.Visitor {
                 });
         }
 
-        this.constants.set(chunk.name.text, value);
+        this.constants.set(nameLower, value);
 
         return [];
     }
@@ -129,6 +130,7 @@ export class Preprocessor implements CC.Visitor {
      * @throws a JavaScript error with the provided message
      */
     public visitError(chunk: CC.ErrorChunk): never {
+        // eslint-disable-next-line @typescript-eslint/no-throw-literal
         throw this.addError({
             ...DiagnosticMessages.hashError(chunk.message.text),
             range: chunk.range
@@ -168,19 +170,19 @@ export class Preprocessor implements CC.Visitor {
     }
 
     /**
-     * Resolves a token to a JavaScript boolean value, or throws an error.
-     * @param token the token to resolve to either `true`, `false`, or an error
-     * @throws if attempting to reference an undefined `#const` or if `token` is neither `true`, `false`, nor an identifier.
+     * Resolves a token to a JavaScript boolean value, or logs a diagnostic error.
+     * @param token the token to resolve to either `true`, `false`, or `undefined`
      */
-    public evaluateCondition(token: Token): boolean {
+    public evaluateCondition(token: Token): boolean | undefined {
         switch (token.kind) {
             case TokenKind.True:
                 return true;
             case TokenKind.False:
                 return false;
             case TokenKind.Identifier:
-                if (this.constants.has(token.text)) {
-                    return !!this.constants.get(token.text);
+                const nameLower = token.text?.toLowerCase();
+                if (this.constants.has(nameLower)) {
+                    return !!this.constants.get(nameLower);
                 }
                 this.addError({
                     ...DiagnosticMessages.referencedConstDoesNotExist(),

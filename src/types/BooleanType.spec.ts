@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from '../chai-config.spec';
 
 import { BooleanType } from './BooleanType';
 import { DynamicType } from './DynamicType';

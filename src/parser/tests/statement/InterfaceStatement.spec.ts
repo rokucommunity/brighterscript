@@ -1,17 +1,16 @@
-import { getTestGetTypedef } from '../../../testHelpers.spec';
-import { standardizePath as s } from '../../../util';
+import { expectZeroDiagnostics, getTestGetTypedef, getTestTranspile } from '../../../testHelpers.spec';
+import { rootDir } from '../../../testHelpers.spec';
 import { Program } from '../../../Program';
 
 describe('InterfaceStatement', () => {
-    const rootDir = s`${process.cwd()}/.tmp/rootDir`;
     let program: Program;
+    const testTranspile = getTestTranspile(() => [program, rootDir]);
+    const testGetTypedef = getTestGetTypedef(() => [program, rootDir]);
     beforeEach(() => {
         program = new Program({
             rootDir: rootDir
         });
     });
-
-    const testGetTypedef = getTestGetTypedef(() => [program, rootDir]);
 
     it('allows strange keywords as property names', () => {
         testGetTypedef(`
@@ -60,5 +59,50 @@ describe('InterfaceStatement', () => {
                 someField as string
             end interface
         `, undefined, undefined, undefined, true);
+    });
+
+    it('allows declaring multiple interfaces in a file', () => {
+        program.setFile('source/interfaces.bs', `
+            interface Iface1
+                name as dynamic
+            end interface
+            interface IFace2
+                prop as dynamic
+            end interface
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
+    it('allows comments after an interface', () => {
+        testTranspile(`
+            interface Iface1
+                name as dynamic
+            end interface
+            'this comment was throwing exception during transpile
+            interface IFace2
+                prop as dynamic
+            end interface
+        `, `
+            'this comment was throwing exception during transpile
+        `);
+    });
+
+    it('allows parameters in interface method signatures', () => {
+        testGetTypedef(`
+            interface Person
+                sub someFunc(name as string, age as integer) as string
+                someField as string
+            end interface
+        `, undefined, undefined, undefined, true);
+    });
+
+    it('supports empty interfaces', () => {
+        const file = program.setFile('source/main.bs', `
+           interface SomeInterface
+           end interface
+        `);
+        program.validate();
+        expectZeroDiagnostics(file);
     });
 });

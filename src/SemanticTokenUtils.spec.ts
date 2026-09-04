@@ -1,5 +1,5 @@
 /* eslint-disable no-bitwise */
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-languageserver-protocol';
 import { encodeSemanticTokens, getModifierBitFlags, semanticTokensLegend } from './SemanticTokenUtils';
 import util from './util';

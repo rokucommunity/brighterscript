@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import { Throttler } from './Throttler';
 import { createSandbox, fake } from 'sinon';
 import { Deferred } from './deferred';

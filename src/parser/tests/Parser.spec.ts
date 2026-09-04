@@ -1,7 +1,6 @@
-import type { Token } from '../../lexer';
-import { TokenKind, ReservedWords } from '../../lexer';
-import { interpolatedRange } from '../../astUtils/creators';
-import type { Range } from '../../astUtils';
+import type { Token } from '../../lexer/Token';
+import { TokenKind, ReservedWords } from '../../lexer/TokenKind';
+import type { Range } from 'vscode-languageserver';
 
 /* A set of utilities to be used while writing tests for the BRS parser. */
 
@@ -11,9 +10,9 @@ import type { Range } from '../../astUtils';
 export function token(kind: TokenKind, text?: string): Token {
     return {
         kind: kind,
-        text: text,
-        isReserved: ReservedWords.has((text || '').toLowerCase()),
-        range: interpolatedRange,
+        text: text!,
+        isReserved: ReservedWords.has((text ?? '').toLowerCase()),
+        range: null,
         leadingWhitespace: ''
     };
 }

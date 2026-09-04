@@ -1,0 +1,380 @@
+import { createAssignmentStatement, createBlock, createDottedSetStatement, createIfStatement, createIndexedSetStatement, createToken } from '../../astUtils/creators';
+import { isAssignmentStatement, isBinaryExpression, isBlock, isBody, isBrsFile, isDottedGetExpression, isDottedSetStatement, isGroupingExpression, isIndexedGetExpression, isIndexedSetStatement, isLiteralExpression, isNamespaceStatement, isUnaryExpression, isVariableExpression } from '../../astUtils/reflection';
+import { createVisitor, WalkMode } from '../../astUtils/visitors';
+import type { BrsFile } from '../../files/BrsFile';
+import type { BeforeFileTranspileEvent } from '../../interfaces';
+import type { Token } from '../../lexer/Token';
+import { TokenKind } from '../../lexer/TokenKind';
+import type { Expression, Statement } from '../../parser/AstNode';
+import type { TernaryExpression } from '../../parser/Expression';
+import { LiteralExpression } from '../../parser/Expression';
+import { ParseMode } from '../../parser/Parser';
+import type { ConstStatement, IfStatement, NamespaceStatement } from '../../parser/Statement';
+import type { Scope } from '../../Scope';
+import util from '../../util';
+
+export class BrsFilePreTranspileProcessor {
+    public constructor(
+        private event: BeforeFileTranspileEvent<BrsFile>
+    ) {
+    }
+
+    public process() {
+        if (isBrsFile(this.event.file)) {
+            this.iterateExpressions();
+        }
+    }
+
+    private iterateExpressions() {
+        const scope = this.event.program.getFirstScopeForFile(this.event.file);
+        //TODO move away from this loop and use a visitor instead
+        for (let expression of this.event.file.parser.references.expressions) {
+            if (expression) {
+                if (isUnaryExpression(expression)) {
+                    this.processExpression(expression.right, scope);
+                } else {
+                    this.processExpression(expression, scope);
+                }
+            }
+        }
+        const walkMode = WalkMode.visitExpressionsRecursive;
+        const visitor = createVisitor({
+            TernaryExpression: (ternaryExpression) => {
+                this.processTernaryExpression(ternaryExpression, visitor, walkMode);
+            }
+        });
+        this.event.file.ast.walk(visitor, { walkMode: walkMode });
+    }
+
+    private processTernaryExpression(ternaryExpression: TernaryExpression, visitor: ReturnType<typeof createVisitor>, walkMode: WalkMode) {
+        function getOwnerAndKey(statement: Statement) {
+            const parent = statement.parent;
+            if (isBlock(parent) || isBody(parent)) {
+                let idx = parent.statements.indexOf(statement);
+                if (idx > -1) {
+                    return { owner: parent.statements, key: idx };
+                }
+            }
+        }
+
+        //if the ternary expression is part of a simple assignment, rewrite it as an `IfStatement`
+        let parent = ternaryExpression.findAncestor(x => !isGroupingExpression(x));
+        let operator: Token;
+        //operators like `+=` will cause the RHS to be a BinaryExpression  due to how the parser handles this. let's do a little magic to detect this situation
+        if (
+            //parent is a binary expression
+            isBinaryExpression(parent) &&
+            (
+                (isAssignmentStatement(parent.parent) && isVariableExpression(parent.left) && parent.left.name === parent.parent.name) ||
+                (isDottedSetStatement(parent.parent) && isDottedGetExpression(parent.left) && parent.left.name === parent.parent.name) ||
+                (isIndexedSetStatement(parent.parent) && isIndexedGetExpression(parent.left) && parent.left.index === parent.parent.index)
+            )
+        ) {
+            //keep the correct operator (i.e. `+=`)
+            operator = parent.operator;
+            //use the outer parent and skip this BinaryExpression
+            parent = parent.parent;
+        }
+        let ifStatement: IfStatement;
+
+        if (isAssignmentStatement(parent)) {
+            ifStatement = createIfStatement({
+                if: createToken(TokenKind.If, 'if', ternaryExpression.questionMarkToken.range),
+                condition: ternaryExpression.test,
+                then: createToken(TokenKind.Then, 'then', ternaryExpression.questionMarkToken.range),
+                thenBranch: createBlock({
+                    statements: [
+                        createAssignmentStatement({
+                            name: parent.name,
+                            equals: operator ?? parent.equals,
+                            value: ternaryExpression.consequent
+                        })
+                    ]
+                }),
+                else: createToken(TokenKind.Else, 'else', ternaryExpression.questionMarkToken.range),
+                elseBranch: createBlock({
+                    statements: [
+                        createAssignmentStatement({
+                            name: parent.name,
+                            equals: operator ?? parent.equals,
+                            value: ternaryExpression.alternate
+                        })
+                    ]
+                }),
+                endIf: createToken(TokenKind.EndIf, 'end if', ternaryExpression.questionMarkToken.range)
+            });
+        } else if (isDottedSetStatement(parent)) {
+            ifStatement = createIfStatement({
+                if: createToken(TokenKind.If, 'if', ternaryExpression.questionMarkToken.range),
+                condition: ternaryExpression.test,
+                then: createToken(TokenKind.Then, 'then', ternaryExpression.questionMarkToken.range),
+                thenBranch: createBlock({
+                    statements: [
+                        createDottedSetStatement({
+                            obj: parent.obj,
+                            name: parent.name,
+                            equals: operator ?? parent.equals,
+                            value: ternaryExpression.consequent
+                        })
+                    ]
+                }),
+                else: createToken(TokenKind.Else, 'else', ternaryExpression.questionMarkToken.range),
+                elseBranch: createBlock({
+                    statements: [
+                        createDottedSetStatement({
+                            obj: parent.obj,
+                            name: parent.name,
+                            equals: operator ?? parent.equals,
+                            value: ternaryExpression.alternate
+                        })
+                    ]
+                }),
+                endIf: createToken(TokenKind.EndIf, 'end if', ternaryExpression.questionMarkToken.range)
+            });
+            //if this is an indexedSetStatement, and the ternary expression is NOT an index
+        } else if (isIndexedSetStatement(parent) && parent.index !== ternaryExpression && !parent.additionalIndexes?.includes(ternaryExpression)) {
+            ifStatement = createIfStatement({
+                if: createToken(TokenKind.If, 'if', ternaryExpression.questionMarkToken.range),
+                condition: ternaryExpression.test,
+                then: createToken(TokenKind.Then, 'then', ternaryExpression.questionMarkToken.range),
+                thenBranch: createBlock({
+                    statements: [
+                        createIndexedSetStatement({
+                            obj: parent.obj,
+                            openingSquare: parent.openingSquare,
+                            index: parent.index,
+                            closingSquare: parent.closingSquare,
+                            equals: operator ?? parent.equals,
+                            value: ternaryExpression.consequent,
+                            additionalIndexes: parent.additionalIndexes
+                        })
+                    ]
+                }),
+                else: createToken(TokenKind.Else, 'else', ternaryExpression.questionMarkToken.range),
+                elseBranch: createBlock({
+                    statements: [
+                        createIndexedSetStatement({
+                            obj: parent.obj,
+                            openingSquare: parent.openingSquare,
+                            index: parent.index,
+                            closingSquare: parent.closingSquare,
+                            equals: operator ?? parent.equals,
+                            value: ternaryExpression.alternate,
+                            additionalIndexes: parent.additionalIndexes
+                        })
+                    ]
+                }),
+                endIf: createToken(TokenKind.EndIf, 'end if', ternaryExpression.questionMarkToken.range)
+            });
+        }
+
+        if (ifStatement) {
+            let { owner, key } = getOwnerAndKey(parent as Statement) ?? {};
+            if (owner && key !== undefined) {
+                this.event.editor.setProperty(owner, key, ifStatement);
+            }
+            //we've injected an ifStatement, so now we need to trigger a walk to handle any nested ternary expressions
+            ifStatement.walk(visitor, { walkMode: walkMode });
+        }
+    }
+
+    /**
+     * Given a string optionally separated by dots, find an enum related to it.
+     * For example, all of these would return the enum: `SomeNamespace.SomeEnum.SomeMember`, SomeEnum.SomeMember, `SomeEnum`
+     */
+    private getEnumInfo(name: string, containingNamespace: string, scope: Scope | undefined) {
+
+        //do we have an enum MEMBER reference? (i.e. SomeEnum.someMember or SomeNamespace.SomeEnum.SomeMember)
+        let memberLink = scope?.getEnumMemberFileLink(name, containingNamespace);
+        if (memberLink) {
+            const value = memberLink.item.getValue();
+            return {
+                enum: memberLink.item.parent,
+                value: new LiteralExpression(createToken(
+                    //just use float literal for now...it will transpile properly with any literal value
+                    value.startsWith('"') ? TokenKind.StringLiteral : TokenKind.FloatLiteral,
+                    value
+                ))
+            };
+        }
+
+        //do we have an enum reference? (i.e. SomeEnum or SomeNamespace.SomeEnum)
+        let enumLink = scope?.getEnumFileLink(name, containingNamespace);
+
+        if (enumLink) {
+            return {
+                enum: enumLink.item
+            };
+        }
+
+    }
+
+    /**
+     * Recursively resolve a const or enum value until we get to the final resolved expression
+     * Returns an object with the resolved value and a flag indicating if a circular reference was detected
+     */
+    private resolveConstValue(value: Expression, scope: Scope | undefined, containingNamespace: string | undefined, visited = new Set<string>()): { value: Expression; isCircular: boolean } {
+        // If it's already a literal, return it as-is
+        if (isLiteralExpression(value)) {
+            return { value: value, isCircular: false };
+        }
+
+        // If it's a variable expression, try to resolve it as a const or enum
+        if (isVariableExpression(value)) {
+            const entityName = value.name.text.toLowerCase();
+
+            // Prevent infinite recursion by tracking visited constants
+            if (visited.has(entityName)) {
+                return { value: value, isCircular: true }; // Return the original value to avoid infinite loop
+            }
+            visited.add(entityName);
+
+            // Try to resolve as const first
+            const constStatement = scope?.getConstFileLink(entityName, containingNamespace)?.item;
+            if (constStatement) {
+                // Recursively resolve the const value
+                return this.resolveConstValue(constStatement.value, scope, containingNamespace, visited);
+            }
+
+            // Try to resolve as enum member
+            const enumInfo = this.getEnumInfo(entityName, containingNamespace, scope);
+            if (enumInfo?.value) {
+                // Enum values are already resolved to literals by getEnumInfo
+                return { value: enumInfo.value, isCircular: false };
+            }
+        }
+
+        // If it's a dotted get expression (e.g., namespace.const or namespace.enum.member), try to resolve it
+        if (isDottedGetExpression(value)) {
+            const parts = util.splitExpression(value);
+            const processedNames: string[] = [];
+
+            for (let part of parts) {
+                if (isVariableExpression(part) || isDottedGetExpression(part)) {
+                    processedNames.push(part?.name?.text?.toLowerCase());
+                } else {
+                    return { value: value, isCircular: false }; // Can't resolve further
+                }
+            }
+
+            const entityName = processedNames.join('.');
+
+            // Prevent infinite recursion
+            if (visited.has(entityName)) {
+                return { value: value, isCircular: true };
+            }
+            visited.add(entityName);
+
+            // Try to resolve as const first
+            const constStatement = scope?.getConstFileLink(entityName, containingNamespace)?.item;
+            if (constStatement) {
+                // Recursively resolve the const value
+                return this.resolveConstValue(constStatement.value, scope, containingNamespace, visited);
+            }
+
+            // Try to resolve as enum member
+            const enumInfo = this.getEnumInfo(entityName, containingNamespace, scope);
+            if (enumInfo?.value) {
+                // Enum values are already resolved to literals by getEnumInfo
+                return { value: enumInfo.value, isCircular: false };
+            }
+        }
+
+        // Return the value as-is if we can't resolve it further
+        return { value: value, isCircular: false };
+    }
+
+    private processExpression(ternaryExpression: Expression, scope: Scope | undefined) {
+        let containingNamespace = this.event.file.getNamespaceStatementForPosition(ternaryExpression.range.start)?.getName(ParseMode.BrighterScript);
+        this.processExpressionInNamespace(ternaryExpression, scope, containingNamespace, new Set<ConstStatement>());
+    }
+
+    private processExpressionInNamespace(expression: Expression, scope: Scope | undefined, containingNamespace: string | undefined, visitedConsts: Set<ConstStatement>) {
+        const parts = util.splitExpression(expression);
+
+        const processedNames: string[] = [];
+        for (let part of parts) {
+            let entityName: string;
+            if (isVariableExpression(part) || isDottedGetExpression(part)) {
+                processedNames.push(part?.name?.text?.toLocaleLowerCase());
+                entityName = processedNames.join('.');
+            } else {
+                return;
+            }
+
+            let value: Expression;
+            let isCircular = false;
+
+            //did we find a const? transpile the value
+            let constStatement = scope?.getConstFileLink(entityName, containingNamespace)?.item;
+            if (constStatement) {
+                // Recursively resolve the const value to its final form
+                const resolved = this.resolveConstValue(constStatement.value, scope, containingNamespace);
+                value = resolved.value;
+                isCircular = resolved.isCircular;
+            } else {
+                //did we find an enum member? transpile that
+                let enumInfo = this.getEnumInfo(entityName, containingNamespace, scope);
+                if (enumInfo?.value) {
+                    value = enumInfo.value;
+                }
+            }
+
+            if (value && !isCircular) {
+                //If the const's value is a complex expression (e.g. an aa literal containing
+                //enum refs), recursively process inner refs so they're inlined too. Without
+                //this step, cross-file const usage leaves nested enum/const refs unresolved
+                //because the consumer file's pre-transpile pass never visits the inlined
+                //value's children (they live in the const's defining file).
+                if (constStatement && !isLiteralExpression(value)) {
+                    //if we're already inlining this const upstream, skip both the recursive
+                    //walk AND the transpile override. Setting the override here would still
+                    //create a transpile-time cycle (the value contains a ref back to a const
+                    //that has been overridden to re-inline this same value).
+                    if (visitedConsts.has(constStatement)) {
+                        return;
+                    }
+                    this.processInlinedConstValue(value, scope, constStatement, visitedConsts);
+                }
+
+                //override the transpile for this item.
+                this.event.editor.setProperty(part, 'transpile', (state) => {
+                    if (isLiteralExpression(value)) {
+                        return value.transpile(state);
+                    } else {
+                        //wrap non-literals with parens to prevent on-device compile errors
+                        return ['(', ...value.transpile(state), ')'];
+                    }
+                });
+                //we are finished handling this expression
+                return;
+            }
+        }
+    }
+
+    private processInlinedConstValue(value: Expression, scope: Scope | undefined, constStatement: ConstStatement, visitedConsts: Set<ConstStatement>) {
+        //skip if we've already walked this const's value during the current outer
+        //inline. This guards against unbounded recursion when consts have circular
+        //aggregate references (const A = { x: B }; const B = { y: A }) and avoids
+        //redundant work for diamond reference graphs.
+        if (visitedConsts.has(constStatement)) {
+            return;
+        }
+        visitedConsts.add(constStatement);
+        const innerNamespace = constStatement.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+        value.walk(createVisitor({
+            VariableExpression: (varExpr) => {
+                if (isDottedGetExpression(varExpr.parent)) {
+                    return;
+                }
+                this.processExpressionInNamespace(varExpr, scope, innerNamespace, visitedConsts);
+            },
+            DottedGetExpression: (dottedExpr) => {
+                if (isDottedGetExpression(dottedExpr.parent)) {
+                    return;
+                }
+                this.processExpressionInNamespace(dottedExpr, scope, innerNamespace, visitedConsts);
+            }
+        }), { walkMode: WalkMode.visitExpressionsRecursive });
+    }
+}

@@ -9,27 +9,27 @@ export class FunctionType implements BscType {
     }
 
     /**
-     * The name of the function for this type. Can be null
+     * The name of the function for this type. Can be undefined
      */
-    public name: string;
+    public name: string | undefined;
 
     /**
      * Determines if this is a sub or not
      */
     public isSub = false;
 
-    public params = [] as Array<{ name: string; type: BscType; isRequired: boolean }>;
+    public params = [] as Array<{ name: string; type: BscType; isOptional: boolean }>;
 
     public setName(name: string) {
         this.name = name;
         return this;
     }
 
-    public addParameter(name: string, type: BscType, isRequired: boolean) {
+    public addParameter(name: string, type: BscType, isOptional: boolean) {
         this.params.push({
             name: name,
             type: type,
-            isRequired: isRequired === false ? false : true
+            isOptional: isOptional === true ? true : false
         });
         return this;
     }
@@ -65,9 +65,9 @@ export class FunctionType implements BscType {
     }
 
     public toString() {
-        let paramTexts = [];
+        let paramTexts: string[] = [];
         for (let param of this.params) {
-            paramTexts.push(`${param.name}${param.isRequired ? '' : '?'} as ${param.type.toString()}`);
+            paramTexts.push(`${param.name}${param.isOptional ? '?' : ''} as ${param.type.toString()}`);
         }
         return `${this.isSub ? 'sub' : 'function'} ${this.name}(${paramTexts.join(', ')}) as ${this.returnType.toString()}`;
 
@@ -75,5 +75,15 @@ export class FunctionType implements BscType {
 
     public toTypeString(): string {
         return 'Function';
+    }
+
+    public clone() {
+        const result = new FunctionType(this.returnType);
+        for (let param of this.params) {
+            result.addParameter(param.name, param.type, param.isOptional);
+        }
+        result.isSub = this.isSub;
+        result.returnType = this.returnType?.clone();
+        return result;
     }
 }

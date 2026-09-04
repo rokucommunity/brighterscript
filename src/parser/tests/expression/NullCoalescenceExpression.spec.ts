@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-for-in-array */
-import { expect } from 'chai';
+import { expect } from '../../../chai-config.spec';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
-import { Lexer } from '../../../lexer';
+import { Lexer } from '../../../lexer/Lexer';
 import { Parser, ParseMode } from '../../Parser';
 import { AssignmentStatement, ExpressionStatement, ForEachStatement } from '../../Statement';
 import type {
@@ -14,7 +14,7 @@ import {
     LiteralExpression,
     NullCoalescingExpression
 } from '../../Expression';
-import { Program } from '../../..';
+import { Program } from '../../../Program';
 import { expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
 
 describe('NullCoalescingExpression', () => {
@@ -190,55 +190,190 @@ describe('NullCoalescingExpression', () => {
         });
 
         it('uses the proper prefix when aliased package is installed', () => {
-            program.addOrReplaceFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
-            testTranspile(
-                'a = user ?? false',
-                `a = rokucommunity_bslib_coalesce(user, false)`
-            );
+            program.setFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
+            testTranspile(`
+                sub main()
+                    a = user ?? false
+                end sub
+            `, `
+                sub main()
+                    a = rokucommunity_bslib_coalesce(user, false)
+                end sub
+            `);
         });
 
         it('properly transpiles null coalesence assignments - simple', () => {
-            testTranspile(`a = user ?? {"id": "default"}`, 'a = bslib_coalesce(user, {\n    "id": "default"\n})', 'none');
+            testTranspile(`
+                sub main()
+                    a = user ?? {"id": "default"}
+                end sub
+            `, `
+                sub main()
+                    a = bslib_coalesce(user, {
+                        "id": "default"
+                    })
+                end sub
+            `);
         });
 
         it('properly transpiles null coalesence assignments - complex consequent', () => {
-            testTranspile(`a = user.getAccount() ?? {"id": "default"}`, `
-                a = (function(user)
-                        __bsConsequent = user.getAccount()
-                        if __bsConsequent <> invalid then
-                            return __bsConsequent
-                        else
-                            return {
-                                "id": "default"
-                            }
-                        end if
-                    end function)(user)
+            testTranspile(`
+                sub main()
+                    user = {}
+                    a = user.getAccount() ?? {"id": "default"}
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    a = (function(user)
+                            __bsConsequent = user.getAccount()
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return {
+                                    "id": "default"
+                                }
+                            end if
+                        end function)(user)
+                end sub
             `);
         });
 
         it('transpiles null coalesence assignment for variable alternate- complex consequent', () => {
-            testTranspile(`a = obj.link ?? fallback`, `
-                a = (function(fallback, obj)
-                        __bsConsequent = obj.link
-                        if __bsConsequent <> invalid then
-                            return __bsConsequent
-                        else
-                            return fallback
-                        end if
-                    end function)(fallback, obj)
+            testTranspile(`
+                sub main()
+                    a = obj.link ?? false
+                end sub
+            `, `
+                sub main()
+                    a = (function(obj)
+                            __bsConsequent = obj.link
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return false
+                            end if
+                        end function)(obj)
+                end sub
             `);
         });
 
+        it('does not capture restricted OS functions', () => {
+            //failOnDiagnostic=false: the bare `eval("print 1")` triggers the rsg_version=1.2
+            //deprecation diagnostic under default settings, which is unrelated to what this test covers.
+            testTranspile(`
+                sub main()
+                    num = 1
+                    test(num.ToStr() = "1" ?? [
+                        createObject("roDeviceInfo")
+                        type(true)
+                        GetGlobalAA()
+                        box(1)
+                        run("file.brs", invalid)
+                        eval("print 1")
+                        GetLastRunCompileError()
+                        GetLastRunRuntimeError()
+                        Tab(1)
+                        Pos(0)
+                    ])
+                end sub
+                sub test(p1)
+                end sub
+            `, `
+                sub main()
+                    num = 1
+                    test((function(num)
+                            __bsConsequent = num.ToStr() = "1"
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return [
+                                    createObject("roDeviceInfo")
+                                    type(true)
+                                    GetGlobalAA()
+                                    box(1)
+                                    run("file.brs", invalid)
+                                    eval("print 1")
+                                    GetLastRunCompileError()
+                                    GetLastRunRuntimeError()
+                                    Tab(1)
+                                    Pos(0)
+                                ]
+                            end if
+                        end function)(num))
+                end sub
+
+                sub test(p1)
+                end sub
+            `, 'trim', 'source/main.bs', false);
+        });
+
         it('properly transpiles null coalesence assignments - complex alternate', () => {
-            testTranspile(`a = user ?? m.defaults.getAccount(settings.name)`, `
-                a = (function(m, settings, user)
-                        __bsConsequent = user
-                        if __bsConsequent <> invalid then
-                            return __bsConsequent
-                        else
-                            return m.defaults.getAccount(settings.name)
-                        end if
-                    end function)(m, settings, user)
+            testTranspile(`
+                sub main()
+                    user = {}
+                    settings = {}
+                    a = user ?? m.defaults.getAccount(settings.name)
+                end sub
+            `, `
+                sub main()
+                    user = {}
+                    settings = {}
+                    a = (function(m, settings, user)
+                            __bsConsequent = user
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return m.defaults.getAccount(settings.name)
+                            end if
+                        end function)(m, settings, user)
+                end sub
+            `);
+        });
+
+        it('ignores enum variable names', () => {
+            testTranspile(`
+                enum Direction
+                    up = "up"
+                end enum
+                sub main()
+                    d = invalid
+                    a = d ?? Direction.up
+                end sub
+            `, `
+                sub main()
+                    d = invalid
+                    a = (function(d)
+                            __bsConsequent = d
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return "up"
+                            end if
+                        end function)(d)
+                end sub
+            `);
+        });
+
+        it('ignores const variable names', () => {
+            testTranspile(`
+                const USER = "user"
+                sub main()
+                    settings = {}
+                    a = m.defaults.getAccount(settings.name) ?? USER
+                end sub
+            `, `
+                sub main()
+                    settings = {}
+                    a = (function(m, settings)
+                            __bsConsequent = m.defaults.getAccount(settings.name)
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return "user"
+                            end if
+                        end function)(m, settings)
+                end sub
             `);
         });
     });

@@ -2,7 +2,7 @@ import { identifier, token, EOF } from '../parser/tests/Parser.spec';
 import { TokenKind } from '../lexer/TokenKind';
 import { Preprocessor } from './Preprocessor';
 import { BrightScriptChunk, DeclarationChunk, ErrorChunk, HashIfStatement } from './Chunk';
-import { expect } from 'chai';
+import { expect } from '../chai-config.spec';
 import { createSandbox } from 'sinon';
 let sinon = createSandbox();
 

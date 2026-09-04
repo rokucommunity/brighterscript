@@ -1,7 +1,7 @@
 /* eslint no-template-curly-in-string: 0 */
-import { expect } from 'chai';
+import { expect } from '../chai-config.spec';
 
-import { TokenKind } from '.';
+import { TokenKind, LexerTextCache, LEXER_TEXT_CACHE_MAX_ENTRIES } from './TokenKind';
 import { Lexer } from './Lexer';
 import { isToken } from './Token';
 import { rangeToArray } from '../parser/Parser.spec';
@@ -9,6 +9,13 @@ import { Range } from 'vscode-languageserver';
 import util from '../util';
 
 describe('lexer', () => {
+    it('recognizes the `const` keyword', () => {
+        let { tokens } = Lexer.scan('const');
+        expect(tokens.map(x => x.kind)).to.eql([
+            TokenKind.Const,
+            TokenKind.Eof
+        ]);
+    });
     it('recognizes namespace keywords', () => {
         let { tokens } = Lexer.scan('namespace end namespace endnamespace end   namespace');
         expect(tokens.map(x => x.kind)).to.eql([
@@ -17,6 +24,67 @@ describe('lexer', () => {
             TokenKind.EndNamespace,
             TokenKind.EndNamespace,
             TokenKind.Eof
+        ]);
+    });
+
+    it('recognizes the question mark operator in various contexts', () => {
+        expectKinds('? ?? ?. ?[ ?.[ ?( ?@', [
+            TokenKind.Question,
+            TokenKind.QuestionQuestion,
+            TokenKind.QuestionDot,
+            TokenKind.QuestionLeftSquare,
+            TokenKind.QuestionDot,
+            TokenKind.LeftSquareBracket,
+            TokenKind.QuestionLeftParen,
+            TokenKind.QuestionAt
+        ]);
+    });
+
+    it('separates optional chain characters and LeftSquare when found at beginning of statement locations', () => {
+        //a statement starting with a question mark is actually a print statement, so we need to keep the ? separate from [
+        expectKinds(`?[ ?[ : ?[ ?[`, [
+            TokenKind.Question,
+            TokenKind.LeftSquareBracket,
+            TokenKind.QuestionLeftSquare,
+            TokenKind.Colon,
+            TokenKind.Question,
+            TokenKind.LeftSquareBracket,
+            TokenKind.QuestionLeftSquare
+        ]);
+    });
+
+    it('separates optional chain characters and LeftParen when found at beginning of statement locations', () => {
+        //a statement starting with a question mark is actually a print statement, so we need to keep the ? separate from [
+        expectKinds(`?( ?( : ?( ?(`, [
+            TokenKind.Question,
+            TokenKind.LeftParen,
+            TokenKind.QuestionLeftParen,
+            TokenKind.Colon,
+            TokenKind.Question,
+            TokenKind.LeftParen,
+            TokenKind.QuestionLeftParen
+        ]);
+    });
+
+    it('handles QuestionDot and Square properly', () => {
+        expectKinds('?.[ ?. [', [
+            TokenKind.QuestionDot,
+            TokenKind.LeftSquareBracket,
+            TokenKind.QuestionDot,
+            TokenKind.LeftSquareBracket
+        ]);
+    });
+
+    it('does not make conditional chaining tokens with space between', () => {
+        expectKinds('? . ? [ ? ( ? @', [
+            TokenKind.Question,
+            TokenKind.Dot,
+            TokenKind.Question,
+            TokenKind.LeftSquareBracket,
+            TokenKind.Question,
+            TokenKind.LeftParen,
+            TokenKind.Question,
+            TokenKind.At
         ]);
     });
 
@@ -33,11 +101,6 @@ describe('lexer', () => {
     it('recognizes library token', () => {
         let { tokens } = Lexer.scan('library');
         expect(tokens[0].kind).to.eql(TokenKind.Library);
-    });
-
-    it('recognizes the question mark operator', () => {
-        let { tokens } = Lexer.scan('?');
-        expect(tokens[0].kind).to.equal(TokenKind.Question);
     });
 
     it('produces an at symbol token', () => {
@@ -788,6 +851,22 @@ describe('lexer', () => {
             expect(f.text).to.eql('2.5e3');
         });
 
+        it('supports very long numbers with !', () => {
+            function doTest(number: string) {
+                let f = Lexer.scan(number).tokens[0];
+                expect(f.kind).to.equal(TokenKind.FloatLiteral);
+                expect(f.text).to.eql(number);
+            }
+            doTest('0!');
+            doTest('0!');
+            doTest('147483648!');
+            doTest('2147483648!');
+            doTest('2147483648111!');
+            doTest('2.4e-38!');
+            doTest('2.4e-32342342342342342342342342348!');
+            doTest('2.4e+32342342342342342342342342348!');
+        });
+
         it('supports larger-than-supported-precision floats to be defined with exponents', () => {
             let f = Lexer.scan('2.3659475627512424e-38').tokens[0];
             expect(f.kind).to.equal(TokenKind.FloatLiteral);
@@ -963,6 +1042,55 @@ describe('lexer', () => {
             ]);
         });
 
+        it('handles whitespace between hash and keywords', () => {
+            function doTest(text: string, ...expected: TokenKind[]) {
+                let { tokens } = Lexer.scan(text);
+                expect(tokens.map(t => t.kind)).to.deep.equal([
+                    ...expected,
+                    TokenKind.Eof
+                ]);
+            }
+            //#if
+            doTest('# if true', TokenKind.HashIf, TokenKind.True);
+            doTest('#\tif true', TokenKind.HashIf, TokenKind.True);
+            doTest('#\t   \t\t \tif true', TokenKind.HashIf, TokenKind.True);
+
+            //#else
+            doTest('# else', TokenKind.HashElse);
+            doTest('#\telse', TokenKind.HashElse);
+            doTest('#\t   \t\t \telse', TokenKind.HashElse);
+
+            //#elseif
+            doTest('# elseif true', TokenKind.HashElseIf, TokenKind.True);
+            doTest('#\telseif true', TokenKind.HashElseIf, TokenKind.True);
+            doTest('#\t   \t\t \telseif true', TokenKind.HashElseIf, TokenKind.True);
+
+            //#else if
+            doTest('# else if true', TokenKind.HashElseIf, TokenKind.True);
+            doTest('#\t elseif true', TokenKind.HashElseIf, TokenKind.True);
+            doTest('#\t   \t\t \t else if true', TokenKind.HashElseIf, TokenKind.True);
+
+            //#endif
+            doTest('# endif', TokenKind.HashEndIf);
+            doTest('#\tendif', TokenKind.HashEndIf);
+            doTest('#\t   \t\t \tendif', TokenKind.HashEndIf);
+
+            //#end if
+            doTest('# end if', TokenKind.HashEndIf);
+            doTest('#\tend if', TokenKind.HashEndIf);
+            doTest('#\t   \t\t \tend if', TokenKind.HashEndIf);
+
+            //#const
+            doTest('# const thing=true', TokenKind.HashConst, TokenKind.Identifier, TokenKind.Equal, TokenKind.True);
+            doTest('#\tconst thing=true', TokenKind.HashConst, TokenKind.Identifier, TokenKind.Equal, TokenKind.True);
+            doTest('#\t   \t\t \tconst thing=true', TokenKind.HashConst, TokenKind.Identifier, TokenKind.Equal, TokenKind.True);
+
+            //#error
+            doTest('# error', TokenKind.HashError);
+            doTest('#\terror', TokenKind.HashError);
+            doTest('#\t   \t\t \terror', TokenKind.HashError);
+        });
+
         it('reads constant aliases', () => {
             let { tokens } = Lexer.scan('#const bar foo');
             expect(tokens.map(t => t.kind)).to.deep.equal([
@@ -1034,6 +1162,14 @@ describe('lexer', () => {
                 TokenKind.HashEndIf,
                 TokenKind.HashEndIf,
                 TokenKind.HashEndIf,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('does not require a message after #error', () => {
+            let { tokens } = Lexer.scan('#error');
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.HashError,
                 TokenKind.Eof
             ]);
         });
@@ -1140,6 +1276,17 @@ describe('lexer', () => {
         });
     });
 
+    it('recognizes enum-related keywords', () => {
+        expect(
+            Lexer.scan('enum end enum endenum').tokens.map(x => x.kind)
+        ).to.eql([
+            TokenKind.Enum,
+            TokenKind.EndEnum,
+            TokenKind.EndEnum,
+            TokenKind.Eof
+        ]);
+    });
+
     it('recognizes class-related keywords', () => {
         expect(
             Lexer.scan('class public protected private end class endclass new override').tokens.map(x => x.kind)
@@ -1154,6 +1301,58 @@ describe('lexer', () => {
             TokenKind.Override,
             TokenKind.Eof
         ]);
+    });
+
+    describe('token text canonicalization', () => {
+        it('uses one shared string instance for fixed-text token kinds', () => {
+            const { tokens } = Lexer.scan('a.b.c(1)(2)');
+            const dots = tokens.filter(x => x.kind === TokenKind.Dot);
+            const parens = tokens.filter(x => x.kind === TokenKind.LeftParen);
+            expect(dots).to.be.lengthOf(2);
+            expect(parens).to.be.lengthOf(2);
+            //same text, and literally the same string instance
+            expect(dots[0].text).to.eql('.');
+            expect(dots[0].text === dots[1].text).to.be.true;
+            expect(parens[0].text === parens[1].text).to.be.true;
+        });
+
+        it('still reports the correct text for fixed-text kinds', () => {
+            const { tokens } = Lexer.scan('a ?? b ?. c @. d');
+            expect(
+                tokens.filter(x => x.kind !== TokenKind.Eof).map(x => x.text)
+            ).to.eql(['a', '??', 'b', '?.', 'c', '@.', 'd']);
+        });
+
+        it('interns repeated whitespace and newline text', () => {
+            const { tokens } = Lexer.scan('sub a()\n    x = 1\n    y = 2\nend sub', { includeWhitespace: true });
+            const indents = tokens.filter(x => x.kind === TokenKind.Whitespace && x.text === '    ');
+            expect(indents.length).to.be.greaterThan(1);
+            //every occurrence should be the same instance
+            for (const token of indents) {
+                expect(token.text === indents[0].text).to.be.true;
+            }
+        });
+
+        it('stops interning once the cache is full but still lexes correctly', () => {
+            //every line gets a unique indent width, far more than the cache can hold.
+            //`x` alone on the line keeps the only whitespace run the leading indent.
+            let source = '';
+            const widths = [];
+            for (let i = 1; i <= LEXER_TEXT_CACHE_MAX_ENTRIES + 50; i++) {
+                widths.push(i);
+                source += `${' '.repeat(i)}x\n`;
+            }
+            const { tokens } = Lexer.scan(source, { includeWhitespace: true });
+
+            //cache must not grow past the cap
+            expect(LexerTextCache.size).to.be.at.most(LEXER_TEXT_CACHE_MAX_ENTRIES);
+
+            //and the text must still be exactly right, cached or not
+            const indents = tokens
+                .filter(x => x.kind === TokenKind.Whitespace)
+                .map(x => x.text.length);
+            expect(indents).to.eql(widths);
+        });
     });
 
     describe('whitespace', () => {
@@ -1185,13 +1384,15 @@ describe('lexer', () => {
     });
 
     it('identifies brighterscript source literals', () => {
-        let { tokens } = Lexer.scan('LINE_NUM SOURCE_FILE_PATH SOURCE_LINE_NUM FUNCTION_NAME SOURCE_FUNCTION_NAME SOURCE_LOCATION PKG_PATH PKG_LOCATION');
+        let { tokens } = Lexer.scan('LINE_NUM SOURCE_FILE_PATH SOURCE_LINE_NUM FUNCTION_NAME SOURCE_FUNCTION_NAME SOURCE_NAMESPACE_NAME SOURCE_NAMESPACE_ROOT_NAME SOURCE_LOCATION PKG_PATH PKG_LOCATION');
         expect(tokens.map(x => x.kind)).to.eql([
             TokenKind.LineNumLiteral,
             TokenKind.SourceFilePathLiteral,
             TokenKind.SourceLineNumLiteral,
             TokenKind.FunctionNameLiteral,
             TokenKind.SourceFunctionNameLiteral,
+            TokenKind.SourceNamespaceNameLiteral,
+            TokenKind.SourceNamespaceRootNameLiteral,
             TokenKind.SourceLocationLiteral,
             TokenKind.PkgPathLiteral,
             TokenKind.PkgLocationLiteral,
@@ -1304,3 +1505,10 @@ describe('lexer', () => {
         ]);
     });
 });
+
+function expectKinds(text: string, tokenKinds: TokenKind[]) {
+    let actual = Lexer.scan(text).tokens.map(x => x.kind);
+    //remove the EOF token
+    actual.pop();
+    expect(actual).to.eql(tokenKinds);
+}

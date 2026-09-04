@@ -1,4 +1,4 @@
-import { expect } from 'chai';
+import { expect } from './chai-config.spec';
 import { Stopwatch } from './Stopwatch';
 import { util } from './util';
 

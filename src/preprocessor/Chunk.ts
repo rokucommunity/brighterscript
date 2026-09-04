@@ -1,4 +1,4 @@
-import type { Token } from '../lexer';
+import type { Token } from '../lexer/Token';
 import type { Range } from 'vscode-languageserver';
 import util from '../util';
 
@@ -93,10 +93,7 @@ export class ErrorChunk implements Chunk {
         readonly hashError: Token,
         readonly message: Token
     ) {
-        this.range = util.createRangeFromPositions(
-            this.hashError.range.start,
-            (this.message ?? this.hashError).range.end
-        );
+        this.range = util.createBoundingRange(this.hashError, this.message);
     }
     public readonly range: Range;
 

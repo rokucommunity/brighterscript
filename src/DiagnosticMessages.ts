@@ -13,11 +13,17 @@ export let DiagnosticMessages = {
         code: 1000,
         severity: DiagnosticSeverity.Error
     }),
-    callToUnknownFunction: (name: string, scopeName: string) => ({
-        message: `Cannot find function with name '${name}' when this file is included in scope '${scopeName}'`,
+    /**
+     *
+     * @param name for local vars, it's the var name. for namespaced parts, it's the specific part that's unknown (`alpha.beta.charlie` would result in "cannot find name 'charlie')
+     * @param fullName if a namespaced name, this is the full name `alpha.beta.charlie`, otherwise it's the same as `name`
+     */
+    cannotFindName: (name: string, fullName?: string) => ({
+        message: `Cannot find name '${name}'`,
         code: 1001,
         data: {
-            functionName: name
+            name: name,
+            fullName: fullName ?? name
         },
         severity: DiagnosticSeverity.Error
     }),
@@ -72,9 +78,12 @@ export let DiagnosticMessages = {
         code: 1011,
         severity: DiagnosticSeverity.Warning
     }),
-    scriptImportCaseMismatch: (correctFilePath: string) => ({
+    scriptImportCaseMismatch: (correctFilePath: string, correctUri?: string) => ({
         message: `Script import path does not match casing of actual file path '${correctFilePath}'.`,
         code: 1012,
+        data: {
+            correctFilePath: correctUri ?? correctFilePath
+        },
         severity: DiagnosticSeverity.Warning
     }),
     fileNotReferencedByAnyOtherFile: () => ({
@@ -226,7 +235,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error
     }),
     mismatchedEndCallableKeyword: (expectedCallableType: string, actualCallableType: string) => ({
-        message: `Expected 'end ${expectedCallableType}' to terminate ${expectedCallableType} block but found 'end ${actualCallableType}' instead.`,
+        message: `Expected 'end ${expectedCallableType?.replace(/^end\s*/, '')}' to terminate ${expectedCallableType} block but found 'end ${actualCallableType?.replace(/^end\s*/, '')}' instead.`,
         code: 1042,
         severity: DiagnosticSeverity.Error
     }),
@@ -348,8 +357,8 @@ export let DiagnosticMessages = {
         code: 1065,
         severity: DiagnosticSeverity.Error
     }),
-    expectedStatementOrFunctionCallButReceivedExpression: () => ({
-        message: `Expected statement or function call but instead found expression`,
+    expectedStatementOrFunctionCallButReceivedExpression: (expressionType = 'expression') => ({
+        message: `Expected statement or function call but instead found ${expressionType}`,
         code: 1066,
         severity: DiagnosticSeverity.Error
     }),
@@ -566,8 +575,8 @@ export let DiagnosticMessages = {
         code: 1108,
         severity: DiagnosticSeverity.Error
     }),
-    expectedToken: (tokenKind: string) => ({
-        message: `Expected '${tokenKind}'`,
+    expectedToken: (...tokenKinds: string[]) => ({
+        message: `Expected token '${tokenKinds.join(`' or '`)}'`,
         code: 1109,
         severity: DiagnosticSeverity.Error
     }),
@@ -636,12 +645,217 @@ export let DiagnosticMessages = {
         code: 1123,
         severity: DiagnosticSeverity.Error
     }),
+    enumValueMustBeType: (expectedType: string) => ({
+        message: `Enum value must be type '${expectedType}'`,
+        code: 1124,
+        severity: DiagnosticSeverity.Error
+    }),
+    enumValueIsRequired: (expectedType: string) => ({
+        message: `Value is required for ${expectedType} enum`,
+        code: 1125,
+        severity: DiagnosticSeverity.Error
+    }),
+    unknownEnumValue: (name: string, enumName: string) => ({
+        message: `Property '${name}' does not exist on enum '${enumName}'`,
+        code: 1126,
+        severity: DiagnosticSeverity.Error
+    }),
+    duplicateEnumDeclaration: (scopeName: string, enumName: string) => ({
+        message: `Scope '${scopeName}' already contains an enum with name '${enumName}'`,
+        code: 1127,
+        severity: DiagnosticSeverity.Error
+    }),
+    unknownRoSGNode: (nodeName: string) => ({
+        message: `Unknown roSGNode '${nodeName}'`,
+        code: 1128,
+        severity: DiagnosticSeverity.Error
+    }),
+    unknownBrightScriptComponent: (componentName: string) => ({
+        message: `Unknown BrightScript component '${componentName}'`,
+        code: 1129,
+        severity: DiagnosticSeverity.Error
+    }),
+    mismatchCreateObjectArgumentCount: (componentName: string, allowedArgCounts: number[], actualCount: number) => {
+        const argCountArray = (allowedArgCounts || [1]).sort().filter((value, index, self) => self.indexOf(value) === index);
+        return {
+            message: `For ${componentName}, expected ${argCountArray.map(c => c.toString()).join(' or ')} total arguments, but got ${actualCount}.`,
+            code: 1130,
+            severity: DiagnosticSeverity.Error
+        };
+    },
+    deprecatedBrightScriptComponent: (componentName: string, deprecatedDescription?: string) => ({
+        message: `${componentName} has been deprecated${deprecatedDescription ? ': ' + deprecatedDescription : ''}`,
+        code: 1131,
+        severity: DiagnosticSeverity.Error
+    }),
+    circularReferenceDetected: (items: string[], scopeName: string) => ({
+        message: `Circular reference detected between ${Array.isArray(items) ? items.join(' -> ') : ''} in scope '${scopeName}'`,
+        code: 1132,
+        severity: DiagnosticSeverity.Error
+    }),
+    unexpectedStatementOutsideFunction: () => ({
+        message: `Unexpected statement found outside of function body`,
+        code: 1133,
+        severity: DiagnosticSeverity.Error
+    }),
+    detectedTooDeepFileSource: (numberOfParentDirectories: number) => ({
+        message: `Expected directory depth no larger than 7, but found ${numberOfParentDirectories}`,
+        code: 1134,
+        severity: DiagnosticSeverity.Error
+    }),
     illegalContinueStatement: () => ({
         message: `Continue statement must be contained within a loop statement`,
-        code: 1124,
+        code: 1135,
+        severity: DiagnosticSeverity.Error
+    }),
+    keywordMustBeDeclaredAtNamespaceLevel: (keyword: string) => ({
+        message: `${keyword} must be declared at the root level or within a namespace`,
+        code: 1136,
+        severity: DiagnosticSeverity.Error
+    }),
+    itemCannotBeUsedAsVariable: (itemType: string) => ({
+        message: `${itemType} cannot be used as a variable`,
+        code: 1137,
+        severity: DiagnosticSeverity.Error
+    }),
+    callfuncHasToManyArgs: (numberOfArgs: number) => ({
+        message: `You can not have more than 5 arguments in a callFunc. ${numberOfArgs} found.`,
+        code: 1138,
+        severity: DiagnosticSeverity.Error
+    }),
+    noOptionalChainingInLeftHandSideOfAssignment: () => ({
+        message: `Optional chaining may not be used in the left-hand side of an assignment`,
+        code: 1139,
+        severity: DiagnosticSeverity.Error
+    }),
+    /**
+     * @param name for function calls where we can't find the name of the function
+     * @param fullName if a namespaced name, this is the full name `alpha.beta.charlie`, otherwise it's the same as `name`
+     */
+    cannotFindFunction: (name: string, fullName?: string) => ({
+        message: `Cannot find function '${name}'`,
+        code: 1140,
+        data: {
+            name: name,
+            fullName: fullName ?? name
+        },
+        severity: DiagnosticSeverity.Error
+    }),
+    voidFunctionMayNotReturnValue: (functionType = 'function') => ({
+        message: `Void ${functionType} may not return a value`,
+        code: 1141,
+        severity: DiagnosticSeverity.Error
+    }),
+    nonVoidFunctionMustReturnValue: (functionType = 'function') => ({
+        message: `Non-void ${functionType} must return a value`,
+        code: 1142,
+        severity: DiagnosticSeverity.Error
+    }),
+    propAccessNotPermittedAfterFunctionCallInExpressionStatement: (accessDescription: string) => ({
+        message: `${accessDescription} access not permitted after a function call when used in an expression statement`,
+        code: 1143,
+        severity: DiagnosticSeverity.Error
+    }),
+    computedPropertyKeyMustBeConstantExpression: () => ({
+        message: `Computed property keys must be a compile-time constant (enum member or const value)`,
+        code: 1144,
+        severity: DiagnosticSeverity.Error
+    }),
+    computedAAKeyMustBeStringExpression: () => ({
+        message: `Computed associative array keys must resolve to a string value`,
+        code: 1145,
+        severity: DiagnosticSeverity.Error
+    }),
+    featureRequiresMinFirmwareVersion: (featureName: string, minimumVersion: string, configuredVersion: string) => ({
+        message: `'${featureName}' requires Roku firmware version ${minimumVersion} or higher (current target is ${configuredVersion})`,
+        code: 1146,
+        severity: DiagnosticSeverity.Error
+    }),
+    reservedBuiltinUsedAsValue: (name: string) => ({
+        message: `'${name}' is a reserved builtin and can only be used as a function call (e.g. '${name}(...)')`,
+        code: 1147,
+        severity: DiagnosticSeverity.Error
+    }),
+    /**
+     * Emitted when a block recovers from a wrong terminator (e.g. `while ... next` or `for ... end while`).
+     * `expected` lists the legal terminators in preferred-first order; `found` is the actual text.
+     * Quick fixes consume the structured `data` to build "Convert '<found>' to '<expected[i]>'" actions.
+     */
+    mismatchedEndingToken: (expected: string[] = [], found = '') => {
+        const expectedList = Array.isArray(expected) ? expected : [];
+        return {
+            message: `Expected ${expectedList.map(text => `'${text}'`).join(' or ')} but found '${found}'`,
+            code: 1148,
+            data: {
+                expected: expectedList,
+                found: found
+            },
+            severity: DiagnosticSeverity.Error
+        };
+    },
+    /**
+     * Callable was marked removed in `availability.os` or `availability.rsg`, and the project's
+     * effective firmware/rsg_version meets that threshold. The call is a hard error on device.
+     */
+    globalCallableRemoved: (name = '', axis: AvailabilityAxis = 'os', threshold = '', current = '') => ({
+        message: `'${name}' is removed in ${formatAvailabilityAxis(axis, threshold)} or higher (current target is ${current})`,
+        code: 1149,
+        data: { name: name, axis: axis, threshold: threshold, current: current },
+        severity: DiagnosticSeverity.Error
+    }),
+    /**
+     * Callable was marked deprecated in `availability.os` or `availability.rsg`, and the project's
+     * effective firmware/rsg_version meets that threshold. The call still works but should
+     * be migrated.
+     */
+    globalCallableDeprecated: (name = '', axis: AvailabilityAxis = 'os', threshold = '', current = '') => ({
+        message: `'${name}' is deprecated as of ${formatAvailabilityAxis(axis, threshold)} (current target is ${current})`,
+        code: 1150,
+        data: { name: name, axis: axis, threshold: threshold, current: current },
+        severity: DiagnosticSeverity.Warning
+    }),
+    rsgVersionRequiresMinFirmware: (rsgVersion: string, requiredFirmware: string, configuredFirmware: string) => ({
+        message: `rsg_version=${rsgVersion} requires Roku firmware version ${requiredFirmware} or higher (current target is ${configuredFirmware})`,
+        code: 1151,
+        severity: DiagnosticSeverity.Error
+    }),
+    invalidRsgVersionFormat: (value: string) => ({
+        message: `'${value}' is not a valid rsg_version (expected value like '1.2' or '1.3')`,
+        code: 1152,
+        severity: DiagnosticSeverity.Warning
+    }),
+    rsgVersionDeprecated: (rsgVersion: string, suggestedReplacement: string) => ({
+        message: `rsg_version=${rsgVersion} is deprecated; consider upgrading to rsg_version=${suggestedReplacement}`,
+        code: 1153,
+        severity: DiagnosticSeverity.Warning
+    }),
+    rsgVersionRemoved: (rsgVersion: string, removedAt: string, replacement: string) => ({
+        message: `rsg_version=${rsgVersion} was removed in firmware ${removedAt}; use rsg_version=${replacement}`,
+        code: 1154,
+        severity: DiagnosticSeverity.Error
+    }),
+    /**
+     * @param name the full name of the function, including namespace
+     * @param length the actual length of `name`
+     * @param maxLength the maximum length a function name may be before it gets truncated by the device at runtime
+     */
+    functionNameTooLong: (name: string, length: number, maxLength: number) => ({
+        message: `Function name '${name}' is ${length} characters long, which exceeds the maximum of ${maxLength}. It will be truncated when converted with ToStr()`,
+        code: 1155,
+        severity: DiagnosticSeverity.Warning
+    }),
+    xmlTagMismatch: (openingTag: string, closingTag: string) => ({
+        message: `Mismatched closing tag: expected '</${openingTag}>' but found '</${closingTag}>'`,
+        code: 1156,
         severity: DiagnosticSeverity.Error
     })
 };
+
+export type AvailabilityAxis = 'os' | 'rsg';
+
+function formatAvailabilityAxis(axis: AvailabilityAxis, version: string): string {
+    return axis === 'os' ? `Roku OS ${version}` : `rsg_version=${version}`;
+}
 
 export const DiagnosticCodeMap = {} as Record<keyof (typeof DiagnosticMessages), number>;
 export let diagnosticCodes = [] as number[];
@@ -665,3 +879,14 @@ export type DiagnosticMessageType<K extends keyof D, D extends Record<string, (.
     ReturnType<D[K]> &
     //include the missing properties from BsDiagnostic
     Pick<BsDiagnostic, 'range' | 'file' | 'relatedInformation' | 'tags'>;
+
+/**
+ * Refines a diagnostic to its concrete `DiagnosticMessageType<K>` shape (including the typed `data`
+ * payload) when its code matches `DiagnosticCodeMap[key]`.
+ */
+export function isDiagnosticOfType<K extends keyof typeof DiagnosticMessages>(
+    diagnostic: { code?: number | string },
+    key: K
+): diagnostic is DiagnosticMessageType<K> {
+    return diagnostic.code === DiagnosticCodeMap[key];
+}
