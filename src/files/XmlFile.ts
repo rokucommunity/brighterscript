@@ -793,6 +793,7 @@ export class XmlFile {
 
         //add the source map comment if configured to emit sourcemaps
         if (this.program.options.sourceMap) {
+            util.stripTrailingSourceMappingURLComment(transpileResult);
             return new SourceNode(null, null, state.srcPath, [
                 transpileResult,
                 //add the sourcemap reference comment

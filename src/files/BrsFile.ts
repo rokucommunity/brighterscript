@@ -1489,6 +1489,7 @@ export class BrsFile {
         state.editor.undoAll();
 
         if (this.program.options.sourceMap) {
+            util.stripTrailingSourceMappingURLComment(transpileResult);
             const stagingFileName = path.basename(state.srcPath).replace(/\.bs$/, '.brs');
             return new SourceNode(null, null, stagingFileName, [
                 transpileResult,
