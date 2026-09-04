@@ -644,8 +644,7 @@ export class BrsFile {
 
                 //function call
             } else if (isCallExpression(assignment.value)) {
-                let callee = assignment.value.callee;
-                let calleeName = isVariableExpression(callee) ? callee.name?.text : undefined;
+                let calleeName: string = (assignment.value.callee as any)?.name?.text;
                 if (calleeName) {
                     let func = this.getCallableByName(calleeName);
                     if (func) {
@@ -741,9 +740,12 @@ export class BrsFile {
 
                 let args = [] as CallableArg[];
                 //TODO convert if stmts to use instanceof instead
-                for (let arg of expression.args) {
+                //`arg` is intentionally `any` here; these branches duck-type across several expression
+                //shapes (`.name`, `.value.value`) that no single static type describes
+                for (let arg of expression.args as any) {
 
                     //is a literal parameter value
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
                     if (isLiteralExpression(arg)) {
                         args.push({
                             range: arg.range,
@@ -754,7 +756,7 @@ export class BrsFile {
                         });
 
                         //is variable being passed into argument
-                    } else if (isVariableExpression(arg)) {
+                    } else if (arg.name) {
                         args.push({
                             range: arg.range,
                             //TODO - look up the data type of the actual variable
@@ -764,13 +766,11 @@ export class BrsFile {
                             typeToken: undefined
                         });
 
-                        //`arg.value` isn't a property on the `Expression` base type; this duck-types across whatever
-                        //expression subtypes carry a nested `.value.value`, matching the pre-existing (unclear) runtime shape
-                    } else if ((arg as any).value) {
+                    } else if (arg.value) {
                         let text = '';
                         /* istanbul ignore next: TODO figure out why value is undefined sometimes */
-                        if ((arg as any).value.value) {
-                            text = (arg as any).value.value.toString();
+                        if (arg.value.value) {
+                            text = arg.value.value.toString();
                         }
                         let callableArg = {
                             range: arg.range,

@@ -56,8 +56,7 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
             if (options.editor) {
                 //`T[K]` can't be statically unified with the now-narrowed `returnValue` because `T`/`K` are unresolved generics here;
                 //callers only ever pass AST-shaped values, so this is safe in practice
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-                options.editor.setProperty(owner, key, returnValue as any);
+                options.editor.setProperty(owner, key, returnValue as unknown as T[keyof T]);
 
                 //we don't have an editor, modify the AST directly
             } else {

@@ -731,9 +731,7 @@ export class XmlFile {
         return result;
     }
 
-    private logDebug(...args: any[]) {
-        //`args` is intentionally untyped passthrough for the logger, so there's no tighter type to spread than `any[]`
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+    private logDebug(...args: unknown[]) {
         this.program.logger.debug('XmlFile', chalk.green(this.pkgPath), ...args);
     }
 

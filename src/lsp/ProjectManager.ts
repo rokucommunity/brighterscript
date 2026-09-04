@@ -1019,15 +1019,10 @@ export class ProjectManager {
 
         //pipe all project-specific events through our emitter, and include the project reference
         project.on('all', (eventName, data) => {
-            //`eventName` is a generic passthrough string here, so this bypasses the overloaded `emit()` dispatcher
-            //and calls the underlying emitter directly - but still deferred to next tick, matching `emit()`'s own behavior
-            void (async () => {
-                await util.sleep(0);
-                this.emitter.emit(eventName, {
-                    ...data,
-                    project: project
-                });
-            })();
+            void this.emit(eventName, {
+                ...data,
+                project: project
+            });
         });
         return project;
     }
@@ -1069,12 +1064,11 @@ export class ProjectManager {
     public on(eventName: 'project-activate', handler: (data: { project: LspProject }) => MaybePromise<void>);
     public on(eventName: 'diagnostics', handler: (data: { project: LspProject; diagnostics: LspDiagnostic[] }) => MaybePromise<void>);
     public on(eventName: string, handler: (payload: any) => MaybePromise<void>) {
-        const wrappedHandler = (payload: any) => {
-            void handler(payload);
-        };
-        this.emitter.on(eventName, wrappedHandler);
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+        this.emitter.on(eventName, handler as any);
         return () => {
-            this.emitter.removeListener(eventName, wrappedHandler);
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+            this.emitter.removeListener(eventName, handler as any);
         };
     }
 
@@ -1083,6 +1077,7 @@ export class ProjectManager {
     private emit(eventName: 'critical-failure', data: { project: LspProject; message: string });
     private emit(eventName: 'project-activate', data: { project: LspProject });
     private emit(eventName: 'diagnostics', data: { project: LspProject; diagnostics: LspDiagnostic[] });
+    private emit(eventName: string, data?: Record<string, any>);
     private async emit(eventName: string, data?) {
         //emit these events on next tick, otherwise they will be processed immediately which could cause issues
         await util.sleep(0);

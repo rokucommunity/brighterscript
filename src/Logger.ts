@@ -44,11 +44,11 @@ export class Logger {
         return '[' + chalk.grey(formatTimestamp()) + ']';
     }
 
-    private writeToLog(method: (...consoleArgs: any[]) => void, ...args: any[]) {
+    private writeToLog(method: (...consoleArgs: any[]) => void, ...args: unknown[]) {
         if (this._logLevel === LogLevel.trace) {
             method = console.trace;
         }
-        let finalArgs: any[] = [];
+        let finalArgs: unknown[] = [];
         //evaluate any functions to get their values.
         //This allows more complicated values to only be evaluated if this log level is active
         for (let arg of args) {
@@ -65,8 +65,6 @@ export class Logger {
         }
         allArgs.push(this.indent);
 
-        //`allArgs`/`finalArgs` are intentionally untyped passthrough, so there's no tighter type to spread than `any[]`
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         method.call(console, ...allArgs, ...finalArgs);
         if (Logger.emitter.listenerCount('log') > 0) {
             Logger.emitter.emit('log', finalArgs.join(' '));
@@ -76,10 +74,8 @@ export class Logger {
     /**
      * Log an error message to the console
      */
-    error(...messages: any[]) {
+    error(...messages: unknown[]) {
         if (this._logLevel >= LogLevel.error) {
-            //`messages` is intentionally untyped passthrough, so there's no tighter type to spread than `any[]`
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
             this.writeToLog(console.error, ...messages);
         }
     }
@@ -87,9 +83,8 @@ export class Logger {
     /**
      * Log a warning message to the console
      */
-    warn(...messages: any[]) {
+    warn(...messages: unknown[]) {
         if (this._logLevel >= LogLevel.warn) {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
             this.writeToLog(console.warn, ...messages);
         }
     }
@@ -97,18 +92,16 @@ export class Logger {
     /**
      * Log a standard log message to the console
      */
-    log(...messages: any[]) {
+    log(...messages: unknown[]) {
         if (this._logLevel >= LogLevel.log) {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
             this.writeToLog(console.log, ...messages);
         }
     }
     /**
      * Log an info message to the console
      */
-    info(...messages: any[]) {
+    info(...messages: unknown[]) {
         if (this._logLevel >= LogLevel.info) {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
             this.writeToLog(console.info, ...messages);
         }
     }
@@ -116,9 +109,8 @@ export class Logger {
     /**
      * Log a debug message to the console
      */
-    debug(...messages: any[]) {
+    debug(...messages: unknown[]) {
         if (this._logLevel >= LogLevel.debug) {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
             this.writeToLog(console.debug, ...messages);
         }
     }
@@ -126,9 +118,8 @@ export class Logger {
     /**
      * Log a debug message to the console
      */
-    trace(...messages: any[]) {
+    trace(...messages: unknown[]) {
         if (this._logLevel >= LogLevel.trace) {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
             this.writeToLog(console.trace, ...messages);
         }
     }

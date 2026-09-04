@@ -642,11 +642,7 @@ export class Program {
      */
     public addOrReplaceFile<T extends BscFile>(fileEntry: FileObj, fileContents: string): T;
     public addOrReplaceFile<T extends BscFile>(fileParam: FileObj | string, fileContents: string): T {
-        if (typeof fileParam === 'string') {
-            return this.setFile<T>(fileParam, fileContents);
-        } else {
-            return this.setFile<T>(fileParam, fileContents);
-        }
+        return this.setFile<T>(fileParam as string, fileContents);
     }
 
     /**

@@ -24,7 +24,7 @@ export class Sequencer {
     }
 
     // eslint-disable-next-line @typescript-eslint/ban-types
-    private actions: Array<{ args: any[]; func: Function }> = [];
+    private actions: Array<{ args: unknown[]; func: (...args: any[]) => any }> = [];
 
     public forEach<T>(itemsOrFactory: Iterable<T> | (() => Iterable<T>), func: (item: T) => any) {
         //register a single action for now, we will fetch the full list and register their actions later
@@ -89,8 +89,6 @@ export class Sequencer {
                 }
 
                 await Promise.resolve(
-                    //`action.func` is a heterogeneous, dynamically-dispatched `Function`, so its args can't be typed any tighter than `any[]`
-                    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
                     action.func(...action.args)
                 );
 
@@ -116,8 +114,6 @@ export class Sequencer {
                 if (this.options?.cancellationToken?.isCancellationRequested) {
                     return this.handleCancel();
                 }
-                //`action.func` is a heterogeneous, dynamically-dispatched `Function`, so its args can't be typed any tighter than `any[]`
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
                 const result = action.func(...action.args);
                 if (typeof result?.then === 'function') {
                     throw new Error(`Action returned a promise which is unsupported when running 'runSync'`);

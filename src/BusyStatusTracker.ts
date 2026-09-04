@@ -131,11 +131,13 @@ export class BusyStatusTracker<T = any> {
     public once(eventName: 'change'): Promise<BusyStatus>;
     public once<T>(eventName: string): Promise<T> {
         return new Promise<T>((resolve) => {
-            const callback = (data: T) => {
-                this.emitter.off(eventName, callback);
-                resolve(data);
-            };
-            this.emitter.on(eventName, callback);
+            //the widened `eventName` can't match the literal-string `on()` overload
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+            const off = this.on(eventName as any, (data) => {
+                off();
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+                resolve(data as any);
+            });
         });
     }
 

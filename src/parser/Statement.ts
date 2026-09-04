@@ -332,9 +332,8 @@ export class CommentStatement extends Statement implements Expression, TypedefPr
             new CommentStatement(
                 this.comments?.map(x => util.cloneToken(x))
             ),
-            //`propsToReparent`'s generic constraint can't express a property whose array holds plain `Token`s rather than `AstNode`s
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-            ['comments' as any]
+            //`propsToReparent`'s constraint resolves to `never` here because `comments` holds plain `Token`s, not `AstNode`s
+            ['comments' as never]
         );
     }
 }
@@ -726,9 +725,8 @@ export class PrintStatement extends Statement {
                     }
                 })
             ),
-            //`propsToReparent`'s generic constraint can't express a property whose array mixes `Expression`s with plain separator `Token`s
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-            ['expressions' as any]
+            //`propsToReparent`'s constraint resolves to `never` here because `expressions` mixes `Expression`s with plain separator `Token`s
+            ['expressions' as never]
         );
     }
 }

@@ -110,24 +110,22 @@ export class DocumentManager {
     public once(eventName: 'flush'): Promise<FlushEvent>;
     public once(eventName: string): Promise<any> {
         return new Promise((resolve) => {
-            const callback = (data: any) => {
-                this.emitter.off(eventName, callback);
+            //the widened `eventName` can't match the literal-string `on()` overload
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+            const off = this.on(eventName as any, (data) => {
+                off();
                 resolve(data);
-            };
-            this.emitter.on(eventName, callback);
+            });
         });
     }
 
     public on(eventName: 'flush', handler: (data: any) => MaybePromise<void>);
     public on(eventName: string, handler: (...args: any[]) => MaybePromise<void>) {
-        const wrappedHandler = (...args: any[]) => {
-            //the rest args are already typed `any[]`, and there's no way to forward them without a spread (`.apply()` is disallowed by `prefer-spread`)
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-            void handler(...args);
-        };
-        this.emitter.on(eventName, wrappedHandler);
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+        this.emitter.on(eventName, handler as any);
         return () => {
-            this.emitter.removeListener(eventName, wrappedHandler);
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+            this.emitter.removeListener(eventName, handler as any);
         };
     }
 
