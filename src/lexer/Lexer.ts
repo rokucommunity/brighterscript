@@ -628,22 +628,7 @@ export class Lexer {
                 this.advance();
                 this.advance();
                 this.addToken(TokenKind.TemplateStringExpressionBegin);
-                while (!this.isAtEnd() && !this.check('}')) {
-                    this.start = this.current;
-                    this.scanToken();
-                }
-                if (this.check('}')) {
-                    this.advance();
-                    this.addToken(TokenKind.TemplateStringExpressionEnd);
-                } else {
-
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.unexpectedConditionalCompilationString(),
-                        range: this.rangeOf()
-                    });
-                }
-
-                this.start = this.current;
+                this.templateStringExpression();
             } else {
                 this.advance();
             }
@@ -657,6 +642,46 @@ export class Lexer {
             this.advance();
             this.addToken(TokenKind.BackTick);
         }
+    }
+
+    /**
+     * Scans the contents of a `${...}` template string expression, stopping just after the `}` that closes it.
+     * Assumes the `${` has already been consumed and its token emitted.
+     *
+     * All actual token scanning is delegated to `scanToken`, so this method's only job is deciding
+     * which `}` terminates the expression. A `}` that closes a brace opened _inside_ the expression
+     * (an associative array literal, for example) is not the terminator, so we track how many
+     * unclosed `{` we've scanned past and only stop at a `}` seen at depth zero.
+     *
+     * Nested template strings need no special handling here: `scanToken` routes a backtick back into
+     * `templateString`, which recurses into this method for its own expressions. Each level therefore
+     * gets its own `depth` local, so arbitrarily deep nesting works without any shared state.
+     */
+    private templateStringExpression() {
+        let depth = 0;
+        while (!this.isAtEnd()) {
+            if (this.check('}')) {
+                if (depth === 0) {
+                    //this is the `}` that closes the expression
+                    this.advance();
+                    this.addToken(TokenKind.TemplateStringExpressionEnd);
+                    this.start = this.current;
+                    return;
+                }
+                depth--;
+            } else if (this.check('{')) {
+                depth++;
+            }
+            this.start = this.current;
+            this.scanToken();
+        }
+
+        //we hit the end of the file before finding the closing `}`
+        this.diagnostics.push({
+            ...DiagnosticMessages.unexpectedConditionalCompilationString(),
+            range: this.rangeOf()
+        });
+        this.start = this.current;
     }
 
     private templateQuasiString() {
