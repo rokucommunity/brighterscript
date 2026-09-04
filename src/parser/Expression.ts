@@ -88,10 +88,7 @@ export class CallExpression extends Expression {
 
     public readonly range: Range | undefined;
 
-    /**
-     * The callee continues this call's chain (e.g. the `alpha.beta` in `alpha.beta()`).
-     * Arguments are excluded, since each argument starts a chain of its own.
-     */
+    /** the `a.b` in `a.b()` */
     public get chainChild() {
         return this.callee;
     }
@@ -511,9 +508,7 @@ export class NamespacedVariableNameExpression extends Expression {
     }
     range: Range | undefined;
 
-    /**
-     * The wrapped name expression continues this chain (e.g. the `Alpha.Beta` in `Alpha.Beta`).
-     */
+    /** the `Alpha.Beta` inside this wrapper */
     public get chainChild() {
         return this.expression;
     }
@@ -586,9 +581,7 @@ export class DottedGetExpression extends Expression {
 
     public readonly range: Range | undefined;
 
-    /**
-     * The object being accessed continues this chain (e.g. the `alpha` in `alpha.beta`).
-     */
+    /** the `a` in `a.b` */
     public get chainChild() {
         return this.obj;
     }
@@ -648,9 +641,7 @@ export class XmlAttributeGetExpression extends Expression {
 
     public readonly range: Range | undefined;
 
-    /**
-     * The object being accessed continues this chain (e.g. the `alpha` in `alpha@beta`).
-     */
+    /** the `a` in `a@b` */
     public get chainChild() {
         return this.obj;
     }
@@ -703,10 +694,7 @@ export class IndexedGetExpression extends Expression {
 
     public readonly range: Range | undefined;
 
-    /**
-     * The object being indexed continues this chain (e.g. the `alpha` in `alpha[1]`).
-     * The index is excluded, since it starts a chain of its own.
-     */
+    /** the `a` in `a[1]` (not the index) */
     public get chainChild() {
         return this.obj;
     }
@@ -1397,9 +1385,7 @@ export class NewExpression extends Expression {
 
     public readonly range: Range | undefined;
 
-    /**
-     * The wrapped call continues this chain (e.g. the `Alpha.Beta()` in `new Alpha.Beta()`).
-     */
+    /** the `Alpha.Beta()` in `new Alpha.Beta()` */
     public get chainChild() {
         return this.call;
     }
@@ -1454,10 +1440,7 @@ export class CallfuncExpression extends Expression {
 
     public readonly range: Range | undefined;
 
-    /**
-     * The callee continues this chain (e.g. the `alpha` in `alpha@.beta()`).
-     * Arguments are excluded, since each argument starts a chain of its own.
-     */
+    /** the `a` in `a@.b()` */
     public get chainChild() {
         return this.callee;
     }

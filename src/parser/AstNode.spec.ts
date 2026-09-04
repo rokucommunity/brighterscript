@@ -1728,41 +1728,32 @@ describe('AstNode', () => {
         }
 
         /**
-         * Find the single node whose source text is `text`
-         */
-        function findNode(code: string, text: string) {
-            const node = parseNodes(code).find(x => getText(code, x) === text);
-            if (!node) {
-                throw new Error(`Could not find node with text '${text}'`);
-            }
-            return node;
-        }
-
-        /**
-         * Assert the full set of expression chains in `code`.
-         *
-         * Each expected entry is the source text of one terminal expression, followed by the
-         * source text of every node in its chain ordered from chain start to chain end.
-         * Statements are excluded so these tests stay focused on expression boundaries.
+         * Assert every terminal expression in `code`, each followed by the nodes it reaches
+         * through via `chainChild` (innermost first). Statements are excluded so these tests
+         * stay focused on expression boundaries.
          */
         function expectChains(code: string, expected: Array<[string, string[]]>) {
             const actual = parseNodes(code)
-            //only expressions (skip the root Body) that are the outermost node of their chain
+            //only expressions (skip the root Body) that are the outermost node of their expression
                 .filter(node => node.parent && node.isTerminal() && !isStatement(node))
-                .map(node => [
-                    getText(code, node),
-                    node.getChain().map(link => getText(code, link))
-                ]);
+                .map(node => {
+                    //collect this node and everything it reaches down through
+                    const links: string[] = [];
+                    for (let link: AstNode | undefined = node; link; link = link.chainChild) {
+                        links.unshift(getText(code, link));
+                    }
+                    return [getText(code, node), links];
+                });
             expect(actual).to.eql(expected);
         }
 
         /**
-         * Assert `[text, isChainStart, isTerminal]` for every node in `code`
+         * Assert `[text, isTerminal]` for every node in `code`
          */
-        function expectChainInfo(code: string, expected: Array<[string, boolean, boolean]>) {
+        function expectTerminals(code: string, expected: Array<[string, boolean]>) {
             const actual = parseNodes(code)
                 .filter(node => node.parent)
-                .map(node => [getText(code, node), node.isChainStart(), node.isTerminal()]);
+                .map(node => [getText(code, node), node.isTerminal()]);
             expect(actual).to.eql(expected);
         }
 
@@ -1951,104 +1942,38 @@ describe('AstNode', () => {
             ]);
         });
 
-        it('reports chain start and terminal flags for every node', () => {
-            expectChainInfo('print alpha.beta(charlie)', [
-                //a statement is always terminal, and starts no chain
-                ['print alpha.beta(charlie)', true, true],
-                //the whole call is the end of the chain
-                ['alpha.beta(charlie)', false, true],
-                //the callee is a link in the middle
-                ['alpha.beta', false, false],
-                //the base value is the start of the chain
-                ['alpha', true, false],
-                //an argument is its own single-node chain
-                ['charlie', true, true]
-            ]);
-        });
-
-        describe('getChainEnd', () => {
-            it('returns the outermost node of the chain', () => {
-                const code = 'print alpha.beta.charlie(1)';
-                expect(
-                    getText(code, findNode(code, 'alpha').getChainEnd())
-                ).to.eql('alpha.beta.charlie(1)');
+        describe('isTerminal', () => {
+            it('is true only for the outermost node of each expression', () => {
+                expectTerminals('print alpha.beta(charlie)', [
+                    ['print alpha.beta(charlie)', true],
+                    //the whole call
+                    ['alpha.beta(charlie)', true],
+                    //the callee, reached through by the call
+                    ['alpha.beta', false],
+                    //reached through by `alpha.beta`
+                    ['alpha', false],
+                    //an argument, so its own expression
+                    ['charlie', true]
+                ]);
             });
 
-            it('returns itself when already terminal', () => {
-                const code = 'print alpha.beta';
-                const node = findNode(code, 'alpha.beta');
-                expect(node.getChainEnd()).to.equal(node);
+            it('is true for a nested expression that is only an argument', () => {
+                //`alpha.beta` is terminal even though it sits inside the call
+                expectTerminals('print doSomething(alpha.beta)', [
+                    ['print doSomething(alpha.beta)', true],
+                    ['doSomething(alpha.beta)', true],
+                    ['doSomething', false],
+                    ['alpha.beta', true],
+                    ['alpha', false]
+                ]);
             });
 
-            it('does not escape into the enclosing expression', () => {
-                const code = 'print doSomething(alpha.beta)';
-                //must stop at `alpha.beta` rather than continuing up to the CallExpression
-                expect(
-                    getText(code, findNode(code, 'alpha').getChainEnd())
-                ).to.eql('alpha.beta');
+            it('is true for statements', () => {
+                expectTerminals('alpha = 1', [
+                    ['alpha = 1', true],
+                    ['1', true]
+                ]);
             });
-        });
-
-        describe('getChainStart', () => {
-            it('returns the base value of the chain', () => {
-                const code = 'print alpha.beta.charlie(1)';
-                expect(
-                    getText(code, findNode(code, 'alpha.beta.charlie(1)').getChainStart())
-                ).to.eql('alpha');
-            });
-
-            it('returns itself when already the chain start', () => {
-                const code = 'print alpha';
-                const node = findNode(code, 'alpha');
-                expect(node.getChainStart()).to.equal(node);
-            });
-
-            it('does not descend into a call argument', () => {
-                const code = 'print doSomething(alpha.beta)';
-                expect(
-                    getText(code, findNode(code, 'doSomething(alpha.beta)').getChainStart())
-                ).to.eql('doSomething');
-            });
-        });
-
-        describe('chainParent', () => {
-            it('is undefined for the terminal node of a chain', () => {
-                const code = 'print alpha.beta';
-                expect(findNode(code, 'alpha.beta').chainParent).to.be.undefined;
-            });
-
-            it('is undefined when the parent does not continue the chain', () => {
-                const code = 'print doSomething(alpha)';
-                //`alpha` is an argument, so it has a parent but no chain parent
-                const alpha = parseNodes(code).filter(x => getText(code, x) === 'alpha')[0];
-                expect(alpha.parent).to.exist;
-                expect(alpha.chainParent).to.be.undefined;
-            });
-
-            it('is the parent when the parent continues the chain', () => {
-                const code = 'print alpha.beta';
-                const nodes = parseNodes(code);
-                const alpha = nodes.find(x => getText(code, x) === 'alpha');
-                const beta = nodes.find(x => getText(code, x) === 'alpha.beta');
-                expect(alpha.chainParent).to.equal(beta);
-            });
-        });
-
-        it('gives every node in a chain the same chain', () => {
-            const code = 'print alpha.beta[1].charlie(2)';
-            const chainTexts = [
-                'alpha',
-                'alpha.beta',
-                'alpha.beta[1]',
-                'alpha.beta[1].charlie',
-                'alpha.beta[1].charlie(2)'
-            ];
-            for (const text of chainTexts) {
-                expect(
-                    findNode(code, text).getChain().map(link => getText(code, link)),
-                    `chain from '${text}'`
-                ).to.eql(chainTexts);
-            }
         });
     });
 });
