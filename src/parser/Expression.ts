@@ -72,6 +72,14 @@ export class CallExpression extends Expression {
     public readonly range: Range;
 
     /**
+     * The callee continues this call's chain (e.g. the `alpha.beta` in `alpha.beta()`).
+     * Arguments are excluded, since each argument starts a chain of its own.
+     */
+    public get chainChild() {
+        return this.callee;
+    }
+
+    /**
      * Get the name of the wrapping namespace (if it exists)
      * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
      */
@@ -399,6 +407,13 @@ export class NamespacedVariableNameExpression extends Expression {
     }
     range: Range;
 
+    /**
+     * The wrapped name expression continues this chain (e.g. the `Alpha.Beta` in `Alpha.Beta`).
+     */
+    public get chainChild() {
+        return this.expression;
+    }
+
     transpile(state: BrsTranspileState) {
         return [
             state.sourceNode(this, this.getName(ParseMode.BrightScript))
@@ -453,6 +468,13 @@ export class DottedGetExpression extends Expression {
 
     public readonly range: Range;
 
+    /**
+     * The object being accessed continues this chain (e.g. the `alpha` in `alpha.beta`).
+     */
+    public get chainChild() {
+        return this.obj;
+    }
+
     transpile(state: BrsTranspileState) {
         //if the callee starts with a namespace name, transpile the name
         if (state.file.calleeStartsWithNamespace(this)) {
@@ -489,6 +511,13 @@ export class XmlAttributeGetExpression extends Expression {
 
     public readonly range: Range;
 
+    /**
+     * The object being accessed continues this chain (e.g. the `alpha` in `alpha@beta`).
+     */
+    public get chainChild() {
+        return this.obj;
+    }
+
     transpile(state: BrsTranspileState) {
         return [
             ...this.obj.transpile(state),
@@ -520,6 +549,14 @@ export class IndexedGetExpression extends Expression {
     }
 
     public readonly range: Range;
+
+    /**
+     * The object being indexed continues this chain (e.g. the `alpha` in `alpha[1]`).
+     * The index is excluded, since it starts a chain of its own.
+     */
+    public get chainChild() {
+        return this.obj;
+    }
 
     transpile(state: BrsTranspileState) {
         return [
@@ -985,6 +1022,13 @@ export class NewExpression extends Expression {
 
     public readonly range: Range;
 
+    /**
+     * The wrapped call continues this chain (e.g. the `Alpha.Beta()` in `new Alpha.Beta()`).
+     */
+    public get chainChild() {
+        return this.call;
+    }
+
     public transpile(state: BrsTranspileState) {
         const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
         const cls = state.file.getClassFileLink(
@@ -1024,6 +1068,14 @@ export class CallfuncExpression extends Expression {
     }
 
     public readonly range: Range;
+
+    /**
+     * The callee continues this chain (e.g. the `alpha` in `alpha@.beta()`).
+     * Arguments are excluded, since each argument starts a chain of its own.
+     */
+    public get chainChild() {
+        return this.callee;
+    }
 
     /**
      * Get the name of the wrapping namespace (if it exists)
