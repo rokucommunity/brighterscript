@@ -137,7 +137,7 @@ export class BrsFile {
             if (!diagnostic.file) {
                 diagnostic.file = this;
             }
-            this.diagnostics.push(diagnostic as any);
+            this.diagnostics.push(diagnostic);
         }
     }
 
@@ -425,7 +425,7 @@ export class BrsFile {
             } catch (error: any) {
                 //if the thrown error is DIFFERENT than any errors from the preprocessor, add that error to the list as well
                 if (this.diagnostics.find((x) => x === error) === undefined) {
-                    this.diagnostics.push(error);
+                    this.diagnostics.push(error as BsDiagnostic);
                 }
             }
 
@@ -644,7 +644,7 @@ export class BrsFile {
 
                 //function call
             } else if (isCallExpression(assignment.value)) {
-                let calleeName = (assignment.value.callee as any)?.name?.text;
+                let calleeName: string = (assignment.value.callee as any)?.name?.text;
                 if (calleeName) {
                     let func = this.getCallableByName(calleeName);
                     if (func) {
@@ -708,7 +708,7 @@ export class BrsFile {
                 range: statement.func.range,
                 type: functionType,
                 getName: statement.getName.bind(statement),
-                hasNamespace: !!statement.findAncestor<NamespaceStatement>(isNamespaceStatement),
+                hasNamespace: !!statement.findAncestor(isNamespaceStatement),
                 functionStatement: statement
             });
         }
@@ -740,9 +740,12 @@ export class BrsFile {
 
                 let args = [] as CallableArg[];
                 //TODO convert if stmts to use instanceof instead
+                //`arg` is intentionally `any` here; these branches duck-type across several expression
+                //shapes (`.name`, `.value.value`) that no single static type describes
                 for (let arg of expression.args as any) {
 
                     //is a literal parameter value
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
                     if (isLiteralExpression(arg)) {
                         args.push({
                             range: arg.range,
@@ -1302,7 +1305,7 @@ export class BrsFile {
      * Returns false if no namespace was found with that name
      */
     public calleeStartsWithNamespace(callee: Expression) {
-        let left = callee as any;
+        let left: Expression = callee;
         while (isDottedGetExpression(left)) {
             left = left.obj;
         }

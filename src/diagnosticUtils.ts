@@ -68,7 +68,7 @@ export function getPrintDiagnosticOptions(options: BsConfig) {
     typeColor[DiagnosticSeverity.Warning] = chalk.yellow;
     typeColor[DiagnosticSeverity.Error] = chalk.red;
 
-    let severityTextMap = {};
+    let severityTextMap = {} as Record<string, string>;
     severityTextMap[DiagnosticSeverity.Information] = 'info';
     severityTextMap[DiagnosticSeverity.Hint] = 'hint';
     severityTextMap[DiagnosticSeverity.Warning] = 'warning';

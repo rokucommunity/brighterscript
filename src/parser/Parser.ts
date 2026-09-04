@@ -409,7 +409,7 @@ export class Parser {
     }
 
     private enumMemberStatement() {
-        const statement = new EnumMemberStatement({} as any);
+        const statement = new EnumMemberStatement({} as { name: Identifier; equal?: Token });
         statement.tokens.name = this.consume(
             DiagnosticMessages.expectedClassFieldIdentifier(),
             TokenKind.Identifier,
@@ -584,7 +584,7 @@ export class Parser {
     }
 
     private enumDeclaration(): EnumStatement {
-        const result = new EnumStatement({} as any, []);
+        const result = new EnumStatement({} as { enum: Token; name: Identifier; endEnum: Token }, []);
         this.warnIfNotBrighterScriptMode('enum declarations');
 
         const parentAnnotations = this.enterAnnotationBlock();
@@ -1034,7 +1034,7 @@ export class Parser {
         }
 
         let typeToken: Token | undefined;
-        let defaultValue;
+        let defaultValue: Expression;
 
         // parse argument default value
         if (this.match(TokenKind.Equal)) {
@@ -1042,7 +1042,7 @@ export class Parser {
             defaultValue = this.expression(false);
         }
 
-        let asToken = null;
+        let asToken: Token = null;
         if (this.check(TokenKind.As)) {
             asToken = this.advance();
 
@@ -1780,10 +1780,10 @@ export class Parser {
         }
 
         let quasis = [] as TemplateStringQuasiExpression[];
-        let expressions = [];
+        let expressions: Expression[] = [];
         let openingBacktick = this.peek();
         this.advance();
-        let currentQuasiExpressionParts = [];
+        let currentQuasiExpressionParts: Array<LiteralExpression | EscapedCharCodeLiteralExpression> = [];
         while (!this.isAtEnd() && !this.check(TokenKind.BackTick)) {
             let next = this.peek();
             if (next.kind === TokenKind.TemplateStringQuasi) {
@@ -1794,7 +1794,7 @@ export class Parser {
                 this.advance();
             } else if (next.kind === TokenKind.EscapedCharCodeLiteral) {
                 currentQuasiExpressionParts.push(
-                    new EscapedCharCodeLiteralExpression(<any>next)
+                    new EscapedCharCodeLiteralExpression(next as Token & { charCode: number })
                 );
                 this.advance();
             } else {
@@ -2157,7 +2157,7 @@ export class Parser {
 
     //consume inline branch of an `if` statement
     private inlineConditionalBranch(...additionalTerminators: BlockTerminator[]): Block | undefined {
-        let statements = [];
+        let statements: Statement[] = [];
         //attempt to get the next statement without using `this.declaration`
         //which seems a bit hackish to get to work properly
         let statement = this.statement();
@@ -2863,7 +2863,7 @@ export class Parser {
         let typeToken: Token;
         let lookForCompounds = true;
         let isACompound = false;
-        let resultToken;
+        let resultToken: Token;
         while (lookForCompounds) {
             lookForCompounds = false;
 

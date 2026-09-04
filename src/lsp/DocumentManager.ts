@@ -110,6 +110,8 @@ export class DocumentManager {
     public once(eventName: 'flush'): Promise<FlushEvent>;
     public once(eventName: string): Promise<any> {
         return new Promise((resolve) => {
+            //the widened `eventName` can't match the literal-string `on()` overload
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
             const off = this.on(eventName as any, (data) => {
                 off();
                 resolve(data);
@@ -119,8 +121,10 @@ export class DocumentManager {
 
     public on(eventName: 'flush', handler: (data: any) => MaybePromise<void>);
     public on(eventName: string, handler: (...args: any[]) => MaybePromise<void>) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         this.emitter.on(eventName, handler as any);
         return () => {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
             this.emitter.removeListener(eventName, handler as any);
         };
     }

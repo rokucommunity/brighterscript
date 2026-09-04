@@ -1019,10 +1019,10 @@ export class ProjectManager {
 
         //pipe all project-specific events through our emitter, and include the project reference
         project.on('all', (eventName, data) => {
-            this.emit(eventName as any, {
+            void this.emit(eventName, {
                 ...data,
                 project: project
-            } as any);
+            });
         });
         return project;
     }
@@ -1064,8 +1064,10 @@ export class ProjectManager {
     public on(eventName: 'project-activate', handler: (data: { project: LspProject }) => MaybePromise<void>);
     public on(eventName: 'diagnostics', handler: (data: { project: LspProject; diagnostics: LspDiagnostic[] }) => MaybePromise<void>);
     public on(eventName: string, handler: (payload: any) => MaybePromise<void>) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         this.emitter.on(eventName, handler as any);
         return () => {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
             this.emitter.removeListener(eventName, handler as any);
         };
     }
@@ -1075,6 +1077,7 @@ export class ProjectManager {
     private emit(eventName: 'critical-failure', data: { project: LspProject; message: string });
     private emit(eventName: 'project-activate', data: { project: LspProject });
     private emit(eventName: 'diagnostics', data: { project: LspProject; diagnostics: LspDiagnostic[] });
+    private emit(eventName: string, data?: Record<string, any>);
     private async emit(eventName: string, data?) {
         //emit these events on next tick, otherwise they will be processed immediately which could cause issues
         await util.sleep(0);
@@ -1150,7 +1153,7 @@ interface StandaloneProject extends LspProject {
  * An annotation used to wrap the method in a busyStatus tracking call
  */
 function TrackBusyStatus(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
-    let originalMethod = descriptor.value;
+    let originalMethod: (...args: any[]) => any = descriptor.value;
 
     //wrapping the original method
     descriptor.value = function value(this: ProjectManager, ...args: any[]) {

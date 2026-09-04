@@ -6,7 +6,6 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { OnGetSemanticTokensEvent } from '../../interfaces';
 import type { Locatable } from '../../lexer/Token';
 import { ParseMode } from '../../parser/Parser';
-import type { NamespaceStatement } from '../../parser/Statement';
 import util from '../../util';
 
 export class BrsFileSemanticTokensProcessor {
@@ -36,7 +35,7 @@ export class BrsFileSemanticTokensProcessor {
         for (const func of this.event.file.parser.references.functionExpressions) {
             for (const parm of func.parameters) {
                 if (isCustomType(parm.type)) {
-                    const namespace = parm.findAncestor<NamespaceStatement>(isNamespaceStatement);
+                    const namespace = parm.findAncestor(isNamespaceStatement);
                     classes.push({
                         className: parm.typeToken.text,
                         namespaceName: namespace?.getName(ParseMode.BrighterScript),
@@ -106,7 +105,7 @@ export class BrsFileSemanticTokensProcessor {
             } else if (isNewExpression(node)) {
                 node = node.call.callee;
             }
-            const containingNamespaceNameLower = node.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase();
+            const containingNamespaceNameLower = node.findAncestor(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase();
             const tokens = util.getAllDottedGetParts(node);
             const processedNames: string[] = [];
             for (const token of tokens ?? []) {
