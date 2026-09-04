@@ -1,11 +1,14 @@
 import chalk from 'chalk';
-import * as moment from 'moment';
+import { formatTimestamp } from './formatUtils';
 import { EventEmitter } from 'eventemitter3';
 import { Stopwatch } from './Stopwatch';
-
+import { LogLevelNumeric as LogLevel } from '@rokucommunity/logger';
+/**
+ * @deprecated use the `createLogger` function instead
+ */
 export class Logger {
 
-    public static subscribe(callback) {
+    public static subscribe(callback: (...args: any[]) => void) {
         this.emitter.on('log', callback);
         return () => {
             this.emitter.off('log', callback);
@@ -18,8 +21,11 @@ export class Logger {
      */
     private indent = '';
 
-    constructor(logLevel?: LogLevel) {
-        this.logLevel = logLevel;
+    constructor(
+        logLevel?: LogLevel,
+        public prefix?: string
+    ) {
+        this.logLevel = logLevel ?? LogLevel.log;
     }
 
     public get logLevel() {
@@ -34,15 +40,15 @@ export class Logger {
     }
     private _logLevel = LogLevel.log;
 
-    private getTimestamp() {
-        return '[' + chalk.grey(moment().format(`hh:mm:ss:SSSS A`)) + ']';
+    public getTimestamp() {
+        return '[' + chalk.grey(formatTimestamp()) + ']';
     }
 
-    private writeToLog(method: (...consoleArgs: any[]) => void, ...args: any[]) {
+    private writeToLog(method: (...consoleArgs: any[]) => void, ...args: unknown[]) {
         if (this._logLevel === LogLevel.trace) {
             method = console.trace;
         }
-        let finalArgs = [];
+        let finalArgs: unknown[] = [];
         //evaluate any functions to get their values.
         //This allows more complicated values to only be evaluated if this log level is active
         for (let arg of args) {
@@ -51,7 +57,15 @@ export class Logger {
             }
             finalArgs.push(arg);
         }
-        method.call(console, this.getTimestamp(), this.indent, ...finalArgs);
+        const allArgs = [
+            this.getTimestamp()
+        ];
+        if (this.prefix) {
+            allArgs.push(this.prefix);
+        }
+        allArgs.push(this.indent);
+
+        method.call(console, ...allArgs, ...finalArgs);
         if (Logger.emitter.listenerCount('log') > 0) {
             Logger.emitter.emit('log', finalArgs.join(' '));
         }
@@ -60,7 +74,7 @@ export class Logger {
     /**
      * Log an error message to the console
      */
-    error(...messages) {
+    error(...messages: unknown[]) {
         if (this._logLevel >= LogLevel.error) {
             this.writeToLog(console.error, ...messages);
         }
@@ -69,7 +83,7 @@ export class Logger {
     /**
      * Log a warning message to the console
      */
-    warn(...messages) {
+    warn(...messages: unknown[]) {
         if (this._logLevel >= LogLevel.warn) {
             this.writeToLog(console.warn, ...messages);
         }
@@ -78,7 +92,7 @@ export class Logger {
     /**
      * Log a standard log message to the console
      */
-    log(...messages) {
+    log(...messages: unknown[]) {
         if (this._logLevel >= LogLevel.log) {
             this.writeToLog(console.log, ...messages);
         }
@@ -86,7 +100,7 @@ export class Logger {
     /**
      * Log an info message to the console
      */
-    info(...messages) {
+    info(...messages: unknown[]) {
         if (this._logLevel >= LogLevel.info) {
             this.writeToLog(console.info, ...messages);
         }
@@ -95,7 +109,7 @@ export class Logger {
     /**
      * Log a debug message to the console
      */
-    debug(...messages) {
+    debug(...messages: unknown[]) {
         if (this._logLevel >= LogLevel.debug) {
             this.writeToLog(console.debug, ...messages);
         }
@@ -104,20 +118,43 @@ export class Logger {
     /**
      * Log a debug message to the console
      */
-    trace(...messages) {
+    trace(...messages: unknown[]) {
         if (this._logLevel >= LogLevel.trace) {
             this.writeToLog(console.trace, ...messages);
         }
     }
 
     /**
+     * Writes to the log (if logLevel matches), and also provides a function that can be called to mark the end of a time.
+     * You can override the action if, for example, the operation was cancelled instead of finished.
+     */
+    timeStart(logLevel: LogLevel, ...messages: any[]) {
+        //call the log if loglevel is in range
+        if (this._logLevel >= logLevel) {
+            const stopwatch = new Stopwatch();
+            const logLevelString = LogLevel[logLevel];
+
+            //write the initial log
+            this[logLevelString](...messages ?? []);
+
+            stopwatch.start();
+
+            return (status = 'finished') => {
+                stopwatch.stop();
+                this[logLevelString](...messages ?? [], `${status}. (${chalk.blue(stopwatch.getDurationText())})`);
+            };
+        }
+        return noop;
+    }
+
+    /**
      * Writes to the log (if logLevel matches), and also times how long the action took to occur.
      * `action` is called regardless of logLevel, so this function can be used to nicely wrap
      * pieces of functionality.
-     * The action function also includes two parameters, `pause` and `resume`, which can be used to improve timings by focusing only on
-     * the actual logic of that action.
+     * The action function also includes two parameters called `pause` and `resume`, which can be used to improve timings by focusing only on
+     * the actual logic of that action. The third parameter is called `cancel`, and will prevent the log function from being run
      */
-    time<T>(logLevel: LogLevel, messages: any[], action: (pause: () => void, resume: () => void) => T): T {
+    time<T>(logLevel: LogLevel, messages: any[], action: (pause: () => void, resume: () => void, cancel: () => void) => T): T {
         //call the log if loglevel is in range
         if (this._logLevel >= logLevel) {
             const stopwatch = new Stopwatch();
@@ -127,15 +164,21 @@ export class Logger {
             this[logLevelString](...messages ?? []);
             this.indent += '  ';
 
+            let isCanceled = false;
+
             stopwatch.start();
             //execute the action
-            const result = action(stopwatch.stop.bind(stopwatch), stopwatch.start.bind(stopwatch)) as any;
+            const result = action(stopwatch.stop.bind(stopwatch), stopwatch.start.bind(stopwatch), () => {
+                isCanceled = true;
+            }) as any;
 
             //return a function to call when the timer is complete
             const done = () => {
                 stopwatch.stop();
                 this.indent = this.indent.substring(2);
-                this[logLevelString](...messages ?? [], `finished. (${chalk.blue(stopwatch.getDurationText())})`);
+                if (!isCanceled) {
+                    this[logLevelString](...messages ?? [], `finished. (${chalk.blue(stopwatch.getDurationText())})`);
+                }
             };
 
             //if this is a promise, wait for it to resolve and then return the original result
@@ -149,21 +192,13 @@ export class Logger {
                 return result;
             }
         } else {
-            return action(noop, noop);
+            return action(noop, noop, noop);
         }
     }
 }
 
-export function noop() {
+export function noop(...args: []): any {
 
 }
 
-export enum LogLevel {
-    off = 0,
-    error = 1,
-    warn = 2,
-    log = 3,
-    info = 4,
-    debug = 5,
-    trace = 6
-}
+export { LogLevelNumeric as LogLevel } from '@rokucommunity/logger';

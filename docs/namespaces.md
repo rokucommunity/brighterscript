@@ -32,7 +32,7 @@ Namespaces can also contain classes. See the [classes](classes.md#Namespaces) fo
 ## Namespace inference
 Functions and classes within a namespace do not need to be prefixed with the full namespace name when called from another location in the same namespace. For example,
 
-```
+```BrighterScript
 namespace Vertibrates.Birds
     function GetAllBirds()
         return [
@@ -55,7 +55,7 @@ end namespace
 ```BrightScript
 function Vertibrates_Birds_GetAllBirds()
     return [
-        Vertibrates_Birds_GetDuck(),
+        Vertibrates_Birds_GetDuck()
         Vertibrates_Birds_GetGoose()
     ]
 end function
@@ -147,7 +147,7 @@ namespace Vertibrates
     namespace Reptiles
         sub Hiss()
         end sub
-    end
+    end namespace
 end namespace
 ```
 
@@ -161,3 +161,18 @@ sub Vertibrates_Reptiles_Hiss()
 end sub
 ```
 </details>
+
+
+## Caveats
+### ObserveField and ObserveFieldScoped
+It's incredibly difficult for brighterscript to know when it's safe to transpile strings that happen to look like namespace names. As such, the `ObserveField` and `ObserveFieldScoped` functions in BrighterScript do not automatically transpile string-based function names into their BrightScript-compatible underscore format.
+
+This means that if you pass a namespaced identifier as a string (i.e `Vertibrates.Birds.Quack`) it will not be converted to `Vertibrates_Birds_Quack` during transpilation. Developers need to ensure they manually provide the transpiled function name when using these functions to avoid runtime errors (i.e. `Vertibrates_Birds_Quack`).
+
+```brighterscript
+'this does not work
+m.top.observeField("someField", "Vertibrates.Birds.Quack")
+
+'you need to do this instead
+m.top.observeField("someField", "Vertibrates_Birds_Quack")
+```

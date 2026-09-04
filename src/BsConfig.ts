@@ -1,4 +1,4 @@
-import type { LogLevel } from './Logger';
+import type { LogLevel } from './logging';
 
 export interface BsConfig {
     /**
@@ -11,6 +11,16 @@ export interface BsConfig {
      * Prefix with a question mark (?) to prevent throwing an exception if the file does not exist.
      */
     project?: string;
+
+    manifest?: {
+        bs_const?: Record<string, boolean | null>;
+    };
+
+    /**
+     * when set, bsconfig.json loading is disabled
+     */
+    noProject?: boolean;
+
 
     /**
      * Relative or absolute path to another bsconfig.json file that this file should import and then override.
@@ -107,15 +117,26 @@ export interface BsConfig {
     ignoreErrorCodes?: (number | string)[];
 
     /**
+     * A map of error codes with their severity level override (error|warn|info)
+     */
+    diagnosticSeverityOverrides?: Record<number | string, 'error' | 'warn' | 'info' | 'hint'>;
+
+    /**
      * Emit full paths to files when printing diagnostics to the console. Defaults to false
      */
     emitFullPaths?: boolean;
 
     /**
      * Emit type definition files (`d.bs`)
-     * @default true
+     * @default false
      */
     emitDefinitions?: boolean;
+
+    /**
+     * If true, removes the explicit type to function's parameters and return (i.e. the `as type` syntax); otherwise keep this information.
+     * @default false
+     */
+    removeParameterTypes?: boolean;
 
     /**
      * A list of filters used to exclude diagnostics from the output
@@ -127,6 +148,28 @@ export interface BsConfig {
      */
     diagnosticLevel?: 'info' | 'hint' | 'warn' | 'error';
 
+    /**
+     * Specify how diagnostics should be reported to the console.
+     * Accepts a single value or an array. When given an array, each diagnostic is rendered
+     * once per entry (so you can, for example, get both detailed terminal output and
+     * github-actions PR annotations from a single run).
+     *
+     * Each value may be a preset name ('detailed', 'github-actions'), a custom template string
+     * (any string containing a `{` placeholder), or an object with explicit `type`.
+     *
+     * Custom templates support the following placeholders, replaced per diagnostic:
+     *   {file}, {line}, {col}, {endLine}, {endCol}, {severity}, {code}, {message}, {source}
+     *
+     * Examples:
+     *   "detailed"
+     *   "github-actions"
+     *   "{file}:{line}:{col} {severity} {code}: {message}"
+     *   { type: "custom", format: "{file}:{line}: {message}" }
+     *   ["detailed", "github-actions"]
+     *
+     * @default "detailed"
+     */
+    diagnosticReporters?: DiagnosticReporter | DiagnosticReporter[];
     /**
      * A list of scripts or modules to add extra diagnostics or transform the AST
      */
@@ -152,23 +195,128 @@ export interface BsConfig {
      * The log level.
      * @default LogLevel.log
      */
-    logLevel?: LogLevel | 'error' | 'warn' | 'log' | 'info' | 'debug' | 'trace';
+    logLevel?: LogLevel | 'error' | 'warn' | 'log' | 'info' | 'debug' | 'trace' | 'off';
     /**
-     * Override the path to source files in source maps. Use this if you have a preprocess step and want
-     * to ensure the source maps point to the original location.
-     * This will only alter source maps for files within rootDir. Any files found outside of rootDir will not
-     * have their source maps changed. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.
+     * Overrides where source files appear to live, in both sourcemaps and the `SOURCE_FILE_PATH` /
+     * `SOURCE_LOCATION` runtime literals. Only applies to files within `rootDir`.
+     *
+     * When `relativeSourceMaps` is false (default): the `rootDir` portion of each source path is
+     * replaced with `sourceRoot` directly in `sources[]`. The map's `sourceRoot` field is not written.
+     *
+     * When `relativeSourceMaps` is true: the map's `sourceRoot` field is set to this value, and
+     * `sources[]` entries are relative to `sourceRoot` (per the sourcemap spec).
+     *
+     * In both modes, `SOURCE_FILE_PATH` and `SOURCE_LOCATION` reflect the `sourceRoot`-substituted path.
      */
     sourceRoot?: string;
+    /**
+     * Should the `sourceRoot` property be resolve to an absolute path (relative to the bsconfig it's defined in)
+     * @default false
+     */
+    resolveSourceRoot?: boolean;
     /**
      * Enables generating sourcemap files, which allow debugging tools to show the original source code while running the emitted files.
      * @default true
      */
     sourceMap?: boolean;
-
+    /**
+     * If true, file paths in sourcemap `sources[]` will be written as relative paths instead of absolute.
+     * Only has an effect when `sourceMap` is true.
+     *
+     * When false (default): `sources[]` contains absolute paths. If `sourceRoot` is set, the `rootDir`
+     * portion is replaced with `sourceRoot` in-place; the map's `sourceRoot` field is never written.
+     *
+     * When true: `sources[]` entries are relative to the map file's directory, making sourcemaps
+     * portable across machines. If `sourceRoot` is also set, the map's `sourceRoot` field is written
+     * and `sources[]` entries are instead relative to `sourceRoot` (per the sourcemap spec — consumers
+     * reconstruct the full path as `path.resolve(sourceRoot, sources[0])`).
+     * @default false
+     */
+    relativeSourceMaps?: boolean;
+    /**
+     * Excludes empty files from being included in the output. Some Brighterscript files
+     * are left empty or with only comments after transpilation to Brightscript.
+     * The default behavior is to write these to disk after transpilation.
+     * Setting this flag to `true` will prevent empty files being written and will
+     * remove associated script tags from XML
+     * @default false
+     */
+    pruneEmptyCodeFiles?: boolean;
     /**
      * Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.
      * @default false
      */
     allowBrighterScriptInBrightScript?: boolean;
+
+    /**
+     * Override the destination directory for the bslib.brs file.  Use this if
+     * you want to customize where the bslib.brs file is located in the staging
+     * directory.  Note that using a location outside of `source` will break
+     * scripts inside `source` that depend on bslib.brs.  Defaults to `source`.
+     */
+    bslibDestinationDir?: string;
+
+    /**
+     * The minimum Roku firmware version required to run this project.
+     * When set, BrightScript (.brs) files are always validated against the version restriction.
+     * BrighterScript (.bs) files are only validated for features that BrighterScript does not
+     * transpile — for example, optional chaining is emitted as-is, so it is subject to the
+     * restriction. Features that BrighterScript fully transpiles (such as classes) are not
+     * restricted, since the transpiled output is compatible with older firmware.
+     * Should be a semver-compatible string (e.g. "11.0.0").
+     */
+    minFirmwareVersion?: string;
+
+    /**
+     * When set to false, validation is skipped entirely. This can speed up builds when diagnostics
+     * are not needed (e.g. when using the VSCode extension which already surfaces diagnostics in the
+     * editor). Note that skipping validation may cause transpilation to fail or produce incorrect
+     * output if the project contains errors that would normally be caught during validation.
+     * @default true
+     */
+    validate?: boolean;
 }
+
+/**
+ * Discriminated union describing how diagnostics are rendered to the console.
+ * - String shorthand: a preset name ('detailed' | 'github-actions') or a template string
+ *   (any string containing a `{` is treated as a custom template).
+ * - Object form: explicit `type` so config files can stay strictly typed.
+ */
+export type DiagnosticReporter =
+    | 'detailed'
+    | 'github-actions'
+    // eslint-disable-next-line @typescript-eslint/ban-types -- string & {} preserves autocomplete for the literals above
+    | (string & {})
+    | { type: 'detailed' }
+    | { type: 'github-actions' }
+    | { type: 'custom'; format: string };
+
+/**
+ * Object form of `DiagnosticReporter` after string shorthand has been resolved.
+ */
+export type NormalizedDiagnosticReporter =
+    | { type: 'detailed' }
+    | { type: 'github-actions' }
+    | { type: 'custom'; format: string };
+
+type OptionalBsConfigFields =
+    | '_ancestors'
+    | 'sourceRoot'
+    | 'project'
+    | 'manifest'
+    | 'noProject'
+    | 'extends'
+    | 'host'
+    | 'password'
+    | 'require'
+    | 'stagingFolderPath'
+    | 'diagnosticLevel'
+    | 'rootDir'
+    | 'stagingDir'
+    | 'minFirmwareVersion'
+    | 'diagnosticReporters';
+
+export type FinalizedBsConfig =
+    Omit<Required<BsConfig>, OptionalBsConfigFields>
+    & Pick<BsConfig, OptionalBsConfigFields>;

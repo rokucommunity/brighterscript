@@ -23,7 +23,7 @@ userId = createdUserId ?? -1
 ```
 transpiles to:
 ```brightscript
-userId = bslib_coalesce(createdUserId, - 1)
+userId = bslib_coalesce(createdUserId, -1)
 ```
 
 ## Scope capturing

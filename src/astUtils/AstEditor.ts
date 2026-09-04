@@ -50,10 +50,10 @@ export class AstEditor {
 
     /**
      * Removes elements from an array and, if necessary, inserts new elements in their place, returning the deleted elements.
+     * @param array the array to splice
      * @param startIndex The zero-based location in the array from which to start removing elements.
      * @param deleteCount The number of elements to remove.
      * @param items Elements to insert into the array in place of the deleted elements.
-     * @returns An array containing the elements that were deleted.
      */
     public arraySplice<T, TItems extends T = T>(array: T[], startIndex: number, deleteCount: number, ...items: TItems[]) {
         const change = new ArraySpliceChange(array, startIndex, deleteCount, items);

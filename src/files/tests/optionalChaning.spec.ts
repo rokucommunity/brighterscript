@@ -1,8 +1,10 @@
 import * as sinonImport from 'sinon';
 import * as fsExtra from 'fs-extra';
 import { Program } from '../../Program';
-import { getTestTranspile } from '../../testHelpers.spec';
+import { expectDiagnostics, getTestTranspile } from '../../testHelpers.spec';
 import { tempDir, rootDir, stagingDir } from '../../testHelpers.spec';
+import { DiagnosticMessages } from '../../DiagnosticMessages';
+import util from '../../util';
 
 let sinon = sinonImport.createSandbox();
 
@@ -92,5 +94,89 @@ describe('optional chaining', () => {
                 print obj.b.localFunc?()
             end sub
         `);
+    });
+
+    it('includes final operator in chain', () => {
+        testTranspile(`
+            sub main()
+                if m.cardFolderStack <> invalid then
+                    m?.cardFolderStack?.visible?.ither = false
+                end if
+            end sub
+        `, undefined, undefined, undefined, false);
+    });
+
+    describe('disallows optional chaining on left-hand-side of assignments', () => {
+        it('catches simple dotted set', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    m?.a = true
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.noOptionalChainingInLeftHandSideOfAssignment(),
+                range: util.createRange(2, 20, 2, 24)
+            }]);
+        });
+
+        it('catches complex dotted set', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    m?.a.b?.c = true
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.noOptionalChainingInLeftHandSideOfAssignment(),
+                range: util.createRange(2, 20, 2, 29)
+            }]);
+        });
+
+        it('catches simple indexed set', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    arr = []
+                    arr?[1] = true
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.noOptionalChainingInLeftHandSideOfAssignment(),
+                range: util.createRange(3, 20, 3, 27)
+            }]);
+        });
+
+        it('catches complex indexed set', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    arr = []
+                    arr[2]?[3] = true
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.noOptionalChainingInLeftHandSideOfAssignment(),
+                range: util.createRange(3, 20, 3, 30)
+            }]);
+        });
+
+        it('catches very complex dotted and indexed sets', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    arr = []
+                    arr[5][6][7]?.thing = true
+                    m.a.b.c.d?[8] = true
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.noOptionalChainingInLeftHandSideOfAssignment(),
+                range: util.createRange(3, 20, 3, 39)
+            }, {
+                ...DiagnosticMessages.noOptionalChainingInLeftHandSideOfAssignment(),
+                range: util.createRange(4, 20, 4, 33)
+            }]);
+        });
     });
 });

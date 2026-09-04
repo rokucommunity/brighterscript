@@ -1,25 +1,37 @@
 import { expect } from './chai-config.spec';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
-import type { DidChangeWatchedFilesParams, Location } from 'vscode-languageserver';
-import { FileChangeType, Range } from 'vscode-languageserver';
+import type { ConfigurationItem, DidChangeWatchedFilesParams, Location, PublishDiagnosticsParams, WorkspaceFolder } from 'vscode-languageserver';
+import { CompletionTriggerKind, FileChangeType } from 'vscode-languageserver';
 import { Deferred } from './deferred';
-import type { Project } from './LanguageServer';
+import type { BrightScriptClientConfiguration } from './LanguageServer';
 import { CustomCommands, LanguageServer } from './LanguageServer';
-import type { SinonStub } from 'sinon';
 import { createSandbox } from 'sinon';
 import { standardizePath as s, util } from './util';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import type { Program } from './Program';
 import * as assert from 'assert';
-import { expectZeroDiagnostics, trim } from './testHelpers.spec';
+import type { PartialDiagnostic } from './testHelpers.spec';
+import { createInactivityStub, expectZeroDiagnostics, normalizeDiagnostics, trim } from './testHelpers.spec';
 import { isBrsFile, isLiteralString } from './astUtils/reflection';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { tempDir, rootDir } from './testHelpers.spec';
+import { URI } from 'vscode-uri';
+import { BusyStatusTracker } from './BusyStatusTracker';
+import type { BscFile } from './interfaces';
+import type { Project } from './lsp/Project';
+import { LogLevel, Logger, createLogger } from './logging';
+import { DiagnosticMessages } from './DiagnosticMessages';
+import { standardizePath } from 'roku-deploy';
+import undent from 'undent';
+import { ProjectManager } from './lsp/ProjectManager';
+import type { WorkspaceConfig } from './lsp/ProjectManager';
+import { workerPool } from './lsp/worker/WorkerThreadProject';
 
 const sinon = createSandbox();
 
 const workspacePath = rootDir;
+const enableThreadingDefault = LanguageServer.enableThreadingDefault;
 
 describe('LanguageServer', () => {
     let server: LanguageServer;
@@ -27,8 +39,6 @@ describe('LanguageServer', () => {
 
     let workspaceFolders: string[] = [];
 
-    let vfs = {} as Record<string, string>;
-    let physicalFilePaths = [] as string[];
     let connection = {
         onInitialize: () => null,
         onInitialized: () => null,
@@ -54,6 +64,11 @@ describe('LanguageServer', () => {
         onWillSaveTextDocumentWaitUntil: () => null,
         onDidSaveTextDocument: () => null,
         onRequest: () => null,
+        languages: {
+            inlayHint: {
+                on: () => null
+            }
+        },
         workspace: {
             getWorkspaceFolders: () => {
                 return workspaceFolders.map(
@@ -65,47 +80,43 @@ describe('LanguageServer', () => {
             },
             getConfiguration: () => {
                 return {};
-            }
+            },
+            onDidChangeWorkspaceFolders: () => { },
+            onWillRenameFiles: () => null
         },
         tracer: {
             log: () => { }
+        },
+        client: {
+            register: () => Promise.resolve()
         }
     };
 
     beforeEach(() => {
         sinon.restore();
+        fsExtra.emptyDirSync(tempDir);
+
         server = new LanguageServer();
+        server['busyStatusTracker'] = new BusyStatusTracker();
         workspaceFolders = [workspacePath];
+        LanguageServer.enableThreadingDefault = false;
 
-        vfs = {};
-        physicalFilePaths = [];
-
-        //hijack the file resolver so we can inject in-memory files for our tests
-        let originalResolver = server['documentFileResolver'];
-        server['documentFileResolver'] = (srcPath: string) => {
-            if (vfs[srcPath]) {
-                return vfs[srcPath];
-            } else {
-                return originalResolver.call(server, srcPath);
-            }
-        };
+        //disable debounce by default for tests so existing tests run without delay
+        server.fileChangeDebounceDelay = 0;
 
         //mock the connection stuff
-        (server as any).createConnection = () => {
+        sinon.stub(server as any, 'establishConnection').callsFake(() => {
             return connection;
-        };
+        });
         server['hasConfigurationCapability'] = true;
     });
-    afterEach(async () => {
-        fsExtra.emptyDirSync(tempDir);
-        try {
-            await Promise.all(
-                physicalFilePaths.map(srcPath => fsExtra.unlinkSync(srcPath))
-            );
-        } catch (e) {
 
-        }
-        server.dispose();
+    afterEach(() => {
+        sinon.restore();
+        fsExtra.emptyDirSync(tempDir);
+
+        server['dispose']();
+        LanguageServer.enableThreadingDefault = enableThreadingDefault;
     });
 
     function addXmlFile(name: string, additionalXmlContents = '') {
@@ -116,7 +127,7 @@ describe('LanguageServer', () => {
             ${additionalXmlContents}
             <script type="text/brightscript" uri="${name}.brs" />
         </component>`;
-        program.setFile(filePath, contents);
+        return program.setFile(filePath, contents);
     }
 
     function addScriptFile(name: string, contents: string, extension = 'brs') {
@@ -124,205 +135,503 @@ describe('LanguageServer', () => {
         const file = program.setFile(filePath, contents);
         if (file) {
             const document = TextDocument.create(util.pathToUri(file.srcPath), 'brightscript', 1, contents);
-            server['documents']['_documents'][document.uri] = document;
+            (server['documents']['_syncedDocuments'] as Map<string, TextDocument>).set(document.uri, document);
             return document;
         }
     }
 
-    function writeToFs(srcPath: string, contents: string) {
-        physicalFilePaths.push(srcPath);
-        fsExtra.ensureDirSync(path.dirname(srcPath));
-        fsExtra.writeFileSync(srcPath, contents);
-    }
+    it('does not cause infinite loop of project creation', async () => {
+        //add a project with a files array that includes (and then excludes) a file
+        fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, JSON.stringify({
+            files: ['source/**/*', '!source/**/*.spec.bs']
+        }));
 
-    describe('createStandaloneFileProject', () => {
-        it('never returns undefined', async () => {
-            let filePath = `${rootDir}/main.brs`;
-            writeToFs(filePath, `sub main(): return: end sub`);
-            let firstProject = await server['createStandaloneFileProject'](filePath);
-            let secondProject = await server['createStandaloneFileProject'](filePath);
-            expect(firstProject).to.equal(secondProject);
+        server['run']();
+
+        function setSyncedDocument(srcPath: string, text: string, version = 1) {
+            //force an open text document
+            const document = TextDocument.create(util.pathToUri(
+                util.standardizePath(srcPath
+                )
+            ), 'brightscript', 1, `sub main()\nend sub`);
+            (server['documents']['_syncedDocuments'] as Map<string, TextDocument>).set(document.uri, document);
+        }
+
+        //wait for the projects to finish loading up
+        await server['syncProjects']();
+
+        //this bug was causing an infinite async loop of new project creations. So monitor the creation of new projects for evaluation later
+        const { stub, promise: createProjectsSettled } = createInactivityStub(ProjectManager.prototype as any, 'constructProject', 400, sinon);
+
+        setSyncedDocument(s`${rootDir}/source/lib1.spec.bs`, 'sub lib1()\nend sub');
+        setSyncedDocument(s`${rootDir}/source/lib2.spec.bs`, 'sub lib2()\nend sub');
+
+        // open a file that is excluded by the project, so it should trigger a standalone project.
+        await server['onTextDocumentDidChangeContent']({
+            document: TextDocument.create(util.pathToUri(s`${rootDir}/source/lib1.spec.bs`), 'brightscript', 1, `sub main()\nend sub`)
         });
 
-        it('filters out certain diagnostics', async () => {
-            let filePath = `${rootDir}/main.brs`;
-            writeToFs(filePath, `sub main(): return: end sub`);
-            let firstProject: Project = await server['createStandaloneFileProject'](filePath);
-            expectZeroDiagnostics(firstProject.builder.program);
+        //wait for the "create projects" deferred debounce to settle
+        await createProjectsSettled;
+
+        //test passes if we've only made 2 new projects (one for each of the standalone projects)
+        expect(stub.callCount).to.eql(2);
+    });
+
+    describe('onDidChangeConfiguration', () => {
+        async function doTest(startingConfigs: WorkspaceConfig[], endingConfigs: WorkspaceConfig[]) {
+            (server as any)['connection'] = connection;
+            server['workspaceConfigsCache'] = new Map(startingConfigs.map(x => [x.workspaceFolder, x]));
+
+            const stub = sinon.stub(server as any, 'getWorkspaceConfigs').returns(Promise.resolve(endingConfigs));
+
+            await server.onDidChangeConfiguration({ settings: {} });
+            stub.restore();
+        }
+
+        it('does not reload project when: no projects are present before and after', async () => {
+            const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
+            await doTest([], []);
+            expect(stub.called).to.be.false;
+        });
+
+        it('does not reload project when: 1 project is unchanged', async () => {
+            const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
+            await doTest([{
+                languageServer: {
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: workspacePath,
+                excludePatterns: []
+            }], [{
+                languageServer: {
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: workspacePath,
+                excludePatterns: []
+            }]);
+            expect(stub.called).to.be.false;
+        });
+
+        it('reloads project when adding new project', async () => {
+            const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
+            await doTest([], [{
+                languageServer: {
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: workspacePath,
+                excludePatterns: []
+            }]);
+            expect(stub.called).to.be.true;
+        });
+
+        it('reloads project when deleting a project', async () => {
+            const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
+            await doTest([{
+                languageServer: {
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: workspacePath,
+                excludePatterns: []
+            }, {
+                languageServer: {
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: s`${tempDir}/project2`,
+                excludePatterns: []
+            }], [{
+                languageServer: {
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: workspacePath,
+                excludePatterns: []
+            }]);
+            expect(stub.called).to.be.true;
+        });
+
+        it('reloads project when changing specific settings', async () => {
+            const stub = sinon.stub(server as any, 'syncProjects').callsFake(() => Promise.resolve());
+            await doTest([{
+                languageServer: {
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
+                    logLevel: 'trace'
+                },
+                workspaceFolder: workspacePath,
+                excludePatterns: []
+            }], [{
+                languageServer: {
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: workspacePath,
+                excludePatterns: []
+            }]);
+            expect(stub.called).to.be.true;
+        });
+
+    });
+
+    describe('syncProjectActivationConcurrencyLimit', () => {
+        function makeConfig(workspaceFolder: string, limit?: number): WorkspaceConfig {
+            return {
+                languageServer: {
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
+                    logLevel: 'info',
+                    ...(limit !== undefined ? { projectActivationConcurrencyLimit: limit } : {})
+                },
+                workspaceFolder: workspaceFolder,
+                excludePatterns: []
+            };
+        }
+
+        it('defaults to 3 when no workspaces are configured', () => {
+            server['workspaceConfigsCache'] = new Map();
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(3);
+        });
+
+        it('defaults to 3 when workspace has no limit set', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(3);
+        });
+
+        it('reads limit from a single workspace config', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 5)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(5);
+        });
+
+        it('uses the smallest limit from multiple workspace folders', () => {
+            const folder2 = s`${tempDir}/project2`;
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 10)],
+                [folder2, makeConfig(folder2, 2)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(2);
+        });
+
+        it('ignores workspaces with no limit when others have a limit', () => {
+            const folder2 = s`${tempDir}/project2`;
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 7)],
+                [folder2, makeConfig(folder2)] // no limit
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            // only the workspace with a limit contributes; the limitless one is filtered out
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(7);
+        });
+
+        it('does not crash when languageServer is undefined on a cache entry', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, {
+                    languageServer: undefined,
+                    workspaceFolder: workspacePath,
+                    excludePatterns: []
+                } as any]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(3);
+        });
+
+        it('does not crash when projectActivationConcurrencyLimit is a non-numeric string', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 'bad' as any)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            // non-numeric values are filtered out; falls back to default
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(3);
+        });
+
+        it('does not crash when projectActivationConcurrencyLimit is null', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, null as any)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(3);
+        });
+
+        it('defaults to 1 when projectActivationConcurrencyLimit is NaN', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, NaN)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(1);
+        });
+
+        it('defaults to 1 when projectActivationConcurrencyLimit is less than 1', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 0)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(1);
+        });
+
+        it('defaults to 1 when projectActivationConcurrencyLimit is a negative number', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, -5)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(1);
+        });
+
+        it('is called on startup (onInitialized) and reads the configured limit', async () => {
+            server['connection'] = connection as any;
+            const spy = sinon.spy(server as any, 'syncProjectActivationConcurrencyLimit');
+            sinon.stub(server as any, 'getWorkspaceConfigs').returns(Promise.resolve([
+                makeConfig(workspacePath, 4)
+            ]));
+            sinon.stub(server as any, 'syncLogLevel').resolves();
+            sinon.stub(server as any, 'rebuildPathFilterer').resolves();
+            sinon.stub(server as any, 'syncProjects').resolves();
+
+            await server['onInitialized']();
+
+            expect(spy.calledOnce).to.be.true;
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(4);
+        });
+
+        it('is updated by onDidChangeConfiguration', async () => {
+            (server as any)['connection'] = connection;
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 10)]
+            ]);
+            sinon.stub(server as any, 'getWorkspaceConfigs').returns(Promise.resolve([
+                makeConfig(workspacePath, 2)
+            ]));
+            sinon.stub(server as any, 'rebuildPathFilterer').resolves();
+            sinon.stub(server as any, 'syncProjects').resolves();
+
+            await server.onDidChangeConfiguration({ settings: {} });
+
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(2);
+        });
+
+        it('getWorkspaceConfigs does not bake in the default when client omits the setting', async () => {
+            // Regression test: getWorkspaceConfigs previously fell back to the default (3) when
+            // the client didn't configure projectActivationConcurrencyLimit. This caused the
+            // cache to always contain a number, so syncProjectActivationConcurrencyLimit could
+            // never distinguish "user set 3" from "user left it unset", and the "use smallest"
+            // logic would incorrectly override an explicit limit from another workspace with 3.
+            //
+            // Scenario: two workspaces — one sets limit=10, one has no opinion.
+            // Expected: syncProjectActivationConcurrencyLimit uses 10 (the only explicit limit).
+            // Broken behaviour: getWorkspaceConfigs stores 3 for the unconfigured workspace,
+            // so Math.min(10, 3) = 3 is used instead.
+            server.run();
+
+            const folder2 = s`${tempDir}/project2`;
+            workspaceFolders = [workspacePath, folder2];
+
+            sinon.stub(server as any, 'getClientConfiguration').callsFake((uri: string) => {
+                if (uri.includes('project2')) {
+                    // this workspace has no opinion on the concurrency limit
+                    return Promise.resolve({
+                        languageServer: { enableThreading: false, enableProjectDiscovery: true, logLevel: 'info' }
+                    });
+                }
+                return Promise.resolve({
+                    languageServer: { enableThreading: false, enableProjectDiscovery: true, logLevel: 'info', projectActivationConcurrencyLimit: 10 }
+                });
+            });
+            sinon.stub(server as any, 'getWorkspaceExcludeGlobs').resolves([]);
+
+            const configs = await server['getWorkspaceConfigs']();
+            const limitForFolder2 = configs.find(c => c.workspaceFolder === folder2)?.languageServer?.projectActivationConcurrencyLimit;
+
+            // the unconfigured workspace should NOT have the default baked in
+            expect(limitForFolder2).to.be.undefined;
+
+            // and the full sync path should respect only the explicitly-set limit
+            server['workspaceConfigsCache'] = new Map(configs.map(c => [c.workspaceFolder, c]));
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(10);
+        });
+
+        it('changing the limit mid-sync updates the property for the next sync but does not affect in-flight workers', () => {
+            // runWithConcurrencyLimit captures the limit by value at call time.
+            // Updating projectActivationConcurrencyLimit while workers are running
+            // has no effect on the current run — they continue until the queue drains.
+            // The new limit takes effect on the next syncProjects call.
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 5)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(5);
+
+            // a config change arrives while activation is hypothetically in progress
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 1)]
+            ]);
+            server['syncProjectActivationConcurrencyLimit']();
+
+            // property reflects the new limit for the NEXT sync
+            expect(server['projectManager'].projectActivationConcurrencyLimit).to.eql(1);
+        });
+    });
+
+    describe('syncMaxWorkerThreads', () => {
+        function makeConfig(workspaceFolder: string, maxWorkerThreads?: number): WorkspaceConfig {
+            return {
+                languageServer: {
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
+                    logLevel: 'info',
+                    ...(maxWorkerThreads !== undefined ? { maxWorkerThreads: maxWorkerThreads } : {})
+                },
+                workspaceFolder: workspaceFolder,
+                excludePatterns: []
+            };
+        }
+
+        it('defaults to LanguageServer.maxWorkerThreadsDefault when no workspaces are configured', () => {
+            server['workspaceConfigsCache'] = new Map();
+            server['syncMaxWorkerThreads']();
+            expect(workerPool.maxWorkers).to.eql(LanguageServer.maxWorkerThreadsDefault);
+        });
+
+        it('reads the limit from a single workspace config', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 4)]
+            ]);
+            server['syncMaxWorkerThreads']();
+            expect(workerPool.maxWorkers).to.eql(4);
+        });
+
+        it('uses the smallest limit from multiple workspace folders', () => {
+            const folder2 = s`${tempDir}/project2`;
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 10)],
+                [folder2, makeConfig(folder2, 2)]
+            ]);
+            server['syncMaxWorkerThreads']();
+            expect(workerPool.maxWorkers).to.eql(2);
+        });
+
+        it('defaults to 1 when the configured value is less than 1', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 0)]
+            ]);
+            server['syncMaxWorkerThreads']();
+            expect(workerPool.maxWorkers).to.eql(1);
         });
     });
 
     describe('sendDiagnostics', () => {
-        it('waits for program to finish loading before sending diagnostics', async () => {
-            server.onInitialize({
-                capabilities: {
-                    workspace: {
-                        workspaceFolders: true
-                    }
-                }
-            } as any);
-            expect(server['clientHasWorkspaceFolderCapability']).to.be.true;
-            server.run();
-            let deferred = new Deferred();
-            let project: any = {
-                builder: {
-                    getDiagnostics: () => []
-                },
-                firstRunPromise: deferred.promise
-            };
-            //make a new not-completed project
-            server.projects.push(project);
-
-            //this call should wait for the builder to finish
-            let p = server['sendDiagnostics']();
-
-            await util.sleep(50);
-            //simulate the program being created
-            project.builder.program = {
-                files: {}
-            };
-            deferred.resolve();
-            await p;
-            //test passed because no exceptions were thrown
-        });
-
         it('dedupes diagnostics found at same location from multiple projects', async () => {
-            server.projects.push(<any>{
-                firstRunPromise: Promise.resolve(),
-                builder: {
-                    getDiagnostics: () => {
-                        return [{
-                            file: {
-                                srcPath: s`${rootDir}/source/main.brs`
-                            },
-                            code: 1000,
-                            range: Range.create(1, 2, 3, 4)
-                        }];
-                    }
-                }
-            }, <any>{
-                firstRunPromise: Promise.resolve(),
-                builder: {
-                    getDiagnostics: () => {
-                        return [{
-                            file: {
-                                srcPath: s`${rootDir}/source/main.brs`
-                            },
-                            code: 1000,
-                            range: Range.create(1, 2, 3, 4)
-                        }];
-                    }
-                }
-            });
-            server['connection'] = connection as any;
-            let stub = sinon.stub(server['connection'], 'sendDiagnostics');
-            await server['sendDiagnostics']();
-            expect(stub.getCall(0).args?.[0]?.diagnostics).to.be.lengthOf(1);
-        });
-
-        it('sends diagnostics that were triggered by the program instead of vscode', async () => {
-            server['connection'] = server['createConnection']();
-            await server['createProject'](workspacePath);
-            let stub: SinonStub;
-            const promise = new Promise((resolve) => {
-                stub = sinon.stub(connection, 'sendDiagnostics').callsFake(resolve as any);
-            });
-            const { program } = server.projects[0].builder;
-            program.setFile('source/lib.bs', `
-                sub lib()
-                    functionDoesNotExist()
+            fsExtra.outputFileSync(s`${rootDir}/common/lib.brs`, `
+                sub test()
+                    print alpha 'variable does not exist
                 end sub
             `);
-            program.validate();
-            await promise;
-            expect(stub.called).to.be.true;
+            fsExtra.outputFileSync(s`${rootDir}/project1/bsconfig.json`, JSON.stringify({
+                rootDir: s`${rootDir}/project1`,
+                files: [{
+                    src: `../common/lib.brs`,
+                    dest: 'source/lib.brs'
+                }]
+            }));
+            fsExtra.outputFileSync(s`${rootDir}/project2/bsconfig.json`, JSON.stringify({
+                rootDir: s`${rootDir}/project2`,
+                files: [{
+                    src: `../common/lib.brs`,
+                    dest: 'source/lib.brs'
+                }]
+            }));
+
+            server['connection'] = connection as any;
+            let sendDiagnosticsDeferred = new Deferred<any>();
+            let stub = sinon.stub(server['connection'], 'sendDiagnostics').callsFake(async (arg) => {
+                sendDiagnosticsDeferred.resolve(arg);
+                return sendDiagnosticsDeferred.promise;
+            });
+
+            await server['syncProjects']();
+
+            await sendDiagnosticsDeferred.promise;
+
+            expect(stub.getCall(0).args?.[0]?.diagnostics).to.be.lengthOf(1);
         });
     });
 
-    describe('createProject', () => {
-        it('prevents creating package on first run', async () => {
-            server['connection'] = server['createConnection']();
-            await server['createProject'](workspacePath);
-            expect(server['projects'][0].builder.program.options.copyToStaging).to.be.false;
+    describe('critical-failure', () => {
+        it('notifies the client when a project reports a critical failure', async () => {
+            server['connection'] = connection as any;
+            const deferred = new Deferred<any>();
+            const stub = sinon.stub(server['connection'], 'sendNotification').callsFake((...args: any[]) => {
+                deferred.resolve(args);
+                return Promise.resolve();
+            });
+
+            server['projectManager']['emit']('critical-failure', {
+                project: server['projectManager'].projects[0],
+                message: 'worker thread crashed unexpectedly'
+            });
+
+            const args = await deferred.promise;
+            expect(args[0]).to.eql('critical-failure');
+            expect(args[1]).to.include('worker thread crashed unexpectedly');
+            stub.restore();
         });
     });
 
-    describe('onDidChangeWatchedFiles', () => {
-        let mainPath = s`${workspacePath}/source/main.brs`;
+    describe('project-activate', () => {
+        it('should sync all open document changes to all projects', async () => {
 
-        it('picks up new files', async () => {
-            server.run();
-            server.onInitialize({
-                capabilities: {
+            //force an open text document
+            const srcPath = s`${rootDir}/source/main.brs`;
+            const document = TextDocument.create(util.pathToUri(srcPath), 'brightscript', 1, `sub main()\nend sub`);
+            (server['documents']['_syncedDocuments'] as Map<string, TextDocument>).set(document.uri, document);
+
+            const deferred = new Deferred();
+            const stub = sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => {
+                deferred.resolve();
+                return Promise.resolve();
+            });
+
+            server['projectManager']['emit']('project-activate', {
+                project: server['projectManager'].projects[0]
+            });
+
+            await deferred.promise;
+            expect(
+                stub.getCalls()[0].args[0].map(x => ({
+                    srcPath: x.srcPath,
+                    fileContents: x.fileContents
+                }))
+            ).to.eql([{
+                srcPath: srcPath,
+                fileContents: document.getText()
+            }]);
+        });
+
+        it('handles when there were no open documents', () => {
+            server['projectManager']['emit']('project-activate', {
+                project: {
+                    projectNumber: 1
                 }
             } as any);
-            writeToFs(mainPath, `sub main(): return: end sub`);
-            await server['onInitialized']();
-            expect(server.projects[0].builder.program.hasFile(mainPath)).to.be.true;
-            //move a file into the directory...the program should detect it
-            let libPath = s`${workspacePath}/source/lib.brs`;
-            writeToFs(libPath, 'sub lib(): return : end sub');
-
-            server.projects[0].configFilePath = `${workspacePath}/bsconfig.json`;
-            await server['onDidChangeWatchedFiles']({
-                changes: [{
-                    uri: getFileProtocolPath(libPath),
-                    type: 1 //created
-                },
-                {
-                    uri: getFileProtocolPath(s`${workspacePath}/source`),
-                    type: 2 //changed
-                }
-                    // ,{
-                    //     uri: 'file:///c%3A/projects/PlumMediaCenter/Roku/appconfig.brs',
-                    //     type: 3 //deleted
-                    // }
-                ]
-            });
-            expect(server.projects[0].builder.program.hasFile(libPath)).to.be.true;
-        });
-    });
-
-    describe('handleFileChanges', () => {
-        it('only adds files that match the files array', async () => {
-            let setFileStub = sinon.stub().returns(Promise.resolve());
-            const project = {
-                builder: {
-                    options: {
-                        files: [
-                            'source/**/*'
-                        ]
-                    },
-                    getFileContents: sinon.stub().callsFake(() => Promise.resolve('')) as any,
-                    rootDir: rootDir,
-                    program: {
-                        setFile: <any>setFileStub
-                    }
-                }
-            } as Project;
-
-            let mainPath = s`${rootDir}/source/main.brs`;
-            // setVfsFile(mainPath, 'sub main()\nend sub');
-
-            await server.handleFileChanges(project, [{
-                type: FileChangeType.Created,
-                srcPath: mainPath
-            }]);
-
-            expect(setFileStub.getCalls()[0]?.args[0]).to.eql({
-                src: mainPath,
-                dest: s`source/main.brs`
-            });
-
-            let libPath = s`${rootDir}/components/lib.brs`;
-
-            expect(setFileStub.callCount).to.equal(1);
-            await server.handleFileChanges(project, [{
-                type: FileChangeType.Created,
-                srcPath: libPath
-            }]);
-            //the function should have ignored the lib file, so no additional files were added
-            expect(setFileStub.callCount).to.equal(1);
+            //we can't really test this, but it helps with code coverage...
         });
     });
 
@@ -330,7 +639,7 @@ describe('LanguageServer', () => {
         it('loads workspace as project', async () => {
             server.run();
 
-            expect(server.projects).to.be.lengthOf(0);
+            expect(server['projectManager'].projects).to.be.lengthOf(0);
 
             fsExtra.ensureDirSync(workspacePath);
 
@@ -338,7 +647,7 @@ describe('LanguageServer', () => {
 
             //no child bsconfig.json files, use the workspacePath
             expect(
-                server.projects.map(x => x.projectPath)
+                server['projectManager'].projects.map(x => x.projectKey)
             ).to.eql([
                 workspacePath
             ]);
@@ -350,10 +659,10 @@ describe('LanguageServer', () => {
 
             //2 child bsconfig.json files. Use those folders as projects, and don't use workspacePath
             expect(
-                server.projects.map(x => x.projectPath).sort()
+                server['projectManager'].projects.map(x => x.projectKey).sort()
             ).to.eql([
-                s`${workspacePath}/project1`,
-                s`${workspacePath}/project2`
+                s`${workspacePath}/project1/bsconfig.json`,
+                s`${workspacePath}/project2/bsconfig.json`
             ]);
 
             fsExtra.removeSync(s`${workspacePath}/project2/bsconfig.json`);
@@ -361,9 +670,9 @@ describe('LanguageServer', () => {
 
             //1 child bsconfig.json file. Still don't use workspacePath
             expect(
-                server.projects.map(x => x.projectPath)
+                server['projectManager'].projects.map(x => x.projectKey)
             ).to.eql([
-                s`${workspacePath}/project1`
+                s`${workspacePath}/project1/bsconfig.json`
             ]);
 
             fsExtra.removeSync(s`${workspacePath}/project1/bsconfig.json`);
@@ -371,28 +680,55 @@ describe('LanguageServer', () => {
 
             //back to no child bsconfig.json files. use workspacePath again
             expect(
-                server.projects.map(x => x.projectPath)
+                server['projectManager'].projects.map(x => x.projectKey)
             ).to.eql([
                 workspacePath
             ]);
         });
 
         it('ignores bsconfig.json files from vscode ignored paths', async () => {
-            server.run();
-            sinon.stub(server['connection'].workspace, 'getConfiguration').returns(Promise.resolve({
-                exclude: {
-                    '**/vendor': true
+            const mapItem = (item: ConfigurationItem) => {
+                if (item.section === 'files') {
+                    return {
+                        exclude: {
+                            '**/vendor': true
+                        }
+                    };
+                } else if (item.section === 'search') {
+                    return {
+                        exclude: {
+                            '**/temp': true
+                        }
+                    };
+                } else {
+                    return {};
                 }
-            }) as any);
+            };
+
+            server.run();
+            sinon.stub(server['connection'].workspace, 'getConfiguration').callsFake(
+                // @ts-expect-error Sinon incorrectly infers the type of this function
+                (items: any) => {
+                    if (typeof items === 'string') {
+                        return Promise.resolve({});
+                    }
+                    if (Array.isArray(items)) {
+                        return Promise.resolve(items.map(mapItem));
+                    }
+                    return Promise.resolve(mapItem(items));
+                }
+            );
+            await server.onInitialized();
 
             fsExtra.outputJsonSync(s`${workspacePath}/vendor/someProject/bsconfig.json`, {});
+            fsExtra.outputJsonSync(s`${workspacePath}/temp/someProject/bsconfig.json`, {});
             //it always ignores node_modules
             fsExtra.outputJsonSync(s`${workspacePath}/node_modules/someProject/bsconfig.json`, {});
             await server['syncProjects']();
 
             //no child bsconfig.json files, use the workspacePath
             expect(
-                server.projects.map(x => x.projectPath)
+                server['projectManager'].projects.map(x => x.projectKey)
             ).to.eql([
                 workspacePath
             ]);
@@ -411,10 +747,10 @@ describe('LanguageServer', () => {
             await server['syncProjects']();
 
             expect(
-                server.projects.map(x => x.projectPath).sort()
+                server['projectManager'].projects.map(x => x.projectKey).sort()
             ).to.eql([
-                s`${tempDir}/root`,
-                s`${tempDir}/root/subdir`
+                s`${tempDir}/root/bsconfig.json`,
+                s`${tempDir}/root/subdir/bsconfig.json`
             ]);
         });
 
@@ -436,40 +772,582 @@ describe('LanguageServer', () => {
             await server['syncProjects']();
 
             expect(
-                server.projects.map(x => x.projectPath).sort()
+                server['projectManager'].projects.map(x => x.projectKey).sort()
             ).to.eql([
                 s`${tempDir}/project1`,
                 s`${tempDir}/sub/dir/project2`
             ]);
         });
-    });
 
-    describe('onDidChangeWatchedFiles', () => {
-        it('converts folder paths into an array of file paths', async () => {
+        it('uses explicit projects list', async () => {
+            fsExtra.outputJsonSync(s`${tempDir}/project1/bsconfig.json`, {});
+            fsExtra.outputFileSync(s`${tempDir}/project1/source/main.brs`, '');
+
+            fsExtra.outputJsonSync(s`${tempDir}/sub/dir/project2/bsconfig.json`, {});
+            fsExtra.outputFileSync(s`${tempDir}/sub/dir/project2/source/main.bs`, '');
+
+            //not in projects list
+            fsExtra.outputJsonSync(s`${tempDir}/project3/bsconfig.json`, {});
+            fsExtra.outputFileSync(s`${tempDir}/project3/source/main.brs`, '');
+
+            workspaceFolders = [
+                s`${tempDir}/`
+            ];
+            const workspaceSettings: BrightScriptClientConfiguration = {
+                languageServer: {
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
+                    logLevel: 'info'
+                },
+                projects: [
+                    // eslint-disable-next-line no-template-curly-in-string
+                    'project1',
+                    // eslint-disable-next-line no-template-curly-in-string
+                    '${workspaceFolder}/sub/dir/project2/bsconfig.json',
+                    // eslint-disable-next-line no-template-curly-in-string
+                    { name: 'p3', path: '${workspaceFolder}/project3', disabled: true }
+                ]
+            };
+
             server.run();
 
-            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {});
-            fsExtra.outputFileSync(s`${rootDir}/source/main.brs`, '');
-            fsExtra.outputFileSync(s`${rootDir}/source/lib.brs`, '');
-            await server['syncProjects']();
-
-            const stub2 = sinon.stub(server.projects[0].builder.program, 'setFile');
-
-            await server['onDidChangeWatchedFiles']({
-                changes: [{
-                    type: FileChangeType.Created,
-                    uri: getFileProtocolPath(s`${rootDir}/source`)
-                }]
-            } as DidChangeWatchedFilesParams);
+            sinon.stub(server as any, 'getClientConfiguration').returns(Promise.resolve(workspaceSettings));
 
             expect(
-                stub2.getCalls().map(x => x.args[0].src).sort()
+                await server['getWorkspaceConfigs']()
             ).to.eql([
-                s`${rootDir}/source/lib.brs`,
-                s`${rootDir}/source/main.brs`
+                {
+                    workspaceFolder: s`${tempDir}/`,
+                    excludePatterns: [],
+                    projects: [
+                        { path: 'project1' },
+                        { path: s`${tempDir}/sub/dir/project2/bsconfig.json` },
+                        { name: 'p3', path: s`${tempDir}/project3`, disabled: true }
+                    ],
+                    languageServer: {
+                        enableThreading: false,
+                        enableProjectDiscovery: true,
+                        projectDiscoveryMaxDepth: 15,
+                        projectDiscoveryExclude: undefined,
+                        logLevel: 'info',
+                        projectActivationConcurrencyLimit: undefined,
+                        maxWorkerThreads: undefined
+                    }
+                }
+            ]);
+        });
+    });
+
+    describe('projectDiscoveryExclude and files.watcherExclude', () => {
+        it('includes projectDiscoveryExclude in workspace configuration', async () => {
+            const projectDiscoveryExclude = {
+                '**/test/**': true,
+                'node_modules/**': true
+            };
+
+            sinon.stub(server as any, 'getClientConfiguration').callsFake((workspaceFolder, section) => {
+                if (section === 'brightscript') {
+                    return Promise.resolve({
+                        languageServer: {
+                            projectDiscoveryExclude: projectDiscoveryExclude
+                        }
+                    });
+                }
+                return Promise.resolve({});
+            });
+
+            server.run();
+            const configs = await server['getWorkspaceConfigs']();
+            expect(configs[0].languageServer.projectDiscoveryExclude).to.deep.equal(projectDiscoveryExclude);
+        });
+
+        it('includes files.watcherExclude in workspace exclude patterns', async () => {
+            sinon.stub(server as any, 'getClientConfiguration').callsFake((workspaceFolder, section) => {
+                if (section === 'files') {
+                    return Promise.resolve({
+                        exclude: { 'node_modules': true },
+                        watcherExclude: {
+                            '**/tmp/**': true,
+                            '**/cache/**': true
+                        }
+                    });
+                }
+                return Promise.resolve({});
+            });
+
+            server.run();
+            const excludeGlobs = await server['getWorkspaceExcludeGlobs'](workspaceFolders[0]);
+            expect(excludeGlobs).to.include('**/tmp/**');
+            expect(excludeGlobs).to.include('**/cache/**');
+        });
+
+        it('includes projectDiscoveryExclude in workspace exclude patterns', async () => {
+            const projectDiscoveryExclude = {
+                '**/test/**': true,
+                '**/node_modules/**': true,
+                '**/.build/**': true
+            };
+
+            sinon.stub(server as any, 'getClientConfiguration').callsFake((workspaceFolder, section) => {
+                if (section === 'brightscript') {
+                    return Promise.resolve({
+                        languageServer: {
+                            projectDiscoveryExclude: projectDiscoveryExclude
+                        }
+                    });
+                }
+                return Promise.resolve({});
+            });
+
+            server.run();
+            const excludeGlobs = await server['getWorkspaceExcludeGlobs'](workspaceFolders[0]);
+            expect(excludeGlobs).to.include('**/test/**');
+            expect(excludeGlobs).to.include('**/node_modules/**');
+            expect(excludeGlobs).to.include('**/.build/**');
+        });
+
+        it('handles undefined projectDiscoveryExclude without crashing', async () => {
+            sinon.stub(server as any, 'getClientConfiguration').callsFake((workspaceFolder, section) => {
+                if (section === 'brightscript') {
+                    return Promise.resolve({
+                        languageServer: {
+                            // projectDiscoveryExclude is undefined
+                        }
+                    });
+                }
+                return Promise.resolve({});
+            });
+
+            server.run();
+            const configs = await server['getWorkspaceConfigs']();
+            expect(configs[0].languageServer.projectDiscoveryExclude).to.be.undefined;
+
+            // Should not crash during pathFilterer rebuild
+            await server['rebuildPathFilterer']();
+        });
+
+        it('handles undefined files.watcherExclude without crashing', async () => {
+            sinon.stub(server as any, 'getClientConfiguration').callsFake((workspaceFolder, section) => {
+                if (section === 'files') {
+                    return Promise.resolve({
+                        exclude: { '**/node_modules/**/*': true }
+                        // watcherExclude is undefined
+                    });
+                }
+                return Promise.resolve({});
+            });
+
+            server.run();
+            const excludeGlobs = await server['getWorkspaceExcludeGlobs'](workspaceFolders[0]);
+            expect(excludeGlobs).to.eql([
+                '**/node_modules/**/*'
             ]);
         });
 
+        it('handles null/undefined configuration sections without crashing', async () => {
+            sinon.stub(server as any, 'getClientConfiguration').callsFake((workspaceFolder, section) => {
+                return Promise.resolve(null);
+            });
+
+            server.run();
+            const configs = await server['getWorkspaceConfigs']();
+            expect(configs[0].languageServer.projectDiscoveryExclude).to.be.undefined;
+
+            const excludeGlobs = await server['getWorkspaceExcludeGlobs'](workspaceFolders[0]);
+            expect(excludeGlobs).to.eql([]);
+        });
+
+        it('handles empty objects for configuration sections without crashing', async () => {
+            sinon.stub(server as any, 'getClientConfiguration').callsFake((workspaceFolder, section) => {
+                return Promise.resolve({});
+            });
+
+            server.run();
+            const configs = await server['getWorkspaceConfigs']();
+            expect(configs[0].languageServer.projectDiscoveryExclude).to.be.undefined;
+
+            const excludeGlobs = await server['getWorkspaceExcludeGlobs'](workspaceFolders[0]);
+            expect(excludeGlobs).to.eql([]);
+        });
+
+        it('handles mixed defined/undefined settings without crashing', async () => {
+            sinon.stub(server as any, 'getClientConfiguration').callsFake((workspaceFolder, section) => {
+                if (section === 'brightscript') {
+                    return Promise.resolve({
+                        languageServer: {
+                            projectDiscoveryExclude: {
+                                '**/test/**/*': true
+                            }
+                        }
+                    });
+                } else if (section === 'files') {
+                    return Promise.resolve({
+                        exclude: { '**/excludeMe/**/*': true }
+                        // watcherExclude is undefined
+                    });
+                }
+                return Promise.resolve({});
+            });
+
+            server.run();
+
+            const excludeGlobs = await server['getWorkspaceExcludeGlobs'](workspaceFolders[0]);
+            expect(excludeGlobs).to.eql([
+                '**/excludeMe/**/*',
+                '**/test/**/*'
+            ]);
+
+            // Should not crash during pathFilterer rebuild
+            await server['rebuildPathFilterer']();
+        });
+    });
+
+    describe('onInitialize', () => {
+        it('sets capabilities', async () => {
+            server['hasConfigurationCapability'] = false;
+            server['clientHasWorkspaceFolderCapability'] = false;
+
+            await server.onInitialize({
+                capabilities: {
+                    workspace: {
+                        configuration: true,
+                        workspaceFolders: true
+                    }
+                }
+            } as any);
+            expect(server['hasConfigurationCapability']).to.be.true;
+            expect(server['clientHasWorkspaceFolderCapability']).to.be.true;
+        });
+    });
+
+    describe('onInitialized', () => {
+        it('registers workspaceFolders change listener', async () => {
+
+            server['connection'] = connection as any;
+
+            const deferred = new Deferred();
+            sinon.stub(server['connection']['workspace'], 'onDidChangeWorkspaceFolders').callsFake((() => {
+                deferred.resolve();
+            }) as any);
+
+            server['hasConfigurationCapability'] = false;
+            server['clientHasWorkspaceFolderCapability'] = true;
+
+            await server.onInitialized();
+            //if the promise resolves, we know the function was called
+            await deferred.promise;
+        });
+    });
+
+    describe('syncLogLevel', () => {
+        beforeEach(() => {
+            //disable logging for these tests
+            sinon.stub(Logger.prototype, 'write').callsFake(() => { });
+        });
+
+        it('uses a default value when no workspace or projects are present', async () => {
+            server.run();
+            await server['syncLogLevel']();
+            expect(server.logger.logLevel).to.eql(LogLevel.log);
+        });
+
+        it('recovers when workspace sends unsupported value', async () => {
+            server.run();
+
+            sinon.stub(server as any, 'getClientConfiguration').returns(Promise.resolve({
+                languageServer: {
+                    logLevel: 'not-valid'
+                }
+            }));
+            await server['syncLogLevel']();
+            expect(server.logger.logLevel).to.eql(LogLevel.log);
+        });
+
+        it('uses logLevel from workspace', async () => {
+            server.run();
+
+            sinon.stub(server as any, 'getClientConfiguration').returns(Promise.resolve({
+                languageServer: {
+                    logLevel: 'trace'
+                }
+            }));
+            await server['syncLogLevel']();
+            expect(server.logger.logLevel).to.eql(LogLevel.trace);
+        });
+
+        it('uses the higher-verbosity logLevel from multiple workspaces', async () => {
+            server.run();
+
+            //mock multiple workspaces
+            sinon.stub(server['connection'].workspace, 'getWorkspaceFolders').returns(Promise.resolve([
+                {
+                    name: 'workspace1',
+                    uri: getFileProtocolPath(s`${tempDir}/project1`)
+                },
+                {
+                    name: 'workspace1',
+                    uri: getFileProtocolPath(s`${tempDir}/project2`)
+                }
+            ]));
+
+            sinon.stub(server as any, 'getClientConfiguration').onFirstCall().returns(Promise.resolve({
+                languageServer: {
+                    logLevel: 'trace'
+                }
+            })).onSecondCall().returns(Promise.resolve({
+                languageServer: {
+                    logLevel: 'info'
+                }
+            }));
+            await server['syncLogLevel']();
+
+            expect(server.logger.logLevel).to.eql(LogLevel.trace);
+        });
+
+        it('uses valid workspace value when one of them is invalid', async () => {
+            server.run();
+
+            //mock multiple workspaces
+            sinon.stub(server['connection'].workspace, 'getWorkspaceFolders').returns(Promise.resolve([
+                {
+                    name: 'workspace1',
+                    uri: getFileProtocolPath(s`${tempDir}/project1`)
+                },
+                {
+                    name: 'workspace1',
+                    uri: getFileProtocolPath(s`${tempDir}/project2`)
+                }
+            ]));
+
+            sinon.stub(server as any, 'getClientConfiguration').onFirstCall().returns(Promise.resolve({
+                languageServer: {
+                    logLevel: 'trace1'
+                }
+            })).onSecondCall().returns(Promise.resolve({
+                languageServer: {
+                    logLevel: 'info'
+                }
+            }));
+            await server['syncLogLevel']();
+
+            expect(server.logger.logLevel).to.eql(LogLevel.info);
+        });
+
+        it('uses value from projects when not found in workspace', async () => {
+            server.run();
+
+            //mock multiple workspaces
+            sinon.stub(server['connection'].workspace, 'getWorkspaceFolders').returns(Promise.resolve([{
+                name: 'workspace1',
+                uri: getFileProtocolPath(s`${tempDir}/project2`)
+            }]));
+
+            server['projectManager'].projects.push({
+                logger: createLogger({
+                    logLevel: LogLevel.info
+                }),
+                projectNumber: 2
+            } as any);
+
+            await server['syncLogLevel']();
+
+            expect(server.logger.logLevel).to.eql(LogLevel.info);
+        });
+    });
+
+    describe('rebuildPathFilterer', () => {
+        let workspaceConfigs: WorkspaceConfig[] = [];
+        beforeEach(() => {
+            workspaceConfigs = [
+                {
+                    languageServer: {
+                        enableThreading: false,
+                        enableProjectDiscovery: true,
+                        logLevel: 'info'
+                    },
+                    workspaceFolder: workspacePath,
+                    excludePatterns: []
+                }
+            ];
+            server['connection'] = connection as any;
+            sinon.stub(server as any, 'getWorkspaceConfigs').callsFake(() => Promise.resolve(workspaceConfigs));
+        });
+
+        it('allows files from dist by default', async () => {
+            const filterer = await server['rebuildPathFilterer']();
+            //certain files are allowed through by default
+            expect(
+                filterer.filter([
+                    s`${rootDir}/manifest`,
+                    s`${rootDir}/dist/file.brs`,
+                    s`${rootDir}/source/file.brs`
+                ])
+            ).to.eql([
+                s`${rootDir}/manifest`,
+                s`${rootDir}/dist/file.brs`,
+                s`${rootDir}/source/file.brs`
+            ]);
+        });
+
+        it('filters out some standard locations by default', async () => {
+            const filterer = await server['rebuildPathFilterer']();
+
+            expect(
+                filterer.filter([
+                    s`${workspacePath}/node_modules/file.brs`,
+                    s`${workspacePath}/.git/file.brs`,
+                    s`${workspacePath}/out/file.brs`,
+                    s`${workspacePath}/.roku-deploy-staging/file.brs`
+                ])
+            ).to.eql([]);
+        });
+
+        it('properly handles a .gitignore list', async () => {
+            fsExtra.outputFileSync(s`${workspacePath}/.gitignore`, undent`
+                dist/
+            `);
+
+            const filterer = await server['rebuildPathFilterer']();
+
+            //filters files that appear in a .gitignore list
+            expect(
+                filterer.filter([
+                    s`${workspacePath}/src/source/file.brs`,
+                    //this file should be excluded
+                    s`${workspacePath}/dist/source/file.brs`
+                ])
+            ).to.eql([
+                s`${workspacePath}/src/source/file.brs`
+            ]);
+        });
+
+        it('does not crash for path outside of workspaceFolder', async () => {
+            fsExtra.outputFileSync(s`${workspacePath}/.gitignore`, undent`
+                dist/
+            `);
+
+            const filterer = await server['rebuildPathFilterer']();
+
+            //filters files that appear in a .gitignore list
+            expect(
+                filterer.filter([
+                    s`${workspacePath}/../flavor1/src/source/file.brs`
+                ])
+            ).to.eql([
+                //since the path is outside the workspace, it does not match the .gitignore patter, and thus is not excluded
+                s`${workspacePath}/../flavor1/src/source/file.brs`
+            ]);
+        });
+
+        it('a gitignore file from any workspace will apply to all workspaces', async () => {
+            workspaceConfigs = [{
+                languageServer: {
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: s`${tempDir}/flavor1`,
+                excludePatterns: []
+            }, {
+                languageServer: {
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
+                    logLevel: 'info'
+                },
+                workspaceFolder: s`${tempDir}/flavor2`,
+                excludePatterns: []
+            }];
+            fsExtra.outputFileSync(s`${workspaceConfigs[0].workspaceFolder}/.gitignore`, undent`
+                dist/
+            `);
+            fsExtra.outputFileSync(s`${workspaceConfigs[1].workspaceFolder}/.gitignore`, undent`
+                out/
+            `);
+
+            const filterer = await server['rebuildPathFilterer']();
+
+            //filters files that appear in a .gitignore list
+            expect(
+                filterer.filter([
+                    //included files
+                    s`${workspaceConfigs[0].workspaceFolder}/src/source/file.brs`,
+                    s`${workspaceConfigs[1].workspaceFolder}/src/source/file.brs`,
+                    //excluded files
+                    s`${workspaceConfigs[0].workspaceFolder}/dist/source/file.brs`,
+                    s`${workspaceConfigs[1].workspaceFolder}/out/source/file.brs`
+                ])
+            ).to.eql([
+                s`${workspaceConfigs[0].workspaceFolder}/src/source/file.brs`,
+                s`${workspaceConfigs[1].workspaceFolder}/src/source/file.brs`
+            ]);
+        });
+
+        it('does not erase project-specific filters', async () => {
+            let filterer = await server['rebuildPathFilterer']();
+            const files = [
+                s`${rootDir}/node_modules/one/file.xml`,
+                s`${rootDir}/node_modules/two.bs`,
+                s`${rootDir}/node_modules/three/dist/lib.bs`
+            ];
+
+            //all node_modules files are filtered out by default, unless included in an includeList
+            expect(filterer.filter(files)).to.eql([]);
+
+            //register two specific node_module folders to include
+            filterer.registerIncludeList(rootDir, ['node_modules/one/**/*', 'node_modules/two.bs']);
+
+            //unless included in an includeList
+            expect(filterer.filter(files)).to.eql([
+                s`${rootDir}/node_modules/one/file.xml`,
+                s`${rootDir}/node_modules/two.bs`
+                //three should still be excluded
+            ]);
+
+            //rebuild the path filterer, make sure the project's includeList is still retained
+            filterer = await server['rebuildPathFilterer']();
+
+            expect(filterer.filter(files)).to.eql([
+                //one and two should still make it through the filter unscathed
+                s`${rootDir}/node_modules/one/file.xml`,
+                s`${rootDir}/node_modules/two.bs`
+                //three should still be excluded
+            ]);
+        });
+
+        it('a removed project includeList gets unregistered', async () => {
+            let filterer = await server['rebuildPathFilterer']();
+            const files = [
+                s`${rootDir}/project1/node_modules/one/file.xml`,
+                s`${rootDir}/project1/node_modules/two.bs`,
+                s`${rootDir}/project1/node_modules/three/dist/lib.bs`
+            ];
+
+            //all node_modules files are filtered out by default, unless included in an includeList
+            expect(filterer.filter(files)).to.eql([]);
+
+            //register a new project that references a file from node_modules
+            fsExtra.outputFileSync(s`${rootDir}/project1/bsconfig.json`, JSON.stringify({
+                files: ['node_modules/one/file.xml']
+            }));
+
+            await server['syncProjects']();
+
+            //one should be included because the project references it
+            expect(filterer.filter(files)).to.eql([
+                s`${rootDir}/project1/node_modules/one/file.xml`
+            ]);
+
+            //delete the project's bsconfig.json and sync again (thus destroying the project)
+            fsExtra.removeSync(s`${rootDir}/project1/bsconfig.json`);
+
+            await server['syncProjects']();
+
+            //the project's pathFilterer pattern has been unregistered
+            expect(filterer.filter(files)).to.eql([]);
+        });
+    });
+
+    describe('onDidChangeWatchedFiles', () => {
         it('does not trigger revalidates when changes are in files which are not tracked', async () => {
             server.run();
             const externalDir = s`${tempDir}/not_app_dir`;
@@ -478,7 +1356,7 @@ describe('LanguageServer', () => {
             fsExtra.outputFileSync(s`${externalDir}/source/lib.brs`, '');
             await server['syncProjects']();
 
-            const stub2 = sinon.stub(server.projects[0].builder.program, 'setFile');
+            const stub2 = sinon.stub((server['projectManager'].projects[0] as Project)['builder'].program, 'setFile');
 
             await server['onDidChangeWatchedFiles']({
                 changes: [{
@@ -491,16 +1369,246 @@ describe('LanguageServer', () => {
                 stub2.getCalls()
             ).to.be.empty;
         });
+
+        it('rebuilds the path filterer when certain files are changed', async () => {
+
+            sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => Promise.resolve());
+            (server as any)['connection'] = connection;
+            async function test(filePath: string, expected = true) {
+                const stub = sinon.stub(server as any, 'rebuildPathFilterer');
+
+                await server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Changed,
+                        uri: util.pathToUri(filePath)
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                expect(
+                    stub.getCalls().length
+                ).to.eql(expected ? 1 : 0);
+
+                stub.restore();
+            }
+
+            await test(s`${rootDir}/bsconfig.json`);
+            await test(s`${rootDir}/sub/dir/bsconfig.json`);
+
+            await test(s`${rootDir}/.vscode/settings.json`);
+
+            await test(s`${rootDir}/.gitignore`);
+            await test(s`${rootDir}/sub/dir/.two/.gitignore`);
+
+            await test(s`${rootDir}/source/main.brs`, false);
+        });
+
+        it('excludes explicit workspaceFolder paths', async () => {
+            (server as any).connection = connection;
+            sinon.stub(server['connection'].workspace, 'getWorkspaceFolders').returns(Promise.resolve([{
+                name: 'workspace1',
+                uri: util.pathToUri(s`${tempDir}/project1`)
+            } as WorkspaceFolder]));
+
+            const stub = sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => Promise.resolve());
+
+            await server['onDidChangeWatchedFiles']({
+                changes: [{
+                    type: FileChangeType.Created,
+                    uri: util.pathToUri(s`${tempDir}/project1`)
+                }]
+            } as DidChangeWatchedFilesParams);
+
+            //it did not send along the workspace folder itself
+            expect(
+                stub.getCalls()[0].args[0]
+            ).to.eql([]);
+        });
+
+        describe('debouncing', () => {
+            let clock: sinon.SinonFakeTimers;
+
+            beforeEach(() => {
+                (server as any)['connection'] = connection;
+                //enable a non-zero debounce for these tests
+                server.fileChangeDebounceDelay = 150;
+                clock = sinon.useFakeTimers();
+            });
+
+            afterEach(() => {
+                clock.restore();
+            });
+
+            it('batches rapid successive file change events into a single handleFileChanges call', async () => {
+                const stub = sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => Promise.resolve());
+
+                //fire 3 rapid events without awaiting
+                const promise1 = server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Changed,
+                        uri: util.pathToUri(s`${rootDir}/source/file1.brs`)
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                const promise2 = server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Changed,
+                        uri: util.pathToUri(s`${rootDir}/source/file2.brs`)
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                const promise3 = server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Changed,
+                        uri: util.pathToUri(s`${rootDir}/source/file3.brs`)
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                //handleFileChanges should not have been called yet (still within debounce window)
+                expect(stub.callCount).to.eql(0);
+
+                //advance past the debounce window and flush microtasks
+                await clock.tickAsync(200);
+
+                //all promises should resolve to the same batch
+                await Promise.all([promise1, promise2, promise3]);
+
+                //handleFileChanges should have been called exactly once with all 3 changes
+                expect(stub.callCount).to.eql(1);
+                expect(stub.getCalls()[0].args[0]).to.have.lengthOf(3);
+            });
+
+            it('resets the debounce timer on each new event', async () => {
+                const stub = sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => Promise.resolve());
+
+                //fire first event
+                void server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Changed,
+                        uri: util.pathToUri(s`${rootDir}/source/file1.brs`)
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                //advance 100ms (less than the 150ms debounce)
+                await clock.tickAsync(100);
+
+                //fire another event -- this should reset the timer
+                void server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Changed,
+                        uri: util.pathToUri(s`${rootDir}/source/file2.brs`)
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                //advance another 100ms (200ms total, but only 100ms since last event)
+                await clock.tickAsync(100);
+
+                //should NOT have flushed yet because the timer was reset
+                expect(stub.callCount).to.eql(0);
+
+                //advance past the debounce window from the second event
+                await clock.tickAsync(100);
+
+                //now it should have flushed with both changes
+                expect(stub.callCount).to.eql(1);
+                expect(stub.getCalls()[0].args[0]).to.have.lengthOf(2);
+            });
+
+            it('calls rebuildPathFilterer at most once per batch when bsconfig changes', async () => {
+                sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => Promise.resolve());
+                const pathFiltererStub = sinon.stub(server as any, 'rebuildPathFilterer').callsFake(() => Promise.resolve());
+
+                //fire two bsconfig change events
+                void server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Changed,
+                        uri: util.pathToUri(s`${rootDir}/bsconfig.json`)
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                void server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Changed,
+                        uri: util.pathToUri(s`${rootDir}/sub/bsconfig.json`)
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                await clock.tickAsync(200);
+
+                //rebuildPathFilterer should have been called exactly once for the entire batch
+                expect(pathFiltererStub.callCount).to.eql(1);
+            });
+
+            it('deduplicates multiple events for the same file within a batch', async () => {
+                const stub = sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => Promise.resolve());
+
+                //fire 3 Changed events for the same file
+                for (let i = 0; i < 3; i++) {
+                    void server['onDidChangeWatchedFiles']({
+                        changes: [{
+                            type: FileChangeType.Changed,
+                            uri: util.pathToUri(s`${rootDir}/source/file1.brs`)
+                        }]
+                    } as DidChangeWatchedFilesParams);
+                }
+
+                await clock.tickAsync(200);
+
+                //should have been called once with only 1 unique change (not 3)
+                expect(stub.callCount).to.eql(1);
+                expect(stub.getCalls()[0].args[0]).to.have.lengthOf(1);
+            });
+
+            it('keeps the last event type when deduplicating (last event wins)', async () => {
+                const stub = sinon.stub(server['projectManager'], 'handleFileChanges').callsFake(() => Promise.resolve());
+                const fileUri = util.pathToUri(s`${rootDir}/source/file1.brs`);
+
+                //fire Created then Deleted for the same file
+                void server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Created,
+                        uri: fileUri
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                void server['onDidChangeWatchedFiles']({
+                    changes: [{
+                        type: FileChangeType.Deleted,
+                        uri: fileUri
+                    }]
+                } as DidChangeWatchedFilesParams);
+
+                await clock.tickAsync(200);
+
+                expect(stub.callCount).to.eql(1);
+                const changes = stub.getCalls()[0].args[0];
+                expect(changes).to.have.lengthOf(1);
+                //the Deleted event should win because it came last
+                expect(changes[0].type).to.eql(FileChangeType.Deleted);
+            });
+        });
+    });
+
+    describe('onDocumentClose', () => {
+        it('calls handleFileClose', async () => {
+            const stub = sinon.stub(server['projectManager'], 'handleFileClose').callsFake((() => { }) as any);
+            await server['onDocumentClose']({
+                document: {
+                    uri: util.pathToUri(s`${rootDir}/source/main.brs`)
+                } as any
+            });
+            expect(stub.args[0][0].srcPath).to.eql(s`${rootDir}/source/main.brs`);
+        });
     });
 
     describe('onSignatureHelp', () => {
         let callDocument: TextDocument;
+        let importingXmlFile: BscFile;
         const functionFileBaseName = 'buildAwesome';
         const funcDefinitionLine = 'function buildAwesome(confirm = true as Boolean)';
         beforeEach(async () => {
-            server['connection'] = server['createConnection']();
-            await server['createProject'](workspacePath);
-            program = server.projects[0].builder.program;
+            server['connection'] = server['establishConnection']();
+            await server['syncProjects']();
+            program = (server['projectManager'].projects[0] as Project)['builder'].program;
 
             const name = `CallComponent`;
             callDocument = addScriptFile(name, `
@@ -512,8 +1620,8 @@ describe('LanguageServer', () => {
                         m.buildAwesome()
                     end if
                 end sub
-            `);
-            addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.bs" />`);
+            `)!;
+            importingXmlFile = addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.bs" />`);
         });
 
         it('should return the expected signature info when documentation is included', async () => {
@@ -582,23 +1690,116 @@ describe('LanguageServer', () => {
             const signature = result.signatures[0];
             expect(signature.label).to.equal(classMethodDefinitionLine);
         });
+
+        it('should return "null" as signature and parameter when used on something with no signature', async () => {
+            const result = await server['onSignatureHelp']({
+                textDocument: {
+                    uri: importingXmlFile.pkgPath
+                },
+                position: util.createPosition(0, 5)
+            });
+
+            console.dir(result);
+
+            expect(result.signatures.length).to.equal(0);
+            expect(result.activeSignature).to.equal(null);
+            expect(result.activeParameter).to.equal(null);
+        });
+    });
+
+    describe('onCompletion', () => {
+        it('does not crash when uri is invalid', async () => {
+            sinon.stub(server['projectManager'], 'getCompletions').callsFake(() => Promise.resolve({ items: [], isIncomplete: false }));
+            expect(
+                await (server['onCompletion'] as any)({
+                    textDocument: {
+                        uri: 'invalid'
+                    },
+                    position: util.createPosition(0, 0)
+                } as any)
+            ).to.eql({
+                items: [],
+                isIncomplete: false
+            });
+        });
+
+        it('ignores the `<` trigger character in non-xml files', async () => {
+            const stub = sinon.stub(server['projectManager'], 'getCompletions').callsFake(() => Promise.resolve({ items: [{ label: 'someCompletion' }], isIncomplete: false }));
+            //`<` is the less-than operator in brightscript, so it should not trigger completions there
+            expect(
+                await (server['onCompletion'] as any)({
+                    textDocument: {
+                        uri: util.pathToUri(s`${rootDir}/source/main.brs`)
+                    },
+                    position: util.createPosition(0, 0),
+                    context: {
+                        triggerKind: CompletionTriggerKind.TriggerCharacter,
+                        triggerCharacter: '<'
+                    }
+                } as any)
+            ).to.eql({
+                items: [],
+                isIncomplete: false
+            });
+            expect(stub.called).to.be.false;
+        });
+
+        it('honors the `<` trigger character in xml files', async () => {
+            const stub = sinon.stub(server['projectManager'], 'getCompletions').callsFake(() => Promise.resolve({ items: [{ label: 'someCompletion' }], isIncomplete: false }));
+            expect(
+                await (server['onCompletion'] as any)({
+                    textDocument: {
+                        uri: util.pathToUri(s`${rootDir}/components/widget.xml`)
+                    },
+                    position: util.createPosition(0, 0),
+                    context: {
+                        triggerKind: CompletionTriggerKind.TriggerCharacter,
+                        triggerCharacter: '<'
+                    }
+                } as any)
+            ).to.eql({
+                items: [{ label: 'someCompletion' }],
+                isIncomplete: false
+            });
+            expect(stub.called).to.be.true;
+        });
+
+        it('still processes non-trigger-character completions in non-xml files', async () => {
+            const stub = sinon.stub(server['projectManager'], 'getCompletions').callsFake(() => Promise.resolve({ items: [{ label: 'someCompletion' }], isIncomplete: false }));
+            expect(
+                await (server['onCompletion'] as any)({
+                    textDocument: {
+                        uri: util.pathToUri(s`${rootDir}/source/main.brs`)
+                    },
+                    position: util.createPosition(0, 0),
+                    context: {
+                        triggerKind: CompletionTriggerKind.TriggerCharacter,
+                        triggerCharacter: '.'
+                    }
+                } as any)
+            ).to.eql({
+                items: [{ label: 'someCompletion' }],
+                isIncomplete: false
+            });
+            expect(stub.called).to.be.true;
+        });
     });
 
     describe('onReferences', () => {
         let functionDocument: TextDocument;
-        let referenceFileUris = [];
+        let referenceFileUris: string[] = [];
 
         beforeEach(async () => {
-            server['connection'] = server['createConnection']();
-            await server['createProject'](workspacePath);
-            program = server.projects[0].builder.program;
+            server['connection'] = server['establishConnection']();
+            await server['syncProjects']();
+            program = (server['projectManager'].projects[0] as Project)['builder'].program;
 
             const functionFileBaseName = 'buildAwesome';
             functionDocument = addScriptFile(functionFileBaseName, `
                 function buildAwesome()
                     return 42
                 end function
-            `);
+            `)!;
 
             for (let i = 0; i < 5; i++) {
                 let name = `CallComponent${i}`;
@@ -609,7 +1810,7 @@ describe('LanguageServer', () => {
                             buildAwesome()
                         end if
                     end sub
-                `);
+                `)!;
 
                 addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.brs" />`);
                 referenceFileUris.push(document.uri);
@@ -652,14 +1853,58 @@ describe('LanguageServer', () => {
         });
     });
 
+    describe('onWillRenameFiles', () => {
+        it('advertises the willRename capability in onInitialize', () => {
+            const result: any = server.onInitialize({ capabilities: {} } as any);
+            expect(result.capabilities.workspace?.fileOperations?.willRename).to.exist;
+            const filters = result.capabilities.workspace.fileOperations.willRename.filters;
+            expect(filters).to.be.an('array').with.length.greaterThan(0);
+            expect(filters[0].pattern.glob).to.contain('bs');
+        });
+
+        it('returns null when no project knows about the renamed file', async () => {
+            server['connection'] = server['establishConnection']();
+            await server['syncProjects']();
+
+            const result = await server['onWillRenameFiles']({
+                files: [{
+                    oldUri: util.pathToUri(s`${rootDir}/source/old.bs`),
+                    newUri: util.pathToUri(s`${rootDir}/source/new.bs`)
+                }]
+            });
+
+            expect(result).to.be.null;
+        });
+
+        it('produces a WorkspaceEdit that rewrites import statements pointing at the renamed file', async () => {
+            fsExtra.outputFileSync(s`${rootDir}/source/lib.bs`, '');
+            fsExtra.outputFileSync(s`${rootDir}/source/main.bs`, `import "pkg:/source/lib.bs"`);
+
+            server['connection'] = server['establishConnection']();
+            await server['syncProjects']();
+
+            const mainUri = util.pathToUri(s`${rootDir}/source/main.bs`);
+            const result = await server['onWillRenameFiles']({
+                files: [{
+                    oldUri: util.pathToUri(s`${rootDir}/source/lib.bs`),
+                    newUri: util.pathToUri(s`${rootDir}/source/lib2.bs`)
+                }]
+            });
+
+            expect(result).to.not.be.null;
+            expect(result.changes[mainUri]).to.have.lengthOf(1);
+            expect(result.changes[mainUri][0].newText).to.eql('pkg:/source/lib2.bs');
+        });
+    });
+
     describe('onDefinition', () => {
         let functionDocument: TextDocument;
         let referenceDocument: TextDocument;
 
         beforeEach(async () => {
-            server['connection'] = server['createConnection']();
-            await server['createProject'](workspacePath);
-            program = server.projects[0].builder.program;
+            server['connection'] = server['establishConnection']();
+            await server['syncProjects']();
+            program = (server['projectManager'].projects[0] as Project)['builder'].program;
 
             const functionFileBaseName = 'buildAwesome';
             functionDocument = addScriptFile(functionFileBaseName, `
@@ -670,7 +1915,7 @@ describe('LanguageServer', () => {
                 function buildAwesome()
                     return 42
                 end function
-            `);
+            `)!;
 
             const name = `CallComponent`;
             referenceDocument = addScriptFile(name, `
@@ -682,7 +1927,7 @@ describe('LanguageServer', () => {
                         m.top.observeFieldScope("loadFinished", "buildAwesome")
                     end if
                 end sub
-            `);
+            `)!;
 
             addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.brs" />`);
         });
@@ -752,7 +1997,7 @@ describe('LanguageServer', () => {
                         return 42
                     end function
                 end class
-            `, 'bs');
+            `, 'bs')!;
 
             const name = `CallComponent`;
             referenceDocument = addScriptFile(name, `
@@ -760,7 +2005,7 @@ describe('LanguageServer', () => {
                     build = new Build()
                     build.awesome()
                 end sub
-            `);
+            `)!;
 
             addXmlFile(name, `<script type="text/brightscript" uri="${functionFileBaseName}.bs" />`);
 
@@ -782,9 +2027,9 @@ describe('LanguageServer', () => {
 
     describe('onDocumentSymbol', () => {
         beforeEach(async () => {
-            server['connection'] = server['createConnection']();
-            await server['createProject'](workspacePath);
-            program = server.projects[0].builder.program;
+            server['connection'] = server['establishConnection']();
+            await server['syncProjects']();
+            program = (server['projectManager'].projects[0] as Project)['builder'].program;
         });
 
         it('should return the expected symbols even if pulled from cache', async () => {
@@ -796,13 +2041,13 @@ describe('LanguageServer', () => {
                 function buildAwesome()
                     return 42
                 end function
-            `);
+            `)!;
 
             // We run the check twice as the first time is with it not cached and second time is with it cached
             for (let i = 0; i < 2; i++) {
-                const symbols = await server.onDocumentSymbol({
+                const symbols = (await server.onDocumentSymbol({
                     textDocument: document
-                });
+                }))!;
                 expect(symbols.length).to.equal(2);
                 expect(symbols[0].name).to.equal('pi');
                 expect(symbols[1].name).to.equal('buildAwesome');
@@ -820,18 +2065,18 @@ describe('LanguageServer', () => {
                         return 42
                     end function
                 end class
-            `, 'bs');
+            `, 'bs')!;
 
             // We run the check twice as the first time is with it not cached and second time is with it cached
             for (let i = 0; i < 2; i++) {
-                const symbols = await server['onDocumentSymbol']({
+                const symbols = (await server['onDocumentSymbol']({
                     textDocument: document
-                });
+                }))!;
 
                 expect(symbols.length).to.equal(1);
                 const classSymbol = symbols[0];
                 expect(classSymbol.name).to.equal('MyFirstClass');
-                const classChildrenSymbols = classSymbol.children;
+                const classChildrenSymbols = classSymbol.children!;
                 expect(classChildrenSymbols.length).to.equal(2);
                 expect(classChildrenSymbols[0].name).to.equal('pi');
                 expect(classChildrenSymbols[1].name).to.equal('buildAwesome');
@@ -849,31 +2094,31 @@ describe('LanguageServer', () => {
                         return 42
                     end function
                 end namespace
-            `, 'bs');
+            `, 'bs')!;
             program.validate();
 
             // We run the check twice as the first time is with it not cached and second time is with it cached
             for (let i = 0; i < 2; i++) {
-                const symbols = await server['onDocumentSymbol']({
+                const symbols = (await server['onDocumentSymbol']({
                     textDocument: document
-                });
+                }))!;
 
                 expect(symbols.length).to.equal(1);
                 const namespaceSymbol = symbols[0];
                 expect(namespaceSymbol.name).to.equal('MyFirstNamespace');
-                const classChildrenSymbols = namespaceSymbol.children;
+                const classChildrenSymbols = namespaceSymbol.children!;
                 expect(classChildrenSymbols.length).to.equal(2);
-                expect(classChildrenSymbols[0].name).to.equal('MyFirstNamespace.pi');
-                expect(classChildrenSymbols[1].name).to.equal('MyFirstNamespace.buildAwesome');
+                expect(classChildrenSymbols[0].name).to.equal('pi');
+                expect(classChildrenSymbols[1].name).to.equal('buildAwesome');
             }
         });
     });
 
     describe('onWorkspaceSymbol', () => {
         beforeEach(async () => {
-            server['connection'] = server['createConnection']();
-            await server['createProject'](workspacePath);
-            program = server.projects[0].builder.program;
+            server['connection'] = server['establishConnection']();
+            await server['syncProjects']();
+            program = (server['projectManager'].projects[0] as Project)['builder'].program;
         });
 
         it('should return the expected symbols even if pulled from cache', async () => {
@@ -949,17 +2194,14 @@ describe('LanguageServer', () => {
         });
 
         it('should work for nested class as well', async () => {
-            const nestedNamespace = 'containerNamespace';
-            const nestedClassName = 'nestedClass';
-
             addScriptFile('nested', `
-                namespace ${nestedNamespace}
-                    class ${nestedClassName}
-                        function pi()
+                namespace animals
+                    class dog
+                        function run()
                             return 3.141592653589793
                         end function
 
-                        function buildAwesome()
+                        function speak()
                             return 42
                         end function
                     end class
@@ -970,66 +2212,43 @@ describe('LanguageServer', () => {
             // We run the check twice as the first time is with it not cached and second time is with it cached
             for (let i = 0; i < 2; i++) {
                 const symbols = await server['onWorkspaceSymbol']({} as any);
-                expect(symbols.length).to.equal(4);
-                expect(symbols[0].name).to.equal(`pi`);
-                expect(symbols[0].containerName).to.equal(`${nestedNamespace}.${nestedClassName}`);
-                expect(symbols[1].name).to.equal(`buildAwesome`);
-                expect(symbols[1].containerName).to.equal(`${nestedNamespace}.${nestedClassName}`);
-                expect(symbols[2].name).to.equal(`${nestedNamespace}.${nestedClassName}`);
-                expect(symbols[2].containerName).to.equal(nestedNamespace);
-                expect(symbols[3].name).to.equal(nestedNamespace);
+                expect(
+                    symbols.map(x => ({
+                        name: x.name,
+                        containerName: x.containerName
+                    })).sort((a, b) => a.name.localeCompare(b.name))
+                ).to.eql([
+                    { name: 'animals', containerName: undefined },
+                    { name: `dog`, containerName: 'animals' },
+                    { name: `run`, containerName: 'dog' },
+                    { name: 'speak', containerName: 'dog' }
+                ]);
             }
         });
     });
 
-    describe('getConfigFilePath', () => {
-        it('honors the hasConfigurationCapability setting', async () => {
-            server.run();
-            sinon.stub(server['connection'].workspace, 'getConfiguration').returns(
-                Promise.reject(
-                    new Error('Client does not support "workspace/configuration"')
-                )
-            );
-            server['hasConfigurationCapability'] = false;
-            fsExtra.outputFileSync(`${workspacePath}/bsconfig.json`, '{}');
-            expect(
-                await server['getConfigFilePath'](workspacePath)
-            ).to.eql(
-                s`${workspacePath}/bsconfig.json`
-            );
-        });
-
+    describe('getClientConfiguration', () => {
         it('executes the connection.workspace.getConfiguration call when enabled to do so', async () => {
             server.run();
-            const bsconfigPath = `${tempDir}/bsconfig.test.json`;
-            //add a dummy bsconfig to reference for the test
-            fsExtra.outputFileSync(bsconfigPath, ``);
+            sinon.restore();
 
-            sinon.stub(server['connection'].workspace, 'getConfiguration').returns(Promise.resolve({ configFile: bsconfigPath }) as any);
+            sinon.stub(server['connection'].workspace, 'getConfiguration').returns(Promise.resolve({ configFile: 'something.json' }) as any);
             server['hasConfigurationCapability'] = true;
-            fsExtra.outputFileSync(`${workspacePath}/bsconfig.json`, '{}');
             expect(
-                s`${await server['getConfigFilePath'](workspacePath)}`
-            ).to.eql(
-                s`${bsconfigPath}`
-            );
+                await server['getClientConfiguration'](workspacePath, 'brightscript')
+            ).to.eql({
+                configFile: 'something.json'
+            });
         });
-    });
 
-    describe('getWorkspaceExcludeGlobs', () => {
-        it('honors the hasConfigurationCapability setting', async () => {
+        it('skips the connection.workspace.getConfiguration call when not supported', async () => {
             server.run();
-            sinon.stub(server['connection'].workspace, 'getConfiguration').returns(
-                Promise.reject(
-                    new Error('Client does not support "workspace/configuration"')
-                )
-            );
+            sinon.restore();
+
+            const stub = sinon.stub(server['connection'].workspace, 'getConfiguration').returns(Promise.resolve({ configFile: 'something.json' }) as any);
             server['hasConfigurationCapability'] = false;
-            expect(
-                await server['getWorkspaceExcludeGlobs'](workspaceFolders[0])
-            ).to.eql([
-                '**/node_modules/**/*'
-            ]);
+            await server['getClientConfiguration'](workspacePath, 'brightscript');
+            expect(stub.called).to.be.false;
         });
     });
 
@@ -1044,10 +2263,10 @@ describe('LanguageServer', () => {
                 fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, '');
                 server.run();
                 await server['syncProjects']();
-                const result = await server.onExecuteCommand({
+                const result = (await server.onExecuteCommand({
                     command: CustomCommands.TranspileFile,
                     arguments: [s`${rootDir}/source/main.bs`]
-                });
+                }))!;
                 expect(
                     trim(result?.code)
                 ).to.eql(trim`
@@ -1069,10 +2288,10 @@ describe('LanguageServer', () => {
                 await server['syncProjects']();
                 const afterSpy = sinon.spy();
                 //make a plugin that changes string text
-                server.projects[0].builder.program.plugins.add({
+                (server['projectManager'].projects[0] as Project)['builder'].program.plugins.add({
                     name: 'test-plugin',
                     beforeProgramTranspile: (program, entries, editor) => {
-                        const file = program.getFile('source/main.bs');
+                        const file = program.getFile('source/main.bs')!;
                         if (isBrsFile(file)) {
                             file.ast.walk(createVisitor({
                                 LiteralExpression: (expression) => {
@@ -1088,10 +2307,10 @@ describe('LanguageServer', () => {
                     afterProgramTranspile: afterSpy
                 });
 
-                const result = await server.onExecuteCommand({
+                const result = (await server.onExecuteCommand({
                     command: CustomCommands.TranspileFile,
                     arguments: [s`${rootDir}/source/main.bs`]
-                });
+                }))!;
                 expect(
                     trim(result?.code)
                 ).to.eql(trim`
@@ -1101,6 +2320,290 @@ describe('LanguageServer', () => {
                 `);
                 expect(afterSpy.called).to.be.true;
             });
+        });
+    });
+
+    it('semantic tokens request waits until after validation has finished', async () => {
+        fsExtra.outputFileSync(s`${rootDir}/source/main.bs`, `
+            sub main()
+                print \`hello world\`
+            end sub
+        `);
+        let spaceCount = 0;
+        const getContents = () => {
+            return `
+                namespace sgnode
+                    sub speak(message)
+                        print message
+                    end sub
+
+                    sub sayHello()
+                        sgnode.speak("Hello")${' '.repeat(spaceCount++)}
+                    end sub
+                end namespace
+            `;
+        };
+
+        const uri = URI.file(s`${rootDir}/source/sgnode.bs`).toString();
+
+        fsExtra.outputFileSync(s`${rootDir}/source/sgnode.bs`, getContents());
+        server.run();
+        await server['syncProjects']();
+        expectZeroDiagnostics((server['projectManager'].projects[0] as Project)['builder'].program);
+
+        fsExtra.outputFileSync(s`${rootDir}/source/sgnode.bs`, getContents());
+        const changeWatchedFilesPromise = server['onDidChangeWatchedFiles']({
+            changes: [{
+                type: FileChangeType.Changed,
+                uri: uri
+            }]
+        });
+        const document = {
+            getText: () => getContents(),
+            uri: uri
+        } as TextDocument;
+
+        const semanticTokensPromise = server['onFullSemanticTokens']({
+            textDocument: document
+        });
+        await Promise.all([
+            changeWatchedFilesPromise,
+            semanticTokensPromise
+        ]);
+        expectZeroDiagnostics((server['projectManager'].projects[0] as Project)['builder'].program);
+    });
+
+    describe('sendDiagnostics', () => {
+        let diagnostics = {};
+        let diagnosticsDeferred = new Deferred();
+
+        beforeEach(() => {
+            server['connection'] = connection as any;
+            sinon.stub(Logger.prototype, 'write').callsFake(() => {
+                //do nothing, logging is too noisy
+            });
+
+            diagnosticsDeferred = new Deferred();
+
+            let timer = setTimeout(() => { }, 0);
+            sinon.stub(server['connection'], 'sendDiagnostics').callsFake((params: PublishDiagnosticsParams) => {
+                clearTimeout(timer);
+                if (params.diagnostics.length === 0) {
+                    delete diagnostics[params.uri];
+                } else {
+                    diagnostics[params.uri] = params.diagnostics;
+                }
+                //debounce the promise so we get the final snapshot of diagnostics sent
+                timer = setTimeout(() => {
+                    diagnosticsDeferred.resolve();
+                    diagnosticsDeferred = new Deferred();
+                }, 100);
+                return Promise.resolve();
+            });
+        });
+
+        async function diagnosticsEquals(expectedDiagnostics: Record<string, Array<PartialDiagnostic | string | number>>) {
+            //wait for a patch
+            await diagnosticsDeferred.promise;
+
+            let actualDiagnostics = { ...diagnostics };
+
+            //normalize the keys
+            for (let collection of [actualDiagnostics, expectedDiagnostics]) {
+                //convert a URI-like string to an fsPath
+                for (let key in collection) {
+                    let keyNormalized = key.startsWith('file:') ? URI.parse(key).fsPath : key;
+                    keyNormalized = standardizePath(
+                        path.isAbsolute(keyNormalized) ? keyNormalized : s`${rootDir}/${keyNormalized}`
+                    );
+                    //if we changed the key, replace this in the collection
+                    if (keyNormalized !== key) {
+                        collection[keyNormalized] = collection[key];
+                        delete collection[key];
+                    }
+                }
+            }
+
+            //normalize the actual diagnostics so it has diagnostics in the same format as the expected
+            for (let key in actualDiagnostics) {
+                const [actual, expected] = normalizeDiagnostics(actualDiagnostics[key], expectedDiagnostics[key] ?? []);
+                actualDiagnostics[key] = actual;
+                expectedDiagnostics[key] = expected;
+            }
+            expect(actualDiagnostics).to.eql(expectedDiagnostics);
+        }
+
+        it('clears standalone file project diagnostics when that file is adopted by at least one project', async () => {
+            const projectManager = server['projectManager'];
+            const documentManager = projectManager['documentManager'];
+
+            //force instant document flushes
+            documentManager['options'].delay = 0;
+
+            //build a small functional project
+            fsExtra.outputFileSync(`${rootDir}/source/main.bs`, `
+                sub main()
+                    alpha.beta()
+                    print missing
+                end sub
+            `);
+            fsExtra.outputFileSync(`${rootDir}/source/lib.bs`, `
+                    namespace alpha
+                    sub beta()
+                    end sub
+                end namespace
+            `);
+            fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, `
+                {
+                    "files": ["source/**/*.bs"],
+                    //silence the logger, it's noisy
+                    "logLevel": "error"
+                }
+            `);
+            server.run();
+
+            await server['onInitialized']();
+
+            await diagnosticsEquals({
+                'source/main.bs': [
+                    DiagnosticMessages.cannotFindName('missing').message
+                ]
+            });
+
+            const document = TextDocument.create(
+                URI.file(s`${rootDir}/source/main.bs`).toString(),
+                'brightscript',
+                0, `
+                    sub main()
+                        alpha.beta()
+                        print missing2
+                    end sub
+                `
+            );
+            //open the main.bs file so it gets reloaded in a standalone project
+            server['documents'].all = () => [document];
+
+            await server['onTextDocumentDidChangeContent']({
+                document: document
+            });
+
+            await diagnosticsEquals({
+                'source/main.bs': [
+                    DiagnosticMessages.cannotFindName('missing2').message
+                ]
+            });
+
+            //mangle the bsconfig and then sync the project. this should produce new diagnostics from the file as it's now in a standalone project
+            fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, `
+                    {
+                        "files": ["source/lib.bs"]
+                //missing closing curly brace (and also have a comma, oops
+            `);
+
+            //tell the language server we've changed a bsconfig. it'll reload the file (fail cuz syntax error) and create a standalone project for the opened file
+            await server['onDidChangeWatchedFiles']({
+                changes: [{
+                    type: FileChangeType.Changed,
+                    uri: URI.file(`${rootDir}/bsconfig.json`).toString()
+                }]
+            });
+
+            //wait for the manager to settle
+            await projectManager.onIdle();
+
+            //we should get a patch clearing the diagnostics from the unloaded main project, then
+            //when the standalone project finishes loading, we should get another diagnostics patch, then
+            //when the project activates, we flush open document changes. So now the opened copy of the file is re-processed and we get the correct error message `missing2`
+            await diagnosticsEquals({
+                'source/main.bs': [
+                    DiagnosticMessages.cannotFindName('alpha').message,
+                    DiagnosticMessages.cannotFindName('missing2').message
+                ],
+                'bsconfig.json': [
+                    'Encountered syntax errors in bsconfig.json: CloseBraceExpected'
+                ]
+            });
+
+
+            //now fix the bsconfig and sync again. This should dispose the standalone project and send new diagnostics
+            fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, `
+                {
+                    "files": ["source/**/*.bs"],
+                    //silence the logger, it's noisy
+                    "logLevel": "error"
+                }
+            `);
+
+            //tell the language server we've changed a bsconfig
+            await server['onDidChangeWatchedFiles']({
+                changes: [{
+                    type: FileChangeType.Changed,
+                    uri: URI.file(`${rootDir}/bsconfig.json`).toString()
+                }]
+            });
+
+            //let the manager settle
+            await projectManager.onIdle();
+
+            //and then get more diagnostics when the opened file is parsed as well
+            await diagnosticsEquals({
+                'source/main.bs': [
+                    DiagnosticMessages.cannotFindName('missing2').message
+                ]
+            });
+        });
+    });
+
+    describe('onCodeAction', () => {
+        beforeEach(async () => {
+            server.run();
+            await server['onInitialized']();
+        });
+
+        async function callOnCodeAction(only: string[], kinds: (string | undefined)[]) {
+            sinon.stub(server['projectManager'], 'getCodeActions').resolves(
+                kinds.map(kind => ({ kind: kind, title: kind }))
+            );
+            return server['onCodeAction']({
+                textDocument: { uri: URI.file(`${rootDir}/source/main.bs`).toString() },
+                range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+                context: { diagnostics: [], only: only }
+            });
+        }
+
+        it('returns all code actions when context.only is empty', async () => {
+            const result = await callOnCodeAction([], ['quickfix', 'refactor']);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix', 'refactor']);
+        });
+
+        it('returns kindless code actions when context.only is empty', async () => {
+            const result = await callOnCodeAction([], ['quickfix', undefined]);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix', undefined]);
+        });
+
+        it('filters to exact kind match', async () => {
+            const result = await callOnCodeAction(['quickfix'], ['quickfix', 'refactor']);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix']);
+        });
+
+        it('includes child kinds using startsWith hierarchy', async () => {
+            const result = await callOnCodeAction(['quickfix'], ['quickfix', 'quickfix.foo', 'quickfix.foo.bar', 'refactor']);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix', 'quickfix.foo', 'quickfix.foo.bar']);
+        });
+
+        it('does not match unrelated kinds that share a prefix', async () => {
+            const result = await callOnCodeAction(['quickfix'], ['quickfix', 'quickfixFoo', 'refactor']);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix']);
+        });
+
+        it('excludes kindless actions when context.only is set (kind is required to match)', async () => {
+            const result = await callOnCodeAction(['quickfix'], ['quickfix', undefined]);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix']);
+        });
+
+        it('matches across multiple requested kinds', async () => {
+            const result = await callOnCodeAction(['quickfix', 'refactor'], ['quickfix', 'quickfix.foo', 'refactor.extract', 'source']);
+            expect(result?.map(x => x.kind)).to.eql(['quickfix', 'quickfix.foo', 'refactor.extract']);
         });
     });
 });

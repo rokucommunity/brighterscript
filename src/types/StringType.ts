@@ -24,4 +24,8 @@ export class StringType implements BscType {
     public toTypeString(): string {
         return this.toString();
     }
+
+    public clone() {
+        return new StringType(this.typeText);
+    }
 }

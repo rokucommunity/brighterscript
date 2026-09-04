@@ -1,20 +1,61 @@
 # Ternary (Conditional) Operator: ?
-The ternary (conditional) operator is the only BrighterScript operator that takes three operands: a condition followed by a question mark (?), then an expression to execute (consequent) if the condition is true followed by a colon (:), and finally the expression to execute (alternate) if the condition is false. This operator is frequently used as a shortcut for the if statement. It can be used in assignments, and in any other place where an expression is valid. Due to ambiguity in the brightscript syntax, ternary operators cannot be used as standalone statements. See the [No standalone statements](#no-standalone-statements) section for more information.
+The ternary (conditional) operator takes three operands: a condition followed by a question mark (?), then an expression to execute (consequent) if the condition is true followed by a colon (:), and finally the expression to execute (alternate) if the condition is false. This operator is frequently used as a shorthand version of an if statement. It can be used in assignments or any place where an expression is valid. Due to ambiguity in the brightscript syntax, ternary operators cannot be used as standalone statements. See the [No standalone statements](#no-standalone-statements) section for more information.
 
 ## Warning
 <p style="background-color: #fdf8e3; color: #333; padding: 20px">The <a href="https://developer.roku.com/docs/references/brightscript/language/expressions-variables-types.md#optional-chaining-operators">optional chaining operator</a> was added to the BrightScript runtime in <a href="https://developer.roku.com/docs/developer-program/release-notes/roku-os-release-notes.md#roku-os-110">Roku OS 11</a>, which introduced a slight limitation to the BrighterScript ternary operator. As such, all ternary expressions must have a space to the right of the question mark when followed by <b>[</b> or <b>(</b>. See the <a href="#">optional chaning</a> section for more information.
 </p>
 
 ## Basic usage
+The basic syntax is: `<condition> ? <value if true> : <value if false>`.
 
+Here's an example:
 ```BrighterScript
-authStatus = user <> invalid ? "logged in" : "not logged in"
+authStatus = user2 <> invalid ? "logged in" : "not logged in"
 ```
 
 transpiles to:
 
 ```BrightScript
-authStatus = bslib_ternary(user <> invalid, "logged in", "not logged in")
+if user2 <> invalid then
+    authStatus = "logged in"
+else
+    authStatus = "not logged in"
+end if
+```
+
+As you can see, when used in the right-hand-side of an assignment, brighterscript transpiles the ternary expression into a simple `if else` block.
+The `bslib_ternary` function checks the condition, and returns either the consequent or alternate. In these optimal situations, brighterscript can generate the most efficient code possible which is equivalent to what you'd write yourself without access to the ternary expression.
+
+This also works for nested ternary expressions:
+```BrighterScript
+result = true ? (true ? "one" : "two") : "three"
+```
+
+transpiles to:
+
+```BrightScript
+if true then
+    if true then
+        result = "one"
+    else
+        result = "two"
+    end if
+else
+    result = "three"
+end if
+```
+
+## Use in complex expressions
+Ternary can also be used in any location where expressions are supported, such as function calls or within array or associative array declarations. In some  situations it's much more difficult to convert the ternary expression into an `if else` statement, so we need to leverage the brighterscript `bslib_ternary` library function instead. Consider the following example:
+
+```BrighterScript
+ printAuthStatus(user2 <> invalid ? "logged in" : "not logged in")
+```
+
+transpiles to:
+
+```BrightScript
+printAuthStatus(bslib_ternary(user2 <> invalid, "logged in", "not logged in"))
 ```
 
 The `bslib_ternary` function checks the condition, and returns either the consequent or alternate.
@@ -24,86 +65,94 @@ There are some important implications to consider for code execution order and s
 Consider:
 
 ```BrighterScript
-  a = user = invalid ? "no name" : user.name
+  printUsername(user = invalid ? "no name" : user.name)
 ```
 
-transpiles to:
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
 ```BrightScript
-a = (function(__bsCondition, user)
+printUsername((function(__bsCondition, user)
         if __bsCondition then
             return "no name"
         else
             return user.name
         end if
-    end function)(user = invalid, user)
+    end function)(user = invalid, user))
 ```
+</details>
 
-This code will crash because `user.invalid` will be evaluated.
 
-To avoid this problem the transpiler provides conditional scope protection, as discussed in the following section.
+If we were to transpile this to leverage the `bslib_ternary` function, it would crash at runtime because `user.name` will be evaluated even when `user` is `invalid`. To avoid this problem the transpiler provides conditional scope protection, as discussed in the following section.
 
 ## Scope protection
 
-For conditional language features such as the _conditional (ternary) operator_, BrighterScript sometimes needs to protect against unintended performance hits.
+Sometimes BrighterScript needs to protect against unintended performance hits. There are 3 possible ways that your code can be transpiled:
 
-There are 2 possible ways that your code can be transpiled:
-
-### Simple
-In this situation, BrighterScript has determined that both the consequent and the alternate are side-effect free and will not cause rendezvous. This means BrighterScript can use a simpler and more performant transpile target.
+### Optimized `if else` block
+In this situation, brighterscript can safely convert the ternary expression into an `if else` block. This is typically available when ternary is used in assignments.
 
 ```BrighterScript
-a = user = invalid ? "not logged in" : "logged in"
+m.username = m.user <> invalid ? m.user.name : invalid
 ```
 
 transpiles to:
 
 ```BrightScript
-a = bslib_ternary(user = invalid, "not logged in", "logged in")
+if m.user <> invalid then
+    m.username = m.user.name
+else
+    m.username = invalid
+end if
 ```
 
+### BrighterScript `bslib_ternary` library function
+In this situation, BrighterScript has determined that both the consequent and the alternate are side-effect free and will not cause rendezvous or cloning, but the code was too complex to safely transpile to an `if else` block so we will leverage the `bslib_ternary` function instead.
+
 ```BrighterScript
-a = user = invalid ? defaultUser : user
+printAuthStatus(user = invalid ? "not logged in" : "logged in")
 ```
 
 transpiles to:
 
 ```BrightScript
-a = bslib_ternary(user = invalid, defaultUser, user)
+printAuthStatus(bslib_ternary(user = invalid, "not logged in", "logged in"))
 ```
+
 
 ### Scope capturing
-In this situation, BrighterScript has detected that your ternary operation will have side-effects or could possibly result in a rendezvous. BrighterScript will create an immediately-invoked-function-expression to capture all of the referenced local variables. This is in order to only execute the consequent if the condition is true, and only execute the alternate if the condition is false.
+In this situation, BrighterScript has detected that your ternary operation will have side-effects or could possibly result in a rendezvous, and could not be transpiled to an `if else` block. BrighterScript will create an [immediately-invoked-function-expression](https://en.wikipedia.org/wiki/Immediately_invoked_function_expression) to capture all of the referenced local variables. This is in order to only execute the consequent if the condition is true, and only execute the alternate if the condition is false.
 
 ```BrighterScript
-  a = user = invalid ? "no name" : user.name
+  printUsername(user = invalid ? "no name" : user.name)
 ```
 
 transpiles to:
 
 ```BrightScript
-a = (function(__bsCondition, user)
+printUsername((function(__bsCondition, user)
         if __bsCondition then
             return "no name"
         else
             return user.name
         end if
-    end function)(user = invalid, user)
+    end function)(user = invalid, user))
 ```
 
 ```BrighterScript
-a = user = invalid ? getNoNameMessage(m.config) : user.name + m.accountType
+printMessage(user = invalid ? getNoNameMessage(m.config) : user.name + m.accountType)
 ```
 
 transpiles to:
 
 ```BrightScript
-a = (function(__bsCondition, getNoNameMessage, m, user)
+printMessage((function(__bsCondition, getNoNameMessage, m, user)
         if __bsCondition then
             return getNoNameMessage(m.config)
         else
             return user.name + m.accountType
         end if
-    end function)(user = invalid, getNoNameMessage, m, user)
+    end function)(user = invalid, getNoNameMessage, m, user))
 ```
 
 ### Nested Scope Protection
@@ -114,29 +163,30 @@ m.increment = function ()
     m.count++
     return m.count
 end function
-result = (m.increment() = 1 ? m.increment() : -1) = -1 ? m.increment(): -1
+printResult((m.increment() = 1 ? m.increment() : -1) = -1 ? m.increment(): -1)
 ```
 
 transpiles to:
+
 ```BrightScript
 m.count = 1
 m.increment = function()
     m.count++
     return m.count
 end function
-result = (function(__bsCondition, m)
+printResult((function(__bsCondition, m)
         if __bsCondition then
             return m.increment()
         else
-            return - 1
+            return -1
         end if
     end function)(((function(__bsCondition, m)
             if __bsCondition then
                 return m.increment()
             else
-                return - 1
+                return -1
             end if
-        end function)(m.increment() = 1, m)) = - 1, m)
+        end function)(m.increment() = 1, m)) = -1, m))
 ```
 
 
@@ -155,7 +205,7 @@ end function
 ```
 
 ## No standalone statements
-The ternary operator may only be used in expressions and may not be used in standalone statements because the BrightScript grammer uses `=` for both assignments (`a = b`) and conditions (`if a = b`)
+The ternary operator may only be used in expressions, and may not be used in standalone statements because the BrightScript grammer uses `=` for both assignments (`a = b`) and conditions (`if a = b`)
 
 ```brightscript
 ' this is generally not valid
@@ -173,6 +223,7 @@ This expression can be interpreted in two completely separate ways:
 ```brightscript
 'assignment
 a = (myValue ? "a" : "b'")
+
 'ternary
 (a = myValue) ? "a" : "b"
 ```

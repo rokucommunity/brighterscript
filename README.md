@@ -2,10 +2,11 @@
 
 A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 
-[![build status](https://img.shields.io/github/workflow/status/rokucommunity/brighterscript/build.svg?logo=github)](https://github.com/rokucommunity/brighterscript/actions?query=workflow%3Abuild)
+[![build status](https://img.shields.io/github/actions/workflow/status/rokucommunity/brighterscript/build.yml?branch=master&logo=github)](https://github.com/rokucommunity/brighterscript/actions?query=branch%3Amaster+workflow%3Abuild)
+[![security](https://img.shields.io/github/actions/workflow/status/rokucommunity/brighterscript/security-audit.yml?branch=master&label=security&logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiI+PHJlY3QgeD0iMyIgeT0iOCIgd2lkdGg9IjEwIiBoZWlnaHQ9IjciIHJ4PSIxIiBmaWxsPSJ3aGl0ZSIvPjxwYXRoIGQ9Ik01IDhWNWEzIDMgMCAwIDEgNiAwdjMiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMiIvPjwvc3ZnPg==)](https://github.com/rokucommunity/brighterscript/actions/workflows/security-audit.yml)
 [![coverage status](https://img.shields.io/coveralls/github/rokucommunity/brighterscript?logo=coveralls)](https://coveralls.io/github/rokucommunity/brighterscript?branch=master)
-[![monthly downloads](https://img.shields.io/npm/dm/brighterscript.svg?sanitize=true&logo=npm&logoColor=)](https://npmcharts.com/compare/brighterscript?minimal=true)
-[![npm version](https://img.shields.io/npm/v/brighterscript.svg?logo=npm)](https://www.npmjs.com/package/brighterscript)
+[![monthly downloads](https://img.shields.io/npm/dm/brighterscript.svg?sanitize=true&logo=npm&logoColor=&label=npm)](https://npmcharts.com/compare/brighterscript?minimal=true)
+[![npm version](https://img.shields.io/npm/v/brighterscript.svg?logo=npm&label=npm)](https://www.npmjs.com/package/brighterscript)
 [![license](https://img.shields.io/npm/l/brighterscript.svg)](LICENSE)
 [![Slack](https://img.shields.io/badge/Slack-RokuCommunity-4A154B?logo=slack)](https://join.slack.com/t/rokudevelopers/shared_invite/zt-4vw7rg6v-NH46oY7hTktpRIBM_zGvwA)
 
@@ -13,8 +14,19 @@ A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 
 The BrighterScript language provides new features and syntax enhancements to Roku's BrightScript language. Because the language is a superset of BrightScript, the parser and associated tools (VSCode integration, cli, etc...) work with standard BrightScript (.brs) files. This means you will get benefits (as described in the following section) from using the BrighterScript compiler, whether your project contains BrighterScript (.bs) files or not. The BrighterScript language transpiles to standard BrightScript, so your code is fully compatible with all roku devices.
 
+## Help!
+
+> [!IMPORTANT]
+> We are currently seeking testers for two major rewrites:
+
+- Language Server Protocol (LSP) Rewrite: We’ve been hard at work revamping our LSP to improve stability, performance, and add new features. We would love your feedback as you put it through its paces. ([Join the LSP discussion](https://github.com/rokucommunity/brighterscript/discussions/1322))
+
+- Version 1 (v1) Rewrite: This is a complete overhaul of the core of our project. Your input is crucial in helping us identify bugs and further refine the release. ([Join the v1 discussion](https://github.com/rokucommunity/brighterscript/discussions/1321))
+
+If you're interested in helping, please visit the GitHub discussion links above for more information and instructions on how to get involved.
+
 ## Features
-BrighterScript adds several new features to the BrightScript language such as Namespaces, classes, import statements, and more. Take a look at the language specification docs for more information.
+BrighterScript adds several new features to the BrightScript language such as namespaces, classes, import statements, and more. Take a look at the language specification docs for more information.
 
 [BrighterScript Language Specification](https://github.com/rokucommunity/BrighterScript/blob/master/docs/readme.md)
 
@@ -58,6 +70,8 @@ BrighterScript adds several new features to the BrightScript language such as Na
 
   - Full BrighterScript support for syntax checking, validation, and intellisense is available within the [Brightscript Language](https://marketplace.visualstudio.com/items?itemName=celsoaf.brightscript) VSCode extension.
 
+  - Configure the language server behavior using [language server settings](https://github.com/rokucommunity/brighterscript/blob/master/docs/language-server.md).
+
   - And if it's not enough, the [plugin API](https://github.com/rokucommunity/brighterscript/blob/master/docs/plugins.md) allows extending the compiler to provide extra diagnostics or transformations.
 
 ## Who uses Brighterscript?
@@ -66,27 +80,35 @@ BrighterScript adds several new features to the BrightScript language such as Na
     <a href="https://www.fubo.tv/">
       <img height="38" src="https://user-images.githubusercontent.com/2544493/192530108-eb470b85-e687-4575-af69-254aab13428c.png">
     </a>&nbsp;&nbsp;&nbsp;
-    <a href="https://www.nba.com/">
-      <img height="38" src="https://user-images.githubusercontent.com/2544493/192593641-aca51992-2bd1-45c2-b087-602b496fca36.png">
+    <a href="mailto:chris@inverted-solutions.com">
+      <img height="38" src="https://user-images.githubusercontent.com/2544493/197794500-2bac4903-ed00-463a-b243-24c68fba7962.png">
     </a>&nbsp;&nbsp;&nbsp;
     <a href="https://www.applicaster.com/">
       <img height="38" src="https://user-images.githubusercontent.com/2544493/192591901-20441fc8-3c6c-45ea-8851-b22430e6fb8e.png">
     </a>&nbsp;&nbsp;&nbsp;
+    <a href="https://www.redspace.com/">
+      <img height="38" src="https://user-images.githubusercontent.com/2544493/195908446-8d9652f8-9877-426f-b3c6-09119d788fd8.png">
+    </a>&nbsp;&nbsp;&nbsp;
     <br/><br/>
-        <a href="https://www.miraclechannel.ca/corcoplus">
+      <a href="https://tantawowa.com/">
+        <img height="38" src="https://user-images.githubusercontent.com/2544493/197795138-2ec870db-71fe-49e3-a014-692a3f31e6aa.png">
+      </a>&nbsp;&nbsp;&nbsp;
+     <a href="https://www.miraclechannel.ca/corcoplus">
       <img height="38" src="https://user-images.githubusercontent.com/2544493/192593254-f2a32cd4-0482-40de-830d-c1d09690c46b.png">
     </a>&nbsp;&nbsp;&nbsp;
-    <a href="https://channelstore.roku.com/details/222212/phototv">
-      <img height="38" src="https://user-images.githubusercontent.com/2544493/169118062-81d94da5-2323-4e31-b19d-7db3f9c88dff.png">
+    <a href="https://digitalpictureframe.tv">
+      <img height="38" src="https://s3.us-east-1.wasabisys.com/tv.digitalpictureframe.assets/logo-wide.png">
     </a>&nbsp;&nbsp;&nbsp;
     <a href="https://www.haystack.tv/">
       <img height="38" src="https://user-images.githubusercontent.com/2544493/192610056-d1b5a382-edf4-47b9-a6a5-d2d3ee9094cb.png">
     </a>&nbsp;&nbsp;&nbsp;
+    <a href="https://www.tksssoftware.com/">
+      <img height="38" alt="TKSS Software Inc" src="https://github.com/user-attachments/assets/332d692f-7386-495d-b29d-c2ed7d3d2e2f" />
+    </a>&nbsp;&nbsp;&nbsp;
 </p>
 <br/>
 
-
-The BrighterScript project is used to power the popular [Brightscript Language](https://marketplace.visualstudio.com/items?itemName=rokucommunity.brightscript) VSCode extension, the [maestro framework](https://github.com/georgejecook/maestro/blob/master/docs/index.md), and more.
+The BrighterScript project is used to power the popular [Brightscript Language](https://marketplace.visualstudio.com/items?itemName=rokucommunity.brightscript) VSCode extension, the [maestro framework](https://github.com/georgejecook/maestro-roku), and more.
 
 [Contact us](https://github.com/rokucommunity/brighterscript/issues/new) if you use BrighterScript in your project and would like your logo listed above. More projects are adopting BrighterScript all the time, from using the new BrighterScript language features to simply using the compiler in their build pipeline.
 
@@ -157,137 +179,27 @@ If you need to configure `bsc`, you can do so in two ways:
 ## bsconfig.json
 
 ### Overview
-The presence of a `bsconfig.json` file in a directory indicates that the directory is the root of a BrightScript project. The `bsconfig.json` file specifies the root files and the compiler options required to compile the project.
+The presence of a `bsconfig.json` file in a directory indicates that the directory is the root of a BrightScript project. The `bsconfig.json` file specifies the root files and the compiler options required to compile the project. Here is a minimal example, which is recommended for new projects:
 
-### Configuration inheritance with `extends`
-
-A `bsconfig.json` file can inherit configurations from another file using the `extends` property.
-
-The extends is a top-level property in `bsconfig.json`. `extends`’ value is a string containing a path to another configuration file to inherit from.
-
-The configuration from the base file are loaded first, then overridden by those in the inheriting config file. If a circularity is encountered, we report an error.
-
-The `files` property from the inheriting config file overwrite those from the base config file.
-
-All relative paths found in the configuration file will be resolved relative to the configuration file they originated in.
-
-### Optional `extends` and `project`
-There are situations where you want to store some compiler settings in a config file, but not fail if that config file doesn't exist. To do this, you can denote that your `extends` or `project` path is optional by prefixing it with a question mark (`?`). For example:
-
- - **bsconfig.json** `extends`
-    ```json
-    {
-      "extends": "?path/to/optional/bsconfig.json"
-    }
-    ```
- - CLI "extends"
-    ```
-    bsc --extends "?path/to/optional/bsconfig.json"
-    ```
-
- - CLI `project` argument
-    ```
-    bsc --project "?path/to/optional/bsconfig.json"
-    ```
- - Node.js API `extends`
-    ```
-    var programBuilder = new ProgramBuilder({
-        "extends": "?path/to/optional/bsconfig.json"
-    });
-    ```
- - Node.js API `project`
-    ```
-    var programBuilder = new ProgramBuilder({
-        "project": "?path/to/optional/bsconfig.json"
-    });
-    ```
-
-### bsconfig.json options
-
-These are the options available in the `bsconfig.json` file.
-
- - **project**: `string` - A path to a project file. This is really only passed in from the command line or the NodeJS API, and should not be present in `bsconfig.json` files. Prefix with a question mark (?) to prevent throwing an exception when the file does not exist.
-
- - **extends**: `string` - Relative or absolute path to another `bsconfig.json` file that this `bsconfig.json` file should import and then override. Prefix with a question mark (?) to prevent throwing an exception when the file does not exist.
-
- - **cwd**: `string` - Override the current working directory
-
- - **rootDir**: `string` - The root directory of your roku project. Defaults to current directory
-
- - **stagingDir**: `string` - the folder where the transpiled files are placed. Defaults to `./out/.roku-deploy-staging`
-
- - **retainStagingDir**: `boolean` - Prevent the staging folder from being deleted after creating the package. Defaults to `false` meaning the dir is deleted every time.
-
- - **files**: ` (string | string[] | { src: string | string[]; dest?: string })[]` - The list file globs used to find all files for the project. If using the {src;dest;} format, you can specify a different destination directory for the matched files in src.
-
- - **outFile**: `string` -  The path (including filename) where the output file should be placed (defaults to `"./out/[WORKSPACE_FOLDER_NAME].zip"`).
-
- - **createPackage**: `boolean` - Creates a zip package. Defaults to true. This setting is ignored when `deploy` is enabled.
-
- - **watch**: `boolean` -  If true, the server will keep running and will watch and recompile on every file change.
-
- - **deploy**: `boolean` -  If true, after a successful build, the project will be deployed to the Roku specified in host.
-
- - **host**: `string` -  The host of the Roku that this project will deploy to.
-
- - **username**: `string` - the username to use when deploying to a Roku device.
-
- - **password**: `string` - The password to use when deploying to a roku device.
-
- - **emitFullPaths**: `boolean` -  Emit full paths to files when printing diagnostics to the console. Defaults to false
-
- - **diagnosticFilters**: `Array<string | number | {src: string; codes: number[]}` - A list of filters used to hide diagnostics.
-   - A `string` value should be a relative-to-root-dir or absolute file path or glob pattern of the files that should be excluded. Any file matching this pattern will have all diagnostics supressed.
-   - A `number` value should be a diagnostic code. This will supress all diagnostics with that code for the whole project.
-   - An object can also be provided to filter specific diagnostic codes for a file pattern. For example,
-        ```jsonc
-        "diagnosticFilters": [{
-            "src": "vendor/**/*",
-            "codes": [1000, 1011] //ignore these specific codes from vendor libraries
-        }]
-        ```
- - **diagnosticLevel**: `'hint' | 'info' | 'warn' | 'error'` - Specify what diagnostic levels are printed to the console. This has no effect on what diagnostics are reported in the LanguageServer. Defaults to 'warn'
-
- - **autoImportComponentScript**: `bool` - BrighterScript only: will automatically import a script at transpile-time for a component with the same name if it exists.
-
- - **sourceRoot**: `string` - Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within rootDir. This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.
-
- - **plugins**: `Array<string>` - List of node scripts or npm modules to load as plugins to the BrighterScript compiler.
-
- - **require**: `Array<string>` - List of node scripts or npm modules to load during the startup sequence. Useful for running things like `ts-node/require`
-
- - **allowBrighterScriptInBrightScript**: `boolean` - Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.
-
-
-## Ignore errors and warnings on a per-line basis
-In addition to disabling an entire class of errors in `bsconfig.json` by using `ignoreErrorCodes`, you may also disable errors for a subset of the complier rules within a file with the following comment flags:
- - `bs:disable-next-line`
- - `bs:disable-next-line: code1 code2 code3`
- - `bs:disable-line`
- - `bs:disable-line: code1 code2 code3`
-
-Here are some examples:
-
-```BrightScript
-sub Main()
-    'disable errors about invalid syntax here
-    'bs:disable-next-line
-    DoSomething(
-
-    DoSomething( 'bs:disable-line
-
-    'disable errors about wrong parameter count
-    DoSomething(1,2,3) 'bs:disable-next-line
-
-    DoSomething(1,2,3) 'bs:disable-next-line:1002
-end sub
-
-sub DoSomething()
-end sub
+```jsonc
+{
+    "rootDir": "src",
+    "files": [
+        "**/*"
+    ],
+    "stagingFolderPath": "dist",
+    "retainStagingFolder": true,
+    //this flag tells BrighterScript that for every xml file, try to import a .bs file with the same name and location
+    "autoImportComponentScript": true,
+    "sourceMap": true
+}
 ```
 
-The primary motivation for this feature was to provide a stopgap measure to hide incorrectly-thrown errors on legitimate BrightScript code due to parser bugs. This is still a new project and it is likely to be missing support for certain BrightScript syntaxes. It is recommended that you only use these comments when absolutely necessary.
+More information on the config file format may be found in the [bsconfig.json documentation](https://github.com/rokucommunity/BrighterScript/blob/master/docs/bsconfig.md).
 
+## Suppressing compiler messages
+
+The BrighterScript compiler emits errors and warnings when it encounters potentially invalid code. Errors and warnings may also be emitted by compiler plugins, such as by [the BrighterScript linter](https://github.com/rokucommunity/bslint). These messages can be suppressed if needed; see [the documentation](https://github.com/rokucommunity/BrighterScript/blob/master/docs/suppressing-compiler-messages.md).
 
 ## ropm support
 In order for BrighterScript-transpiled projects to work as ropm modules, they need a reference to [bslib](https://github.com/rokucommunity/bslib/blob/master/source/bslib.brs) (the BrightScript runtime library for BrighterScript features) in their package. As `ropm` and `brighterscript` become more popular, this could result in many duplicate copies of `bslib.brs`.
@@ -313,6 +225,10 @@ ropm install @rokucommunity/bslib
 ## Language Server Protocol
 
 This project also contributes a class that aligns with Microsoft's [Language Server Protocol](https://microsoft.github.io/language-server-protocol/), which makes it easy to integrate `BrightScript` and `BrighterScript` with any IDE that supports the protocol. We won't go into more detail here, but you can use the `LanguageServer` class from this project to integrate into your IDE. The [vscode-BrightScript-language](https://github.com/rokucommunity/vscode-BrightScript-language) extension uses this LanguageServer class to bring `BrightScript` and `BrighterScript` language support to Visual Studio Code.
+
+## Accepted security advisories
+
+Dependencies flagged by `npm audit` that we have reviewed and chosen not to upgrade are tracked in [audit-ci.jsonc](https://github.com/RokuCommunity/brighterscript/blob/master/audit-ci.jsonc). Each entry includes the advisory ID, the date it was added, and the reason it does not apply to this project.
 
 ## Changelog
 [Click here](CHANGELOG.md) to view the changelog.

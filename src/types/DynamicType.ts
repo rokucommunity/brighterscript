@@ -14,7 +14,6 @@ export class DynamicType implements BscType {
 
     /**
      * The dynamic type is convertible to everything.
-     * @param targetType
      */
     public isConvertibleTo(targetType: BscType) {
         //everything can be dynamic, so as long as a type is provided, this is true
@@ -27,5 +26,9 @@ export class DynamicType implements BscType {
 
     public toTypeString(): string {
         return this.toString();
+    }
+
+    public clone() {
+        return new DynamicType(this.typeText);
     }
 }

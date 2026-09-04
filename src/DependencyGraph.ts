@@ -59,7 +59,7 @@ export class DependencyGraph {
 
     /**
      * Get a list of the dependencies for the given key, recursively.
-     * @param key the key (or keys) for which to get the dependencies
+     * @param keys the key (or keys) for which to get the dependencies
      * @param exclude a list of keys to exclude from traversal. Anytime one of these nodes is encountered, it is skipped.
      */
     public getAllDependencies(keys: string | string[], exclude?: string[]) {
@@ -99,7 +99,8 @@ export class DependencyGraph {
 
     /**
      * Listen for any changes to dependencies with the given key.
-     * @param emitImmediately if true, the handler will be called once immediately.
+     * @param key the name of the dependency
+     * @param handler a function called anytime changes occur
      */
     public onchange(key: string, handler: (event: DependencyChangedEvent) => void) {
         this.onchangeEmitter.on(key, handler);
@@ -136,17 +137,19 @@ export class Node {
     ) {
         if (dependencies.length > 0) {
             this.subscriptions = [];
-        }
-        for (let dependency of this.dependencies) {
-            let sub = this.graph.onchange(dependency, (event) => {
-                //notify the graph that we changed since one of our dependencies changed
-                this.graph.emit(this.key, event);
-            });
 
-            this.subscriptions.push(sub);
+            for (let dependency of this.dependencies) {
+                let sub = this.graph.onchange(dependency, (event) => {
+                    //notify the graph that we changed since one of our dependencies changed
+                    this.graph.emit(this.key, event);
+                });
+
+                this.subscriptions.push(sub);
+            }
         }
     }
-    private subscriptions: Array<() => void>;
+
+    private subscriptions: Array<() => void> | undefined;
 
     /**
      * Return the full list of unique dependencies for this node by traversing all descendents
@@ -160,7 +163,7 @@ export class Node {
             let dependency = dependencyStack.pop();
 
             //if this is a new dependency and we aren't supposed to skip it
-            if (!dependencyMap[dependency] && !exclude.includes(dependency)) {
+            if (dependency && !dependencyMap[dependency] && !exclude.includes(dependency)) {
                 dependencyMap[dependency] = true;
 
                 //get the node for this dependency

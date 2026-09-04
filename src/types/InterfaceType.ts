@@ -9,20 +9,21 @@ export class InterfaceType implements BscType {
     }
 
     /**
-     * The name of the interface. Can be null.
+     * The name of the interface. Can be undefined.
      */
-    public name: string;
+    public name: string | undefined;
 
     public isAssignableTo(targetType: BscType) {
         //we must have all of the members of the target type, and they must be equivalent types
         if (isInterfaceType(targetType)) {
             for (const [targetMemberName, targetMemberType] of targetType.members) {
+                const ourMemberType = this.members.get(targetMemberName);
                 //we don't have the target member
-                if (!this.members.has(targetMemberName)) {
+                if (!ourMemberType) {
                     return false;
                 }
                 //our member's type is not assignable to the target member type
-                if (!this.members.get(targetMemberName).isAssignableTo(targetMemberType)) {
+                if (!ourMemberType.isAssignableTo(targetMemberType)) {
                     return false;
                 }
             }
@@ -66,5 +67,15 @@ export class InterfaceType implements BscType {
             return targetType.isAssignableTo(this);
         }
         return false;
+    }
+
+    public clone() {
+        let members = new Map<string, BscType>();
+        for (const [key, member] of this.members) {
+            members.set(key, member?.clone());
+        }
+        const result = new InterfaceType(members);
+        result.name = this.name;
+        return result;
     }
 }

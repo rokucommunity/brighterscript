@@ -8,13 +8,16 @@ import type { BrsFile } from '../files/BrsFile';
 import type { FunctionStatement } from '../parser/Statement';
 import { PrintStatement, Block, ReturnStatement, ExpressionStatement } from '../parser/Statement';
 import { TokenKind } from '../lexer/TokenKind';
-import { createVisitor, WalkMode, walkStatements } from './visitors';
-import { isPrintStatement } from './reflection';
-import { createCall, createToken, createVariableExpression } from './creators';
+import { createVisitor, walkArray, WalkMode, walkStatements } from './visitors';
+import { isBlock, isLiteralExpression, isPrintStatement } from './reflection';
+import { createCall, createIntegerLiteral, createToken, createVariableExpression } from './creators';
 import { createStackedVisitor } from './stackedVisitor';
 import { AstEditor } from './AstEditor';
 import { Parser } from '../parser/Parser';
 import type { Statement, Expression, AstNode } from '../parser/AstNode';
+import { expectZeroDiagnostics } from '../testHelpers.spec';
+import type { LiteralExpression, VariableExpression } from '../parser/Expression';
+import { BinaryExpression } from '../parser/Expression';
 
 describe('astUtils visitors', () => {
     const rootDir = process.cwd();
@@ -353,6 +356,103 @@ describe('astUtils visitors', () => {
             index = 1;
             expect(items.map(x => `${x.constructor.name}:${x._testId}`)).to.eql(expectedConstructors.map(x => `${x}:${index++}`));
         }
+
+        it('links every ast node to its parent when walked', () => {
+            const { ast } = program.setFile<BrsFile>('source/main.bs', `
+                library "v30/bslCore.brs"
+                import "source/main.bs"
+                namespace alpha
+                    namespace beta
+                        sub charlie()
+                            delta = 1
+                            delta++
+                            delta = sub()
+                                'do some printing
+                                print "hello"
+                            end sub
+                            delta()
+                            for i = 0 to 10 step 1
+                                exit for
+                            end for
+                            while false
+                                exit while
+                            end while
+                            if true or false then
+                                print 1.2
+                            else
+                                print 123123123123
+                            end if
+                            dim arr[1, 2]
+                            goto theLabel
+                            theLabel:
+                            return false
+                            end
+                            stop
+                            for each item in [1, 2, 3]
+                                continue for
+                            end for
+                            obj = { name: "bob"}
+                            obj.name = obj.name
+                            obj["name"] = obj["name"]
+                            obj.name = obj@firstName
+                            print (true or false)
+                            print \`true\${false}\\n\`
+                            print not true
+                            print FUNCTION_NAME
+                            print new Person()
+                            print tag\`stuff\${1}\`
+                            print true ? true : false
+                            print true ?? false
+                            print /search stuff/g
+                            try
+                                obj.bob = "carl"
+                                throw "e"
+                            catch e
+                                obj["name"] = "dale"
+                            print e
+                            end try
+                            obj@.doCallfunc(1, 2)
+                        end sub
+                    end namespace
+                end namespace
+                @SomeAnnotation(1, "two")
+                interface IPerson
+                    name as string
+                    function doSomething() as string
+                end interface
+                class Person
+                    name as string = "bob"
+                    function doSomething(value = true) as string
+                    end function
+                end class
+                enum Direction
+                    up = "up"
+                end enum
+                enum Logical
+                    yes = 1
+                    no = 0
+                end enum
+                const CONST_VALUE = 1.2
+            `);
+            expectZeroDiagnostics(program);
+            const nodes: AstNode[] = [];
+            //get every expression and statement in the file
+            ast.walk((node) => {
+                nodes.push(node);
+            }, { walkMode: WalkMode.visitAllRecursive });
+
+            for (let i = 0; i < nodes.length; i++) {
+                const node = nodes[i];
+
+                //find the top-most ast node
+                let top = node;
+                while (top.parent) {
+                    top = top.parent;
+                }
+                //should be the same instance. If it doesn't then something is wrong with the .parent linking
+                expect(top === ast || node === ast, `Node ${node.constructor.name} (index ${i}) has broken parent link`).to.be.true;
+            }
+        });
 
         it('Walks through all expressions until cancelled', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
@@ -970,6 +1070,88 @@ describe('astUtils visitors', () => {
             ).to.be.lengthOf(0);
         });
 
+        it('walks everything when the first element is replaced', () => {
+            const { ast } = Parser.parse(`
+                sub main()
+                    print 1
+                    print 2
+                    print 3
+                end sub
+            `);
+            const target = ast.findChild<Block>(isBlock).statements[0];
+            let callCount = 0;
+            ast.walk((astNode, parent, owner: Statement[], key) => {
+                if (isPrintStatement(astNode)) {
+                    callCount++;
+                }
+                if (astNode === target) {
+                    owner.splice(key, 1);
+                }
+            }, {
+                walkMode: WalkMode.visitAllRecursive
+            });
+            //the visitor should have been called for every statement
+            expect(callCount).to.eql(3);
+            expect(
+                (ast.statements[0] as FunctionStatement).func.body.statements
+            ).not.to.include(target);
+        });
+
+        it('walks everything when the middle element is replaced', () => {
+            const { ast } = Parser.parse(`
+                sub main()
+                    print 1
+                    print 2
+                    print 3
+                end sub
+            `);
+            const target = ast.findChild<Block>(isBlock).statements[1];
+            let callCount = 0;
+            ast.walk((astNode, parent, owner: Statement[], key) => {
+                if (isPrintStatement(astNode)) {
+                    callCount++;
+                }
+                if (astNode === target) {
+                    owner.splice(key, 1);
+                }
+            }, {
+                walkMode: WalkMode.visitAllRecursive
+            });
+            //the visitor should have been called for every statement
+            expect(callCount).to.eql(3);
+            expect(
+                (ast.statements[0] as FunctionStatement).func.body.statements
+            ).not.to.include(target);
+        });
+
+        it('walks everything when the end element is replaced', () => {
+            const { ast } = Parser.parse(`
+                sub main()
+                    print 1
+                    print 2
+                    print 3
+                end sub
+            `);
+            const target = ast.findChild<Block>(isBlock).statements[2];
+            let callCount = 0;
+            ast.walk((astNode, parent, owner: Statement[], key) => {
+                if (isPrintStatement(astNode)) {
+                    callCount++;
+                }
+                if (astNode === target) {
+                    owner.splice(key, 1);
+                }
+            }, {
+                walkMode: WalkMode.visitAllRecursive
+            });
+            //the visitor should have been called for every statement
+            expect(callCount).to.eql(3);
+            expect(
+                (ast.statements[0] as FunctionStatement).func.body.statements
+            ).not.to.include(target);
+        });
+
+
         it('can be used to insert statements', () => {
             const { ast } = Parser.parse(`
                 sub main()
@@ -987,23 +1169,142 @@ describe('astUtils visitors', () => {
                     //add another expression to the list every time. This should result in 1 the first time, 2 the second, 3 the third.
                     calls.push(new ExpressionStatement(
                         createCall(
-                            createVariableExpression('doSomethingBeforePrint')
+                            createVariableExpression('doSomethingBeforePrint'),
+                            [
+                                createIntegerLiteral(callExpressionCount.toString())
+                            ]
                         )
                     ));
-                    owner.splice(key, 0, ...calls);
+                    owner.splice(key + 1, 0, ...calls.map(x => x.clone()));
                 },
-                CallExpression: () => {
+                CallExpression: (call) => {
                     callExpressionCount++;
+                    console.log('call visitor for', (call.args[0] as LiteralExpression).token.text);
                 }
             }), {
                 walkMode: WalkMode.visitAllRecursive
             });
             //the visitor should have been called for every statement
             expect(printStatementCount).to.eql(3);
-            expect(callExpressionCount).to.eql(0);
+            //since the calls were injected after each print statement, we should have 1 call for the first print, 2 for the second, and 3 for the third
+            expect(callExpressionCount).to.eql(6);
             expect(
                 (ast.statements[0] as FunctionStatement).func.body.statements
             ).to.be.lengthOf(9);
+        });
+
+        it('walks a new child when returned from a visitor', () => {
+            let walkedLiterals: string[] = [];
+
+            Parser.parse(`
+                sub main()
+                    print 1 + 2
+                end sub
+            `).ast.walk(createVisitor({
+                BinaryExpression: (node, parent, owner: Statement[], key) => {
+                    //replace the `1 + 2` binary expression with a new binary expression
+                    if (isLiteralExpression(node.left) && node.left.token.text === '1') {
+                        return new BinaryExpression(
+                            createIntegerLiteral('3'),
+                            createToken(TokenKind.Plus),
+                            createIntegerLiteral('4')
+                        );
+                    }
+                },
+                LiteralExpression: (node) => {
+                    walkedLiterals.push(node.token.text);
+                }
+            }), {
+                walkMode: WalkMode.visitAllRecursive
+            });
+
+            expect(walkedLiterals).to.eql(['3', '4']);
+        });
+
+        it('walks a new child when returned from a visitor and using an AstEditor', () => {
+            let walkedLiterals: string[] = [];
+
+            Parser.parse(`
+                sub main()
+                    print 1 + 2
+                end sub
+            `).ast.walk(createVisitor({
+                BinaryExpression: (node, parent, owner: Statement[], key) => {
+                    //replace the `1 + 2` binary expression with a new binary expression
+                    if (isLiteralExpression(node.left) && node.left.token.text === '1') {
+                        return new BinaryExpression(
+                            createIntegerLiteral('3'),
+                            createToken(TokenKind.Plus),
+                            createIntegerLiteral('4')
+                        );
+                    }
+                },
+                LiteralExpression: (node) => {
+                    walkedLiterals.push(node.token.text);
+                }
+            }), {
+                walkMode: WalkMode.visitAllRecursive,
+                editor: new AstEditor()
+            });
+
+            expect(walkedLiterals).to.eql(['3', '4']);
+        });
+    });
+
+    describe('walkArray', () => {
+        const one = createVariableExpression('one');
+        const two = createVariableExpression('two');
+        const three = createVariableExpression('three');
+        const four = createVariableExpression('four');
+        const five = createVariableExpression('five');
+
+        function doTest(startingArray: VariableExpression[], expected: VariableExpression[], visitor?: (item: AstNode, parent: AstNode, owner: any, key: number) => any) {
+            const visitedItems: VariableExpression[] = [];
+            walkArray(startingArray, (item, parent, owner, key) => {
+                visitedItems.push(item as any);
+                return visitor?.(item, parent, owner, key);
+            }, { walkMode: WalkMode.visitAllRecursive });
+            expect(
+                visitedItems.map(x => x.name.text)
+            ).to.eql(
+                expected.map(x => x.name.text)
+            );
+        }
+
+        it('walks every element in the array', () => {
+            doTest(
+                [one, two, three, four, five],
+                [one, two, three, four, five]
+            );
+        });
+
+        it('walks new items added to the array', () => {
+            doTest(
+                [one, two],
+                [one, three, two, four],
+                (item, parent, owner, key) => {
+                    //insert a value after one
+                    if (item === one) {
+                        owner.splice(key + 1, 0, three);
+                        //insert a value after one
+                    } else if (item === two) {
+                        owner.splice(key + 1, 0, four);
+                    }
+                }
+            );
+        });
+
+        it('triggers on nodes that were skiped due to insertions', () => {
+            doTest(
+                [one, two, three],
+                [one, two, four, three],
+                (item, parent, owner, key) => {
+                    //insert a value after one
+                    if (item === two) {
+                        owner.splice(key, 0, four);
+                    }
+                }
+            );
         });
     });
 });

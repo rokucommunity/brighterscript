@@ -8,6 +8,7 @@ import { Parser, ParseMode } from '../../Parser';
 import { AssignmentStatement } from '../../Statement';
 import { Program } from '../../../Program';
 import { expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
+import { util } from '../../../util';
 
 describe('TemplateStringExpression', () => {
     describe('parser template String', () => {
@@ -18,6 +19,41 @@ describe('TemplateStringExpression', () => {
         });
 
         describe('in assignment', () => {
+            it('generates correct locations for quasis', () => {
+                let { tokens } = Lexer.scan('print `0xAAAAAA${"0xBBBBBB"}0xCCCCCC`');
+                expect(
+                    tokens.filter(x => /"?0x/.test(x.text)).map(x => x.range)
+                ).to.eql([
+                    util.createRange(0, 7, 0, 15), // 0xAAAAAA
+                    util.createRange(0, 17, 0, 27), // "0xBBBBBB"
+                    util.createRange(0, 28, 0, 36) // 0xCCCCCC
+                ]);
+            });
+
+            it('generates correct locations for items', () => {
+                let { tokens } = Lexer.scan('print `${111}${222}${333}`');
+                //throw out the `print` token
+                tokens.shift();
+                expect(
+                    //compute the length of the token char spread
+                    tokens.filter(x => x.text !== '').map(x => [x.range.end.character - x.range.start.character, x.text])
+                ).to.eql([
+                    '`',
+                    '${',
+                    '111',
+                    '}',
+                    '${',
+                    '222',
+                    '}',
+                    '${',
+                    '333',
+                    '}',
+                    '`'
+                ].map(x => [x.length, x])
+                );
+            });
+
+
             it(`simple case`, () => {
                 let { tokens } = Lexer.scan(`a = \`hello      world\``);
                 let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
@@ -82,7 +118,7 @@ describe('TemplateStringExpression', () => {
                 end sub
             `, `
                 sub main()
-                    a = rokucommunity_bslib_toString(LINE_NUM) + "," + rokucommunity_bslib_toString(LINE_NUM)
+                    a = (rokucommunity_bslib_toString(LINE_NUM) + "," + rokucommunity_bslib_toString(LINE_NUM))
                 end sub
             `);
         });
@@ -94,7 +130,7 @@ describe('TemplateStringExpression', () => {
                     end sub
                 `, `
                     sub main()
-                        a = bslib_toString(LINE_NUM) + "," + bslib_toString(LINE_NUM)
+                        a = (bslib_toString(LINE_NUM) + "," + bslib_toString(LINE_NUM))
                     end sub
                 `
             );
@@ -119,7 +155,7 @@ describe('TemplateStringExpression', () => {
                 end sub
             `, `
                 sub main()
-                    a = "hello " + bslib_toString(LINE_NUM.text) + " world " + bslib_toString("template" + "".getChars()) + " test"
+                    a = ("hello " + bslib_toString(LINE_NUM.text) + " world " + bslib_toString("template" + "".getChars()) + " test")
                 end sub
             `);
         });
@@ -131,7 +167,7 @@ describe('TemplateStringExpression', () => {
                 end sub
             `, `
                 sub main()
-                    a = chr(13) + chr(10) + chr(96) + chr(36)
+                    a = (chr(13) + chr(10) + chr(96) + chr(36))
                 end sub
             `);
         });
@@ -143,7 +179,7 @@ describe('TemplateStringExpression', () => {
                 end sub
             `, `
                 sub main()
-                    a = chr(2) + chr(987)
+                    a = (chr(2) + chr(987))
                 end sub
             `);
         });
@@ -155,7 +191,7 @@ describe('TemplateStringExpression', () => {
                 end sub
             `, `
                 sub main()
-                    a = "hello world" + chr(10) + "I am multiline"
+                    a = ("hello world" + chr(10) + "I am multiline")
                 end sub
             `);
         });
@@ -167,7 +203,7 @@ describe('TemplateStringExpression', () => {
                 end sub
             `, `
                 sub main()
-                    a = chr(10)
+                    a = (chr(10))
                 end sub
             `);
         });
@@ -179,7 +215,7 @@ describe('TemplateStringExpression', () => {
                 end sub
             `, `
                 sub main()
-                    a = chr(13) + chr(10)
+                    a = (chr(13) + chr(10))
                 end sub
             `);
         });
@@ -191,7 +227,7 @@ describe('TemplateStringExpression', () => {
                 end sub
             `, `
                 sub main()
-                    a = "I am multiline" + chr(10) + bslib_toString(a.isRunning()) + chr(10) + "more"
+                    a = ("I am multiline" + chr(10) + bslib_toString(a.isRunning()) + chr(10) + "more")
                 end sub
             `);
         });
@@ -210,11 +246,11 @@ describe('TemplateStringExpression', () => {
                     a = [
                         "one"
                         "two"
-                        "I am a complex example" + bslib_toString(a.isRunning([
+                        ("I am a complex example" + bslib_toString(a.isRunning([
                             "a"
                             "b"
                             "c"
-                        ]))
+                        ])))
                     ]
                 end sub
             `);
@@ -239,25 +275,25 @@ describe('TemplateStringExpression', () => {
                     a = [
                         "one"
                         "two"
-                        "I am a complex example " + bslib_toString(a.isRunning([
+                        ("I am a complex example " + bslib_toString(a.isRunning([
                             "a"
                             "b"
                             "c"
-                            "d_open " + bslib_toString("inside" + m.items[1]) + " d_close"
-                        ]))
+                            ("d_open " + bslib_toString("inside" + m.items[1]) + " d_close")
+                        ])))
                     ]
                 end sub
             `);
         });
 
-        it('properly transpiles two template strings side-by-side', () => {
+        it('properly transpiles two expressions side-by-side', () => {
             testTranspile(`
                 sub main()
                     a = \`\${"hello"}\${"world"}\`
                 end sub
             `, `
                 sub main()
-                    a = "hello" + "world"
+                    a = ("hello" + "world")
                 end sub
             `);
         });
@@ -269,7 +305,7 @@ describe('TemplateStringExpression', () => {
                 end sub
             `, `
                 sub main()
-                    text = "Hello " + "world"
+                    text = ("Hello " + "world")
                 end sub
             `);
         });
@@ -309,6 +345,56 @@ describe('TemplateStringExpression', () => {
                 `);
             });
 
+            it('wraps result in parens when we have at least one expression', () => {
+                testTranspile(`
+                    sub main()
+                        print \`hello \${1}\`
+                    end sub
+                `, `
+                    sub main()
+                        print ("hello " + bslib_toString(1))
+                    end sub
+                `);
+            });
+
+            it('wraps result in parens when we have at least one escaped char', () => {
+                testTranspile(`
+                    sub main()
+                        print \`hello \\nworld\`
+                    end sub
+                `, `
+                    sub main()
+                        print ("hello " + chr(10) + "world")
+                    end sub
+                `);
+            });
+
+            it('wraps result in parens when we have an expression and at least one escaped char', () => {
+                testTranspile(`
+                    sub main()
+                        num = 1
+                        print \`hello \${num} \\nworld\`
+                    end sub
+                `, `
+                    sub main()
+                        num = 1
+                        print ("hello " + bslib_toString(num) + " " + chr(10) + "world")
+                    end sub
+                `);
+            });
+
+            it('does not wrap a plain string with parens', () => {
+                testTranspile(`
+                    sub main()
+                        print \`hello world\`
+                    end sub
+                `, `
+                    sub main()
+                        print "hello world"
+                    end sub
+                `);
+            });
+
             it('can be concatenated with regular string', () => {
                 testTranspile(`
                     sub main()
@@ -323,5 +409,17 @@ describe('TemplateStringExpression', () => {
                 `, undefined, 'source/main.bs');
             });
         });
+    });
+
+    it('gets right position for annotation', () => {
+        const parser = Parser.parse(`
+            @template(\`
+                <label id="theLabel" />
+            \`)
+            function init()
+            end function
+        `);
+        const ann = parser.ast.statements[0].annotations![0];
+        expect(ann.range).to.eql(util.createRange(1, 12, 3, 14));
     });
 });

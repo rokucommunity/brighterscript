@@ -22,13 +22,13 @@ export class FunctionScope {
     /**
      * The parent scope of this scope
      */
-    public parentScope: FunctionScope;
+    public parentScope: FunctionScope | undefined;
     public variableDeclarations = [] as VariableDeclaration[];
     public labelStatements = [] as LabelDeclaration[];
 
     /**
      * Find all variable declarations above the given line index
-     * @param lineIndex
+     * @param lineIndex the 0-based line number
      */
     public getVariablesAbove(lineIndex: number) {
         let results = [] as VariableDeclaration[];

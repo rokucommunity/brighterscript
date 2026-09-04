@@ -8,6 +8,53 @@
             "password"
         ]
     },
+    "definitions": {
+        "diagnosticReporterValue": {
+            "oneOf": [
+                {
+                    "type": "string",
+                    "description": "Either a preset name ('detailed' or 'github-actions') or a custom template string containing at least one known placeholder."
+                },
+                {
+                    "type": "object",
+                    "required": ["type"],
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "enum": ["detailed"]
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                {
+                    "type": "object",
+                    "required": ["type"],
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "enum": ["github-actions"]
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                {
+                    "type": "object",
+                    "required": ["type", "format"],
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "enum": ["custom"]
+                        },
+                        "format": {
+                            "type": "string",
+                            "description": "Template string. Supported placeholders: {file}, {line}, {col}, {endLine}, {endCol}, {severity}, {severityCode}, {code}, {message}, {source}."
+                        }
+                    },
+                    "additionalProperties": false
+                }
+            ]
+        }
+    },
     "properties": {
         "extends": {
             "description": "Relative or absolute path to another bsconfig.json file that this file should use as a base and then override. Prefix with a question mark (?) to prevent throwing an exception if the file does not exist.",
@@ -21,6 +68,24 @@
             "description": "The root directory of your Roku project. Defaults to the current working directory (or cwd property)",
             "type": "string"
         },
+        "manifest": {
+            "description": "A entry to modify manifest values",
+            "type": "object",
+            "properties": {
+                "bs_const": {
+                    "description": "A dictionary of bs_consts to change or add to the manifest. Each entry ",
+                    "type": "object",
+                    "patternProperties": {
+                        "^.+$": {
+                            "type": [
+                                "boolean",
+                                "null"
+                            ]
+                        }
+                    }
+                }
+            }
+        },
         "files": {
             "description": "The list of files that should be used in this project. Supports globs. Optionally, you can specify an object with `src` and `dest` properties to move files from one location into a different destination location",
             "default": [
@@ -29,6 +94,7 @@
                 "components/**/*.*",
                 "images/**/*.*"
             ],
+            "type": "array",
             "items": {
                 "anyOf": [
                     {
@@ -80,6 +146,11 @@
             "type": "boolean",
             "default": false
         },
+        "relativeSourceMaps": {
+            "description": "If true, source file paths in generated sourcemaps will be relative to the map file location instead of absolute. This makes sourcemaps portable across different machines and environments.",
+            "type": "boolean",
+            "default": false
+        },
         "copyToStaging": {
             "description": "If true, the files are copied to staging. This setting is ignored when deploy is enabled or if createPackage is enabled",
             "type": "boolean"
@@ -123,6 +194,7 @@
         "stagingFolderPath": {
             "type": "string",
             "deprecated": true,
+            "deprecationMessage": "Deprecated. Use `stagingDir` instead.",
             "description": "The path to the staging folder (where all files are copied before creating the zip package)"
         },
         "ignoreErrorCodes": {
@@ -139,6 +211,24 @@
                 ]
             }
         },
+        "diagnosticSeverityOverrides": {
+            "description": "A map of error codes with their severity level override (error|warn|info)",
+            "type": "object",
+            "patternProperties": {
+                ".{1,}": {
+                    "type": [
+                        "number",
+                        "string"
+                    ],
+                    "enum": [
+                        "error",
+                        "warn",
+                        "info",
+                        "hint"
+                    ]
+                }
+            }
+        },
         "emitFullPaths": {
             "description": "Emit full paths to files when printing diagnostics to the console.",
             "type": "boolean",
@@ -146,6 +236,11 @@
         },
         "emitDefinitions": {
             "description": "Emit type definition files (`d.bs`) during transpile",
+            "type": "boolean",
+            "default": false
+        },
+        "removeParameterTypes": {
+            "description": "Removes the explicit type to function's parameters and return (i.e. the `as type` syntax) ",
             "type": "boolean",
             "default": false
         },
@@ -236,6 +331,11 @@
             "description": "Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within rootDir. This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.",
             "type": "string"
         },
+        "resolveSourceRoot": {
+            "description": "Should the `sourceRoot` property be resolve to an absolute path (relative to the bsconfig it's defined in)",
+            "type": "boolean",
+            "default": false
+        },
         "diagnosticLevel": {
             "description": "Specify what diagnostic levels are printed to the console. This has no effect on what diagnostics are reported in the LanguageServer. Defaults to 'warn'",
             "type": "string",
@@ -247,10 +347,33 @@
                 "error"
             ]
         },
+        "diagnosticReporters": {
+            "description": "Specify how diagnostics are reported to the console. Accepts a single value or an array; each diagnostic is rendered once per entry. Each value is either a preset name ('detailed', 'github-actions'), a custom template string containing at least one known placeholder ({file}, {line}, {col}, {endLine}, {endCol}, {severity}, {severityCode}, {code}, {message}, {source}), or an object with explicit `type`. Defaults to 'detailed'.",
+            "default": "detailed",
+            "oneOf": [
+                {
+                    "$ref": "#/definitions/diagnosticReporterValue"
+                },
+                {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/diagnosticReporterValue"
+                    }
+                }
+            ]
+        },
         "allowBrighterScriptInBrightScript": {
             "description": "Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.",
             "type": "boolean",
             "default": false
+        },
+        "minFirmwareVersion": {
+            "description": "The minimum Roku firmware version required to run this project. When set, BrightScript (.brs) files will be validated to ensure they only use language features available in that firmware version or earlier. BrighterScript (.bs) files are always allowed to use all features since they are transpiled. Should be a semver-compatible string (e.g. \"11.0.0\").",
+            "type": "string",
+            "examples": [
+                "11.0.0",
+                "12.0.0"
+            ]
         }
     }
 }

@@ -20,9 +20,9 @@ export class KeyedThrottler {
     }
 
     /**
-    * Get a promise that resolves the next time the throttler becomes idle.
-    * If no throttler exists, this will resolve immediately
-    */
+     * Get a promise that resolves the next time the throttler becomes idle.
+     * If no throttler exists, this will resolve immediately
+     */
     public async onIdleOnce(key: string, resolveImmediatelyIfIdle = true) {
         const throttler = this.throttlers[key];
         if (throttler) {

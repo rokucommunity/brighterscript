@@ -1,6 +1,6 @@
 import { isBrsFile } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
-import type { BeforeFileTranspileEvent, CompilerPlugin } from '../../interfaces';
+import type { BeforeFileTranspileEvent, Plugin } from '../../interfaces';
 
 export default function plugin() {
     return {
@@ -19,5 +19,5 @@ export default function plugin() {
                 }
             }
         }
-    } as CompilerPlugin;
+    } as Plugin;
 }

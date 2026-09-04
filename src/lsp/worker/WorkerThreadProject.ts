@@ -1,0 +1,380 @@
+import * as EventEmitter from 'eventemitter3';
+import { Worker } from 'worker_threads';
+import type { MessagePort } from 'worker_threads';
+import type { WorkerMessage, MethodNames } from './MessageHandler';
+import { MessageHandler } from './MessageHandler';
+import util from '../../util';
+import type { LspDiagnostic, ActivateResponse, ProjectConfig, FileRenameTextEdit } from '../LspProject';
+import { type LspProject } from '../LspProject';
+import { WorkerPool } from './WorkerPool';
+import type { Hover, MaybePromise, SemanticToken } from '../../interfaces';
+import type { DocumentAction, DocumentActionWithStatus } from '../DocumentManager';
+import { Deferred } from '../../deferred';
+import type { FileTranspileResult, SignatureInfoObj } from '../../Program';
+import type { Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList, SelectionRange, InlayHint } from 'vscode-languageserver-protocol';
+import type { Logger } from '../../logging';
+import { createLogger } from '../../logging';
+import * as fsExtra from 'fs-extra';
+import * as path from 'path';
+import { standardizePath as s } from '../../util';
+
+
+export const workerPool = new WorkerPool(() => {
+    //construct the path to the `./run.ts` (or `./run.js`) script in this same directory
+    const runScriptPath = s`${__dirname}/run${path.extname(__filename)}`;
+
+    // Prepare execArgv for debugging support
+    const execArgv: string[] = [];
+
+    // Add ts-node if we're running TypeScript
+    if (/\.ts$/i.test(runScriptPath)) {
+        execArgv.push('--require', 'ts-node/register');
+    }
+
+    // Enable debugging for worker threads if the main process is being debugged
+    // Check if debugging is enabled via execArgv or environment variables
+    const isDebugging = process.execArgv.some(arg => arg.startsWith('--inspect')) || process.env.NODE_OPTIONS?.includes('--inspect');
+
+    if (isDebugging) {
+        // Node.js will automatically assign a unique port for each worker when using --inspect=0
+        // This allows VSCode to automatically attach to worker threads
+        execArgv.push('--inspect=0');
+    }
+
+    return new Worker(
+        runScriptPath,
+        {
+            execArgv: execArgv.length > 0 ? execArgv : undefined
+        }
+    );
+});
+
+export class WorkerThreadProject implements LspProject {
+    public constructor(
+        options?: {
+            logger?: Logger;
+        }
+    ) {
+        this.logger = options?.logger ?? createLogger();
+    }
+
+    public async activate(options: ProjectConfig) {
+        this.activateOptions = options;
+        this.bsconfigPath = options.bsconfigPath ? util.standardizePath(options.bsconfigPath) : options.bsconfigPath;
+        this.projectDir = options.projectDir ? util.standardizePath(options.projectDir) : options.projectDir;
+        this.projectKey = options.projectKey ? util.standardizePath(options.projectKey) : options.bsconfigPath ?? options.projectDir;
+        this.workspaceFolder = options.workspaceFolder ? util.standardizePath(options.workspaceFolder) : options.workspaceFolder;
+        this.projectNumber = options.projectNumber;
+
+        // get a dedicated MessagePort on a (possibly shared) worker thread
+        const assignment = workerPool.assignProject();
+        this.worker = assignment.worker;
+        this.port = assignment.port;
+        this.worker.on('exit', this.handleWorkerExit);
+        this.messageHandler = new MessageHandler<LspProject>({
+            name: 'MainThread',
+            port: this.port,
+            onRequest: this.processRequest.bind(this),
+            onUpdate: this.processUpdate.bind(this)
+        });
+        this.disposables.push(this.messageHandler);
+
+        const activateResponse = await this.messageHandler.sendRequest<ActivateResponse>('activate', { data: [options] });
+        this.bsconfigPath = activateResponse.data.bsconfigPath;
+        this.rootDir = activateResponse.data.rootDir;
+        this.filePatterns = activateResponse.data.filePatterns;
+        this.logger.logLevel = activateResponse.data.logLevel;
+        this.manifestSrcPath = activateResponse.data.manifestSrcPath;
+
+        //load the bsconfig file contents (used for performance optimizations externally)
+        try {
+            this.bsconfigFileContents = (await fsExtra.readFile(this.bsconfigPath)).toString();
+        } catch { }
+
+        //load the manifest file contents (used for change detection to trigger project reloads).
+        //use manifestSrcPath from the activation response which reflects the actual src path (respects {src;dest} mappings)
+        try {
+            this.manifestFileContents = (await fsExtra.readFile(this.manifestSrcPath)).toString();
+        } catch { }
+
+
+        this.activationDeferred.resolve();
+        return activateResponse.data;
+    }
+
+    public logger: Logger;
+
+    public isStandaloneProject = false;
+
+    private activationDeferred = new Deferred();
+
+    /**
+     * Options used to activate this project
+     */
+    public activateOptions: ProjectConfig;
+
+    /**
+     * The root directory of the project
+     */
+    public rootDir: string;
+
+    /**
+     * The file patterns from bsconfig.json that were used to find all files for this project
+     */
+    public filePatterns: string[];
+
+    /**
+     * Path to a bsconfig.json file that will be used for this project
+     */
+    public bsconfigPath?: string;
+
+    /**
+     * The contents of the bsconfig.json file. This is used to detect when the bsconfig file has not actually been changed (even if the fs says it did).
+     *
+     * Only available after `.activate()` has completed.
+     * @deprecated do not depend on this property. This will certainly be removed in a future release
+     */
+    bsconfigFileContents?: string;
+
+    /**
+     * The contents of the manifest file. This is used to detect when the manifest file has not actually been changed (even if the fs says it did).
+     *
+     * Only available after `.activate()` has completed.
+     * @deprecated do not depend on this property. This will certainly be removed in a future release
+     */
+    manifestFileContents?: string;
+
+    /**
+     * The absolute source path to the manifest file (the file that maps to dest 'manifest').
+     * May differ from rootDir/manifest if the project uses a custom {src; dest} mapping.
+     *
+     * Only available after `.activate()` has completed.
+     */
+    manifestSrcPath?: string;
+
+    /**
+     * The worker thread where the actual project will execute. May be shared with other projects.
+     */
+    private worker: Worker;
+
+    /**
+     * This project's dedicated MessagePort on `worker`, used for all request/response/update traffic
+     */
+    private port: MessagePort;
+
+    /**
+     * True once `dispose()` has run. Used to distinguish an intentional worker shutdown from an unexpected crash.
+     */
+    private isDisposed = false;
+
+    /**
+     * Called if this project's worker thread exits. If we didn't cause that ourselves via `dispose()`,
+     * treat it as a critical failure so the user finds out instead of every request just hanging forever.
+     */
+    private handleWorkerExit = (code: number) => {
+        if (this.isDisposed) {
+            return;
+        }
+        this.logger.error(`Worker thread for project #${this.projectNumber} exited unexpectedly with code ${code}`);
+        //emit() is async; this handler can't be, so void it
+        void this.emit('critical-failure', {
+            message: `The BrighterScript language server's worker thread crashed unexpectedly (exit code ${code}). This project (and any others sharing its worker thread) will stop responding until the language server is reloaded - there is currently no automatic recovery for a crashed worker thread.`
+        });
+        //reject any in-flight requests instead of leaving callers hanging forever on a worker that's gone
+        this.messageHandler?.dispose();
+    };
+
+    /**
+     * Path to the project. For directory-only projects, this is the path to the dir. For bsconfig.json projects, this is the path to the config.
+     */
+    projectKey: string;
+    /**
+     * The directory for the root of this project (typically where the bsconfig.json or manifest is located)
+     */
+    projectDir: string;
+
+    /**
+     * A unique number for this project, generated during this current language server session. Mostly used so we can identify which project is doing logging
+     */
+    public projectNumber: number;
+
+    /**
+     * The path to the workspace where this project resides. A workspace can have multiple projects (by adding a bsconfig.json to each folder).
+     * Defaults to `.projectPath` if not set
+     */
+    public workspaceFolder: string;
+
+    /**
+     * Promise that resolves when the project finishes activating
+     * @returns a promise that resolves when the project finishes activating
+     */
+    public whenActivated() {
+        return this.activationDeferred.promise;
+    }
+
+
+    /**
+     * Validate the project. This will trigger a full validation on any scopes that were changed since the last validation,
+     * and will also eventually emit a new 'diagnostics' event that includes all diagnostics for the project
+     */
+    public async validate() {
+        const response = await this.messageHandler.sendRequest<void>('validate');
+        return response.data;
+    }
+
+    /**
+     * Cancel any active validation that's running
+     */
+    public async cancelValidate() {
+        const response = await this.messageHandler.sendRequest<void>('cancelValidate');
+        return response.data;
+    }
+
+    public async getDiagnostics() {
+        const response = await this.messageHandler.sendRequest<LspDiagnostic[]>('getDiagnostics');
+        return response.data;
+    }
+
+    /**
+     * Apply a series of file changes to the project. This is safe to call any time. Changes will be queued and flushed at the correct times
+     * during the program's lifecycle flow
+     */
+    public async applyFileChanges(documentActions: DocumentAction[]): Promise<DocumentActionWithStatus[]> {
+        const response = await this.messageHandler.sendRequest<DocumentActionWithStatus[]>('applyFileChanges', {
+            data: [documentActions]
+        });
+        return response.data;
+    }
+
+    /**
+     * Send a request with the standard structure
+     * @param name the name of the request
+     * @param data the array of data to send
+     * @returns the response from the request
+     */
+    private async sendStandardRequest<T>(name: string, ...data: any[]) {
+        const response = await this.messageHandler.sendRequest<T>(name as MethodNames<LspProject>, {
+            data: data
+        });
+        return response.data;
+    }
+
+    /**
+     * Get the full list of semantic tokens for the given file path
+     */
+    public async getSemanticTokens(options: { srcPath: string }) {
+        return this.sendStandardRequest<SemanticToken[]>('getSemanticTokens', options);
+    }
+
+    public async transpileFile(options: { srcPath: string }) {
+        return this.sendStandardRequest<FileTranspileResult>('transpileFile', options);
+    }
+
+    public async getHover(options: { srcPath: string; position: Position }): Promise<Hover[]> {
+        return this.sendStandardRequest<Hover[]>('getHover', options);
+    }
+
+    public async getDefinition(options: { srcPath: string; position: Position }): Promise<Location[]> {
+        return this.sendStandardRequest<Location[]>('getDefinition', options);
+    }
+
+    public async getSignatureHelp(options: { srcPath: string; position: Position }): Promise<SignatureInfoObj[]> {
+        return this.sendStandardRequest<SignatureInfoObj[]>('getSignatureHelp', options);
+    }
+
+    public async getDocumentSymbol(options: { srcPath: string }): Promise<DocumentSymbol[]> {
+        return this.sendStandardRequest<DocumentSymbol[]>('getDocumentSymbol', options);
+    }
+
+    public async getWorkspaceSymbol(): Promise<WorkspaceSymbol[]> {
+        return this.sendStandardRequest<WorkspaceSymbol[]>('getWorkspaceSymbol');
+    }
+
+    public async getReferences(options: { srcPath: string; position: Position }): Promise<Location[]> {
+        return this.sendStandardRequest<Location[]>('getReferences', options);
+    }
+
+    public async getFileRenameEdits(options: { oldSrcPath: string; newSrcPath: string }): Promise<FileRenameTextEdit[]> {
+        return this.sendStandardRequest<FileRenameTextEdit[]>('getFileRenameEdits', options);
+    }
+
+    public async getCodeActions(options: { srcPath: string; range: Range }): Promise<CodeAction[]> {
+        return this.sendStandardRequest<CodeAction[]>('getCodeActions', options);
+    }
+
+    public async getSourceFixAllCodeActions(options: { srcPath: string }): Promise<CodeAction[]> {
+        return this.sendStandardRequest<CodeAction[]>('getSourceFixAllCodeActions', options);
+    }
+
+    public async getSelectionRanges(options: { srcPath: string; positions: Position[] }): Promise<SelectionRange[]> {
+        return this.sendStandardRequest<SelectionRange[]>('getSelectionRanges', options);
+    }
+
+    public async getInlayHints(options: { srcPath: string; range: Range }): Promise<InlayHint[]> {
+        return this.sendStandardRequest<InlayHint[]>('getInlayHints', options);
+    }
+
+    public async getCompletions(options: { srcPath: string; position: Position }): Promise<CompletionList> {
+        return this.sendStandardRequest<CompletionList>('getCompletions', options);
+    }
+
+    /**
+     * Handles request/response/update messages from the worker thread
+     */
+    private messageHandler: MessageHandler<LspProject>;
+
+    private processRequest(request: WorkerMessage) {
+
+    }
+
+    private processUpdate(update: WorkerMessage) {
+        //for now, all updates are treated like "events"
+        void this.emit(update.name, update.data);
+    }
+
+    public on(eventName: 'critical-failure', handler: (data: { message: string }) => void);
+    public on(eventName: 'diagnostics', handler: (data: { diagnostics: LspDiagnostic[] }) => MaybePromise<void>);
+    public on(eventName: 'all', handler: (eventName: string, data: any) => MaybePromise<void>);
+    public on(eventName: string, handler: (...args: any[]) => MaybePromise<void>) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+        this.emitter.on(eventName, handler as any);
+        return () => {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+            this.emitter.removeListener(eventName, handler as any);
+        };
+    }
+
+    private emit(eventName: 'critical-failure', data: { message: string });
+    private emit(eventName: 'diagnostics', data: { diagnostics: LspDiagnostic[] });
+    private emit(eventName: string, data?: any);
+    private async emit(eventName: string, data?) {
+        //emit these events on next tick, otherwise they will be processed immediately which could cause issues
+        await util.sleep(0);
+        this.emitter.emit(eventName, data);
+        //emit the 'all' event
+        this.emitter.emit('all', eventName, data);
+    }
+    private emitter = new EventEmitter();
+
+    public disposables: LspProject['disposables'] = [];
+
+    public dispose() {
+        if (this.isDisposed) {
+            return;
+        }
+        this.isDisposed = true;
+        this.worker?.off('exit', this.handleWorkerExit);
+
+        for (let disposable of this.disposables ?? []) {
+            disposable?.dispose?.();
+        }
+        this.disposables = [];
+
+        //close our dedicated port and release our slot on the worker (which terminates the worker if it's now empty)
+        this.port?.close();
+        if (this.worker) {
+            workerPool.releaseProject(this.worker);
+        }
+        this.emitter?.removeAllListeners();
+    }
+}

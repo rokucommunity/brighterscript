@@ -6,6 +6,9 @@ import { Parser, ParseMode } from './Parser';
 import type { FunctionStatement, AssignmentStatement, FieldStatement } from './Statement';
 import { ClassStatement } from './Statement';
 import { NewExpression } from './Expression';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics } from '../testHelpers.spec';
+import { isClassStatement } from '../astUtils/reflection';
+import util from '../util';
 
 describe('parser class', () => {
     it('throws exception when used in brightscript scope', () => {
@@ -90,6 +93,45 @@ describe('parser class', () => {
         `);
 
         expect(parser.diagnostics[0]?.message).to.eql(DiagnosticMessages.cannotUseReservedWordAsIdentifier('throw').message);
+    });
+
+    it('does not allow function param named "type"', () => {
+        const parser = Parser.parse(`
+            sub test(type as string)
+            end sub
+        `);
+
+        expectDiagnostics(parser, [{
+            ...DiagnosticMessages.cannotUseReservedWordAsIdentifier('type'),
+            range: util.createRange(1, 21, 1, 25)
+        }]);
+    });
+
+    it('does not allow class method named "type"', () => {
+        const parser = Parser.parse(`
+            class Person
+                sub test(type as string)
+                end sub
+            end class
+        `, { mode: ParseMode.BrighterScript });
+
+        expectDiagnostics(parser, [{
+            ...DiagnosticMessages.cannotUseReservedWordAsIdentifier('type'),
+            range: util.createRange(2, 25, 2, 29)
+        }]);
+    });
+
+    it('does not allow interface method named "type"', () => {
+        const parser = Parser.parse(`
+            interface Person
+                sub test(type as string)
+            end interface
+        `, { mode: ParseMode.BrighterScript });
+
+        expectDiagnostics(parser, [{
+            ...DiagnosticMessages.cannotUseReservedWordAsIdentifier('type'),
+            range: util.createRange(2, 25, 2, 29)
+        }]);
     });
 
     it('supports the try/catch keywords in various places', () => {
@@ -194,10 +236,10 @@ describe('parser class', () => {
             expect(diagnostics).to.be.empty;
             expect(statements[0]).instanceof(ClassStatement);
             let field = (statements[0] as ClassStatement).body[0] as FieldStatement;
-            expect(field.accessModifier.kind).to.equal(TokenKind.Public);
-            expect(field.name.text).to.equal('firstName');
-            expect(field.as.text).to.equal('as');
-            expect(field.type.text).to.equal('string');
+            expect(field.accessModifier!.kind).to.equal(TokenKind.Public);
+            expect(field.name!.text).to.equal('firstName');
+            expect(field.as!.text).to.equal('as');
+            expect(field.type!.text).to.equal('string');
         });
 
         it('can be solely an identifier', () => {
@@ -209,7 +251,7 @@ describe('parser class', () => {
             let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expect(diagnostics).to.be.lengthOf(0);
             let cls = statements[0] as ClassStatement;
-            expect(cls.fields[0].name.text).to.equal('firstName');
+            expect(cls.fields[0].name!.text).to.equal('firstName');
         });
 
         it('malformed field does not impact leading and trailing fields', () => {
@@ -222,8 +264,8 @@ describe('parser class', () => {
                 `);
             let { statements } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             let cls = statements[0] as ClassStatement;
-            expect(cls.fields[0].name.text).to.equal('firstName');
-            expect(cls.fields[cls.fields.length - 1].name.text).to.equal('lastName');
+            expect(cls.fields[0].name!.text).to.equal('firstName');
+            expect(cls.fields[cls.fields.length - 1].name!.text).to.equal('lastName');
         });
 
         it(`detects missing type after 'as' keyword`, () => {
@@ -235,7 +277,7 @@ describe('parser class', () => {
             let { diagnostics, statements } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expect(diagnostics.length).to.be.greaterThan(0);
             let cls = statements[0] as ClassStatement;
-            expect(cls.fields[0].name.text).to.equal('middleName');
+            expect(cls.fields[0].name!.text).to.equal('middleName');
             expect(diagnostics[0].code).to.equal(DiagnosticMessages.expectedIdentifierAfterKeyword('as').code);
         });
 
@@ -267,7 +309,7 @@ describe('parser class', () => {
             expect(theClass).to.be.instanceof(ClassStatement);
             let method = theClass.methods[0];
             expect(method.name.text).to.equal('getName');
-            expect(method.accessModifier.text).to.equal('public');
+            expect(method.accessModifier!.text).to.equal('public');
             expect(method.func).to.exist;
         });
 
@@ -283,7 +325,7 @@ describe('parser class', () => {
             expect(diagnostics).to.be.lengthOf(0);
             let theClass = statements[0] as ClassStatement;
             let method = theClass.methods[0];
-            expect(method.accessModifier.text).to.equal('public');
+            expect(method.accessModifier!.text).to.equal('public');
             expect(method.func).to.exist;
         });
 
@@ -364,8 +406,8 @@ describe('parser class', () => {
         let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
         expect(diagnostics[0]?.message).to.not.exist;
         let stmt = (statements[1] as ClassStatement);
-        expect(stmt.extendsKeyword.text).to.equal('extends');
-        expect(stmt.parentClassName.getName(ParseMode.BrighterScript)).to.equal('Person');
+        expect(stmt.extendsKeyword!.text).to.equal('extends');
+        expect(stmt.parentClassName!.getName(ParseMode.BrighterScript)).to.equal('Person');
     });
 
     it('catches missing identifier after "extends" keyword', () => {
@@ -408,6 +450,90 @@ describe('parser class', () => {
             `, { mode: ParseMode.BrightScript });
 
             expect(diagnostics[0]?.message).to.not.exist;
+        });
+    });
+
+    describe('optional members', () => {
+        it('allows optional fields', () => {
+            let { statements, diagnostics } = Parser.parse(`
+                class HasOptional
+                    optional name as string
+                    optional height
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            expect(statements.length).to.eq(1);
+            expect(isClassStatement(statements[0])).to.be.true;
+            const klass = statements[0] as ClassStatement;
+            klass.fields.forEach(f => expect(f.isOptional).to.be.true);
+        });
+
+        it('allows fields named optional', () => {
+            let { statements, diagnostics } = Parser.parse(`
+                class IsJustOptional
+                    optional
+                    someThingElse
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            expect(statements.length).to.eq(1);
+            expect(isClassStatement(statements[0])).to.be.true;
+            const klass = statements[0] as ClassStatement;
+            klass.fields.forEach(f => expect(f.isOptional).to.be.false);
+        });
+
+        it('allows typed fields named optional', () => {
+            let { statements, diagnostics } = Parser.parse(`
+                class IsJustOptional
+                    optional as string
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            expect(statements.length).to.eq(1);
+            expect(isClassStatement(statements[0])).to.be.true;
+            const klass = statements[0] as ClassStatement;
+            klass.fields.forEach(f => expect(f.isOptional).to.be.false);
+        });
+
+        it('allows fields named optional that are also optional', () => {
+            let { statements, diagnostics } = Parser.parse(`
+                class IsJustOptional
+                    optional optional
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            expect(statements.length).to.eq(1);
+            expect(isClassStatement(statements[0])).to.be.true;
+            const klass = statements[0] as ClassStatement;
+            klass.fields.forEach(f => expect(f.isOptional).to.be.true);
+        });
+
+        it('disallows optional methods', () => {
+            let { statements, diagnostics } = Parser.parse(`
+                class HasOptional
+                    optional function getValue() as boolean
+                        return false
+                    end function
+                end class
+            `, { mode: ParseMode.BrighterScript });
+
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.expectedNewlineOrColon().message
+            ]);
+            expect(statements.length).to.eq(1);
+        });
+
+        it('allows fields named `as` that are also optional', () => {
+            let { statements, diagnostics } = Parser.parse(`
+                class IsJustOptional
+                    optional as
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            expect(statements.length).to.eq(1);
+            expect(isClassStatement(statements[0])).to.be.true;
+            const klass = statements[0] as ClassStatement;
+            klass.fields.forEach(f => expect(f.isOptional).to.be.true);
         });
     });
 });

@@ -6,16 +6,19 @@ import type { Range } from 'vscode-languageserver';
 import util from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
-import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
+import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isNamespaceStatement, isStringType, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isStringType, isTemplateStringExpression, isTypeCastExpression, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { FunctionType } from '../types/FunctionType';
+import type { AstNode } from './AstNode';
 import { Expression } from './AstNode';
+import { SymbolTable } from '../SymbolTable';
+import { SourceNode } from 'source-map';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -26,10 +29,10 @@ export class BinaryExpression extends Expression {
         public right: Expression
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.left.range.start, this.right.range.end);
+        this.range = util.createBoundingRange(this.left, this.operator, this.right);
     }
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -47,10 +50,27 @@ export class BinaryExpression extends Expression {
             walk(this, 'right', visitor, options);
         }
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new BinaryExpression(
+                this.left?.clone(),
+                util.cloneToken(this.operator),
+                this.right?.clone()
+            ),
+            ['left', 'right']
+        );
+    }
 }
 
 export class CallExpression extends Expression {
-    static MaximumArguments = 32;
+    /**
+     * Number of parameters that can be defined on a function
+     *
+     * Prior to Roku OS 11.5, this was 32
+     * As of Roku OS 11.5, this is 63
+     */
+    static MaximumArguments = 63;
 
     constructor(
         readonly callee: Expression,
@@ -59,16 +79,25 @@ export class CallExpression extends Expression {
          */
         readonly openingParen: Token,
         readonly closingParen: Token,
-        readonly args: Expression[]
+        readonly args: Expression[],
+        unused?: any
     ) {
         super();
-        this.range = util.createBoundingRange(this.callee, this.openingParen, ...args, this.closingParen);
+        this.range = util.createBoundingRange(this.callee, this.openingParen, ...args ?? [], this.closingParen);
     }
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
+
+    /**
+     * Get the name of the wrapping namespace (if it exists)
+     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
+     */
+    public get namespaceName() {
+        return this.findAncestor(isNamespaceStatement)?.nameExpression;
+    }
 
     transpile(state: BrsTranspileState, nameOverride?: string) {
-        let result = [];
+        let result: TranspileResult = [];
 
         //transpile the name
         if (nameOverride) {
@@ -102,6 +131,18 @@ export class CallExpression extends Expression {
             walkArray(this.args, visitor, options, this);
         }
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new CallExpression(
+                this.callee?.clone(),
+                util.cloneToken(this.openingParen),
+                util.cloneToken(this.closingParen),
+                this.args?.map(e => e?.clone())
+            ),
+            ['callee', 'args']
+        );
+    }
 }
 
 export class FunctionExpression extends Expression implements TypedefProvider {
@@ -113,26 +154,43 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         readonly leftParen: Token,
         readonly rightParen: Token,
         readonly asToken?: Token,
-        readonly returnTypeToken?: Token,
-        /**
-         * If this function is enclosed within another function, this will reference that parent function
-         */
-        readonly parentFunction?: FunctionExpression
+        readonly returnTypeToken?: Token
     ) {
         super();
-        if (this.returnTypeToken) {
-            this.returnType = util.tokenToBscType(this.returnTypeToken);
-        } else if (this.functionType.text.toLowerCase() === 'sub') {
-            this.returnType = new VoidType();
-        } else {
-            this.returnType = DynamicType.instance;
+        this.setReturnType(); // set the initial return type that we parse
+
+        //if there's a body, and it doesn't have a SymbolTable, assign one
+        if (this.body && !this.body.symbolTable) {
+            this.body.symbolTable = new SymbolTable(`Function Body`);
         }
+        this.symbolTable = new SymbolTable('FunctionExpression', () => this.parent?.getSymbolTable());
     }
 
     /**
      * The type this function returns
      */
     public returnType: BscType;
+
+    /**
+     * Does this method require the return type to be present after transpile (useful for `as void` or the `as boolean` in `onKeyEvent`)
+     */
+    private requiresReturnType: boolean;
+
+    /**
+     * Get the name of the wrapping namespace (if it exists)
+     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
+     */
+    public get namespaceName() {
+        return this.findAncestor(isNamespaceStatement)?.nameExpression;
+    }
+
+    /**
+     * Get the name of the wrapping namespace (if it exists)
+     * @deprecated use `.findAncestor(isFunctionExpression)` instead.
+     */
+    public get parentFunction() {
+        return this.findAncestor(isFunctionExpression);
+    }
 
     /**
      * The list of function calls that are declared within this function scope. This excludes CallExpressions
@@ -147,25 +205,40 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
     /**
      * A list of all child functions declared directly within this function
+     * @deprecated use `.walk(createVisitor({ FunctionExpression: ()=>{}), { walkMode: WalkMode.visitAllRecursive })` instead
      */
-    public childFunctionExpressions = [] as FunctionExpression[];
+    public get childFunctionExpressions() {
+        const expressions = [] as FunctionExpression[];
+        this.walk(createVisitor({
+            FunctionExpression: (expression) => {
+                expressions.push(expression);
+            }
+        }), {
+            walkMode: WalkMode.visitAllRecursive
+        });
+        return expressions;
+    }
 
     /**
      * The range of the function, starting at the 'f' in function or 's' in sub (or the open paren if the keyword is missing),
      * and ending with the last n' in 'end function' or 'b' in 'end sub'
      */
     public get range() {
-        return util.createRangeFromPositions(
-            (this.functionType ?? this.leftParen).range.start,
-            (this.end ?? this.body ?? this.returnTypeToken ?? this.asToken ?? this.rightParen).range.end
+        return util.createBoundingRange(
+            this.functionType, this.leftParen,
+            ...this.parameters ?? [],
+            this.rightParen,
+            this.asToken,
+            this.returnTypeToken,
+            this.end
         );
     }
 
     transpile(state: BrsTranspileState, name?: Identifier, includeBody = true) {
-        let results = [];
+        let results = [] as TranspileResult;
         //'function'|'sub'
         results.push(
-            state.transpileToken(this.functionType)
+            state.transpileToken(this.functionType!)
         );
         //functionName?
         if (name) {
@@ -193,14 +266,15 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             state.transpileToken(this.rightParen)
         );
         //as [Type]
-        if (this.asToken) {
+        this.setReturnType(); // check one more time before transpile
+        if (this.asToken && !(state.options.removeParameterTypes && !this.requiresReturnType)) {
             results.push(
                 ' ',
                 //as
                 state.transpileToken(this.asToken),
                 ' ',
                 //return type
-                state.sourceNode(this.returnTypeToken, this.returnType.toTypeString())
+                state.sourceNode(this.returnTypeToken!, this.returnType.toTypeString())
             );
         }
         if (includeBody) {
@@ -218,8 +292,37 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         return results;
     }
 
-    getTypedef(state: BrsTranspileState, name?: Identifier) {
-        return this.transpile(state, name, false);
+    getTypedef(state: BrsTranspileState) {
+        let results = [
+            new SourceNode(1, 0, null, [
+                //'function'|'sub'
+                this.functionType?.text,
+                //functionName?
+                ...(isFunctionStatement(this.parent) || isMethodStatement(this.parent) ? [' ', this.parent.name?.text ?? ''] : []),
+                //leftParen
+                '(',
+                //parameters
+                ...(
+                    this.parameters?.map((param, i) => ([
+                        //separating comma
+                        i > 0 ? ', ' : '',
+                        ...param.getTypedef(state)
+                    ])) ?? []
+                ) as any,
+                //right paren
+                ')',
+                //as <ReturnType>
+                ...(this.asToken ? [
+                    ' as ',
+                    this.returnTypeToken?.text
+                ] : []),
+                '\n',
+                state.indent(),
+                //'end sub'|'end function'
+                this.end.text
+            ])
+        ];
+        return results;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -235,11 +338,73 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
     getFunctionType(): FunctionType {
         let functionType = new FunctionType(this.returnType);
-        functionType.isSub = this.functionType.text === 'sub';
+        functionType.isSub = this.functionType?.text === 'sub';
         for (let param of this.parameters) {
             functionType.addParameter(param.name.text, param.type, !!param.typeToken);
         }
         return functionType;
+    }
+
+    private setReturnType() {
+
+        /**
+         * RokuOS methods can be written several different ways:
+         * 1. Function() : return withValue
+         * 2. Function() as type : return withValue
+         * 3. Function() as void : return
+         *
+         * 4. Sub() : return
+         * 5. Sub () as void : return
+         * 6. Sub() as type : return withValue
+         *
+         * Formats (1), (2), and (6) throw a compile error if there IS NOT a return value in the function body.
+         * Formats (3), (4), and (5) throw a compile error if there IS a return value in the function body.
+         *
+         * 7. Additionally, as a special case, the OS requires that `onKeyEvent()` be defined with `as boolean`
+         */
+
+        const isSub = this.functionType?.text.toLowerCase() === 'sub';
+
+        if (this.returnTypeToken) {
+            this.returnType = util.tokenToBscType(this.returnTypeToken);
+        } else if (isSub) {
+            this.returnType = new VoidType();
+        } else {
+            this.returnType = DynamicType.instance;
+        }
+
+        if ((isFunctionStatement(this.parent) || isMethodStatement(this.parent)) && this.parent?.name?.text.toLowerCase() === 'onkeyevent') {
+            // onKeyEvent() requires 'as Boolean' otherwise RokuOS throws errors
+            this.requiresReturnType = true;
+        } else if (isSub && !isVoidType(this.returnType)) { // format (6)
+            this.requiresReturnType = true;
+        } else if (this.returnTypeToken && isVoidType(this.returnType)) { // format (3)
+            this.requiresReturnType = true;
+        }
+    }
+
+    public clone(): FunctionExpression {
+        const clone = this.finalizeClone(
+            new FunctionExpression(
+                this.parameters?.map(e => e?.clone()),
+                this.body?.clone(),
+                util.cloneToken(this.functionType),
+                util.cloneToken(this.end),
+                util.cloneToken(this.leftParen),
+                util.cloneToken(this.rightParen),
+                util.cloneToken(this.asToken),
+                util.cloneToken(this.returnTypeToken)
+            ),
+            ['body']
+        );
+
+        //rebuild the .callExpressions list in the clone
+        clone.body?.walk?.((node) => {
+            if (isCallExpression(node) && !isNewExpression(node.parent)) {
+                clone.callExpressions.push(node);
+            }
+        }, { walkMode: WalkMode.visitExpressions });
+        return clone;
     }
 }
 
@@ -260,11 +425,13 @@ export class FunctionParameterExpression extends Expression {
 
     public type: BscType;
 
-    public get range(): Range {
-        return {
-            start: this.name.range.start,
-            end: this.typeToken ? this.typeToken.range.end : this.name.range.end
-        };
+    public get range(): Range | undefined {
+        return util.createBoundingRange(
+            this.name,
+            this.asToken,
+            this.typeToken,
+            this.defaultValue
+        );
     }
 
     public transpile(state: BrsTranspileState) {
@@ -278,14 +445,32 @@ export class FunctionParameterExpression extends Expression {
             result.push(this.defaultValue.transpile(state));
         }
         //type declaration
-        if (this.asToken) {
+        if (this.asToken && !state.options.removeParameterTypes) {
             result.push(' ');
             result.push(state.transpileToken(this.asToken));
             result.push(' ');
-            result.push(state.sourceNode(this.typeToken, this.type.toTypeString()));
+            result.push(state.sourceNode(this.typeToken!, this.type.toTypeString()));
         }
 
         return result;
+    }
+
+    public getTypedef(state: BrsTranspileState): TranspileResult {
+        const results = [this.name.text] as TranspileResult;
+
+        if (this.defaultValue) {
+            results.push(' = ', ...(this.defaultValue.getTypedef(state) ?? this.defaultValue.transpile(state)));
+        }
+
+        if (this.asToken) {
+            results.push(' as ');
+
+            if (this.typeToken) {
+                results.push(this.typeToken.text);
+            }
+        }
+
+        return results;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -293,6 +478,18 @@ export class FunctionParameterExpression extends Expression {
         if (this.defaultValue && options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'defaultValue', visitor, options);
         }
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new FunctionParameterExpression(
+                util.cloneToken(this.name),
+                util.cloneToken(this.typeToken),
+                this.defaultValue?.clone(),
+                util.cloneToken(this.asToken)
+            ),
+            ['defaultValue']
+        );
     }
 }
 
@@ -302,13 +499,19 @@ export class NamespacedVariableNameExpression extends Expression {
         readonly expression: DottedGetExpression | VariableExpression
     ) {
         super();
-        this.range = expression.range;
+        this.range = expression?.range;
     }
-    range: Range;
+    range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
             state.sourceNode(this, this.getName(ParseMode.BrightScript))
+        ];
+    }
+
+    getTypedef(state) {
+        return [
+            state.sourceNode(this, this.getName(ParseMode.BrighterScript))
         ];
     }
 
@@ -338,9 +541,18 @@ export class NamespacedVariableNameExpression extends Expression {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
+        this.expression?.link();
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'expression', visitor, options);
         }
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new NamespacedVariableNameExpression(
+                this.expression?.clone()
+            )
+        );
     }
 }
 
@@ -354,10 +566,10 @@ export class DottedGetExpression extends Expression {
         readonly dot: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.obj.range.start, this.name.range.end);
+        this.range = util.createBoundingRange(this.obj, this.dot, this.name);
     }
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
         //if the callee starts with a namespace name, transpile the name
@@ -372,10 +584,30 @@ export class DottedGetExpression extends Expression {
         }
     }
 
+    getTypedef(state: BrsTranspileState) {
+        //always transpile the dots for typedefs
+        return [
+            ...(this.obj.getTypedef ? this.obj.getTypedef(state) : this.obj.transpile(state)),
+            state.transpileToken(this.dot),
+            state.transpileToken(this.name)
+        ];
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'obj', visitor, options);
         }
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new DottedGetExpression(
+                this.obj?.clone(),
+                util.cloneToken(this.name),
+                util.cloneToken(this.dot)
+            ),
+            ['obj']
+        );
     }
 }
 
@@ -389,10 +621,10 @@ export class XmlAttributeGetExpression extends Expression {
         readonly at: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.obj.range.start, this.name.range.end);
+        this.range = util.createBoundingRange(this.obj, this.at, this.name);
     }
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -407,6 +639,17 @@ export class XmlAttributeGetExpression extends Expression {
             walk(this, 'obj', visitor, options);
         }
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new XmlAttributeGetExpression(
+                this.obj?.clone(),
+                util.cloneToken(this.name),
+                util.cloneToken(this.at)
+            ),
+            ['obj']
+        );
+    }
 }
 
 export class IndexedGetExpression extends Expression {
@@ -418,29 +661,63 @@ export class IndexedGetExpression extends Expression {
          */
         public openingSquare: Token,
         public closingSquare: Token,
-        public questionDotToken?: Token //  ? or ?.
+        public questionDotToken?: Token, //  ? or ?.
+        /**
+         * More indexes, separated by commas
+         */
+        public additionalIndexes?: Expression[]
     ) {
         super();
         this.range = util.createBoundingRange(this.obj, this.openingSquare, this.questionDotToken, this.openingSquare, this.index, this.closingSquare);
+        this.additionalIndexes ??= [];
     }
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
-        return [
+        const result = [];
+        result.push(
             ...this.obj.transpile(state),
             this.questionDotToken ? state.transpileToken(this.questionDotToken) : '',
-            state.transpileToken(this.openingSquare),
-            ...(this.index?.transpile(state) ?? []),
+            state.transpileToken(this.openingSquare)
+        );
+        const indexes = [this.index, ...this.additionalIndexes ?? []];
+        for (let i = 0; i < indexes.length; i++) {
+            //add comma between indexes
+            if (i > 0) {
+                result.push(', ');
+            }
+            let index = indexes[i];
+            result.push(
+                ...(index?.transpile(state) ?? [])
+            );
+        }
+        result.push(
             this.closingSquare ? state.transpileToken(this.closingSquare) : ''
-        ];
+        );
+        return result;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'obj', visitor, options);
             walk(this, 'index', visitor, options);
+            walkArray(this.additionalIndexes, visitor, options, this);
         }
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new IndexedGetExpression(
+                this.obj?.clone(),
+                this.index?.clone(),
+                util.cloneToken(this.openingSquare),
+                util.cloneToken(this.closingSquare),
+                util.cloneToken(this.questionDotToken),
+                this.additionalIndexes?.map(e => e?.clone())
+            ),
+            ['obj', 'index', 'additionalIndexes']
+        );
     }
 }
 
@@ -453,12 +730,15 @@ export class GroupingExpression extends Expression {
         public expression: Expression
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.tokens.left.range.start, this.tokens.right.range.end);
+        this.range = util.createBoundingRange(this.tokens.left, this.expression, this.tokens.right);
     }
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
+        if (isTypeCastExpression(this.expression)) {
+            return this.expression.transpile(state);
+        }
         return [
             state.transpileToken(this.tokens.left),
             ...this.expression.transpile(state),
@@ -470,6 +750,19 @@ export class GroupingExpression extends Expression {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'expression', visitor, options);
         }
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new GroupingExpression(
+                {
+                    left: util.cloneToken(this.tokens.left),
+                    right: util.cloneToken(this.tokens.right)
+                },
+                this.expression?.clone()
+            ),
+            ['expression']
+        );
     }
 }
 
@@ -514,6 +807,14 @@ export class LiteralExpression extends Expression {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new LiteralExpression(
+                util.cloneToken(this.token)
+            )
+        );
+    }
 }
 
 /**
@@ -538,6 +839,14 @@ export class EscapedCharCodeLiteralExpression extends Expression {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new EscapedCharCodeLiteralExpression(
+                util.cloneToken(this.token)
+            )
+        );
+    }
 }
 
 export class ArrayLiteralExpression extends Expression {
@@ -548,13 +857,13 @@ export class ArrayLiteralExpression extends Expression {
         readonly hasSpread = false
     ) {
         super();
-        this.range = util.createBoundingRange(this.open, ...this.elements, this.close);
+        this.range = util.createBoundingRange(this.open, ...this.elements ?? [], this.close);
     }
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
-        let result = [];
+        let result = [] as TranspileResult;
         result.push(
             state.transpileToken(this.open)
         );
@@ -606,6 +915,18 @@ export class ArrayLiteralExpression extends Expression {
             walkArray(this.elements, visitor, options, this);
         }
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new ArrayLiteralExpression(
+                this.elements?.map(e => e?.clone()),
+                util.cloneToken(this.open),
+                util.cloneToken(this.close),
+                this.hasSpread
+            ),
+            ['elements']
+        );
+    }
 }
 
 export class AAMemberExpression extends Expression {
@@ -616,14 +937,13 @@ export class AAMemberExpression extends Expression {
         public value: Expression
     ) {
         super();
-        this.range = util.createRangeFromPositions(keyToken.range.start, this.value.range.end);
+        this.range = util.createBoundingRange(this.keyToken, this.colonToken, this.value);
     }
 
-    public range: Range;
+    public range: Range | undefined;
     public commaToken?: Token;
 
     transpile(state: BrsTranspileState) {
-        //TODO move the logic from AALiteralExpression loop into this function
         return [];
     }
 
@@ -631,22 +951,88 @@ export class AAMemberExpression extends Expression {
         walk(this, 'value', visitor, options);
     }
 
+    public clone() {
+        return this.finalizeClone(
+            new AAMemberExpression(
+                util.cloneToken(this.keyToken),
+                util.cloneToken(this.colonToken),
+                this.value?.clone()
+            ),
+            ['value']
+        );
+    }
+}
+
+export class AAIndexedMemberExpression extends Expression {
+    constructor(options: {
+        leftBracket: Token;
+        key: Expression;
+        rightBracket: Token;
+        colon: Token;
+        /** The expression evaluated to determine the member's initial value. */
+        value: Expression;
+    }) {
+        super();
+        this.key = options.key;
+        this.tokens = {
+            leftBracket: options.leftBracket,
+            rightBracket: options.rightBracket,
+            colon: options.colon
+        };
+        this.value = options.value;
+        this.range = util.createBoundingRange(this.tokens.leftBracket, this.key, this.tokens.rightBracket, this.tokens.colon, this.value);
+    }
+
+    public readonly tokens: {
+        readonly leftBracket: Token;
+        readonly rightBracket: Token;
+        readonly colon: Token;
+    };
+
+    public key: Expression;
+    /** The expression evaluated to determine the member's initial value. */
+    public value: Expression;
+
+    public range: Range | undefined;
+    public commaToken?: Token;
+
+    transpile(state: BrsTranspileState) {
+        return [];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        walk(this, 'key', visitor, options);
+        walk(this, 'value', visitor, options);
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new AAIndexedMemberExpression({
+                leftBracket: util.cloneToken(this.tokens.leftBracket),
+                key: this.key?.clone(),
+                rightBracket: util.cloneToken(this.tokens.rightBracket),
+                colon: util.cloneToken(this.tokens.colon),
+                value: this.value?.clone()
+            }),
+            ['key', 'value']
+        );
+    }
 }
 
 export class AALiteralExpression extends Expression {
     constructor(
-        readonly elements: Array<AAMemberExpression | CommentStatement>,
+        readonly elements: Array<AAMemberExpression | AAIndexedMemberExpression | CommentStatement>,
         readonly open: Token,
         readonly close: Token
     ) {
         super();
-        this.range = util.createBoundingRange(this.open, ...this.elements, this.close);
+        this.range = util.createBoundingRange(this.open, ...this.elements ?? [], this.close);
     }
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
-        let result = [];
+        let result = [] as TranspileResult;
         //open curly
         result.push(
             state.transpileToken(this.open)
@@ -663,7 +1049,7 @@ export class AALiteralExpression extends Expression {
             let nextElement = this.elements[i + 1];
 
             //don't indent if comment is same-line
-            if (isCommentStatement(element as any) &&
+            if (isCommentStatement(element) &&
                 (util.linesTouch(this.open, element) || util.linesTouch(previousElement, element))
             ) {
                 result.push(' ');
@@ -678,12 +1064,17 @@ export class AALiteralExpression extends Expression {
                 result.push(...element.transpile(state));
             } else {
                 //key
-                result.push(
-                    state.transpileToken(element.keyToken)
-                );
+                if ('tokens' in element) {
+                    //computed key: transpile the resolved expression (pre-transpile overrides it to a literal)
+                    result.push(...element.key.transpile(state));
+                } else {
+                    result.push(
+                        state.transpileToken(element.keyToken)
+                    );
+                }
                 //colon
                 result.push(
-                    state.transpileToken(element.colonToken),
+                    state.transpileToken('tokens' in element ? element.tokens.colon : element.colonToken),
                     ' '
                 );
 
@@ -693,7 +1084,7 @@ export class AALiteralExpression extends Expression {
 
 
             //if next element is a same-line comment, skip the newline
-            if (nextElement && isCommentStatement(nextElement) && nextElement.range.start.line === element.range.start.line) {
+            if (nextElement && isCommentStatement(nextElement) && nextElement.range?.start.line === element.range?.start.line) {
 
                 //add a newline between statements
             } else {
@@ -720,6 +1111,17 @@ export class AALiteralExpression extends Expression {
             walkArray(this.elements, visitor, options, this);
         }
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new AALiteralExpression(
+                this.elements?.map(e => e?.clone()),
+                util.cloneToken(this.open),
+                util.cloneToken(this.close)
+            ),
+            ['elements']
+        );
+    }
 }
 
 export class UnaryExpression extends Expression {
@@ -728,15 +1130,22 @@ export class UnaryExpression extends Expression {
         public right: Expression
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.operator.range.start, this.right.range.end);
+        this.range = util.createBoundingRange(this.operator, this.right);
     }
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
+        let separatingWhitespace: string | undefined;
+        if (isVariableExpression(this.right)) {
+            separatingWhitespace = this.right.name.leadingWhitespace;
+        } else if (isLiteralExpression(this.right)) {
+            separatingWhitespace = this.right.token.leadingWhitespace;
+        }
+
         return [
             state.transpileToken(this.operator),
-            ' ',
+            separatingWhitespace ?? ' ',
             ...this.right.transpile(state)
         ];
     }
@@ -746,6 +1155,16 @@ export class UnaryExpression extends Expression {
             walk(this, 'right', visitor, options);
         }
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new UnaryExpression(
+                util.cloneToken(this.operator),
+                this.right?.clone()
+            ),
+            ['right']
+        );
+    }
 }
 
 export class VariableExpression extends Expression {
@@ -753,7 +1172,7 @@ export class VariableExpression extends Expression {
         readonly name: Identifier
     ) {
         super();
-        this.range = this.name.range;
+        this.range = this.name?.range;
     }
 
     public readonly range: Range;
@@ -763,10 +1182,10 @@ export class VariableExpression extends Expression {
     }
 
     transpile(state: BrsTranspileState) {
-        let result = [];
+        let result = [] as TranspileResult;
         const namespace = this.findAncestor(isNamespaceStatement);
         //if the callee is the name of a known namespace function
-        if (state.file.calleeIsKnownNamespaceFunction(this, namespace?.getName(ParseMode.BrighterScript))) {
+        if (namespace && state.file.calleeIsKnownNamespaceFunction(this, namespace.getName(ParseMode.BrighterScript))) {
             result.push(
                 state.sourceNode(this, [
                     namespace.getName(ParseMode.BrightScript),
@@ -784,8 +1203,22 @@ export class VariableExpression extends Expression {
         return result;
     }
 
+    getTypedef(state: BrsTranspileState) {
+        return [
+            state.transpileToken(this.name)
+        ];
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new VariableExpression(
+                util.cloneToken(this.name)
+            )
+        );
     }
 }
 
@@ -794,14 +1227,14 @@ export class SourceLiteralExpression extends Expression {
         readonly token: Token
     ) {
         super();
-        this.range = token.range;
+        this.range = token?.range;
     }
 
     public readonly range: Range;
 
     private getFunctionName(state: BrsTranspileState, parseMode: ParseMode) {
-        let func = state.file.getFunctionScopeAtPosition(this.token.range.start).func;
-        let nameParts = [];
+        let func = this.findAncestor(isFunctionExpression);
+        let nameParts = [] as TranspileResult;
         while (func.parentFunction) {
             let index = func.parentFunction.childFunctionExpressions.indexOf(func);
             nameParts.unshift(`anon${index}`);
@@ -809,20 +1242,35 @@ export class SourceLiteralExpression extends Expression {
         }
         //get the index of this function in its parent
         nameParts.unshift(
-            func.functionStatement.getName(parseMode)
+            func.functionStatement!.getName(parseMode)
         );
         return nameParts.join('$');
+    }
+
+    /**
+     * Get the line number from our token or from the closest ancestor that has a range
+     */
+    private getClosestLineNumber() {
+        let node: AstNode = this;
+        while (node) {
+            if (node.range) {
+                return node.range.start.line + 1;
+            }
+            node = node.parent;
+        }
+        return -1;
     }
 
     transpile(state: BrsTranspileState) {
         let text: string;
         switch (this.token.kind) {
             case TokenKind.SourceFilePathLiteral:
-                const pathUrl = fileUrl(state.srcPath);
+                const pathUrl = util.fileUrl(state.srcPath);
                 text = `"${pathUrl.substring(0, 4)}" + "${pathUrl.substring(4)}"`;
                 break;
             case TokenKind.SourceLineNumLiteral:
-                text = `${this.token.range.start.line + 1}`;
+                //TODO find first parent that has range, or default to -1
+                text = `${this.getClosestLineNumber()}`;
                 break;
             case TokenKind.FunctionNameLiteral:
                 text = `"${this.getFunctionName(state, ParseMode.BrightScript)}"`;
@@ -830,9 +1278,23 @@ export class SourceLiteralExpression extends Expression {
             case TokenKind.SourceFunctionNameLiteral:
                 text = `"${this.getFunctionName(state, ParseMode.BrighterScript)}"`;
                 break;
+            case TokenKind.SourceNamespaceNameLiteral:
+                let namespaceParts = this.getFunctionName(state, ParseMode.BrighterScript).split('.');
+                namespaceParts.pop(); // remove the function name
+
+                text = `"${namespaceParts.join('.')}"`;
+                break;
+            case TokenKind.SourceNamespaceRootNameLiteral:
+                let namespaceRootParts = this.getFunctionName(state, ParseMode.BrighterScript).split('.');
+                namespaceRootParts.pop(); // remove the function name
+
+                let rootNamespace = namespaceRootParts.shift() ?? '';
+                text = `"${rootNamespace}"`;
+                break;
             case TokenKind.SourceLocationLiteral:
-                const locationUrl = fileUrl(state.srcPath);
-                text = `"${locationUrl.substring(0, 4)}" + "${locationUrl.substring(4)}:${this.token.range.start.line + 1}"`;
+                const locationUrl = util.fileUrl(state.srcPath);
+                //TODO find first parent that has range, or default to -1
+                text = `"${locationUrl.substring(0, 4)}" + "${locationUrl.substring(4)}:${this.getClosestLineNumber()}"`;
                 break;
             case TokenKind.PkgPathLiteral:
                 let pkgPath1 = `pkg:/${state.file.pkgPath}`
@@ -863,6 +1325,14 @@ export class SourceLiteralExpression extends Expression {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new SourceLiteralExpression(
+                util.cloneToken(this.token)
+            )
+        );
+    }
 }
 
 /**
@@ -876,7 +1346,7 @@ export class NewExpression extends Expression {
         readonly call: CallExpression
     ) {
         super();
-        this.range = util.createRangeFromPositions(this.newKeyword.range.start, this.call.range.end);
+        this.range = util.createBoundingRange(this.newKeyword, this.call);
     }
 
     /**
@@ -888,7 +1358,7 @@ export class NewExpression extends Expression {
         return this.call.callee as NamespacedVariableNameExpression;
     }
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     public transpile(state: BrsTranspileState) {
         const namespace = this.findAncestor(isNamespaceStatement);
@@ -906,6 +1376,16 @@ export class NewExpression extends Expression {
             walk(this, 'call', visitor, options);
         }
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new NewExpression(
+                util.cloneToken(this.newKeyword),
+                this.call?.clone()
+            ),
+            ['call']
+        );
+    }
 }
 
 export class CallfuncExpression extends Expression {
@@ -918,16 +1398,28 @@ export class CallfuncExpression extends Expression {
         readonly closingParen: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            callee.range.start,
-            (closingParen ?? args[args.length - 1] ?? openingParen ?? methodName ?? operator).range.end
+        this.range = util.createBoundingRange(
+            callee,
+            operator,
+            methodName,
+            openingParen,
+            ...args ?? [],
+            closingParen
         );
     }
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
+
+    /**
+     * Get the name of the wrapping namespace (if it exists)
+     * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
+     */
+    public get namespaceName() {
+        return this.findAncestor(isNamespaceStatement)?.nameExpression;
+    }
 
     public transpile(state: BrsTranspileState) {
-        let result = [];
+        let result = [] as TranspileResult;
         result.push(
             ...this.callee.transpile(state),
             state.sourceNode(this.operator, '.callfunc'),
@@ -962,6 +1454,20 @@ export class CallfuncExpression extends Expression {
             walkArray(this.args, visitor, options, this);
         }
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new CallfuncExpression(
+                this.callee?.clone(),
+                util.cloneToken(this.operator),
+                util.cloneToken(this.methodName),
+                util.cloneToken(this.openingParen),
+                this.args?.map(e => e?.clone()),
+                util.cloneToken(this.closingParen)
+            ),
+            ['callee', 'args']
+        );
+    }
 }
 
 /**
@@ -973,15 +1479,14 @@ export class TemplateStringQuasiExpression extends Expression {
         readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteralExpression>
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            this.expressions[0].range.start,
-            this.expressions[this.expressions.length - 1].range.end
+        this.range = util.createBoundingRange(
+            ...expressions ?? []
         );
     }
-    readonly range: Range;
+    readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState, skipEmptyStrings = true) {
-        let result = [];
+        let result = [] as TranspileResult;
         let plus = '';
         for (let expression of this.expressions) {
             //skip empty strings
@@ -1003,6 +1508,15 @@ export class TemplateStringQuasiExpression extends Expression {
             walkArray(this.expressions, visitor, options, this);
         }
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new TemplateStringQuasiExpression(
+                this.expressions?.map(e => e?.clone())
+            ),
+            ['expressions']
+        );
+    }
 }
 
 export class TemplateStringExpression extends Expression {
@@ -1013,22 +1527,25 @@ export class TemplateStringExpression extends Expression {
         readonly closingBacktick: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            quasis[0].range.start,
-            quasis[quasis.length - 1].range.end
+        this.range = util.createBoundingRange(
+            openingBacktick,
+            quasis?.[0],
+            quasis?.[quasis?.length - 1],
+            closingBacktick
         );
     }
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
-        if (this.quasis.length === 1 && this.expressions.length === 0) {
+        //if this is essentially just a normal brightscript string but with backticks, transpile it as a normal string without parens
+        if (this.expressions.length === 0 && this.quasis.length === 1 && this.quasis[0].expressions.length === 1) {
             return this.quasis[0].transpile(state);
         }
-        let result = [];
+        let result: TranspileResult = ['('];
         let plus = '';
         //helper function to figure out when to include the plus
-        function add(...items) {
+        function add(...items: TranspileResult) {
             if (items.length > 0) {
                 result.push(
                     plus,
@@ -1068,6 +1585,8 @@ export class TemplateStringExpression extends Expression {
                 }
             }
         }
+        //the expression should be wrapped in parens so it can be used line a single expression at runtime
+        result.push(')');
 
         return result;
     }
@@ -1075,7 +1594,7 @@ export class TemplateStringExpression extends Expression {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             //walk the quasis and expressions in left-to-right order
-            for (let i = 0; i < this.quasis.length; i++) {
+            for (let i = 0; i < this.quasis?.length; i++) {
                 walk(this.quasis, i, visitor, options, this);
 
                 //this skips the final loop iteration since we'll always have one more quasi than expression
@@ -1084,6 +1603,18 @@ export class TemplateStringExpression extends Expression {
                 }
             }
         }
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new TemplateStringExpression(
+                util.cloneToken(this.openingBacktick),
+                this.quasis?.map(e => e?.clone()),
+                this.expressions?.map(e => e?.clone()),
+                util.cloneToken(this.closingBacktick)
+            ),
+            ['quasis', 'expressions']
+        );
     }
 }
 
@@ -1096,16 +1627,19 @@ export class TaggedTemplateStringExpression extends Expression {
         readonly closingBacktick: Token
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            quasis[0].range.start,
-            quasis[quasis.length - 1].range.end
+        this.range = util.createBoundingRange(
+            tagName,
+            openingBacktick,
+            quasis?.[0],
+            quasis?.[quasis?.length - 1],
+            closingBacktick
         );
     }
 
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
-        let result = [];
+        let result = [] as TranspileResult;
         result.push(
             state.transpileToken(this.tagName),
             '(['
@@ -1149,7 +1683,7 @@ export class TaggedTemplateStringExpression extends Expression {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             //walk the quasis and expressions in left-to-right order
-            for (let i = 0; i < this.quasis.length; i++) {
+            for (let i = 0; i < this.quasis?.length; i++) {
                 walk(this.quasis, i, visitor, options, this);
 
                 //this skips the final loop iteration since we'll always have one more quasi than expression
@@ -1158,6 +1692,19 @@ export class TaggedTemplateStringExpression extends Expression {
                 }
             }
         }
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new TaggedTemplateStringExpression(
+                util.cloneToken(this.tagName),
+                util.cloneToken(this.openingBacktick),
+                this.quasis?.map(e => e?.clone()),
+                this.expressions?.map(e => e?.clone()),
+                util.cloneToken(this.closingBacktick)
+            ),
+            ['quasis', 'expressions']
+        );
     }
 }
 
@@ -1168,15 +1715,18 @@ export class AnnotationExpression extends Expression {
     ) {
         super();
         this.name = nameToken.text;
-        this.range = util.createRangeFromPositions(
-            atToken.range.start,
-            nameToken.range.end
+    }
+
+    public get range() {
+        return util.createBoundingRange(
+            this.atToken,
+            this.nameToken,
+            this.call
         );
     }
 
     public name: string;
-    public range: Range;
-    public call: CallExpression;
+    public call: CallExpression | undefined;
 
     /**
      * Convert annotation arguments to JavaScript types
@@ -1203,6 +1753,16 @@ export class AnnotationExpression extends Expression {
             ...(this.call?.transpile(state) ?? [])
         ];
     }
+
+    public clone() {
+        const clone = this.finalizeClone(
+            new AnnotationExpression(
+                util.cloneToken(this.atToken),
+                util.cloneToken(this.nameToken)
+            )
+        );
+        return clone;
+    }
 }
 
 export class TernaryExpression extends Expression {
@@ -1214,21 +1774,30 @@ export class TernaryExpression extends Expression {
         readonly alternate?: Expression
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            test.range.start,
-            (alternate ?? colonToken ?? consequent ?? questionMarkToken ?? test).range.end
+        this.range = util.createBoundingRange(
+            test,
+            questionMarkToken,
+            consequent,
+            colonToken,
+            alternate
         );
     }
 
-    public range: Range;
+    public range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
-        let result = [];
-        let consequentInfo = util.getExpressionInfo(this.consequent);
-        let alternateInfo = util.getExpressionInfo(this.alternate);
+        let result = [] as TranspileResult;
+        const file = state.file;
+        let consequentInfo = util.getExpressionInfo(this.consequent!, file);
+        let alternateInfo = util.getExpressionInfo(this.alternate!, file);
 
         //get all unique variable names used in the consequent and alternate, and sort them alphabetically so the output is consistent
         let allUniqueVarNames = [...new Set([...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])].sort();
+        //discard names of global functions that cannot be passed by reference
+        allUniqueVarNames = allUniqueVarNames.filter(name => {
+            return !nonReferenceableFunctions.includes(name.toLowerCase());
+        });
+
         let mutatingExpressions = [
             ...consequentInfo.expressions,
             ...alternateInfo.expressions
@@ -1240,7 +1809,7 @@ export class TernaryExpression extends Expression {
                     this.questionMarkToken,
                     //write all the scope variables as parameters.
                     //TODO handle when there are more than 31 parameters
-                    `(function(__bsCondition, ${allUniqueVarNames.join(', ')})`
+                    `(function(${['__bsCondition', ...allUniqueVarNames].join(', ')})`
                 ),
                 state.newline,
                 //double indent so our `end function` line is still indented one at the end
@@ -1264,7 +1833,7 @@ export class TernaryExpression extends Expression {
                 state.indent(-1),
                 state.sourceNode(this.questionMarkToken, 'end function)('),
                 ...this.test.transpile(state),
-                state.sourceNode(this.questionMarkToken, `, ${allUniqueVarNames.join(', ')})`)
+                state.sourceNode(this.questionMarkToken, `${['', ...allUniqueVarNames].join(', ')})`)
             );
             state.blockDepth--;
         } else {
@@ -1288,6 +1857,19 @@ export class TernaryExpression extends Expression {
             walk(this, 'alternate', visitor, options);
         }
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new TernaryExpression(
+                this.test?.clone(),
+                util.cloneToken(this.questionMarkToken),
+                this.consequent?.clone(),
+                util.cloneToken(this.colonToken),
+                this.alternate?.clone()
+            ),
+            ['test', 'consequent', 'alternate']
+        );
+    }
 }
 
 export class NullCoalescingExpression extends Expression {
@@ -1297,20 +1879,26 @@ export class NullCoalescingExpression extends Expression {
         public alternate: Expression
     ) {
         super();
-        this.range = util.createRangeFromPositions(
-            consequent.range.start,
-            (alternate ?? questionQuestionToken ?? consequent).range.end
+        this.range = util.createBoundingRange(
+            consequent,
+            questionQuestionToken,
+            alternate
         );
     }
-    public readonly range: Range;
+    public readonly range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
-        let result = [];
-        let consequentInfo = util.getExpressionInfo(this.consequent);
-        let alternateInfo = util.getExpressionInfo(this.alternate);
+        let result = [] as TranspileResult;
+        let consequentInfo = util.getExpressionInfo(this.consequent, state.file);
+        let alternateInfo = util.getExpressionInfo(this.alternate, state.file);
 
         //get all unique variable names used in the consequent and alternate, and sort them alphabetically so the output is consistent
         let allUniqueVarNames = [...new Set([...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])].sort();
+        //discard names of global functions that cannot be passed by reference
+        allUniqueVarNames = allUniqueVarNames.filter(name => {
+            return !nonReferenceableFunctions.includes(name.toLowerCase());
+        });
+
         let hasMutatingExpression = [
             ...consequentInfo.expressions,
             ...alternateInfo.expressions
@@ -1370,6 +1958,17 @@ export class NullCoalescingExpression extends Expression {
             walk(this, 'alternate', visitor, options);
         }
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new NullCoalescingExpression(
+                this.consequent?.clone(),
+                util.cloneToken(this.questionQuestionToken),
+                this.alternate?.clone()
+            ),
+            ['consequent', 'alternate']
+        );
+    }
 }
 
 export class RegexLiteralExpression extends Expression {
@@ -1382,7 +1981,7 @@ export class RegexLiteralExpression extends Expression {
     }
 
     public get range() {
-        return this.tokens.regexLiteral.range;
+        return this.tokens?.regexLiteral?.range;
     }
 
     public transpile(state: BrsTranspileState): TranspileResult {
@@ -1413,10 +2012,56 @@ export class RegexLiteralExpression extends Expression {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
     }
+
+    public clone() {
+        return this.finalizeClone(
+            new RegexLiteralExpression({
+                regexLiteral: util.cloneToken(this.tokens.regexLiteral)
+            })
+        );
+    }
+}
+
+
+export class TypeCastExpression extends Expression {
+    constructor(
+        public obj: Expression,
+        public asToken: Token,
+        public typeToken: Token
+    ) {
+        super();
+        this.range = util.createBoundingRange(
+            this.obj,
+            this.asToken,
+            this.typeToken
+        );
+    }
+
+    public range: Range;
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return this.obj.transpile(state);
+    }
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'obj', visitor, options);
+        }
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new TypeCastExpression(
+                this.obj?.clone(),
+                util.cloneToken(this.asToken),
+                util.cloneToken(this.typeToken)
+            ),
+            ['obj']
+        );
+    }
 }
 
 // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
-type ExpressionValue = string | number | boolean | Expression | ExpressionValue[] | { [key: string]: ExpressionValue };
+type ExpressionValue = string | number | boolean | Expression | ExpressionValue[] | { [key: string]: ExpressionValue } | null;
 
 function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
     if (!expr) {
@@ -1443,11 +2088,17 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
     }
     if (isAALiteralExpression(expr)) {
         return expr.elements.reduce((acc, e) => {
-            if (!isCommentStatement(e)) {
+            if (!isCommentStatement(e) && !(isAAIndexedMemberExpression(e))) {
                 acc[e.keyToken.text] = expressionToValue(e.value, strict);
             }
             return acc;
         }, {});
+    }
+    //for annotations, we only support serializing pure string values
+    if (isTemplateStringExpression(expr)) {
+        if (expr.quasis?.length === 1 && expr.expressions.length === 0) {
+            return expr.quasis[0].expressions.map(x => x.token.text).join('');
+        }
     }
     return strict ? null : expr;
 }
@@ -1459,3 +2110,21 @@ function numberExpressionToValue(expr: LiteralExpression, operator = '') {
         return parseFloat(operator + expr.token.text);
     }
 }
+
+/**
+ * A list of names of functions that are restricted from being stored to a
+ * variable, property, or passed as an argument. (i.e. `type` or `createobject`).
+ * Names are stored in lower case.
+ */
+const nonReferenceableFunctions = [
+    'createobject',
+    'type',
+    'getglobalaa',
+    'box',
+    'run',
+    'eval',
+    'getlastruncompileerror',
+    'getlastrunruntimeerror',
+    'tab',
+    'pos'
+];

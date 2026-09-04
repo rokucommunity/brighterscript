@@ -93,10 +93,7 @@ export class ErrorChunk implements Chunk {
         readonly hashError: Token,
         readonly message: Token
     ) {
-        this.range = util.createRangeFromPositions(
-            this.hashError.range.start,
-            (this.message ?? this.hashError).range.end
-        );
+        this.range = util.createBoundingRange(this.hashError, this.message);
     }
     public readonly range: Range;
 
