@@ -1256,6 +1256,40 @@ describe('XmlFile', () => {
             expect(code.endsWith(`<!--//# sourceMappingURL=./SimpleScene.xml.map -->`)).to.be.true;
         });
 
+        it('replaces existing trailing sourceMappingURL comment instead of appending a second one', () => {
+            program.options.sourceMap = true;
+            let file = program.setFile('components/SimpleScene.xml',
+                trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene">
+                </component>
+                <!--//# sourceMappingURL=./some-old-path.xml.map -->
+            `);
+            //prevent the default auto-imports to ensure no transpilation from AST
+            (file as any).getMissingImportsForTranspile = () => [];
+            const code = file.transpile().code;
+            expect(code.match(/sourceMappingURL=/g)?.length).to.eql(1);
+            expect(code.endsWith(`<!--//# sourceMappingURL=./SimpleScene.xml.map -->`)).to.be.true;
+        });
+
+        it('replaces existing trailing sourceMappingURL comment when AST-transpiling', () => {
+            program.options.sourceMap = true;
+            //a script tag pointing at a .bs file forces the AST transpile path, which rebuilds output
+            //from the component tree and therefore drops a comment sitting outside the root element
+            let file = program.setFile('components/SimpleScene.xml',
+                trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene">
+                    <script type="text/brightscript" uri="SimpleScene.bs"/>
+                </component>
+                <!--//# sourceMappingURL=./some-old-path.xml.map -->
+            `);
+            expect(file.needsTranspiled).to.be.true;
+            const code = file.transpile().code;
+            expect(code.match(/sourceMappingURL=/g)?.length).to.eql(1);
+            expect(code.endsWith(`<!--//# sourceMappingURL=./SimpleScene.xml.map -->`)).to.be.true;
+        });
+
         it('AST-based source mapping includes sourcemap reference', () => {
             program.options.sourceMap = true;
             let file = program.setFile('components/SimpleScene.xml',

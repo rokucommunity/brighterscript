@@ -1889,6 +1889,29 @@ export class Util {
     }
 
     /**
+     * Strip a trailing `sourceMappingURL` comment (and the newline preceding it) from the end of a
+     * transpile result, so that appending a freshly-generated one doesn't produce a duplicate. A file
+     * can already carry a comment from a previous build, which is either preserved verbatim (for
+     * files that don't need transpiling) or re-emitted as a comment by the AST transpile.
+     *
+     * Handles both BrightScript-style (`'//# sourceMappingURL=...`) and XML-style
+     * (`<!--//# sourceMappingURL=... -->`) comments. Leaves the node untouched when no trailing
+     * sourceMappingURL comment is present.
+     */
+    public stripTrailingSourceMappingURLComment(node: SourceNode): SourceNode {
+        //`\S+` cannot backtrack across whitespace, so this stays linear-time on adversarial input
+        const pattern = /(?:\r?\n)?[ \t]*(?:'\/\/# sourceMappingURL=\S+|<!--[ \t]*\/\/# sourceMappingURL=\S+[ \t]*-->)\s*$/;
+        if (pattern.test(node.toString())) {
+            //`replaceRight` operates on the right-most leaf string, which is where a trailing comment
+            //lands in both the verbatim and AST-transpiled cases. The `source-map` typings declare the
+            //pattern as a string, but it is handed straight to `String.prototype.replace`, which
+            //accepts a RegExp
+            node.replaceRight(pattern as unknown as string, '');
+        }
+        return node;
+    }
+
+    /**
      * Parse the `sourceMappingURL` comment from file contents and resolve it to a RawSourceMap.
      * Handles inline base64 data URIs, absolute paths, relative paths (resolved against srcPath's
      * directory), and falls back to a co-located `<srcPath>.map` file.
