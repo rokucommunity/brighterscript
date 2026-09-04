@@ -4,12 +4,12 @@ import { ReservedWords, TokenKind } from '../lexer/TokenKind';
 import type { AAMemberExpression } from './Expression';
 import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
-import type { AssignmentStatement, ClassStatement } from './Statement';
+import type { AliasStatement, AssignmentStatement, ClassStatement, TypecastStatement, TypeStatement } from './Statement';
 import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { isBlock, isCommentStatement, isFunctionStatement, isIfStatement, isIndexedGetExpression } from '../astUtils/reflection';
-import { expectDiagnostics, expectZeroDiagnostics } from '../testHelpers.spec';
+import { isAliasStatement, isBlock, isCommentStatement, isFunctionStatement, isIfStatement, isIndexedGetExpression, isTypecastStatement, isTypeStatement } from '../astUtils/reflection';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics } from '../testHelpers.spec';
 import { BrsTranspileState } from './BrsTranspileState';
 import { SourceNode } from 'source-map';
 import { BrsFile } from '../files/BrsFile';
@@ -53,7 +53,7 @@ describe('parser', () => {
             return [...expressions.values()].map(x => {
                 const file = new BrsFile('', '', new Program({} as any));
                 const state = new BrsTranspileState(file);
-                return new SourceNode(null, null, null, x.transpile(state)).toString();
+                return new SourceNode(null, null, null, x.transpile(state) as any).toString();
             });
         }
 
@@ -750,13 +750,13 @@ describe('parser', () => {
                         expectCommentWithText(ifStmt.thenBranch.statements[1], `'comment 2`);
                         expectCommentWithText(ifStmt.thenBranch.statements[3], `'comment 3`);
 
-                        let elseIfBranch = ifStmt.elseBranch;
+                        let elseIfBranch = ifStmt.elseBranch!;
                         if (isIfStatement(elseIfBranch)) {
                             expectCommentWithText(elseIfBranch.thenBranch.statements[0], `'comment 4`);
                             expectCommentWithText(elseIfBranch.thenBranch.statements[1], `'comment 5`);
                             expectCommentWithText(elseIfBranch.thenBranch.statements[3], `'comment 6`);
 
-                            let elseBranch = elseIfBranch.elseBranch;
+                            let elseBranch = elseIfBranch.elseBranch!;
                             if (isBlock(elseBranch)) {
                                 expectCommentWithText(elseBranch.statements[0], `'comment 7`);
                                 expectCommentWithText(elseBranch.statements[1], `'comment 8`);
@@ -928,6 +928,63 @@ describe('parser', () => {
                 expect(diagnostics, `assigning to reserved word "${reservedWord}" should have been an error`).to.be.length.greaterThan(0);
             }
         });
+
+        describe('unreferencable builtins as parameter names', () => {
+            it('flags `function f(Box)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(Box)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('Box')]);
+            });
+
+            it('flags `function f(CreateObject)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(CreateObject)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('CreateObject')]);
+            });
+
+            it('flags `function f(GetGlobalAA)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(GetGlobalAA)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('GetGlobalAA')]);
+            });
+
+            it('flags `function f(GetLastRunCompileError)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(GetLastRunCompileError)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('GetLastRunCompileError')]);
+            });
+
+            it('flags `function f(GetLastRunRunTimeError)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(GetLastRunRunTimeError)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('GetLastRunRunTimeError')]);
+            });
+
+            it('flags `function f(ObjFun)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(ObjFun)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('ObjFun')]);
+            });
+
+            it('flags `function f(Pos)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(Pos)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('Pos')]);
+            });
+
+            it('flags `function f(Run)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(Run)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('Run')]);
+            });
+
+            it('flags `function f(Tab)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(Tab)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('Tab')]);
+            });
+
+            it('flags `function f(type)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(type)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('type')]);
+            });
+
+            it('flags `function f(eval)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(eval)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('eval')]);
+            });
+        });
     });
 
     describe('import keyword', () => {
@@ -1022,15 +1079,15 @@ describe('parser', () => {
             expect(statements[0]).to.be.instanceof(FunctionStatement);
             let fn = statements[0] as FunctionStatement;
             expect(fn.annotations).to.exist;
-            expect(fn.annotations[0]).to.be.instanceof(AnnotationExpression);
-            expect(fn.annotations[0].nameToken.text).to.equal('meta1');
-            expect(fn.annotations[0].name).to.equal('meta1');
+            expect(fn.annotations![0]).to.be.instanceof(AnnotationExpression);
+            expect(fn.annotations![0].nameToken.text).to.equal('meta1');
+            expect(fn.annotations![0].name).to.equal('meta1');
 
             expect(statements[1]).to.be.instanceof(FunctionStatement);
             fn = statements[1] as FunctionStatement;
             expect(fn.annotations).to.exist;
-            expect(fn.annotations[0]).to.be.instanceof(AnnotationExpression);
-            expect(fn.annotations[0].nameToken.text).to.equal('meta2');
+            expect(fn.annotations![0]).to.be.instanceof(AnnotationExpression);
+            expect(fn.annotations![0].nameToken.text).to.equal('meta2');
         });
 
         it('attaches annotations inside a function body', () => {
@@ -1046,7 +1103,7 @@ describe('parser', () => {
             let stat = fnStatements[0];
             expect(stat).to.exist;
             expect(stat.annotations?.length).to.equal(1);
-            expect(stat.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(stat.annotations![0]).to.be.instanceof(AnnotationExpression);
         });
 
         it('attaches multiple annotations to next statement', () => {
@@ -1060,10 +1117,10 @@ describe('parser', () => {
             expect(statements[0]).to.be.instanceof(FunctionStatement);
             let fn = statements[0] as FunctionStatement;
             expect(fn.annotations).to.exist;
-            expect(fn.annotations.length).to.equal(3);
-            expect(fn.annotations[0]).to.be.instanceof(AnnotationExpression);
-            expect(fn.annotations[1]).to.be.instanceof(AnnotationExpression);
-            expect(fn.annotations[2]).to.be.instanceof(AnnotationExpression);
+            expect(fn.annotations!.length).to.equal(3);
+            expect(fn.annotations![0]).to.be.instanceof(AnnotationExpression);
+            expect(fn.annotations![1]).to.be.instanceof(AnnotationExpression);
+            expect(fn.annotations![2]).to.be.instanceof(AnnotationExpression);
         });
 
         it('allows annotations with parameters', () => {
@@ -1075,9 +1132,9 @@ describe('parser', () => {
             expect(diagnostics[0]?.message).not.to.exist;
             let fn = statements[0] as FunctionStatement;
             expect(fn.annotations).to.exist;
-            expect(fn.annotations[0]).to.be.instanceof(AnnotationExpression);
-            expect(fn.annotations[0].nameToken.text).to.equal('meta1');
-            expect(fn.annotations[0].call).to.be.instanceof(CallExpression);
+            expect(fn.annotations![0]).to.be.instanceof(AnnotationExpression);
+            expect(fn.annotations![0].nameToken.text).to.equal('meta1');
+            expect(fn.annotations![0].call).to.be.instanceof(CallExpression);
         });
 
         it('attaches annotations to a class', () => {
@@ -1092,7 +1149,7 @@ describe('parser', () => {
             expect(diagnostics[0]?.message).not.to.exist;
             let cs = statements[0] as ClassStatement;
             expect(cs.annotations?.length).to.equal(1);
-            expect(cs.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(cs.annotations![0]).to.be.instanceof(AnnotationExpression);
         });
 
         it('attaches annotations to multiple clases', () => {
@@ -1113,12 +1170,12 @@ describe('parser', () => {
             expect(diagnostics[0]?.message).not.to.exist;
             let cs = statements[0] as ClassStatement;
             expect(cs.annotations?.length).to.equal(1);
-            expect(cs.annotations[0]).to.be.instanceof(AnnotationExpression);
-            expect(cs.annotations[0].name).to.equal('meta1');
+            expect(cs.annotations![0]).to.be.instanceof(AnnotationExpression);
+            expect(cs.annotations![0].name).to.equal('meta1');
             let cs2 = statements[1] as ClassStatement;
             expect(cs2.annotations?.length).to.equal(1);
-            expect(cs2.annotations[0]).to.be.instanceof(AnnotationExpression);
-            expect(cs2.annotations[0].name).to.equal('meta2');
+            expect(cs2.annotations![0]).to.be.instanceof(AnnotationExpression);
+            expect(cs2.annotations![0].name).to.equal('meta2');
         });
 
         it('attaches annotations to a namespaced class', () => {
@@ -1136,7 +1193,7 @@ describe('parser', () => {
             let ns = statements[0] as NamespaceStatement;
             let cs = ns.body.statements[0] as ClassStatement;
             expect(cs.annotations?.length).to.equal(1);
-            expect(cs.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(cs.annotations![0]).to.be.instanceof(AnnotationExpression);
         });
 
         it('attaches annotations to a namespaced class - multiple', () => {
@@ -1160,12 +1217,12 @@ describe('parser', () => {
             let ns = statements[0] as NamespaceStatement;
             let cs = ns.body.statements[0] as ClassStatement;
             expect(cs.annotations?.length).to.equal(1);
-            expect(cs.annotations[0]).to.be.instanceof(AnnotationExpression);
-            expect(cs.annotations[0].name).to.equal('meta1');
+            expect(cs.annotations![0]).to.be.instanceof(AnnotationExpression);
+            expect(cs.annotations![0].name).to.equal('meta1');
             let cs2 = ns.body.statements[1] as ClassStatement;
             expect(cs2.annotations?.length).to.equal(1);
-            expect(cs2.annotations[0]).to.be.instanceof(AnnotationExpression);
-            expect(cs2.annotations[0].name).to.equal('meta2');
+            expect(cs2.annotations![0]).to.be.instanceof(AnnotationExpression);
+            expect(cs2.annotations![0].name).to.equal('meta2');
 
         });
 
@@ -1185,7 +1242,7 @@ describe('parser', () => {
             let cs = statements[0] as ClassStatement;
             let stat = cs.body[0];
             expect(stat.annotations?.length).to.equal(1);
-            expect(stat.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(stat.annotations![0]).to.be.instanceof(AnnotationExpression);
         });
 
         it('attaches annotations to a class methods', () => {
@@ -1204,7 +1261,7 @@ describe('parser', () => {
             let cs = statements[0] as ClassStatement;
             let stat = cs.body[1];
             expect(stat.annotations?.length).to.equal(1);
-            expect(stat.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(stat.annotations![0]).to.be.instanceof(AnnotationExpression);
         });
         it('attaches annotations to a class methods, fields and constructor', () => {
             let { statements, diagnostics } = parse(`
@@ -1230,16 +1287,16 @@ describe('parser', () => {
             expect(diagnostics[0]?.message).not.to.exist;
             let cs = statements[0] as ClassStatement;
             expect(cs.annotations?.length).to.equal(2);
-            expect(cs.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(cs.annotations![0]).to.be.instanceof(AnnotationExpression);
             let stat1 = cs.body[0];
             let stat2 = cs.body[1];
             let f1 = cs.body[2];
             expect(stat1.annotations?.length).to.equal(2);
-            expect(stat1.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(stat1.annotations![0]).to.be.instanceof(AnnotationExpression);
             expect(stat2.annotations?.length).to.equal(2);
-            expect(stat2.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(stat2.annotations![0]).to.be.instanceof(AnnotationExpression);
             expect(f1.annotations?.length).to.equal(2);
-            expect(f1.annotations[0]).to.be.instanceof(AnnotationExpression);
+            expect(f1.annotations![0]).to.be.instanceof(AnnotationExpression);
         });
 
         it('ignores annotations on commented out lines', () => {
@@ -1274,18 +1331,18 @@ describe('parser', () => {
             expect(statements[0]).to.be.instanceof(FunctionStatement);
             let fn = statements[0] as FunctionStatement;
             expect(fn.annotations).to.exist;
-            expect(fn.annotations[0].getArguments()).to.deep.equal([]);
+            expect(fn.annotations![0].getArguments()).to.deep.equal([]);
 
             expect(statements[1]).to.be.instanceof(FunctionStatement);
             fn = statements[1] as FunctionStatement;
             expect(fn.annotations).to.exist;
-            expect(fn.annotations[0]).to.be.instanceof(AnnotationExpression);
-            expect(fn.annotations[0].getArguments()).to.deep.equal([
+            expect(fn.annotations![0]).to.be.instanceof(AnnotationExpression);
+            expect(fn.annotations![0].getArguments()).to.deep.equal([
                 'arg', 2, true,
                 { prop: 'value' }, [1, 2],
                 null
             ]);
-            let allArgs = fn.annotations[0].getArguments(false);
+            let allArgs = fn.annotations![0].getArguments(false);
             expect(allArgs.pop()).to.be.instanceOf(FunctionExpression);
         });
 
@@ -1302,7 +1359,794 @@ describe('parser', () => {
             expect(statements[0]).to.be.instanceof(FunctionStatement);
             let fn = statements[0] as FunctionStatement;
             expect(fn.annotations).to.exist;
-            expect(fn.annotations[0].getArguments()).to.deep.equal([-100]);
+            expect(fn.annotations![0].getArguments()).to.deep.equal([-100]);
+        });
+    });
+
+    describe('grouped type expressions', () => {
+        it('is not allowed in brightscript mode', () => {
+            let parser = parse(`
+                sub main(param as (string or integer))
+                    print param
+                end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.functionParameterTypeIsInvalid('param', '(')]);
+        });
+
+        it('allows group type expressions in parameters', () => {
+            let { diagnostics } = parse(`
+                sub main(param as (string or integer))
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows group type expressions in type casts', () => {
+            let { diagnostics } = parse(`
+                sub main(val)
+                    printThing(val as (string or integer))
+                end sub
+                sub printThing(thing as (string or integer))
+                    print thing
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows union of grouped type expressions', () => {
+            let { diagnostics } = parse(`
+                sub main(param as (string or integer) or (float or dynamic))
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows nested grouped type expressions', () => {
+            let { diagnostics } = parse(`
+                sub main(param as ((string or integer) or (float or dynamic)))
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+
+        it('allows complicated grouped type expression', () => {
+            let { diagnostics } = parse(`
+                sub main(param as (({name as string} and {age as integer}) or (string and SomeInterface) or Klass and roAssociativeArray) )
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+    });
+
+    describe('union types', () => {
+
+        it('is not allowed in brightscript mode', () => {
+            let parser = parse(`
+                sub main(param as string or integer)
+                    print param
+                end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()]);
+        });
+
+        it('allows union types in parameters', () => {
+            let { diagnostics } = parse(`
+                sub main(param as string or integer)
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows union types in type casts', () => {
+            let { diagnostics } = parse(`
+                sub main(val)
+                    printThing(val as string or integer)
+                end sub
+                sub printThing(thing as string or integer)
+                    print thing
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+    });
+
+
+    describe('intersection types', () => {
+
+        it('is not allowed in brightscript mode', () => {
+            let parser = parse(`
+                sub main(param as string and integer)
+                    print param
+                end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(parser.diagnostics, [DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()]);
+        });
+
+        it('allows intersection types in parameters', () => {
+            let { diagnostics } = parse(`
+                sub main(param as string and integer)
+                    print param
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows intersection types in type casts', () => {
+            let { diagnostics } = parse(`
+                sub main(val)
+                    printThing(val as string and integer)
+                end sub
+                sub printThing(thing as string and integer)
+                    print thing
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        describe('invalid syntax', () => {
+
+            it('flags union type with missing sides', () => {
+                let { diagnostics } = parse(`
+                    sub main(param as Thing or )
+                        print param
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.expectedIdentifierAfterKeyword('or').message]);
+            });
+
+            it('flags missing type inside binary type', () => {
+                let { diagnostics } = parse(`
+                    sub main(param as string or and float)
+                        print param
+                    end sub
+                `, ParseMode.BrighterScript);
+                expect(diagnostics[0]?.message).to.exist;
+            });
+        });
+    });
+
+    describe('typecast statement', () => {
+        it('allows typecast statement ', () => {
+            let { ast, diagnostics } = parse(`
+                typeCAST m AS roAssociativeArray
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(isTypecastStatement(ast.statements[0])).to.be.true;
+            const stmt = ast.statements[0] as TypecastStatement;
+            expect(stmt.tokens.typecast.text).to.eq('typeCAST');
+            expect(stmt.tokens.typecast).to.exist;
+        });
+
+        it('is disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                typecast m AS roAssociativeArray
+            `, ParseMode.BrightScript);
+            expectDiagnostics(diagnostics, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('typecast statements')
+            ]);
+        });
+
+        it('allows `typecast` for function name', () => {
+            let { ast, diagnostics } = parse(`
+                function typecast() as integer
+                    return 1
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect((ast.statements[0] as FunctionStatement).name.text).to.eq('typecast');
+        });
+
+        it('allows `typecast` for variable name', () => {
+            let { ast, diagnostics } = parse(`
+                function foo() as integer
+                    typecast = 1
+                    return typecast
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(((ast.statements[0] as FunctionStatement).func.body.statements[0] as AssignmentStatement).name.text).to.eq('typecast');
+        });
+
+        it('is allowed in function', () => {
+            let { diagnostics } = parse(`
+                function foo() as integer
+                    typecast m as MyObject
+                    return m.getNum()
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('is allowed in function literal', () => {
+            let { diagnostics } = parse(`
+                interface PiGetter
+                    pi as float
+                    function getPi() as float
+                end interface
+
+                function makePiGetter() as object
+                    x = {
+                        pi: 3.14,
+                        getPi: function() as float
+                            typecast m as PiGetter
+                            return m.pi
+                        end function
+                    }
+                    return x
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+    });
+
+    describe('alias statement', () => {
+        it('allows alias statement ', () => {
+            let { ast, diagnostics } = parse(`
+                ALIAS x = lcase
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(isAliasStatement(ast.statements[0])).to.be.true;
+            const stmt = ast.statements[0] as AliasStatement;
+            expect(stmt.tokens.alias.text).to.eq('ALIAS');
+            expect(stmt.tokens.value).to.exist;
+        });
+
+        it('is disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                alias x = lcase
+            `, ParseMode.BrightScript);
+            expectDiagnostics(diagnostics, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('alias statements')
+            ]);
+        });
+
+        it('allows `alias` for function name', () => {
+            let { ast, diagnostics } = parse(`
+                function alias() as integer
+                    return 1
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect((ast.statements[0] as FunctionStatement).name.text).to.eq('alias');
+        });
+
+        it('allows `alias` for variable name', () => {
+            let { ast, diagnostics } = parse(`
+                function foo() as integer
+                    alias = 1
+                    return alias
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(((ast.statements[0] as FunctionStatement).func.body.statements[0] as AssignmentStatement).name.text).to.eq('alias');
+        });
+    });
+
+    describe('type statement', () => {
+        it('allows type statement ', () => {
+            let { ast, diagnostics } = parse(`
+                TYPE x = string
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(isTypeStatement(ast.statements[0])).to.be.true;
+            const stmt = ast.statements[0] as TypeStatement;
+            expect(stmt.tokens.type.text).to.eq('TYPE');
+            expect(stmt.tokens.value).to.exist;
+        });
+
+        it('is disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                type x = string
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('type statements')
+            ]);
+        });
+
+        it('disallows `type` for function name', () => {
+            let { diagnostics } = parse(`
+                function type() as integer
+                    return 1
+                end function
+            `, ParseMode.BrighterScript);
+            expectDiagnostics(diagnostics, [
+                DiagnosticMessages.cannotUseReservedWordAsIdentifier('type').message
+            ]);
+        });
+
+        it('disallows `type` for variable name', () => {
+            let { diagnostics } = parse(`
+                function foo() as integer
+                    type = 1
+                    return type
+                end function
+            `, ParseMode.BrighterScript);
+            expectDiagnostics(diagnostics, [
+                DiagnosticMessages.cannotUseReservedWordAsIdentifier('type').message
+            ]);
+        });
+
+        it('has error when rhs is not a type', () => {
+            let { diagnostics } = parse(`
+                type x = 123
+            `, ParseMode.BrighterScript);
+            expectDiagnostics(diagnostics, [
+                DiagnosticMessages.expectedIdentifierAfterKeyword('=').message
+            ]);
+        });
+
+        it('allows type statement with complicated type', () => {
+            let { ast, diagnostics } = parse(`
+                type x = string or CustomKlass or roAssociativeArray
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(isTypeStatement(ast.statements[0])).to.be.true;
+            const stmt = ast.statements[0] as TypeStatement;
+            expect(stmt.tokens.type.text).to.eq('type');
+            expect(stmt.tokens.value).to.exist;
+        });
+    });
+
+
+    describe('inline interfaces', () => {
+        it('inline interface param types disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                sub test(foo as {x as string})
+                    print foo.x
+                end sub
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.functionParameterTypeIsInvalid('foo', '{').message
+            ]);
+        });
+
+        it('inline interface return types disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                function test() as {x as string}
+                    print {x: "hello"}
+                end function
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.invalidFunctionReturnType('{').message
+            ]);
+        });
+
+        it('inline interface as param type', () => {
+            let { ast, diagnostics } = parse(`
+                sub test(foo as {x as string})
+                    print foo.x
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements.length).to.eq(1);
+        });
+
+        it('inline interface as return type', () => {
+            let { ast, diagnostics } = parse(`
+               function test() as {x as string}
+                    print {x: "hello"}
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements.length).to.eq(1);
+        });
+
+        it('parses a big inline interface as param type', () => {
+            let { ast, diagnostics } = parse(`
+                sub test(foo as {
+                    x as string,
+                    y as {a as integer}
+                    z})
+                    print foo.x + y.a.toStr()
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements.length).to.eq(1);
+        });
+
+        it('allows optional members', () => {
+            let { ast, diagnostics } = parse(`
+                sub test(p as {x as string, optional y})
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements.length).to.eq(1);
+        });
+
+        it('is allowed as typecast', () => {
+            let { diagnostics } = parse(`
+                sub test(p)
+                    print (p as {name as string}).name
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('is allowed as class and interface field', () => {
+            let { diagnostics } = parse(`
+                class Klass
+                    x as {name as string}
+                end class
+                interface Iface
+                    y as {age as integer}
+                end interface
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have custom type as member type', () => {
+            let { diagnostics } = parse(`
+                interface IFace
+                   name as string
+                end interface
+                function test(z as {foo as IFace})
+                    return z.foo.name
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have per-member doc comment', () => {
+            let { diagnostics } = parse(`
+                interface IFace
+                    inline as {
+                        ' comment 1
+                        name as string
+                        ' comment 2
+                        age as integer
+                    }
+                end interface
+                function test(z as {foo as IFace})
+                    return z.foo.inline.name
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have string literals as members', () => {
+            let { diagnostics } = parse(`
+                function test(z as {"this is a stringliteral" as string})
+                    return z["this is a stringliteral"]
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+    });
+
+    describe('for each with types', () => {
+        it('parses without errors', () => {
+            let { diagnostics } = parse(`
+                function main()
+                    for each item as string in ["a", "b", "c"]
+                        print item
+                    end for
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows complicated expressions', () => {
+            let { diagnostics } = parse(`
+                function main(data)
+                    for each item as {a as integer or boolean, b as SomeInterface[], c as {id as string} } or string in data
+                        print item
+                    end for
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+    });
+
+    describe('line continuation', () => {
+        describe('binary operator continuation', () => {
+            it('is allowed after arithmetic operators in BrighterScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        a = x +
+                            y
+                        b = x -
+                            y
+                        c = x *
+                            y
+                        d = x /
+                            y
+                        e = x \\
+                            y
+                        f = x mod
+                            y
+                        g = x ^
+                            y
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('is allowed after boolean operators in BrighterScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        a = isValid and
+                            isEnabled
+                        b = isValid or
+                            isEnabled
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('is allowed after relational operators in BrighterScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        a = x =
+                            y
+                        b = x <>
+                            y
+                        c = x >
+                            y
+                        d = x >=
+                            y
+                        e = x <
+                            y
+                        f = x <=
+                            y
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('is not allowed in BrightScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        result = value1 +
+                                 value2
+                    end sub
+                `, ParseMode.BrightScript);
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.unexpectedToken('\n'),
+                    DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+                ]);
+            });
+        });
+
+        describe('function call argument continuation', () => {
+            it('is not allowed in BrightScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        result = foo(
+                            arg1,
+                            arg2
+                        )
+                    end sub
+                    sub foo(a, b)
+                    end sub
+                `, ParseMode.BrightScript);
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.unexpectedToken('\n'),
+                    DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                    DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+                ]);
+            });
+
+            it('is allowed in BrighterScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        result = foo(
+                            arg1,
+                            arg2
+                        )
+                    end sub
+                    sub foo(a, b)
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('does not affect inline objects passed as arguments in BrightScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        foo({
+                            key: "value"
+                        })
+                    end sub
+                    sub foo(a)
+                    end sub
+                `, ParseMode.BrightScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+        });
+
+        describe('minFirmwareVersion >= 15.3 in BrightScript mode', () => {
+            it('allows binary operator continuation in BrightScript mode when minFirmwareVersion is 15.3', () => {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        result = value1 +
+                                 value2
+                    end sub
+                `);
+                let { diagnostics } = Parser.parse(tokens, {
+                    mode: ParseMode.BrightScript,
+                    minFirmwareVersion: '15.3'
+                });
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('allows binary operator continuation in BrightScript mode when minFirmwareVersion is above 15.3', () => {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        result = value1 +
+                                 value2
+                    end sub
+                `);
+                let { diagnostics } = Parser.parse(tokens, {
+                    mode: ParseMode.BrightScript,
+                    minFirmwareVersion: '16.0.0'
+                });
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('does not allow binary operator continuation in BrightScript mode when minFirmwareVersion is below 15.3', () => {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        result = value1 +
+                                 value2
+                    end sub
+                `);
+                let { diagnostics } = Parser.parse(tokens, {
+                    mode: ParseMode.BrightScript,
+                    minFirmwareVersion: '11.0.0'
+                });
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.unexpectedToken('\n'),
+                    DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+                ]);
+            });
+
+            it('allows function call argument continuation in BrightScript mode when minFirmwareVersion is 15.3', () => {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        result = foo(
+                            arg1,
+                            arg2
+                        )
+                    end sub
+                    sub foo(a, b)
+                    end sub
+                `);
+                let { diagnostics } = Parser.parse(tokens, {
+                    mode: ParseMode.BrightScript,
+                    minFirmwareVersion: '15.3.0'
+                });
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('does not allow function call argument continuation in BrightScript mode when minFirmwareVersion is below 15.3', () => {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        result = foo(
+                            arg1,
+                            arg2
+                        )
+                    end sub
+                    sub foo(a, b)
+                    end sub
+                `);
+                let { diagnostics } = Parser.parse(tokens, {
+                    mode: ParseMode.BrightScript,
+                    minFirmwareVersion: '15.2.9'
+                });
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.unexpectedToken('\n'),
+                    DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                    DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+                ]);
+            });
+        });
+    });
+
+    describe('typed functions as types', () => {
+        it('disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                function test(func as function())
+                    return func()
+                end function
+             `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.unexpectedToken(')')
+            ]);
+        });
+
+        it('can be passed as param types', () => {
+            let { diagnostics } = parse(`
+                function test(func as function())
+                    return func()
+                end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have a return type', () => {
+            let { diagnostics } = parse(`
+                function test(func as sub() as integer) as integer
+                    return func()
+                end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can use sub or function', () => {
+            let { diagnostics } = parse(`
+                function test(func as sub() as integer) as integer
+                    return func()
+                end function
+
+                function test2(func as function() as integer) as integer
+                    return func()
+                 end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have primitive parameters', () => {
+            let { diagnostics } = parse(`
+                function test(func as function(name as string, num as integer) as integer) as integer
+                    return func("hello", 123)
+                end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have complex parameters', () => {
+            let { diagnostics } = parse(`
+                interface IFace
+                    name as string
+                end interface
+
+                function test(func as function(thing as IFace) as integer) as integer
+                    return func({name: "hello"})
+                end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have compound parameters', () => {
+            let { diagnostics } = parse(`
+                interface IFace
+                    name as string
+                end interface
+
+                function test(func as function(arg1 as string or integer, arg2 as IFace) as integer) as integer
+                    return func("hello", {name: "hello"})
+                end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can be used as return types', () => {
+            let { diagnostics } = parse(`
+                function test() as function() as integer
+                    return function() as integer
+                        return 123
+                    end function
+                end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have a union as return type', () => {
+            let { diagnostics } = parse(`
+                type foo = function() as integer or string
+                function test() as foo
+                    return function() as integer
+                        return 123
+                    end function
+                end function
+             `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
         });
     });
 });
@@ -1310,7 +2154,7 @@ describe('parser', () => {
 function parse(text: string, mode?: ParseMode) {
     let { tokens } = Lexer.scan(text);
     return Parser.parse(tokens, {
-        mode: mode
+        mode: mode!
     });
 }
 

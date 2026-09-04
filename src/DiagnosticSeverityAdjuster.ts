@@ -16,6 +16,11 @@ export class DiagnosticSeverityAdjuster {
 
     public createSeverityMap(diagnosticSeverityOverrides: BsConfig['diagnosticSeverityOverrides']): Map<string, DiagnosticSeverity> {
         const map = new Map<string, DiagnosticSeverity>();
+
+        if (!diagnosticSeverityOverrides) {
+            return map;
+        }
+
         Object.keys(diagnosticSeverityOverrides).forEach(key => {
             const value = diagnosticSeverityOverrides[key];
             switch (value) {

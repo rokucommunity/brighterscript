@@ -22,7 +22,7 @@ export class BrsTranspileState extends TranspileState {
      * Used to assist blocks in knowing when to add a comment statement to the same line as the first line of the parent
      */
     lineage = [] as Array<{
-        range: Range;
+        range?: Range;
     }>;
 
     /**

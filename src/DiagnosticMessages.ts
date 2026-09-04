@@ -78,9 +78,12 @@ export let DiagnosticMessages = {
         code: 1011,
         severity: DiagnosticSeverity.Warning
     }),
-    scriptImportCaseMismatch: (correctFilePath: string) => ({
+    scriptImportCaseMismatch: (correctFilePath: string, correctUri?: string) => ({
         message: `Script import path does not match casing of actual file path '${correctFilePath}'.`,
         code: 1012,
+        data: {
+            correctFilePath: correctUri ?? correctFilePath
+        },
         severity: DiagnosticSeverity.Warning
     }),
     fileNotReferencedByAnyOtherFile: () => ({
@@ -354,8 +357,8 @@ export let DiagnosticMessages = {
         code: 1065,
         severity: DiagnosticSeverity.Error
     }),
-    expectedStatementOrFunctionCallButReceivedExpression: () => ({
-        message: `Expected statement or function call but instead found expression`,
+    expectedStatementOrFunctionCallButReceivedExpression: (expressionType = 'expression') => ({
+        message: `Expected statement or function call but instead found ${expressionType}`,
         code: 1066,
         severity: DiagnosticSeverity.Error
     }),
@@ -724,14 +727,145 @@ export let DiagnosticMessages = {
         message: `Optional chaining may not be used in the left-hand side of an assignment`,
         code: 1139,
         severity: DiagnosticSeverity.Error
+    }),
+    /**
+     * @param name for function calls where we can't find the name of the function
+     * @param fullName if a namespaced name, this is the full name `alpha.beta.charlie`, otherwise it's the same as `name`
+     */
+    cannotFindFunction: (name: string, fullName?: string) => ({
+        message: `Cannot find function '${name}'`,
+        code: 1140,
+        data: {
+            name: name,
+            fullName: fullName ?? name
+        },
+        severity: DiagnosticSeverity.Error
+    }),
+    voidFunctionMayNotReturnValue: (functionType = 'function') => ({
+        message: `Void ${functionType} may not return a value`,
+        code: 1141,
+        severity: DiagnosticSeverity.Error
+    }),
+    nonVoidFunctionMustReturnValue: (functionType = 'function') => ({
+        message: `Non-void ${functionType} must return a value`,
+        code: 1142,
+        severity: DiagnosticSeverity.Error
+    }),
+    propAccessNotPermittedAfterFunctionCallInExpressionStatement: (accessDescription: string) => ({
+        message: `${accessDescription} access not permitted after a function call when used in an expression statement`,
+        code: 1143,
+        severity: DiagnosticSeverity.Error
+    }),
+    computedPropertyKeyMustBeConstantExpression: () => ({
+        message: `Computed property keys must be a compile-time constant (enum member or const value)`,
+        code: 1144,
+        severity: DiagnosticSeverity.Error
+    }),
+    computedAAKeyMustBeStringExpression: () => ({
+        message: `Computed associative array keys must resolve to a string value`,
+        code: 1145,
+        severity: DiagnosticSeverity.Error
+    }),
+    featureRequiresMinFirmwareVersion: (featureName: string, minimumVersion: string, configuredVersion: string) => ({
+        message: `'${featureName}' requires Roku firmware version ${minimumVersion} or higher (current target is ${configuredVersion})`,
+        code: 1146,
+        severity: DiagnosticSeverity.Error
+    }),
+    reservedBuiltinUsedAsValue: (name: string) => ({
+        message: `'${name}' is a reserved builtin and can only be used as a function call (e.g. '${name}(...)')`,
+        code: 1147,
+        severity: DiagnosticSeverity.Error
+    }),
+    /**
+     * Emitted when a block recovers from a wrong terminator (e.g. `while ... next` or `for ... end while`).
+     * `expected` lists the legal terminators in preferred-first order; `found` is the actual text.
+     * Quick fixes consume the structured `data` to build "Convert '<found>' to '<expected[i]>'" actions.
+     */
+    mismatchedEndingToken: (expected: string[] = [], found = '') => {
+        const expectedList = Array.isArray(expected) ? expected : [];
+        return {
+            message: `Expected ${expectedList.map(text => `'${text}'`).join(' or ')} but found '${found}'`,
+            code: 1148,
+            data: {
+                expected: expectedList,
+                found: found
+            },
+            severity: DiagnosticSeverity.Error
+        };
+    },
+    /**
+     * Callable was marked removed in `availability.os` or `availability.rsg`, and the project's
+     * effective firmware/rsg_version meets that threshold. The call is a hard error on device.
+     */
+    globalCallableRemoved: (name = '', axis: AvailabilityAxis = 'os', threshold = '', current = '') => ({
+        message: `'${name}' is removed in ${formatAvailabilityAxis(axis, threshold)} or higher (current target is ${current})`,
+        code: 1149,
+        data: { name: name, axis: axis, threshold: threshold, current: current },
+        severity: DiagnosticSeverity.Error
+    }),
+    /**
+     * Callable was marked deprecated in `availability.os` or `availability.rsg`, and the project's
+     * effective firmware/rsg_version meets that threshold. The call still works but should
+     * be migrated.
+     */
+    globalCallableDeprecated: (name = '', axis: AvailabilityAxis = 'os', threshold = '', current = '') => ({
+        message: `'${name}' is deprecated as of ${formatAvailabilityAxis(axis, threshold)} (current target is ${current})`,
+        code: 1150,
+        data: { name: name, axis: axis, threshold: threshold, current: current },
+        severity: DiagnosticSeverity.Warning
+    }),
+    rsgVersionRequiresMinFirmware: (rsgVersion: string, requiredFirmware: string, configuredFirmware: string) => ({
+        message: `rsg_version=${rsgVersion} requires Roku firmware version ${requiredFirmware} or higher (current target is ${configuredFirmware})`,
+        code: 1151,
+        severity: DiagnosticSeverity.Error
+    }),
+    invalidRsgVersionFormat: (value: string) => ({
+        message: `'${value}' is not a valid rsg_version (expected value like '1.2' or '1.3')`,
+        code: 1152,
+        severity: DiagnosticSeverity.Warning
+    }),
+    rsgVersionDeprecated: (rsgVersion: string, suggestedReplacement: string) => ({
+        message: `rsg_version=${rsgVersion} is deprecated; consider upgrading to rsg_version=${suggestedReplacement}`,
+        code: 1153,
+        severity: DiagnosticSeverity.Warning
+    }),
+    rsgVersionRemoved: (rsgVersion: string, removedAt: string, replacement: string) => ({
+        message: `rsg_version=${rsgVersion} was removed in firmware ${removedAt}; use rsg_version=${replacement}`,
+        code: 1154,
+        severity: DiagnosticSeverity.Error
+    }),
+    /**
+     * @param name the full name of the function, including namespace
+     * @param length the actual length of `name`
+     * @param maxLength the maximum length a function name may be before it gets truncated by the device at runtime
+     */
+    functionNameTooLong: (name: string, length: number, maxLength: number) => ({
+        message: `Function name '${name}' is ${length} characters long, which exceeds the maximum of ${maxLength}. It will be truncated when converted with ToStr()`,
+        code: 1155,
+        severity: DiagnosticSeverity.Warning
+    }),
+    xmlTagMismatch: (openingTag: string, closingTag: string) => ({
+        message: `Mismatched closing tag: expected '</${openingTag}>' but found '</${closingTag}>'`,
+        code: 1156,
+        severity: DiagnosticSeverity.Error
     })
 };
+
+export type AvailabilityAxis = 'os' | 'rsg';
+
+function formatAvailabilityAxis(axis: AvailabilityAxis, version: string): string {
+    return axis === 'os' ? `Roku OS ${version}` : `rsg_version=${version}`;
+}
 
 export const DiagnosticCodeMap = {} as Record<keyof (typeof DiagnosticMessages), number>;
 export let diagnosticCodes = [] as number[];
 for (let key in DiagnosticMessages) {
-    diagnosticCodes.push(DiagnosticMessages[key]().code);
-    DiagnosticCodeMap[key] = DiagnosticMessages[key]().code;
+    const typedKey = key as keyof typeof DiagnosticMessages;
+    //every factory returns an object with a `code` property regardless of its specific (possibly required) arguments,
+    //so it's safe to call each one with no arguments purely to read that `code` off the result
+    const getCode = DiagnosticMessages[typedKey] as () => { code: number };
+    diagnosticCodes.push(getCode().code);
+    DiagnosticCodeMap[typedKey] = getCode().code;
 }
 
 export interface DiagnosticInfo {
@@ -749,3 +883,14 @@ export type DiagnosticMessageType<K extends keyof D, D extends Record<string, (.
     ReturnType<D[K]> &
     //include the missing properties from BsDiagnostic
     Pick<BsDiagnostic, 'range' | 'file' | 'relatedInformation' | 'tags'>;
+
+/**
+ * Refines a diagnostic to its concrete `DiagnosticMessageType<K>` shape (including the typed `data`
+ * payload) when its code matches `DiagnosticCodeMap[key]`.
+ */
+export function isDiagnosticOfType<K extends keyof typeof DiagnosticMessages>(
+    diagnostic: { code?: number | string },
+    key: K
+): diagnostic is DiagnosticMessageType<K> {
+    return diagnostic.code === DiagnosticCodeMap[key];
+}

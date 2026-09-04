@@ -6,7 +6,658 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
-## [0.64.4](https://github.com/rokucommunity/brighterscript/compare/v0.64.3...0.64.4) - 2023-05-10
+## [0.73.1](https://github.com/rokucommunity/brighterscript/compare/0.73.0...v0.73.1) - 2026-09-02
+### Added
+ - Add <field> and <function> completions in xml interfaces ([#1748](https://github.com/rokucommunity/brighterscript/pull/1748))
+ - Add warning for function names that exceed the truncation limit ([#1777](https://github.com/rokucommunity/brighterscript/pull/1777))
+ - Add SceneGraph XML element and attribute completions ([#1741](https://github.com/rokucommunity/brighterscript/pull/1741))
+ - Report mismatched XML element pairs ([#1746](https://github.com/rokucommunity/brighterscript/pull/1746))
+### Changed
+ - Security enhancements (([#1773](https://github.com/rokucommunity/brighterscript/pull/1773), [#1775](https://github.com/rokucommunity/brighterscript/pull/1775), [#1782](https://github.com/rokucommunity/brighterscript/pull/1782))
+ - Keep synthesized Tokens on the lexer's hidden class ([#1781](https://github.com/rokucommunity/brighterscript/pull/1781))
+ - Cap LSP worker thread pool to fix memory scaling with project count ([#1776](https://github.com/rokucommunity/brighterscript/pull/1776))
+ - upgrade to [@rokucommunity/logger@0.4.2](https://github.com/rokucommunity/logger/blob/master/CHANGELOG.md#042---2026-09-02). Notable changes since 0.4.0:
+     - Security enhancements ([#38](https://github.com/rokucommunity/logger/pull/38), [#39](https://github.com/rokucommunity/logger/pull/39))
+     - Serialize Error.cause (recursively) when logging ([#33](https://github.com/rokucommunity/logger/pull/33))
+ - upgrade to [roku-deploy@3.18.4](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3184---2026-09-02). Notable changes since 3.17.6:
+     - Migrate networking library from `postman-request` to `needle` ([#282](https://github.com/rokucommunity/roku-deploy/pull/282))
+### Fixed
+ - Fix compile break against roku-deploy 3.18 ([#1752](https://github.com/rokucommunity/brighterscript/pull/1752))
+
+
+
+## [0.73.0](https://github.com/rokucommunity/brighterscript/compare/0.72.5...v0.73.0) - 2026-06-29
+### Changed
+ - Validate eval/rsg_version against firmware lifecycle ([#1698](https://github.com/rokucommunity/brighterscript/pull/1698))
+ - Reduced unessisary unnecessary production dependencies ([#1735](https://github.com/rokucommunity/brighterscript/pull/1735)) ([#1736](https://github.com/rokucommunity/brighterscript/pull/1736)) ([#1737](https://github.com/rokucommunity/brighterscript/pull/1737))
+ - upgrade to [@rokucommunity/logger@0.4.0](https://github.com/rokucommunity/logger/blob/master/CHANGELOG.md#040---2026-06-29).
+
+
+
+## [0.72.5](https://github.com/rokucommunity/brighterscript/compare/0.72.4...v0.72.5) - 2026-06-10
+### Changed
+ - upgrade to [@rokucommunity/logger@0.3.13](https://github.com/rokucommunity/logger/blob/master/CHANGELOG.md#0313---2026-06-08). Notable changes since 0.3.12:
+     - chore: Security updates ([#15](https://github.com/rokucommunity/logger/pull/15), [#14](https://github.com/rokucommunity/logger/pull/14), [#27](https://github.com/rokucommunity/logger/pull/27), [#26](https://github.com/rokucommunity/logger/pull/26), [#24](https://github.com/rokucommunity/logger/pull/24), [#21](https://github.com/rokucommunity/logger/pull/21), [#19](https://github.com/rokucommunity/logger/pull/19))
+ - upgrade to [roku-deploy@3.17.6](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3176---2026-06-04). Notable changes since 3.17.5:
+     - Fix case-insensitive matching for absolute `files.src` glob patterns on case-insensitive file systems ([#279](https://github.com/rokucommunity/roku-deploy/pull/279))
+
+
+
+## [0.72.4](https://github.com/rokucommunity/brighterscript/compare/0.72.3...v0.72.4) - 2026-05-30
+### Changed
+ - upgrade to [roku-deploy@3.17.5](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3175---2026-05-30). Notable changes since 3.17.4:
+     - Preserve `!` glob-negation prefix when using normalizeFilesArray ([#277](https://github.com/rokucommunity/roku-deploy/pull/277))
+
+
+
+## [0.72.3](https://github.com/rokucommunity/brighterscript/compare/0.72.2...v0.72.3) - 2026-05-27
+### Added
+ - parameter name inlay hints ([#1703](https://github.com/rokucommunity/brighterscript/pull/1703))
+
+
+
+## [0.72.2](https://github.com/rokucommunity/brighterscript/compare/0.72.1...v0.72.2) - 2026-05-19
+### Changed
+ - upgrade to [@rokucommunity/logger@0.3.12](https://github.com/rokucommunity/logger/blob/master/CHANGELOG.md#0312---2026-05-19). Notable changes since 0.3.11:
+     - Security enhancements ([#17](https://github.com/rokucommunity/logger/pull/17))
+ - upgrade to [roku-deploy@3.17.4](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3174---2026-05-19). Notable changes since 3.17.2:
+     - Security enhancements ([#263](https://github.com/rokucommunity/roku-deploy/pull/263))
+### Fixed
+ - Security enhancements ([#1714](https://github.com/rokucommunity/brighterscript/pull/1714))
+
+
+
+## [0.72.1](https://github.com/rokucommunity/brighterscript/compare/0.72.0...v0.72.1) - 2026-05-11
+### Added
+ - Add diagnosticReporter config option ([#1701](https://github.com/rokucommunity/brighterscript/pull/1701))
+ - Add bs:disable / bs:enable block directives and diagnostic suppression quick fixes ([#1699](https://github.com/rokucommunity/brighterscript/pull/1699))
+ - Recover from mismatched loop terminators with quick fixes ([#1696](https://github.com/rokucommunity/brighterscript/pull/1696))
+ - Add `validate` bsconfig flag to skip validation phase ([#1687](https://github.com/rokucommunity/brighterscript/pull/1687))
+### Changed
+ - Diagnose reserved BrightScript builtins used as values ([#1697](https://github.com/rokucommunity/brighterscript/pull/1697))
+ - allow line continuation in .brs files when minFirmwareVersion >= 15.3 ([#1693](https://github.com/rokucommunity/brighterscript/pull/1693))
+ - Reload projects when manifest file changes ([#1700](https://github.com/rokucommunity/brighterscript/pull/1700))
+ - upgrade to [roku-deploy@3.17.2](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3172---2026-05-05). Notable changes since 3.17.1:
+     - Expanded the default files array to include the locale folder ([#237](https://github.com/rokucommunity/roku-deploy/pull/237))
+
+
+
+## [0.72.0](https://github.com/rokucommunity/brighterscript/compare/0.71.1...v0.72.0) - 2026-04-30
+### Added
+ - Add `relativeSourceMaps` option for portable sourcemaps ([#1624](https://github.com/rokucommunity/brighterscript/pull/1624))
+ - added `source fix all` code action support ([#1659](https://github.com/rokucommunity/brighterscript/pull/1659))
+ - added selection range provider support to lsp capabilities ([#1657](https://github.com/rokucommunity/brighterscript/pull/1657))
+ - Add `minFirmwareVersion` setting in bsconfig.json ([#1678](https://github.com/rokucommunity/brighterscript/pull/1678))
+ - Support line continuation ([#1667](https://github.com/rokucommunity/brighterscript/pull/1667))
+### Changed
+ - Auto-update imports when files are renamed through LSP ([#1688](https://github.com/rokucommunity/brighterscript/pull/1688))
+ - Limit project activation concurrency to 3 and is user configurable ([#1627](https://github.com/rokucommunity/brighterscript/pull/1627))
+ - Chain prebuild sourcemaps through BrighterScript transpile ([#1676](https://github.com/rokucommunity/brighterscript/pull/1676))
+ - Report const cycle diagnostic per node to match class convention ([#1681](https://github.com/rokucommunity/brighterscript/pull/1681))
+ - upgrade to [roku-deploy@3.17.1](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3171---2026-04-27). Notable changes since 3.16.5:
+### Fixed
+ - performance: share per-file namespace data via lazy ScopeNamespaceLookup view ([#1684](https://github.com/rokucommunity/brighterscript/pull/1684))
+ - performance: share BscSymbol references in SymbolTable.mergeSymbolTable ([#1682](https://github.com/rokucommunity/brighterscript/pull/1682))
+ - performance: lazy-allocate NamespaceContainer's optional fields ([#1683](https://github.com/rokucommunity/brighterscript/pull/1683))
+ - Fix cross-file const inlining and flag const cycles ([#1680](https://github.com/rokucommunity/brighterscript/pull/1680))
+
+
+
+## [0.71.1](https://github.com/rokucommunity/brighterscript/compare/0.71.0...v0.71.1) - 2026-04-14
+### Changed
+ - upgrade to [roku-deploy@3.16.5](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3165---2026-04-13). Notable changes since 3.16.3:
+     - Resolve files array staging option ([#249](https://github.com/rokucommunity/roku-deploy/pull/249))
+     - Fix `zipFolder` bug that wasn't properly handling absolute stagingDir path ([#245](https://github.com/rokucommunity/roku-deploy/pull/245))
+
+
+
+## [0.71.0](https://github.com/rokucommunity/brighterscript/compare/0.70.4...v0.71.0) - 2026-03-27
+### Added
+ - Add computed property names (compile-time support only) ([#1658](https://github.com/rokucommunity/brighterscript/pull/1658))
+### Changed
+ - More quick fixes and fix all quick fixes ([#1662](https://github.com/rokucommunity/brighterscript/pull/1662))
+  - Bump picomatch from 2.3.1 to 2.3.2 ([#1661](https://github.com/rokucommunity/brighterscript/pull/1661))
+ - Bump picomatch from 2.3.1 to 2.3.2 in /benchmarks ([#1660](https://github.com/rokucommunity/brighterscript/pull/1660))
+
+ - 
+ ### Fixed
+ - bugfix/small perf improvements ([#1663](https://github.com/rokucommunity/brighterscript/pull/1663))
+
+
+
+## [0.70.4](https://github.com/rokucommunity/brighterscript/compare/0.70.3...v0.70.4) - 2026-03-24
+### Added
+ - Add definition provider for import statement ([#1595](https://github.com/rokucommunity/brighterscript/pull/1595))
+### Changed
+ - cache PathCollection per project in flushDocumentChanges ([#1628](https://github.com/rokucommunity/brighterscript/pull/1628))
+ - debounce `onDidChangeWatchedFiles` events ([#1626](https://github.com/rokucommunity/brighterscript/pull/1626))
+ - spelling fix ([#1621](https://github.com/rokucommunity/brighterscript/pull/1621))
+ - Backport `for each` type syntax from V1 -> V0 ([#1617](https://github.com/rokucommunity/brighterscript/pull/1617))
+ - Backport V1 Typed function type syntax to v0 ([#1623](https://github.com/rokucommunity/brighterscript/pull/1623))
+ - Backport intersection type and grouped type expressions ([#1608](https://github.com/rokucommunity/brighterscript/pull/1608))
+ - Backport TypeStatement syntax from v1 to v0 ([#1600](https://github.com/rokucommunity/brighterscript/pull/1600))
+ - Backport v1 inline interface syntax ([#1592](https://github.com/rokucommunity/brighterscript/pull/1592))
+ - chore: Add AI agent instructions ([#1654](https://github.com/rokucommunity/brighterscript/pull/1654))
+ - chore: Set up comprehensive Copilot coding agent instructions ([#1650](https://github.com/rokucommunity/brighterscript/pull/1650))
+ - chore: Ensure we have consistent line endings ([#1642](https://github.com/rokucommunity/brighterscript/pull/1642))
+ - upgrade to [roku-deploy@3.16.3](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3163---2026-03-24). Notable changes since 3.14.4:
+     - Bump flatted from 3.2.2 to 3.4.2 ([#236](https://github.com/rokucommunity/roku-deploy/pull/236))
+     - Bump minimatch from 3.1.2 to 3.1.5 ([#234](https://github.com/rokucommunity/roku-deploy/pull/234))
+     - Bump ajv from 6.12.6 to 6.14.0 ([#232](https://github.com/rokucommunity/roku-deploy/pull/232))
+     - Bump lodash from 4.17.21 to 4.17.23 ([#227](https://github.com/rokucommunity/roku-deploy/pull/227))
+     - Add ecpSettingMode to device-info interface ([#225](https://github.com/rokucommunity/roku-deploy/pull/225))
+     - Add support for detecting ecpNetworkAccessMode ([#223](https://github.com/rokucommunity/roku-deploy/pull/223))
+     - Support installing and deleting component libraries ([#220](https://github.com/rokucommunity/roku-deploy/pull/220))
+### Fixed
+ - chore: fix issue with running tests on newer node versions ([#1644](https://github.com/rokucommunity/brighterscript/pull/1644))
+ - Fix confusing diagnostic when dottedGet follows function call in ExpressionStatement ([#1598](https://github.com/rokucommunity/brighterscript/pull/1598))
+ - Typedef namespace param ([#1641](https://github.com/rokucommunity/brighterscript/pull/1641))
+
+
+
+## [0.70.3](https://github.com/rokucommunity/brighterscript/compare/0.70.2...v0.70.3) - 2025-10-31
+### Changed
+ - upgrade to [roku-deploy@3.14.4](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3144---2025-10-30). Notable changes since 3.13.0:
+     - Add specific error classes for reboot and check for updates functions ([#216](https://github.com/rokucommunity/brighterscript/pull/216))
+     - Add 'rebootDevice' and 'checkForUpdate' functionality for supported OS versions ([#208](https://github.com/rokucommunity/brighterscript/pull/208))
+### Fixed
+ - Fix crash when bsc plugin in worker loads another version of bsc ([#1579](https://github.com/rokucommunity/brighterscript/pull/1579))
+ - Fix recursive const and enum resolution during transpilation ([#1578](https://github.com/rokucommunity/brighterscript/pull/1578))
+
+
+
+## [0.70.2](https://github.com/rokucommunity/brighterscript/compare/0.70.1...v0.70.2) - 2025-10-10
+### Changed
+ - Add info for brightscript components `roUtils` and `roRenderThreadQueue` ([#1574](https://github.com/rokucommunity/brighterscript/pull/1574))
+ - Roku sdk updates ([#1573](https://github.com/rokucommunity/brighterscript/pull/1573))
+
+
+
+## [0.70.1](https://github.com/rokucommunity/brighterscript/compare/0.70.0...v0.70.1) - 2025-09-11
+### Changed
+ - Flag param names that are reserved words ([#1556](https://github.com/rokucommunity/brighterscript/pull/1556))
+### Fixed
+ - Fix for adding files on beforeProgramValidate ([#1568](https://github.com/rokucommunity/brighterscript/pull/1568))
+ - Fix typdef generation of default param func ([#1551](https://github.com/rokucommunity/brighterscript/pull/1551))
+
+
+
+## [0.70.0](https://github.com/rokucommunity/brighterscript/compare/0.69.13...v0.70.0) - 2025-08-11
+### Added
+ - Transpile class methods as named functions ([#1548](https://github.com/rokucommunity/brighterscript/pull/1548))
+### Changed
+ - upgrade to [roku-deploy@3.13.0](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3130---2025-08-04). Notable changes since 3.12.6:
+     - Add standards-compliant User-Agent header ([#203](https://github.com/rokucommunity/brighterscript/pull/203))
+
+
+
+## [0.69.13](https://github.com/rokucommunity/brighterscript/compare/0.69.12...v0.69.13) - 2025-08-04
+### Added
+ - Add projectDiscoveryExclude setting and files.watcherExclude support ([#1535](https://github.com/rokucommunity/brighterscript/pull/1535))
+ - Add max depth configuration for Roku project discovery ([#1533](https://github.com/rokucommunity/brighterscript/pull/1533))
+### Fixed
+ - Fix signature help crash on malformed function declarations ([#1536](https://github.com/rokucommunity/brighterscript/pull/1536))
+
+
+
+## [0.69.12](https://github.com/rokucommunity/brighterscript/compare/0.69.11...v0.69.12) - 2025-07-07
+### Fixed
+ - Fix discovery when `projects` is empty ([#1529](https://github.com/rokucommunity/brighterscript/pull/1529))
+
+
+
+## [0.69.11](https://github.com/rokucommunity/brighterscript/compare/0.69.10...v0.69.11) - 2025-07-03
+### Added
+ - Add `enableProjectDiscovery` language server option ([#1520](https://github.com/rokucommunity/brighterscript/pull/1520), [#1525](https://github.com/rokucommunity/brighterscript/pull/1525))
+### Changed
+ - chore: add some docs about `ObserveField` namespace caveats ([#1513](https://github.com/rokucommunity/brighterscript/pull/1513))
+ - Support `projects` array in settings ([#1521](https://github.com/rokucommunity/brighterscript/pull/1521))
+ - Improve `manifest` discovery ([#1518](https://github.com/rokucommunity/brighterscript/pull/1518))
+ - Improve `bsconfig.json` auto-discovery ([#1512](https://github.com/rokucommunity/brighterscript/pull/1512))
+
+
+
+## [0.69.10](https://github.com/rokucommunity/brighterscript/compare/0.69.9...v0.69.10) - 2025-06-03
+### Changed
+ - upgrade to [roku-deploy@3.12.6](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3126---2025-06-03). Notable changes since 3.12.5:
+     - chore: Upgrade to the undent package instead of dedent ([#196](https://github.com/rokucommunity/brighterscript/pull/196))
+     - chore: Shared CI remove merged check on publish releases ([#194](https://github.com/rokucommunity/brighterscript/pull/194))
+
+
+
+## [0.69.9](https://github.com/rokucommunity/brighterscript/compare/0.69.8...v0.69.9) - 2025-05-09
+### Added
+ - Add `bsc0` cli binary name ([#1490](https://github.com/rokucommunity/brighterscript/pull/1490))
+
+
+
+## [0.69.8](https://github.com/rokucommunity/brighterscript/compare/0.69.7...v0.69.8) - 2025-05-05
+### Changed
+ - upgrade to [@rokucommunity/logger@0.3.11](https://github.com/rokucommunity/logger/blob/master/CHANGELOG.md#0311---2025-05-05). Notable changes since 0.3.10:
+ - upgrade to [roku-deploy@3.12.5](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3125---2025-05-05). Notable changes since 3.12.4:
+
+
+
+## [0.69.7](https://github.com/rokucommunity/brighterscript/compare/0.69.6...v0.69.7) - 2025-04-23
+### Added
+ - flag incorrect return statements in functions and subs ([#1463](https://github.com/rokucommunity/brighterscript/pull/1463))
+### Fixed
+ - prevent runtime crash for non-referencable funcs in ternary and null coalescing ([#1474](https://github.com/rokucommunity/brighterscript/pull/1474))
+ - fix `removeParameterTypes` compile errors for return types ([#1414](https://github.com/rokucommunity/brighterscript/pull/1414))
+
+
+
+## [0.69.6](https://github.com/rokucommunity/brighterscript/compare/v0.69.5...v0.69.6) - 2025-04-09
+### Changed
+ - Updated the type definition of the `InStr` global callable ([#1456](https://github.com/rokucommunity/brighterscript/pull/1456))
+
+
+
+## [0.69.5](https://github.com/rokucommunity/brighterscript/compare/v0.69.4...v0.69.5) - 2025-04-03
+### Fixed
+ - more safely wrap expressions for template string transpile ([#1445](https://github.com/rokucommunity/brighterscript/pull/1445))
+
+
+
+## [0.69.4](https://github.com/rokucommunity/brighterscript/compare/v0.69.3...v0.69.4) - 2025-03-31
+### Changed
+ - Support plugin factory detecting brighterscript version ([#1438](https://github.com/rokucommunity/brighterscript/pull/1438))
+ - (chore) Migration to the new shared CI ([#1440](https://github.com/rokucommunity/brighterscript/pull/1440))
+ - upgrade to [@rokucommunity/logger@0.3.10](https://github.com/rokucommunity/logger/blob/master/CHANGELOG.md#0310---2025-03-26). Notable changes since 0.3.9:
+     - Added the ability to turn off timestamps in the output and fixed a potental crash if the format string was empty ([logger#11](https://github.com/rokucommunity/logger/pull/11))
+
+
+
+## [0.69.3](https://github.com/rokucommunity/brighterscript/compare/v0.69.2...v0.69.3) - 2025-03-20
+### Changed
+ - Adds `Alias` statement syntax from v1 to v0 ([#1430](https://github.com/rokucommunity/brighterscript/pull/1430))
+ - Remove temporary code that was accidentally committed ([#1432](https://github.com/rokucommunity/brighterscript/pull/1432))
+### Fixed
+ - Fixed `getClosestExpression` bug to return `undefined` when position not found ([#1433](https://github.com/rokucommunity/brighterscript/pull/1433))
+
+
+
+## [0.69.2](https://github.com/rokucommunity/brighterscript/compare/v0.69.1...v0.69.2) - 2025-03-13
+### Changed
+ - Significantly improve the performance of standardizePath ([#1425](https://github.com/rokucommunity/brighterscript/pull/1425))
+ - Backport v1 typecast syntax to v0 ([#1421](https://github.com/rokucommunity/brighterscript/pull/1421))
+
+
+
+## [0.69.1](https://github.com/rokucommunity/brighterscript/compare/v0.69.0...v0.69.1) - 2025-03-10
+### Changed
+ - Prevent running the lsp project in a worker thread ([#1423](https://github.com/rokucommunity/brighterscript/pull/1423))
+
+
+
+## [0.69.0](https://github.com/rokucommunity/brighterscript/compare/v0.68.5...v0.69.0) - 2025-02-10
+### Changed
+ - Language Server Rewrite ([#993](https://github.com/rokucommunity/brighterscript/pull/993))
+
+
+
+## [0.68.5](https://github.com/rokucommunity/brighterscript/compare/v0.68.4...v0.68.5) - 2025-02-06
+### Added
+ - Add experimental `validate` flag to ProgramBuilder.run() ([#1409](https://github.com/rokucommunity/brighterscript/pull/1409))
+
+
+
+## [0.68.4](https://github.com/rokucommunity/brighterscript/compare/v0.68.3...v0.68.4) - 2025-01-22
+### Changed
+ - upgrade to [roku-deploy@3.12.4](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3124---2025-01-22). Notable changes since 3.12.3:
+     - fixed an issue with 577 error codes ([roku-deploy#182](https://github.com/rokucommunity/roku-deploy/pull/182))
+
+
+
+## [0.68.3](https://github.com/rokucommunity/brighterscript/compare/v0.68.2...v0.68.3) - 2025-01-13
+### Changed
+ - Export more items ([#1394](https://github.com/rokucommunity/brighterscript/pull/1394))
+### Fixed
+ - Fix class transpile issue with child class constructor not inherriting parent params ([#1390](https://github.com/rokucommunity/brighterscript/pull/1390))
+
+
+
+## [0.68.2](https://github.com/rokucommunity/brighterscript/compare/v0.68.1...v0.68.2) - 2024-12-06
+### Changed
+ - Add more convenience exports from vscode-languageserver ([#1359](https://github.com/rokucommunity/brighterscript/pull/1359))
+ - upgrade to [roku-deploy@3.12.3](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3123---2024-12-06). Notable changes since 3.12.2:
+     - Fix issues with detecting "check for updates required" ([roku-deploy#181](https://github.com/rokucommunity/roku-deploy/pull/181))
+     - Identify when a 577 error is thrown, send a new developer friendly message ([roku-deploy#180](https://github.com/rokucommunity/roku-deploy/pull/180))
+     - Bump dependencies to remove audit issues ([roku-deploy#178](https://github.com/rokucommunity/roku-deploy/pull/178))
+
+
+
+## [0.68.1](https://github.com/rokucommunity/brighterscript/compare/v0.68.0...v0.68.1) - 2024-11-26
+### Added
+ - Add Namespace Source Literals ([#1354](https://github.com/rokucommunity/brighterscript/pull/1354))
+ - Language server crash fix ([#1353](https://github.com/rokucommunity/brighterscript/pull/1353))
+### Fixed
+ - Fix bug with ternary transpile for indexed set ([#1357](https://github.com/rokucommunity/brighterscript/pull/1357))
+ - Enhance lexer to support long numeric literals with type designators ([#1351](https://github.com/rokucommunity/brighterscript/pull/1351))
+
+
+
+## [0.68.0](https://github.com/rokucommunity/brighterscript/compare/v0.67.8...v0.68.0) - 2024-11-21
+### Changed
+ - Fix issues with the ast walkArray function ([#1347](https://github.com/rokucommunity/brighterscript/pull/1347))
+ - Optimize ternary transpilation for assignments ([#1341](https://github.com/rokucommunity/brighterscript/pull/1341))
+
+
+
+## [0.67.8](https://github.com/rokucommunity/brighterscript/compare/v0.67.7...v0.67.8) - 2024-10-18
+### Changed
+ - upgrade to [roku-deploy@3.12.2](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3122---2024-10-18). Notable changes since 3.12.1:
+     - fixes #175 - updated regex to find a signed package on `/plugin_package` page ([roku-deploy#176](https://github.com/rokucommunity/roku-deploy/pull/176))
+### Fixed
+ - namespace-relative transpile bug for standalone file ([#1324](https://github.com/rokucommunity/brighterscript/pull/1324))
+ - Prevent crash when `ProgramBuilder.run` called with no options ([#1316](https://github.com/rokucommunity/brighterscript/pull/1316))
+
+
+
+## [0.67.7](https://github.com/rokucommunity/brighterscript/compare/v0.67.6...v0.67.7) - 2024-09-25
+### Changed
+ - Ast node clone ([#1281](https://github.com/rokucommunity/brighterscript/pull/1281))
+
+
+
+## [0.67.6](https://github.com/rokucommunity/brighterscript/compare/v0.67.5...v0.67.6) - 2024-09-05
+### Added
+ - support for `roIntrinsicDouble` ([#1291](https://github.com/rokucommunity/brighterscript/pull/1291))
+ - support for resolving `sourceRoot` at time of config load ([#1290](https://github.com/rokucommunity/brighterscript/pull/1290))
+### Changed
+ - document plugin naming convention ([#1284](https://github.com/rokucommunity/brighterscript/pull/1284))
+
+
+
+## [0.67.5](https://github.com/rokucommunity/brighterscript/compare/v0.67.4...v0.67.5) - 2024-07-31
+### Fixed
+ - templatestring support for `annotation.getArguments()` ([#1264](https://github.com/rokucommunity/brighterscript/pull/1264))
+
+
+
+## [0.67.4](https://github.com/rokucommunity/brighterscript/compare/v0.67.3...v0.67.4) - 2024-07-24
+### Changed
+ - upgrade to [roku-deploy@3.12.1](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3121---2024-07-19). Notable changes since 3.12.0:
+     - Fix bug with absolute paths and getDestPath ([roku-deploy#171](https://github.com/rokucommunity/roku-deploy/pull/171))
+
+
+
+## [0.67.3](https://github.com/rokucommunity/brighterscript/compare/v0.67.2...v0.67.3) - 2024-06-14
+### Changed
+ - Flag using devDependency in production code ([#1222](https://github.com/rokucommunity/brighterscript/pull/1222))
+### Fixed
+ - Fix crash with missing scope ([#1234](https://github.com/rokucommunity/brighterscript/pull/1234))
+ - fix: conform bsconfig.schema.json to strict types ([#1205](https://github.com/rokucommunity/brighterscript/pull/1205))
+
+
+
+## [0.67.2](https://github.com/rokucommunity/brighterscript/compare/v0.67.1...v0.67.2) - 2024-06-03
+### Changed
+ - Fix crash with optional chaining in signature help ([#1207](https://github.com/rokucommunity/brighterscript/pull/1207))
+
+
+
+## [0.67.1](https://github.com/rokucommunity/brighterscript/compare/v0.67.0...v0.67.1) - 2024-05-16
+### Fixed
+ - remove ascii color chars in language server logs ([#1189](https://github.com/rokucommunity/brighterscript/pull/1189))
+ - crash when diagnostic is missing range ([#1174](https://github.com/rokucommunity/brighterscript/pull/1174))
+
+
+
+## [0.67.0](https://github.com/rokucommunity/brighterscript/compare/v0.65.27...v0.67.0) - 2024-05-10
+### Changed
+ - Fix formatting with logger output ([#1171](https://github.com/rokucommunity/brighterscript/pull/1171))
+ - Move function calls to separate diagnostic ([#1169](https://github.com/rokucommunity/brighterscript/pull/1169))
+ - resolve the stagingDir option relative to the bsconfig.json file ([#1148](https://github.com/rokucommunity/brighterscript/pull/1148))
+ - Upgrade to @rokucommunity/logger ([#1137](https://github.com/rokucommunity/brighterscript/pull/1137))
+
+
+
+## 0.66.0
+This release was skipped because we decided to change from the v0.66 alphas to move those breaking changes into v1. 
+
+
+
+## [0.65.27](https://github.com/rokucommunity/brighterscript/compare/v0.65.26...v0.65.27) - 2024-03-27
+### Added
+ - Plugin hook provide workspace symbol ([#1118](https://github.com/rokucommunity/brighterscript/pull/1118))
+ - Plugin hook for documentSymbol ([#1116](https://github.com/rokucommunity/brighterscript/pull/1116))
+### Changed
+ - Upgade LSP packages ([#1117](https://github.com/rokucommunity/brighterscript/pull/1117))
+### Fixed
+ - Improve workspace/document symbol handling ([#1120](https://github.com/rokucommunity/brighterscript/pull/1120))
+ - Increase max param count diagnostic to 63 ([#1112](https://github.com/rokucommunity/brighterscript/pull/1112))
+
+
+
+## [0.65.26](https://github.com/rokucommunity/brighterscript/compare/v0.65.25...v0.65.26) - 2024-03-13
+### Fixed
+ - Prevent unused variable warnings on transpiled ternary and null coalescence expressions ([#1101](https://github.com/rokucommunity/brighterscript/pull/1101))
+
+
+
+## [0.65.25](https://github.com/rokucommunity/brighterscript/compare/v0.65.24...v0.65.25) - 2024-03-07
+### Added
+ - Allow negative patterns in diagnostic filters ([#1078](https://github.com/rokucommunity/brighterscript/pull/1078))
+ - Support when tokens have null ranges ([#1072](https://github.com/rokucommunity/brighterscript/pull/1072))
+ - Support whitespace in conditional compile keywords ([#1090](https://github.com/rokucommunity/brighterscript/pull/1090))
+### Changed
+ - Add `create-test-package` command for easier tgz testing ([#1088](https://github.com/rokucommunity/brighterscript/pull/1088))
+ - Bump ip from 2.0.0 to 2.0.1 in /benchmarks ([#1079](https://github.com/rokucommunity/brighterscript/pull/1079))
+ - Reduce null safety issues in Statement and Expression subclasses ([#1033](https://github.com/rokucommunity/brighterscript/pull/1033))
+
+
+
+## [0.65.24](https://github.com/rokucommunity/brighterscript/compare/v0.65.23...v0.65.24) - 2024-03-01
+### Changed
+ - upgrade to [roku-deploy@3.12.0](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3120---2024-03-01). Notable changes since 3.11.3:
+     - Support overriding various package upload form data ([roku-deploy#136](https://github.com/rokucommunity/roku-deploy/pull/136))
+
+
+
+## [0.65.23](https://github.com/rokucommunity/brighterscript/compare/v0.65.22...v0.65.23) - 2024-02-29
+### Changed
+ - upgrade to [roku-deploy@3.11.3](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3113---2024-02-29). Notable changes since 3.11.2:
+     - Retry the convertToSquahsfs request given the HPE_INVALID_CONSTANT error ([roku-deploy#145](https://github.com/rokucommunity/roku-deploy/pull/145))
+### Fixed
+ - empty interfaces break the parser ([#1082](https://github.com/rokucommunity/brighterscript/pull/1082))
+
+
+## [0.65.22](https://github.com/rokucommunity/brighterscript/compare/v0.65.21...0.65.22) - 2024-02-09
+### Added
+ - support for `provideReferences` in plugins ([#1066](https://github.com/rokucommunity/brighterscript/pull/1066))
+ - allow v1 syntax: built-in types for class member types and type declarations on lhs ([#1059](https://github.com/rokucommunity/brighterscript/pull/1059))
+### Changed
+ - fix sourcemap comment and add `file` prop to map ([#1064](https://github.com/rokucommunity/brighterscript/pull/1064))
+ - move `coveralls-next` to a devDependency since it's not needed at runtime ([#1051](https://github.com/rokucommunity/brighterscript/pull/1051))
+
+
+
+## [0.65.21](https://github.com/rokucommunity/brighterscript/compare/v0.65.20...v0.65.21) - 2024-01-31
+### Fixed
+ - parsing issues with multi-index IndexedSet and IndexedGet ([#1050](https://github.com/rokucommunity/brighterscript/pull/1050))
+
+
+
+## [0.65.20](https://github.com/rokucommunity/brighterscript/compare/v0.65.19...v0.65.20) - 2024-01-30
+### Added
+ - plugin hooks for getDefinition ([#1045](https://github.com/rokucommunity/brighterscript/pull/1045))
+
+
+
+## [0.65.19](https://github.com/rokucommunity/brighterscript/compare/v0.65.18...v0.65.19) - 2024-01-30
+### Changed
+ - Backport v1 syntax changes ([#1034](https://github.com/rokucommunity/brighterscript/pull/1034))
+
+
+
+## [0.65.18](https://github.com/rokucommunity/brighterscript/compare/v0.65.17...v0.65.18) - 2024-01-25
+### Changed
+ - Refactor bsconfig documentation ([#1024](https://github.com/rokucommunity/brighterscript/pull/1024))
+ - Prevent overwriting `Program._manifest` if already set on startup ([#1027](https://github.com/rokucommunity/brighterscript/pull/1027))
+ - Improving null safety: Add FinalizedBsConfig and tweak plugin events ([#1000](https://github.com/rokucommunity/brighterscript/pull/1000))
+
+
+
+## [0.65.17](https://github.com/rokucommunity/brighterscript/compare/v0.65.16...0.65.17) - 2024-01-16
+### Changed
+ - add documentation on pruneEmptyCodeFiles to the README ([#1012](https://github.com/rokucommunity/brighterscript/pull/1012))
+ - assign .program to the builder BEFORE calling afterProgram ([#1011](https://github.com/rokucommunity/brighterscript/pull/1011))
+### Fixed
+ - properly handle `libpkg:/` prefix for script imports ([#1017](https://github.com/rokucommunity/brighterscript/pull/1017))
+
+
+
+## [0.65.16](https://github.com/rokucommunity/brighterscript/compare/v0.65.15...v0.65.16) - 2024-01-08
+### Added
+ - Add `pruneEmptyCodeFiles` option to prevent publishing of empty files and exclude unnecessary script imports ([#997](https://github.com/rokucommunity/brighterscript/pull/997))
+### Changed
+ - chore: improve null safety ([#996](https://github.com/rokucommunity/brighterscript/pull/996))
+
+
+
+## [0.65.15](https://github.com/rokucommunity/brighterscript/compare/v0.65.14...v0.65.15) - 2023-12-26
+### Fixed
+ - Prevent errors when using enums in a file that's not included in any scopes ([#995](https://github.com/rokucommunity/brighterscript/pull/995))
+
+
+
+## [0.65.14](https://github.com/rokucommunity/brighterscript/compare/v0.65.13...v0.65.14) - 2023-12-20
+### Fixed
+ - multi-namespace class inheritance transpile bug ([#990](https://github.com/rokucommunity/brighterscript/pull/990))
+### Changed
+ - flag missing function references for `onChange` function ([#941](https://github.com/rokucommunity/brighterscript/pull/941))
+ - upgrade to [roku-deploy@3.11.2](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3112---2023-12-20). Notable changes since 3.11.1:
+     - Update wrong host password error message ([roku-deploy#134](https://github.com/rokucommunity/roku-deploy/pull/134))
+
+
+
+## [0.65.13](https://github.com/rokucommunity/brighterscript/compare/v0.65.12...v0.65.13) - 2023-12-08
+### Fixed
+ - broken enum transpiling ([#985](https://github.com/rokucommunity/brighterscript/pull/985))
+
+
+
+## [0.65.12](https://github.com/rokucommunity/brighterscript/compare/v0.65.11...v0.65.12) - 2023-12-07
+### Added
+ - `optional` modifier for interface and class members ([#955](https://github.com/rokucommunity/brighterscript/pull/955))
+ - manifest loading from files ([#942](https://github.com/rokucommunity/brighterscript/pull/942))
+### Changed
+ - use regex for faster manifest/typedef detection ([#976](https://github.com/rokucommunity/brighterscript/pull/976))
+ - out-of-date transpile blocks in docs ([#956](https://github.com/rokucommunity/brighterscript/pull/956))
+### Fixed
+ - Correct RANGE in template string when dealing with quotes in annotations ([#975](https://github.com/rokucommunity/brighterscript/pull/975))
+
+
+
+## [0.65.11](https://github.com/rokucommunity/brighterscript/compare/v0.65.10...v0.65.11) - 2023-11-30
+### Changed
+ - upgrade to [roku-deploy@3.11.1](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3111---2023-11-30). Notable changes since 3.10.5:
+     - Wait for file stream to close before resolving promise ([roku-deploy#133](https://github.com/rokucommunity/roku-deploy/pull/133))
+### Fixed
+ - enums as class initial values ([#950](https://github.com/rokucommunity/brighterscript/pull/950))
+
+
+
+## [0.65.10](https://github.com/rokucommunity/brighterscript/compare/v0.65.9...v0.65.10) - 2023-11-14
+### Changed
+ - upgrade to [roku-deploy@3.10.5](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3105---2023-11-14). Notable changes since 3.10.4:
+     - Add better device-info docs ([roku-deploy#128](https://github.com/rokucommunity/roku-deploy/pull/128))
+     - Added some more message grabbing logic ([roku-deploy#127](https://github.com/rokucommunity/roku-deploy/pull/127))
+
+
+
+## [0.65.9](https://github.com/rokucommunity/brighterscript/compare/v0.65.8...v0.65.9) - 2023-11-06
+### Changed
+ - upgrade to [roku-deploy@3.10.4](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3104---2023-11-03). Notable changes since 3.10.3:
+     - Enhance getDeviceInfo() method ([roku-deploy#120](https://github.com/rokucommunity/roku-deploy/pull/120))
+### Fixed
+ - issue with unary expression parsing ([#938](https://github.com/rokucommunity/brighterscript/pull/938))
+
+
+
+## [0.65.8](https://github.com/rokucommunity/brighterscript/compare/v0.65.7...v0.65.8) - 2023-10-06
+### Added
+ - interface parameter support ([#924](https://github.com/rokucommunity/brighterscript/pull/924))
+### Changed
+ - Bump postcss from 8.2.15 to 8.4.31 ([#928](https://github.com/rokucommunity/brighterscript/pull/928))
+### Fixed
+ - chore: fix typescript typing for `Deferred` ([#923](https://github.com/rokucommunity/brighterscript/pull/923))
+
+
+
+## [0.65.7](https://github.com/rokucommunity/brighterscript/compare/v0.65.6...v0.65.7) - 2023-09-28
+### Fixed
+ - fix bug in --noproject flag logic ([#922](https://github.com/rokucommunity/brighterscript/pull/922))
+
+
+
+## [0.65.6](https://github.com/rokucommunity/brighterscript/compare/v0.65.5...v0.65.6) - 2023-09-28
+### Added
+ - `noProject` flag to bsc so `bsconfig.json` loading can be skipped entirely even if present ([#868](https://github.com/rokucommunity/brighterscript/pull/868))
+### Changed
+ - docs: add some more details to the plugins ([#913](https://github.com/rokucommunity/brighterscript/pull/913))
+ - docs: add missing emitDefinitions ([#893](https://github.com/rokucommunity/brighterscript/pull/893))
+### Fixed
+ - incorrect quasi location in template string ([#921](https://github.com/rokucommunity/brighterscript/pull/921))
+ - `UnaryExpression` transpile for namespace and const ([#914](https://github.com/rokucommunity/brighterscript/pull/914))
+
+
+
+## [0.65.5](https://github.com/rokucommunity/brighterscript/compare/v0.65.4...v0.65.5) - 2023-09-06
+### Added
+ - support overriding bs_const values in bsconfig ([#887](https://github.com/rokucommunity/brighterscript/pull/887))
+ - allow optionally specifying bslib destination directory ([#871](https://github.com/rokucommunity/brighterscript/pull/871))
+ - Print diagnostic related information ([#867](https://github.com/rokucommunity/brighterscript/pull/867))
+### Fixed
+ - ensure consistent insertion of bslib.brs ([#870](https://github.com/rokucommunity/brighterscript/pull/870))
+ - Fix crashes in util for null ranges ([#869](https://github.com/rokucommunity/brighterscript/pull/869))
+ - Fix tab issue when printing diagnostics ([#865](https://github.com/rokucommunity/brighterscript/pull/865))
+
+
+
+## [0.65.4](https://github.com/rokucommunity/brighterscript/compare/v0.65.3...v0.65.4) - 2023-07-24
+### Changed
+ - Install `v8-profiler-next` on demand instead of being a dependency ([#854](https://github.com/rokucommunity/brighterscript/pull/854))
+
+
+
+## [0.65.3](https://github.com/rokucommunity/brighterscript/compare/v0.65.2...v0.65.3) - 2023-07-22
+### Changed
+ - Show busy spinner for lsp builds. Remove `build-status` event in favor of new `busy-status` ([#852](https://github.com/rokucommunity/brighterscript/pull/852))
+ - upgrade to [roku-deploy@3.10.3](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3103---2023-07-22). Notable changes since 3.10.2:
+     - Bump word-wrap from 1.2.3 to 1.2.4 ([roku-deploy#117](https://github.com/rokucommunity/roku-deploy/pull/117))
+ - Bump word-wrap from 1.2.3 to 1.2.4 ([#851](https://github.com/rokucommunity/brighterscript/pull/851))
+
+
+
+## [0.65.2](https://github.com/rokucommunity/brighterscript/compare/v0.65.1...v0.65.2) - 2023-07-17
+### Added
+ - beforeProgramDispose event ([#844](https://github.com/rokucommunity/brighterscript/pull/844)), ([#845](https://github.com/rokucommunity/brighterscript/pull/845))
+ - profiling support to the cli via the `--profile` flag ([#833](https://github.com/rokucommunity/brighterscript/pull/833))
+### Changed
+ - Make component ready on afterScopeCreate ([#843](https://github.com/rokucommunity/brighterscript/pull/843))
+ - Add project index to language server log entries ([#836](https://github.com/rokucommunity/brighterscript/pull/836))
+ - Prevent crashing when diagnostic is missing range. ([#832](https://github.com/rokucommunity/brighterscript/pull/832))
+ - Prevent crash when diagnostic is missing range ([#831](https://github.com/rokucommunity/brighterscript/pull/831))
+ - Add baseline interface docs ([#829](https://github.com/rokucommunity/brighterscript/pull/829))
+
+
+
+## [0.65.1](https://github.com/rokucommunity/brighterscript/compare/v0.65.0...v0.65.1) - 2023-06-09
+### Fixed
+ - injection of duplicate super calls into classes ([#823](https://github.com/rokucommunity/brighterscript/pull/823))
+
+
+
+## [0.65.0](https://github.com/rokucommunity/brighterscript/compare/v0.64.4...v0.65.0) - 2023-05-17
+### Changed
+ - npm audit fixes. upgrade to coveralls-next ([43756d8](https://github.com/rokucommunity/brighterscript/commit/43756d8))
+ - Improve findChild and findAncestor AST methods ([#807](https://github.com/rokucommunity/brighterscript/pull/807))
+
+
+
+## [0.64.4](https://github.com/rokucommunity/brighterscript/compare/v0.64.3...v0.64.4) - 2023-05-10
 ### Changed
  - upgrade to [roku-deploy@3.10.2](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3102---2023-05-10). Notable changes since 3.10.1:
      - Fix audit issues ([roku-deploy#116](https://github.com/rokucommunity/roku-deploy/pull/116))
@@ -1603,13 +2254,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0](https://github.com/rokucommunity/brighterscript/compare/v0.1.0...v0.1.0) - 2019-08-10
 ### Changed
  - Cloned from [brightscript-language](https://github.com/rokucommunity/brightscript-language)
-
-
-
-
-
-
-
-
-
-

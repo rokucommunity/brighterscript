@@ -12,7 +12,7 @@ import { XmlFile } from './XmlFile';
 import { standardizePath as s } from '../util';
 import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 import { ProgramBuilder } from '../ProgramBuilder';
-import { LogLevel } from '../Logger';
+import { LogLevel } from '../logging';
 import { isXmlFile } from '../astUtils/reflection';
 import { tempDir, rootDir, stagingDir } from '../testHelpers.spec';
 
@@ -36,6 +36,18 @@ describe('XmlFile', () => {
     });
 
     describe('parse', () => {
+        it('does not crash on malformed child elements (e.g. a lone `<` while typing)', () => {
+            //this used to throw in SGParser.mapNode because the element had no tag name
+            file = program.setFile('components/malformed.xml', trim`
+                <component name="Main" extends="Group">
+                    <children>
+                        <
+                    </children>
+                </component>
+            `);
+            expect(isXmlFile(file)).to.be.true;
+        });
+
         it('allows modifying the parsed XML model', () => {
             const expected = 'OtherName';
             program.plugins.add({
@@ -59,13 +71,13 @@ describe('XmlFile', () => {
             program.plugins.add({
                 name: 'allows modifying the parsed XML model',
                 afterFileParse: () => {
-                    let child = file.parser.ast.component.children.children[0];
+                    let child = file.parser.ast.component!.children.children[0];
                     expect(child.attributes).to.have.lengthOf(4);
-                    child.setAttribute('text', undefined);
-                    expect(child.getAttribute('id').value.text).to.equal('one');
+                    child.setAttribute('text', undefined as any);
+                    expect(child.getAttribute('id')!.value.text).to.equal('one');
                     expect(child.attributes).to.have.lengthOf(3);
-                    child.setAttribute('text3', undefined);
-                    expect(child.getAttribute('id').value.text).to.equal('one');
+                    child.setAttribute('text3', undefined as any);
+                    expect(child.getAttribute('id')!.value.text).to.equal('one');
                     expect(child.attributes).to.have.lengthOf(2);
                 }
             });
@@ -384,7 +396,7 @@ describe('XmlFile', () => {
         });
 
         //TODO - refine this test once cdata scripts are supported
-        it('prevents scope completions entirely', () => {
+        it('does not provide node completions outside of <children>', () => {
             program.setFile('components/component1.brs', ``);
 
             let xmlFile = program.setFile('components/component1.xml', trim`
@@ -394,7 +406,112 @@ describe('XmlFile', () => {
                 </component>
             `);
 
+            //at the component root (not inside <children>) we should not spew node/scope completions
             expect(program.getCompletions(xmlFile.srcPath, Position.create(1, 1))).to.be.empty;
+        });
+
+        /**
+         * Find the (line, character) position immediately after the first occurrence of `marker` in the file
+         */
+        function positionAfter(fileContents: string, marker: string): Position {
+            const index = fileContents.indexOf(marker);
+            const before = fileContents.substring(0, index + marker.length);
+            const lines = before.split('\n');
+            return Position.create(lines.length - 1, lines[lines.length - 1].length);
+        }
+
+        it('provides element completions for scenegraph nodes and project components after `<`', () => {
+            program.setFile('components/widget.xml', trim`
+                <component name="Widget" extends="Group">
+                </component>
+            `);
+            const xmlFile = program.setFile<XmlFile>('components/main.xml', trim`
+                <component name="Main" extends="Group">
+                    <children>
+                        <
+                    </children>
+                </component>
+            `);
+            //position the caret right after the lone `<` inside <children>
+            const lines = xmlFile.fileContents.split('\n');
+            const lineIndex = lines.findIndex(line => line.trim() === '<');
+            const completions = xmlFile.getCompletions(Position.create(lineIndex, lines[lineIndex].indexOf('<') + 1));
+            const labels = completions.map(x => x.label);
+            //built-in node
+            expect(labels).to.include('Label');
+            //project component
+            expect(labels).to.include('Widget');
+            //a component can't contain itself
+            expect(labels).not.to.include('Main');
+            expect(completions.every(x => x.kind === CompletionItemKind.Class)).to.be.true;
+        });
+
+        it('provides <field>/<function> completions inside <interface> (not nodes)', () => {
+            const xmlFile = program.setFile<XmlFile>('components/main.xml', trim`
+                <component name="Main" extends="Group">
+                    <interface>
+                        <
+                    </interface>
+                </component>
+            `);
+            const lines = xmlFile.fileContents.split('\n');
+            const lineIndex = lines.findIndex(line => line.trim() === '<');
+            const labels = xmlFile.getCompletions(Position.create(lineIndex, lines[lineIndex].indexOf('<') + 1)).map(x => x.label);
+            expect(labels).to.include.members(['field', 'function']);
+            //nodes/components are only valid inside <children>, not inside <interface>
+            expect(labels).not.to.include('Label');
+        });
+
+        it('provides attribute completions inside a <field> tag', () => {
+            const xmlFile = program.setFile<XmlFile>('components/main.xml', trim`
+                <component name="Main" extends="Group">
+                    <interface>
+                        <field id="thing" >
+                    </interface>
+                </component>
+            `);
+            const labels = xmlFile.getCompletions(positionAfter(xmlFile.fileContents, '<field id="thing" ')).map(x => x.label);
+            expect(labels).to.include.members(['type', 'value', 'onChange', 'alias']);
+            //`id` is already present, so it should not be suggested again
+            expect(labels).not.to.include('id');
+        });
+
+        it('provides attribute completions inside a <function> tag', () => {
+            const xmlFile = program.setFile<XmlFile>('components/main.xml', trim`
+                <component name="Main" extends="Group">
+                    <interface>
+                        <function >
+                    </interface>
+                </component>
+            `);
+            const labels = xmlFile.getCompletions(positionAfter(xmlFile.fileContents, '<function ')).map(x => x.label);
+            expect(labels).to.eql(['name']);
+        });
+
+        it('provides field completions inside an open element tag', () => {
+            const xmlFile = program.setFile<XmlFile>('components/main.xml', trim`
+                <component name="Main" extends="Group">
+                    <children>
+                        <Label text="hi" >
+                    </children>
+                </component>
+            `);
+            const completions = xmlFile.getCompletions(positionAfter(xmlFile.fileContents, '<Label text="hi" '));
+            const labels = completions.map(x => x.label);
+            //Label has a `color` field
+            expect(labels).to.include('color');
+            //`text` is already present on the tag, so it should not be suggested again
+            expect(labels).not.to.include('text');
+            expect(completions.every(x => x.kind === CompletionItemKind.Field)).to.be.true;
+        });
+
+        it('getTokenAt returns the token whose range contains the position', () => {
+            const xmlFile = program.setFile<XmlFile>('components/main.xml', trim`
+                <component name="Main" extends="Group">
+                </component>
+            `);
+            const token = xmlFile.getTokenAt(positionAfter(xmlFile.fileContents, '<compon'));
+            expect(token?.image).to.equal('component');
         });
     });
 
@@ -489,10 +606,10 @@ describe('XmlFile', () => {
     });
 
     it('allows adding diagnostics', () => {
-        const expected = [{
+        const expected: BsDiagnostic[] = [{
             message: 'message',
-            file: undefined,
-            range: undefined
+            file: undefined as any,
+            range: undefined as any
         }];
         file.addDiagnostics(expected);
         expectDiagnostics(file, expected);
@@ -669,6 +786,258 @@ describe('XmlFile', () => {
             `, 'none', 'components/Comp.xml');
         });
 
+        it('transpiles mismatched tags correctly using opening tag', () => {
+            const file = program.setFile('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup">
+                        </LayoutGroup>
+                    </children>
+                </component>
+            `);
+            file.needsTranspiled = true;
+            program.validate();
+
+            // Should have a diagnostic for the mismatch
+            expect(file.diagnostics).to.have.lengthOf(1);
+            expect(file.diagnostics[0]).to.deep.include({
+                ...DiagnosticMessages.xmlTagMismatch('Group', 'LayoutGroup')
+            });
+
+            // But transpile should still work correctly (self-closing since no children)
+            const transpiled = file.transpile();
+            expect(trimMap(transpiled.code)).to.equal(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                    <children>
+                        <Group id="myGroup" />
+                    </children>
+                </component>
+            `);
+        });
+
+        it('transpiles mismatched tags with children correctly using opening tag', () => {
+            const file = program.setFile('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup">
+                            <Label text="hello" />
+                        </LayoutGroup>
+                    </children>
+                </component>
+            `);
+            file.needsTranspiled = true;
+            program.validate();
+
+            // Should have a diagnostic for the mismatch
+            expect(file.diagnostics).to.have.lengthOf(1);
+            expect(file.diagnostics[0]).to.deep.include({
+                ...DiagnosticMessages.xmlTagMismatch('Group', 'LayoutGroup')
+            });
+
+            // Transpile should use the opening tag for closing, not the mismatched closing tag
+            const transpiled = file.transpile();
+            expect(trimMap(transpiled.code)).to.equal(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                    <children>
+                        <Group id="myGroup">
+                            <Label text="hello" />
+                        </Group>
+                    </children>
+                </component>
+            `);
+        });
+
+        it('does not emit a mismatch diagnostic for well-formed matching tags', () => {
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup">
+                            <Label text="hello" />
+                        </Group>
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(file);
+        });
+
+        it('does not emit a mismatch diagnostic for self-closing tags', () => {
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup" />
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(file);
+        });
+
+        it('catches mismatched tags injected via a plugin (no closingTag on the parser AST)', () => {
+            //this proves the check runs at validation time against the stored closingTag,
+            //so it catches AST mutated/injected by plugins, not just parser output
+            program.plugins.add({
+                name: 'inject-mismatched-closing-tag',
+                afterFileParse: (file) => {
+                    if (isXmlFile(file)) {
+                        const group = file.parser.ast.component?.children?.children?.[0];
+                        if (group) {
+                            //plugin sets a mismatched closing tag programmatically
+                            group.closingTag = { text: 'LayoutGroup' };
+                        }
+                    }
+                }
+            });
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup" />
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(file, [
+                DiagnosticMessages.xmlTagMismatch('Group', 'LayoutGroup')
+            ]);
+        });
+
+        it('emits a mismatch diagnostic for a mismatched <component> tag', () => {
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                </komponent>
+            `);
+            program.validate();
+            expectDiagnostics(file, [
+                DiagnosticMessages.xmlTagMismatch('component', 'komponent')
+            ]);
+        });
+
+        it('emits a mismatch diagnostic for a mismatched <interface> tag', () => {
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <interface>
+                        <field id="foo" type="string" />
+                    </interfase>
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(file, [
+                DiagnosticMessages.xmlTagMismatch('interface', 'interfase')
+            ]);
+        });
+
+        it('emits a mismatch diagnostic for a mismatched <children> tag', () => {
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup" />
+                    </kids>
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(file, [
+                DiagnosticMessages.xmlTagMismatch('children', 'kids')
+            ]);
+        });
+
+        it('emits a diagnostic for each mismatch when several are nested', () => {
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="outer">
+                            <Rectangle id="inner">
+                                <Label text="hello" />
+                            </Rectangel>
+                        </LayoutGroup>
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(file, [
+                DiagnosticMessages.xmlTagMismatch('Group', 'LayoutGroup'),
+                DiagnosticMessages.xmlTagMismatch('Rectangle', 'Rectangel')
+            ]);
+        });
+
+        it('treats a closing tag differing only by case as a mismatch', () => {
+            //XML is case-sensitive, and the Roku compiler rejects `<Group></group>`
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup">
+                        </group>
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(file, [
+                DiagnosticMessages.xmlTagMismatch('Group', 'group')
+            ]);
+        });
+
+        it('points the diagnostic range at the closing tag', () => {
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup">
+                        </LayoutGroup>
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expect(file.diagnostics).to.have.lengthOf(1);
+            //the squiggle must land on `LayoutGroup` (line 4), not on the opening tag
+            expect(file.diagnostics[0].range).to.eql(
+                Range.create(4, 10, 4, 21)
+            );
+        });
+
+        it('still emits the mismatch diagnostic when the file is not transpiled', () => {
+            //validation must not depend on needsTranspiled being set
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <children>
+                        <Group id="myGroup">
+                        </LayoutGroup>
+                    </children>
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(file, [
+                DiagnosticMessages.xmlTagMismatch('Group', 'LayoutGroup')
+            ]);
+        });
+
+        it('does not emit a mismatch diagnostic for a script tag with a cdata body', () => {
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp" extends="Group">
+                    <script type="text/brightscript"><![CDATA[
+                        sub init()
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(file);
+        });
+
         it('does not include additional bslib script if already there ', () => {
             testTranspile(trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -829,7 +1198,7 @@ describe('XmlFile', () => {
                     <script uri="SimpleScene.brs" type="text/brightscript" />
                     <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
                 </component>
-            `, null, 'components/comp.xml');
+            `, null as any, 'components/comp.xml');
         });
 
         it('returns the XML unmodified if needsTranspiled is false', () => {
@@ -887,6 +1256,40 @@ describe('XmlFile', () => {
             expect(code.endsWith(`<!--//# sourceMappingURL=./SimpleScene.xml.map -->`)).to.be.true;
         });
 
+        it('replaces existing trailing sourceMappingURL comment instead of appending a second one', () => {
+            program.options.sourceMap = true;
+            let file = program.setFile('components/SimpleScene.xml',
+                trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene">
+                </component>
+                <!--//# sourceMappingURL=./some-old-path.xml.map -->
+            `);
+            //prevent the default auto-imports to ensure no transpilation from AST
+            (file as any).getMissingImportsForTranspile = () => [];
+            const code = file.transpile().code;
+            expect(code.match(/sourceMappingURL=/g)?.length).to.eql(1);
+            expect(code.endsWith(`<!--//# sourceMappingURL=./SimpleScene.xml.map -->`)).to.be.true;
+        });
+
+        it('replaces existing trailing sourceMappingURL comment when AST-transpiling', () => {
+            program.options.sourceMap = true;
+            //a script tag pointing at a .bs file forces the AST transpile path, which rebuilds output
+            //from the component tree and therefore drops a comment sitting outside the root element
+            let file = program.setFile('components/SimpleScene.xml',
+                trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene">
+                    <script type="text/brightscript" uri="SimpleScene.bs"/>
+                </component>
+                <!--//# sourceMappingURL=./some-old-path.xml.map -->
+            `);
+            expect(file.needsTranspiled).to.be.true;
+            const code = file.transpile().code;
+            expect(code.match(/sourceMappingURL=/g)?.length).to.eql(1);
+            expect(code.endsWith(`<!--//# sourceMappingURL=./SimpleScene.xml.map -->`)).to.be.true;
+        });
+
         it('AST-based source mapping includes sourcemap reference', () => {
             program.options.sourceMap = true;
             let file = program.setFile('components/SimpleScene.xml',
@@ -898,6 +1301,92 @@ describe('XmlFile', () => {
             file.needsTranspiled = true;
             const code = file.transpile().code;
             expect(code.endsWith(`<!--//# sourceMappingURL=./SimpleScene.xml.map -->`)).to.be.true;
+        });
+
+        it('removes script imports if given file is not publishable', () => {
+            program.options.pruneEmptyCodeFiles = true;
+            program.setFile(`components/SimpleScene.bs`, `
+                enum simplescenetypes
+                    hero
+                    intro
+                end enum
+            `);
+
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component
+                    name="SimpleScene" extends="Scene"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd"
+                >
+                    <script type="text/brightscript" uri="SimpleScene.bs"/>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd">
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/SimpleScene.xml');
+        });
+
+        it('removes extra imports found via dependencies if given file is not publishable', () => {
+            program.options.pruneEmptyCodeFiles = true;
+            program.setFile(`source/simplescenetypes.bs`, `
+                enum SimpleSceneTypes
+                    world = "world"
+                end enum
+            `);
+            program.setFile(`components/SimpleScene.bs`, `
+                import "pkg:/source/simplescenetypes.bs"
+
+                sub init()
+                    ? "Hello " + SimpleSceneTypes.world
+                end sub
+            `);
+
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component
+                    name="SimpleScene" extends="Scene"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd"
+                >
+                    <script type="text/brightscript" uri="SimpleScene.bs"/>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd">
+                    <script type="text/brightscript" uri="SimpleScene.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/SimpleScene.xml');
+        });
+
+        it('removes imports of empty brightscript files', () => {
+            program.options.pruneEmptyCodeFiles = true;
+            program.setFile(`components/EmptyFile.brs`, '');
+            program.setFile(`components/SimpleScene.brs`, `
+                sub init()
+                    ? "Hello World"
+                end sub
+            `);
+            testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component
+                    name="SimpleScene" extends="Scene"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd"
+                >
+                    <script type="text/brightscript" uri="SimpleScene.brs"/>
+                    <script type="text/brightscript" uri="EmptyFile.brs"/>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://devtools.web.roku.com/schema/RokuSceneGraph.xsd">
+                    <script type="text/brightscript" uri="SimpleScene.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/SimpleScene.xml');
         });
     });
 
@@ -1003,7 +1492,7 @@ describe('XmlFile', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const scope = program.getComponentScope('ChildComponent');
+            const scope = program.getComponentScope('ChildComponent')!;
             expect([...scope.namespaceLookup.keys()].sort()).to.eql([
                 'lib',
                 'parent'
@@ -1181,6 +1670,60 @@ describe('XmlFile', () => {
                 DiagnosticMessages.xmlComponentMissingExtendsAttribute()
             ]);
         });
+
+        describe('bs:disable / bs:enable block directives', () => {
+            it('a bare bs:disable suppresses every diagnostic in the file', () => {
+                program.setFile<XmlFile>('components/file.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <!--bs:disable-->
+                    <component>
+                    </component>
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('suppresses only the listed codes', () => {
+                program.setFile<XmlFile>('components/file.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <!--bs:disable 1007-->
+                    <component>
+                    </component>
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.xmlComponentMissingNameAttribute()
+                ]);
+            });
+
+            it('does not suppress unlisted codes', () => {
+                program.setFile<XmlFile>('components/file.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <!--bs:disable 1006-->
+                    <component name="Foo">
+                    </component>
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.xmlComponentMissingExtendsAttribute()
+                ]);
+            });
+
+            it('a bs:enable closes the disable block', () => {
+                program.setFile<XmlFile>('components/file.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <!--bs:disable-->
+                    <!--bs:enable-->
+                    <component>
+                    </component>
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.xmlComponentMissingNameAttribute(),
+                    DiagnosticMessages.xmlComponentMissingExtendsAttribute()
+                ]);
+            });
+        });
     });
 
     describe('duplicate components', () => {
@@ -1214,7 +1757,7 @@ describe('XmlFile', () => {
                 <component name="comp1">
                 </component>
             `);
-            expect(program.getComponent('comp1').file.pkgPath).to.equal(comp2.pkgPath);
+            expect(program.getComponent('comp1')!.file.pkgPath).to.equal(comp2.pkgPath);
 
             //add comp1. it should become the main component with this name
             const comp1 = program.setFile('components/comp1.xml', trim`
@@ -1222,11 +1765,11 @@ describe('XmlFile', () => {
                 <component name="comp1" extends="Group">
                 </component>
             `);
-            expect(program.getComponent('comp1').file.pkgPath).to.equal(comp1.pkgPath);
+            expect(program.getComponent('comp1')!.file.pkgPath).to.equal(comp1.pkgPath);
 
             //remove comp1, comp2 should be the primary again
             program.removeFile(s`${rootDir}/components/comp1.xml`);
-            expect(program.getComponent('comp1').file.pkgPath).to.equal(comp2.pkgPath);
+            expect(program.getComponent('comp1')!.file.pkgPath).to.equal(comp2.pkgPath);
 
             //add comp3
             program.setFile('components/comp3.xml', trim`
@@ -1235,7 +1778,7 @@ describe('XmlFile', () => {
                 </component>
             `);
             //...the 2nd file should still be main
-            expect(program.getComponent('comp1').file.pkgPath).to.equal(comp2.pkgPath);
+            expect(program.getComponent('comp1')!.file.pkgPath).to.equal(comp2.pkgPath);
         });
     });
 });

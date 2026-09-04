@@ -86,6 +86,10 @@ sub main()
 end sub
 ```
 
+## Using constants as computed associative array keys
+
+String constants can be used as computed keys in associative array literals. See [Computed Property Names](computed-property-names.md) for full details.
+
 ## Referencing other constants
 Constants can reference other constants (as long as there is no circular reference). You can even use template strings!
 
@@ -107,6 +111,6 @@ transpiles to
 ```brightscript
 sub main()
     print ("https://api.domain.com" + "/login")
-    print (bslib_toString("https://api.domain.com") + "/some/error")
+    print ((bslib_toString("https://api.domain.com") + "/some/error"))
 end sub
 ```

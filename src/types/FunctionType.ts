@@ -9,9 +9,9 @@ export class FunctionType implements BscType {
     }
 
     /**
-     * The name of the function for this type. Can be null
+     * The name of the function for this type. Can be undefined
      */
-    public name: string;
+    public name: string | undefined;
 
     /**
      * Determines if this is a sub or not
@@ -65,7 +65,7 @@ export class FunctionType implements BscType {
     }
 
     public toString() {
-        let paramTexts = [];
+        let paramTexts: string[] = [];
         for (let param of this.params) {
             paramTexts.push(`${param.name}${param.isOptional ? '?' : ''} as ${param.type.toString()}`);
         }
@@ -75,5 +75,15 @@ export class FunctionType implements BscType {
 
     public toTypeString(): string {
         return 'Function';
+    }
+
+    public clone() {
+        const result = new FunctionType(this.returnType);
+        for (let param of this.params) {
+            result.addParameter(param.name, param.type, param.isOptional);
+        }
+        result.isSub = this.isSub;
+        result.returnType = this.returnType?.clone();
+        return result;
     }
 }

@@ -27,4 +27,8 @@ export class DynamicType implements BscType {
     public toTypeString(): string {
         return this.toString();
     }
+
+    public clone() {
+        return new DynamicType(this.typeText);
+    }
 }

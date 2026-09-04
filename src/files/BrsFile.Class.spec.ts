@@ -73,6 +73,29 @@ describe('BrsFile BrighterScript classes', () => {
         ]);
     });
 
+    it('allows class named `optional`', () => {
+        program.setFile('source/main.bs', `
+            class optional
+                thing = 1
+            end class
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
+    it('supports optional fields', () => {
+        program.setFile('source/main.bs', `
+            class Movie
+                name as string
+                optional subtitles as string
+                public optional isRepeatEnabled as boolean
+                private optional wasPlayed
+            end class
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
     it('access modifier is option for override', () => {
         let file = program.setFile<BrsFile>({ src: `${rootDir}/source/main.bs`, dest: 'source/main.bs' }, `
             class Animal
@@ -89,7 +112,7 @@ describe('BrsFile BrighterScript classes', () => {
         expectZeroDiagnostics(program);
         let duckClass = file.parser.references.classStatements.find(x => x.name.text.toLowerCase() === 'duck');
         expect(duckClass).to.exist;
-        expect(duckClass.memberMap['move']).to.exist;
+        expect(duckClass!.memberMap['move']).to.exist;
     });
 
     it('supports various namespace configurations', () => {
@@ -228,12 +251,13 @@ describe('BrsFile BrighterScript classes', () => {
                     end sub
                 end class
             `, `
+                sub __Animal_method_new()
+                    m.species1 = "Animal"
+                    print "From Animal: " + m.species
+                end sub
                 function __Animal_builder()
                     instance = {}
-                    instance.new = sub()
-                        m.species1 = "Animal"
-                        print "From Animal: " + m.species
-                    end sub
+                    instance.new = __Animal_method_new
                     return instance
                 end function
                 function Animal()
@@ -241,14 +265,15 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new()
                     return instance
                 end function
+                sub __Duck_method_new()
+                    m.super0_new()
+                    m.species2 = "Duck"
+                    print "From Duck: " + m.species
+                end sub
                 function __Duck_builder()
                     instance = __Animal_builder()
                     instance.super0_new = instance.new
-                    instance.new = sub()
-                        m.super0_new()
-                        m.species2 = "Duck"
-                        print "From Duck: " + m.species
-                    end sub
+                    instance.new = __Duck_method_new
                     return instance
                 end function
                 function Duck()
@@ -270,10 +295,11 @@ describe('BrsFile BrighterScript classes', () => {
                     end sub
                 end class
             `, `
+                sub __Animal_method_new()
+                end sub
                 function __Animal_builder()
                     instance = {}
-                    instance.new = sub()
-                    end sub
+                    instance.new = __Animal_method_new
                     return instance
                 end function
                 function Animal()
@@ -281,13 +307,55 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new()
                     return instance
                 end function
+                sub __Duck_method_new()
+                    'comment should not cause double super call
+                    m.super0_new()
+                end sub
                 function __Duck_builder()
                     instance = __Animal_builder()
                     instance.super0_new = instance.new
-                    instance.new = sub()
-                        'comment should not cause double super call
-                        m.super0_new()
+                    instance.new = __Duck_method_new
+                    return instance
+                end function
+                function Duck()
+                    instance = __Duck_builder()
+                    instance.new()
+                    return instance
+                end function
+            `);
+        });
+
+        it('does not inject a call to super if one exists', () => {
+            testTranspile(`
+                class Animal
+                end class
+                class Duck extends Animal
+                    sub new()
+                        print "I am a statement which does not use m"
+                        super()
                     end sub
+                end class
+            `, `
+                sub __Animal_method_new()
+                end sub
+                function __Animal_builder()
+                    instance = {}
+                    instance.new = __Animal_method_new
+                    return instance
+                end function
+                function Animal()
+                    instance = __Animal_builder()
+                    instance.new()
+                    return instance
+                end function
+                sub __Duck_method_new()
+                    print "I am a statement which does not use m"
+                    m.super0_new()
+                end sub
+                function __Duck_builder()
+                    instance = __Animal_builder()
+                    instance.super0_new = instance.new
+                    instance.new = __Duck_method_new
                     return instance
                 end function
                 function Duck()
@@ -310,11 +378,12 @@ describe('BrsFile BrighterScript classes', () => {
                     className3 = "BabyDuck"
                 end class
             `, `
+                sub __Animal_method_new()
+                    m.className1 = "Animal"
+                end sub
                 function __Animal_builder()
                     instance = {}
-                    instance.new = sub()
-                        m.className1 = "Animal"
-                    end sub
+                    instance.new = __Animal_method_new
                     return instance
                 end function
                 function Animal()
@@ -322,13 +391,14 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new()
                     return instance
                 end function
+                sub __Duck_method_new()
+                    m.super0_new()
+                    m.className2 = "Duck"
+                end sub
                 function __Duck_builder()
                     instance = __Animal_builder()
                     instance.super0_new = instance.new
-                    instance.new = sub()
-                        m.super0_new()
-                        m.className2 = "Duck"
-                    end sub
+                    instance.new = __Duck_method_new
                     return instance
                 end function
                 function Duck()
@@ -336,13 +406,14 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new()
                     return instance
                 end function
+                sub __BabyDuck_method_new()
+                    m.super1_new()
+                    m.className3 = "BabyDuck"
+                end sub
                 function __BabyDuck_builder()
                     instance = __Duck_builder()
                     instance.super1_new = instance.new
-                    instance.new = sub()
-                        m.super1_new()
-                        m.className3 = "BabyDuck"
-                    end sub
+                    instance.new = __BabyDuck_method_new
                     return instance
                 end function
                 function BabyDuck()
@@ -362,10 +433,11 @@ describe('BrsFile BrighterScript classes', () => {
                     end class
                 end namespace
             `, `
+                sub __Birds_WaterFowl_Duck_method_new()
+                end sub
                 function __Birds_WaterFowl_Duck_builder()
                     instance = {}
-                    instance.new = sub()
-                    end sub
+                    instance.new = __Birds_WaterFowl_Duck_method_new
                     return instance
                 end function
                 function Birds_WaterFowl_Duck()
@@ -373,12 +445,13 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new()
                     return instance
                 end function
+                sub __Birds_WaterFowl_BabyDuck_method_new()
+                    m.super0_new()
+                end sub
                 function __Birds_WaterFowl_BabyDuck_builder()
                     instance = __Birds_WaterFowl_Duck_builder()
                     instance.super0_new = instance.new
-                    instance.new = sub()
-                        m.super0_new()
-                    end sub
+                    instance.new = __Birds_WaterFowl_BabyDuck_method_new
                     return instance
                 end function
                 function Birds_WaterFowl_BabyDuck()
@@ -389,15 +462,16 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
-        it('works for simple  class', () => {
+        it('works for simple class', () => {
             testTranspile(`
                 class Duck
                 end class
             `, `
+                sub __Duck_method_new()
+                end sub
                 function __Duck_builder()
                     instance = {}
-                    instance.new = sub()
-                    end sub
+                    instance.new = __Duck_method_new
                     return instance
                 end function
                 function Duck()
@@ -408,6 +482,81 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
+        it('inherits the parameters of the last known constructor', () => {
+            testTranspile(`
+                class Animal
+                    sub new(p1)
+                    end sub
+                end class
+                class Bird extends Animal
+                end class
+                class Duck extends Bird
+                    sub new(p1, p2)
+                        super(p1)
+                        m.p2 = p2
+                    end sub
+                end class
+                class BabyDuck extends Duck
+                end class
+            `, `
+                sub __Animal_method_new(p1)
+                end sub
+                function __Animal_builder()
+                    instance = {}
+                    instance.new = __Animal_method_new
+                    return instance
+                end function
+                function Animal(p1)
+                    instance = __Animal_builder()
+                    instance.new(p1)
+                    return instance
+                end function
+                sub __Bird_method_new(p1)
+                    m.super0_new(p1)
+                end sub
+                function __Bird_builder()
+                    instance = __Animal_builder()
+                    instance.super0_new = instance.new
+                    instance.new = __Bird_method_new
+                    return instance
+                end function
+                function Bird(p1)
+                    instance = __Bird_builder()
+                    instance.new(p1)
+                    return instance
+                end function
+                sub __Duck_method_new(p1, p2)
+                    m.super1_new(p1)
+                    m.p2 = p2
+                end sub
+                function __Duck_builder()
+                    instance = __Bird_builder()
+                    instance.super1_new = instance.new
+                    instance.new = __Duck_method_new
+                    return instance
+                end function
+                function Duck(p1, p2)
+                    instance = __Duck_builder()
+                    instance.new(p1, p2)
+                    return instance
+                end function
+                sub __BabyDuck_method_new(p1, p2)
+                    m.super2_new(p1, p2)
+                end sub
+                function __BabyDuck_builder()
+                    instance = __Duck_builder()
+                    instance.super2_new = instance.new
+                    instance.new = __BabyDuck_method_new
+                    return instance
+                end function
+                function BabyDuck(p1, p2)
+                    instance = __BabyDuck_builder()
+                    instance.new(p1, p2)
+                    return instance
+                end function
+            `);
+        });
+
         it('registers the constructor and properly handles its parameters', () => {
             testTranspile(`
                 class Duck
@@ -415,10 +564,11 @@ describe('BrsFile BrighterScript classes', () => {
                     end sub
                 end class
             `, `
+                sub __Duck_method_new(name as string, age as integer)
+                end sub
                 function __Duck_builder()
                     instance = {}
-                    instance.new = sub(name as string, age as integer)
-                    end sub
+                    instance.new = __Duck_method_new
                     return instance
                 end function
                 function Duck(name as string, age as integer)
@@ -443,10 +593,11 @@ describe('BrsFile BrighterScript classes', () => {
                     end sub
                 end class
             `, `
+                sub __Animal_method_new(name as string)
+                end sub
                 function __Animal_builder()
                     instance = {}
-                    instance.new = sub(name as string)
-                    end sub
+                    instance.new = __Animal_method_new
                     return instance
                 end function
                 function Animal(name as string)
@@ -454,13 +605,14 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new(name)
                     return instance
                 end function
+                sub __Duck_method_new(name as string, age as integer)
+                    m.super0_new(name)
+                    m.super0_DoSomething()
+                end sub
                 function __Duck_builder()
                     instance = __Animal_builder()
                     instance.super0_new = instance.new
-                    instance.new = sub(name as string, age as integer)
-                        m.super0_new(name)
-                        m.super0_DoSomething()
-                    end sub
+                    instance.new = __Duck_method_new
                     return instance
                 end function
                 function Duck(name as string, age as integer)
@@ -490,13 +642,15 @@ describe('BrsFile BrighterScript classes', () => {
                     end function
                 end class
             `, `
+                sub __Creature_method_new(name as string)
+                end sub
+                function __Creature_method_sayHello(text)
+                    ? text
+                end function
                 function __Creature_builder()
                     instance = {}
-                    instance.new = sub(name as string)
-                    end sub
-                    instance.sayHello = function(text)
-                        ? text
-                    end function
+                    instance.new = __Creature_method_new
+                    instance.sayHello = __Creature_method_sayHello
                     return instance
                 end function
                 function Creature(name as string)
@@ -504,24 +658,26 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new(name)
                     return instance
                 end function
+                sub __Duck_method_new(name as string)
+                    m.super0_new(name)
+                end sub
+                function __Duck_method_sayHello(text)
+                    text = "The duck says " + text
+                    if text <> invalid
+                        m.super0_sayHello(text)
+                    end if
+                end function
                 function __Duck_builder()
                     instance = __Creature_builder()
                     instance.super0_new = instance.new
-                    instance.new = sub()
-                        m.super0_new()
-                    end sub
+                    instance.new = __Duck_method_new
                     instance.super0_sayHello = instance.sayHello
-                    instance.sayHello = function(text)
-                        text = "The duck says " + text
-                        if text <> invalid
-                            m.super0_sayHello(text)
-                        end if
-                    end function
+                    instance.sayHello = __Duck_method_sayHello
                     return instance
                 end function
-                function Duck()
+                function Duck(name as string)
                     instance = __Duck_builder()
-                    instance.new()
+                    instance.new(name)
                     return instance
                 end function
             `, 'trim', 'source/main.bs'
@@ -595,10 +751,11 @@ describe('BrsFile BrighterScript classes', () => {
                     end sub
                 end class
             `, `
+                sub __Parent_method_new()
+                end sub
                 function __Parent_builder()
                     instance = {}
-                    instance.new = sub()
-                    end sub
+                    instance.new = __Parent_method_new
                     return instance
                 end function
                 function Parent()
@@ -606,12 +763,13 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new()
                     return instance
                 end function
+                sub __Child_method_new()
+                    m.super0_new()
+                end sub
                 function __Child_builder()
                     instance = __Parent_builder()
                     instance.super0_new = instance.new
-                    instance.new = sub()
-                        m.super0_new()
-                    end sub
+                    instance.new = __Child_method_new
                     return instance
                 end function
                 function Child()
@@ -633,11 +791,12 @@ describe('BrsFile BrighterScript classes', () => {
                     name = "Bob"
                 end class
             `, `
+                sub __Person_method_new()
+                    m.name = "Bob"
+                end sub
                 function __Person_builder()
                     instance = {}
-                    instance.new = sub()
-                        m.name = "Bob"
-                    end sub
+                    instance.new = __Person_method_new
                     return instance
                 end function
                 function Person()
@@ -693,15 +852,17 @@ describe('BrsFile BrighterScript classes', () => {
                     '> Waddling...\\nDewey moved 2 meters\\nFell over...I'm new at this
                 end sub
             `, `
+                sub __Animal_method_new(name as string)
+                    m.name = invalid
+                    m.name = name
+                end sub
+                sub __Animal_method_move(distanceInMeters as integer)
+                    print m.name + " moved " + distanceInMeters.ToStr() + " meters"
+                end sub
                 function __Animal_builder()
                     instance = {}
-                    instance.new = sub(name as string)
-                        m.name = invalid
-                        m.name = name
-                    end sub
-                    instance.move = sub(distanceInMeters as integer)
-                        print m.name + " moved " + distanceInMeters.ToStr() + " meters"
-                    end sub
+                    instance.new = __Animal_method_new
+                    instance.move = __Animal_method_move
                     return instance
                 end function
                 function Animal(name as string)
@@ -709,40 +870,44 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new(name)
                     return instance
                 end function
+                sub __Duck_method_new(name as string)
+                    m.super0_new(name)
+                end sub
+                sub __Duck_method_move(distanceInMeters as integer)
+                    print "Waddling..."
+                    m.super0_move(distanceInMeters)
+                end sub
                 function __Duck_builder()
                     instance = __Animal_builder()
                     instance.super0_new = instance.new
-                    instance.new = sub()
-                        m.super0_new()
-                    end sub
+                    instance.new = __Duck_method_new
                     instance.super0_move = instance.move
-                    instance.move = sub(distanceInMeters as integer)
-                        print "Waddling..."
-                        m.super0_move(distanceInMeters)
-                    end sub
+                    instance.move = __Duck_method_move
                     return instance
                 end function
-                function Duck()
+                function Duck(name as string)
                     instance = __Duck_builder()
-                    instance.new()
+                    instance.new(name)
                     return instance
                 end function
+                sub __BabyDuck_method_new(name as string)
+                    m.super1_new(name)
+                end sub
+                sub __BabyDuck_method_move(distanceInMeters as integer)
+                    m.super1_move(distanceInMeters)
+                    print "Fell over...I'm new at this"
+                end sub
                 function __BabyDuck_builder()
                     instance = __Duck_builder()
                     instance.super1_new = instance.new
-                    instance.new = sub()
-                        m.super1_new()
-                    end sub
+                    instance.new = __BabyDuck_method_new
                     instance.super1_move = instance.move
-                    instance.move = sub(distanceInMeters as integer)
-                        m.super1_move(distanceInMeters)
-                        print "Fell over...I'm new at this"
-                    end sub
+                    instance.move = __BabyDuck_method_move
                     return instance
                 end function
-                function BabyDuck()
+                function BabyDuck(name as string)
                     instance = __BabyDuck_builder()
-                    instance.new()
+                    instance.new(name)
                     return instance
                 end function
 
@@ -775,13 +940,15 @@ describe('BrsFile BrighterScript classes', () => {
                     end sub
                 end class
             `, `
+                sub __Duck_method_new()
+                end sub
+                sub __Duck_method_walk(meters as integer)
+                    print "Walked " + meters.ToStr() + " meters"
+                end sub
                 function __Duck_builder()
                     instance = {}
-                    instance.new = sub()
-                    end sub
-                    instance.walk = sub(meters as integer)
-                        print "Walked " + meters.ToStr() + " meters"
-                    end sub
+                    instance.new = __Duck_method_new
+                    instance.walk = __Duck_method_walk
                     return instance
                 end function
                 function Duck()
@@ -789,17 +956,19 @@ describe('BrsFile BrighterScript classes', () => {
                     instance.new()
                     return instance
                 end function
+                sub __BabyDuck_method_new()
+                    m.super0_new()
+                end sub
+                sub __BabyDuck_method_walk(meters as integer)
+                    print "Tripped"
+                    m.super0_walk(meters)
+                end sub
                 function __BabyDuck_builder()
                     instance = __Duck_builder()
                     instance.super0_new = instance.new
-                    instance.new = sub()
-                        m.super0_new()
-                    end sub
+                    instance.new = __BabyDuck_method_new
                     instance.super0_walk = instance.walk
-                    instance.walk = sub(meters as integer)
-                        print "Tripped"
-                        m.super0_walk(meters)
-                    end sub
+                    instance.walk = __BabyDuck_method_walk
                     return instance
                 end function
                 function BabyDuck()
@@ -809,6 +978,159 @@ describe('BrsFile BrighterScript classes', () => {
                 end function
             `, 'trim', 'source/main.bs');
         });
+
+        it('works with enums as field initial values inside a namespace', () => {
+            testTranspile(`
+                namespace MyNS
+                    class HasEnumKlass
+                        enumValue = MyEnum.A
+                    end class
+                    enum MyEnum
+                        A = "A"
+                        B = "B"
+                    end enum
+                end namespace
+            `, `
+                sub __MyNS_HasEnumKlass_method_new()
+                    m.enumValue = "A"
+                end sub
+                function __MyNS_HasEnumKlass_builder()
+                    instance = {}
+                    instance.new = __MyNS_HasEnumKlass_method_new
+                    return instance
+                end function
+                function MyNS_HasEnumKlass()
+                    instance = __MyNS_HasEnumKlass_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, 'trim', 'source/main.bs');
+        });
+
+        it('allows enums as super args inside a namespace', () => {
+            testTranspile(`
+                namespace MyNS
+                    class SubKlass extends SuperKlass
+                        sub new()
+                            super(MyEnum.B)
+                        end sub
+                    end class
+                    class SuperKlass
+                        sub new(enumVal)
+                            print enumVal
+                        end sub
+                    end class
+                    enum MyEnum
+                        A = "A"
+                        B = "B"
+                    end enum
+                end namespace
+            `, `
+                sub __MyNS_SubKlass_method_new()
+                    m.super0_new("B")
+                end sub
+                function __MyNS_SubKlass_builder()
+                    instance = __MyNS_SuperKlass_builder()
+                    instance.super0_new = instance.new
+                    instance.new = __MyNS_SubKlass_method_new
+                    return instance
+                end function
+                function MyNS_SubKlass()
+                    instance = __MyNS_SubKlass_builder()
+                    instance.new()
+                    return instance
+                end function
+                sub __MyNS_SuperKlass_method_new(enumVal)
+                    print enumVal
+                end sub
+                function __MyNS_SuperKlass_builder()
+                    instance = {}
+                    instance.new = __MyNS_SuperKlass_method_new
+                    return instance
+                end function
+                function MyNS_SuperKlass(enumVal)
+                    instance = __MyNS_SuperKlass_builder()
+                    instance.new(enumVal)
+                    return instance
+                end function
+            `, 'trim', 'source/main.bs');
+        });
+
+
+        it('works with enums as values referenced in a namespace directly', () => {
+            testTranspile(`
+                namespace MyNS
+                    class HasEnumKlass
+                        myArray = [true, true]
+                        sub new()
+                            m.myArray[MyEnum.A] = true
+                            m.myArray[MyEnum.B] = false
+                        end sub
+                    end class
+                    enum MyEnum
+                        A = 0
+                        B = 1
+                    end enum
+                end namespace
+            `, `
+                sub __MyNS_HasEnumKlass_method_new()
+                    m.myArray = [
+                        true
+                        true
+                    ]
+                    m.myArray[0] = true
+                    m.myArray[1] = false
+                end sub
+                function __MyNS_HasEnumKlass_builder()
+                    instance = {}
+                    instance.new = __MyNS_HasEnumKlass_method_new
+                    return instance
+                end function
+                function MyNS_HasEnumKlass()
+                    instance = __MyNS_HasEnumKlass_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, 'trim', 'source/main.bs');
+        });
+
+        it('works with enums as values referenced in a namespace with namespace', () => {
+            testTranspile(`
+                namespace MyNS
+                    class HasEnumKlass
+                        myArray = [true, true]
+                        sub new()
+                            m.myArray[MyNS.MyEnum.A] = true
+                            m.myArray[MyNS.MyEnum.B] = false
+                        end sub
+                    end class
+                    enum MyEnum
+                        A = 0
+                        B = 1
+                    end enum
+                end namespace
+            `, `
+                sub __MyNS_HasEnumKlass_method_new()
+                    m.myArray = [
+                        true
+                        true
+                    ]
+                    m.myArray[0] = true
+                    m.myArray[1] = false
+                end sub
+                function __MyNS_HasEnumKlass_builder()
+                    instance = {}
+                    instance.new = __MyNS_HasEnumKlass_method_new
+                    return instance
+                end function
+                function MyNS_HasEnumKlass()
+                    instance = __MyNS_HasEnumKlass_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, 'trim', 'source/main.bs');
+        });
+
     });
 
     it('detects using `new` keyword on non-classes', () => {
@@ -916,13 +1238,15 @@ describe('BrsFile BrighterScript classes', () => {
         expect(
             fsExtra.readFileSync(s`${stagingDir}/source/lib.brs`).toString().trimEnd()
         ).to.eql(trim`
+            sub __Being_method_new()
+            end sub
+            function __Being_method_think()
+                print "thinking..."
+            end function
             function __Being_builder()
                 instance = {}
-                instance.new = sub()
-                end sub
-                instance.think = function()
-                    print "thinking..."
-                end function
+                instance.new = __Being_method_new
+                instance.think = __Being_method_think
                 return instance
             end function
             function Being()
@@ -930,15 +1254,17 @@ describe('BrsFile BrighterScript classes', () => {
                 instance.new()
                 return instance
             end function
+            sub __Human_method_new()
+                m.super0_new()
+            end sub
+            function __Human_method_think()
+                m.super0_think()
+            end function
             function __Human_builder()
                 instance = __Being_builder()
                 instance.super0_new = instance.new
-                instance.new = sub()
-                    m.super0_new()
-                end sub
-                instance.think = function()
-                    m.super0_think()
-                end function
+                instance.new = __Human_method_new
+                instance.think = __Human_method_think
                 return instance
             end function
             function Human()
@@ -1406,12 +1732,13 @@ describe('BrsFile BrighterScript classes', () => {
                 end class
             end namespace
         `, `
+            sub __App_ClassC_method_new()
+                m.super1_new()
+            end sub
             function __App_ClassC_builder()
                 instance = __App_ClassB_builder()
                 instance.super1_new = instance.new
-                instance.new = sub()
-                    m.super1_new()
-                end sub
+                instance.new = __App_ClassC_method_new
                 return instance
             end function
             function App_ClassC()
@@ -1434,12 +1761,13 @@ describe('BrsFile BrighterScript classes', () => {
                 end class
             end namespace
         `, `
+            sub __App_ClassB_method_new()
+                m.super0_new()
+            end sub
             function __App_ClassB_builder()
                 instance = __ClassA_builder()
                 instance.super0_new = instance.new
-                instance.new = sub()
-                    m.super0_new()
-                end sub
+                instance.new = __App_ClassB_method_new
                 return instance
             end function
             function App_ClassB()
@@ -1484,6 +1812,84 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         program.validate();
+    });
+
+    it('extending namespaced class transpiles properly', () => {
+        testTranspile(`
+            namespace App
+                class CoreClass
+                    sub new()
+                        print "CoreClass.new()"
+                    end sub
+                end class
+            end namespace
+            namespace App.Logic
+                class FirstClass extends App.CoreClass
+                end class
+                class SecondClass extends FirstClass
+                end class
+            end namespace
+            namespace App.OtherLogic
+                class FinalClass extends App.Logic.SecondClass
+                end class
+            end namespace
+        `, `
+            sub __App_CoreClass_method_new()
+                print "CoreClass.new()"
+            end sub
+            function __App_CoreClass_builder()
+                instance = {}
+                instance.new = __App_CoreClass_method_new
+                return instance
+            end function
+            function App_CoreClass()
+                instance = __App_CoreClass_builder()
+                instance.new()
+                return instance
+            end function
+            sub __App_Logic_FirstClass_method_new()
+                m.super0_new()
+            end sub
+            function __App_Logic_FirstClass_builder()
+                instance = __App_CoreClass_builder()
+                instance.super0_new = instance.new
+                instance.new = __App_Logic_FirstClass_method_new
+                return instance
+            end function
+            function App_Logic_FirstClass()
+                instance = __App_Logic_FirstClass_builder()
+                instance.new()
+                return instance
+            end function
+            sub __App_Logic_SecondClass_method_new()
+                m.super1_new()
+            end sub
+            function __App_Logic_SecondClass_builder()
+                instance = __App_Logic_FirstClass_builder()
+                instance.super1_new = instance.new
+                instance.new = __App_Logic_SecondClass_method_new
+                return instance
+            end function
+            function App_Logic_SecondClass()
+                instance = __App_Logic_SecondClass_builder()
+                instance.new()
+                return instance
+            end function
+            sub __App_OtherLogic_FinalClass_method_new()
+                m.super2_new()
+            end sub
+            function __App_OtherLogic_FinalClass_builder()
+                instance = __App_Logic_SecondClass_builder()
+                instance.super2_new = instance.new
+                instance.new = __App_OtherLogic_FinalClass_method_new
+                return instance
+            end function
+            function App_OtherLogic_FinalClass()
+                instance = __App_OtherLogic_FinalClass_builder()
+                instance.new()
+                return instance
+            end function
+        `);
     });
 
     it.skip('detects calling class constructors with too many parameters', () => {

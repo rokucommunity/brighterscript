@@ -40,7 +40,7 @@ export class SymbolTable {
     /**
      * The parent SymbolTable (if there is one)
      */
-    public get parent() {
+    public get parent(): SymbolTable | undefined {
         return this.parentProviders[this.parentProviders.length - 1]?.();
     }
 
@@ -80,9 +80,9 @@ export class SymbolTable {
      * @param searchParent should we look to our parent if we don't have the symbol?
      * @returns An array of BscSymbols - one for each time this symbol had a type implicitly defined
      */
-    getSymbol(name: string, searchParent = true): BscSymbol[] {
+    getSymbol(name: string, searchParent = true): BscSymbol[] | undefined {
         const key = name.toLowerCase();
-        let result: BscSymbol[];
+        let result: BscSymbol[] | undefined;
         // look in our map first
         if ((result = this.symbolMap.get(key))) {
             return result;
@@ -107,7 +107,7 @@ export class SymbolTable {
         if (!this.symbolMap.has(key)) {
             this.symbolMap.set(key, []);
         }
-        this.symbolMap.get(key).push({
+        this.symbolMap.get(key)?.push({
             name: name,
             range: range,
             type: type
@@ -115,18 +115,19 @@ export class SymbolTable {
     }
 
     /**
-     * Adds all the symbols from another table to this one
-     * It will overwrite any existing symbols in this table
+     * Adds all the symbols from another table to this one.
+     * Source symbols are shared by reference (not cloned) since BscSymbol is treated as immutable.
+     * The destination still owns its own array per key, so subsequent addSymbol calls on either
+     * table do not leak across.
      */
     mergeSymbolTable(symbolTable: SymbolTable) {
-        for (let [, value] of symbolTable.symbolMap) {
-            for (const symbol of value) {
-                this.addSymbol(
-                    symbol.name,
-                    symbol.range,
-                    symbol.type
-                );
+        for (const [key, sourceSymbols] of symbolTable.symbolMap) {
+            let destSymbols = this.symbolMap.get(key);
+            if (!destSymbols) {
+                destSymbols = [];
+                this.symbolMap.set(key, destSymbols);
             }
+            destSymbols.push(...sourceSymbols);
         }
     }
 
@@ -148,6 +149,11 @@ export class SymbolTable {
     }
 }
 
+/**
+ * A symbol entry stored in a SymbolTable.
+ * Treated as immutable once added: range and type must not be reassigned, and the object
+ * may be shared by reference across multiple symbol tables (e.g. via mergeSymbolTable).
+ */
 export interface BscSymbol {
     name: string;
     range: Range;
@@ -157,4 +163,4 @@ export interface BscSymbol {
 /**
  * A function that returns a symbol table.
  */
-export type SymbolTableProvider = () => SymbolTable;
+export type SymbolTableProvider = () => SymbolTable | undefined;

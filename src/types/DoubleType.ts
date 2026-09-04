@@ -36,4 +36,8 @@ export class DoubleType implements BscType {
     public toTypeString(): string {
         return this.toString();
     }
+
+    public clone() {
+        return new DoubleType(this.typeText);
+    }
 }

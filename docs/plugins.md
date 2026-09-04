@@ -39,6 +39,13 @@ builder.addPlugin(myPlugin);
 builder.run(/*...*/);
 ```
 
+## Creating a plugin
+### Naming conventions
+While there are no restrictions on plugin names, it helps others to find your plugin on npm when you follow these naming conventions:
+
+- **Unscoped**: If your npm package name won’t be scoped (doesn’t begin with `@`), then the plugin name should begin with `bsc-plugin-`, such as `bsc-plugin-auto-findnode`.
+- **Scoped**: If your npm package name will be scoped, then the plugin name should be in the format of `@<scope>/bsc-plugin-<plugin-name>` such as `@rokucommunity/bsc-plugin-auto-findnode` or even `@<scope>/bsc-plugin` such as `@maestro/bsc-plugin`.
+
 ## Compiler events
 
 Full compiler lifecycle:
@@ -69,6 +76,7 @@ Full compiler lifecycle:
         - `afterFileTranspile`
     - `afterProgramTranspile`
 - `afterPublish`
+- `beforeProgramDispose`
 
 ### Language server
 
@@ -143,7 +151,7 @@ The top level object is the `ProgramBuilder` which runs the overall process: pre
 Here are some important interfaces. You can view them in the code at [this link](https://github.com/rokucommunity/brighterscript/blob/ddcb7b2cd219bd9fecec93d52fbbe7f9b972816b/src/interfaces.ts#L190:~:text=export%20interface%20CompilerPlugin%20%7B).
 
 ```typescript
-export type CompilerPluginFactory = () => CompilierPlugin;
+export type CompilerPluginFactory = (options?: PluginFactoryOptions) => CompilierPlugin;
 
 export interface CompilerPlugin {
     name: string;
@@ -158,6 +166,7 @@ export interface CompilerPlugin {
     afterProgramValidate?: (program: Program) => void;
     beforeProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
     afterProgramTranspile?: (program: Program, entries: TranspileObj[], editor: AstEditor) => void;
+    beforeProgramDispose?: PluginHandler<BeforeProgramDisposeEvent>;
     onGetCodeActions?: PluginHandler<OnGetCodeActionsEvent>;
 
     /**
@@ -185,6 +194,70 @@ export interface CompilerPlugin {
      * Called after the `provideHover` hook. Use this if you want to intercept or sanitize the hover data (even from other plugins) before it gets sent to the client.
      */
     afterProvideHover?: PluginHandler<AfterProvideHoverEvent>;
+
+    /**
+     * Called before the `provideDefinition` hook
+     */
+    beforeProvideDefinition?(event: BeforeProvideDefinitionEvent): any;
+    /**
+     * Provide one or more `Location`s where the symbol at the given position was originally defined
+     * @param event
+     */
+    provideDefinition?(event: ProvideDefinitionEvent): any;
+    /**
+     * Called after `provideDefinition`. Use this if you want to intercept or sanitize the definition data provided by bsc or other plugins
+     * @param event
+     */
+    afterProvideDefinition?(event: AfterProvideDefinitionEvent): any;
+
+
+    /**
+     * Called before the `provideReferences` hook
+     */
+    beforeProvideReferences?(event: BeforeProvideReferencesEvent): any;
+    /**
+     * Provide all of the `Location`s where the symbol at the given position is located
+     * @param event
+     */
+    provideReferences?(event: ProvideReferencesEvent): any;
+    /**
+     * Called after `provideReferences`. Use this if you want to intercept or sanitize the references data provided by bsc or other plugins
+     * @param event
+     */
+    afterProvideReferences?(event: AfterProvideReferencesEvent): any;
+
+
+    /**
+     * Called before the `provideDocumentSymbols` hook
+     */
+    beforeProvideDocumentSymbols?(event: BeforeProvideDocumentSymbolsEvent): any;
+    /**
+     * Provide all of the `DocumentSymbol`s for the given file
+     * @param event
+     */
+    provideDocumentSymbols?(event: ProvideDocumentSymbolsEvent): any;
+    /**
+     * Called after `provideDocumentSymbols`. Use this if you want to intercept or sanitize the document symbols data provided by bsc or other plugins
+     * @param event
+     */
+    afterProvideDocumentSymbols?(event: AfterProvideDocumentSymbolsEvent): any;
+
+
+    /**
+     * Called before the `provideWorkspaceSymbols` hook
+     */
+    beforeProvideWorkspaceSymbols?(event: BeforeProvideWorkspaceSymbolsEvent): any;
+    /**
+     * Provide all of the workspace symbols for the entire project
+     * @param event
+     */
+    provideWorkspaceSymbols?(event: ProvideWorkspaceSymbolsEvent): any;
+    /**
+     * Called after `provideWorkspaceSymbols`. Use this if you want to intercept or sanitize the workspace symbols data provided by bsc or other plugins
+     * @param event
+     */
+    afterProvideWorkspaceSymbols?(event: AfterProvideWorkspaceSymbolsEvent): any;
+
 
     onGetSemanticTokens?: PluginHandler<OnGetSemanticTokensEvent>;
     //scope events
@@ -240,6 +313,39 @@ interface CallableContainer {
     scope: Scope;
 }
 ```
+
+### PluginFactory
+To register a plugin, you need to have a default export that returns a factory. BrighterScript will call this factory once for every instance of a program that needs the plugin. This means that you might have multiple instances of a plugin in one NodeJS process (one for each brighterscript project).
+
+```typescript
+export default function () {
+    return {
+        name: 'Name of your plugin'
+    };
+}
+```
+
+### BrighterScript v1 compatability
+There is currently a v1 rewrite of BrighterScript which includes some significant breaking changes. This has caused challenges with brighterscript plugins, as you need to maintain separate versions for v0 and v1. You can utilize the `pluginOptions.version` property in your factory to determine what brighterscript version is running your plugin, and adjust accordingly.
+
+This options object is only available starting with brighterscript `v0.69.4` and `v1.0.0-alpha.45`. It's important to support backwards compatibility that an `undefined` `version` value be treated as a v0 plugin.
+
+Here's a small example:
+
+```typescript
+export default function (pluginOptions: PluginOptions) {
+    if(semver.major(pluginOptions?.version) === '1') {
+        return {
+            name: 'v1 version of your plugin!'
+        };
+    } else {
+        return {
+            name: 'v0 version of your plugin'
+        };
+    }
+}
+```
+
 
 ## Plugin API
 
@@ -388,6 +494,29 @@ export default function plugin() {
                     });
                 }
             }
+        }
+    } as CompilerPlugin;
+}
+```
+
+## Modifying `bsconfig.json` via a plugin
+
+In some cases you may want to modify the project's configuration via a plugin, such as to change settings based on environment variables or to dynamically modify the project's `files` array. Plugins may do so in the `beforeProgramCreate` step. For example, here's a plugin which adds an additional file to the build:
+```typescript
+import { CompilerPlugin, ProgramBuilder } from 'brighterscript';
+
+export default function plugin() {
+    return {
+        name: 'addFilesDynamically',
+        beforeProgramCreate: (builder: ProgramBuilder) => {
+            if (!builder.options.files) {
+                builder.options.files = [];
+            }
+
+            builder.options.files.push({
+                src: "path/to/plugin/file.bs",
+                dest: "some/destination/path/goes/here"
+            })
         }
     } as CompilerPlugin;
 }

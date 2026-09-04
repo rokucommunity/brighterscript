@@ -1,4 +1,7 @@
-module.exports = async (suite, name, brighterscript, projectPath, options) => {
+import type { TargetOptions } from '../target-runner';
+
+module.exports = async (options: TargetOptions) => {
+    const { suite, name, version, fullName, brighterscript, projectPath, suiteOptions } = options;
     const { ProgramBuilder, XmlFile } = brighterscript;
 
     const builder = new ProgramBuilder();
@@ -21,14 +24,14 @@ module.exports = async (suite, name, brighterscript, projectPath, options) => {
         console.log('[xml-parser] No XML files found in program');
         return;
     }
-    suite.add(name, (deferred) => {
-        const wait = [];
+    suite.add(fullName, (deferred) => {
+        const wait: Promise<any>[] = [];
         for (const x of xmlFiles) {
             const xmlFile = new XmlFile(x.srcPath, x.pkgPath, builder.program);
             //handle async and sync parsing
             const prom = xmlFile.parse(x.fileContents);
-            if (prom) {
-                wait.push(prom);
+            if (prom as any) {
+                wait.push(prom as any);
             }
         }
         if (wait.length > 0) {
@@ -38,7 +41,7 @@ module.exports = async (suite, name, brighterscript, projectPath, options) => {
             deferred.resolve();
         }
     }, {
-        ...options,
+        ...suiteOptions,
         'defer': true
     });
 };
