@@ -27,12 +27,20 @@ export class ReferencesProvider {
 
         const callSiteToken = file.getTokenAt(this.event.position);
 
+        //there's no token at this position (i.e. the cursor is past the end of a line), so there's nothing to search for
+        if (!callSiteToken) {
+            return;
+        }
+
         const searchFor = callSiteToken.text.toLowerCase();
 
         const scopes = this.event.program.getScopesForFile(file);
 
+        //track processed files across all scopes. A file's references are the same no matter which
+        //scope it was reached through, so walking it once per scope would emit duplicate results
+        const processedFiles = new Set<BrsFile>();
+
         for (const scope of scopes) {
-            const processedFiles = new Set<BrsFile>();
             for (const file of scope.getAllFiles()) {
                 if (!isBrsFile(file) || processedFiles.has(file)) {
                     continue;

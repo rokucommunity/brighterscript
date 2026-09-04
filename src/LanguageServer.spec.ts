@@ -1851,6 +1851,32 @@ describe('LanguageServer', () => {
 
             expect(references).to.be.empty;
         });
+
+        it('does not return duplicate locations for a file shared by multiple component scopes', async () => {
+            //a variable declared and used entirely within a file that many components include
+            const sharedDocument = addScriptFile('sharedLib', `
+                sub useShared()
+                    sharedValue = 1
+                    print sharedValue
+                end sub
+            `)!;
+            for (let i = 0; i < 3; i++) {
+                addXmlFile(`SharedHost${i}`, `<script type="text/brightscript" uri="sharedLib.brs" />`);
+            }
+
+            const references = await server['onReferences']({
+                textDocument: {
+                    uri: sharedDocument.uri
+                },
+                position: util.createPosition(2, 22)
+            } as any);
+
+            //the assignment and the print usage, each reported exactly once even though the
+            //file is reachable through the source scope plus 3 component scopes
+            const keys = references.map(x => `${x.uri}:${x.range.start.line}:${x.range.start.character}`);
+            expect(keys).to.eql([...new Set(keys)]);
+            expect(references).to.be.lengthOf(2);
+        });
     });
 
     describe('onWillRenameFiles', () => {
