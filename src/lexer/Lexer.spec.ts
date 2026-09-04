@@ -1471,6 +1471,74 @@ describe('lexer', () => {
             ]);
         });
 
+        it('recognizes a regex at the start of a template string expression', () => {
+            expect(
+                Lexer.scan('thing = `${/hello/g}`').tokens.map(x => x.kind)
+            ).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.RegexLiteral,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('does not end a template string expression at a curly brace inside a regex', () => {
+            expect(
+                Lexer.scan('thing = `${/[}]/g}`').tokens.map(x => x.kind)
+            ).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.RegexLiteral,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('recognizes a regex after a comma', () => {
+            expect(
+                Lexer.scan('thing = [1, /hello/g]').tokens.map(x => x.kind)
+            ).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.LeftSquareBracket,
+                TokenKind.IntegerLiteral,
+                TokenKind.Comma,
+                TokenKind.RegexLiteral,
+                TokenKind.RightSquareBracket,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('still treats a forwardslash after an identifier as division', () => {
+            expect(
+                Lexer.scan('thing = `${a/b}`').tokens.map(x => x.kind)
+            ).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.Identifier,
+                TokenKind.Forwardslash,
+                TokenKind.Identifier,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
         it('only captures alphanumeric flags', () => {
             expect(
                 Lexer.scan('speak(/a/)').tokens.map(x => x.kind)
