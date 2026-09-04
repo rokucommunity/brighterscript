@@ -8,7 +8,25 @@ import { URI } from 'vscode-uri';
 import { tempDir } from '../../testHelpers.spec';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
+import type { Location, LocationLink, Range } from 'vscode-languageserver-protocol';
 const sinon = createSandbox();
+
+/**
+ * Assert that `result` is a single LocationLink pointing at `srcPath`, whose `originSelectionRange`
+ * covers exactly the given range. The origin range matters just as much as the target: VS Code uses
+ * it to underline the whole path as one unit instead of splitting it into per-segment chunks.
+ */
+function expectLocationLink(result: Array<Location | LocationLink>, srcPath: string, originSelectionRange: Range) {
+    expect(
+        result.map(x => ({
+            targetUri: (x as LocationLink).targetUri,
+            originSelectionRange: (x as LocationLink).originSelectionRange
+        }))
+    ).to.eql([{
+        targetUri: URI.file(srcPath).toString(),
+        originSelectionRange: originSelectionRange
+    }]);
+}
 
 describe('DefinitionProvider', () => {
     let program: Program;
@@ -210,12 +228,9 @@ describe('DefinitionProvider', () => {
         // Line 2 (0-indexed): `                <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />`
         // The uri value range starts at the opening `"` for `pkg:/components/MainScene.brs`
         const result = program.getDefinition(xmlFile.srcPath, util.createPosition(2, 60));
-        expect(result).to.be.lengthOf(1);
-        expect(result[0]).to.include({
-            targetUri: URI.file(brsFile.srcPath).toString()
-        });
-        // originSelectionRange should cover the full URI value (the entire filePathRange)
-        expect((result[0] as any).originSelectionRange).to.exist;
+        //the origin range covers the whole `pkg:/components/MainScene.brs` value, so vscode
+        //underlines it as a single link instead of one chunk per path segment
+        expectLocationLink(result, brsFile.srcPath, util.createRange(2, 54, 2, 83));
     });
 
     it('handles script tag uri go-to-definition with relative path', () => {
@@ -231,11 +246,7 @@ describe('DefinitionProvider', () => {
         // Line 2 (0-indexed): `                <script type="text/brightscript" uri="MainScene.brs" />`
         // The uri value range starts at the opening `"` for `MainScene.brs`
         const result = program.getDefinition(xmlFile.srcPath, util.createPosition(2, 54));
-        expect(result).to.be.lengthOf(1);
-        expect(result[0]).to.include({
-            targetUri: URI.file(brsFile.srcPath).toString()
-        });
-        expect((result[0] as any).originSelectionRange).to.exist;
+        expectLocationLink(result, brsFile.srcPath, util.createRange(2, 54, 2, 67));
     });
 
     it('returns empty array when script tag uri file is not found', () => {
@@ -264,11 +275,8 @@ describe('DefinitionProvider', () => {
         // Line 3 (0-indexed): `                poster.uri = "pkg:/source/assets.brs"`
         // "pkg:/source/assets.brs" starts at col 29 (opening ") + content at col 30
         const result = program.getDefinition(main.srcPath, util.createPosition(3, 35));
-        expect(result).to.be.lengthOf(1);
-        expect(result[0]).to.include({
-            targetUri: URI.file(targetFile.srcPath).toString()
-        });
-        expect((result[0] as any).originSelectionRange).to.exist;
+        //the origin range excludes the surrounding quotes
+        expectLocationLink(result, targetFile.srcPath, util.createRange(3, 30, 3, 52));
     });
 
     it('handles relative (./) string literal in brs assignment', () => {
@@ -284,11 +292,7 @@ describe('DefinitionProvider', () => {
         // Line 2 (0-indexed): `                m.uri = "./utils.brs"`
         // "./utils.brs" starts at col 24 (opening ") + content at col 25
         const result = program.getDefinition(main.srcPath, util.createPosition(2, 27));
-        expect(result).to.be.lengthOf(1);
-        expect(result[0]).to.include({
-            targetUri: URI.file(targetFile.srcPath).toString()
-        });
-        expect((result[0] as any).originSelectionRange).to.exist;
+        expectLocationLink(result, targetFile.srcPath, util.createRange(2, 25, 2, 36));
     });
 
     it('handles relative (../) string literal in brs assignment', () => {
@@ -304,11 +308,7 @@ describe('DefinitionProvider', () => {
         // Line 2 (0-indexed): `                m.uri = "../shared.brs"`
         // "../shared.brs" starts at col 24 (opening ") + content at col 25
         const result = program.getDefinition(main.srcPath, util.createPosition(2, 27));
-        expect(result).to.be.lengthOf(1);
-        expect(result[0]).to.include({
-            targetUri: URI.file(targetFile.srcPath).toString()
-        });
-        expect((result[0] as any).originSelectionRange).to.exist;
+        expectLocationLink(result, targetFile.srcPath, util.createRange(2, 25, 2, 38));
     });
 
     it('does not navigate to non-existent files for arbitrary brs string literals', () => {
@@ -339,11 +339,7 @@ describe('DefinitionProvider', () => {
         // Line 3 (0-indexed): `                    <Poster uri="pkg:/components/utils.brs" />`
         // Attribute value "pkg:/components/utils.brs" starts (after opening ") at col 33
         const result = program.getDefinition(xmlFile.srcPath, util.createPosition(3, 36));
-        expect(result).to.be.lengthOf(1);
-        expect(result[0]).to.include({
-            targetUri: URI.file(targetFile.srcPath).toString()
-        });
-        expect((result[0] as any).originSelectionRange).to.exist;
+        expectLocationLink(result, targetFile.srcPath, util.createRange(3, 33, 3, 58));
     });
 
     it('handles xml child node backgroundURI attribute go-to-definition', () => {
@@ -361,11 +357,7 @@ describe('DefinitionProvider', () => {
         // Line 3 (0-indexed): `                    <Scene backgroundURI="pkg:/components/bg.brs" />`
         // backgroundURI value starts (after opening ") at col 42
         const result = program.getDefinition(xmlFile.srcPath, util.createPosition(3, 45));
-        expect(result).to.be.lengthOf(1);
-        expect(result[0]).to.include({
-            targetUri: URI.file(targetFile.srcPath).toString()
-        });
-        expect((result[0] as any).originSelectionRange).to.exist;
+        expectLocationLink(result, targetFile.srcPath, util.createRange(3, 42, 3, 64));
     });
 
     it('handles xml child node relative uri attribute go-to-definition', () => {
@@ -383,11 +375,7 @@ describe('DefinitionProvider', () => {
         // Line 3 (0-indexed): `                    <Poster uri="./utils.brs" />`
         // Attribute value "./utils.brs" starts (after opening ") at col 33
         const result = program.getDefinition(xmlFile.srcPath, util.createPosition(3, 35));
-        expect(result).to.be.lengthOf(1);
-        expect(result[0]).to.include({
-            targetUri: URI.file(targetFile.srcPath).toString()
-        });
-        expect((result[0] as any).originSelectionRange).to.exist;
+        expectLocationLink(result, targetFile.srcPath, util.createRange(3, 33, 3, 44));
     });
 
     it('handles bare filename (no prefix) string literal in brs assignment', () => {
@@ -404,11 +392,7 @@ describe('DefinitionProvider', () => {
         // Line 2 (0-indexed): `                m.uri = "utils.brs"`
         // "utils.brs" starts at col 24 (opening ") + content at col 25
         const result = program.getDefinition(main.srcPath, util.createPosition(2, 27));
-        expect(result).to.be.lengthOf(1);
-        expect(result[0]).to.include({
-            targetUri: URI.file(targetFile.srcPath).toString()
-        });
-        expect((result[0] as any).originSelectionRange).to.exist;
+        expectLocationLink(result, targetFile.srcPath, util.createRange(2, 25, 2, 34));
     });
 
     it('handles bare filename with extension in brs assignment', () => {
@@ -425,11 +409,7 @@ describe('DefinitionProvider', () => {
         // Line 2 (0-indexed): `                m.uri = "myAsset.brs"`
         // "myAsset.brs" starts at col 24 (opening ") + content at col 25
         const result = program.getDefinition(main.srcPath, util.createPosition(2, 27));
-        expect(result).to.be.lengthOf(1);
-        expect(result[0]).to.include({
-            targetUri: URI.file(targetFile.srcPath).toString()
-        });
-        expect((result[0] as any).originSelectionRange).to.exist;
+        expectLocationLink(result, targetFile.srcPath, util.createRange(2, 25, 2, 36));
     });
 
     it('handles mangled AST without throwing', () => {
@@ -510,11 +490,7 @@ describe('DefinitionProvider', () => {
             `);
             // Line 2 (0-indexed): `                    m.uri = "pkg:/images/hero.png"`
             const result = diskProgram.getDefinition(main.srcPath, util.createPosition(2, 32));
-            expect(result).to.be.lengthOf(1);
-            expect(result[0]).to.include({
-                targetUri: URI.file(imgSrcPath).toString()
-            });
-            expect((result[0] as any).originSelectionRange).to.exist;
+            expectLocationLink(result, imgSrcPath, util.createRange(2, 29, 2, 49));
         });
 
         it('does not navigate to an image asset that does not exist on disk', () => {
@@ -543,11 +519,7 @@ describe('DefinitionProvider', () => {
             // Line 3 (0-indexed): `                        <Poster uri="pkg:/images/poster.png" />`
             // uri value starts after opening " at col ~37
             const result = diskProgram.getDefinition(xmlFile.srcPath, util.createPosition(3, 40));
-            expect(result).to.be.lengthOf(1);
-            expect(result[0]).to.include({
-                targetUri: URI.file(imgSrcPath).toString()
-            });
-            expect((result[0] as any).originSelectionRange).to.exist;
+            expectLocationLink(result, imgSrcPath, util.createRange(3, 37, 3, 59));
         });
 
         it('does not navigate to an image asset via XML attribute when file is not on disk', () => {
@@ -581,11 +553,120 @@ describe('DefinitionProvider', () => {
             // Line 2 (0-indexed): `                    m.uri = "pkg:/images/hero.png"`
             const result = remapProgram.getDefinition(main.srcPath, util.createPosition(2, 32));
             remapProgram.dispose();
-            expect(result).to.be.lengthOf(1);
-            expect(result[0]).to.include({
-                targetUri: URI.file(imgSrcPath).toString()
+            expectLocationLink(result, imgSrcPath, util.createRange(2, 29, 2, 49));
+        });
+
+        it('navigates to an asset matched by a non-globstar glob', () => {
+            const imgSrcPath = s`${diskRootDir}/assets/hero.png`;
+            fsExtra.outputFileSync(imgSrcPath, 'PNG_DUMMY');
+
+            //`assets/*.png` flattens every match into `images/<filename>`
+            const globProgram = new Program({
+                rootDir: diskRootDir,
+                files: [{ src: 'assets/*.png', dest: 'images' }]
             });
-            expect((result[0] as any).originSelectionRange).to.exist;
+            const main = globProgram.setFile('source/main.brs', `
+                sub main()
+                    m.uri = "pkg:/images/hero.png"
+                end sub
+            `);
+            const result = globProgram.getDefinition(main.srcPath, util.createPosition(2, 32));
+            globProgram.dispose();
+            expectLocationLink(result, imgSrcPath, util.createRange(2, 29, 2, 49));
+        });
+
+        it('navigates to an asset matched by an explicit non-glob file entry', () => {
+            const imgSrcPath = s`${diskRootDir}/weird/logo.png`;
+            fsExtra.outputFileSync(imgSrcPath, 'PNG_DUMMY');
+
+            //a single file remapped to an entirely different name in the package
+            const explicitProgram = new Program({
+                rootDir: diskRootDir,
+                files: [{ src: 'weird/logo.png', dest: 'images/brand.png' }]
+            });
+            const main = explicitProgram.setFile('source/main.brs', `
+                sub main()
+                    m.uri = "pkg:/images/brand.png"
+                end sub
+            `);
+            const result = explicitProgram.getDefinition(main.srcPath, util.createPosition(2, 32));
+            explicitProgram.dispose();
+            expectLocationLink(result, imgSrcPath, util.createRange(2, 29, 2, 50));
+        });
+
+        it('navigates to an asset whose src lives outside of rootDir', () => {
+            const externalDir = s`${tempDir}/definitionProviderExternal`;
+            fsExtra.emptyDirSync(externalDir);
+            const imgSrcPath = s`${externalDir}/foo.png`;
+            fsExtra.outputFileSync(imgSrcPath, 'PNG_DUMMY');
+
+            const externalProgram = new Program({
+                rootDir: diskRootDir,
+                files: [{ src: `${externalDir.replace(/\\/g, '/')}/**/*`, dest: 'ext' }]
+            });
+            const main = externalProgram.setFile('source/main.brs', `
+                sub main()
+                    m.uri = "pkg:/ext/foo.png"
+                end sub
+            `);
+            const result = externalProgram.getDefinition(main.srcPath, util.createPosition(2, 32));
+            externalProgram.dispose();
+            fsExtra.removeSync(externalDir);
+            expectLocationLink(result, imgSrcPath, util.createRange(2, 29, 2, 45));
+        });
+
+        it('does not navigate to an asset excluded by a negated files pattern', () => {
+            fsExtra.outputFileSync(s`${diskRootDir}/images/hero.png`, 'PNG_DUMMY');
+
+            const excludeProgram = new Program({
+                rootDir: diskRootDir,
+                files: ['**/*', '!images/**/*']
+            });
+            const main = excludeProgram.setFile('source/main.brs', `
+                sub main()
+                    m.uri = "pkg:/images/hero.png"
+                end sub
+            `);
+            const result = excludeProgram.getDefinition(main.srcPath, util.createPosition(2, 32));
+            excludeProgram.dispose();
+            expect(result).to.eql([]);
+        });
+
+        it('does not navigate to a directory', () => {
+            fsExtra.ensureDirSync(s`${diskRootDir}/images`);
+            const main = diskProgram.setFile('source/main.brs', `
+                sub main()
+                    m.uri = "pkg:/images"
+                end sub
+            `);
+            expect(
+                diskProgram.getDefinition(main.srcPath, util.createPosition(2, 32))
+            ).to.eql([]);
+        });
+
+        it('does not treat an arbitrary string as a path just because a file shares its name', () => {
+            //a file with no extension and no slashes is not plausibly a path, so `print "hello world"`
+            //must not become a link even though this file exists
+            fsExtra.outputFileSync(s`${diskRootDir}/source/hello world`, 'x');
+            const main = diskProgram.setFile('source/main.brs', `
+                sub main()
+                    print "hello world"
+                end sub
+            `);
+            expect(
+                diskProgram.getDefinition(main.srcPath, util.createPosition(2, 30))
+            ).to.eql([]);
+        });
+
+        it('does not treat a url as a file path', () => {
+            const main = diskProgram.setFile('source/main.brs', `
+                sub main()
+                    m.uri = "http://example.com/images/hero.png"
+                end sub
+            `);
+            expect(
+                diskProgram.getDefinition(main.srcPath, util.createPosition(2, 40))
+            ).to.eql([]);
         });
     });
 });
