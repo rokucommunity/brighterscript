@@ -6,6 +6,7 @@ import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import { ForEachStatement } from '../../Statement';
 import { VariableExpression } from '../../Expression';
+import { DiagnosticMessages } from '../../../DiagnosticMessages';
 
 describe('parser foreach loops', () => {
     it('requires a name and target', () => {
@@ -112,5 +113,44 @@ describe('parser foreach loops', () => {
         expect(statements[0].range).deep.include(
             Range.create(0, 0, 2, 7)
         );
+    });
+
+    describe('terminator recovery', () => {
+        it('emits a single targeted diagnostic for `for each ... end while`', () => {
+            const parser = Parser.parse(`
+                sub a()
+                    for each x in arr
+                        print x
+                    end while
+                end sub
+            `);
+            expect(parser.diagnostics).to.be.lengthOf(1);
+            expect(parser.diagnostics[0].code).to.equal(DiagnosticMessages.mismatchedEndingToken().code);
+            expect((parser.diagnostics[0] as any).data).to.eql({ expected: ['end for', 'next'], found: 'end while' });
+        });
+
+        it('stores the bogus `end while` token on the ForEachStatement', () => {
+            const parser = Parser.parse(`
+                sub a()
+                    for each x in arr
+                        print x
+                    end while
+                end sub
+            `);
+            const fn = parser.references.functionStatements[0];
+            const forEachStmt = fn.func.body.statements[0] as ForEachStatement;
+            expect(forEachStmt.tokens.endFor.kind).to.equal(TokenKind.EndWhile);
+        });
+
+        it('does not regress on the canonical `for each ... next` form', () => {
+            const parser = Parser.parse(`
+                sub a()
+                    for each x in arr
+                        print x
+                    next
+                end sub
+            `);
+            expect(parser.diagnostics).to.be.lengthOf(0);
+        });
     });
 });

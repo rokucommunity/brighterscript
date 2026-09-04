@@ -1,16 +1,15 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import type { Block, CommentStatement, FunctionStatement, NamespaceStatement } from './Statement';
+import type { Block, CommentStatement, FunctionStatement } from './Statement';
 import type { Range } from 'vscode-languageserver';
 import util from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
-import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isStringType, isTemplateStringExpression, isTypeCastExpression, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isStringType, isTemplateStringExpression, isTypeCastExpression, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
@@ -94,7 +93,7 @@ export class CallExpression extends Expression {
      * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
      */
     public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+        return this.findAncestor(isNamespaceStatement)?.nameExpression;
     }
 
     transpile(state: BrsTranspileState, nameOverride?: string) {
@@ -182,7 +181,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
      * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
      */
     public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+        return this.findAncestor(isNamespaceStatement)?.nameExpression;
     }
 
     /**
@@ -190,7 +189,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
      * @deprecated use `.findAncestor(isFunctionExpression)` instead.
      */
     public get parentFunction() {
-        return this.findAncestor<FunctionExpression>(isFunctionExpression);
+        return this.findAncestor(isFunctionExpression);
     }
 
     /**
@@ -384,7 +383,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
     }
 
-    public clone() {
+    public clone(): FunctionExpression {
         const clone = this.finalizeClone(
             new FunctionExpression(
                 this.parameters?.map(e => e?.clone()),
@@ -945,7 +944,6 @@ export class AAMemberExpression extends Expression {
     public commaToken?: Token;
 
     transpile(state: BrsTranspileState) {
-        //TODO move the logic from AALiteralExpression loop into this function
         return [];
     }
 
@@ -963,12 +961,67 @@ export class AAMemberExpression extends Expression {
             ['value']
         );
     }
+}
 
+export class AAIndexedMemberExpression extends Expression {
+    constructor(options: {
+        leftBracket: Token;
+        key: Expression;
+        rightBracket: Token;
+        colon: Token;
+        /** The expression evaluated to determine the member's initial value. */
+        value: Expression;
+    }) {
+        super();
+        this.key = options.key;
+        this.tokens = {
+            leftBracket: options.leftBracket,
+            rightBracket: options.rightBracket,
+            colon: options.colon
+        };
+        this.value = options.value;
+        this.range = util.createBoundingRange(this.tokens.leftBracket, this.key, this.tokens.rightBracket, this.tokens.colon, this.value);
+    }
+
+    public readonly tokens: {
+        readonly leftBracket: Token;
+        readonly rightBracket: Token;
+        readonly colon: Token;
+    };
+
+    public key: Expression;
+    /** The expression evaluated to determine the member's initial value. */
+    public value: Expression;
+
+    public range: Range | undefined;
+    public commaToken?: Token;
+
+    transpile(state: BrsTranspileState) {
+        return [];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        walk(this, 'key', visitor, options);
+        walk(this, 'value', visitor, options);
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new AAIndexedMemberExpression({
+                leftBracket: util.cloneToken(this.tokens.leftBracket),
+                key: this.key?.clone(),
+                rightBracket: util.cloneToken(this.tokens.rightBracket),
+                colon: util.cloneToken(this.tokens.colon),
+                value: this.value?.clone()
+            }),
+            ['key', 'value']
+        );
+    }
 }
 
 export class AALiteralExpression extends Expression {
     constructor(
-        readonly elements: Array<AAMemberExpression | CommentStatement>,
+        readonly elements: Array<AAMemberExpression | AAIndexedMemberExpression | CommentStatement>,
         readonly open: Token,
         readonly close: Token
     ) {
@@ -996,7 +1049,7 @@ export class AALiteralExpression extends Expression {
             let nextElement = this.elements[i + 1];
 
             //don't indent if comment is same-line
-            if (isCommentStatement(element as any) &&
+            if (isCommentStatement(element) &&
                 (util.linesTouch(this.open, element) || util.linesTouch(previousElement, element))
             ) {
                 result.push(' ');
@@ -1011,12 +1064,17 @@ export class AALiteralExpression extends Expression {
                 result.push(...element.transpile(state));
             } else {
                 //key
-                result.push(
-                    state.transpileToken(element.keyToken)
-                );
+                if ('tokens' in element) {
+                    //computed key: transpile the resolved expression (pre-transpile overrides it to a literal)
+                    result.push(...element.key.transpile(state));
+                } else {
+                    result.push(
+                        state.transpileToken(element.keyToken)
+                    );
+                }
                 //colon
                 result.push(
-                    state.transpileToken(element.colonToken),
+                    state.transpileToken('tokens' in element ? element.tokens.colon : element.colonToken),
                     ' '
                 );
 
@@ -1125,7 +1183,7 @@ export class VariableExpression extends Expression {
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
-        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        const namespace = this.findAncestor(isNamespaceStatement);
         //if the callee is the name of a known namespace function
         if (namespace && state.file.calleeIsKnownNamespaceFunction(this, namespace.getName(ParseMode.BrighterScript))) {
             result.push(
@@ -1175,7 +1233,7 @@ export class SourceLiteralExpression extends Expression {
     public readonly range: Range;
 
     private getFunctionName(state: BrsTranspileState, parseMode: ParseMode) {
-        let func = this.findAncestor<FunctionExpression>(isFunctionExpression);
+        let func = this.findAncestor(isFunctionExpression);
         let nameParts = [] as TranspileResult;
         while (func.parentFunction) {
             let index = func.parentFunction.childFunctionExpressions.indexOf(func);
@@ -1207,7 +1265,7 @@ export class SourceLiteralExpression extends Expression {
         let text: string;
         switch (this.token.kind) {
             case TokenKind.SourceFilePathLiteral:
-                const pathUrl = fileUrl(state.srcPath);
+                const pathUrl = util.fileUrl(state.srcPath);
                 text = `"${pathUrl.substring(0, 4)}" + "${pathUrl.substring(4)}"`;
                 break;
             case TokenKind.SourceLineNumLiteral:
@@ -1234,7 +1292,7 @@ export class SourceLiteralExpression extends Expression {
                 text = `"${rootNamespace}"`;
                 break;
             case TokenKind.SourceLocationLiteral:
-                const locationUrl = fileUrl(state.srcPath);
+                const locationUrl = util.fileUrl(state.srcPath);
                 //TODO find first parent that has range, or default to -1
                 text = `"${locationUrl.substring(0, 4)}" + "${locationUrl.substring(4)}:${this.getClosestLineNumber()}"`;
                 break;
@@ -1303,7 +1361,7 @@ export class NewExpression extends Expression {
     public readonly range: Range | undefined;
 
     public transpile(state: BrsTranspileState) {
-        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        const namespace = this.findAncestor(isNamespaceStatement);
         const cls = state.file.getClassFileLink(
             this.className.getName(ParseMode.BrighterScript),
             namespace?.getName(ParseMode.BrighterScript)
@@ -1357,7 +1415,7 @@ export class CallfuncExpression extends Expression {
      * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
      */
     public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+        return this.findAncestor(isNamespaceStatement)?.nameExpression;
     }
 
     public transpile(state: BrsTranspileState) {
@@ -1484,10 +1542,10 @@ export class TemplateStringExpression extends Expression {
         if (this.expressions.length === 0 && this.quasis.length === 1 && this.quasis[0].expressions.length === 1) {
             return this.quasis[0].transpile(state);
         }
-        let result = ['('];
+        let result: TranspileResult = ['('];
         let plus = '';
         //helper function to figure out when to include the plus
-        function add(...items) {
+        function add(...items: TranspileResult) {
             if (items.length > 0) {
                 result.push(
                     plus,
@@ -2030,7 +2088,7 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
     }
     if (isAALiteralExpression(expr)) {
         return expr.elements.reduce((acc, e) => {
-            if (!isCommentStatement(e)) {
+            if (!isCommentStatement(e) && !(isAAIndexedMemberExpression(e))) {
                 acc[e.keyToken.text] = expressionToValue(e.value, strict);
             }
             return acc;

@@ -5,6 +5,7 @@ import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import type { ForStatement } from '../../Statement';
 import { LiteralExpression } from '../../Expression';
+import { DiagnosticMessages } from '../../../DiagnosticMessages';
 
 describe('parser for loops', () => {
     it('accepts a \'step\' clause', () => {
@@ -164,5 +165,55 @@ describe('parser for loops', () => {
         expect(statements[0].range).to.deep.include(
             Range.create(0, 0, 2, 8)
         );
+    });
+
+    describe('terminator recovery', () => {
+        it('emits a single targeted diagnostic for `for ... end while`', () => {
+            const parser = Parser.parse(`
+                sub a()
+                    for i = 0 to 3
+                        print i
+                    end while
+                end sub
+            `);
+            expect(parser.diagnostics).to.be.lengthOf(1);
+            expect(parser.diagnostics[0].code).to.equal(DiagnosticMessages.mismatchedEndingToken().code);
+            expect((parser.diagnostics[0] as any).data).to.eql({ expected: ['end for', 'next'], found: 'end while' });
+        });
+
+        it('stores the bogus `end while` token on the ForStatement', () => {
+            const parser = Parser.parse(`
+                sub a()
+                    for i = 0 to 3
+                        print i
+                    end while
+                end sub
+            `);
+            const fn = parser.references.functionStatements[0];
+            const forStmt = fn.func.body.statements[0] as ForStatement;
+            expect(forStmt.endForToken.kind).to.equal(TokenKind.EndWhile);
+        });
+
+        it('does not regress on the canonical `for ... next` form', () => {
+            const parser = Parser.parse(`
+                sub a()
+                    for i = 0 to 3
+                        print i
+                    next
+                end sub
+            `);
+            expect(parser.diagnostics).to.be.lengthOf(0);
+        });
+
+        it('does not regress on the canonical `for ... end for` form', () => {
+            const parser = Parser.parse(`
+                sub a()
+                    for i = 0 to 3
+                        print i
+                    end for
+                end sub
+            `);
+            expect(parser.diagnostics).to.be.lengthOf(0);
+        });
     });
 });

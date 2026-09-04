@@ -8,6 +8,53 @@
             "password"
         ]
     },
+    "definitions": {
+        "diagnosticReporterValue": {
+            "oneOf": [
+                {
+                    "type": "string",
+                    "description": "Either a preset name ('detailed' or 'github-actions') or a custom template string containing at least one known placeholder."
+                },
+                {
+                    "type": "object",
+                    "required": ["type"],
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "enum": ["detailed"]
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                {
+                    "type": "object",
+                    "required": ["type"],
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "enum": ["github-actions"]
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                {
+                    "type": "object",
+                    "required": ["type", "format"],
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "enum": ["custom"]
+                        },
+                        "format": {
+                            "type": "string",
+                            "description": "Template string. Supported placeholders: {file}, {line}, {col}, {endLine}, {endCol}, {severity}, {severityCode}, {code}, {message}, {source}."
+                        }
+                    },
+                    "additionalProperties": false
+                }
+            ]
+        }
+    },
     "properties": {
         "extends": {
             "description": "Relative or absolute path to another bsconfig.json file that this file should use as a base and then override. Prefix with a question mark (?) to prevent throwing an exception if the file does not exist.",
@@ -96,6 +143,11 @@
         },
         "sourceMap": {
             "description": "Enables generating sourcemap files, which allow debugging tools to show the original source code while running the emitted files.",
+            "type": "boolean",
+            "default": false
+        },
+        "relativeSourceMaps": {
+            "description": "If true, source file paths in generated sourcemaps will be relative to the map file location instead of absolute. This makes sourcemaps portable across different machines and environments.",
             "type": "boolean",
             "default": false
         },
@@ -295,10 +347,33 @@
                 "error"
             ]
         },
+        "diagnosticReporters": {
+            "description": "Specify how diagnostics are reported to the console. Accepts a single value or an array; each diagnostic is rendered once per entry. Each value is either a preset name ('detailed', 'github-actions'), a custom template string containing at least one known placeholder ({file}, {line}, {col}, {endLine}, {endCol}, {severity}, {severityCode}, {code}, {message}, {source}), or an object with explicit `type`. Defaults to 'detailed'.",
+            "default": "detailed",
+            "oneOf": [
+                {
+                    "$ref": "#/definitions/diagnosticReporterValue"
+                },
+                {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/diagnosticReporterValue"
+                    }
+                }
+            ]
+        },
         "allowBrighterScriptInBrightScript": {
             "description": "Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.",
             "type": "boolean",
             "default": false
+        },
+        "minFirmwareVersion": {
+            "description": "The minimum Roku firmware version required to run this project. When set, BrightScript (.brs) files will be validated to ensure they only use language features available in that firmware version or earlier. BrighterScript (.bs) files are always allowed to use all features since they are transpiled. Should be a semver-compatible string (e.g. \"11.0.0\").",
+            "type": "string",
+            "examples": [
+                "11.0.0",
+                "12.0.0"
+            ]
         }
     }
 }

@@ -1,16 +1,17 @@
 import * as EventEmitter from 'eventemitter3';
 import { Worker } from 'worker_threads';
-import type { WorkerMessage } from './MessageHandler';
+import type { MessagePort } from 'worker_threads';
+import type { WorkerMessage, MethodNames } from './MessageHandler';
 import { MessageHandler } from './MessageHandler';
 import util from '../../util';
-import type { LspDiagnostic, ActivateResponse, ProjectConfig } from '../LspProject';
+import type { LspDiagnostic, ActivateResponse, ProjectConfig, FileRenameTextEdit } from '../LspProject';
 import { type LspProject } from '../LspProject';
 import { WorkerPool } from './WorkerPool';
 import type { Hover, MaybePromise, SemanticToken } from '../../interfaces';
 import type { DocumentAction, DocumentActionWithStatus } from '../DocumentManager';
 import { Deferred } from '../../deferred';
 import type { FileTranspileResult, SignatureInfoObj } from '../../Program';
-import type { Position, Range, Location, LocationLink, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList } from 'vscode-languageserver-protocol';
+import type { Position, Range, Location, LocationLink, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList, SelectionRange, InlayHint } from 'vscode-languageserver-protocol';
 import type { Logger } from '../../logging';
 import { createLogger } from '../../logging';
 import * as fsExtra from 'fs-extra';
@@ -65,11 +66,14 @@ export class WorkerThreadProject implements LspProject {
         this.workspaceFolder = options.workspaceFolder ? util.standardizePath(options.workspaceFolder) : options.workspaceFolder;
         this.projectNumber = options.projectNumber;
 
-        // start a new worker thread or get an unused existing thread
-        this.worker = workerPool.getWorker();
+        // get a dedicated MessagePort on a (possibly shared) worker thread
+        const assignment = workerPool.assignProject();
+        this.worker = assignment.worker;
+        this.port = assignment.port;
+        this.worker.on('exit', this.handleWorkerExit);
         this.messageHandler = new MessageHandler<LspProject>({
             name: 'MainThread',
-            port: this.worker,
+            port: this.port,
             onRequest: this.processRequest.bind(this),
             onUpdate: this.processUpdate.bind(this)
         });
@@ -80,10 +84,17 @@ export class WorkerThreadProject implements LspProject {
         this.rootDir = activateResponse.data.rootDir;
         this.filePatterns = activateResponse.data.filePatterns;
         this.logger.logLevel = activateResponse.data.logLevel;
+        this.manifestSrcPath = activateResponse.data.manifestSrcPath;
 
         //load the bsconfig file contents (used for performance optimizations externally)
         try {
             this.bsconfigFileContents = (await fsExtra.readFile(this.bsconfigPath)).toString();
+        } catch { }
+
+        //load the manifest file contents (used for change detection to trigger project reloads).
+        //use manifestSrcPath from the activation response which reflects the actual src path (respects {src;dest} mappings)
+        try {
+            this.manifestFileContents = (await fsExtra.readFile(this.manifestSrcPath)).toString();
         } catch { }
 
 
@@ -126,9 +137,52 @@ export class WorkerThreadProject implements LspProject {
     bsconfigFileContents?: string;
 
     /**
-     * The worker thread where the actual project will execute
+     * The contents of the manifest file. This is used to detect when the manifest file has not actually been changed (even if the fs says it did).
+     *
+     * Only available after `.activate()` has completed.
+     * @deprecated do not depend on this property. This will certainly be removed in a future release
+     */
+    manifestFileContents?: string;
+
+    /**
+     * The absolute source path to the manifest file (the file that maps to dest 'manifest').
+     * May differ from rootDir/manifest if the project uses a custom {src; dest} mapping.
+     *
+     * Only available after `.activate()` has completed.
+     */
+    manifestSrcPath?: string;
+
+    /**
+     * The worker thread where the actual project will execute. May be shared with other projects.
      */
     private worker: Worker;
+
+    /**
+     * This project's dedicated MessagePort on `worker`, used for all request/response/update traffic
+     */
+    private port: MessagePort;
+
+    /**
+     * True once `dispose()` has run. Used to distinguish an intentional worker shutdown from an unexpected crash.
+     */
+    private isDisposed = false;
+
+    /**
+     * Called if this project's worker thread exits. If we didn't cause that ourselves via `dispose()`,
+     * treat it as a critical failure so the user finds out instead of every request just hanging forever.
+     */
+    private handleWorkerExit = (code: number) => {
+        if (this.isDisposed) {
+            return;
+        }
+        this.logger.error(`Worker thread for project #${this.projectNumber} exited unexpectedly with code ${code}`);
+        //emit() is async; this handler can't be, so void it
+        void this.emit('critical-failure', {
+            message: `The BrighterScript language server's worker thread crashed unexpectedly (exit code ${code}). This project (and any others sharing its worker thread) will stop responding until the language server is reloaded - there is currently no automatic recovery for a crashed worker thread.`
+        });
+        //reject any in-flight requests instead of leaving callers hanging forever on a worker that's gone
+        this.messageHandler?.dispose();
+    };
 
     /**
      * Path to the project. For directory-only projects, this is the path to the dir. For bsconfig.json projects, this is the path to the config.
@@ -199,7 +253,7 @@ export class WorkerThreadProject implements LspProject {
      * @returns the response from the request
      */
     private async sendStandardRequest<T>(name: string, ...data: any[]) {
-        const response = await this.messageHandler.sendRequest<T>(name as any, {
+        const response = await this.messageHandler.sendRequest<T>(name as MethodNames<LspProject>, {
             data: data
         });
         return response.data;
@@ -240,8 +294,24 @@ export class WorkerThreadProject implements LspProject {
         return this.sendStandardRequest<Location[]>('getReferences', options);
     }
 
+    public async getFileRenameEdits(options: { oldSrcPath: string; newSrcPath: string }): Promise<FileRenameTextEdit[]> {
+        return this.sendStandardRequest<FileRenameTextEdit[]>('getFileRenameEdits', options);
+    }
+
     public async getCodeActions(options: { srcPath: string; range: Range }): Promise<CodeAction[]> {
         return this.sendStandardRequest<CodeAction[]>('getCodeActions', options);
+    }
+
+    public async getSourceFixAllCodeActions(options: { srcPath: string }): Promise<CodeAction[]> {
+        return this.sendStandardRequest<CodeAction[]>('getSourceFixAllCodeActions', options);
+    }
+
+    public async getSelectionRanges(options: { srcPath: string; positions: Position[] }): Promise<SelectionRange[]> {
+        return this.sendStandardRequest<SelectionRange[]>('getSelectionRanges', options);
+    }
+
+    public async getInlayHints(options: { srcPath: string; range: Range }): Promise<InlayHint[]> {
+        return this.sendStandardRequest<InlayHint[]>('getInlayHints', options);
     }
 
     public async getCompletions(options: { srcPath: string; position: Position }): Promise<CompletionList> {
@@ -259,21 +329,24 @@ export class WorkerThreadProject implements LspProject {
 
     private processUpdate(update: WorkerMessage) {
         //for now, all updates are treated like "events"
-        this.emit(update.name as any, update.data);
+        void this.emit(update.name, update.data);
     }
 
     public on(eventName: 'critical-failure', handler: (data: { message: string }) => void);
     public on(eventName: 'diagnostics', handler: (data: { diagnostics: LspDiagnostic[] }) => MaybePromise<void>);
     public on(eventName: 'all', handler: (eventName: string, data: any) => MaybePromise<void>);
     public on(eventName: string, handler: (...args: any[]) => MaybePromise<void>) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         this.emitter.on(eventName, handler as any);
         return () => {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
             this.emitter.removeListener(eventName, handler as any);
         };
     }
 
     private emit(eventName: 'critical-failure', data: { message: string });
     private emit(eventName: 'diagnostics', data: { diagnostics: LspDiagnostic[] });
+    private emit(eventName: string, data?: any);
     private async emit(eventName: string, data?) {
         //emit these events on next tick, otherwise they will be processed immediately which could cause issues
         await util.sleep(0);
@@ -286,14 +359,21 @@ export class WorkerThreadProject implements LspProject {
     public disposables: LspProject['disposables'] = [];
 
     public dispose() {
+        if (this.isDisposed) {
+            return;
+        }
+        this.isDisposed = true;
+        this.worker?.off('exit', this.handleWorkerExit);
+
         for (let disposable of this.disposables ?? []) {
             disposable?.dispose?.();
         }
         this.disposables = [];
 
-        //move the worker back to the pool so it can be used again
+        //close our dedicated port and release our slot on the worker (which terminates the worker if it's now empty)
+        this.port?.close();
         if (this.worker) {
-            workerPool.releaseWorker(this.worker);
+            workerPool.releaseProject(this.worker);
         }
         this.emitter?.removeAllListeners();
     }

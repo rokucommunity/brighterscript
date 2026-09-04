@@ -1,7 +1,7 @@
 /* eslint no-template-curly-in-string: 0 */
 import { expect } from '../chai-config.spec';
 
-import { TokenKind } from './TokenKind';
+import { TokenKind, LexerTextCache, LEXER_TEXT_CACHE_MAX_ENTRIES } from './TokenKind';
 import { Lexer } from './Lexer';
 import { isToken } from './Token';
 import { rangeToArray } from '../parser/Parser.spec';
@@ -1301,6 +1301,58 @@ describe('lexer', () => {
             TokenKind.Override,
             TokenKind.Eof
         ]);
+    });
+
+    describe('token text canonicalization', () => {
+        it('uses one shared string instance for fixed-text token kinds', () => {
+            const { tokens } = Lexer.scan('a.b.c(1)(2)');
+            const dots = tokens.filter(x => x.kind === TokenKind.Dot);
+            const parens = tokens.filter(x => x.kind === TokenKind.LeftParen);
+            expect(dots).to.be.lengthOf(2);
+            expect(parens).to.be.lengthOf(2);
+            //same text, and literally the same string instance
+            expect(dots[0].text).to.eql('.');
+            expect(dots[0].text === dots[1].text).to.be.true;
+            expect(parens[0].text === parens[1].text).to.be.true;
+        });
+
+        it('still reports the correct text for fixed-text kinds', () => {
+            const { tokens } = Lexer.scan('a ?? b ?. c @. d');
+            expect(
+                tokens.filter(x => x.kind !== TokenKind.Eof).map(x => x.text)
+            ).to.eql(['a', '??', 'b', '?.', 'c', '@.', 'd']);
+        });
+
+        it('interns repeated whitespace and newline text', () => {
+            const { tokens } = Lexer.scan('sub a()\n    x = 1\n    y = 2\nend sub', { includeWhitespace: true });
+            const indents = tokens.filter(x => x.kind === TokenKind.Whitespace && x.text === '    ');
+            expect(indents.length).to.be.greaterThan(1);
+            //every occurrence should be the same instance
+            for (const token of indents) {
+                expect(token.text === indents[0].text).to.be.true;
+            }
+        });
+
+        it('stops interning once the cache is full but still lexes correctly', () => {
+            //every line gets a unique indent width, far more than the cache can hold.
+            //`x` alone on the line keeps the only whitespace run the leading indent.
+            let source = '';
+            const widths = [];
+            for (let i = 1; i <= LEXER_TEXT_CACHE_MAX_ENTRIES + 50; i++) {
+                widths.push(i);
+                source += `${' '.repeat(i)}x\n`;
+            }
+            const { tokens } = Lexer.scan(source, { includeWhitespace: true });
+
+            //cache must not grow past the cap
+            expect(LexerTextCache.size).to.be.at.most(LEXER_TEXT_CACHE_MAX_ENTRIES);
+
+            //and the text must still be exactly right, cached or not
+            const indents = tokens
+                .filter(x => x.kind === TokenKind.Whitespace)
+                .map(x => x.text.length);
+            expect(indents).to.eql(widths);
+        });
     });
 
     describe('whitespace', () => {

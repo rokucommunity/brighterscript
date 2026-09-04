@@ -1,6 +1,6 @@
 import type { BsDiagnostic } from './interfaces';
 import * as path from 'path';
-import * as minimatch from 'minimatch';
+import * as micromatch from 'micromatch';
 import type { BsConfig } from './BsConfig';
 import { standardizePath as s } from './util';
 
@@ -100,9 +100,16 @@ export class DiagnosticFilterer {
                 path.isAbsolute(filter.src) ? filter.src : `${this.rootDir}/${filter.src}`
             );
 
-            matchedFilePaths = minimatch.match(Object.keys(this.byFile), src, {
+            //micromatch (picomatch) treats backslashes as escape chars, but standardizePath produces
+            //backslashes on Windows. Match against forward-slash-normalized copies of the paths (and pattern),
+            //then map the matches back to the original `byFile` keys.
+            const originalByNormalized = new Map<string, string>();
+            for (const filePath of Object.keys(this.byFile)) {
+                originalByNormalized.set(filePath.replace(/\\/g, '/'), filePath);
+            }
+            matchedFilePaths = micromatch([...originalByNormalized.keys()], src.replace(/\\/g, '/'), {
                 nocase: true
-            });
+            }).map(normalized => originalByNormalized.get(normalized));
 
             //there is no src; this applies to all files
         } else {

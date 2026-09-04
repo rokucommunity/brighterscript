@@ -928,6 +928,63 @@ describe('parser', () => {
                 expect(diagnostics, `assigning to reserved word "${reservedWord}" should have been an error`).to.be.length.greaterThan(0);
             }
         });
+
+        describe('unreferencable builtins as parameter names', () => {
+            it('flags `function f(Box)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(Box)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('Box')]);
+            });
+
+            it('flags `function f(CreateObject)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(CreateObject)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('CreateObject')]);
+            });
+
+            it('flags `function f(GetGlobalAA)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(GetGlobalAA)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('GetGlobalAA')]);
+            });
+
+            it('flags `function f(GetLastRunCompileError)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(GetLastRunCompileError)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('GetLastRunCompileError')]);
+            });
+
+            it('flags `function f(GetLastRunRunTimeError)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(GetLastRunRunTimeError)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('GetLastRunRunTimeError')]);
+            });
+
+            it('flags `function f(ObjFun)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(ObjFun)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('ObjFun')]);
+            });
+
+            it('flags `function f(Pos)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(Pos)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('Pos')]);
+            });
+
+            it('flags `function f(Run)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(Run)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('Run')]);
+            });
+
+            it('flags `function f(Tab)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(Tab)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('Tab')]);
+            });
+
+            it('flags `function f(type)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(type)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('type')]);
+            });
+
+            it('flags `function f(eval)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(eval)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('eval')]);
+            });
+        });
     });
 
     describe('import keyword', () => {
@@ -1783,6 +1840,211 @@ describe('parser', () => {
                 end function
             `, ParseMode.BrighterScript);
             expectZeroDiagnostics(diagnostics);
+        });
+    });
+
+    describe('line continuation', () => {
+        describe('binary operator continuation', () => {
+            it('is allowed after arithmetic operators in BrighterScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        a = x +
+                            y
+                        b = x -
+                            y
+                        c = x *
+                            y
+                        d = x /
+                            y
+                        e = x \\
+                            y
+                        f = x mod
+                            y
+                        g = x ^
+                            y
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('is allowed after boolean operators in BrighterScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        a = isValid and
+                            isEnabled
+                        b = isValid or
+                            isEnabled
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('is allowed after relational operators in BrighterScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        a = x =
+                            y
+                        b = x <>
+                            y
+                        c = x >
+                            y
+                        d = x >=
+                            y
+                        e = x <
+                            y
+                        f = x <=
+                            y
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('is not allowed in BrightScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        result = value1 +
+                                 value2
+                    end sub
+                `, ParseMode.BrightScript);
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.unexpectedToken('\n'),
+                    DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+                ]);
+            });
+        });
+
+        describe('function call argument continuation', () => {
+            it('is not allowed in BrightScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        result = foo(
+                            arg1,
+                            arg2
+                        )
+                    end sub
+                    sub foo(a, b)
+                    end sub
+                `, ParseMode.BrightScript);
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.unexpectedToken('\n'),
+                    DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                    DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+                ]);
+            });
+
+            it('is allowed in BrighterScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        result = foo(
+                            arg1,
+                            arg2
+                        )
+                    end sub
+                    sub foo(a, b)
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('does not affect inline objects passed as arguments in BrightScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        foo({
+                            key: "value"
+                        })
+                    end sub
+                    sub foo(a)
+                    end sub
+                `, ParseMode.BrightScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+        });
+
+        describe('minFirmwareVersion >= 15.3 in BrightScript mode', () => {
+            it('allows binary operator continuation in BrightScript mode when minFirmwareVersion is 15.3', () => {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        result = value1 +
+                                 value2
+                    end sub
+                `);
+                let { diagnostics } = Parser.parse(tokens, {
+                    mode: ParseMode.BrightScript,
+                    minFirmwareVersion: '15.3'
+                });
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('allows binary operator continuation in BrightScript mode when minFirmwareVersion is above 15.3', () => {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        result = value1 +
+                                 value2
+                    end sub
+                `);
+                let { diagnostics } = Parser.parse(tokens, {
+                    mode: ParseMode.BrightScript,
+                    minFirmwareVersion: '16.0.0'
+                });
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('does not allow binary operator continuation in BrightScript mode when minFirmwareVersion is below 15.3', () => {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        result = value1 +
+                                 value2
+                    end sub
+                `);
+                let { diagnostics } = Parser.parse(tokens, {
+                    mode: ParseMode.BrightScript,
+                    minFirmwareVersion: '11.0.0'
+                });
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.unexpectedToken('\n'),
+                    DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+                ]);
+            });
+
+            it('allows function call argument continuation in BrightScript mode when minFirmwareVersion is 15.3', () => {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        result = foo(
+                            arg1,
+                            arg2
+                        )
+                    end sub
+                    sub foo(a, b)
+                    end sub
+                `);
+                let { diagnostics } = Parser.parse(tokens, {
+                    mode: ParseMode.BrightScript,
+                    minFirmwareVersion: '15.3.0'
+                });
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('does not allow function call argument continuation in BrightScript mode when minFirmwareVersion is below 15.3', () => {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        result = foo(
+                            arg1,
+                            arg2
+                        )
+                    end sub
+                    sub foo(a, b)
+                    end sub
+                `);
+                let { diagnostics } = Parser.parse(tokens, {
+                    mode: ParseMode.BrightScript,
+                    minFirmwareVersion: '15.2.9'
+                });
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.unexpectedToken('\n'),
+                    DiagnosticMessages.expectedRightParenAfterFunctionCallArguments(),
+                    DiagnosticMessages.expectedStatementOrFunctionCallButReceivedExpression()
+                ]);
+            });
         });
     });
 

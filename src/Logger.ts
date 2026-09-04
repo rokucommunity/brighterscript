@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import * as moment from 'moment';
+import { formatTimestamp } from './formatUtils';
 import { EventEmitter } from 'eventemitter3';
 import { Stopwatch } from './Stopwatch';
 import { LogLevelNumeric as LogLevel } from '@rokucommunity/logger';
@@ -8,7 +8,7 @@ import { LogLevelNumeric as LogLevel } from '@rokucommunity/logger';
  */
 export class Logger {
 
-    public static subscribe(callback) {
+    public static subscribe(callback: (...args: any[]) => void) {
         this.emitter.on('log', callback);
         return () => {
             this.emitter.off('log', callback);
@@ -41,14 +41,14 @@ export class Logger {
     private _logLevel = LogLevel.log;
 
     public getTimestamp() {
-        return '[' + chalk.grey(moment().format(`hh:mm:ss:SSSS A`)) + ']';
+        return '[' + chalk.grey(formatTimestamp()) + ']';
     }
 
-    private writeToLog(method: (...consoleArgs: any[]) => void, ...args: any[]) {
+    private writeToLog(method: (...consoleArgs: any[]) => void, ...args: unknown[]) {
         if (this._logLevel === LogLevel.trace) {
             method = console.trace;
         }
-        let finalArgs: any[] = [];
+        let finalArgs: unknown[] = [];
         //evaluate any functions to get their values.
         //This allows more complicated values to only be evaluated if this log level is active
         for (let arg of args) {
@@ -74,7 +74,7 @@ export class Logger {
     /**
      * Log an error message to the console
      */
-    error(...messages) {
+    error(...messages: unknown[]) {
         if (this._logLevel >= LogLevel.error) {
             this.writeToLog(console.error, ...messages);
         }
@@ -83,7 +83,7 @@ export class Logger {
     /**
      * Log a warning message to the console
      */
-    warn(...messages) {
+    warn(...messages: unknown[]) {
         if (this._logLevel >= LogLevel.warn) {
             this.writeToLog(console.warn, ...messages);
         }
@@ -92,7 +92,7 @@ export class Logger {
     /**
      * Log a standard log message to the console
      */
-    log(...messages) {
+    log(...messages: unknown[]) {
         if (this._logLevel >= LogLevel.log) {
             this.writeToLog(console.log, ...messages);
         }
@@ -100,7 +100,7 @@ export class Logger {
     /**
      * Log an info message to the console
      */
-    info(...messages) {
+    info(...messages: unknown[]) {
         if (this._logLevel >= LogLevel.info) {
             this.writeToLog(console.info, ...messages);
         }
@@ -109,7 +109,7 @@ export class Logger {
     /**
      * Log a debug message to the console
      */
-    debug(...messages) {
+    debug(...messages: unknown[]) {
         if (this._logLevel >= LogLevel.debug) {
             this.writeToLog(console.debug, ...messages);
         }
@@ -118,7 +118,7 @@ export class Logger {
     /**
      * Log a debug message to the console
      */
-    trace(...messages) {
+    trace(...messages: unknown[]) {
         if (this._logLevel >= LogLevel.trace) {
             this.writeToLog(console.trace, ...messages);
         }

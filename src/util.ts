@@ -8,7 +8,7 @@ import type { Diagnostic, Position, Range, Location, DiagnosticRelatedInformatio
 import { URI } from 'vscode-uri';
 import * as xml2js from 'xml2js';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
-import { DiagnosticMessages } from './DiagnosticMessages';
+import { DiagnosticCodeMap, DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, Plugin, ExpressionInfo, TranspileResult, MaybePromise, DisposableLike, PluginFactory } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
@@ -29,7 +29,8 @@ import { TokenKind } from './lexer/TokenKind';
 import { isAssignmentStatement, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isFunctionParameterExpression, isIndexedGetExpression, isNamespacedVariableNameExpression, isNewExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { CustomType } from './types/CustomType';
-import { SourceNode } from 'source-map';
+import { SourceNode, SourceMapConsumer } from 'source-map';
+import type { RawSourceMap, SourceMapGenerator } from 'source-map';
 import type { SGAttribute } from './parser/SGTypes';
 import * as requireRelative from 'require-relative';
 import type { BrsFile } from './files/BrsFile';
@@ -384,6 +385,7 @@ export class Util {
             createPackage: config.createPackage === false ? false : true,
             outFile: config.outFile ?? `./out/${rootFolderName}.zip`,
             sourceMap: config.sourceMap === true,
+            relativeSourceMaps: config.relativeSourceMaps === true,
             username: config.username ?? 'rokudev',
             watch: config.watch === true ? true : false,
             emitFullPaths: config.emitFullPaths === true ? true : false,
@@ -403,7 +405,8 @@ export class Util {
             emitDefinitions: config.emitDefinitions === true ? true : false,
             removeParameterTypes: config.removeParameterTypes === true ? true : false,
             logLevel: logLevel,
-            bslibDestinationDir: bslibDestinationDir
+            bslibDestinationDir: bslibDestinationDir,
+            validate: config.validate === false ? false : true
         };
 
         //mutate `config` in case anyone is holding a reference to the incomplete one
@@ -505,6 +508,29 @@ export class Util {
     }
 
     /**
+     * Compute the replacement text for a file-path string (used in `import` statements and XML `<script uri>` attributes)
+     * when the target file is being renamed. Preserves the original path style: `pkg:/...` stays `pkg:/...`,
+     * relative paths stay relative (recomputed from the containing file's pkg path).
+     *
+     * @param originalText the path string as it appears in source (no surrounding quotes)
+     * @param containingFilePkgPath pkg path of the file containing the reference
+     * @param newTargetPkgPath pkg path of the renamed file (path-separator agnostic)
+     * @returns the new path string, or `null` if the original style is unsupported
+     */
+    public computeRenamedReferencePath(originalText: string, containingFilePkgPath: string, newTargetPkgPath: string): string | null {
+        if (!originalText) {
+            return null;
+        }
+        const newPkgPathForwardSlash = path.normalize(newTargetPkgPath).split(path.sep).join('/');
+        const schemeMatch = /^(pkg|libpkg):\//i.exec(originalText);
+        if (schemeMatch) {
+            return `${schemeMatch[1]}:/${newPkgPathForwardSlash}`;
+        }
+        const relative = this.getRelativePath(containingFilePkgPath, newTargetPkgPath);
+        return relative.split(path.sep).join('/');
+    }
+
+    /**
      * Compute the relative path from the source file to the target file
      * @param pkgSrcPath  - the absolute path to the source, where cwd is the package location
      * @param pkgTargetPath  - the absolute path to the target, where cwd is the package location
@@ -545,8 +571,8 @@ export class Util {
     /**
      * Walks left in a DottedGetExpression and returns a VariableExpression if found, or undefined if not found
      */
-    public findBeginningVariableExpression(dottedGet: DottedGetExpression): VariableExpression | undefined {
-        let left: any = dottedGet;
+    public findBeginningVariableExpression(expression: Expression): VariableExpression | undefined {
+        let left: Expression = expression;
         while (left) {
             if (isVariableExpression(left)) {
                 return left;
@@ -636,6 +662,107 @@ export class Util {
             return 1;
         }
         return 0;
+    }
+
+    /**
+     * Convert a file path into a `file://` URL string (e.g. `file:///C:/projects/file.brs`).
+     * Mirrors the `file-url` package: resolves the path, normalizes slashes, prefixes a leading slash
+     * (required for Windows drive letters), and escapes per RFC 3986.
+     */
+    public fileUrl(filePath: string) {
+        let pathName = path.resolve(filePath).replace(/\\/g, '/');
+        //Windows drive letter must be prefixed with a slash
+        if (!pathName.startsWith('/')) {
+            pathName = `/${pathName}`;
+        }
+        //escape required characters for path components
+        return encodeURI(`file://${pathName}`).replace(/[?#]/g, encodeURIComponent);
+    }
+
+    /**
+     * `JSON.stringify` that is safe against circular references and throwing getters. Replaces the
+     * `safe-json-stringify` package.
+     */
+    public safeJsonStringify(data: any, replacer?: (key: string, value: any) => any, space?: string | number) {
+        const seen: any[] = [];
+        const throwsMessage = (err: any) => '[Throws: ' + (err ? err.message : '?') + ']';
+        const safeGetValue = (obj: any, property: string) => {
+            try {
+                return obj[property];
+            } catch (err) {
+                return throwsMessage(err);
+            }
+        };
+        const visit = (obj: any) => {
+            if (obj === null || typeof obj !== 'object') {
+                return obj;
+            }
+            if (seen.includes(obj)) {
+                return '[Circular]';
+            }
+            seen.push(obj);
+            try {
+                if (typeof obj.toJSON === 'function') {
+                    try {
+                        return visit(obj.toJSON());
+                    } catch (err) {
+                        return throwsMessage(err);
+                    }
+                }
+                if (Array.isArray(obj)) {
+                    return obj.map(visit);
+                }
+                return Object.keys(obj as Record<string, unknown>).reduce<Record<string, any>>((result, prop) => {
+                    result[prop] = visit(safeGetValue(obj, prop));
+                    return result;
+                }, {});
+            } finally {
+                seen.pop();
+            }
+        };
+        return JSON.stringify(visit(data), replacer, space);
+    }
+
+    /**
+     * Serialize an error (or any thrown value) into a plain object suitable for `JSON.stringify`,
+     * handling circular references. Replaces the `serialize-error` package.
+     */
+    public serializeError(value: any) {
+        const commonProperties = ['name', 'message', 'stack', 'code'];
+        const destroyCircular = (from: any, seen: any[]) => {
+            const to: any = Array.isArray(from) ? [] : {};
+            seen.push(from);
+            for (const [key, val] of Object.entries(from as Record<string, unknown>)) {
+                if (typeof val === 'function') {
+                    continue;
+                }
+                if (!val || typeof val !== 'object') {
+                    to[key] = val;
+                    continue;
+                }
+                if (!seen.includes(from[key])) {
+                    to[key] = destroyCircular(from[key], seen.slice());
+                    continue;
+                }
+                to[key] = '[Circular]';
+            }
+            for (const property of commonProperties) {
+                if (typeof from[property] === 'string') {
+                    to[property] = from[property];
+                }
+            }
+            return to;
+        };
+
+        if (typeof value === 'object' && value !== null) {
+            return destroyCircular(value, []);
+        }
+        //people sometimes throw things besides Error objects…
+        if (typeof value === 'function') {
+            //`JSON.stringify()` discards functions. We do too, unless a function is thrown directly.
+            return `[Function: ${(value.name || 'anonymous')}]`;
+        }
+        return value;
     }
 
     /**
@@ -802,13 +929,23 @@ export class Util {
      */
     public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
         const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code;
+        //the "unknown diagnostic code" warning is always surfaced. Otherwise typo'd codes in directive comments could silence themselves.
+        if (diagnosticCode === DiagnosticCodeMap.unknownDiagnosticCode) {
+            return false;
+        }
         for (let flag of diagnostic.file?.commentFlags ?? []) {
-            //this diagnostic is affected by this flag
-            if (diagnostic.range && this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
-                //if the flag acts upon this diagnostic's code
-                if (flag.codes === null || (diagnosticCode !== undefined && flag.codes.includes(diagnosticCode))) {
-                    return true;
-                }
+            if (!diagnostic.range || !this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
+                continue;
+            }
+            //if this flag explicitly re-enables the code, it's not suppressed here, keep looking
+            const isEnabled = flag.enableCodes === null || (diagnosticCode !== undefined && flag.enableCodes?.includes(diagnosticCode));
+            if (isEnabled) {
+                continue;
+            }
+            //if this flag disables the code, it's suppressed
+            const isDisabled = flag.codes === null || (diagnosticCode !== undefined && flag.codes?.includes(diagnosticCode));
+            if (isDisabled) {
+                return true;
             }
         }
     }
@@ -1061,11 +1198,13 @@ export class Util {
      */
     public cloneToken<T extends Token>(token: T) {
         if (token) {
+            //keep this field order identical to `Lexer.addToken` so cloned tokens
+            //share the same V8 hidden class as lexer-produced tokens
             const result = {
                 kind: token.kind,
-                range: this.cloneRange(token.range),
                 text: token.text,
                 isReserved: token.isReserved,
+                range: this.cloneRange(token.range),
                 leadingWhitespace: token.leadingWhitespace
             } as T;
             //handle those tokens that have charCode
@@ -1264,7 +1403,7 @@ export class Util {
                     acc.push(plugin);
                 } catch (err: any) {
                     if (onError) {
-                        onError(pathOrModule, err);
+                        onError(pathOrModule, err as Error);
                     } else {
                         throw err;
                     }
@@ -1283,7 +1422,7 @@ export class Util {
         const variableExpressions = [] as VariableExpression[];
         const uniqueVarNames = new Set<string>();
 
-        function expressionWalker(expression) {
+        function expressionWalker(expression: AstNode) {
             if (isExpression(expression)) {
                 expressions.push(expression);
             }
@@ -1627,7 +1766,7 @@ export class Util {
      * Returns an integer if valid, or undefined. Eliminates checking for NaN
      */
     public parseInt(value: any) {
-        const result = parseInt(value);
+        const result = parseInt(value as string);
         if (!isNaN(result)) {
             return result;
         } else {
@@ -1644,7 +1783,7 @@ export class Util {
 
     public validateTooDeepFile(file: (BrsFile | XmlFile)) {
         //find any files nested too deep
-        let pkgPath = file.pkgPath ?? (file.pkgPath as any).toString();
+        let pkgPath: string = file.pkgPath ?? (file.pkgPath as any).toString();
         let rootFolder = pkgPath.replace(/^pkg:/, '').split(/[\\\/]/)[0].toLowerCase();
 
         if (isBrsFile(file) && rootFolder !== 'source') {
@@ -1746,7 +1885,77 @@ export class Util {
     ): SourceNode {
         // we can use a typecast rather than actually transforming the data because SourceNode
         // accepts a more permissive type than its typedef states
-        return new SourceNode(line, column, source, chunks as any, name);
+        return new SourceNode(line, column, source, chunks as string | SourceNode | (string | SourceNode)[], name);
+    }
+
+    /**
+     * Strip a trailing `sourceMappingURL` comment (and the newline preceding it) from the end of a
+     * transpile result, so that appending a freshly-generated one doesn't produce a duplicate. A file
+     * can already carry a comment from a previous build, which is either preserved verbatim (for
+     * files that don't need transpiling) or re-emitted as a comment by the AST transpile.
+     *
+     * Handles both BrightScript-style (`'//# sourceMappingURL=...`) and XML-style
+     * (`<!--//# sourceMappingURL=... -->`) comments. Leaves the node untouched when no trailing
+     * sourceMappingURL comment is present.
+     */
+    public stripTrailingSourceMappingURLComment(node: SourceNode): SourceNode {
+        //`\S+` cannot backtrack across whitespace, so this stays linear-time on adversarial input
+        const pattern = /(?:\r?\n)?[ \t]*(?:'\/\/# sourceMappingURL=\S+|<!--[ \t]*\/\/# sourceMappingURL=\S+[ \t]*-->)\s*$/;
+        if (pattern.test(node.toString())) {
+            //`replaceRight` operates on the right-most leaf string, which is where a trailing comment
+            //lands in both the verbatim and AST-transpiled cases. The `source-map` typings declare the
+            //pattern as a string, but it is handed straight to `String.prototype.replace`, which
+            //accepts a RegExp
+            node.replaceRight(pattern as unknown as string, '');
+        }
+        return node;
+    }
+
+    /**
+     * Parse the `sourceMappingURL` comment from file contents and resolve it to a RawSourceMap.
+     * Handles inline base64 data URIs, absolute paths, relative paths (resolved against srcPath's
+     * directory), and falls back to a co-located `<srcPath>.map` file.
+     * Supports both BrightScript-style comments (`'//# sourceMappingURL=...`) and XML-style
+     * comments (`<!--//# sourceMappingURL=... -->`).
+     * Returns undefined if no map can be found.
+     */
+    public async resolveInputSourceMap(fileContents: string, srcPath: string): Promise<RawSourceMap | undefined> {
+        // Match sourceMappingURL - [^\s]+ stops at whitespace (safe, no backtracking risk).
+        // Strip any trailing XML comment close (either --> or --!>) that may have been captured
+        // when the URL is not followed by a space in an XML comment like <!--//# ...=url-->.
+        const match = /['"]?\/\/# sourceMappingURL=([^\s]+)/m.exec(fileContents);
+        if (match) {
+            const url = match[1].replace(/--!?>$/, '').trim();
+            if (url.startsWith('data:')) {
+                // inline base64: data:application/json;base64,<b64>
+                const b64Match = /base64,([A-Za-z0-9+/=]+)$/.exec(url);
+                if (b64Match) {
+                    return JSON.parse(Buffer.from(b64Match[1], 'base64').toString('utf8')) as RawSourceMap;
+                }
+            } else {
+                const mapPath = path.isAbsolute(url) ? url : path.resolve(path.dirname(srcPath), url);
+                if (await fsExtra.pathExists(mapPath)) {
+                    return JSON.parse(await fsExtra.readFile(mapPath, 'utf8')) as RawSourceMap;
+                }
+            }
+        }
+
+        // no usable sourceMappingURL; try co-located <srcPath>.map
+        const colocated = `${srcPath}.map`;
+        if (await fsExtra.pathExists(colocated)) {
+            return JSON.parse(await fsExtra.readFile(colocated, 'utf8')) as RawSourceMap;
+        }
+        return undefined;
+    }
+
+    /**
+     * Apply an input sourcemap to a generated SourceMapGenerator, chaining mappings so the
+     * output traces back through the input map to the original source.
+     */
+    public async applySourceMap(generator: SourceMapGenerator, inputMap: RawSourceMap, sourceFile: string) {
+        await SourceMapConsumer.with(inputMap, null, (consumer) => {
+            generator.applySourceMap(consumer, sourceFile);
+        });
     }
 
     public isBuiltInType(typeName: string) {
@@ -1775,10 +1984,10 @@ export class Util {
  * A tagged template literal function for standardizing the path. This has to be defined as standalone function since it's a tagged template literal function,
  * we can't use `object.tag` syntax.
  */
-export function standardizePath(stringParts, ...expressions: any[]) {
+export function standardizePath(stringParts: TemplateStringsArray | string, ...expressions: any[]) {
     let result: string[] = [];
     for (let i = 0; i < stringParts?.length; i++) {
-        result.push(stringParts[i], expressions[i]);
+        result.push(stringParts[i], expressions[i] as string);
     }
     return util.standardizePath(
         result.join('')

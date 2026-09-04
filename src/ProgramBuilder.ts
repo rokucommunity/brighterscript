@@ -1,7 +1,7 @@
 import * as debounce from 'debounce-promise';
 import * as path from 'path';
 import { rokuDeploy } from 'roku-deploy';
-import type { LogLevel as RokuDeployLogLevel } from 'roku-deploy/dist/Logger';
+import type { RokuDeployOptions } from 'roku-deploy';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import type { BscFile, BsDiagnostic, FileObj, FileResolver } from './interfaces';
 import { Program } from './Program';
@@ -91,12 +91,12 @@ export class ProgramBuilder {
                 pathAbsolute: srcPath, //keep this for backwards-compatibility. TODO remove in v1
                 srcPath: srcPath,
                 getDiagnostics: () => {
-                    return [<any>diagnostic];
+                    return [diagnostic as BsDiagnostic];
                 }
             } as BscFile;
         }
         diagnostic.file = file;
-        this.staticDiagnostics.push(<any>diagnostic);
+        this.staticDiagnostics.push(diagnostic as BsDiagnostic);
     }
 
     public getDiagnostics() {
@@ -106,14 +106,7 @@ export class ProgramBuilder {
         ];
     }
 
-    public async run(options: BsConfig & {
-        /**
-         * Should validation run? Default is `true`. You must set explicitly to `false` to disable.
-         * @deprecated this is an experimental flag, and its behavior may change in a future release
-         * @default true
-         */
-        validate?: boolean;
-    }) {
+    public async run(options: BsConfig) {
         if (options?.logLevel) {
             this.logger.logLevel = options.logLevel;
         }
@@ -334,6 +327,19 @@ export class ProgramBuilder {
         //get printing options
         const options = diagnosticUtils.getPrintDiagnosticOptions(this.options);
         const { cwd, emitFullPaths } = options;
+        //custom-template reporters are pre-resolved once so we don't recompile them per diagnostic;
+        //the resolved function is stashed on the entry as `run` so we don't have to keep a parallel array.
+        //invalid entries are warned about and skipped (we never want to abort a build over a config typo).
+        const reporters = diagnosticUtils.normalizeDiagnosticReporters(
+            this.options?.diagnosticReporters,
+            this.logger
+        )
+            .map(reporter => (reporter.type === 'custom'
+                ? { ...reporter, run: diagnosticUtils.createCustomDiagnosticReporter(reporter.format) }
+                : reporter));
+        if (reporters.length === 0) {
+            return;
+        }
 
         let srcPaths = Object.keys(diagnosticsByFile).sort();
         for (let srcPath of srcPaths) {
@@ -369,8 +375,16 @@ export class ProgramBuilder {
                         message: x.message
                     };
                 });
-                //format output
-                diagnosticUtils.printDiagnostic(options, severity, filePath, lines, diagnostic, relatedInformation);
+                //format output once per configured reporter
+                for (const reporter of reporters) {
+                    if (reporter.type === 'github-actions') {
+                        diagnosticUtils.printDiagnosticGithubActions({ options: options, severity: severity, filePath: filePath, diagnostic: diagnostic });
+                    } else if (reporter.type === 'custom') {
+                        reporter.run({ options: options, severity: severity, filePath: filePath, diagnostic: diagnostic });
+                    } else {
+                        diagnosticUtils.printDiagnostic(options, severity, filePath, lines, diagnostic, relatedInformation);
+                    }
+                }
             }
         }
     }
@@ -379,15 +393,16 @@ export class ProgramBuilder {
      * Run the process once, allowing it to be cancelled.
      * NOTE: This should only be called by `runOnce`.
      */
-    private async _runOnce(options: { cancellationToken: { isCanceled: any }; validate: boolean }) {
+    private async _runOnce(options: { cancellationToken: { isCanceled: any }; validate?: boolean }) {
         let wereDiagnosticsPrinted = false;
         try {
             //maybe cancel?
             if (options?.cancellationToken?.isCanceled === true) {
                 return -1;
             }
-            //validate program. false means no, everything else (including missing) means true
-            if (options?.validate !== false) {
+            //the prop-drilled validate value takes precedence over this.options.validate.
+            //false means no, everything else (including missing) means true
+            if ((options?.validate ?? this.options.validate) !== false) {
                 this.validateProject();
             }
 
@@ -437,7 +452,7 @@ export class ProgramBuilder {
                 await this.logger.time(LogLevel.log, [`Creating package at ${this.options.outFile}`], async () => {
                     await rokuDeploy.zipPackage({
                         ...this.options,
-                        logLevel: this.options.logLevel as unknown as RokuDeployLogLevel,
+                        logLevel: this.options.logLevel as unknown as RokuDeployOptions['logLevel'],
                         outDir: util.getOutDir(this.options),
                         outFile: path.basename(this.options.outFile)
                     });
@@ -455,7 +470,7 @@ export class ProgramBuilder {
             let options = util.cwdWork(this.options.cwd, () => {
                 return rokuDeploy.getOptions({
                     ...this.options,
-                    logLevel: this.options.logLevel as unknown as RokuDeployLogLevel,
+                    logLevel: this.options.logLevel as unknown as RokuDeployOptions['logLevel'],
                     outDir: util.getOutDir(this.options),
                     outFile: path.basename(this.options.outFile)
 
@@ -503,7 +518,7 @@ export class ProgramBuilder {
             await this.logger.time(LogLevel.log, ['Deploying package to', this.options.host], async () => {
                 await rokuDeploy.publish({
                     ...this.options,
-                    logLevel: this.options.logLevel as unknown as RokuDeployLogLevel,
+                    logLevel: this.options.logLevel as unknown as RokuDeployOptions['logLevel'],
                     outDir: util.getOutDir(this.options),
                     outFile: path.basename(this.options.outFile)
                 });
@@ -544,7 +559,7 @@ export class ProgramBuilder {
                 this.program!.loadManifest(manifestFile, false);
             }
 
-            const loadFile = async (fileObj) => {
+            const loadFile = async (fileObj: FileObj) => {
                 try {
                     this.program!.setFile(fileObj, await this.getFileContents(fileObj.src));
                 } catch (e) {

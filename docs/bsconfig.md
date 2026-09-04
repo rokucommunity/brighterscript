@@ -2,33 +2,47 @@
 
 While a minimal `bsconfig.json` file is sufficient for getting started, `bsc` supports a range of helpful options.
 
-- [allowBrighterScriptInBrightScript](#allowBrighterScriptInBrightScript)
-- [autoImportComponentScript](#autoImportComponentScript)
-- [bslibDestinationDir](#bslibDestinationDir)
-- [createPackage](#createPackage)
-- [cwd](#cwd)
-- [deploy](#deploy)
-- [diagnosticFilters](#diagnosticFilters)
-- [diagnosticLevel](#diagnosticLevel)
-- [diagnosticSeverityOverrides](#diagnosticSeverityOverrides)
-- [emitDefinitions](#emitDefinitions)
-- [emitFullPaths](#emitFullPaths)
-- [extends](#extends)
-- [files](#files)
-- [host](#host)
-- [outFile](#outFile)
-- [password](#password)
-- [plugins](#plugins)
-- [project](#project)
-- [pruneEmptyCodeFiles](#pruneEmptyCodeFiles)
-- [removeParameterTypes](#removeParameterTypes)
-- [require](#require)
-- [retainStagingDir](#retainStagingDir)
-- [rootDir](#rootDir)
-- [sourceRoot](#sourceRoot)
-- [stagingDir](#stagingDir)
-- [username](#username)
-- [watch](#watch)
+- [bsconfig.json options](#bsconfigjson-options)
+  - [`allowBrighterScriptInBrightScript`](#allowbrighterscriptinbrightscript)
+  - [`autoImportComponentScript`](#autoimportcomponentscript)
+  - [`bslibDestinationDir`](#bslibdestinationdir)
+  - [`createPackage`](#createpackage)
+  - [`cwd`](#cwd)
+  - [`deploy`](#deploy)
+  - [`diagnosticFilters`](#diagnosticfilters)
+    - [Negative patterns in `diagnosticFilters`](#negative-patterns-in-diagnosticfilters)
+  - [`diagnosticLevel`](#diagnosticlevel)
+  - [`diagnosticReporters`](#diagnosticreporters)
+  - [`diagnosticSeverityOverrides`](#diagnosticseverityoverrides)
+  - [`emitDefinitions`](#emitdefinitions)
+  - [`emitFullPaths`](#emitfullpaths)
+  - [`extends`](#extends)
+    - [Optional `extends` and `project`](#optional-extends-and-project)
+  - [`files`](#files)
+    - [Excluding files](#excluding-files)
+    - [File pattern resolution](#file-pattern-resolution)
+    - [Specifying file destinations](#specifying-file-destinations)
+    - [File collision handling](#file-collision-handling)
+  - [`host`](#host)
+  - [`minFirmwareVersion`](#minfirmwareversion)
+    - [Line continuation in `.brs` files](#line-continuation-in-brs-files)
+  - [`outFile`](#outfile)
+  - [`password`](#password)
+  - [`plugins`](#plugins)
+  - [`project`](#project)
+  - [`pruneEmptyCodeFiles`](#pruneemptycodefiles)
+  - [`removeParameterTypes`](#removeparametertypes)
+  - [`require`](#require)
+  - [`retainStagingDir`](#retainstagingdir)
+  - [`rootDir`](#rootdir)
+  - [`sourceMap`](#sourcemap)
+  - [`relativeSourceMaps`](#relativesourcemaps)
+    - [`relativeSourceMaps: false` (default)](#relativesourcemaps-false-default)
+    - [`relativeSourceMaps: true`](#relativesourcemaps-true)
+  - [`sourceRoot`](#sourceroot)
+  - [`stagingDir`](#stagingdir)
+  - [`username`](#username)
+  - [`watch`](#watch)
 
 ## `allowBrighterScriptInBrightScript`
 
@@ -117,6 +131,58 @@ The semantics of overriding match the way `git` treats `.gitignore` files: Negat
 Type: `"hint" | "info" | "warn" | "error"`
 
 Specify what diagnostic levels are printed to the console. This has no effect on what diagnostics are reported in the LanguageServer. Defaults to `"warn"`.
+
+## `diagnosticReporters`
+
+Type: `string | { type: string; format?: string } | Array<string | { type: string; format?: string }>`
+
+Specify how diagnostics are reported to the console. Accepts a single value or an array; when given an array, each diagnostic is rendered once per entry (so you can, for example, emit detailed terminal output and GitHub Actions PR annotations from a single run). Defaults to `"detailed"`.
+
+Each value can be:
+
+- A **preset name**: `"detailed"` (the default rich, multi-line, colored output) or `"github-actions"` (one-line workflow commands like `::error file=...,line=...::message` so the GitHub Actions runner surfaces them as PR annotations).
+- A **custom template string** containing at least one of the known placeholders. The placeholders supported are:
+
+  | Placeholder      | Value |
+  |------------------|---|
+  | `{file}`         | file path (respects `emitFullPaths`) |
+  | `{line}` / `{col}` | 1-based start line / column |
+  | `{endLine}` / `{endCol}` | 1-based end line / column |
+  | `{severity}`     | `error` / `warning` / `info` / `hint` |
+  | `{severityCode}` | numeric LSP severity (1=error, 2=warning, 3=info, 4=hint) |
+  | `{code}`         | diagnostic code (e.g. `1001`) |
+  | `{message}`      | diagnostic message |
+  | `{source}`       | diagnostic source (e.g. `brs`) |
+
+  Unknown placeholders pass through unchanged so typos surface visually.
+- An **explicit object** with `type`: `{ "type": "detailed" }`, `{ "type": "github-actions" }`, or `{ "type": "custom", "format": "<template>" }`.
+
+Examples:
+
+```jsonc
+"diagnosticReporters": "detailed"
+
+"diagnosticReporters": "github-actions"
+
+// custom template
+"diagnosticReporters": "{file}:{line}:{col} {severity} BS{code}: {message}"
+
+// emit detailed terminal output AND github-actions annotations from the same run
+"diagnosticReporters": ["detailed", "github-actions"]
+
+// explicit object form (also accepts the same shapes inside an array)
+"diagnosticReporters": { "type": "custom", "format": "{file}:{line}: {message}" }
+```
+
+If a value is invalid (typo'd preset, custom template with no known placeholders, etc.) it is logged as a warning and skipped. Duplicate entries are dropped with a warning message. If every configured reporter is invalid, the build falls back to `"detailed"` rather than failing.
+
+The CLI accepts the same value (single or repeated):
+
+```bash
+bsc --diagnostic-reporters detailed
+bsc --diagnostic-reporters detailed github-actions
+bsc --diagnostic-reporters '{file}:{line}: {message}'
+```
 
 ## `diagnosticSeverityOverrides`
 
@@ -355,6 +421,54 @@ Type: `string`
 
 The host of the Roku that this project will deploy to when the [`deploy`](#deploy) field is set to `true`. Defaults to `undefined`.
 
+## `minFirmwareVersion`
+
+Type: `string`
+
+The minimum Roku firmware version required to run this project. When set, files are validated to ensure they only use language features available in that firmware version or earlier. BrightScript (`.brs`) files are always validated against the version restriction. BrighterScript (`.bs`) files are only validated for features that BrighterScript does not transpile — for example, optional chaining is emitted as-is rather than transpiled down, so it is subject to the version restriction. BrighterScript features that are fully transpiled (such as classes) are not restricted, since the transpiled output is compatible with older firmware.
+
+Should be a semver-compatible string (e.g. `"11.0.0"` or `"11.0"`). Defaults to `undefined` (no version restriction).
+
+**Example:**
+
+```json
+{
+    "minFirmwareVersion": "11.0.0"
+}
+```
+
+With this setting, using optional chaining (`?.`) without the version requirement being met will produce an error like:
+
+> BrightScript feature 'optional chaining' requires Roku firmware version 11.0.0 or higher, but 'minFirmwareVersion' is set to 10.0.0
+
+**Features gated by firmware version:**
+
+| Feature | Minimum Version |
+|---------|----------------|
+| Optional chaining (`?.`, `?[`, `?(`) | 11.0.0 |
+| Multi-line expressions / line continuation in `.brs` files | 15.3.0 |
+
+### Line continuation in `.brs` files
+
+In BrighterScript (`.bs`) files, multi-line expressions are supported because those constructs are transpiled away before reaching the device. In plain BrightScript (`.brs`) files, Roku OS 15.3 added native support for the same feature.
+
+When `minFirmwareVersion` is set to `15.3` or higher, line continuation is enabled for `.brs` files as well:
+
+```brs
+' allowed in .brs files when minFirmwareVersion >= 15.3
+sub main()
+    result = firstValue +
+             secondValue
+
+    someFunction(
+        arg1,
+        arg2
+    )
+end sub
+```
+
+When `minFirmwareVersion` is below `15.3` (or is not set), line continuation in `.brs` files is still a parse error, while `.bs` files continue to support it regardless of the firmware version setting (because the output is transpiled).
+
 ## `outFile`
 
 Type: `string`
@@ -413,11 +527,62 @@ Type: `string`
 
 The root directory of your roku project. Defaults to `process.cwd()`.
 
+## `sourceMap`
+
+Type: `boolean`
+
+Enables generating sourcemap files (`.map`), which allow debugging tools to show the original source code while running the emitted files. Defaults to `false`.
+
+## `relativeSourceMaps`
+
+Type: `boolean`
+
+If `true`, file paths in the sourcemap `sources` array will be written as relative paths instead of absolute paths, and the behavior of [`sourceRoot`](#sourceroot) changes. Defaults to `false`.
+
+This option only has an effect when [`sourceMap`](#sourcemap) is `true`.
+
+### `relativeSourceMaps: false` (default)
+
+This is the legacy behavior. Each entry in `sources[]` is an absolute path. If [`sourceRoot`](#sourceroot) is set, the `rootDir` portion of the path is replaced with `sourceRoot` directly inside `sources[]`. The map file's `sourceRoot` field is never written.
+
+```jsonc
+// sources[] with relativeSourceMaps: false, sourceRoot: undefined
+"sources": ["/absolute/path/to/rootDir/source/main.bs"]
+
+// sources[] with relativeSourceMaps: false, sourceRoot: "/my/source/server"
+"sources": ["/my/source/server/source/main.bs"]  // rootDir swapped for sourceRoot
+```
+
+### `relativeSourceMaps: true`
+
+Each entry in `sources[]` is a path relative to the map file's location. This makes sourcemaps portable across machines — useful when publishing build output as an npm package or sharing artifacts across CI environments.
+
+If [`sourceRoot`](#sourceroot) is also set, the map file's `sourceRoot` field is written, and `sources[]` entries are made relative to `sourceRoot` instead of relative to the map file. Per the sourcemap spec, consumers reconstruct the full source path as `path.resolve(sourceRoot, sources[0])`.
+
+```jsonc
+// sources[] with relativeSourceMaps: true, sourceRoot: undefined
+// map is at stagingDir/source/main.brs.map
+"sources": ["../../rootDir/source/main.bs"]  // relative to the map file
+
+// sources[] with relativeSourceMaps: true, sourceRoot: "/my/source/server"
+"sourceRoot": "/my/source/server",
+"sources": ["source/main.bs"]  // relative to sourceRoot; resolves to /my/source/server/source/main.bs
+```
+
 ## `sourceRoot`
 
 Type: `string`
 
-Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within [`rootDir`](#rootdir). This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files. This option also affects the `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals.
+Overrides where source files appear to live, both in sourcemaps and in the `SOURCE_FILE_PATH` / `SOURCE_LOCATION` runtime literals. Only applies to files within [`rootDir`](#rootdir) — files outside `rootDir` are unaffected.
+
+The primary use case is preprocessing: if you transform files before passing them to BrighterScript, `sourceRoot` lets you point debuggers and runtime literals back to the original pre-processed sources.
+
+The exact behavior depends on whether [`relativeSourceMaps`](#relativesourcemaps) is set:
+
+- **`relativeSourceMaps: false` (default):** The `rootDir` portion of each source path is replaced with `sourceRoot` directly in `sources[]`. The map file's `sourceRoot` field is not written.
+- **`relativeSourceMaps: true`:** The map file's `sourceRoot` field is set to this value, and `sources[]` entries are relative to `sourceRoot`. The `rootDir` portion of each source path is still replaced with `sourceRoot` when computing the relative path.
+
+In both cases, `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals embedded in the transpiled output will reflect the `sourceRoot`-substituted path at runtime.
 
 ## `stagingDir`
 
