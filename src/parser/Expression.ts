@@ -383,7 +383,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
     }
 
-    public clone() {
+    public clone(): FunctionExpression {
         const clone = this.finalizeClone(
             new FunctionExpression(
                 this.parameters?.map(e => e?.clone()),
@@ -1049,7 +1049,7 @@ export class AALiteralExpression extends Expression {
             let nextElement = this.elements[i + 1];
 
             //don't indent if comment is same-line
-            if (isCommentStatement(element as any) &&
+            if (isCommentStatement(element) &&
                 (util.linesTouch(this.open, element) || util.linesTouch(previousElement, element))
             ) {
                 result.push(' ');
@@ -1542,10 +1542,10 @@ export class TemplateStringExpression extends Expression {
         if (this.expressions.length === 0 && this.quasis.length === 1 && this.quasis[0].expressions.length === 1) {
             return this.quasis[0].transpile(state);
         }
-        let result = ['('];
+        let result: TranspileResult = ['('];
         let plus = '';
         //helper function to figure out when to include the plus
-        function add(...items) {
+        function add(...items: TranspileResult) {
             if (items.length > 0) {
                 result.push(
                     plus,

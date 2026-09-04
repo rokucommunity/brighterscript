@@ -1,5 +1,7 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
 import type { BeforeFileTranspileEvent, Plugin, OnFileValidateEvent, OnGetCodeActionsEvent, OnGetSourceFixAllCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, ProvideSelectionRangesEvent, ProvideInlayHintsEvent } from '../interfaces';
+import type { BrsFile } from '../files/BrsFile';
+import type { XmlFile } from '../files/XmlFile';
 import type { Program } from '../Program';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { FixAllCodeActionsProcessor } from './codeActions/FixAllCodeActionsProcessor';
@@ -63,15 +65,18 @@ export class BscPlugin implements Plugin {
 
     public onGetSemanticTokens(event: OnGetSemanticTokensEvent) {
         if (isBrsFile(event.file)) {
-            return new BrsFileSemanticTokensProcessor(event as any).process();
+            //`isBrsFile` narrows `event.file`, but not the generic `event` itself
+            return new BrsFileSemanticTokensProcessor(event as unknown as OnGetSemanticTokensEvent<BrsFile>).process();
         }
     }
 
     public onFileValidate(event: OnFileValidateEvent) {
         if (isBrsFile(event.file)) {
-            return new BrsFileValidator(event as any).process();
+            //`isBrsFile` narrows `event.file`, but not the generic `event` itself
+            return new BrsFileValidator(event as unknown as OnFileValidateEvent<BrsFile>).process();
         } else if (isXmlFile(event.file)) {
-            return new XmlFileValidator(event as any).process();
+            //`isXmlFile` narrows `event.file`, but not the generic `event` itself
+            return new XmlFileValidator(event as unknown as OnFileValidateEvent<XmlFile>).process();
         }
     }
 
@@ -89,7 +94,8 @@ export class BscPlugin implements Plugin {
 
     public beforeFileTranspile(event: BeforeFileTranspileEvent) {
         if (isBrsFile(event.file)) {
-            return new BrsFilePreTranspileProcessor(event as any).process();
+            //`isBrsFile` narrows `event.file`, but not the generic `event` itself
+            return new BrsFilePreTranspileProcessor(event as unknown as BeforeFileTranspileEvent<BrsFile>).process();
         }
     }
 }

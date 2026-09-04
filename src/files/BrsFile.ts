@@ -137,7 +137,7 @@ export class BrsFile {
             if (!diagnostic.file) {
                 diagnostic.file = this;
             }
-            this.diagnostics.push(diagnostic as any);
+            this.diagnostics.push(diagnostic);
         }
     }
 
@@ -425,7 +425,7 @@ export class BrsFile {
             } catch (error: any) {
                 //if the thrown error is DIFFERENT than any errors from the preprocessor, add that error to the list as well
                 if (this.diagnostics.find((x) => x === error) === undefined) {
-                    this.diagnostics.push(error);
+                    this.diagnostics.push(error as BsDiagnostic);
                 }
             }
 
@@ -644,7 +644,8 @@ export class BrsFile {
 
                 //function call
             } else if (isCallExpression(assignment.value)) {
-                let calleeName = (assignment.value.callee as any)?.name?.text;
+                let callee = assignment.value.callee;
+                let calleeName = isVariableExpression(callee) ? callee.name?.text : undefined;
                 if (calleeName) {
                     let func = this.getCallableByName(calleeName);
                     if (func) {
@@ -740,7 +741,7 @@ export class BrsFile {
 
                 let args = [] as CallableArg[];
                 //TODO convert if stmts to use instanceof instead
-                for (let arg of expression.args as any) {
+                for (let arg of expression.args) {
 
                     //is a literal parameter value
                     if (isLiteralExpression(arg)) {
@@ -753,7 +754,7 @@ export class BrsFile {
                         });
 
                         //is variable being passed into argument
-                    } else if (arg.name) {
+                    } else if (isVariableExpression(arg)) {
                         args.push({
                             range: arg.range,
                             //TODO - look up the data type of the actual variable
@@ -763,11 +764,13 @@ export class BrsFile {
                             typeToken: undefined
                         });
 
-                    } else if (arg.value) {
+                        //`arg.value` isn't a property on the `Expression` base type; this duck-types across whatever
+                        //expression subtypes carry a nested `.value.value`, matching the pre-existing (unclear) runtime shape
+                    } else if ((arg as any).value) {
                         let text = '';
                         /* istanbul ignore next: TODO figure out why value is undefined sometimes */
-                        if (arg.value.value) {
-                            text = arg.value.value.toString();
+                        if ((arg as any).value.value) {
+                            text = (arg as any).value.value.toString();
                         }
                         let callableArg = {
                             range: arg.range,
@@ -1302,7 +1305,7 @@ export class BrsFile {
      * Returns false if no namespace was found with that name
      */
     public calleeStartsWithNamespace(callee: Expression) {
-        let left = callee as any;
+        let left: Expression = callee;
         while (isDottedGetExpression(left)) {
             left = left.obj;
         }

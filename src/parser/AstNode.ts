@@ -133,7 +133,7 @@ export abstract class AstNode {
      * Clone this node and all of its children. This creates a completely detached and identical copy of the AST.
      * All tokens, statements, expressions, range, and location are cloned.
      */
-    public abstract clone();
+    public abstract clone(): AstNode;
 
     /**
      * Helper function for creating a clone. This will clone any attached annotations, as well as reparent the cloned node's children to the clone
@@ -169,6 +169,8 @@ export abstract class Statement extends AstNode {
      * Annotations for this statement
      */
     public annotations: AnnotationExpression[] | undefined;
+
+    public abstract clone(): Statement;
 }
 
 
@@ -178,4 +180,6 @@ export abstract class Expression extends AstNode {
      * When being considered by the walk visitor, this describes what type of element the current class is.
      */
     public visitMode = InternalWalkMode.visitExpressions;
+
+    public abstract clone(): Expression;
 }

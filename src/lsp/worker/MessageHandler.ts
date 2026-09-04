@@ -75,7 +75,7 @@ export class MessageHandler<T, TRequestName = MethodNames<T>> {
             deferred: deferred
         });
 
-        this.emitter.once(`response-${id}`, (response) => {
+        this.emitter.once(`response-${id}`, (response: R) => {
             deferred.resolve(response);
             this.activeRequests.delete(id);
         });
@@ -162,7 +162,7 @@ export class MessageHandler<T, TRequestName = MethodNames<T>> {
             name: error.name,
             message: error.message,
             stack: error.stack,
-            cause: (error.cause as any)?.message && (error.cause as any)?.stack ? this.errorToObject(error.cause as any) : error.cause
+            cause: (error.cause as Error)?.message && (error.cause as Error)?.stack ? this.errorToObject(error.cause as Error) : error.cause
         };
     }
 

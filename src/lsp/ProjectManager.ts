@@ -1019,10 +1019,15 @@ export class ProjectManager {
 
         //pipe all project-specific events through our emitter, and include the project reference
         project.on('all', (eventName, data) => {
-            this.emit(eventName as any, {
-                ...data,
-                project: project
-            } as any);
+            //`eventName` is a generic passthrough string here, so this bypasses the overloaded `emit()` dispatcher
+            //and calls the underlying emitter directly - but still deferred to next tick, matching `emit()`'s own behavior
+            void (async () => {
+                await util.sleep(0);
+                this.emitter.emit(eventName, {
+                    ...data,
+                    project: project
+                });
+            })();
         });
         return project;
     }
@@ -1064,9 +1069,12 @@ export class ProjectManager {
     public on(eventName: 'project-activate', handler: (data: { project: LspProject }) => MaybePromise<void>);
     public on(eventName: 'diagnostics', handler: (data: { project: LspProject; diagnostics: LspDiagnostic[] }) => MaybePromise<void>);
     public on(eventName: string, handler: (payload: any) => MaybePromise<void>) {
-        this.emitter.on(eventName, handler as any);
+        const wrappedHandler = (payload: any) => {
+            void handler(payload);
+        };
+        this.emitter.on(eventName, wrappedHandler);
         return () => {
-            this.emitter.removeListener(eventName, handler as any);
+            this.emitter.removeListener(eventName, wrappedHandler);
         };
     }
 
@@ -1150,7 +1158,7 @@ interface StandaloneProject extends LspProject {
  * An annotation used to wrap the method in a busyStatus tracking call
  */
 function TrackBusyStatus(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
-    let originalMethod = descriptor.value;
+    let originalMethod: (...args: any[]) => any = descriptor.value;
 
     //wrapping the original method
     descriptor.value = function value(this: ProjectManager, ...args: any[]) {

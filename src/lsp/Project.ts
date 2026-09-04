@@ -667,9 +667,14 @@ export class Project implements LspProject {
     public on(eventName: 'diagnostics', handler: (data: { diagnostics: LspDiagnostic[] }) => MaybePromise<void>);
     public on(eventName: 'all', handler: (eventName: string, data: any) => MaybePromise<void>);
     public on(eventName: string, handler: (...args: any[]) => MaybePromise<void>) {
-        this.emitter.on(eventName, handler as any);
+        const wrappedHandler = (...args: any[]) => {
+            //the rest args are already typed `any[]`, and there's no way to forward them without a spread (`.apply()` is disallowed by `prefer-spread`)
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+            void handler(...args);
+        };
+        this.emitter.on(eventName, wrappedHandler);
         return () => {
-            this.emitter.removeListener(eventName, handler as any);
+            this.emitter.removeListener(eventName, wrappedHandler);
         };
     }
 

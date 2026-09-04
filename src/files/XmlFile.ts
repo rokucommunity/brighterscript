@@ -239,7 +239,7 @@ export class XmlFile {
             file: this
         }));
 
-        this.getCommentFlags(this.parser.tokens as any[]);
+        this.getCommentFlags(this.parser.tokens as Array<IToken & { tokenType: TokenType }>);
 
         //needsTranspiled should be true if an import is brighterscript
         this.needsTranspiled = this.needsTranspiled || this.ast.component?.scripts?.some(
@@ -731,7 +731,9 @@ export class XmlFile {
         return result;
     }
 
-    private logDebug(...args) {
+    private logDebug(...args: any[]) {
+        //`args` is intentionally untyped passthrough for the logger, so there's no tighter type to spread than `any[]`
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         this.program.logger.debug('XmlFile', chalk.green(this.pkgPath), ...args);
     }
 

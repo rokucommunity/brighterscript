@@ -860,8 +860,12 @@ function formatAvailabilityAxis(axis: AvailabilityAxis, version: string): string
 export const DiagnosticCodeMap = {} as Record<keyof (typeof DiagnosticMessages), number>;
 export let diagnosticCodes = [] as number[];
 for (let key in DiagnosticMessages) {
-    diagnosticCodes.push(DiagnosticMessages[key]().code);
-    DiagnosticCodeMap[key] = DiagnosticMessages[key]().code;
+    const typedKey = key as keyof typeof DiagnosticMessages;
+    //every factory returns an object with a `code` property regardless of its specific (possibly required) arguments,
+    //so it's safe to call each one with no arguments purely to read that `code` off the result
+    const getCode = DiagnosticMessages[typedKey] as () => { code: number };
+    diagnosticCodes.push(getCode().code);
+    DiagnosticCodeMap[typedKey] = getCode().code;
 }
 
 export interface DiagnosticInfo {

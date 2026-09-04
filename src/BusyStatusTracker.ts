@@ -131,10 +131,11 @@ export class BusyStatusTracker<T = any> {
     public once(eventName: 'change'): Promise<BusyStatus>;
     public once<T>(eventName: string): Promise<T> {
         return new Promise<T>((resolve) => {
-            const off = this.on(eventName as any, (data) => {
-                off();
-                resolve(data as any);
-            });
+            const callback = (data: T) => {
+                this.emitter.off(eventName, callback);
+                resolve(data);
+            };
+            this.emitter.on(eventName, callback);
         });
     }
 

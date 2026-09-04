@@ -107,11 +107,11 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
         this.ensureNameIndex();
         if (!this.nameSet!.has(lower)) {
             //memoize the negative result so repeated misses are cheap
-            super.set(lower, undefined as any);
+            super.set(lower, undefined);
             return undefined;
         }
         const container = this.buildContainer(lower);
-        super.set(lower, container as any);
+        super.set(lower, container);
         return container;
     }
 

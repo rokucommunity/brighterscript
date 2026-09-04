@@ -107,7 +107,8 @@ export default class SGParser {
             });
         }
 
-        const { prolog, root } = buildAST(cst as any, this.diagnostics);
+        //the xml-tools parser types its CST root generically; we know this grammar always produces a document root
+        const { prolog, root } = buildAST(cst as unknown as DocumentCstNode, this.diagnostics);
         if (!root) {
             const token1 = tokenVector[0];
             const token2 = tokenVector[1];

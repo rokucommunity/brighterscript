@@ -1,4 +1,3 @@
-import type { Range } from 'vscode-languageserver-protocol';
 import { InlayHintKind } from 'vscode-languageserver-protocol';
 import {
     isBrsFile,
@@ -15,6 +14,7 @@ import { WalkMode, createVisitor } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ProvideInlayHintsEvent } from '../../interfaces';
 import type { CallExpression, CallfuncExpression, FunctionParameterExpression } from '../../parser/Expression';
+import type { Expression } from '../../parser/AstNode';
 import type { ClassStatement, FunctionStatement, MethodStatement, NamespaceStatement } from '../../parser/Statement';
 import { ParseMode } from '../../parser/Parser';
 import { util } from '../../util';
@@ -147,7 +147,7 @@ export class InlayHintProcessor {
      * If the receiver is `m`, prefer the enclosing class. Otherwise fall back to a name search
      * across all classes (only used when there's exactly one match).
      */
-    private lookupClassMethodParameters(file: BrsFile, callee: { obj?: any }, name: string): FunctionParameterExpression[] | undefined {
+    private lookupClassMethodParameters(file: BrsFile, callee: { obj?: Expression }, name: string): FunctionParameterExpression[] | undefined {
         if (isVariableExpression(callee.obj) && callee.obj.name.text === 'm') {
             const enclosingClass = callee.obj.findAncestor<ClassStatement>(isClassStatement);
             if (enclosingClass) {
@@ -186,7 +186,7 @@ export class InlayHintProcessor {
         return undefined;
     }
 
-    private pushHintsForArgs(args: Array<{ range?: Range }>, params: FunctionParameterExpression[]) {
+    private pushHintsForArgs(args: Expression[], params: FunctionParameterExpression[]) {
         for (let i = 0; i < args.length && i < params.length; i++) {
             const arg = args[i];
             const param = params[i];
@@ -195,7 +195,7 @@ export class InlayHintProcessor {
                 continue;
             }
             //skip when the argument is just an identifier that already matches the parameter name
-            if (isVariableExpression(arg as any) && (arg as any).name?.text?.toLowerCase() === paramName.toLowerCase()) {
+            if (isVariableExpression(arg) && arg.name?.text?.toLowerCase() === paramName.toLowerCase()) {
                 continue;
             }
             this.event.inlayHints.push({

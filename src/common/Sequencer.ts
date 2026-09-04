@@ -89,6 +89,8 @@ export class Sequencer {
                 }
 
                 await Promise.resolve(
+                    //`action.func` is a heterogeneous, dynamically-dispatched `Function`, so its args can't be typed any tighter than `any[]`
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
                     action.func(...action.args)
                 );
 
@@ -114,6 +116,8 @@ export class Sequencer {
                 if (this.options?.cancellationToken?.isCancellationRequested) {
                     return this.handleCancel();
                 }
+                //`action.func` is a heterogeneous, dynamically-dispatched `Function`, so its args can't be typed any tighter than `any[]`
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
                 const result = action.func(...action.args);
                 if (typeof result?.then === 'function') {
                     throw new Error(`Action returned a promise which is unsupported when running 'runSync'`);
