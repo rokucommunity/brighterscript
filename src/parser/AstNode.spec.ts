@@ -3,16 +3,26 @@ import * as fsExtra from 'fs-extra';
 import { Program } from '../Program';
 import type { BrsFile } from '../files/BrsFile';
 import { expect } from '../chai-config.spec';
-import type { AAIndexedMemberExpression, AALiteralExpression, AAMemberExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, GroupingExpression, IndexedGetExpression, NewExpression, NullCoalescingExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, TypeCastExpression, UnaryExpression, XmlAttributeGetExpression } from './Expression';
+import type { AAIndexedMemberExpression, AALiteralExpression, AAMemberExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NewExpression, NullCoalescingExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, TypeCastExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression } from './Expression';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
 import { tempDir, rootDir, stagingDir } from '../testHelpers.spec';
-import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isCallfuncExpression, isCatchStatement, isClassStatement, isCommentStatement, isConstStatement, isDimStatement, isDottedGetExpression, isDottedSetStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isGroupingExpression, isIfStatement, isIncrementStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isLibraryStatement, isMethodStatement, isNamespaceStatement, isNewExpression, isNullCoalescingExpression, isPrintStatement, isReturnStatement, isTaggedTemplateStringExpression, isTemplateStringExpression, isTemplateStringQuasiExpression, isTernaryExpression, isThrowStatement, isTryCatchStatement, isTypeCastExpression, isUnaryExpression, isWhileStatement, isXmlAttributeGetExpression } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isCallfuncExpression, isCatchStatement, isClassStatement, isCommentStatement, isConstStatement, isDimStatement, isDottedGetExpression, isDottedSetStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isGroupingExpression, isIfStatement, isIncrementStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isNewExpression, isNullCoalescingExpression, isPrintStatement, isReturnStatement, isTaggedTemplateStringExpression, isTemplateStringExpression, isTemplateStringQuasiExpression, isTernaryExpression, isThrowStatement, isTryCatchStatement, isTypeCastExpression, isUnaryExpression, isVariableExpression, isWhileStatement, isXmlAttributeGetExpression } from '../astUtils/reflection';
 import type { ClassStatement, FunctionStatement, InterfaceFieldStatement, InterfaceMethodStatement, MethodStatement, InterfaceStatement, CatchStatement, ThrowStatement, EnumStatement, EnumMemberStatement, ConstStatement, Block, CommentStatement, PrintStatement, DimStatement, ForStatement, WhileStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, TryCatchStatement, DottedSetStatement } from './Statement';
 import { AssignmentStatement, EmptyStatement } from './Statement';
 import { ParseMode, Parser } from './Parser';
 import type { AstNode } from './AstNode';
 
 type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };
+
+/**
+ * Compile-time assertion that `T` is exactly `TExpected` (not merely assignable to it).
+ * These specs are typechecked by ts-node at runtime, so a broken inference fails the suite.
+ */
+function expectTypeToBe<TExpected>() {
+    return <TActual>(_value: TActual & IfEquals<TActual, TExpected, unknown, never>) => { };
+}
+type IfEquals<X, Y, TIfEqual, TIfNot> =
+    (<G>() => G extends X ? 1 : 2) extends (<G>() => G extends Y ? 1 : 2) ? TIfEqual : TIfNot;
 
 describe('AstNode', () => {
     let program: Program;
@@ -28,6 +38,165 @@ describe('AstNode', () => {
     afterEach(() => {
         fsExtra.emptyDirSync(tempDir);
         program.dispose();
+    });
+
+    describe('findAncestor', () => {
+        /**
+         * Grab a deeply-nested node to walk upward from. `delta` is a variable
+         * expression inside a method, inside a class, inside a namespace.
+         */
+        function getDeepNode() {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                namespace Alpha
+                    class Bravo
+                        sub charlie()
+                            delta = 1
+                            print delta
+                        end sub
+                    end class
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            //NOTE: must match by name; a bare isVariableExpression matches the
+            //namespace's own name expression, which has no class in its chain
+            const node = file.ast.findChild<VariableExpression>(
+                (x) => isVariableExpression(x) && x.name.text.toLowerCase() === 'delta'
+            );
+            expect(node).to.exist;
+            return node!;
+        }
+
+        it('infers the node type from a single type-guard matcher', () => {
+            const node = getDeepNode();
+
+            const namespaceStatement = node.findAncestor(isNamespaceStatement);
+
+            //runtime
+            expect(namespaceStatement!.getName(ParseMode.BrighterScript)).to.eql('Alpha');
+            //compile-time: no explicit type arg was supplied, yet this is a NamespaceStatement
+            expectTypeToBe<NamespaceStatement | undefined>()(namespaceStatement);
+        });
+
+        it('returns a union for a custom matcher with an explicit type argument', () => {
+            const node = getDeepNode();
+
+            //the terse way to get a union out of custom logic: name the union once
+            //as the type argument and write plain boolean logic
+            const found = node.findAncestor<ClassStatement | NamespaceStatement>(
+                (x) => isClassStatement(x) || isNamespaceStatement(x)
+            );
+
+            //the class is nearer than the namespace, so it wins the upward walk
+            expect(isClassStatement(found)).to.be.true;
+            expect((found as ClassStatement).name.text).to.eql('Bravo');
+            expectTypeToBe<ClassStatement | NamespaceStatement | undefined>()(found);
+        });
+
+        it('narrows a union result down to a single member when guarded', () => {
+            const node = getDeepNode();
+
+            const found = node.findAncestor<ClassStatement | NamespaceStatement>(
+                (x) => isClassStatement(x) || isNamespaceStatement(x)
+            );
+
+            //standard narrowing still applies to the union we got back
+            if (isClassStatement(found)) {
+                expectTypeToBe<ClassStatement>()(found);
+                expect(found.name.text).to.eql('Bravo');
+            } else {
+                throw new Error('should have found the class');
+            }
+        });
+
+        it('also returns a union for a matcher annotated as a type predicate', () => {
+            const node = getDeepNode();
+
+            //more verbose than the explicit type argument above, but the compiler
+            //actually *verifies* this predicate against the matcher body rather
+            //than taking the caller's word for it
+            const found = node.findAncestor(
+                (x): x is ClassStatement | NamespaceStatement => isClassStatement(x) || isNamespaceStatement(x)
+            );
+
+            expect(isClassStatement(found)).to.be.true;
+            expectTypeToBe<ClassStatement | NamespaceStatement | undefined>()(found);
+        });
+
+        it('honors the order of the upward walk, returning the nearest match', () => {
+            const node = getDeepNode();
+
+            //the method is nearest, then the class, then the namespace
+            const nearest = node.findAncestor<ClassStatement | MethodStatement | NamespaceStatement>(
+                (x) => isClassStatement(x) || isMethodStatement(x) || isNamespaceStatement(x)
+            );
+            expect(isMethodStatement(nearest)).to.be.true;
+            expectTypeToBe<ClassStatement | MethodStatement | NamespaceStatement | undefined>()(nearest);
+        });
+
+        it('supports a multi-statement boolean matcher with an explicit type argument', () => {
+            const node = getDeepNode();
+
+            //matcher returns boolean|undefined (no explicit return on the fall-through path)
+            const found = node.findAncestor<ClassStatement>((x) => {
+                if (isClassStatement(x)) {
+                    return true;
+                }
+            });
+
+            expect(found!.name.text).to.eql('Bravo');
+            expectTypeToBe<ClassStatement | undefined>()(found);
+        });
+
+        it('does not verify an explicit type argument against the matcher logic', () => {
+            const node = getDeepNode();
+
+            //CAVEAT of the terse form: the type argument is asserted, not proven. The
+            //logic below matches a class, but we claim MethodStatement and the compiler
+            //accepts it. Annotate the matcher as a type predicate if you want this checked.
+            const found = node.findAncestor<MethodStatement>((x) => isClassStatement(x));
+
+            expectTypeToBe<MethodStatement | undefined>()(found);
+            //the static type is a lie; at runtime it really is the ClassStatement
+            expect(isClassStatement(found)).to.be.true;
+        });
+
+        it('falls back to AstNode when a boolean matcher gives no type information', () => {
+            const node = getDeepNode();
+
+            //an un-annotated `||` of guards is NOT a type predicate, so TypeScript
+            //cannot infer the union here; the result widens to the AstNode default.
+            const found = node.findAncestor((x) => isClassStatement(x) || isNamespaceStatement(x));
+
+            expect(isClassStatement(found)).to.be.true;
+            expectTypeToBe<AstNode | undefined>()(found);
+        });
+
+        it('returns undefined when no ancestor matches', () => {
+            const node = getDeepNode();
+
+            //there is no literal expression anywhere up the parent chain
+            const found = node.findAncestor(isLiteralExpression);
+
+            expect(found).to.be.undefined;
+            expectTypeToBe<LiteralExpression | undefined>()(found);
+        });
+
+        it('stops the walk and returns undefined when the matcher cancels', () => {
+            const node = getDeepNode();
+
+            //the namespace is a real ancestor, but cancelling before we reach it
+            //short-circuits the walk
+            const found = node.findAncestor((x, cancellationToken) => {
+                if (isClassStatement(x)) {
+                    cancellationToken.cancel();
+                    return;
+                }
+                return isNamespaceStatement(x);
+            });
+
+            expect(found).to.be.undefined;
+        });
     });
 
     describe('findChildAtPosition', () => {

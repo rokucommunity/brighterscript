@@ -4,7 +4,7 @@ import { Cache } from '../../Cache';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile, BsDiagnostic, OnScopeValidateEvent } from '../../interfaces';
-import type { ConstStatement, EnumStatement, NamespaceStatement } from '../../parser/Statement';
+import type { ConstStatement, EnumStatement } from '../../parser/Statement';
 import util from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
@@ -82,7 +82,7 @@ export class ScopeValidator {
                     });
                     return;
                 }
-                const enclosingNamespace = member.key.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase();
+                const enclosingNamespace = member.key.findAncestor(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase();
                 const entityName = parts.map(p => p.name.text.toLowerCase()).join('.');
                 // Check enum member
                 const memberLink = scope.getEnumMemberFileLink(entityName, enclosingNamespace);
@@ -171,7 +171,7 @@ export class ScopeValidator {
                     result.push({
                         parts: parts,
                         expression: expression,
-                        enclosingNamespaceNameLower: expression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase()
+                        enclosingNamespaceNameLower: expression.findAncestor(isNamespaceStatement)?.getName(ParseMode.BrighterScript)?.toLowerCase()
                     });
                 }
             }
@@ -402,7 +402,7 @@ export class ScopeValidator {
                 return;
             }
             chain.push(constStatement);
-            const innerNamespace = constStatement.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+            const innerNamespace = constStatement.findAncestor(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
             const value = constStatement.value;
             if (value) {
                 if (isVariableExpression(value) || isDottedGetExpression(value)) {
