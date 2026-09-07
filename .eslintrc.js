@@ -55,7 +55,7 @@ module.exports = {
         //had to add this rule to prevent eslint from crashing
         '@typescript-eslint/no-restricted-imports': ['off', {}],
         //mitigating this sometimes results in undesirably verbose code. Should investigate enabling again in the future.
-        '@typescript-eslint/no-unsafe-argument': 'off',
+        '@typescript-eslint/no-unsafe-argument': 'error',
         'object-curly-spacing': 'off',
         '@typescript-eslint/object-curly-spacing': [
             'error',
