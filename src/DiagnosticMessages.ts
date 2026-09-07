@@ -860,8 +860,9 @@ function formatAvailabilityAxis(axis: AvailabilityAxis, version: string): string
 export const DiagnosticCodeMap = {} as Record<keyof (typeof DiagnosticMessages), number>;
 export let diagnosticCodes = [] as number[];
 for (let key in DiagnosticMessages) {
-    diagnosticCodes.push(DiagnosticMessages[key]().code);
-    DiagnosticCodeMap[key] = DiagnosticMessages[key]().code;
+    const code = (DiagnosticMessages[key] as () => DiagnosticInfo)().code;
+    diagnosticCodes.push(code);
+    DiagnosticCodeMap[key] = code;
 }
 
 export interface DiagnosticInfo {

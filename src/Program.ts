@@ -642,7 +642,8 @@ export class Program {
      */
     public addOrReplaceFile<T extends BscFile>(fileEntry: FileObj, fileContents: string): T;
     public addOrReplaceFile<T extends BscFile>(fileParam: FileObj | string, fileContents: string): T {
-        return this.setFile<T>(fileParam as any, fileContents);
+        const setFile = this.setFile.bind(this) as (fileParam: FileObj | string, fileContents: string) => T;
+        return setFile(fileParam, fileContents);
     }
 
     /**
@@ -773,19 +774,18 @@ export class Program {
             srcPath = s`${path.resolve(rootDir, fileParam)}`;
             pkgPath = s`${util.replaceCaseInsensitive(srcPath, rootDir, '')}`;
         } else {
-            let param: any = fileParam;
-
-            if (param.src) {
-                srcPath = s`${param.src}`;
+            //narrow via `in` so each property access is type-safe, since FileObj and the alternate shape share no property names
+            if ('src' in fileParam && fileParam.src) {
+                srcPath = s`${fileParam.src}`;
             }
-            if (param.srcPath) {
-                srcPath = s`${param.srcPath}`;
+            if ('srcPath' in fileParam && fileParam.srcPath) {
+                srcPath = s`${fileParam.srcPath}`;
             }
-            if (param.dest) {
-                pkgPath = s`${this.removePkgPrefix(param.dest)}`;
+            if ('dest' in fileParam && fileParam.dest) {
+                pkgPath = s`${this.removePkgPrefix(fileParam.dest)}`;
             }
-            if (param.pkgPath) {
-                pkgPath = s`${this.removePkgPrefix(param.pkgPath)}`;
+            if ('pkgPath' in fileParam && fileParam.pkgPath) {
+                pkgPath = s`${this.removePkgPrefix(fileParam.pkgPath)}`;
             }
         }
 

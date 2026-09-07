@@ -2,7 +2,7 @@ import type { Scope } from '../Scope';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { CallExpression } from '../parser/Expression';
 import { ParseMode } from '../parser/Parser';
-import type { ClassStatement, MethodStatement, NamespaceStatement } from '../parser/Statement';
+import type { ClassStatement, MemberStatement, MethodStatement, NamespaceStatement } from '../parser/Statement';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
 import util from '../util';
@@ -285,9 +285,9 @@ export class BsClassValidator {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.mismatchedOverriddenMemberVisibility(
                                     classStatement.name.text,
-                                    ancestorAndMember.member.name?.text,
+                                    ancestorAndMember.member.name?.text ?? '',
                                     member.accessModifier?.text ?? 'public',
-                                    ancestorAndMember.member.accessModifier?.text || 'public',
+                                    ancestorAndMember.member.accessModifier?.text ?? 'public',
                                     ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
                                 file: classStatement.file,
@@ -342,15 +342,15 @@ export class BsClassValidator {
     /**
      * Get the closest member with the specified name (case-insensitive)
      */
-    getAncestorMember(classStatement, memberName) {
+    getAncestorMember(classStatement: AugmentedClassStatement, memberName: string): { classStatement: AugmentedClassStatement; member: MemberStatement } | undefined {
         let lowerMemberName = memberName.toLowerCase();
         let ancestor = classStatement.parentClass;
         while (ancestor) {
             let member = ancestor.memberMap[lowerMemberName];
             if (member) {
                 return {
-                    member: member,
-                    classStatement: ancestor
+                    classStatement: ancestor,
+                    member: member
                 };
             }
             ancestor = ancestor.parentClass !== ancestor ? ancestor.parentClass : null;

@@ -18,7 +18,7 @@ export class ReaderWriterManager {
     public read(action: Action) {
         const reader = {
             action: action,
-            deferred: new Deferred()
+            deferred: new Deferred<unknown>()
         };
         this.readers.push(reader);
         void this.execute();
@@ -31,7 +31,7 @@ export class ReaderWriterManager {
     public write(action: Action) {
         const writer = {
             action: action,
-            deferred: new Deferred()
+            deferred: new Deferred<unknown>()
         };
         this.writers.push(writer);
         void this.execute();
@@ -63,9 +63,9 @@ export class ReaderWriterManager {
     }
 }
 
-type Action = () => MaybePromise<any>;
+type Action = () => MaybePromise<unknown>;
 
 interface ReaderWriter {
     action: Action;
-    deferred: Deferred;
+    deferred: Deferred<unknown>;
 }
