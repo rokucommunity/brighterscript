@@ -10,6 +10,12 @@ import type { AnnotationExpression } from './Expression';
 import util from '../util';
 
 /**
+ * The set of a node's own property names whose value is an AstNode (or array of AstNode) that needs
+ * its `.parent` reassigned to the clone after `finalizeClone()` constructs it.
+ */
+export type PropsToReparent<T extends AstNode> = Array<{ [K in keyof T]: T[K] extends AstNode | AstNode[] ? K : never }[keyof T]>;
+
+/**
  * A BrightScript AST node
  */
 export abstract class AstNode {
@@ -140,7 +146,7 @@ export abstract class AstNode {
      */
     protected finalizeClone<T extends AstNode>(
         clone: T,
-        propsToReparent?: Array<{ [K in keyof T]: T[K] extends AstNode | AstNode[] ? K : never }[keyof T]>
+        propsToReparent?: PropsToReparent<T>
     ) {
         //clone the annotations if they exist
         if (Array.isArray((this as unknown as Statement).annotations)) {
@@ -161,6 +167,8 @@ export abstract class AstNode {
 }
 
 export abstract class Statement extends AstNode {
+    public abstract clone(): Statement;
+
     /**
      * When being considered by the walk visitor, this describes what type of element the current class is.
      */
@@ -174,6 +182,8 @@ export abstract class Statement extends AstNode {
 
 /** A BrightScript expression */
 export abstract class Expression extends AstNode {
+    public abstract clone(): Expression;
+
     /**
      * When being considered by the walk visitor, this describes what type of element the current class is.
      */

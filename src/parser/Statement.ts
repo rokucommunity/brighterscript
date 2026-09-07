@@ -1,7 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { CompoundAssignmentOperators, TokenKind } from '../lexer/TokenKind';
-import type { BinaryExpression, NamespacedVariableNameExpression, FunctionParameterExpression, LiteralExpression } from './Expression';
+import type { BinaryExpression, NamespacedVariableNameExpression, FunctionParameterExpression, LiteralExpression, DottedGetExpression } from './Expression';
 import { FunctionExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
@@ -17,7 +17,7 @@ import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import type { TranspileState } from './TranspileState';
 import { SymbolTable } from '../SymbolTable';
-import type { AstNode, Expression } from './AstNode';
+import type { AstNode, Expression, PropsToReparent } from './AstNode';
 import { Statement } from './AstNode';
 
 export class EmptyStatement extends Statement {
@@ -332,7 +332,7 @@ export class CommentStatement extends Statement implements Expression, TypedefPr
             new CommentStatement(
                 this.comments?.map(x => util.cloneToken(x))
             ),
-            ['comments' as any]
+            []
         );
     }
 }
@@ -600,7 +600,7 @@ export class IfStatement extends Statement {
                 },
                 this.condition?.clone(),
                 this.thenBranch?.clone(),
-                this.elseBranch?.clone(),
+                this.elseBranch?.clone() as IfStatement | Block,
                 this.isInline
             ),
             ['condition', 'thenBranch', 'elseBranch']
@@ -687,12 +687,12 @@ export class PrintStatement extends Statement {
             ' '
         ] as TranspileResult;
         for (let i = 0; i < this.expressions.length; i++) {
-            const expressionOrSeparator: any = this.expressions[i];
-            if (expressionOrSeparator.transpile) {
-                result.push(...(expressionOrSeparator as ExpressionStatement).transpile(state));
+            const expressionOrSeparator = this.expressions[i];
+            if (isExpression(expressionOrSeparator as AstNode)) {
+                result.push(...(expressionOrSeparator as Expression).transpile(state));
             } else {
                 result.push(
-                    state.tokenToSourceNode(expressionOrSeparator)
+                    state.tokenToSourceNode(expressionOrSeparator as PrintSeparatorTab | PrintSeparatorSpace)
                 );
             }
             //if there's an expression after us, add a space
@@ -706,7 +706,7 @@ export class PrintStatement extends Statement {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             //sometimes we have semicolon Tokens in the expressions list (should probably fix that...), so only walk the actual expressions
-            walkArray(this.expressions as AstNode[], visitor, options, this, (item) => isExpression(item as any));
+            walkArray(this.expressions as AstNode[], visitor, options, this, (item) => isExpression(item as unknown as AstNode));
         }
     }
 
@@ -717,14 +717,15 @@ export class PrintStatement extends Statement {
                     print: util.cloneToken(this.tokens.print)
                 },
                 this.expressions?.map(e => {
-                    if (isExpression(e as any)) {
+                    if (isExpression(e as AstNode)) {
                         return (e as Expression).clone();
                     } else {
-                        return util.cloneToken(e as Token);
+                        return util.cloneToken(e as PrintSeparatorTab | PrintSeparatorSpace);
                     }
                 })
             ),
-            ['expressions' as any]
+            //`expressions` mixes real AstNode Expressions with plain PrintSeparator tokens, so it can't satisfy PropsToReparent's homogeneous-AstNode[] key constraint
+            ['expressions'] as unknown as PropsToReparent<PrintStatement>
         );
     }
 }
@@ -2365,7 +2366,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let result = [] as TranspileResult;
 
         const constructorFunction = this.getConstructorFunction();
-        let constructorParams = [];
+        let constructorParams: FunctionParameterExpression[] = [];
         if (constructorFunction) {
             constructorParams = constructorFunction.func.parameters;
         } else {
@@ -2563,7 +2564,7 @@ export class MethodStatement extends FunctionStatement {
                 //is a call statement
                 return isExpressionStatement(x) && isCallExpression(x.expression) &&
                     //is a call to super
-                    util.findBeginningVariableExpression(x.expression.callee as any)?.name.text.toLowerCase() === 'super';
+                    util.findBeginningVariableExpression(x.expression.callee as DottedGetExpression)?.name.text.toLowerCase() === 'super';
             }) !== -1;
 
         //if a call to super exists, quit here
