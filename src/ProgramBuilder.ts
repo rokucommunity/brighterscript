@@ -96,7 +96,7 @@ export class ProgramBuilder {
             } as BscFile;
         }
         diagnostic.file = file;
-        this.staticDiagnostics.push(<any>diagnostic);
+        this.staticDiagnostics.push(diagnostic as BsDiagnostic);
     }
 
     public getDiagnostics() {
@@ -559,7 +559,7 @@ export class ProgramBuilder {
                 this.program!.loadManifest(manifestFile, false);
             }
 
-            const loadFile = async (fileObj) => {
+            const loadFile = async (fileObj: FileObj) => {
                 try {
                     this.program!.setFile(fileObj, await this.getFileContents(fileObj.src));
                 } catch (e) {

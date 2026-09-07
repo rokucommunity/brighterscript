@@ -647,9 +647,10 @@ export class Scope {
         return result;
     }
 
-    protected logDebug(...args: any[]) {
+    protected logDebug(...args: unknown[]) {
         this.program.logger.debug(this._debugLogComponentName, ...args);
     }
+
     private _debugLogComponentName: string;
 
     public validate(force = false) {

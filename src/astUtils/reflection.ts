@@ -335,20 +335,20 @@ const numberConstructorNames = [
     DoubleType.name
 ];
 export function isNumberType(e: any): e is IntegerType | LongIntegerType | FloatType | DoubleType {
-    return numberConstructorNames.includes(e?.constructor.name);
+    return numberConstructorNames.includes(e?.constructor.name as string);
 }
 
 // Literal reflection
 
-export function isLiteralInvalid(e: any): e is LiteralExpression & { type: InvalidType } {
+export function isLiteralInvalid(e: AstNode | undefined): e is LiteralExpression & { type: InvalidType } {
     return isLiteralExpression(e) && isInvalidType(e.type);
 }
-export function isLiteralBoolean(e: any): e is LiteralExpression & { type: BooleanType } {
+export function isLiteralBoolean(e: AstNode | undefined): e is LiteralExpression & { type: BooleanType } {
     return isLiteralExpression(e) && isBooleanType(e.type);
 }
-export function isLiteralString(e: any): e is LiteralExpression & { type: StringType } {
+export function isLiteralString(e: AstNode | undefined): e is LiteralExpression & { type: StringType } {
     return isLiteralExpression(e) && isStringType(e.type);
 }
-export function isLiteralNumber(e: any): e is LiteralExpression & { type: IntegerType | LongIntegerType | FloatType | DoubleType } {
+export function isLiteralNumber(e: AstNode | undefined): e is LiteralExpression & { type: IntegerType | LongIntegerType | FloatType | DoubleType } {
     return isLiteralExpression(e) && isNumberType(e.type);
 }

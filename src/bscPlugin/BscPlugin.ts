@@ -1,4 +1,6 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
+import type { BrsFile } from '../files/BrsFile';
+import type { XmlFile } from '../files/XmlFile';
 import type { BeforeFileTranspileEvent, Plugin, OnFileValidateEvent, OnGetCodeActionsEvent, OnGetSourceFixAllCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, ProvideSelectionRangesEvent, ProvideInlayHintsEvent } from '../interfaces';
 import type { Program } from '../Program';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
@@ -63,15 +65,15 @@ export class BscPlugin implements Plugin {
 
     public onGetSemanticTokens(event: OnGetSemanticTokensEvent) {
         if (isBrsFile(event.file)) {
-            return new BrsFileSemanticTokensProcessor(event as any).process();
+            return new BrsFileSemanticTokensProcessor(event as OnGetSemanticTokensEvent<BrsFile>).process();
         }
     }
 
     public onFileValidate(event: OnFileValidateEvent) {
         if (isBrsFile(event.file)) {
-            return new BrsFileValidator(event as any).process();
+            return new BrsFileValidator(event as OnFileValidateEvent<BrsFile>).process();
         } else if (isXmlFile(event.file)) {
-            return new XmlFileValidator(event as any).process();
+            return new XmlFileValidator(event as OnFileValidateEvent<XmlFile>).process();
         }
     }
 
@@ -89,7 +91,7 @@ export class BscPlugin implements Plugin {
 
     public beforeFileTranspile(event: BeforeFileTranspileEvent) {
         if (isBrsFile(event.file)) {
-            return new BrsFilePreTranspileProcessor(event as any).process();
+            return new BrsFilePreTranspileProcessor(event as BeforeFileTranspileEvent<BrsFile>).process();
         }
     }
 }

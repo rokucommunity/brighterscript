@@ -50,6 +50,7 @@ import { util } from './util';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
 import { LogLevel, createLogger, logger, setLspLoggerProps } from './logging';
+import type { LogLevel as LogLevelText } from '@rokucommunity/logger';
 import ignore from 'ignore';
 import * as micromatch from 'micromatch';
 import type { LspProject, LspDiagnostic } from './lsp/LspProject';
@@ -353,7 +354,7 @@ export class LanguageServer {
                     if (typeof value === 'string') {
                         value = value.toLowerCase();
                     }
-                    const logLevelNumeric = this.logger.getLogLevelNumeric(value as any);
+                    const logLevelNumeric = this.logger.getLogLevelNumeric(value as LogLevelText | LogLevel);
 
                     if (typeof logLevelNumeric === 'number') {
                         return logLevelNumeric;
@@ -620,7 +621,7 @@ export class LanguageServer {
      * Extract project paths from settings' projects list, expanding the workspaceFolder variable if necessary
      */
     private normalizeProjectPaths(workspaceFolder: string, projects: (string | BrightScriptProjectConfiguration)[]): BrightScriptProjectConfiguration[] | undefined {
-        return projects?.reduce((acc, project) => {
+        return projects?.reduce<BrightScriptProjectConfiguration[]>((acc, project) => {
             if (typeof project === 'string') {
                 acc.push({ path: project });
             } else if (typeof project.path === 'string') {

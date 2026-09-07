@@ -1019,10 +1019,10 @@ export class ProjectManager {
 
         //pipe all project-specific events through our emitter, and include the project reference
         project.on('all', (eventName, data) => {
-            this.emit(eventName as any, {
+            this.emit(eventName as 'validate-begin', {
                 ...data,
                 project: project
-            } as any);
+            } as { project: LspProject });
         });
         return project;
     }
@@ -1064,9 +1064,9 @@ export class ProjectManager {
     public on(eventName: 'project-activate', handler: (data: { project: LspProject }) => MaybePromise<void>);
     public on(eventName: 'diagnostics', handler: (data: { project: LspProject; diagnostics: LspDiagnostic[] }) => MaybePromise<void>);
     public on(eventName: string, handler: (payload: any) => MaybePromise<void>) {
-        this.emitter.on(eventName, handler as any);
+        this.emitter.on(eventName, handler as (...args: unknown[]) => void);
         return () => {
-            this.emitter.removeListener(eventName, handler as any);
+            this.emitter.removeListener(eventName, handler as (...args: unknown[]) => void);
         };
     }
 
@@ -1156,7 +1156,7 @@ function TrackBusyStatus(target: any, propertyKey: string, descriptor: PropertyD
     descriptor.value = function value(this: ProjectManager, ...args: any[]) {
         return this.busyStatusTracker.run(() => {
             return originalMethod.apply(this, args);
-        }, originalMethod.name);
+        }, originalMethod.name as string);
     };
 }
 

@@ -137,7 +137,7 @@ export class BrsFile {
             if (!diagnostic.file) {
                 diagnostic.file = this;
             }
-            this.diagnostics.push(diagnostic as any);
+            this.diagnostics.push(diagnostic);
         }
     }
 
@@ -425,7 +425,7 @@ export class BrsFile {
             } catch (error: any) {
                 //if the thrown error is DIFFERENT than any errors from the preprocessor, add that error to the list as well
                 if (this.diagnostics.find((x) => x === error) === undefined) {
-                    this.diagnostics.push(error);
+                    this.diagnostics.push(error as BsDiagnostic);
                 }
             }
 
@@ -644,7 +644,7 @@ export class BrsFile {
 
                 //function call
             } else if (isCallExpression(assignment.value)) {
-                let calleeName = (assignment.value.callee as any)?.name?.text;
+                let calleeName = (assignment.value.callee as VariableExpression)?.name?.text;
                 if (calleeName) {
                     let func = this.getCallableByName(calleeName);
                     if (func) {
@@ -743,7 +743,7 @@ export class BrsFile {
                 for (let arg of expression.args as any) {
 
                     //is a literal parameter value
-                    if (isLiteralExpression(arg)) {
+                    if (isLiteralExpression(arg as AstNode)) {
                         args.push({
                             range: arg.range,
                             type: arg.type,
@@ -1302,7 +1302,7 @@ export class BrsFile {
      * Returns false if no namespace was found with that name
      */
     public calleeStartsWithNamespace(callee: Expression) {
-        let left = callee as any;
+        let left = callee;
         while (isDottedGetExpression(left)) {
             left = left.obj;
         }

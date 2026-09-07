@@ -107,7 +107,7 @@ export default class SGParser {
             });
         }
 
-        const { prolog, root } = buildAST(cst as any, this.diagnostics);
+        const { prolog, root } = buildAST(cst as DocumentCstNode, this.diagnostics);
         if (!root) {
             const token1 = tokenVector[0];
             const token2 = tokenVector[1];

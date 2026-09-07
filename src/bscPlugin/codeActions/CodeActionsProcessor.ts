@@ -16,6 +16,7 @@ import { WalkMode } from '../../astUtils/visitors';
 import { TokenKind } from '../../lexer/TokenKind';
 import { getMissingExtendsInsertPosition } from './codeActionHelpers';
 import { rangeFromTokenValue } from '../../parser/SGParser';
+import type { IToken } from 'chevrotain';
 import type { Range } from 'vscode-languageserver';
 
 export class CodeActionsProcessor {
@@ -32,11 +33,11 @@ export class CodeActionsProcessor {
         // First pass: individual fixes for each diagnostic at the cursor position
         for (const diagnostic of this.event.diagnostics) {
             if (diagnostic.code === DiagnosticCodeMap.cannotFindName || diagnostic.code === DiagnosticCodeMap.cannotFindFunction) {
-                this.suggestCannotFindNameQuickFix(diagnostic as any);
+                this.suggestCannotFindNameQuickFix(diagnostic as DiagnosticMessageType<'cannotFindName'> | DiagnosticMessageType<'cannotFindFunction'>);
             } else if (diagnostic.code === DiagnosticCodeMap.classCouldNotBeFound) {
-                this.suggestClassImportQuickFix(diagnostic as any);
+                this.suggestClassImportQuickFix(diagnostic as DiagnosticMessageType<'classCouldNotBeFound'>);
             } else if (diagnostic.code === DiagnosticCodeMap.xmlComponentMissingExtendsAttribute) {
-                this.suggestMissingExtendsQuickFix(diagnostic as any);
+                this.suggestMissingExtendsQuickFix(diagnostic as DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>);
             } else if (diagnostic.code === DiagnosticCodeMap.voidFunctionMayNotReturnValue) {
                 this.suggestVoidFunctionReturnQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.nonVoidFunctionMustReturnValue) {
@@ -259,7 +260,7 @@ export class CodeActionsProcessor {
                 }
                 continue;
             }
-            const tokenRange: Range = isXml ? rangeFromTokenValue(token) : token.range;
+            const tokenRange: Range = isXml ? rangeFromTokenValue(token as IToken) : token.range;
             const tokenText: string = isXml ? token.image : token.text;
             const parsed = parseDisableComment(tokenText);
             if (!parsed) {
@@ -286,10 +287,10 @@ export class CodeActionsProcessor {
     private getDisableFileInsertion(file: BscFile): { position: ReturnType<typeof util.createPosition>; prefix: string; suffix: string } {
         if (isXmlFile(file)) {
             //insert after the `<?xml ?>` declaration if present, otherwise at the very top
-            const declCloseToken = file.parser.tokens?.find(t => (t as any).tokenType?.name === 'SPECIAL_CLOSE');
+            const declCloseToken = file.parser.tokens?.find(t => t.tokenType?.name === 'SPECIAL_CLOSE');
             if (declCloseToken) {
-                const endLine = (declCloseToken as any).endLine - 1;
-                const endColumn = (declCloseToken as any).endColumn;
+                const endLine = declCloseToken.endLine - 1;
+                const endColumn = declCloseToken.endColumn;
                 return {
                     position: util.createPosition(endLine, endColumn),
                     prefix: '\n',
@@ -687,7 +688,7 @@ export class CodeActionsProcessor {
             [DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent]: ['Remove redundant script import', 'Fix all: Remove redundant script imports'],
             [DiagnosticCodeMap.unnecessaryCodebehindScriptImport]: ['Remove unnecessary codebehind import', 'Fix all: Remove unnecessary codebehind imports']
         };
-        const [singleTitle, fixAllTitle] = titles[diagnostics[0]?.code] ?? ['Remove script import', 'Fix all: Remove script imports'];
+        const [singleTitle, fixAllTitle] = titles[diagnostics[0]?.code as number] ?? ['Remove script import', 'Fix all: Remove script imports'];
         const changes = diagnostics.map<DeleteChange>(diagnostic => {
             return {
                 type: 'delete',

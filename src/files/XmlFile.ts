@@ -15,7 +15,7 @@ import type { DependencyGraph } from '../DependencyGraph';
 import type { SGToken } from '../parser/SGTypes';
 import { SGScript } from '../parser/SGTypes';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
-import type { IToken, TokenType } from 'chevrotain';
+import type { IToken } from 'chevrotain';
 import { TranspileState } from '../parser/TranspileState';
 
 /**
@@ -239,7 +239,7 @@ export class XmlFile {
             file: this
         }));
 
-        this.getCommentFlags(this.parser.tokens as any[]);
+        this.getCommentFlags(this.parser.tokens as Array<IToken>);
 
         //needsTranspiled should be true if an import is brighterscript
         this.needsTranspiled = this.needsTranspiled || this.ast.component?.scripts?.some(
@@ -257,7 +257,7 @@ export class XmlFile {
     /**
      * Collect all bs: comment flags
      */
-    public getCommentFlags(tokens: Array<IToken & { tokenType: TokenType }>) {
+    public getCommentFlags(tokens: Array<IToken>) {
         const processor = new CommentFlagProcessor(this, ['<!--'], diagnosticCodes);
 
         this.commentFlags = [];
@@ -731,7 +731,7 @@ export class XmlFile {
         return result;
     }
 
-    private logDebug(...args) {
+    private logDebug(...args: unknown[]) {
         this.program.logger.debug('XmlFile', chalk.green(this.pkgPath), ...args);
     }
 

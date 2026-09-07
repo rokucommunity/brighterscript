@@ -1,7 +1,7 @@
 import * as EventEmitter from 'eventemitter3';
 import { Worker } from 'worker_threads';
 import type { MessagePort } from 'worker_threads';
-import type { WorkerMessage } from './MessageHandler';
+import type { MethodNames, WorkerMessage } from './MessageHandler';
 import { MessageHandler } from './MessageHandler';
 import util from '../../util';
 import type { LspDiagnostic, ActivateResponse, ProjectConfig, FileRenameTextEdit } from '../LspProject';
@@ -253,7 +253,7 @@ export class WorkerThreadProject implements LspProject {
      * @returns the response from the request
      */
     private async sendStandardRequest<T>(name: string, ...data: any[]) {
-        const response = await this.messageHandler.sendRequest<T>(name as any, {
+        const response = await this.messageHandler.sendRequest<T>(name as MethodNames<LspProject>, {
             data: data
         });
         return response.data;
@@ -329,16 +329,16 @@ export class WorkerThreadProject implements LspProject {
 
     private processUpdate(update: WorkerMessage) {
         //for now, all updates are treated like "events"
-        this.emit(update.name as any, update.data);
+        this.emit(update.name as 'critical-failure', update.data as { message: string });
     }
 
     public on(eventName: 'critical-failure', handler: (data: { message: string }) => void);
     public on(eventName: 'diagnostics', handler: (data: { diagnostics: LspDiagnostic[] }) => MaybePromise<void>);
     public on(eventName: 'all', handler: (eventName: string, data: any) => MaybePromise<void>);
     public on(eventName: string, handler: (...args: any[]) => MaybePromise<void>) {
-        this.emitter.on(eventName, handler as any);
+        this.emitter.on(eventName, handler as (...args: unknown[]) => void);
         return () => {
-            this.emitter.removeListener(eventName, handler as any);
+            this.emitter.removeListener(eventName, handler as (...args: unknown[]) => void);
         };
     }
 

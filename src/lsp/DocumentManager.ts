@@ -110,7 +110,7 @@ export class DocumentManager {
     public once(eventName: 'flush'): Promise<FlushEvent>;
     public once(eventName: string): Promise<any> {
         return new Promise((resolve) => {
-            const off = this.on(eventName as any, (data) => {
+            const off = this.on(eventName as 'flush', (data) => {
                 off();
                 resolve(data);
             });
@@ -119,9 +119,9 @@ export class DocumentManager {
 
     public on(eventName: 'flush', handler: (data: any) => MaybePromise<void>);
     public on(eventName: string, handler: (...args: any[]) => MaybePromise<void>) {
-        this.emitter.on(eventName, handler as any);
+        this.emitter.on(eventName, handler as (...args: unknown[]) => void);
         return () => {
-            this.emitter.removeListener(eventName, handler as any);
+            this.emitter.removeListener(eventName, handler as (...args: unknown[]) => void);
         };
     }
 

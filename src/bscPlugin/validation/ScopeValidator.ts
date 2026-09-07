@@ -13,7 +13,7 @@ import { TokenKind } from '../../lexer/TokenKind';
 import type { Scope } from '../../Scope';
 import type { DiagnosticRelatedInformation } from 'vscode-languageserver';
 import type { Expression } from '../../parser/AstNode';
-import type { VariableExpression, DottedGetExpression } from '../../parser/Expression';
+import type { VariableExpression, DottedGetExpression, LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 
@@ -447,7 +447,7 @@ export class ScopeValidator {
             if (call.name?.toLowerCase() !== 'createobject' || !isLiteralExpression(call?.args[0]?.expression)) {
                 continue;
             }
-            const firstParamToken = (call?.args[0]?.expression as any)?.token;
+            const firstParamToken = (call?.args[0]?.expression as LiteralExpression)?.token;
             const firstParamStringValue = firstParamToken?.text?.replace(/"/g, '');
             //if this is a `createObject('roSGNode'` call, only support known sg node types
             if (firstParamStringValue?.toLowerCase() === 'rosgnode' && isLiteralExpression(call?.args[1]?.expression)) {

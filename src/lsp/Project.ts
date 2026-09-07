@@ -667,9 +667,9 @@ export class Project implements LspProject {
     public on(eventName: 'diagnostics', handler: (data: { diagnostics: LspDiagnostic[] }) => MaybePromise<void>);
     public on(eventName: 'all', handler: (eventName: string, data: any) => MaybePromise<void>);
     public on(eventName: string, handler: (...args: any[]) => MaybePromise<void>) {
-        this.emitter.on(eventName, handler as any);
+        this.emitter.on(eventName, handler as (...args: unknown[]) => void);
         return () => {
-            this.emitter.removeListener(eventName, handler as any);
+            this.emitter.removeListener(eventName, handler as (...args: unknown[]) => void);
         };
     }
 
