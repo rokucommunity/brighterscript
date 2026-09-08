@@ -1,6 +1,7 @@
 import type { Range } from 'vscode-languageserver';
 import { AstEditor } from '../astUtils/AstEditor';
 import type { BrsFile } from '../files/BrsFile';
+import type { FirmwareCapabilities } from '../RokuConstants';
 import type { ClassStatement } from './Statement';
 import { TranspileState } from './TranspileState';
 
@@ -10,6 +11,7 @@ export class BrsTranspileState extends TranspileState {
     ) {
         super(file.srcPath, file.program.options);
         this.bslibPrefix = this.file.program.bslibPrefix;
+        this.firmwareCapabilities = this.file.program.firmwareCapabilities;
     }
 
     /**
@@ -36,12 +38,10 @@ export class BrsTranspileState extends TranspileState {
     public editor = new AstEditor();
 
     /**
-     * What the target firmware natively understands. Convenience passthrough to
-     * `program.firmwareCapabilities` so AST nodes don't have to reach through `file.program`.
+     * What the target firmware natively understands. Captured once when the state is created —
+     * capabilities are derived from config and cannot change partway through a transpile.
      */
-    public get firmwareCapabilities() {
-        return this.file.program.firmwareCapabilities;
-    }
+    public readonly firmwareCapabilities: FirmwareCapabilities;
 
     /**
      * Stack of loop-label trackers, one per enclosing loop currently being transpiled. Only used
