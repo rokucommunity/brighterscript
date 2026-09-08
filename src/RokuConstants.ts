@@ -127,3 +127,14 @@ export const DEFAULT_MIN_FIRMWARE_VERSION = '15.0.0';
  * Source: Roku OS 11 release notes.
  */
 export const OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION = '11.0.0';
+
+/**
+ * Minimum Roku firmware version that introduced the `continue for` / `continue while` statements.
+ * Unlike optional chaining, `continue` CAN be transpiled down for older devices (rewritten into a
+ * `goto` to a label at the end of the loop body), so this constant is used two ways:
+ * - transpiled files targeting below this version get the `goto`-label rewrite
+ * - files that are NOT transpiled get a diagnostic, since the device must support it natively
+ * Source: Roku OS 11.5 release notes ("Developers can now insert `continue` statements in `for`
+ * and `while` loops").
+ */
+export const CONTINUE_MIN_FIRMWARE_VERSION = '11.5.0';

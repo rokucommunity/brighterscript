@@ -649,6 +649,90 @@ describe('BrsFileValidator', () => {
                 }]);
             });
         });
+
+        describe('continue', () => {
+            it('allows `continue` in .brs files when minFirmwareVersion is not set', () => {
+                program = new Program({});
+                program.setFile('source/main.brs', `
+                    sub main()
+                        for i = 0 to 10
+                            continue for
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows `continue` in .brs files when minFirmwareVersion is exactly 11.5.0', () => {
+                program = new Program({ minFirmwareVersion: '11.5.0' });
+                program.setFile('source/main.brs', `
+                    sub main()
+                        for i = 0 to 10
+                            continue for
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('flags `continue` in .brs files when minFirmwareVersion is below 11.5.0', () => {
+                program = new Program({ minFirmwareVersion: '11.0.0' });
+                program.setFile('source/main.brs', `
+                    sub main()
+                        for i = 0 to 10
+                            continue for
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.featureRequiresMinFirmwareVersion('continue', '11.5.0', '11.0.0')
+                }]);
+            });
+
+            it('flags `continue while` in .brs files when minFirmwareVersion is below 11.5.0', () => {
+                program = new Program({ minFirmwareVersion: '11.0.0' });
+                program.setFile('source/main.brs', `
+                    sub main()
+                        while true
+                            continue while
+                        end while
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.featureRequiresMinFirmwareVersion('continue', '11.5.0', '11.0.0')
+                }]);
+            });
+
+            it('does not flag `continue` in .bs files below 11.5.0 because it gets transpiled', () => {
+                program = new Program({ minFirmwareVersion: '11.0.0' });
+                program.setFile('source/main.bs', `
+                    sub main()
+                        for i = 0 to 10
+                            continue for
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('does not flag `continue` in .brs files below 11.5.0 when allowBrighterScriptInBrightScript forces transpilation', () => {
+                program = new Program({ minFirmwareVersion: '11.0.0', allowBrighterScriptInBrightScript: true });
+                program.setFile('source/main.brs', `
+                    sub main()
+                        for i = 0 to 10
+                            continue for
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+        });
     });
 
     describe('eval deprecation', () => {

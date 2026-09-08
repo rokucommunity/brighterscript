@@ -446,7 +446,32 @@ With this setting, using optional chaining (`?.`) without the version requiremen
 | Feature | Minimum Version |
 |---------|----------------|
 | Optional chaining (`?.`, `?[`, `?(`) | 11.0.0 |
+| `continue for` / `continue while` | 11.5.0 |
 | Multi-line expressions / line continuation in `.brs` files | 15.3.0 |
+
+### `continue` and older firmware
+
+`continue for` and `continue while` were introduced in Roku OS 11.5, but unlike optional chaining they
+*can* be transpiled down. When a file is transpiled and `minFirmwareVersion` is below `11.5.0`, each
+`continue` is rewritten into a `goto` targeting a label at the end of the enclosing loop body:
+
+```brightscript
+' source
+for i = 0 to 10
+    continue for
+end for
+
+' transpiled output when targeting below 11.5.0
+for i = 0 to 10
+    goto BRIGHTERSCRIPT_CONTINUE_0
+    BRIGHTERSCRIPT_CONTINUE_0:
+end for
+```
+
+Files that are **not** transpiled (a `.brs` file without
+[`allowBrighterScriptInBrightScript`](#allowbrighterscriptinbrightscript)) are emitted as-is, so
+there is nothing to rewrite. Those get an error instead, since the code would fail on the target
+device.
 
 ### Line continuation in `.brs` files
 

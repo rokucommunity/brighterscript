@@ -13,7 +13,7 @@ import { InterfaceType } from '../../types/InterfaceType';
 import util from '../../util';
 import type { Range } from 'vscode-languageserver';
 import * as semver from 'semver';
-import { OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION } from '../../RokuConstants';
+import { CONTINUE_MIN_FIRMWARE_VERSION, OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION } from '../../RokuConstants';
 import type { AvailabilityAxis } from '../../DiagnosticMessages';
 import { globalCallableMap } from '../../globalCallables';
 
@@ -463,6 +463,30 @@ export class BrsFileValidator {
             this.event.file.addDiagnostic({
                 range: statement.range,
                 ...DiagnosticMessages.illegalContinueStatement()
+            });
+        }
+        this.validateMinFirmwareVersionForContinue(statement);
+    }
+
+    /**
+     * Add a diagnostic when a file that will NOT be transpiled uses `continue` while targeting
+     * firmware older than the version that introduced it. Transpiled files are exempt because
+     * `ContinueStatement.transpile` downlevels `continue` into a `goto` label jump for those
+     * targets, so the emitted code runs on the older device.
+     */
+    private validateMinFirmwareVersionForContinue(statement: ContinueStatement) {
+        if (this.event.file.needsTranspiled) {
+            return;
+        }
+        const minFirmwareVersion = this.event.file.program.getMinFirmwareVersion();
+        if (semver.lt(minFirmwareVersion, CONTINUE_MIN_FIRMWARE_VERSION)) {
+            this.event.file.addDiagnostic({
+                ...DiagnosticMessages.featureRequiresMinFirmwareVersion(
+                    'continue',
+                    CONTINUE_MIN_FIRMWARE_VERSION,
+                    minFirmwareVersion
+                ),
+                range: statement.range
             });
         }
     }
