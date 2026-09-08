@@ -102,15 +102,9 @@ import { Cache } from '../Cache';
 import type { Expression, Statement } from './AstNode';
 import { SymbolTable } from '../SymbolTable';
 import type { BscType } from '../types/BscType';
-import * as semver from 'semver';
+import { getFirmwareCapabilities } from '../RokuConstants';
 
 export class Parser {
-    /**
-     * The minimum Roku firmware version that added native support for multi-line expressions
-     * (line continuation) in plain BrightScript (`.brs`) files.
-     */
-    private static readonly LINE_CONTINUATION_MIN_FIRMWARE_VERSION = '15.3.0';
-
     /**
      * The array of tokens passed to `parse()`
      */
@@ -243,8 +237,9 @@ export class Parser {
         this.logger = options?.logger ?? createLogger();
         options = this.sanitizeParseOptions(options);
         this.options = options;
-        const coercedMinFirmwareVersion = semver.coerce(this.options.minFirmwareVersion);
-        this.allowLineContinuation = options.mode === ParseMode.BrighterScript || (!!coercedMinFirmwareVersion && semver.gte(coercedMinFirmwareVersion, Parser.LINE_CONTINUATION_MIN_FIRMWARE_VERSION));
+        //the parser has no `Program` reference, so derive capabilities from the raw version string
+        this.allowLineContinuation = options.mode === ParseMode.BrighterScript ||
+            getFirmwareCapabilities(this.options.minFirmwareVersion).lineContinuation;
 
         let tokens: Token[];
         if (typeof toParse === 'string') {

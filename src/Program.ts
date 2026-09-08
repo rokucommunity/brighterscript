@@ -24,7 +24,8 @@ import chalk from 'chalk';
 import { globalFile } from './globalCallables';
 import { parseManifest, parseManifestEntries, getBsConst } from './preprocessor/Manifest';
 import type { ManifestEntry } from './preprocessor/Manifest';
-import { DEFAULT_MIN_FIRMWARE_VERSION, RSG_VERSIONS } from './RokuConstants';
+import type { FirmwareCapabilities } from './RokuConstants';
+import { DEFAULT_MIN_FIRMWARE_VERSION, getFirmwareCapabilities, RSG_VERSIONS } from './RokuConstants';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement } from './astUtils/reflection';
@@ -1984,6 +1985,22 @@ export class Program {
             this._minFirmwareVersion = coerced ? coerced.version : DEFAULT_MIN_FIRMWARE_VERSION;
         }
         return this._minFirmwareVersion;
+    }
+
+    private _firmwareCapabilities: FirmwareCapabilities | undefined;
+
+    /**
+     * What the project's target firmware natively understands, derived from
+     * {@link getMinFirmwareVersion}. These are facts about the device, not decisions about what
+     * to do — a caller finding a missing capability decides whether to transpile around it (as
+     * `continue` does) or report a diagnostic (as optional chaining does).
+     * Cached after first call.
+     */
+    public get firmwareCapabilities(): FirmwareCapabilities {
+        if (this._firmwareCapabilities === undefined) {
+            this._firmwareCapabilities = getFirmwareCapabilities(this.getMinFirmwareVersion());
+        }
+        return this._firmwareCapabilities;
     }
 
     private _rsgVersion: string | undefined;
