@@ -700,6 +700,145 @@ describe('XmlFile', () => {
         ]);
     });
 
+    describe('xml tag casing', () => {
+        it('emits a casing diagnostic for <Children>', () => {
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="Comp" extends="Group">
+                <Children>
+                    <Label id="myLabel" />
+                </Children>
+            </component>
+        `);
+            program.validate();
+            expectDiagnostics(file, [
+                DiagnosticMessages.xmlTagWrongCase('Children', 'children')
+            ]);
+        });
+
+        it('emits a casing diagnostic for <Interface>', () => {
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="Comp" extends="Group">
+                <Interface>
+                    <field id="foo" type="string" />
+                </Interface>
+            </component>
+        `);
+            program.validate();
+            expectDiagnostics(file, [
+                DiagnosticMessages.xmlTagWrongCase('Interface', 'interface')
+            ]);
+        });
+
+        it('emits a casing diagnostic for <Script>', () => {
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="Comp" extends="Group">
+                <Script type="text/brightscript" uri="pkg:/source/main.brs" />
+            </component>
+        `);
+            program.setFile('source/main.brs', '');
+            program.validate();
+            expectDiagnostics(file, [
+                DiagnosticMessages.xmlTagWrongCase('Script', 'script')
+            ]);
+        });
+
+        it('emits a casing diagnostic for <Component>', () => {
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <Component name="Comp" extends="Group">
+            </Component>
+        `);
+            program.validate();
+            expectDiagnostics(file, [
+                DiagnosticMessages.xmlTagWrongCase('Component', 'component')
+            ]);
+        });
+
+        it('emits casing diagnostics for <Field> and <Function>', () => {
+            program.setFile('source/main.brs', `sub doThing()
+end sub`);
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="Comp" extends="Group">
+                <script type="text/brightscript" uri="pkg:/source/main.brs" />
+                <interface>
+                    <Field id="foo" type="string" />
+                    <Function name="doThing" />
+                </interface>
+            </component>
+        `);
+            program.validate();
+            expectDiagnostics(file, [
+                DiagnosticMessages.xmlTagWrongCase('Field', 'field'),
+                DiagnosticMessages.xmlTagWrongCase('Function', 'function')
+            ]);
+        });
+
+        it('does not emit a casing diagnostic for node tags inside <children>', () => {
+        //node names inside <children> are author-defined component names, so their
+        //casing must be left alone
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="Comp" extends="Group">
+                <children>
+                    <Group id="outer">
+                        <Label id="inner" text="hello" />
+                    </Group>
+                </children>
+            </component>
+        `);
+            program.validate();
+            expectZeroDiagnostics(file);
+        });
+
+        it('points the diagnostic range at the opening tag name', () => {
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="Comp" extends="Group">
+                <Children>
+                </Children>
+            </component>
+        `);
+            program.validate();
+            expect(file.diagnostics).to.have.lengthOf(1);
+            //the squiggle lands on `Children` (line 2)
+            expect(file.diagnostics[0].range).to.eql(
+                Range.create(2, 5, 2, 13)
+            );
+        });
+
+        it('preserves the original casing when transpiling', () => {
+        //we report the problem but must not silently rewrite the author's markup
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="Comp" extends="Group">
+                <Children>
+                    <Label id="myLabel" />
+                </Children>
+            </component>
+        `);
+            program.validate();
+            expect(file.transpile().code).to.include('<Children>');
+            expect(file.transpile().code).to.include('</Children>');
+        });
+
+        it('still emits the generic unexpected-tag diagnostic for unknown tags', () => {
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="Comp" extends="Group">
+                <bogus />
+            </component>
+        `);
+            program.validate();
+            expectDiagnostics(file, [
+                DiagnosticMessages.xmlUnexpectedTag('bogus')
+            ]);
+        });
+    });
+
     describe('transpile', () => {
         it('handles single quotes properly', () => {
             testTranspile(trim`
@@ -1037,6 +1176,7 @@ describe('XmlFile', () => {
             program.validate();
             expectZeroDiagnostics(file);
         });
+
 
         it('does not include additional bslib script if already there ', () => {
             testTranspile(trim`

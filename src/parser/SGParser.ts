@@ -195,7 +195,9 @@ function mapElement({ children }: ElementCstNode, diagnostics: Diagnostic[]): SG
 
     const attributes = mapAttributes(children.attribute);
     const content = children.content?.[0];
-    switch (name.text) {
+    //match structural tags case-insensitively so wrong-cased tags (like `<Children>`) still
+    //produce a proper AST node. `XmlFileValidator` reports the casing problem during validation.
+    switch (name.text.toLowerCase()) {
         case 'component':
             const componentContent = mapElements(content, ['interface', 'script', 'children', 'customization'], diagnostics);
             return new SGComponent(name, attributes, componentContent, range, closingName);
@@ -269,7 +271,9 @@ function mapElements(content: ContentCstNode, allow: string[], diagnostics: Diag
         for (const entry of element) {
             const name = entry.children.Name?.[0];
             if (name?.image) {
-                if (allow.includes(name.image)) {
+                //compare case-insensitively so wrong-cased tags (like `<Children>`) are still
+                //mapped into the AST. `XmlFileValidator` reports the casing problem separately.
+                if (allow.some(x => x === name.image.toLowerCase())) {
                     tags.push(mapElement(entry, diagnostics));
                 } else {
                     //unexpected tag

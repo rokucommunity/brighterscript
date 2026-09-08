@@ -848,6 +848,11 @@ export let DiagnosticMessages = {
         message: `Mismatched closing tag: expected '</${openingTag}>' but found '</${closingTag}>'`,
         code: 1156,
         severity: DiagnosticSeverity.Error
+    }),
+    xmlTagWrongCase: (actualTag: string, expectedTag: string) => ({
+        message: `Tag '${actualTag}' must be all lower case. Use '${expectedTag}' instead`,
+        code: 1157,
+        severity: DiagnosticSeverity.Error
     })
 };
 
