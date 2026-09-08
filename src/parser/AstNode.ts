@@ -170,10 +170,12 @@ export abstract class AstNode {
      * print doSomething(a.b)
      * ```
      *
-     * Requires `parent` to be set, so the node must already be linked (see `link()`).
+     * Requires `parent` to be set, so the node must already be linked (see `link()`). An
+     * unlinked node has no parent, so it reports `true`.
      */
     public isTerminal(): boolean {
-        return this.parent?.chainChild !== this;
+        //no parent means nothing can be reaching through us
+        return this.parent === undefined || this.parent.chainChild !== this;
     }
 
     /**
