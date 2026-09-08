@@ -1340,7 +1340,9 @@ describe('ProjectManager', () => {
     });
 
     it('completes promise when project is disposed in the middle of a flow', async function () {
-        this.timeout(20_000);
+        //spins up a worker thread and talks to it over a socket; macOS runners can be slow to
+        //cold-boot that, so use the same budget as the other worker-thread tests in this file
+        this.timeout(60_000);
         //small plugin to communicate over a socket inside the worker thread.
         //This transpiles from tsc use `require()` for all imports and don't reference external vars
         class Plugin {
