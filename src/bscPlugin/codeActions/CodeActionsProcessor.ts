@@ -548,7 +548,7 @@ export class CodeActionsProcessor {
         if (changes.length === 1 && isBrsFile(this.event.file)) {
             const diagnostic = diagnostics[0];
             const expression = this.event.file.getClosestExpression(diagnostic.range.start);
-            const func = expression.findAncestor<FunctionExpression>(isFunctionExpression);
+            const func = expression.findAncestor(isFunctionExpression);
 
             //if we're in a sub and we do not have a return type, suggest converting to a function
             if (func.functionType.kind === TokenKind.Sub && !func.returnTypeToken) {
@@ -625,7 +625,7 @@ export class CodeActionsProcessor {
 
         for (const d of diagnostics) {
             const expr = file.getClosestExpression(d.range.start);
-            const fn = expr?.findAncestor<FunctionExpression>(isFunctionExpression);
+            const fn = expr?.findAncestor(isFunctionExpression);
             if (!fn) {
                 continue;
             }
@@ -663,7 +663,7 @@ export class CodeActionsProcessor {
 
         //'Convert function to sub' has no fix-all variant; only add it for the individual case
         if (addVoidChanges.length === 1 && diagnostics.length === 1) {
-            const func = file.getClosestExpression(diagnostics[0].range.start).findAncestor<FunctionExpression>(isFunctionExpression);
+            const func = file.getClosestExpression(diagnostics[0].range.start).findAncestor(isFunctionExpression);
             this.event.codeActions.push(
                 codeActionUtil.createCodeAction({
                     title: `Convert function to sub`,

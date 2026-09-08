@@ -708,7 +708,7 @@ export class BrsFile {
                 range: statement.func.range,
                 type: functionType,
                 getName: statement.getName.bind(statement),
-                hasNamespace: !!statement.findAncestor<NamespaceStatement>(isNamespaceStatement),
+                hasNamespace: !!statement.findAncestor(isNamespaceStatement),
                 functionStatement: statement
             });
         }

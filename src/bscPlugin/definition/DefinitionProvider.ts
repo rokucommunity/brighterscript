@@ -49,7 +49,7 @@ export class DefinitionProvider {
         const expression = file.getClosestExpression(this.event.position);
         if (scope && expression) {
             scope.linkSymbolTable();
-            let containingNamespace = expression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+            let containingNamespace = expression.findAncestor(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
             const fullName = util.getAllDottedGetParts(expression)?.map(x => x.text).join('.');
 
             //find a constant with this name
