@@ -668,5 +668,87 @@ describe('DefinitionProvider', () => {
                 diskProgram.getDefinition(main.srcPath, util.createPosition(2, 40))
             ).to.eql([]);
         });
+
+        it('navigates to an extensionless asset referenced by an absolute path', () => {
+            const assetSrcPath = s`${diskRootDir}/images/MyImageWithoutExt`;
+            fsExtra.outputFileSync(assetSrcPath, 'PNG_DUMMY');
+            const main = diskProgram.setFile('source/main.brs', `
+                sub main()
+                    m.uri = "pkg:/images/MyImageWithoutExt"
+                end sub
+            `);
+            expectLocationLink(
+                diskProgram.getDefinition(main.srcPath, util.createPosition(2, 40)),
+                assetSrcPath,
+                util.createRange(2, 29, 2, 58)
+            );
+        });
+
+        it('navigates to an extensionless asset referenced by a bare name', () => {
+            //a bare name resolves relative to the containing file, so this sits beside main.brs
+            const assetSrcPath = s`${diskRootDir}/source/MyImageWithoutExt`;
+            fsExtra.outputFileSync(assetSrcPath, 'PNG_DUMMY');
+            const main = diskProgram.setFile('source/main.brs', `
+                sub main()
+                    m.uri = "MyImageWithoutExt"
+                end sub
+            `);
+            expectLocationLink(
+                diskProgram.getDefinition(main.srcPath, util.createPosition(2, 35)),
+                assetSrcPath,
+                util.createRange(2, 29, 2, 46)
+            );
+        });
+
+        it('navigates to an extensionless asset referenced from an xml attribute', () => {
+            const assetSrcPath = s`${diskRootDir}/images/MyImageWithoutExt`;
+            fsExtra.outputFileSync(assetSrcPath, 'PNG_DUMMY');
+            const xmlFile = diskProgram.setFile('components/MainScene.xml', `
+                <component name="MainScene" extends="Scene">
+                    <children>
+                        <Poster uri="pkg:/images/MyImageWithoutExt" />
+                    </children>
+                </component>
+            `);
+            expectLocationLink(
+                diskProgram.getDefinition(xmlFile.srcPath, util.createPosition(3, 45)),
+                assetSrcPath,
+                util.createRange(3, 37, 3, 66)
+            );
+        });
+
+        it('navigates to a font asset referenced by a <Font uri> attribute', () => {
+            const fontSrcPath = s`${diskRootDir}/fonts/MyFont.ttf`;
+            fsExtra.outputFileSync(fontSrcPath, 'TTF_DUMMY');
+            const xmlFile = diskProgram.setFile('components/MainScene.xml', `
+                <component name="MainScene" extends="Scene">
+                    <children>
+                        <Font uri="pkg:/fonts/MyFont.ttf" />
+                    </children>
+                </component>
+            `);
+            expectLocationLink(
+                diskProgram.getDefinition(xmlFile.srcPath, util.createPosition(3, 40)),
+                fontSrcPath,
+                util.createRange(3, 35, 3, 56)
+            );
+        });
+
+        it('navigates to an image referenced by a <Scene backgroundURI> attribute', () => {
+            const imgSrcPath = s`${diskRootDir}/images/bg.jpg`;
+            fsExtra.outputFileSync(imgSrcPath, 'JPG_DUMMY');
+            const xmlFile = diskProgram.setFile('components/MainScene.xml', `
+                <component name="MainScene" extends="Scene">
+                    <children>
+                        <Scene backgroundURI="pkg:/images/bg.jpg" />
+                    </children>
+                </component>
+            `);
+            expectLocationLink(
+                diskProgram.getDefinition(xmlFile.srcPath, util.createPosition(3, 50)),
+                imgSrcPath,
+                util.createRange(3, 46, 3, 64)
+            );
+        });
     });
 });

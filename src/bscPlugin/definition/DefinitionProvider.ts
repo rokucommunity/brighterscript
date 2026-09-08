@@ -42,12 +42,14 @@ export class DefinitionProvider {
      * path as one unit on Ctrl+hover) when the file is found, or null when it is not.
      *
      * Resolution happens in two steps:
-     *   1. Check the program's loaded files (covers .brs/.bs/.xml).
+     *   1. Check the program's loaded files (covers .brs/.bs/.xml). Any string is tried here, since
+     *      a hit is proof the string names a real file — including extensionless names.
      *   2. Assets like images are never loaded into the program, so fall back to reverse-mapping
-     *      the pkgPath back through the project's `files` array to a path on disk.
+     *      the pkgPath back through the project's `files` array to a path on disk. That fallback
+     *      touches the disk, so it's gated behind `looksLikeFilePath`.
      */
     private tryGetFilePathLocationLink(pathStr: string, containingFilePkgPath: string, originRange: Range): LocationLink | null {
-        if (!this.looksLikeFilePath(pathStr)) {
+        if (!pathStr?.trim()) {
             return null;
         }
         const pkgPath = util.getPkgPathFromTarget(containingFilePkgPath, pathStr);
@@ -56,7 +58,9 @@ export class DefinitionProvider {
         }
         //the file is loaded in the program (.brs/.bs/.xml)
         const targetFile = this.event.program.getFile(pkgPath);
-        const srcPath = targetFile?.srcPath ?? this.findSrcPathForPkgPath(pkgPath);
+        const srcPath = targetFile?.srcPath ?? (
+            this.looksLikeFilePath(pathStr) ? this.findSrcPathForPkgPath(pkgPath) : undefined
+        );
         if (!srcPath) {
             return null;
         }
@@ -156,19 +160,30 @@ export class DefinitionProvider {
     }
 
     /**
-     * Is this string plausibly a file path? We require a path separator, a `pkg:`/`libpkg:` scheme,
-     * or a file extension, so that arbitrary strings (`"hello world"`, `"Poster"`) never trigger a
-     * disk lookup or turn into a link just because a file happens to share their name.
+     * Is this string plausibly the path of a file on disk? This gates the disk half of the lookup
+     * only — a file that's loaded in the program is matched by name regardless, so extensionless
+     * names like `uri="MyImageWithoutExt"` still resolve there.
+     *
+     * Assets aren't in the program, so an extensionless asset name has to pass through here too.
+     * That means we can't require an extension; we only rule out strings that can't name a file at
+     * all (whitespace, urls, path characters roku won't accept), which keeps prose like
+     * `print "hello world"` from hitting the disk on every hover.
      */
     private looksLikeFilePath(pathStr: string) {
-        if (!pathStr?.trim() || /[\r\n]/.test(pathStr)) {
+        if (!pathStr?.trim()) {
             return false;
         }
         //urls point at remote resources, not files in this project
         if (/^[a-z][a-z0-9+.-]*:\/\//i.test(pathStr)) {
             return false;
         }
-        return /^(?:pkg|libpkg):/i.test(pathStr) || /[/\\]/.test(pathStr) || /\.[a-z0-9]+$/i.test(pathStr);
+        //`pkg:/` and `libpkg:/` paths are unambiguous, so accept them without further scrutiny
+        if (/^(?:pkg|libpkg):/i.test(pathStr)) {
+            return true;
+        }
+        //anything else has to look like a bare path segment chain. Notably this rejects strings
+        //containing whitespace, which is what filters out ordinary prose.
+        return /^[\w.-]+(?:[/\\][\w.-]+)*$/.test(pathStr);
     }
 
     /**
