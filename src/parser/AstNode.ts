@@ -142,8 +142,6 @@ export abstract class AstNode {
      * a.b     .previousInChain -> a
      * a       .previousInChain -> undefined
      * ```
-     * Note that `b` and `c` are name tokens on those nodes, not nodes of their own, so there is
-     * nothing that `.previousInChain` could return for them.
      *
      * This walks toward the AST *child*, since chains are stored inverted: the full expression is
      * the top node and its base is the deepest descendant. It is not `parent` reversed though -
