@@ -88,8 +88,8 @@ export class CallExpression extends Expression {
 
     public readonly range: Range | undefined;
 
-    /** the `a.b` in `a.b()` */
-    public get chainChild() {
+    /** `a.b()` -> `a.b` (not the args) */
+    public get previousInChain() {
         return this.callee;
     }
 
@@ -508,8 +508,8 @@ export class NamespacedVariableNameExpression extends Expression {
     }
     range: Range | undefined;
 
-    /** the `Alpha.Beta` inside this wrapper */
-    public get chainChild() {
+    /** unwraps to the `Alpha.Beta` inside */
+    public get previousInChain() {
         return this.expression;
     }
 
@@ -581,8 +581,8 @@ export class DottedGetExpression extends Expression {
 
     public readonly range: Range | undefined;
 
-    /** the `a` in `a.b` */
-    public get chainChild() {
+    /** `a.b` -> `a` */
+    public get previousInChain() {
         return this.obj;
     }
 
@@ -641,8 +641,8 @@ export class XmlAttributeGetExpression extends Expression {
 
     public readonly range: Range | undefined;
 
-    /** the `a` in `a@b` */
-    public get chainChild() {
+    /** `a@b` -> `a` */
+    public get previousInChain() {
         return this.obj;
     }
 
@@ -694,8 +694,8 @@ export class IndexedGetExpression extends Expression {
 
     public readonly range: Range | undefined;
 
-    /** the `a` in `a[1]` (not the index) */
-    public get chainChild() {
+    /** `a[1]` -> `a` (not the index) */
+    public get previousInChain() {
         return this.obj;
     }
 
@@ -1385,8 +1385,8 @@ export class NewExpression extends Expression {
 
     public readonly range: Range | undefined;
 
-    /** the `Alpha.Beta()` in `new Alpha.Beta()` */
-    public get chainChild() {
+    /** `new Alpha.Beta()` -> `Alpha.Beta()` */
+    public get previousInChain() {
         return this.call;
     }
 
@@ -1440,8 +1440,8 @@ export class CallfuncExpression extends Expression {
 
     public readonly range: Range | undefined;
 
-    /** the `a` in `a@.b()` */
-    public get chainChild() {
+    /** `a@.b()` -> `a` (not the args) */
+    public get previousInChain() {
         return this.callee;
     }
 

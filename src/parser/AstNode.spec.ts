@@ -1897,18 +1897,18 @@ describe('AstNode', () => {
         }
 
         /**
-         * Assert every terminal expression in `code`, each followed by the nodes it reaches
-         * through via `chainChild` (innermost first). Statements are excluded so these tests
-         * stay focused on expression boundaries.
+         * Assert every terminal expression in `code`, each followed by every step of that
+         * expression via `previousInChain` (shortest prefix first). Statements are excluded so
+         * these tests stay focused on expression boundaries.
          */
         function expectChains(code: string, expected: Array<[string, string[]]>) {
             const actual = parseNodes(code)
             //only expressions (skip the root Body) that are the outermost node of their expression
                 .filter(node => node.parent && node.isTerminal() && !isStatement(node))
                 .map(node => {
-                    //collect this node and everything it reaches down through
+                    //collect this node and every earlier step of the same expression
                     const links: string[] = [];
-                    for (let link: AstNode | undefined = node; link; link = link.chainChild) {
+                    for (let link: AstNode | undefined = node; link; link = link.previousInChain) {
                         links.unshift(getText(code, link));
                     }
                     return [getText(code, node), links];

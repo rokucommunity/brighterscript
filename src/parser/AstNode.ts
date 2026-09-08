@@ -132,40 +132,48 @@ export abstract class AstNode {
     }
 
     /**
-     * The child that this node reaches through, for nodes like `a.b` that wrap another
-     * expression. Overridden by dotted/indexed gets, calls, etc. Everything else returns undefined.
+     * The previous step in this expression, or undefined if this node doesn't build on another
+     * expression. Overridden by dotted/indexed gets, calls, and other chaining nodes.
      *
-     * Given `a.b`, the `DottedGetExpression` for `a.b` returns the `VariableExpression` for `a`.
-     *
-     * Only the wrapped expression counts. Call args and index values are excluded, because
-     * they're separate expressions that merely sit inside this one:
+     * Each node in a chain spans a whole prefix of the source, so this walks to the next-shorter
+     * prefix. In `a.b.c`:
      * ```
-     * a.b(c)      //CallExpression.chainChild is `a.b`,  NOT `c`
-     * a[c]        //IndexedGetExpression.chainChild is `a`, NOT `c`
+     * a.b.c   .previousInChain -> a.b
+     * a.b     .previousInChain -> a
+     * a       .previousInChain -> undefined
+     * ```
+     * (`b` and `c` are name tokens on those nodes, not nodes of their own)
+     *
+     * Note this walks toward the AST *child*, since chains are stored inverted: the full
+     * expression is the top node and its base is the deepest descendant. It is not `parent`
+     * reversed - args and index values have a `parent` but are never a `previousInChain`,
+     * because they're separate expressions that merely sit inside this one:
+     * ```
+     * a.b(c)   //CallExpression.previousInChain is `a.b`, NOT `c`
+     * a[c]     //IndexedGetExpression.previousInChain is `a`, NOT `c`
      * ```
      */
-    public get chainChild(): AstNode | undefined {
+    public get previousInChain(): AstNode | undefined {
         return undefined;
     }
 
     /**
-     * Is this node the outermost node of its expression? (i.e. is nothing else reaching down
-     * through it via `chainChild`)
+     * Is this node a complete expression, rather than one step inside a longer one?
      *
-     * Statements are always terminal. Use this to find whole expressions while walking, instead
-     * of also matching the fragments inside them.
+     * True when nothing chains onto this node. Statements are always terminal. Use this to find
+     * whole expressions while walking, instead of also matching every prefix inside them.
      *
      * ```
      * print a.b.c(1)
      * // a.b.c(1)  terminal - the whole expression
-     * // a.b.c     no       - a.b.c(1) reaches through it
-     * // a.b       no       - a.b.c reaches through it
-     * // a         no       - a.b reaches through it
+     * // a.b.c     no       - a.b.c(1) chains onto it
+     * // a.b       no       - a.b.c chains onto it
+     * // a         no       - a.b chains onto it
      * // 1         terminal - an argument, so its own expression
      * ```
      *
-     * Note that an inner node can still be terminal when it's an argument rather than something
-     * being reached through. Here `a.b` is terminal even though it's nested inside the call:
+     * A nested node is still terminal when it's an argument rather than something chained onto.
+     * Here `a.b` is terminal even though it sits inside the call:
      * ```
      * print doSomething(a.b)
      * ```
@@ -174,8 +182,8 @@ export abstract class AstNode {
      * unlinked node has no parent, so it reports `true`.
      */
     public isTerminal(): boolean {
-        //no parent means nothing can be reaching through us
-        return this.parent === undefined || this.parent.chainChild !== this;
+        //walk up, then back down: if we don't land on ourselves, nothing chains onto us
+        return this.parent === undefined || this.parent.previousInChain !== this;
     }
 
     /**
