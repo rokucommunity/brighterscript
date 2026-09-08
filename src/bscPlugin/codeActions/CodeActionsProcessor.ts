@@ -17,6 +17,7 @@ import { TokenKind } from '../../lexer/TokenKind';
 import { getMissingExtendsInsertPosition } from './codeActionHelpers';
 import { rangeFromTokenValue } from '../../parser/SGParser';
 import type { Range } from 'vscode-languageserver';
+import type { IToken } from 'chevrotain';
 
 export class CodeActionsProcessor {
     public constructor(
@@ -31,12 +32,12 @@ export class CodeActionsProcessor {
     public process() {
         // First pass: individual fixes for each diagnostic at the cursor position
         for (const diagnostic of this.event.diagnostics) {
-            if (diagnostic.code === DiagnosticCodeMap.cannotFindName || diagnostic.code === DiagnosticCodeMap.cannotFindFunction) {
-                this.suggestCannotFindNameQuickFix(diagnostic as any);
-            } else if (diagnostic.code === DiagnosticCodeMap.classCouldNotBeFound) {
-                this.suggestClassImportQuickFix(diagnostic as any);
-            } else if (diagnostic.code === DiagnosticCodeMap.xmlComponentMissingExtendsAttribute) {
-                this.suggestMissingExtendsQuickFix(diagnostic as any);
+            if (isDiagnosticOfType(diagnostic, 'cannotFindName') || isDiagnosticOfType(diagnostic, 'cannotFindFunction')) {
+                this.suggestCannotFindNameQuickFix(diagnostic);
+            } else if (isDiagnosticOfType(diagnostic, 'classCouldNotBeFound')) {
+                this.suggestClassImportQuickFix(diagnostic);
+            } else if (isDiagnosticOfType(diagnostic, 'xmlComponentMissingExtendsAttribute')) {
+                this.suggestMissingExtendsQuickFix(diagnostic);
             } else if (diagnostic.code === DiagnosticCodeMap.voidFunctionMayNotReturnValue) {
                 this.suggestVoidFunctionReturnQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.nonVoidFunctionMustReturnValue) {
@@ -259,7 +260,7 @@ export class CodeActionsProcessor {
                 }
                 continue;
             }
-            const tokenRange: Range = isXml ? rangeFromTokenValue(token) : token.range;
+            const tokenRange: Range = isXml ? rangeFromTokenValue(token as IToken) : token.range;
             const tokenText: string = isXml ? token.image : token.text;
             const parsed = parseDisableComment(tokenText);
             if (!parsed) {
@@ -286,10 +287,10 @@ export class CodeActionsProcessor {
     private getDisableFileInsertion(file: BscFile): { position: ReturnType<typeof util.createPosition>; prefix: string; suffix: string } {
         if (isXmlFile(file)) {
             //insert after the `<?xml ?>` declaration if present, otherwise at the very top
-            const declCloseToken = file.parser.tokens?.find(t => (t as any).tokenType?.name === 'SPECIAL_CLOSE');
+            const declCloseToken = file.parser.tokens?.find(t => t.tokenType?.name === 'SPECIAL_CLOSE');
             if (declCloseToken) {
-                const endLine = (declCloseToken as any).endLine - 1;
-                const endColumn = (declCloseToken as any).endColumn;
+                const endLine = declCloseToken.endLine - 1;
+                const endColumn = declCloseToken.endColumn;
                 return {
                     position: util.createPosition(endLine, endColumn),
                     prefix: '\n',
@@ -380,7 +381,7 @@ export class CodeActionsProcessor {
     /**
      * Suggests import statements for an unresolved name (function, class, namespace, or enum).
      */
-    private suggestCannotFindNameQuickFix(diagnostic: DiagnosticMessageType<'cannotFindName'>) {
+    private suggestCannotFindNameQuickFix(diagnostic: DiagnosticMessageType<'cannotFindName'> | DiagnosticMessageType<'cannotFindFunction'>) {
         //skip if not a BrighterScript file
         if ((diagnostic.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
             return;
@@ -547,7 +548,7 @@ export class CodeActionsProcessor {
         if (changes.length === 1 && isBrsFile(this.event.file)) {
             const diagnostic = diagnostics[0];
             const expression = this.event.file.getClosestExpression(diagnostic.range.start);
-            const func = expression.findAncestor<FunctionExpression>(isFunctionExpression);
+            const func = expression.findAncestor(isFunctionExpression);
 
             //if we're in a sub and we do not have a return type, suggest converting to a function
             if (func.functionType.kind === TokenKind.Sub && !func.returnTypeToken) {
@@ -624,7 +625,7 @@ export class CodeActionsProcessor {
 
         for (const d of diagnostics) {
             const expr = file.getClosestExpression(d.range.start);
-            const fn = expr?.findAncestor<FunctionExpression>(isFunctionExpression);
+            const fn = expr?.findAncestor(isFunctionExpression);
             if (!fn) {
                 continue;
             }
@@ -662,7 +663,7 @@ export class CodeActionsProcessor {
 
         //'Convert function to sub' has no fix-all variant; only add it for the individual case
         if (addVoidChanges.length === 1 && diagnostics.length === 1) {
-            const func = file.getClosestExpression(diagnostics[0].range.start).findAncestor<FunctionExpression>(isFunctionExpression);
+            const func = file.getClosestExpression(diagnostics[0].range.start).findAncestor(isFunctionExpression);
             this.event.codeActions.push(
                 codeActionUtil.createCodeAction({
                     title: `Convert function to sub`,
@@ -687,7 +688,7 @@ export class CodeActionsProcessor {
             [DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent]: ['Remove redundant script import', 'Fix all: Remove redundant script imports'],
             [DiagnosticCodeMap.unnecessaryCodebehindScriptImport]: ['Remove unnecessary codebehind import', 'Fix all: Remove unnecessary codebehind imports']
         };
-        const [singleTitle, fixAllTitle] = titles[diagnostics[0]?.code] ?? ['Remove script import', 'Fix all: Remove script imports'];
+        const [singleTitle, fixAllTitle] = titles[diagnostics[0]?.code as number] ?? ['Remove script import', 'Fix all: Remove script imports'];
         const changes = diagnostics.map<DeleteChange>(diagnostic => {
             return {
                 type: 'delete',

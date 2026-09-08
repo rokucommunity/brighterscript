@@ -93,7 +93,7 @@ export class Preprocessor implements CC.Visitor {
             });
         }
 
-        let value;
+        let value: boolean;
         switch (chunk.value.kind) {
             case TokenKind.True:
                 value = true;

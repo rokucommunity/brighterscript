@@ -10,7 +10,7 @@ import { URI } from 'vscode-uri';
 import { Deferred } from '../deferred';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import { rokuDeploy } from 'roku-deploy';
-import type { DocumentSymbol, Position, Range, Location, WorkspaceSymbol, InlayHint } from 'vscode-languageserver-protocol';
+import type { DocumentSymbol, Position, Range, Location, LocationLink, WorkspaceSymbol, InlayHint } from 'vscode-languageserver-protocol';
 import { CompletionList } from 'vscode-languageserver-protocol';
 import { CancellationTokenSource } from 'vscode-languageserver-protocol';
 import type { DocumentAction, DocumentActionWithStatus } from './DocumentManager';
@@ -389,7 +389,7 @@ export class Project implements LspProject {
         }
     }
 
-    public async getDefinition(options: { srcPath: string; position: Position }): Promise<Location[]> {
+    public async getDefinition(options: { srcPath: string; position: Position }): Promise<Array<Location | LocationLink>> {
         await this.onIdle();
         if (this.builder.program.hasFile(options.srcPath)) {
             return this.builder.program.getDefinition(options.srcPath, options.position);
@@ -667,8 +667,10 @@ export class Project implements LspProject {
     public on(eventName: 'diagnostics', handler: (data: { diagnostics: LspDiagnostic[] }) => MaybePromise<void>);
     public on(eventName: 'all', handler: (eventName: string, data: any) => MaybePromise<void>);
     public on(eventName: string, handler: (...args: any[]) => MaybePromise<void>) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         this.emitter.on(eventName, handler as any);
         return () => {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
             this.emitter.removeListener(eventName, handler as any);
         };
     }

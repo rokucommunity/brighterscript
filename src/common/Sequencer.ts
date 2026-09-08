@@ -24,7 +24,7 @@ export class Sequencer {
     }
 
     // eslint-disable-next-line @typescript-eslint/ban-types
-    private actions: Array<{ args: any[]; func: Function }> = [];
+    private actions: Array<{ args: unknown[]; func: (...args: any[]) => any }> = [];
 
     public forEach<T>(itemsOrFactory: Iterable<T> | (() => Iterable<T>), func: (item: T) => any) {
         //register a single action for now, we will fetch the full list and register their actions later

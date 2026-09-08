@@ -571,8 +571,8 @@ export class Util {
     /**
      * Walks left in a DottedGetExpression and returns a VariableExpression if found, or undefined if not found
      */
-    public findBeginningVariableExpression(dottedGet: DottedGetExpression): VariableExpression | undefined {
-        let left: any = dottedGet;
+    public findBeginningVariableExpression(expression: Expression): VariableExpression | undefined {
+        let left: Expression = expression;
         while (left) {
             if (isVariableExpression(left)) {
                 return left;
@@ -712,7 +712,7 @@ export class Util {
                 if (Array.isArray(obj)) {
                     return obj.map(visit);
                 }
-                return Object.keys(obj).reduce((result, prop) => {
+                return Object.keys(obj as Record<string, unknown>).reduce<Record<string, any>>((result, prop) => {
                     result[prop] = visit(safeGetValue(obj, prop));
                     return result;
                 }, {});
@@ -732,7 +732,7 @@ export class Util {
         const destroyCircular = (from: any, seen: any[]) => {
             const to: any = Array.isArray(from) ? [] : {};
             seen.push(from);
-            for (const [key, val] of Object.entries(from)) {
+            for (const [key, val] of Object.entries(from as Record<string, unknown>)) {
                 if (typeof val === 'function') {
                     continue;
                 }
@@ -1403,7 +1403,7 @@ export class Util {
                     acc.push(plugin);
                 } catch (err: any) {
                     if (onError) {
-                        onError(pathOrModule, err);
+                        onError(pathOrModule, err as Error);
                     } else {
                         throw err;
                     }
@@ -1422,7 +1422,7 @@ export class Util {
         const variableExpressions = [] as VariableExpression[];
         const uniqueVarNames = new Set<string>();
 
-        function expressionWalker(expression) {
+        function expressionWalker(expression: AstNode) {
             if (isExpression(expression)) {
                 expressions.push(expression);
             }
@@ -1766,7 +1766,7 @@ export class Util {
      * Returns an integer if valid, or undefined. Eliminates checking for NaN
      */
     public parseInt(value: any) {
-        const result = parseInt(value);
+        const result = parseInt(value as string);
         if (!isNaN(result)) {
             return result;
         } else {
@@ -1783,7 +1783,7 @@ export class Util {
 
     public validateTooDeepFile(file: (BrsFile | XmlFile)) {
         //find any files nested too deep
-        let pkgPath = file.pkgPath ?? (file.pkgPath as any).toString();
+        let pkgPath: string = file.pkgPath ?? (file.pkgPath as any).toString();
         let rootFolder = pkgPath.replace(/^pkg:/, '').split(/[\\\/]/)[0].toLowerCase();
 
         if (isBrsFile(file) && rootFolder !== 'source') {
@@ -1885,7 +1885,7 @@ export class Util {
     ): SourceNode {
         // we can use a typecast rather than actually transforming the data because SourceNode
         // accepts a more permissive type than its typedef states
-        return new SourceNode(line, column, source, chunks as any, name);
+        return new SourceNode(line, column, source, chunks as string | SourceNode | (string | SourceNode)[], name);
     }
 
     /**
@@ -1984,10 +1984,10 @@ export class Util {
  * A tagged template literal function for standardizing the path. This has to be defined as standalone function since it's a tagged template literal function,
  * we can't use `object.tag` syntax.
  */
-export function standardizePath(stringParts, ...expressions: any[]) {
+export function standardizePath(stringParts: TemplateStringsArray | string, ...expressions: any[]) {
     let result: string[] = [];
     for (let i = 0; i < stringParts?.length; i++) {
-        result.push(stringParts[i], expressions[i]);
+        result.push(stringParts[i], expressions[i] as string);
     }
     return util.standardizePath(
         result.join('')

@@ -146,7 +146,7 @@ export class AssignmentStatement extends Statement {
      * @deprecated use `.findAncestor(isFunctionExpression)` instead.
      */
     public get containingFunction() {
-        return this.findAncestor<FunctionExpression>(isFunctionExpression);
+        return this.findAncestor(isFunctionExpression);
     }
 
     transpile(state: BrsTranspileState) {
@@ -343,7 +343,8 @@ export class CommentStatement extends Statement implements Expression, TypedefPr
             new CommentStatement(
                 this.comments?.map(x => util.cloneToken(x))
             ),
-            ['comments' as any]
+            //`propsToReparent`'s constraint resolves to `never` here because `comments` holds plain `Token`s, not `AstNode`s
+            ['comments' as never]
         );
     }
 }
@@ -425,7 +426,7 @@ export class FunctionStatement extends Statement implements TypedefProvider {
      * Get the name of this expression based on the parse mode
      */
     public getName(parseMode: ParseMode) {
-        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        const namespace = this.findAncestor(isNamespaceStatement);
         if (namespace) {
             let delimiter = parseMode === ParseMode.BrighterScript ? '.' : '_';
             let namespaceName = namespace.getName(parseMode);
@@ -440,7 +441,7 @@ export class FunctionStatement extends Statement implements TypedefProvider {
      * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
      */
     public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+        return this.findAncestor(isNamespaceStatement)?.nameExpression;
     }
 
     transpile(state: BrsTranspileState) {
@@ -600,7 +601,7 @@ export class IfStatement extends Statement {
         }
     }
 
-    public clone() {
+    public clone(): IfStatement {
         return this.finalizeClone(
             new IfStatement(
                 {
@@ -703,7 +704,7 @@ export class PrintStatement extends Statement {
                 result.push(...(expressionOrSeparator as ExpressionStatement).transpile(state));
             } else {
                 result.push(
-                    state.tokenToSourceNode(expressionOrSeparator)
+                    state.tokenToSourceNode(expressionOrSeparator as Token)
                 );
             }
             //if there's an expression after us, add a space
@@ -717,7 +718,7 @@ export class PrintStatement extends Statement {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             //sometimes we have semicolon Tokens in the expressions list (should probably fix that...), so only walk the actual expressions
-            walkArray(this.expressions as AstNode[], visitor, options, this, (item) => isExpression(item as any));
+            walkArray(this.expressions as AstNode[], visitor, options, this, (item) => isExpression(item));
         }
     }
 
@@ -728,14 +729,15 @@ export class PrintStatement extends Statement {
                     print: util.cloneToken(this.tokens.print)
                 },
                 this.expressions?.map(e => {
-                    if (isExpression(e as any)) {
+                    if (isExpression(e as AstNode)) {
                         return (e as Expression).clone();
                     } else {
-                        return util.cloneToken(e as Token);
+                        return util.cloneToken(e as PrintSeparatorTab | PrintSeparatorSpace);
                     }
                 })
             ),
-            ['expressions' as any]
+            //`propsToReparent`'s constraint resolves to `never` here because `expressions` mixes `Expression`s with plain separator `Token`s
+            ['expressions' as never]
         );
     }
 }
@@ -1481,7 +1483,7 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     }
 
     public getName(parseMode: ParseMode) {
-        const parentNamespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        const parentNamespace = this.findAncestor(isNamespaceStatement);
         let name = this.nameExpression?.getName?.(parseMode);
         if (!name) {
             return name;
@@ -1646,7 +1648,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
      * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
      */
     public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+        return this.findAncestor(isNamespaceStatement)?.nameExpression;
     }
 
     public get fields() {
@@ -1663,7 +1665,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
     public get fullName() {
         const name = this.tokens.name?.text;
         if (name) {
-            const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const namespace = this.findAncestor(isNamespaceStatement);
             if (namespace) {
                 let namespaceName = namespace.getName(ParseMode.BrighterScript);
                 return `${namespaceName}.${name}`;
@@ -1687,7 +1689,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
      * Get the name of this expression based on the parse mode
      */
     public getName(parseMode: ParseMode) {
-        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        const namespace = this.findAncestor(isNamespaceStatement);
         if (namespace) {
             let delimiter = parseMode === ParseMode.BrighterScript ? '.' : '_';
             let namespaceName = namespace.getName(parseMode);
@@ -2030,14 +2032,14 @@ export class ClassStatement extends Statement implements TypedefProvider {
      * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
      */
     public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+        return this.findAncestor(isNamespaceStatement)?.nameExpression;
     }
 
 
     public getName(parseMode: ParseMode) {
         const name = this.name?.text;
         if (name) {
-            const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const namespace = this.findAncestor(isNamespaceStatement);
             if (namespace) {
                 let namespaceName = namespace.getName(parseMode);
                 let separator = parseMode === ParseMode.BrighterScript ? '.' : '_';
@@ -2089,7 +2091,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
             this.name.text
         );
         if (this.extendsKeyword && this.parentClassName) {
-            const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const namespace = this.findAncestor(isNamespaceStatement);
             const fqName = util.getFullyQualifiedClassName(
                 this.parentClassName.getName(ParseMode.BrighterScript),
                 namespace?.getName(ParseMode.BrighterScript)
@@ -2141,7 +2143,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let stmt = this as ClassStatement;
         while (stmt) {
             if (stmt.parentClassName) {
-                const namespace = stmt.findAncestor<NamespaceStatement>(isNamespaceStatement);
+                const namespace = stmt.findAncestor(isNamespaceStatement);
                 //find the parent class
                 stmt = state.file.getClassFileLink(
                     stmt.parentClassName.getName(ParseMode.BrighterScript),
@@ -2173,7 +2175,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let stmt = this as ClassStatement;
         while (stmt) {
             if (stmt.parentClassName) {
-                const namespace = stmt.findAncestor<NamespaceStatement>(isNamespaceStatement);
+                const namespace = stmt.findAncestor(isNamespaceStatement);
                 stmt = state.file.getClassFileLink(
                     stmt.parentClassName.getName(ParseMode.BrighterScript),
                     namespace?.getName(ParseMode.BrighterScript)
@@ -2245,7 +2247,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
         //construct parent class or empty object
         if (ancestors[0]) {
-            const ancestorNamespace = ancestors[0].findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const ancestorNamespace = ancestors[0].findAncestor(isNamespaceStatement);
             let fullyQualifiedClassName = util.getFullyQualifiedClassName(
                 ancestors[0].getName(ParseMode.BrighterScript)!,
                 ancestorNamespace?.getName(ParseMode.BrighterScript)
@@ -2382,7 +2384,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let result = [] as TranspileResult;
 
         const constructorFunction = this.getConstructorFunction();
-        let constructorParams = [];
+        let constructorParams: FunctionParameterExpression[] = [];
         if (constructorFunction) {
             constructorParams = constructorFunction.func.parameters;
         } else {
@@ -2580,7 +2582,7 @@ export class MethodStatement extends FunctionStatement {
                 //is a call statement
                 return isExpressionStatement(x) && isCallExpression(x.expression) &&
                     //is a call to super
-                    util.findBeginningVariableExpression(x.expression.callee as any)?.name.text.toLowerCase() === 'super';
+                    util.findBeginningVariableExpression(x.expression.callee)?.name.text.toLowerCase() === 'super';
             }) !== -1;
 
         //if a call to super exists, quit here
@@ -2963,7 +2965,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
      * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
      */
     public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+        return this.findAncestor(isNamespaceStatement)?.nameExpression;
     }
 
     public getMembers() {
@@ -3029,7 +3031,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
     public get fullName() {
         const name = this.tokens.name?.text;
         if (name) {
-            const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const namespace = this.findAncestor(isNamespaceStatement);
 
             if (namespace) {
                 let namespaceName = namespace.getName(ParseMode.BrighterScript);
@@ -3202,7 +3204,7 @@ export class ConstStatement extends Statement implements TypedefProvider {
     public get fullName() {
         const name = this.tokens.name?.text;
         if (name) {
-            const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const namespace = this.findAncestor(isNamespaceStatement);
             if (namespace) {
                 let namespaceName = namespace.getName(ParseMode.BrighterScript);
                 return `${namespaceName}.${name}`;
@@ -3454,7 +3456,7 @@ export class TypeStatement extends Statement {
     public get fullName() {
         const name = this.tokens.name?.text;
         if (name) {
-            const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const namespace = this.findAncestor(isNamespaceStatement);
             if (namespace) {
                 let namespaceName = namespace.getName(ParseMode.BrighterScript);
                 return `${namespaceName}.${name}`;

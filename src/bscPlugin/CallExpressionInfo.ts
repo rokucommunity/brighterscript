@@ -87,7 +87,7 @@ export class CallExpressionInfo {
             }
         }
 
-        this.myClass = this.expression.findAncestor<ClassStatement>(isClassStatement);
+        this.myClass = this.expression.findAncestor(isClassStatement);
         this.type = this.ascertainType();
         this.parameterIndex = this.getParameterIndex();
     }

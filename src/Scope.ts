@@ -1,4 +1,4 @@
-import type { CompletionItem, Position, Range, Location } from 'vscode-languageserver';
+import type { CompletionItem, Position, Range, Location, LocationLink } from 'vscode-languageserver';
 import * as path from 'path';
 import { CompletionItemKind } from 'vscode-languageserver';
 import chalk from 'chalk';
@@ -647,7 +647,7 @@ export class Scope {
         return result;
     }
 
-    protected logDebug(...args: any[]) {
+    protected logDebug(...args: unknown[]) {
         this.program.logger.debug(this._debugLogComponentName, ...args);
     }
     private _debugLogComponentName: string;
@@ -804,7 +804,7 @@ export class Scope {
         for (let func of file.parser.references.functionExpressions) {
             for (let param of func.parameters) {
                 let lowerParamName = param.name.text.toLowerCase();
-                let namespace = this.getNamespace(lowerParamName, param.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase());
+                let namespace = this.getNamespace(lowerParamName, param.findAncestor(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase());
                 //see if the param matches any starting namespace part
                 if (namespace) {
                     this.diagnostics.push({
@@ -825,7 +825,7 @@ export class Scope {
 
         for (let assignment of file.parser.references.assignmentStatements) {
             let lowerAssignmentName = assignment.name.text.toLowerCase();
-            let namespace = this.getNamespace(lowerAssignmentName, assignment.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase());
+            let namespace = this.getNamespace(lowerAssignmentName, assignment.findAncestor(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase());
             //see if the param matches any starting namespace part
             if (namespace) {
                 this.diagnostics.push({
@@ -885,7 +885,7 @@ export class Scope {
             const getNamespaceName = () => {
                 if (!namespaceFetched) {
                     namespaceFetched = true;
-                    currentNamespaceName = func.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+                    currentNamespaceName = func.findAncestor(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
                 }
                 return currentNamespaceName;
             };
@@ -1233,7 +1233,7 @@ export class Scope {
      * Get the definition (where was this thing first defined) of the symbol under the position
      * @deprecated use `DefinitionProvider.process()`
      */
-    public getDefinition(file: BscFile, position: Position): Location[] {
+    public getDefinition(file: BscFile, position: Position): Array<Location | LocationLink> {
         // Overridden in XMLScope. Brs files use implementation in BrsFile
         return [];
     }

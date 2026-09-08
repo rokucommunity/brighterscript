@@ -178,7 +178,7 @@ export class BrsFileValidator {
                 }
             },
             ReturnStatement: (node) => {
-                const func = node.findAncestor<FunctionExpression>(isFunctionExpression);
+                const func = node.findAncestor(isFunctionExpression);
                 //these situations cannot have a value next to `return`
                 if (
                     //`function as void`, `sub as void`

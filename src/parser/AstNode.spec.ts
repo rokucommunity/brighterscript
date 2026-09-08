@@ -3,16 +3,28 @@ import * as fsExtra from 'fs-extra';
 import { Program } from '../Program';
 import type { BrsFile } from '../files/BrsFile';
 import { expect } from '../chai-config.spec';
-import type { AAIndexedMemberExpression, AALiteralExpression, AAMemberExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, GroupingExpression, IndexedGetExpression, NewExpression, NullCoalescingExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, TypeCastExpression, UnaryExpression, XmlAttributeGetExpression } from './Expression';
+import type { AAIndexedMemberExpression, AALiteralExpression, AAMemberExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NewExpression, NullCoalescingExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, TypeCastExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression } from './Expression';
 import { expectZeroDiagnostics } from '../testHelpers.spec';
 import { tempDir, rootDir, stagingDir } from '../testHelpers.spec';
-import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isCallfuncExpression, isCatchStatement, isClassStatement, isCommentStatement, isConstStatement, isDimStatement, isDottedGetExpression, isDottedSetStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isGroupingExpression, isIfStatement, isIncrementStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isLibraryStatement, isMethodStatement, isNamespaceStatement, isNewExpression, isNullCoalescingExpression, isPrintStatement, isReturnStatement, isTaggedTemplateStringExpression, isTemplateStringExpression, isTemplateStringQuasiExpression, isTernaryExpression, isThrowStatement, isTryCatchStatement, isTypeCastExpression, isUnaryExpression, isWhileStatement, isXmlAttributeGetExpression } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isCallfuncExpression, isCatchStatement, isClassStatement, isCommentStatement, isConstStatement, isDimStatement, isDottedGetExpression, isDottedSetStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isGroupingExpression, isIfStatement, isIncrementStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isNewExpression, isNullCoalescingExpression, isPrintStatement, isReturnStatement, isTaggedTemplateStringExpression, isTemplateStringExpression, isTemplateStringQuasiExpression, isTernaryExpression, isThrowStatement, isTryCatchStatement, isTypeCastExpression, isUnaryExpression, isVariableExpression, isWhileStatement, isXmlAttributeGetExpression } from '../astUtils/reflection';
 import type { ClassStatement, FunctionStatement, InterfaceFieldStatement, InterfaceMethodStatement, MethodStatement, InterfaceStatement, CatchStatement, ThrowStatement, EnumStatement, EnumMemberStatement, ConstStatement, Block, CommentStatement, PrintStatement, DimStatement, ForStatement, WhileStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, TryCatchStatement, DottedSetStatement } from './Statement';
 import { AssignmentStatement, EmptyStatement } from './Statement';
 import { ParseMode, Parser } from './Parser';
 import type { AstNode } from './AstNode';
+import { WalkMode } from '../astUtils/visitors';
+import { isStatement } from '../astUtils/reflection';
 
 type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };
+
+/**
+ * Compile-time assertion that `T` is exactly `TExpected` (not merely assignable to it).
+ * These specs are typechecked by ts-node at runtime, so a broken inference fails the suite.
+ */
+function expectTypeToBe<TExpected>() {
+    return <TActual>(_value: TActual & IfEquals<TActual, TExpected, unknown, never>) => { };
+}
+type IfEquals<X, Y, TIfEqual, TIfNot> =
+    (<G>() => G extends X ? 1 : 2) extends (<G>() => G extends Y ? 1 : 2) ? TIfEqual : TIfNot;
 
 describe('AstNode', () => {
     let program: Program;
@@ -28,6 +40,165 @@ describe('AstNode', () => {
     afterEach(() => {
         fsExtra.emptyDirSync(tempDir);
         program.dispose();
+    });
+
+    describe('findAncestor', () => {
+        /**
+         * Grab a deeply-nested node to walk upward from. `delta` is a variable
+         * expression inside a method, inside a class, inside a namespace.
+         */
+        function getDeepNode() {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                namespace Alpha
+                    class Bravo
+                        sub charlie()
+                            delta = 1
+                            print delta
+                        end sub
+                    end class
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            //NOTE: must match by name; a bare isVariableExpression matches the
+            //namespace's own name expression, which has no class in its chain
+            const node = file.ast.findChild<VariableExpression>(
+                (x) => isVariableExpression(x) && x.name.text.toLowerCase() === 'delta'
+            );
+            expect(node).to.exist;
+            return node!;
+        }
+
+        it('infers the node type from a single type-guard matcher', () => {
+            const node = getDeepNode();
+
+            const namespaceStatement = node.findAncestor(isNamespaceStatement);
+
+            //runtime
+            expect(namespaceStatement!.getName(ParseMode.BrighterScript)).to.eql('Alpha');
+            //compile-time: no explicit type arg was supplied, yet this is a NamespaceStatement
+            expectTypeToBe<NamespaceStatement | undefined>()(namespaceStatement);
+        });
+
+        it('returns a union for a custom matcher with an explicit type argument', () => {
+            const node = getDeepNode();
+
+            //the terse way to get a union out of custom logic: name the union once
+            //as the type argument and write plain boolean logic
+            const found = node.findAncestor<ClassStatement | NamespaceStatement>(
+                (x) => isClassStatement(x) || isNamespaceStatement(x)
+            );
+
+            //the class is nearer than the namespace, so it wins the upward walk
+            expect(isClassStatement(found)).to.be.true;
+            expect((found as ClassStatement).name.text).to.eql('Bravo');
+            expectTypeToBe<ClassStatement | NamespaceStatement | undefined>()(found);
+        });
+
+        it('narrows a union result down to a single member when guarded', () => {
+            const node = getDeepNode();
+
+            const found = node.findAncestor<ClassStatement | NamespaceStatement>(
+                (x) => isClassStatement(x) || isNamespaceStatement(x)
+            );
+
+            //standard narrowing still applies to the union we got back
+            if (isClassStatement(found)) {
+                expectTypeToBe<ClassStatement>()(found);
+                expect(found.name.text).to.eql('Bravo');
+            } else {
+                throw new Error('should have found the class');
+            }
+        });
+
+        it('also returns a union for a matcher annotated as a type predicate', () => {
+            const node = getDeepNode();
+
+            //more verbose than the explicit type argument above, but the compiler
+            //actually *verifies* this predicate against the matcher body rather
+            //than taking the caller's word for it
+            const found = node.findAncestor(
+                (x): x is ClassStatement | NamespaceStatement => isClassStatement(x) || isNamespaceStatement(x)
+            );
+
+            expect(isClassStatement(found)).to.be.true;
+            expectTypeToBe<ClassStatement | NamespaceStatement | undefined>()(found);
+        });
+
+        it('honors the order of the upward walk, returning the nearest match', () => {
+            const node = getDeepNode();
+
+            //the method is nearest, then the class, then the namespace
+            const nearest = node.findAncestor<ClassStatement | MethodStatement | NamespaceStatement>(
+                (x) => isClassStatement(x) || isMethodStatement(x) || isNamespaceStatement(x)
+            );
+            expect(isMethodStatement(nearest)).to.be.true;
+            expectTypeToBe<ClassStatement | MethodStatement | NamespaceStatement | undefined>()(nearest);
+        });
+
+        it('supports a multi-statement boolean matcher with an explicit type argument', () => {
+            const node = getDeepNode();
+
+            //matcher returns boolean|undefined (no explicit return on the fall-through path)
+            const found = node.findAncestor<ClassStatement>((x) => {
+                if (isClassStatement(x)) {
+                    return true;
+                }
+            });
+
+            expect(found!.name.text).to.eql('Bravo');
+            expectTypeToBe<ClassStatement | undefined>()(found);
+        });
+
+        it('does not verify an explicit type argument against the matcher logic', () => {
+            const node = getDeepNode();
+
+            //CAVEAT of the terse form: the type argument is asserted, not proven. The
+            //logic below matches a class, but we claim MethodStatement and the compiler
+            //accepts it. Annotate the matcher as a type predicate if you want this checked.
+            const found = node.findAncestor<MethodStatement>((x) => isClassStatement(x));
+
+            expectTypeToBe<MethodStatement | undefined>()(found);
+            //the static type is a lie; at runtime it really is the ClassStatement
+            expect(isClassStatement(found)).to.be.true;
+        });
+
+        it('falls back to AstNode when a boolean matcher gives no type information', () => {
+            const node = getDeepNode();
+
+            //an un-annotated `||` of guards is NOT a type predicate, so TypeScript
+            //cannot infer the union here; the result widens to the AstNode default.
+            const found = node.findAncestor((x) => isClassStatement(x) || isNamespaceStatement(x));
+
+            expect(isClassStatement(found)).to.be.true;
+            expectTypeToBe<AstNode | undefined>()(found);
+        });
+
+        it('returns undefined when no ancestor matches', () => {
+            const node = getDeepNode();
+
+            //there is no literal expression anywhere up the parent chain
+            const found = node.findAncestor(isLiteralExpression);
+
+            expect(found).to.be.undefined;
+            expectTypeToBe<LiteralExpression | undefined>()(found);
+        });
+
+        it('stops the walk and returns undefined when the matcher cancels', () => {
+            const node = getDeepNode();
+
+            //the namespace is a real ancestor, but cancelling before we reach it
+            //short-circuits the walk
+            const found = node.findAncestor((x, cancellationToken) => {
+                if (isClassStatement(x)) {
+                    cancellationToken.cancel();
+                    return;
+                }
+                return isNamespaceStatement(x);
+            });
+
+            expect(found).to.be.undefined;
+        });
     });
 
     describe('findChildAtPosition', () => {
@@ -1693,6 +1864,285 @@ describe('AstNode', () => {
             `).ast;
 
             testClone(original);
+        });
+    });
+    describe('chains', () => {
+        /**
+         * Parse `code` and return every node in the AST, in walk order, already linked to its parent
+         */
+        function parseNodes(code: string) {
+            const { ast } = Parser.parse(code);
+            const nodes: AstNode[] = [];
+            ast.walk((node) => {
+                nodes.push(node);
+            }, { walkMode: WalkMode.visitAllRecursive });
+            return nodes;
+        }
+
+        /**
+         * Render a node as the exact source text it spans. This gives the tests a readable,
+         * unambiguous label for each node without depending on transpile behavior.
+         */
+        function getText(code: string, node: AstNode) {
+            const lines = code.split(/\r?\n/);
+            const { start, end } = node.range;
+            if (start.line === end.line) {
+                return lines[start.line].slice(start.character, end.character);
+            }
+            return [
+                lines[start.line].slice(start.character),
+                ...lines.slice(start.line + 1, end.line),
+                lines[end.line].slice(0, end.character)
+            ].join('\n').replace(/\s+/g, ' ');
+        }
+
+        /**
+         * Assert every terminal expression in `code`, each followed by every step of that
+         * expression via `previousInChain` (shortest prefix first). Statements are excluded so
+         * these tests stay focused on expression boundaries.
+         */
+        function expectChains(code: string, expected: Array<[string, string[]]>) {
+            const actual = parseNodes(code)
+            //only expressions (skip the root Body) that are the outermost node of their expression
+                .filter(node => node.parent && node.isTerminal() && !isStatement(node))
+                .map(node => {
+                    //collect this node and every earlier step of the same expression
+                    const links: string[] = [];
+                    for (let link: AstNode | undefined = node; link; link = link.previousInChain) {
+                        links.unshift(getText(code, link));
+                    }
+                    return [getText(code, node), links];
+                });
+            expect(actual).to.eql(expected);
+        }
+
+        /**
+         * Assert `[text, isTerminal]` for every node in `code`
+         */
+        function expectTerminals(code: string, expected: Array<[string, boolean]>) {
+            const actual = parseNodes(code)
+                .filter(node => node.parent)
+                .map(node => [getText(code, node), node.isTerminal()]);
+            expect(actual).to.eql(expected);
+        }
+
+        it('treats a lone variable as a complete chain', () => {
+            expectChains('print alpha', [
+                ['alpha', ['alpha']]
+            ]);
+        });
+
+        it('walks a simple dotted get chain', () => {
+            expectChains('print alpha.beta.charlie', [
+                ['alpha.beta.charlie', ['alpha', 'alpha.beta', 'alpha.beta.charlie']]
+            ]);
+        });
+
+        it('stops at the boundary when a chain is used as a call argument', () => {
+            expectChains('print doSomething(alpha.beta.charlie)', [
+                ['doSomething(alpha.beta.charlie)', ['doSomething', 'doSomething(alpha.beta.charlie)']],
+                ['alpha.beta.charlie', ['alpha', 'alpha.beta', 'alpha.beta.charlie']]
+            ]);
+        });
+
+        it('finds chains in nested function calls', () => {
+            expectChains('print alpha(beta.charlie(1 + 2))', [
+                ['alpha(beta.charlie(1 + 2))', ['alpha', 'alpha(beta.charlie(1 + 2))']],
+                ['beta.charlie(1 + 2)', ['beta', 'beta.charlie', 'beta.charlie(1 + 2)']],
+                ['1 + 2', ['1 + 2']],
+                ['1', ['1']],
+                ['2', ['2']]
+            ]);
+        });
+
+        it('treats a call of a call as one chain', () => {
+            expectChains('print alpha()()', [
+                ['alpha()()', ['alpha', 'alpha()', 'alpha()()']]
+            ]);
+        });
+
+        it('includes indexed gets in the chain but not their index', () => {
+            expectChains('print alpha.beta[charlie.delta]', [
+                ['alpha.beta[charlie.delta]', ['alpha', 'alpha.beta', 'alpha.beta[charlie.delta]']],
+                ['charlie.delta', ['charlie', 'charlie.delta']]
+            ]);
+        });
+
+        it('includes xml attribute gets in the chain', () => {
+            expectChains('print alpha.beta@charlie', [
+                ['alpha.beta@charlie', ['alpha', 'alpha.beta', 'alpha.beta@charlie']]
+            ]);
+        });
+
+        it('includes callfunc in the chain but not its args', () => {
+            expectChains('print alpha.beta@.charlie(delta.echo)', [
+                ['alpha.beta@.charlie(delta.echo)', ['alpha', 'alpha.beta', 'alpha.beta@.charlie(delta.echo)']],
+                ['delta.echo', ['delta', 'delta.echo']]
+            ]);
+        });
+
+        it('handles a long mixed chain', () => {
+            expectChains('print alpha.beta[1].charlie(2).delta@echo', [
+                [
+                    'alpha.beta[1].charlie(2).delta@echo',
+                    [
+                        'alpha',
+                        'alpha.beta',
+                        'alpha.beta[1]',
+                        'alpha.beta[1].charlie',
+                        'alpha.beta[1].charlie(2)',
+                        'alpha.beta[1].charlie(2).delta',
+                        'alpha.beta[1].charlie(2).delta@echo'
+                    ]
+                ],
+                ['1', ['1']],
+                ['2', ['2']]
+            ]);
+        });
+
+        it('treats a grouping as a boundary in both directions', () => {
+            expectChains('print (alpha.beta).charlie', [
+                ['(alpha.beta).charlie', ['(alpha.beta)', '(alpha.beta).charlie']],
+                ['alpha.beta', ['alpha', 'alpha.beta']]
+            ]);
+        });
+
+        it('treats each operand of a binary expression as its own chain', () => {
+            expectChains('print alpha.beta > charlie.delta', [
+                ['alpha.beta > charlie.delta', ['alpha.beta > charlie.delta']],
+                ['alpha.beta', ['alpha', 'alpha.beta']],
+                ['charlie.delta', ['charlie', 'charlie.delta']]
+            ]);
+        });
+
+        it('treats the operand of a unary expression as its own chain', () => {
+            expectChains('print not alpha.beta', [
+                ['not alpha.beta', ['not alpha.beta']],
+                ['alpha.beta', ['alpha', 'alpha.beta']]
+            ]);
+        });
+
+        it('treats array literal elements as their own chains', () => {
+            expectChains('print [alpha.beta, charlie.delta]', [
+                ['[alpha.beta, charlie.delta]', ['[alpha.beta, charlie.delta]']],
+                ['alpha.beta', ['alpha', 'alpha.beta']],
+                ['charlie.delta', ['charlie', 'charlie.delta']]
+            ]);
+        });
+
+        it('treats aa literal member values as their own chains', () => {
+            expectChains('print {alpha: beta.charlie}', [
+                ['{alpha: beta.charlie}', ['{alpha: beta.charlie}']],
+                ['alpha: beta.charlie', ['alpha: beta.charlie']],
+                ['beta.charlie', ['beta', 'beta.charlie']]
+            ]);
+        });
+
+        it('treats each part of a ternary as its own chain', () => {
+            expectChains('print alpha.beta ? charlie.delta : echo.foxtrot', [
+                [
+                    'alpha.beta ? charlie.delta : echo.foxtrot',
+                    ['alpha.beta ? charlie.delta : echo.foxtrot']
+                ],
+                ['alpha.beta', ['alpha', 'alpha.beta']],
+                ['charlie.delta', ['charlie', 'charlie.delta']],
+                ['echo.foxtrot', ['echo', 'echo.foxtrot']]
+            ]);
+        });
+
+        it('treats each part of a null coalescing expression as its own chain', () => {
+            expectChains('print alpha.beta ?? charlie.delta', [
+                ['alpha.beta ?? charlie.delta', ['alpha.beta ?? charlie.delta']],
+                ['alpha.beta', ['alpha', 'alpha.beta']],
+                ['charlie.delta', ['charlie', 'charlie.delta']]
+            ]);
+        });
+
+        it('treats template string interpolations as their own chains', () => {
+            /* eslint-disable no-template-curly-in-string */
+            expectChains('print `hello ${alpha.beta} world`', [
+                ['`hello ${alpha.beta} world`', ['`hello ${alpha.beta} world`']],
+                ['hello ', ['hello ']],
+                ['hello ', ['hello ']],
+                ['alpha.beta', ['alpha', 'alpha.beta']],
+                [' world', [' world']],
+                [' world', [' world']]
+            ]);
+            /* eslint-enable no-template-curly-in-string */
+        });
+
+        it('includes the wrapped call in a new expression chain', () => {
+            expectChains('print new Alpha.Beta(charlie.delta)', [
+                [
+                    'new Alpha.Beta(charlie.delta)',
+                    [
+                        'Alpha',
+                        'Alpha.Beta',
+                        'Alpha.Beta',
+                        'Alpha.Beta(charlie.delta)',
+                        'new Alpha.Beta(charlie.delta)'
+                    ]
+                ],
+                ['charlie.delta', ['charlie', 'charlie.delta']]
+            ]);
+        });
+
+        it('treats the parts of a dotted set statement as separate chains', () => {
+            expectChains('alpha.beta.charlie = delta.echo', [
+                ['alpha.beta', ['alpha', 'alpha.beta']],
+                ['delta.echo', ['delta', 'delta.echo']]
+            ]);
+        });
+
+        it('treats the parts of an indexed set statement as separate chains', () => {
+            expectChains('alpha.beta[charlie.delta] = echo.foxtrot', [
+                ['alpha.beta', ['alpha', 'alpha.beta']],
+                ['charlie.delta', ['charlie', 'charlie.delta']],
+                ['echo.foxtrot', ['echo', 'echo.foxtrot']]
+            ]);
+        });
+
+        it('finds chains in statement expressions', () => {
+            expectChains([
+                'for each item in alpha.beta.charlie',
+                'end for'
+            ].join('\n'), [
+                ['alpha.beta.charlie', ['alpha', 'alpha.beta', 'alpha.beta.charlie']]
+            ]);
+        });
+
+        describe('isTerminal', () => {
+            it('is true only for the outermost node of each expression', () => {
+                expectTerminals('print alpha.beta(charlie)', [
+                    ['print alpha.beta(charlie)', true],
+                    //the whole call
+                    ['alpha.beta(charlie)', true],
+                    //the callee, reached through by the call
+                    ['alpha.beta', false],
+                    //reached through by `alpha.beta`
+                    ['alpha', false],
+                    //an argument, so its own expression
+                    ['charlie', true]
+                ]);
+            });
+
+            it('is true for a nested expression that is only an argument', () => {
+                //`alpha.beta` is terminal even though it sits inside the call
+                expectTerminals('print doSomething(alpha.beta)', [
+                    ['print doSomething(alpha.beta)', true],
+                    ['doSomething(alpha.beta)', true],
+                    ['doSomething', false],
+                    ['alpha.beta', true],
+                    ['alpha', false]
+                ]);
+            });
+
+            it('is true for statements', () => {
+                expectTerminals('alpha = 1', [
+                    ['alpha = 1', true],
+                    ['1', true]
+                ]);
+            });
         });
     });
 });

@@ -1,7 +1,7 @@
 import * as EventEmitter from 'eventemitter3';
 import { Worker } from 'worker_threads';
 import type { MessagePort } from 'worker_threads';
-import type { WorkerMessage } from './MessageHandler';
+import type { WorkerMessage, MethodNames } from './MessageHandler';
 import { MessageHandler } from './MessageHandler';
 import util from '../../util';
 import type { LspDiagnostic, ActivateResponse, ProjectConfig, FileRenameTextEdit } from '../LspProject';
@@ -11,7 +11,7 @@ import type { Hover, MaybePromise, SemanticToken } from '../../interfaces';
 import type { DocumentAction, DocumentActionWithStatus } from '../DocumentManager';
 import { Deferred } from '../../deferred';
 import type { FileTranspileResult, SignatureInfoObj } from '../../Program';
-import type { Position, Range, Location, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList, SelectionRange, InlayHint } from 'vscode-languageserver-protocol';
+import type { Position, Range, Location, LocationLink, DocumentSymbol, WorkspaceSymbol, CodeAction, CompletionList, SelectionRange, InlayHint } from 'vscode-languageserver-protocol';
 import type { Logger } from '../../logging';
 import { createLogger } from '../../logging';
 import * as fsExtra from 'fs-extra';
@@ -253,7 +253,7 @@ export class WorkerThreadProject implements LspProject {
      * @returns the response from the request
      */
     private async sendStandardRequest<T>(name: string, ...data: any[]) {
-        const response = await this.messageHandler.sendRequest<T>(name as any, {
+        const response = await this.messageHandler.sendRequest<T>(name as MethodNames<LspProject>, {
             data: data
         });
         return response.data;
@@ -274,8 +274,8 @@ export class WorkerThreadProject implements LspProject {
         return this.sendStandardRequest<Hover[]>('getHover', options);
     }
 
-    public async getDefinition(options: { srcPath: string; position: Position }): Promise<Location[]> {
-        return this.sendStandardRequest<Location[]>('getDefinition', options);
+    public async getDefinition(options: { srcPath: string; position: Position }): Promise<Array<Location | LocationLink>> {
+        return this.sendStandardRequest<Array<Location | LocationLink>>('getDefinition', options);
     }
 
     public async getSignatureHelp(options: { srcPath: string; position: Position }): Promise<SignatureInfoObj[]> {
@@ -329,21 +329,24 @@ export class WorkerThreadProject implements LspProject {
 
     private processUpdate(update: WorkerMessage) {
         //for now, all updates are treated like "events"
-        this.emit(update.name as any, update.data);
+        void this.emit(update.name, update.data);
     }
 
     public on(eventName: 'critical-failure', handler: (data: { message: string }) => void);
     public on(eventName: 'diagnostics', handler: (data: { diagnostics: LspDiagnostic[] }) => MaybePromise<void>);
     public on(eventName: 'all', handler: (eventName: string, data: any) => MaybePromise<void>);
     public on(eventName: string, handler: (...args: any[]) => MaybePromise<void>) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         this.emitter.on(eventName, handler as any);
         return () => {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
             this.emitter.removeListener(eventName, handler as any);
         };
     }
 
     private emit(eventName: 'critical-failure', data: { message: string });
     private emit(eventName: 'diagnostics', data: { diagnostics: LspDiagnostic[] });
+    private emit(eventName: string, data?: any);
     private async emit(eventName: string, data?) {
         //emit these events on next tick, otherwise they will be processed immediately which could cause issues
         await util.sleep(0);

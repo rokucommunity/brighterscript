@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
 import * as semver from 'semver';
-import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, DocumentSymbol, CancellationToken, SelectionRange, InlayHint } from 'vscode-languageserver';
+import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location, LocationLink, DocumentSymbol, CancellationToken, SelectionRange, InlayHint } from 'vscode-languageserver';
 import { CancellationTokenSource, CompletionItemKind } from 'vscode-languageserver';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
@@ -643,7 +643,7 @@ export class Program {
      */
     public addOrReplaceFile<T extends BscFile>(fileEntry: FileObj, fileContents: string): T;
     public addOrReplaceFile<T extends BscFile>(fileParam: FileObj | string, fileContents: string): T {
-        return this.setFile<T>(fileParam as any, fileContents);
+        return this.setFile<T>(fileParam as string, fileContents);
     }
 
     /**
@@ -774,7 +774,8 @@ export class Program {
             srcPath = s`${path.resolve(rootDir, fileParam)}`;
             pkgPath = s`${util.replaceCaseInsensitive(srcPath, rootDir, '')}`;
         } else {
-            let param: any = fileParam;
+            //`fileParam` here is `FileObj | { srcPath?: string; pkgPath?: string }`; duck-type across both shapes
+            let param = fileParam as { src?: string; srcPath?: string; dest?: string; pkgPath?: string };
 
             if (param.src) {
                 srcPath = s`${param.src}`;
@@ -1270,7 +1271,7 @@ export class Program {
      * Given a position in a file, if the position is sitting on some type of identifier,
      * go to the definition of that identifier (where this thing was first defined)
      */
-    public getDefinition(srcPath: string, position: Position): Location[] {
+    public getDefinition(srcPath: string, position: Position): Array<Location | LocationLink> {
         let file = this.getFile(srcPath);
         if (!file) {
             return [];
@@ -1286,12 +1287,10 @@ export class Program {
         this.plugins.emit('beforeProvideDefinition', event);
         this.plugins.emit('provideDefinition', event);
         this.plugins.emit('afterProvideDefinition', event);
+
         return event.definitions;
     }
 
-    /**
-     * Get hover information for a file and position
-     */
     public getHover(srcPath: string, position: Position): Hover[] {
         let file = this.getFile(srcPath);
         let result: Hover[];
