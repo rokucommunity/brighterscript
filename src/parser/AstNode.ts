@@ -132,6 +132,64 @@ export abstract class AstNode {
     }
 
     /**
+     * The previous step in this expression, or undefined if this node doesn't build on another
+     * expression. Overridden by dotted/indexed gets, calls, and other chaining nodes.
+     *
+     * Each node in a chain spans a whole prefix of the source, so this walks to the next-shorter
+     * prefix. Given `a.b.c`, there are only three nodes:
+     * ```
+     * a.b.c   .previousInChain -> a.b
+     * a.b     .previousInChain -> a
+     * a       .previousInChain -> undefined
+     * ```
+     *
+     * This walks toward the AST *child*, since chains are stored inverted: the full expression is
+     * the top node and its base is the deepest descendant. It is not `parent` reversed though -
+     * arguments and index values have a `parent`, but are never anything's `previousInChain`,
+     * because they're separate expressions that merely sit inside this one:
+     * ```
+     * a.b(arg)   //CallExpression.previousInChain is `a.b`, NOT `arg`
+     * a[i]       //IndexedGetExpression.previousInChain is `a`, NOT `i`
+     * ```
+     */
+    public get previousInChain(): AstNode | undefined {
+        return undefined;
+    }
+
+    /**
+     * Is this node a complete expression, rather than one step inside a longer one?
+     *
+     * True when nothing chains onto this node. Statements are always terminal. Use this to find
+     * whole expressions while walking, instead of also matching every prefix inside them.
+     *
+     * ```
+     * print a.b.c(arg)
+     *
+     * //a.b.c(arg)   yes - the whole expression
+     * //a.b.c        no  - a.b.c(arg) chains onto it
+     * //a.b          no  - a.b.c chains onto it
+     * //a            no  - a.b chains onto it
+     * //arg          yes - an argument, so an expression of its own
+     * ```
+     *
+     * An argument is terminal no matter how long it is, because nothing chains onto it. Both of
+     * these are terminal, even though they sit inside the call:
+     * ```
+     * print doSomething(x.y, 1 + 2)
+     *
+     * //x.y          yes
+     * //1 + 2        yes
+     * ```
+     *
+     * Requires `parent` to be set, so the node must already be linked (see `link()`). An
+     * unlinked node has no parent, so it reports `true`.
+     */
+    public isTerminal(): boolean {
+        //walk up, then back down: if we don't land on ourselves, nothing chains onto us
+        return this.parent === undefined || this.parent.previousInChain !== this;
+    }
+
+    /**
      * Clone this node and all of its children. This creates a completely detached and identical copy of the AST.
      * All tokens, statements, expressions, range, and location are cloned.
      */
