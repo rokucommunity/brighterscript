@@ -694,7 +694,7 @@ export class IndexedGetExpression extends Expression {
 
     public readonly range: Range | undefined;
 
-    /** `a[1]` -> `a` (not the index) */
+    /** `a[i]` -> `a` (not the index) */
     public get previousInChain() {
         return this.obj;
     }

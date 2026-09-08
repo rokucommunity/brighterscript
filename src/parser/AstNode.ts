@@ -136,21 +136,22 @@ export abstract class AstNode {
      * expression. Overridden by dotted/indexed gets, calls, and other chaining nodes.
      *
      * Each node in a chain spans a whole prefix of the source, so this walks to the next-shorter
-     * prefix. In `a.b.c`:
+     * prefix. Given `a.b.c`, there are only three nodes:
      * ```
      * a.b.c   .previousInChain -> a.b
      * a.b     .previousInChain -> a
      * a       .previousInChain -> undefined
      * ```
-     * (`b` and `c` are name tokens on those nodes, not nodes of their own)
+     * Note that `b` and `c` are name tokens on those nodes, not nodes of their own, so there is
+     * nothing that `.previousInChain` could return for them.
      *
-     * Note this walks toward the AST *child*, since chains are stored inverted: the full
-     * expression is the top node and its base is the deepest descendant. It is not `parent`
-     * reversed - args and index values have a `parent` but are never a `previousInChain`,
+     * This walks toward the AST *child*, since chains are stored inverted: the full expression is
+     * the top node and its base is the deepest descendant. It is not `parent` reversed though -
+     * arguments and index values have a `parent`, but are never anything's `previousInChain`,
      * because they're separate expressions that merely sit inside this one:
      * ```
-     * a.b(c)   //CallExpression.previousInChain is `a.b`, NOT `c`
-     * a[c]     //IndexedGetExpression.previousInChain is `a`, NOT `c`
+     * a.b(arg)   //CallExpression.previousInChain is `a.b`, NOT `arg`
+     * a[i]       //IndexedGetExpression.previousInChain is `a`, NOT `i`
      * ```
      */
     public get previousInChain(): AstNode | undefined {
@@ -164,18 +165,22 @@ export abstract class AstNode {
      * whole expressions while walking, instead of also matching every prefix inside them.
      *
      * ```
-     * print a.b.c(1)
-     * // a.b.c(1)  terminal - the whole expression
-     * // a.b.c     no       - a.b.c(1) chains onto it
-     * // a.b       no       - a.b.c chains onto it
-     * // a         no       - a.b chains onto it
-     * // 1         terminal - an argument, so its own expression
+     * print a.b.c(arg)
+     *
+     * //a.b.c(arg)   yes - the whole expression
+     * //a.b.c        no  - a.b.c(arg) chains onto it
+     * //a.b          no  - a.b.c chains onto it
+     * //a            no  - a.b chains onto it
+     * //arg          yes - an argument, so an expression of its own
      * ```
      *
-     * A nested node is still terminal when it's an argument rather than something chained onto.
-     * Here `a.b` is terminal even though it sits inside the call:
+     * An argument is terminal no matter how long it is, because nothing chains onto it. Both of
+     * these are terminal, even though they sit inside the call:
      * ```
-     * print doSomething(a.b)
+     * print doSomething(x.y, 1 + 2)
+     *
+     * //x.y          yes
+     * //1 + 2        yes
      * ```
      *
      * Requires `parent` to be set, so the node must already be linked (see `link()`). An
