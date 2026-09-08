@@ -10,15 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
  - Add `isTerminal` and `previousInChain` getters to AstNode ([#1788](https://github.com/rokucommunity/brighterscript/pull/1788))
  - Add generic go-to-definition for file path strings in BRS/BS/XML files ([#1648](https://github.com/rokucommunity/brighterscript/pull/1648))
+ - Transpile `continue` down for firmware below 11.5 ([#489](https://github.com/rokucommunity/brighterscript/pull/489))
 ### Changed
- - Transpile continue down for firmware below 11.5 ([#489](https://github.com/rokucommunity/brighterscript/pull/489))
  - Better error message for wrong-cased XML tags ([#1793](https://github.com/rokucommunity/brighterscript/pull/1793))
- - Recognize regex literals after `${` and `,` ([#1789](https://github.com/rokucommunity/brighterscript/pull/1789))
  - Infer node type from findAncestor type-guard matchers ([#1787](https://github.com/rokucommunity/brighterscript/pull/1787))
  - Enable @typescript-eslint/no-unsafe-argument ([#1785](https://github.com/rokucommunity/brighterscript/pull/1785))
- - Avoid emitting a duplicate sourceMappingURL comment ([#1786](https://github.com/rokucommunity/brighterscript/pull/1786))
  - Reduce per-Token lexer allocation to cut GC pressure while editing ([#1712](https://github.com/rokucommunity/brighterscript/pull/1712))
 ### Fixed
+ - Avoid emitting a duplicate sourceMappingURL comment ([#1786](https://github.com/rokucommunity/brighterscript/pull/1786))
+ - Recognize regex literals after `${` and `,` ([#1789](https://github.com/rokucommunity/brighterscript/pull/1789))
  - Fix duplicate and crashing "find all references" results ([#1791](https://github.com/rokucommunity/brighterscript/pull/1791))
  - Fix nested curly braces in template strings ([#1539](https://github.com/rokucommunity/brighterscript/pull/1539))
 
