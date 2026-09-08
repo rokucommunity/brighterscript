@@ -471,7 +471,7 @@ export class BrsFileValidator {
     /**
      * Add a diagnostic when a file that will NOT be transpiled uses `continue` while targeting
      * firmware older than the version that introduced it. Transpiled files are exempt because
-     * `ContinueStatement.transpile` downlevels `continue` into a `goto` label jump for those
+     * `ContinueStatement.transpile` rewrites `continue` into a `goto` label jump for those
      * targets, so the emitted code runs on the older device.
      */
     private validateMinFirmwareVersionForContinue(statement: ContinueStatement) {

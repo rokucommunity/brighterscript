@@ -225,7 +225,7 @@ export class Block extends Statement {
             );
             state.lineage.shift();
         }
-        //if a `continue` inside this block was downleveled into a `goto`, emit its jump target as
+        //if a `continue` inside this block was rewritten into a `goto`, emit its jump target as
         //the last line of the block. Done here (rather than in the loop statements) so the label
         //picks up the block's own indent depth.
         const loopLabel = state.peekLoopLabel();
@@ -3272,7 +3272,7 @@ export class ContinueStatement extends Statement {
     transpile(state: BrsTranspileState) {
         //when targeting firmware without native `continue` support, rewrite into a jump to the
         //label at the end of the enclosing loop body
-        if (state.shouldDownlevelContinue) {
+        if (!state.isContinueSupportedNatively) {
             const label = state.getLoopLabel();
             //no enclosing loop means this is a `continue` outside a loop, which validation already
             //flags as an error. fall through to the passthrough emit rather than producing a

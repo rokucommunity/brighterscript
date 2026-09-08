@@ -109,7 +109,7 @@ describe('parser continue statements', () => {
         `);
     });
 
-    describe('downlevel transpile for older firmware', () => {
+    describe('rewrites continue as goto for older firmware', () => {
         it('rewrites `continue for` into a goto label', () => {
             program = new Program({ rootDir: rootDir, sourceMap: true, minFirmwareVersion: '11.0.0' });
             testTranspile(`

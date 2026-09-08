@@ -38,24 +38,26 @@ export class BrsTranspileState extends TranspileState {
     public editor = new AstEditor();
 
     /**
-     * True when `continue` statements must be rewritten into `goto` label jumps because the
-     * project targets firmware older than the version that introduced native `continue` support.
+     * True when the project's target firmware understands `continue for`/`continue while` on its
+     * own, so those statements can be emitted as-is. When false, they must be rewritten into
+     * `goto` jumps to a label at the end of the loop body.
      * Computed lazily and cached, since it is checked once per loop and per continue statement.
      */
-    public get shouldDownlevelContinue() {
-        if (this._shouldDownlevelContinue === undefined) {
-            this._shouldDownlevelContinue = semver.lt(
+    public get isContinueSupportedNatively() {
+        if (this._isContinueSupportedNatively === undefined) {
+            this._isContinueSupportedNatively = semver.gte(
                 this.file.program.getMinFirmwareVersion(),
                 CONTINUE_MIN_FIRMWARE_VERSION
             );
         }
-        return this._shouldDownlevelContinue;
+        return this._isContinueSupportedNatively;
     }
-    private _shouldDownlevelContinue: boolean | undefined;
+    private _isContinueSupportedNatively: boolean | undefined;
 
     /**
      * Stack of loop-label trackers, one per enclosing loop currently being transpiled. Only used
-     * when `continue` must be downleveled for firmware older than CONTINUE_MIN_FIRMWARE_VERSION.
+     * when `continue` must be rewritten as a `goto` for firmware older than
+     * CONTINUE_MIN_FIRMWARE_VERSION.
      */
     private loopLabels = [] as Array<{ label: string; wasAccessed: boolean; blockDepth: number }>;
 
