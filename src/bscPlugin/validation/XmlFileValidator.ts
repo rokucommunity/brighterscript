@@ -2,6 +2,7 @@ import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { XmlFile } from '../../files/XmlFile';
 import type { OnFileValidateEvent } from '../../interfaces';
 import type { SGAst, SGTag } from '../../parser/SGTypes';
+import { isSGInterface } from '../../astUtils/xml';
 import util from '../../util';
 
 export class XmlFileValidator {
@@ -15,6 +16,7 @@ export class XmlFileValidator {
         if (this.event.file.parser.ast.root) {
             this.validateComponent(this.event.file.parser.ast);
             this.validateTagClosings(this.event.file.parser.ast.root);
+            this.validateTagCasing(this.event.file.parser.ast.root);
         } else {
             //skip empty XML
         }
@@ -39,6 +41,41 @@ export class XmlFileValidator {
         }
         for (const child of tag.getChildren()) {
             this.validateTagClosings(child);
+        }
+    }
+
+    /**
+     * Report any structural tag that isn't all lower case (e.g. `<Children>` instead of
+     * `<children>`). Roku requires these tags to be lower case, but the parser matches them
+     * case-insensitively so we can emit this specific diagnostic instead of a generic
+     * "unexpected tag" error.
+     *
+     * Only the structural spine is walked (the component tag, its direct children, and the
+     * members of `<interface>`). Tags inside `<children>` are node/component names (like
+     * `<Label>`) whose casing is author-defined, so they're intentionally not validated.
+     */
+    private validateTagCasing(root: SGTag) {
+        const validate = (tag: SGTag) => {
+            const tagText = tag.tag.text;
+            if (tagText !== tagText.toLowerCase()) {
+                this.event.file.diagnostics.push({
+                    ...DiagnosticMessages.xmlTagWrongCase(tagText, tagText.toLowerCase()),
+                    range: tag.tag.range,
+                    file: this.event.file
+                });
+            }
+        };
+
+        validate(root);
+        //`<children>` holds author-cased node names, so validate the tag itself but not its contents
+        for (const child of root.getChildren()) {
+            validate(child);
+            if (isSGInterface(child)) {
+                //`<field>` and `<function>` members are structural too
+                for (const member of child.getChildren()) {
+                    validate(member);
+                }
+            }
         }
     }
 
