@@ -1,8 +1,6 @@
 import type { Range } from 'vscode-languageserver';
-import * as semver from 'semver';
 import { AstEditor } from '../astUtils/AstEditor';
 import type { BrsFile } from '../files/BrsFile';
-import { CONTINUE_MIN_FIRMWARE_VERSION } from '../RokuConstants';
 import type { ClassStatement } from './Statement';
 import { TranspileState } from './TranspileState';
 
@@ -38,21 +36,12 @@ export class BrsTranspileState extends TranspileState {
     public editor = new AstEditor();
 
     /**
-     * True when the project's target firmware understands `continue for`/`continue while` on its
-     * own, so those statements can be emitted as-is. When false, they must be rewritten into
-     * `goto` jumps to a label at the end of the loop body.
-     * Computed lazily and cached, since it is checked once per loop and per continue statement.
+     * What the target firmware natively understands. Convenience passthrough to
+     * `program.firmwareCapabilities` so AST nodes don't have to reach through `file.program`.
      */
-    public get isContinueSupportedNatively() {
-        if (this._isContinueSupportedNatively === undefined) {
-            this._isContinueSupportedNatively = semver.gte(
-                this.file.program.getMinFirmwareVersion(),
-                CONTINUE_MIN_FIRMWARE_VERSION
-            );
-        }
-        return this._isContinueSupportedNatively;
+    public get firmwareCapabilities() {
+        return this.file.program.firmwareCapabilities;
     }
-    private _isContinueSupportedNatively: boolean | undefined;
 
     /**
      * Stack of loop-label trackers, one per enclosing loop currently being transpiled. Only used

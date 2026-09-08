@@ -478,13 +478,12 @@ export class BrsFileValidator {
         if (this.event.file.needsTranspiled) {
             return;
         }
-        const minFirmwareVersion = this.event.file.program.getMinFirmwareVersion();
-        if (semver.lt(minFirmwareVersion, CONTINUE_MIN_FIRMWARE_VERSION)) {
+        if (!this.event.file.program.firmwareCapabilities.continueStatement) {
             this.event.file.addDiagnostic({
                 ...DiagnosticMessages.featureRequiresMinFirmwareVersion(
                     'continue',
                     CONTINUE_MIN_FIRMWARE_VERSION,
-                    minFirmwareVersion
+                    this.event.file.program.getMinFirmwareVersion()
                 ),
                 range: statement.range
             });
@@ -538,13 +537,12 @@ export class BrsFileValidator {
      * it is emitted as-is, so the target device must natively support it.
      */
     private validateMinFirmwareVersionForOptionalChaining(range: Range | undefined) {
-        const minFirmwareVersion = this.event.file.program.getMinFirmwareVersion();
-        if (semver.lt(minFirmwareVersion, OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION)) {
+        if (!this.event.file.program.firmwareCapabilities.optionalChaining) {
             this.event.file.addDiagnostic({
                 ...DiagnosticMessages.featureRequiresMinFirmwareVersion(
                     'optional chaining',
                     OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION,
-                    minFirmwareVersion
+                    this.event.file.program.getMinFirmwareVersion()
                 ),
                 range: range
             });

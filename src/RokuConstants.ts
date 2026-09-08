@@ -1,3 +1,5 @@
+import * as semver from 'semver';
+
 /**
  * Availability markers for a feature on a single version axis (firmware OS, or rsg_version).
  * All fields are version strings — coerced to semver at the point of comparison.
@@ -122,19 +124,55 @@ export const DEFAULT_MIN_FIRMWARE_VERSION = '15.0.0';
 
 /**
  * Minimum Roku firmware version that introduced optional chaining (`?.`, `?[`, `?(`).
- * Optional chaining is NOT transpiled by BrighterScript, so this restriction applies to both
- * .brs and .bs files — the target device must natively support it.
  * Source: Roku OS 11 release notes.
  */
 export const OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION = '11.0.0';
 
 /**
  * Minimum Roku firmware version that introduced the `continue for` / `continue while` statements.
- * Unlike optional chaining, `continue` CAN be transpiled down for older devices (rewritten into a
- * `goto` to a label at the end of the loop body), so this constant is used two ways:
- * - transpiled files targeting below this version get the `goto`-label rewrite
- * - files that are NOT transpiled get a diagnostic, since the device must support it natively
  * Source: Roku OS 11.5 release notes ("Developers can now insert `continue` statements in `for`
  * and `while` loops").
  */
 export const CONTINUE_MIN_FIRMWARE_VERSION = '11.5.0';
+
+/**
+ * Minimum Roku firmware version that introduced line continuation after binary operators
+ * (multi-line expressions) in plain BrightScript.
+ * Source: Roku OS 15.3 release notes.
+ */
+export const LINE_CONTINUATION_MIN_FIRMWARE_VERSION = '15.3.0';
+
+/**
+ * What a given Roku firmware version natively understands.
+ *
+ * These are facts about the target device, NOT statements about what brighterscript does with
+ * them. Each caller decides how to react to a missing capability, and the reactions differ:
+ * `continueStatement` can be transpiled away (rewritten as a `goto`), while `optionalChaining`
+ * has no equivalent fallback and can only be reported as a diagnostic.
+ */
+export interface FirmwareCapabilities {
+    /** `?.`, `?[`, `?(` — no transpile fallback exists, so absence is a diagnostic. */
+    optionalChaining: boolean;
+    /** `continue for` / `continue while` — transpiles to a `goto` label jump when absent. */
+    continueStatement: boolean;
+    /** Line continuation after binary operators in plain BrightScript. */
+    lineContinuation: boolean;
+}
+
+/**
+ * Derive the capability table for a firmware version.
+ *
+ * Takes a raw version string (coerced internally) so callers without a `Program` — notably
+ * `Parser`, which only receives `minFirmwareVersion` through its options — can use it too. An
+ * unset or unparseable version falls back to {@link DEFAULT_MIN_FIRMWARE_VERSION}.
+ * Prefer `program.firmwareCapabilities` when a `Program` is available; it caches the result.
+ */
+export function getFirmwareCapabilities(minFirmwareVersion?: string): FirmwareCapabilities {
+    const coerced = minFirmwareVersion ? semver.coerce(minFirmwareVersion) : undefined;
+    const version = coerced ? coerced.version : DEFAULT_MIN_FIRMWARE_VERSION;
+    return {
+        optionalChaining: semver.gte(version, OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION),
+        continueStatement: semver.gte(version, CONTINUE_MIN_FIRMWARE_VERSION),
+        lineContinuation: semver.gte(version, LINE_CONTINUATION_MIN_FIRMWARE_VERSION)
+    };
+}
