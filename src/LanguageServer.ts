@@ -1,5 +1,4 @@
 import * as path from 'path';
-import * as os from 'os';
 import type {
     CompletionItem,
     Connection,
@@ -63,6 +62,7 @@ import { Deferred } from './deferred';
 import { workerPool } from './lsp/worker/WorkerThreadProject';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import isEqual = require('lodash.isequal');
+import { getDefaultMaxWorkerThreads } from './lsp/worker/WorkerPool';
 
 export class LanguageServer {
     /**
@@ -84,7 +84,7 @@ export class LanguageServer {
      * per-workspace settings. Once this limit is reached, additional projects are spread evenly across the
      * existing worker threads instead of each getting a dedicated one.
      */
-    public static maxWorkerThreadsDefault = Math.max(1, os.cpus().length);
+    public static maxWorkerThreadsDefault = getDefaultMaxWorkerThreads();
 
     /**
      * The language server protocol connection, used to send and receive all requests and responses
@@ -418,6 +418,7 @@ export class LanguageServer {
             concurrencyLimit = 1;
         }
         this.projectManager.projectActivationConcurrencyLimit = concurrencyLimit;
+        this.logger.info(`projectActivationConcurrencyLimit set to ${concurrencyLimit}`);
     }
 
     /**
@@ -442,6 +443,7 @@ export class LanguageServer {
             maxWorkerThreads = 1;
         }
         workerPool.maxWorkers = maxWorkerThreads;
+        this.logger.info(`maxWorkerThreads set to ${maxWorkerThreads}`);
     }
 
     @AddStackToErrorMessage

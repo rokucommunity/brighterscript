@@ -11,6 +11,20 @@ interface WorkerEntry {
     projectCount: number;
 }
 
+
+export const MEMORY_GB_PER_V8_INSTANCE = 2;
+
+/**
+ * Gets the lower bound of number of CPUS available vs 2GB chunks of memory.
+ * This allows as many concurrent threads as possible, while still allowing a full v8 instance per thread.
+ */
+export function getDefaultMaxWorkerThreads() {
+    const numCpus = os.cpus().length;
+    const memoryGB = Math.floor(os.totalmem() / (1024 * 1024 * 1024));
+    return Math.max(1, Math.min(numCpus, memoryGB / MEMORY_GB_PER_V8_INSTANCE));
+}
+
+
 export class WorkerPool {
     constructor(
         private factory: () => Worker
@@ -25,7 +39,7 @@ export class WorkerPool {
      * Once this limit is reached, additional projects are multiplexed onto existing workers
      * (each project still gets its own dedicated MessagePort) instead of spawning new threads.
      */
-    public maxWorkers = Math.max(1, os.cpus().length);
+    public maxWorkers = getDefaultMaxWorkerThreads();
 
     /**
      * Every worker thread currently in the pool, along with how many projects are attached to it
