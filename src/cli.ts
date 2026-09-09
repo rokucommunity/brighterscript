@@ -2,6 +2,7 @@
 import * as yargs from 'yargs';
 import * as path from 'path';
 import { ProgramBuilder } from './ProgramBuilder';
+import type { BsConfig } from './BsConfig';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import { normalizeDiagnosticReporters } from './diagnosticUtils';
 import util from './util';
@@ -74,7 +75,7 @@ async function main() {
             server.run();
         } else {
             let builder = new ProgramBuilder();
-            await builder.run(<any>options);
+            await builder.run(options as unknown as BsConfig);
             //if this is a single run (i.e. not watch mode) and there are error diagnostics, return an error code
             const hasError = !!builder.getDiagnostics().find(x => x.severity === DiagnosticSeverity.Error);
             if (builder.options.watch) {
@@ -95,7 +96,7 @@ async function main() {
     }
 }
 
-function askQuestion(question) {
+function askQuestion(question: string) {
     return new Promise((resolve, reject) => {
         rl.question(question, (answer) => {
             resolve(answer);
@@ -144,7 +145,7 @@ function finalizeProfiling() {
                 const profileResultPath = path.join(process.cwd(), `${Date.now()}-${profileTitle}.cpuprofile`);
                 console.log(`Writing profile result to:`, chalk.green(profileResultPath));
                 const profile = v8Profiler.stopProfiling(profileTitle);
-                profile.export((error, result) => {
+                profile.export((error: Error, result: string) => {
                     fsExtra.writeFileSync(profileResultPath, result);
                     profile.delete();
                     resolve();

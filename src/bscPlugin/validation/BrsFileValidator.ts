@@ -18,7 +18,7 @@ import type { BrightScriptDoc } from '../../parser/BrightScriptDocParser';
 import brsDocParser from '../../parser/BrightScriptDocParser';
 import { TypeStatementType } from '../../types/TypeStatementType';
 import * as semver from 'semver';
-import { OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION } from '../../RokuConstants';
+import { CONTINUE_MIN_FIRMWARE_VERSION, OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION } from '../../RokuConstants';
 import type { AvailabilityAxis } from '../../DiagnosticMessages';
 import { globalCallableMap } from '../../globalCallables';
 
@@ -300,7 +300,7 @@ export class BrsFileValidator {
                 }
             },
             ReturnStatement: (node) => {
-                const func = node.findAncestor<FunctionExpression>(isFunctionExpression);
+                const func = node.findAncestor(isFunctionExpression);
                 //these situations cannot have a value next to `return`
                 if (
                     //`function as void`, `sub as void`
@@ -810,6 +810,29 @@ export class BrsFileValidator {
                 ...DiagnosticMessages.illegalContinueStatement()
             });
         }
+        this.validateMinFirmwareVersionForContinue(statement);
+    }
+
+    /**
+     * Add a diagnostic when a file that will NOT be transpiled uses `continue` while targeting
+     * firmware older than the version that introduced it. Transpiled files are exempt because
+     * `ContinueStatement.transpile` rewrites `continue` into a `goto` label jump for those
+     * targets, so the emitted code runs on the older device.
+     */
+    private validateMinFirmwareVersionForContinue(statement: ContinueStatement) {
+        if (this.event.file.needsTranspiled) {
+            return;
+        }
+        if (!this.event.program.firmwareCapabilities.continueStatement) {
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.featureRequiresMinFirmwareVersion(
+                    'continue',
+                    CONTINUE_MIN_FIRMWARE_VERSION,
+                    this.event.program.getMinFirmwareVersion()
+                ),
+                location: statement.location
+            });
+        }
     }
 
     /**
@@ -871,13 +894,12 @@ export class BrsFileValidator {
      * it is emitted as-is, so the target device must natively support it.
      */
     private validateMinFirmwareVersionForOptionalChaining(range: Range | undefined) {
-        const minFirmwareVersion = this.event.program.getMinFirmwareVersion();
-        if (semver.lt(minFirmwareVersion, OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION)) {
+        if (!this.event.program.firmwareCapabilities.optionalChaining) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.featureRequiresMinFirmwareVersion(
                     'optional chaining',
                     OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION,
-                    minFirmwareVersion
+                    this.event.program.getMinFirmwareVersion()
                 ),
                 location: util.createLocationFromFileRange(this.event.file, range)
             });

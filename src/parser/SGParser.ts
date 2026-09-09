@@ -118,7 +118,8 @@ export default class SGParser {
             });
         }
 
-        const { prolog, root } = this.buildAST(cst as any);
+        //the xml-tools parser types its CST root generically; we know this grammar always produces a document root
+        const { prolog, root } = this.buildAST(cst as unknown as DocumentCstNode);
         if (!root) {
             const token1 = tokenVector[0];
             const token2 = tokenVector[1];
@@ -198,7 +199,9 @@ export default class SGParser {
             endTagClose: endTagClose
         };
 
-        switch (startTagName.text) {
+        //match structural tags case-insensitively so wrong-cased tags (like `<Children>`) still
+        //produce a proper AST node. `XmlFileValidator` reports the casing problem during validation.
+        switch (startTagName.text.toLowerCase()) {
             case 'component':
                 constructorOptions.elements = this.mapElements(content, ['interface', 'script', 'children', 'customization']);
                 return new SGComponent(constructorOptions);
@@ -274,7 +277,9 @@ export default class SGParser {
             for (const entry of element) {
                 const name = entry.children.Name?.[0];
                 if (name?.image) {
-                    if (!allow.includes(name.image)) {
+                    //compare case-insensitively so wrong-cased tags (like `<Children>`) are still
+                    //mapped into the AST. `XmlFileValidator` reports the casing problem separately.
+                    if (!allow.includes(name.image.toLowerCase())) {
                         //unexpected tag
                         this.diagnostics.push({
                             ...DiagnosticMessages.xmlUnexpectedTag(name.image),

@@ -67,5 +67,5 @@ type Action = () => MaybePromise<any>;
 
 interface ReaderWriter {
     action: Action;
-    deferred: Deferred;
+    deferred: Deferred<any>;
 }

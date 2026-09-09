@@ -107,17 +107,11 @@ import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDotte
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { Expression, Statement } from './AstNode';
 import type { BsDiagnostic, DeepWriteable } from '../interfaces';
-import * as semver from 'semver';
+import { getFirmwareCapabilities } from '../RokuConstants';
 
 const declarableTypesLower = DeclarableTypes.map(tokenKind => tokenKind.toLowerCase());
 
 export class Parser {
-    /**
-     * The minimum Roku firmware version that added native support for multi-line expressions
-     * (line continuation) in plain BrightScript (`.brs`) files.
-     */
-    private static readonly LINE_CONTINUATION_MIN_FIRMWARE_VERSION = '15.3.0';
-
     /**
      * The array of tokens passed to `parse()`
      */
@@ -214,8 +208,9 @@ export class Parser {
         this.logger = options?.logger ?? createLogger();
         options = this.sanitizeParseOptions(options);
         this.options = options;
-        const coercedMinFirmwareVersion = semver.coerce(this.options.minFirmwareVersion);
-        this.allowLineContinuation = options.mode === ParseMode.BrighterScript || (!!coercedMinFirmwareVersion && semver.gte(coercedMinFirmwareVersion, Parser.LINE_CONTINUATION_MIN_FIRMWARE_VERSION));
+        //the parser has no `Program` reference, so derive capabilities from the raw version string
+        this.allowLineContinuation = options.mode === ParseMode.BrighterScript ||
+            getFirmwareCapabilities(this.options.minFirmwareVersion).lineContinuation;
 
         let tokens: Token[];
         if (typeof toParse === 'string') {
@@ -1776,10 +1771,10 @@ export class Parser {
         }
 
         let quasis = [] as TemplateStringQuasiExpression[];
-        let expressions = [];
+        let expressions: Expression[] = [];
         let openingBacktick = this.peek();
         this.advance();
-        let currentQuasiExpressionParts = [];
+        let currentQuasiExpressionParts: Array<LiteralExpression | EscapedCharCodeLiteralExpression> = [];
         while (!this.isAtEnd() && !this.check(TokenKind.BackTick)) {
             let next = this.peek();
             if (next.kind === TokenKind.TemplateStringQuasi) {
@@ -2437,7 +2432,7 @@ export class Parser {
 
     //consume inline branch of an `if` statement
     private inlineConditionalBranch(...additionalTerminators: BlockTerminator[]): Block | undefined {
-        let statements = [];
+        let statements: Statement[] = [];
         //attempt to get the next statement without using `this.declaration`
         //which seems a bit hackish to get to work properly
         let statement = this.statement();

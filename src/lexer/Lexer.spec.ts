@@ -1,7 +1,7 @@
 /* eslint no-template-curly-in-string: 0 */
 import { expect } from '../chai-config.spec';
 
-import { AllowedTriviaTokens, TokenKind } from './TokenKind';
+import { AllowedTriviaTokens, TokenKind, LexerTextCache, LEXER_TEXT_CACHE_MAX_ENTRIES } from './TokenKind';
 import { Lexer } from './Lexer';
 import type { Token } from './Token';
 import { isToken } from './Token';
@@ -555,6 +555,251 @@ describe('lexer', () => {
                 TokenKind.Eof
             ]);
             expect(tokens[1].text).to.deep.equal(`hello `);
+        });
+
+        it('handles nested curly braces', () => {
+            let tokens = Lexer.scan('thing = `${{}}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.RightCurlyBrace,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('handles deeply nested curly braces', () => {
+            let tokens = Lexer.scan('thing = `${{a: {b: 1}}}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.Identifier,
+                TokenKind.Colon,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.Identifier,
+                TokenKind.Colon,
+                TokenKind.IntegerLiteral,
+                TokenKind.RightCurlyBrace,
+                TokenKind.RightCurlyBrace,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('handles curly braces alongside other expressions', () => {
+            let tokens = Lexer.scan('thing = `${arr[0]} and ${{key: value}}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.Identifier,
+                TokenKind.LeftSquareBracket,
+                TokenKind.IntegerLiteral,
+                TokenKind.RightSquareBracket,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.Identifier,
+                TokenKind.Colon,
+                TokenKind.Identifier,
+                TokenKind.RightCurlyBrace,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('handles deeply nested template strings', () => {
+            let tokens = Lexer.scan('print `one${`two${`three${`four`}`}`}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Print,
+
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, //one
+                TokenKind.TemplateStringExpressionBegin,
+
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, //two
+                TokenKind.TemplateStringExpressionBegin,
+
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, //three
+                TokenKind.TemplateStringExpressionBegin,
+
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, //four
+                TokenKind.BackTick,
+
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.BackTick,
+
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.BackTick,
+
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.BackTick,
+
+                TokenKind.Eof
+            ]);
+        });
+
+        it('handles nested curly braces inside nested template strings', () => {
+            let tokens = Lexer.scan('print `a${`b${{c: {}}}`}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Print,
+
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, //a
+                TokenKind.TemplateStringExpressionBegin,
+
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, //b
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.Identifier,
+                TokenKind.Colon,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.RightCurlyBrace,
+                TokenKind.RightCurlyBrace,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.BackTick,
+
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.BackTick,
+
+                TokenKind.Eof
+            ]);
+        });
+
+        it('ignores curly braces inside strings within an expression', () => {
+            //the `}` here belongs to the string, so it must not end the expression
+            let tokens = Lexer.scan('thing = `${{ "a}b": "{" }}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.StringLiteral,
+                TokenKind.Colon,
+                TokenKind.StringLiteral,
+                TokenKind.RightCurlyBrace,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('ignores curly braces inside a comment within an expression', () => {
+            let tokens = Lexer.scan('thing = `${1 \'}\n}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.IntegerLiteral,
+                //the comment is captured as leading trivia rather than emitted as a token,
+                //but it still shields the `}` inside it from closing the expression
+                TokenKind.Newline,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+            //prove the comment really was scanned (and so really did shield the `}`)
+            expect(
+                tokens.flatMap(x => x.leadingTrivia ?? []).filter(x => x.kind === TokenKind.Comment).map(x => x.text)
+            ).to.eql([`'}`]);
+        });
+
+        it('supports an associative array literal spanning multiple lines', () => {
+            let tokens = Lexer.scan('thing = `${{\n    b: 1\n}}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.Newline,
+                TokenKind.Identifier,
+                TokenKind.Colon,
+                TokenKind.IntegerLiteral,
+                TokenKind.Newline,
+                TokenKind.RightCurlyBrace,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('supports an inline function containing braces in an expression', () => {
+            let tokens = Lexer.scan('thing = `${sub()\nprint {}\nend sub}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.Sub,
+                TokenKind.LeftParen,
+                TokenKind.RightParen,
+                TokenKind.Newline,
+                TokenKind.Print,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.RightCurlyBrace,
+                TokenKind.Newline,
+                TokenKind.EndSub,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('supports an empty expression', () => {
+            let tokens = Lexer.scan('thing = `${}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('flags an unterminated template string expression', () => {
+            const { diagnostics } = Lexer.scan('thing = `${{}`');
+            expect(diagnostics).to.be.lengthOf(1);
         });
 
         it('real example, which is causing issues in the formatter', () => {
@@ -1291,6 +1536,58 @@ describe('lexer', () => {
         ]);
     });
 
+    describe('token text canonicalization', () => {
+        it('uses one shared string instance for fixed-text token kinds', () => {
+            const { tokens } = Lexer.scan('a.b.c(1)(2)');
+            const dots = tokens.filter(x => x.kind === TokenKind.Dot);
+            const parens = tokens.filter(x => x.kind === TokenKind.LeftParen);
+            expect(dots).to.be.lengthOf(2);
+            expect(parens).to.be.lengthOf(2);
+            //same text, and literally the same string instance
+            expect(dots[0].text).to.eql('.');
+            expect(dots[0].text === dots[1].text).to.be.true;
+            expect(parens[0].text === parens[1].text).to.be.true;
+        });
+
+        it('still reports the correct text for fixed-text kinds', () => {
+            const { tokens } = Lexer.scan('a ?? b ?. c @. d');
+            expect(
+                tokens.filter(x => x.kind !== TokenKind.Eof).map(x => x.text)
+            ).to.eql(['a', '??', 'b', '?.', 'c', '@.', 'd']);
+        });
+
+        it('interns repeated whitespace and newline text', () => {
+            const { tokens } = Lexer.scan('sub a()\n    x = 1\n    y = 2\nend sub', { includeWhitespace: true });
+            const indents = tokens.filter(x => x.kind === TokenKind.Whitespace && x.text === '    ');
+            expect(indents.length).to.be.greaterThan(1);
+            //every occurrence should be the same instance
+            for (const token of indents) {
+                expect(token.text === indents[0].text).to.be.true;
+            }
+        });
+
+        it('stops interning once the cache is full but still lexes correctly', () => {
+            //every line gets a unique indent width, far more than the cache can hold.
+            //`x` alone on the line keeps the only whitespace run the leading indent.
+            let source = '';
+            const widths = [];
+            for (let i = 1; i <= LEXER_TEXT_CACHE_MAX_ENTRIES + 50; i++) {
+                widths.push(i);
+                source += `${' '.repeat(i)}x\n`;
+            }
+            const { tokens } = Lexer.scan(source, { includeWhitespace: true });
+
+            //cache must not grow past the cap
+            expect(LexerTextCache.size).to.be.at.most(LEXER_TEXT_CACHE_MAX_ENTRIES);
+
+            //and the text must still be exactly right, cached or not
+            const indents = tokens
+                .filter(x => x.kind === TokenKind.Whitespace)
+                .map(x => x.text.length);
+            expect(indents).to.eql(widths);
+        });
+    });
+
     describe('whitespace', () => {
         it('preserves the exact number of whitespace characterswhitespace', () => {
             let { tokens } = Lexer.scan('   ', { includeWhitespace: true });
@@ -1413,6 +1710,74 @@ describe('lexer', () => {
                 TokenKind.IntegerLiteral,
                 TokenKind.Forwardslash,
                 TokenKind.IntegerLiteral,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('recognizes a regex at the start of a template string expression', () => {
+            expect(
+                Lexer.scan('thing = `${/hello/g}`').tokens.map(x => x.kind)
+            ).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.RegexLiteral,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('does not end a template string expression at a curly brace inside a regex', () => {
+            expect(
+                Lexer.scan('thing = `${/[}]/g}`').tokens.map(x => x.kind)
+            ).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.RegexLiteral,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('recognizes a regex after a comma', () => {
+            expect(
+                Lexer.scan('thing = [1, /hello/g]').tokens.map(x => x.kind)
+            ).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.LeftSquareBracket,
+                TokenKind.IntegerLiteral,
+                TokenKind.Comma,
+                TokenKind.RegexLiteral,
+                TokenKind.RightSquareBracket,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('still treats a forwardslash after an identifier as division', () => {
+            expect(
+                Lexer.scan('thing = `${a/b}`').tokens.map(x => x.kind)
+            ).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.Identifier,
+                TokenKind.Forwardslash,
+                TokenKind.Identifier,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
                 TokenKind.Eof
             ]);
         });

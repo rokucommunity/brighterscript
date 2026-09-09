@@ -874,6 +874,148 @@ describe('XmlFile', () => {
         });
     });
 
+    describe('xml tag casing', () => {
+        it('emits a casing diagnostic for <Children>', () => {
+            program.setFile<XmlFile>('components/Comp.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="Comp" extends="Group">
+                <Children>
+                    <Label id="myLabel" />
+                </Children>
+            </component>
+        `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.xmlTagWrongCase('Children', 'children').message
+            ]);
+        });
+
+        it('emits a casing diagnostic for <Interface>', () => {
+            program.setFile<XmlFile>('components/Comp.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="Comp" extends="Group">
+                <Interface>
+                    <field id="foo" type="string" />
+                </Interface>
+            </component>
+        `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.xmlTagWrongCase('Interface', 'interface').message
+            ]);
+        });
+
+        it('emits a casing diagnostic for <Script>', () => {
+            program.setFile<XmlFile>('components/Comp.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="Comp" extends="Group">
+                <Script type="text/brightscript" uri="pkg:/source/main.brs" />
+            </component>
+        `);
+            program.setFile('source/main.brs', '');
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.xmlTagWrongCase('Script', 'script').message
+            ]);
+        });
+
+        it('emits a casing diagnostic for <Component>', () => {
+            program.setFile<XmlFile>('components/Comp.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <Component name="Comp" extends="Group">
+            </Component>
+        `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.xmlTagWrongCase('Component', 'component').message
+            ]);
+        });
+
+        it('emits casing diagnostics for <Field> and <Function>', () => {
+            program.setFile('source/main.brs', `sub doThing()
+end sub`);
+            program.setFile<XmlFile>('components/Comp.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="Comp" extends="Group">
+                <script type="text/brightscript" uri="pkg:/source/main.brs" />
+                <interface>
+                    <Field id="foo" type="string" />
+                    <Function name="doThing" />
+                </interface>
+            </component>
+        `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.xmlTagWrongCase('Field', 'field').message,
+                DiagnosticMessages.xmlTagWrongCase('Function', 'function').message
+            ]);
+        });
+
+        it('does not emit a casing diagnostic for node tags inside <children>', () => {
+        //node names inside <children> are author-defined component names, so their
+        //casing must be left alone
+            program.setFile<XmlFile>('components/Comp.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="Comp" extends="Group">
+                <children>
+                    <Group id="outer">
+                        <Label id="inner" text="hello" />
+                    </Group>
+                </children>
+            </component>
+        `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('points the diagnostic range at the opening tag name', () => {
+            program.setFile<XmlFile>('components/Comp.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="Comp" extends="Group">
+                <Children>
+                </Children>
+            </component>
+        `);
+            program.validate();
+            const diagnostics = program.getDiagnostics().filter(
+                x => x.code === DiagnosticMessages.xmlTagWrongCase('', '').code
+            );
+            expect(diagnostics).to.have.lengthOf(1);
+            //the squiggle lands on `Children` (line 2)
+            expect(diagnostics[0].location.range).to.eql(
+                Range.create(2, 5, 2, 13)
+            );
+        });
+
+        it('preserves the original casing when transpiling', () => {
+        //we report the problem but must not silently rewrite the author's markup
+            const file = program.setFile<XmlFile>('components/Comp.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="Comp" extends="Group">
+                <Children>
+                    <Label id="myLabel" />
+                </Children>
+            </component>
+        `);
+            program.validate();
+            expect(file.transpile().code).to.include('<Children>');
+            expect(file.transpile().code).to.include('</Children>');
+        });
+
+        it('still emits the generic unexpected-tag diagnostic for unknown tags', () => {
+            program.setFile<XmlFile>('components/Comp.xml', trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="Comp" extends="Group">
+                <bogus />
+            </component>
+        `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.xmlUnexpectedTag('bogus').message
+            ]);
+        });
+    });
+
     describe('transpile', () => {
         it('handles single quotes properly', async () => {
             await testTranspile(trim`
@@ -1230,6 +1372,40 @@ describe('XmlFile', () => {
             //prevent the default auto-imports to ensure no transpilation from AST
             (file as any).getMissingImportsForTranspile = () => [];
             const code = file.transpile().code;
+            expect(code.endsWith(`<!--//# sourceMappingURL=./SimpleScene.xml.map -->`)).to.be.true;
+        });
+
+        it('replaces existing trailing sourceMappingURL comment instead of appending a second one', () => {
+            program.options.sourceMap = true;
+            let file = program.setFile<XmlFile>('components/SimpleScene.xml',
+                trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene">
+                </component>
+                <!--//# sourceMappingURL=./some-old-path.xml.map -->
+            `);
+            //prevent the default auto-imports to ensure no transpilation from AST
+            (file as any).getMissingImportsForTranspile = () => [];
+            const code = file.transpile().code;
+            expect(code.match(/sourceMappingURL=/g)?.length).to.eql(1);
+            expect(code.endsWith(`<!--//# sourceMappingURL=./SimpleScene.xml.map -->`)).to.be.true;
+        });
+
+        it('replaces existing trailing sourceMappingURL comment when AST-transpiling', () => {
+            program.options.sourceMap = true;
+            //a script tag pointing at a .bs file forces the AST transpile path, which rebuilds output
+            //from the component tree and therefore drops a comment sitting outside the root element
+            let file = program.setFile<XmlFile>('components/SimpleScene.xml',
+                trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene">
+                    <script type="text/brightscript" uri="SimpleScene.bs"/>
+                </component>
+                <!--//# sourceMappingURL=./some-old-path.xml.map -->
+            `);
+            expect(file.needsTranspiled).to.be.true;
+            const code = file.transpile().code;
+            expect(code.match(/sourceMappingURL=/g)?.length).to.eql(1);
             expect(code.endsWith(`<!--//# sourceMappingURL=./SimpleScene.xml.map -->`)).to.be.true;
         });
 

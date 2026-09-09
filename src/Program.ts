@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
 import * as semver from 'semver';
-import type { CodeAction, Position, Range, SignatureInformation, Location, DocumentSymbol, CancellationToken, SelectionRange, InlayHint } from 'vscode-languageserver';
+import type { CodeAction, Position, Range, SignatureInformation, Location, LocationLink, DocumentSymbol, CancellationToken, SelectionRange, InlayHint } from 'vscode-languageserver';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
@@ -21,7 +21,8 @@ import chalk from 'chalk';
 import { globalCallables, globalFile } from './globalCallables';
 import { parseManifest, parseManifestEntries, getBsConst } from './preprocessor/Manifest';
 import type { ManifestEntry } from './preprocessor/Manifest';
-import { DEFAULT_MIN_FIRMWARE_VERSION, RSG_VERSIONS } from './RokuConstants';
+import type { FirmwareCapabilities } from './RokuConstants';
+import { DEFAULT_MIN_FIRMWARE_VERSION, getFirmwareCapabilities, RSG_VERSIONS } from './RokuConstants';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement, isReferenceType } from './astUtils/reflection';
@@ -1053,7 +1054,8 @@ export class Program {
             srcPath = s`${path.resolve(rootDir, fileParam)}`;
             destPath = s`${util.replaceCaseInsensitive(srcPath, rootDir, '')}`;
         } else {
-            let param: any = fileParam;
+            //`fileParam` here is `FileObj | { srcPath?: string; pkgPath?: string }`; duck-type across both shapes
+            let param = fileParam as { src?: string; srcPath?: string; dest?: string; pkgPath?: string };
 
             if (param.src) {
                 srcPath = s`${param.src}`;
@@ -1935,7 +1937,7 @@ export class Program {
      * Given a position in a file, if the position is sitting on some type of identifier,
      * go to the definition of that identifier (where this thing was first defined)
      */
-    public getDefinition(srcPath: string, position: Position): Location[] {
+    public getDefinition(srcPath: string, position: Position): Array<Location | LocationLink> {
         let file = this.getFile(srcPath);
         if (!file) {
             return [];
@@ -1951,12 +1953,10 @@ export class Program {
         this.plugins.emit('beforeProvideDefinition', event);
         this.plugins.emit('provideDefinition', event);
         this.plugins.emit('afterProvideDefinition', event);
+
         return event.definitions;
     }
 
-    /**
-     * Get hover information for a file and position
-     */
     public getHover(srcPath: string, position: Position): Hover[] {
         let file = this.getFile(srcPath);
         let result: Hover[];
@@ -2669,6 +2669,22 @@ export class Program {
             this._minFirmwareVersion = coerced ? coerced.version : DEFAULT_MIN_FIRMWARE_VERSION;
         }
         return this._minFirmwareVersion;
+    }
+
+    private _firmwareCapabilities: FirmwareCapabilities | undefined;
+
+    /**
+     * What the project's target firmware natively understands, derived from
+     * {@link getMinFirmwareVersion}. These are facts about the device, not decisions about what
+     * to do — a caller finding a missing capability decides whether to transpile around it (as
+     * `continue` does) or report a diagnostic (as optional chaining does).
+     * Cached after first call.
+     */
+    public get firmwareCapabilities(): FirmwareCapabilities {
+        if (this._firmwareCapabilities === undefined) {
+            this._firmwareCapabilities = getFirmwareCapabilities(this.getMinFirmwareVersion());
+        }
+        return this._firmwareCapabilities;
     }
 
     private _rsgVersion: string | undefined;

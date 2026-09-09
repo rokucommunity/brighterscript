@@ -827,7 +827,7 @@ export class XmlFile implements BscFile {
         return result;
     }
 
-    private logDebug(...args) {
+    private logDebug(...args: unknown[]) {
         this.program?.logger?.debug('XmlFile', chalk.green(this.destPath), ...args);
     }
 
@@ -851,6 +851,7 @@ export class XmlFile implements BscFile {
 
         //add the source map comment if configured to emit sourcemaps
         if (this.program.options.sourceMap) {
+            util.stripTrailingSourceMappingURLComment(transpileResult);
             return new SourceNode(null, null, state.srcPath, [
                 transpileResult,
                 //add the sourcemap reference comment
