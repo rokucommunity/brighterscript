@@ -1650,31 +1650,43 @@ describe('ProjectManager', () => {
             host: host,
             port: port
         });
+        //this test intentionally disposes the project (and thus the worker thread hosting the
+        //server) while this socket is still open, so the peer can disappear at any moment. Without
+        //an 'error' listener, node throws that ECONNRESET as an _uncaught_ exception, which mocha
+        //then attributes to whatever test happens to be running. Swallow it - a dead peer is
+        //exactly what this test is arranging.
+        connection.on('error', () => { });
 
-        //do the request to fetch symbols (this will be stalled on purpose by our test plugin)
-        let managerGetWorkspaceSymbolPromise = manager.getWorkspaceSymbol();
+        try {
+            //do the request to fetch symbols (this will be stalled on purpose by our test plugin)
+            let managerGetWorkspaceSymbolPromise = manager.getWorkspaceSymbol();
 
-        //small sleep to let things settle
-        await util.sleep(20);
+            //small sleep to let things settle
+            await util.sleep(20);
 
-        //now dispose the project (which should destroy all of the listeners)
-        manager['removeProject'](manager.projects[0]);
+            //now dispose the project (which should destroy all of the listeners)
+            manager['removeProject'](manager.projects[0]);
 
-        //settle again
-        await util.sleep(20);
+            //settle again
+            await util.sleep(20);
 
-        console.log('Asking the client to resolve');
+            console.log('Asking the client to resolve');
 
-        //resolve the request
-        connection.write('resolve');
+            //resolve the request
+            connection.write('resolve');
 
-        //now wait to see if we ever get the response back
-        let result = await managerGetWorkspaceSymbolPromise;
+            //now wait to see if we ever get the response back
+            let result = await managerGetWorkspaceSymbolPromise;
 
-        //the result should be an empty array, since the only project was rejected in the middle of the request
-        expect(result).to.eql([]);
+            //the result should be an empty array, since the only project was rejected in the middle of the request
+            expect(result).to.eql([]);
 
-        //test passes if the promise resolves
+            //test passes if the promise resolves
+        } finally {
+            //don't leave the socket open past the end of the test, otherwise a late reset from the
+            //torn-down worker thread surfaces as a failure in an unrelated test
+            connection.destroy();
+        }
     });
 
     it('properly handles reloading when bsconfig.json contents change', async () => {
