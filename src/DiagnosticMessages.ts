@@ -1,6 +1,6 @@
 import type { Position } from 'vscode-languageserver';
 import { DiagnosticSeverity } from 'vscode-languageserver';
-import type { BsDiagnostic, TypeCompatibilityData } from './interfaces';
+import type { BsDiagnostic, DiagnosticCode, TypeCompatibilityData } from './interfaces';
 import { TokenKind } from './lexer/TokenKind';
 import util from './util';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
@@ -1191,6 +1191,11 @@ export let DiagnosticMessages = {
         message: `Function name '${name}' is ${length} characters long, which exceeds the maximum of ${maxLength}. It will be truncated when converted with ToStr()`,
         severity: DiagnosticSeverity.Warning,
         code: 'function-name-too-long'
+    }),
+    xmlTagWrongCase: (actualTag: string, expectedTag: string) => ({
+        message: `Tag '${actualTag}' must be all lower case. Use '${expectedTag}' instead`,
+        severity: DiagnosticSeverity.Error,
+        code: 'xml-tag-wrong-case'
     })
 };
 export const defaultMaximumTruncationLength = 160;
@@ -1294,12 +1299,17 @@ function formatAvailabilityAxis(axis: AvailabilityAxis, version: string): string
 
 export const DiagnosticCodeMap = {} as Record<keyof (typeof DiagnosticMessages), string>;
 export const DiagnosticLegacyCodeMap = {} as Record<keyof (typeof DiagnosticMessages), number>;
-export let diagnosticCodes = [] as string[];
+export let diagnosticCodes = [] as DiagnosticCode[];
 for (let key in DiagnosticMessages) {
-    diagnosticCodes.push(DiagnosticMessages[key]().code);
-    diagnosticCodes.push(DiagnosticMessages[key]().legacyCode);
-    DiagnosticCodeMap[key] = DiagnosticMessages[key]().code;
-    DiagnosticLegacyCodeMap[key] = DiagnosticMessages[key]().legacyCode;
+    const typedKey = key as keyof typeof DiagnosticMessages;
+    //every factory returns an object with `code`/`legacyCode` properties regardless of its specific (possibly required)
+    //arguments, so it's safe to call each one with no arguments purely to read those codes off the result
+    const getCodes = DiagnosticMessages[typedKey] as () => { code: string; legacyCode?: number };
+    const codes = getCodes();
+    diagnosticCodes.push(codes.code);
+    diagnosticCodes.push(codes.legacyCode);
+    DiagnosticCodeMap[typedKey] = codes.code;
+    DiagnosticLegacyCodeMap[typedKey] = codes.legacyCode;
 }
 
 export interface DiagnosticInfo {

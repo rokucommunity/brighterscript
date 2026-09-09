@@ -157,6 +157,11 @@ export class CallExpression extends Expression {
 
     public readonly location: Location | undefined;
 
+    /** `a.b()` -> `a.b` (not the args) */
+    public get previousInChain() {
+        return this.callee;
+    }
+
     transpile(state: BrsTranspileState, nameOverride?: string) {
         let result: TranspileResult = [];
 
@@ -686,6 +691,11 @@ export class DottedGetExpression extends Expression {
 
     public readonly location: Location | undefined;
 
+    /** `a.b` -> `a` */
+    public get previousInChain() {
+        return this.obj;
+    }
+
     transpile(state: BrsTranspileState) {
         //if the callee starts with a namespace name, transpile the name
         if (state.file.calleeStartsWithNamespace(this)) {
@@ -789,6 +799,11 @@ export class XmlAttributeGetExpression extends Expression {
 
     public readonly location: Location | undefined;
 
+    /** `a@b` -> `a` */
+    public get previousInChain() {
+        return this.obj;
+    }
+
     transpile(state: BrsTranspileState) {
         return [
             ...this.obj.transpile(state),
@@ -884,6 +899,11 @@ export class IndexedGetExpression extends Expression {
     }
 
     public readonly location: Location | undefined;
+
+    /** `a[i]` -> `a` (not the index) */
+    public get previousInChain() {
+        return this.obj;
+    }
 
     transpile(state: BrsTranspileState) {
         const result = [];
@@ -1687,7 +1707,7 @@ export class SourceLiteralExpression extends Expression {
     }
 
     private getFunctionName(state: BrsTranspileState, parseMode: ParseMode) {
-        let func = this.findAncestor<FunctionExpression>(isFunctionExpression);
+        let func = this.findAncestor(isFunctionExpression);
         let nameParts = [] as TranspileResult;
         let parentFunction: FunctionExpression;
         while ((parentFunction = func.findAncestor<FunctionExpression>(isFunctionExpression))) {
@@ -1824,8 +1844,14 @@ export class NewExpression extends Expression {
         return this.call.callee as (VariableExpression | DottedGetExpression);
     }
 
+
+    /** `new Alpha.Beta()` -> `Alpha.Beta()` */
+    public get previousInChain() {
+        return this.call;
+    }
+
     public transpile(state: BrsTranspileState) {
-        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        const namespace = this.findAncestor(isNamespaceStatement);
         const cls = state.file.getClassFileLink(
             this.className.getName(ParseMode.BrighterScript),
             namespace?.getName(ParseMode.BrighterScript)
@@ -1910,6 +1936,11 @@ export class CallfuncExpression extends Expression {
     public readonly kind = AstNodeKind.CallfuncExpression;
 
     public readonly location: Location | undefined;
+
+    /** `a@.b()` -> `a` (not the args) */
+    public get previousInChain() {
+        return this.callee;
+    }
 
     public transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -2068,10 +2099,10 @@ export class TemplateStringExpression extends Expression {
         if (this.expressions.length === 0 && this.quasis.length === 1 && this.quasis[0].expressions.length === 1) {
             return this.quasis[0].transpile(state);
         }
-        let result = ['('];
+        let result: TranspileResult = ['('];
         let plus = '';
         //helper function to figure out when to include the plus
-        function add(...items) {
+        function add(...items: TranspileResult) {
             if (items.length > 0) {
                 result.push(
                     plus,

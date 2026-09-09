@@ -109,6 +109,113 @@ describe('parser continue statements', () => {
         `);
     });
 
+    describe('rewrites continue as goto for older firmware', () => {
+        it('rewrites `continue for` into a goto label', async () => {
+            program = new Program({ rootDir: rootDir, sourceMap: true, minFirmwareVersion: '11.0.0' });
+            await testTranspile(`
+                sub main()
+                    for i = 0 to 10
+                        continue for
+                    end for
+                end sub
+            `, `
+                sub main()
+                    for i = 0 to 10
+                        goto BRIGHTERSCRIPT_CONTINUE_0
+                        BRIGHTERSCRIPT_CONTINUE_0:
+                    end for
+                end sub
+            `);
+        });
+
+        it('rewrites `continue while` into a goto label', async () => {
+            program = new Program({ rootDir: rootDir, sourceMap: true, minFirmwareVersion: '11.0.0' });
+            await testTranspile(`
+                sub main()
+                    while true
+                        continue while
+                    end while
+                end sub
+            `, `
+                sub main()
+                    while true
+                        goto BRIGHTERSCRIPT_CONTINUE_0
+                        BRIGHTERSCRIPT_CONTINUE_0:
+                    end while
+                end sub
+            `);
+        });
+
+        it('rewrites `continue for` inside a for-each loop', async () => {
+            program = new Program({ rootDir: rootDir, sourceMap: true, minFirmwareVersion: '11.0.0' });
+            await testTranspile(`
+                sub main()
+                    for each item in [1, 2, 3]
+                        continue for
+                    end for
+                end sub
+            `, `
+                sub main()
+                    for each item in [
+                        1
+                        2
+                        3
+                    ]
+                        goto BRIGHTERSCRIPT_CONTINUE_0
+                        BRIGHTERSCRIPT_CONTINUE_0:
+                    end for
+                end sub
+            `);
+        });
+
+        it('uses a distinct label per loop and targets the innermost loop', async () => {
+            program = new Program({ rootDir: rootDir, sourceMap: true, minFirmwareVersion: '11.0.0' });
+            await testTranspile(`
+                sub main()
+                    for i = 0 to 10
+                        for j = 0 to 10
+                            continue for
+                        end for
+                        continue for
+                    end for
+                end sub
+            `, `
+                sub main()
+                    for i = 0 to 10
+                        for j = 0 to 10
+                            goto BRIGHTERSCRIPT_CONTINUE_1
+                            BRIGHTERSCRIPT_CONTINUE_1:
+                        end for
+                        goto BRIGHTERSCRIPT_CONTINUE_0
+                        BRIGHTERSCRIPT_CONTINUE_0:
+                    end for
+                end sub
+            `);
+        });
+
+        it('does not emit a label for loops that contain no continue statement', async () => {
+            program = new Program({ rootDir: rootDir, sourceMap: true, minFirmwareVersion: '11.0.0' });
+            await testTranspile(`
+                sub main()
+                    for i = 0 to 10
+                        print i
+                    end for
+                end sub
+            `);
+        });
+
+        it('emits `continue` natively when targeting 11.5.0 or higher', async () => {
+            program = new Program({ rootDir: rootDir, sourceMap: true, minFirmwareVersion: '11.5.0' });
+            await testTranspile(`
+                sub main()
+                    for i = 0 to 10
+                        continue for
+                    end for
+                end sub
+            `);
+        });
+    });
+
     it('does not crash when missing loop type', () => {
         program.plugins['suppressErrors'] = false;
         program.setFile('source/main.brs', `

@@ -1858,6 +1858,32 @@ describe('LanguageServer', () => {
 
             expect(references).to.be.empty;
         });
+
+        it('does not return duplicate locations for a file shared by multiple component scopes', async () => {
+            //a variable declared and used entirely within a file that many components include
+            const sharedDocument = addScriptFile('sharedLib', `
+                sub useShared()
+                    sharedValue = 1
+                    print sharedValue
+                end sub
+            `)!;
+            for (let i = 0; i < 3; i++) {
+                addXmlFile(`SharedHost${i}`, `<script type="text/brightscript" uri="sharedLib.brs" />`);
+            }
+
+            const references = await server['onReferences']({
+                textDocument: {
+                    uri: sharedDocument.uri
+                },
+                position: util.createPosition(2, 22)
+            } as any);
+
+            //the assignment and the print usage, each reported exactly once even though the
+            //file is reachable through the source scope plus 3 component scopes
+            const keys = references.map(x => `${x.uri}:${x.range.start.line}:${x.range.start.character}`);
+            expect(keys).to.eql([...new Set(keys)]);
+            expect(references).to.be.lengthOf(2);
+        });
     });
 
     describe('onWillRenameFiles', () => {
@@ -1948,7 +1974,7 @@ describe('LanguageServer', () => {
             });
 
             expect(locations.length).to.equal(1);
-            const location: Location = locations[0];
+            const location: Location = locations[0] as Location;
             expect(location.uri).to.equal(functionDocument.uri);
             expect(location.range.start.line).to.equal(5);
             expect(location.range.start.character).to.equal(16);
@@ -1963,7 +1989,7 @@ describe('LanguageServer', () => {
             });
 
             expect(locations.length).to.equal(1);
-            const location: Location = locations[0];
+            const location: Location = locations[0] as Location;
             expect(location.uri).to.equal(functionDocument.uri);
             expect(location.range.start.line).to.equal(5);
             expect(location.range.start.character).to.equal(16);
@@ -1988,7 +2014,7 @@ describe('LanguageServer', () => {
                 position: util.createPosition(3, 36)
             });
             expect(locations.length).to.equal(1);
-            const location: Location = locations[0];
+            const location: Location = locations[0] as Location;
             expect(location.uri).to.equal(referenceDocument.uri);
             expect(location.range.start.line).to.equal(2);
             expect(location.range.start.character).to.equal(20);
@@ -2023,7 +2049,7 @@ describe('LanguageServer', () => {
                 position: util.createPosition(3, 30)
             });
             expect(locations.length).to.equal(1);
-            const location: Location = locations[0];
+            const location: Location = locations[0] as Location;
             expect(location.uri).to.equal(functionDocument.uri);
             expect(location.range.start.line).to.equal(2);
             expect(location.range.start.character).to.equal(20);

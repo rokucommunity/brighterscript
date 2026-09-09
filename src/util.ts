@@ -619,8 +619,8 @@ export class Util {
     /**
      * Walks left in a DottedGetExpression and returns a VariableExpression if found, or undefined if not found
      */
-    public findBeginningVariableExpression(dottedGet: DottedGetExpression): VariableExpression | undefined {
-        let left: any = dottedGet;
+    public findBeginningVariableExpression(expression: Expression): VariableExpression | undefined {
+        let left: Expression = expression;
         while (left) {
             if (isVariableExpression(left)) {
                 return left;
@@ -775,7 +775,7 @@ export class Util {
                 if (Array.isArray(obj)) {
                     return obj.map(visit);
                 }
-                return Object.keys(obj).reduce((result, prop) => {
+                return Object.keys(obj as Record<string, unknown>).reduce<Record<string, any>>((result, prop) => {
                     result[prop] = visit(safeGetValue(obj, prop));
                     return result;
                 }, {});
@@ -795,7 +795,7 @@ export class Util {
         const destroyCircular = (from: any, seen: any[]) => {
             const to: any = Array.isArray(from) ? [] : {};
             seen.push(from);
-            for (const [key, val] of Object.entries(from)) {
+            for (const [key, val] of Object.entries(from as Record<string, unknown>)) {
                 if (typeof val === 'function') {
                     continue;
                 }
@@ -1948,7 +1948,7 @@ export class Util {
                     acc.push(plugin);
                 } catch (err: any) {
                     if (onError) {
-                        onError(pathOrModule, err);
+                        onError(pathOrModule, err as Error);
                     } else {
                         throw err;
                     }
@@ -1967,7 +1967,7 @@ export class Util {
         const variableExpressions = [] as VariableExpression[];
         const uniqueVarNames = new Set<string>();
 
-        function expressionWalker(expression) {
+        function expressionWalker(expression: AstNode) {
             if (isExpression(expression)) {
                 expressions.push(expression);
             }
@@ -2339,7 +2339,7 @@ export class Util {
      * Returns an integer if valid, or undefined. Eliminates checking for NaN
      */
     public parseInt(value: any) {
-        const result = parseInt(value);
+        const result = parseInt(value as string);
         if (!isNaN(result)) {
             return result;
         } else {
@@ -2457,7 +2457,30 @@ export class Util {
     ): SourceNode {
         // we can use a typecast rather than actually transforming the data because SourceNode
         // accepts a more permissive type than its typedef states
-        return new SourceNode(line, column, source, chunks as any, name);
+        return new SourceNode(line, column, source, chunks as string | SourceNode | (string | SourceNode)[], name);
+    }
+
+    /**
+     * Strip a trailing `sourceMappingURL` comment (and the newline preceding it) from the end of a
+     * transpile result, so that appending a freshly-generated one doesn't produce a duplicate. A file
+     * can already carry a comment from a previous build, which is either preserved verbatim (for
+     * files that don't need transpiling) or re-emitted as a comment by the AST transpile.
+     *
+     * Handles both BrightScript-style (`'//# sourceMappingURL=...`) and XML-style
+     * (`<!--//# sourceMappingURL=... -->`) comments. Leaves the node untouched when no trailing
+     * sourceMappingURL comment is present.
+     */
+    public stripTrailingSourceMappingURLComment(node: SourceNode): SourceNode {
+        //`\S+` cannot backtrack across whitespace, so this stays linear-time on adversarial input
+        const pattern = /(?:\r?\n)?[ \t]*(?:'\/\/# sourceMappingURL=\S+|<!--[ \t]*\/\/# sourceMappingURL=\S+[ \t]*-->)\s*$/;
+        if (pattern.test(node.toString())) {
+            //`replaceRight` operates on the right-most leaf string, which is where a trailing comment
+            //lands in both the verbatim and AST-transpiled cases. The `source-map` typings declare the
+            //pattern as a string, but it is handed straight to `String.prototype.replace`, which
+            //accepts a RegExp
+            node.replaceRight(pattern as unknown as string, '');
+        }
+        return node;
     }
 
     /**
@@ -3162,10 +3185,10 @@ export class Util {
  * A tagged template literal function for standardizing the path. This has to be defined as standalone function since it's a tagged template literal function,
  * we can't use `object.tag` syntax.
  */
-export function standardizePath(stringParts, ...expressions: any[]) {
+export function standardizePath(stringParts: TemplateStringsArray | string, ...expressions: any[]) {
     let result: string[] = [];
     for (let i = 0; i < stringParts?.length; i++) {
-        result.push(stringParts[i], expressions[i]);
+        result.push(stringParts[i], expressions[i] as string);
     }
     return util.standardizePath(
         result.join('')

@@ -455,6 +455,17 @@ export class Block extends Statement {
             );
             state.lineage.shift();
         }
+        //if a `continue` inside this block was rewritten into a `goto`, emit its jump target as
+        //the last line of the block. Done here (rather than in the loop statements) so the label
+        //picks up the block's own indent depth.
+        const loopLabel = state.peekLoopLabel();
+        if (loopLabel?.wasAccessed && loopLabel.blockDepth === state.blockDepth) {
+            results.push(
+                state.newline,
+                state.indent(),
+                `${loopLabel.label}:`
+            );
+        }
         state.blockDepth--;
         return results;
     }
@@ -606,7 +617,7 @@ export class FunctionStatement extends Statement implements TypedefProvider {
      * Get the name of this expression based on the parse mode
      */
     public getName(parseMode: ParseMode) {
-        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        const namespace = this.findAncestor(isNamespaceStatement);
         if (namespace) {
             let delimiter = parseMode === ParseMode.BrighterScript ? '.' : '_';
             let namespaceName = namespace.getName(parseMode);
@@ -1378,7 +1389,9 @@ export class ForStatement extends Statement {
         }
         //loop body
         state.lineage.unshift(this);
+        state.pushLoopLabel();
         result.push(...this.body.transpile(state));
+        state.popLoopLabel();
         state.lineage.shift();
 
         //end for
@@ -1496,7 +1509,9 @@ export class ForEachStatement extends Statement {
         result.push(...this.target.transpile(state));
         //body
         state.lineage.unshift(this);
+        state.pushLoopLabel();
         result.push(...this.body.transpile(state));
+        state.popLoopLabel();
         state.lineage.shift();
 
         //end for
@@ -1601,7 +1616,9 @@ export class WhileStatement extends Statement {
         );
         state.lineage.unshift(this);
         //body
+        state.pushLoopLabel();
         result.push(...this.body.transpile(state));
+        state.popLoopLabel();
         state.lineage.shift();
 
         //end while
@@ -2182,7 +2199,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
     public get fullName() {
         const name = this.tokens.name?.text;
         if (name) {
-            const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const namespace = this.findAncestor(isNamespaceStatement);
             if (namespace) {
                 let namespaceName = namespace.getName(ParseMode.BrighterScript);
                 return `${namespaceName}.${name}`;
@@ -2206,7 +2223,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
      * Get the name of this expression based on the parse mode
      */
     public getName(parseMode: ParseMode) {
-        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        const namespace = this.findAncestor(isNamespaceStatement);
         if (namespace) {
             let delimiter = parseMode === ParseMode.BrighterScript ? '.' : '_';
             let namespaceName = namespace.getName(parseMode);
@@ -2665,7 +2682,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
     public getName(parseMode: ParseMode) {
         const name = this.tokens.name?.text;
         if (name) {
-            const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const namespace = this.findAncestor(isNamespaceStatement);
             if (namespace) {
                 let namespaceName = namespace.getName(parseMode);
                 let separator = parseMode === ParseMode.BrighterScript ? '.' : '_';
@@ -2784,7 +2801,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let stmt = this as ClassStatement;
         while (stmt) {
             if (stmt.parentClassName) {
-                const namespace = stmt.findAncestor<NamespaceStatement>(isNamespaceStatement);
+                const namespace = stmt.findAncestor(isNamespaceStatement);
                 //find the parent class
                 stmt = state.file.getClassFileLink(
                     stmt.parentClassName.getName(),
@@ -2816,7 +2833,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let stmt = this as ClassStatement;
         while (stmt) {
             if (stmt.parentClassName) {
-                const namespace = stmt.findAncestor<NamespaceStatement>(isNamespaceStatement);
+                const namespace = stmt.findAncestor(isNamespaceStatement);
                 stmt = state.file.getClassFileLink(
                     stmt.parentClassName.getName(),
                     namespace?.getName(ParseMode.BrighterScript)
@@ -2919,7 +2936,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
         //construct parent class or empty object
         if (ancestors[0]) {
-            const ancestorNamespace = ancestors[0].findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const ancestorNamespace = ancestors[0].findAncestor(isNamespaceStatement);
             let fullyQualifiedClassName = util.getFullyQualifiedClassName(
                 ancestors[0].getName(ParseMode.BrighterScript)!,
                 ancestorNamespace?.getName(ParseMode.BrighterScript)
@@ -3069,7 +3086,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let result: TranspileResult = state.transpileAnnotations(this);
 
         const constructorFunction = this.getConstructorFunction();
-        let constructorParams = [];
+        let constructorParams: FunctionParameterExpression[] = [];
         if (constructorFunction) {
             constructorParams = constructorFunction.func.parameters;
         } else {
@@ -3866,7 +3883,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
     public get fullName() {
         const name = this.tokens.name?.text;
         if (name) {
-            const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const namespace = this.findAncestor(isNamespaceStatement);
 
             if (namespace) {
                 let namespaceName = namespace.getName(ParseMode.BrighterScript);
@@ -4109,7 +4126,7 @@ export class ConstStatement extends Statement implements TypedefProvider {
     public get fullName() {
         const name = this.tokens.name?.text;
         if (name) {
-            const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const namespace = this.findAncestor(isNamespaceStatement);
             if (namespace) {
                 let namespaceName = namespace.getName(ParseMode.BrighterScript);
                 return `${namespaceName}.${name}`;
@@ -4201,6 +4218,19 @@ export class ContinueStatement extends Statement {
     public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
+        //when targeting firmware without native `continue` support, rewrite into a jump to the
+        //label at the end of the enclosing loop body
+        if (!state.firmwareCapabilities.continueStatement) {
+            const label = state.getLoopLabel();
+            //no enclosing loop means this is a `continue` outside a loop, which validation already
+            //flags as an error. fall through to the passthrough emit rather than producing a
+            //`goto undefined`
+            if (label) {
+                return [
+                    state.sourceNode(this.tokens.continue, `goto ${label}`)
+                ];
+            }
+        }
         return [
             state.sourceNode(this.tokens.continue, this.tokens.continue?.text ?? 'continue'),
             this.tokens.loopType?.leadingWhitespace ?? ' ',
@@ -4370,7 +4400,9 @@ export class AliasStatement extends Statement {
         readonly equals?: Token;
     };
 
-    public readonly value: Expression;
+    //the constructor only accepts these two shapes, so keep the field just as narrow. `clone()`
+    //feeds this value straight back into the constructor, which requires the narrow type.
+    public readonly value: VariableExpression | DottedGetExpression;
 
     public readonly kind = AstNodeKind.AliasStatement;
 

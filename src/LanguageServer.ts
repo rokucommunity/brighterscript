@@ -1,5 +1,4 @@
 import * as path from 'path';
-import * as os from 'os';
 import type {
     CompletionItem,
     Connection,
@@ -50,6 +49,7 @@ import { util } from './util';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
 import { LogLevel, createLogger, logger, setLspLoggerProps } from './logging';
+import type { LogLevel as LogLevelText } from '@rokucommunity/logger';
 import ignore from 'ignore';
 import * as micromatch from 'micromatch';
 import type { LspProject, LspDiagnostic } from './lsp/LspProject';
@@ -60,6 +60,7 @@ import * as fsExtra from 'fs-extra';
 import type { FileChange, MaybePromise } from './interfaces';
 import { Deferred } from './deferred';
 import { workerPool } from './lsp/worker/WorkerThreadProject';
+import { getDefaultMaxWorkerThreads } from './lsp/worker/WorkerPool';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import isEqual = require('lodash.isequal');
 
@@ -83,7 +84,7 @@ export class LanguageServer {
      * per-workspace settings. Once this limit is reached, additional projects are spread evenly across the
      * existing worker threads instead of each getting a dedicated one.
      */
-    public static maxWorkerThreadsDefault = Math.max(1, os.cpus().length);
+    public static maxWorkerThreadsDefault = getDefaultMaxWorkerThreads();
 
     /**
      * The language server protocol connection, used to send and receive all requests and responses
@@ -353,7 +354,7 @@ export class LanguageServer {
                     if (typeof value === 'string') {
                         value = value.toLowerCase();
                     }
-                    const logLevelNumeric = this.logger.getLogLevelNumeric(value as any);
+                    const logLevelNumeric = this.logger.getLogLevelNumeric(value as LogLevelText | LogLevel);
 
                     if (typeof logLevelNumeric === 'number') {
                         return logLevelNumeric;
@@ -417,6 +418,7 @@ export class LanguageServer {
             concurrencyLimit = 1;
         }
         this.projectManager.projectActivationConcurrencyLimit = concurrencyLimit;
+        this.logger.info(`projectActivationConcurrencyLimit set to ${concurrencyLimit}`);
     }
 
     /**
@@ -441,6 +443,7 @@ export class LanguageServer {
             maxWorkerThreads = 1;
         }
         workerPool.maxWorkers = maxWorkerThreads;
+        this.logger.info(`maxWorkerThreads set to ${maxWorkerThreads}`);
     }
 
     @AddStackToErrorMessage
@@ -620,7 +623,7 @@ export class LanguageServer {
      * Extract project paths from settings' projects list, expanding the workspaceFolder variable if necessary
      */
     private normalizeProjectPaths(workspaceFolder: string, projects: (string | BrightScriptProjectConfiguration)[]): BrightScriptProjectConfiguration[] | undefined {
-        return projects?.reduce((acc, project) => {
+        return projects?.reduce<BrightScriptProjectConfiguration[]>((acc, project) => {
             if (typeof project === 'string') {
                 acc.push({ path: project });
             } else if (typeof project.path === 'string') {
@@ -711,7 +714,7 @@ export class LanguageServer {
 
         const srcPath = util.uriToPath(params.textDocument.uri);
 
-        const result = this.projectManager.getDefinition({ srcPath: srcPath, position: params.position });
+        const result = await this.projectManager.getDefinition({ srcPath: srcPath, position: params.position });
         return result;
     }
 
