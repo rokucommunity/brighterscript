@@ -56,9 +56,21 @@ describe('WorkerPool', () => {
             const numFakeCpus = 16;
             const bytesInGB = 1024 * 1024 * 1024;
             sinon.stub(os, 'cpus').returns(new Array(numFakeCpus));
-            // 4 GB of memory - should only allow 2 threads, even though 16 cores available
-            sinon.stub(os, 'totalmem').returns(2 * MEMORY_GB_PER_V8_INSTANCE * bytesInGB);
+            // 5 GB of memory - should only allow 2 threads, even though 16 cores available
+            // That's 2 * 2GB + 1GB buffer
+            sinon.stub(os, 'totalmem').returns(5 * bytesInGB);
             expect(getDefaultMaxWorkerThreads()).to.be.eq(2);
+            sinon.restore();
+        });
+
+        it('should not use all the memory', () => {
+            const numFakeCpus = 16;
+            const bytesInGB = 1024 * 1024 * 1024;
+            sinon.stub(os, 'cpus').returns(new Array(numFakeCpus));
+            const memory = 12 * bytesInGB;
+            sinon.stub(os, 'totalmem').returns(memory);
+            const numThreads = getDefaultMaxWorkerThreads();
+            expect(numThreads * MEMORY_GB_PER_V8_INSTANCE * bytesInGB).to.be.lessThan(memory);
             sinon.restore();
         });
     });

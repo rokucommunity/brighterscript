@@ -13,6 +13,7 @@ interface WorkerEntry {
 
 
 export const MEMORY_GB_PER_V8_INSTANCE = 2;
+export const MEMORY_GB_BUFFER = 1;
 
 /**
  * Gets the lower bound of number of CPUS available vs 2GB chunks of memory.
@@ -20,8 +21,8 @@ export const MEMORY_GB_PER_V8_INSTANCE = 2;
  */
 export function getDefaultMaxWorkerThreads() {
     const numCpus = os.cpus().length;
-    const memoryGB = Math.floor(os.totalmem() / (1024 * 1024 * 1024));
-    return Math.max(1, Math.min(numCpus, memoryGB / MEMORY_GB_PER_V8_INSTANCE));
+    const availableMemoryGB = Math.floor(os.totalmem() / (1024 * 1024 * 1024)) - MEMORY_GB_BUFFER;
+    return Math.max(1, Math.min(numCpus, Math.floor(availableMemoryGB / MEMORY_GB_PER_V8_INSTANCE)));
 }
 
 
