@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.73.3](https://github.com/rokucommunity/brighterscript/compare/0.73.2...v0.73.3) - 2026-09-09
+### Changed
+ - Modifies default max worker thread logic to be only as much as memory allows ([#1798](https://github.com/rokucommunity/brighterscript/pull/1798))
+ - Security enhancements ([#1796](https://github.com/rokucommunity/brighterscript/pull/1796))
+
+
+
 ## [0.73.2](https://github.com/rokucommunity/brighterscript/compare/0.73.1...v0.73.2) - 2026-09-08
 ### Added
  - Add `isTerminal` and `previousInChain` getters to AstNode ([#1788](https://github.com/rokucommunity/brighterscript/pull/1788))
