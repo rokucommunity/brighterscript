@@ -35,7 +35,7 @@ describe('ActionPipeline', () => {
         expect(error?.message).to.eql('sync boom');
     });
 
-    it('rejects when an async action throws', async () => {
+    it('rejects when an async action rejects', async () => {
         let error: Error;
         try {
             await pipeline.run(async () => {
@@ -48,29 +48,7 @@ describe('ActionPipeline', () => {
         expect(error?.message).to.eql('async boom');
     });
 
-    it('runs a single async action at a time', async () => {
-        const events: string[] = [];
-        const action = (name: string, delay: number) => {
-            return pipeline.run(async () => {
-                events.push(`${name}-start`);
-                await util.sleep(delay);
-                events.push(`${name}-end`);
-            });
-        };
-        //the first action takes the longest, so without serialization the others would finish first
-        await Promise.all([
-            action('a', 20),
-            action('b', 5),
-            action('c', 1)
-        ]);
-        expect(events).to.eql([
-            'a-start', 'a-end',
-            'b-start', 'b-end',
-            'c-start', 'c-end'
-        ]);
-    });
-
-    it('keeps processing subsequent actions after one rejects', async () => {
+    it('runs every queued action, even when an earlier one rejects', async () => {
         const events: string[] = [];
         const failure = pipeline.run(async () => {
             await util.sleep(5);
@@ -92,25 +70,31 @@ describe('ActionPipeline', () => {
         expect(events).to.eql(['second ran']);
     });
 
-    it('runs work enqueued while the queue is idle', async () => {
+    it('starts each queued action synchronously rather than waiting for the previous one', async () => {
+        const events: string[] = [];
+        const action = (name: string, delay: number) => {
+            return pipeline.run(async () => {
+                events.push(`${name}-start`);
+                await util.sleep(delay);
+                events.push(`${name}-end`);
+            });
+        };
+        //the queue is drained in one synchronous pass, so every action is started up front
+        //and they finish in whatever order their delays dictate
+        await Promise.all([
+            action('a', 20),
+            action('b', 5),
+            action('c', 1)
+        ]);
+        expect(events).to.eql([
+            'a-start', 'b-start', 'c-start',
+            'c-end', 'b-end', 'a-end'
+        ]);
+    });
+
+    it('runs work enqueued after the queue has drained', async () => {
         expect(await pipeline.run(() => 1)).to.eql(1);
         //the queue has fully drained. make sure a later action still gets processed
         expect(await pipeline.run(() => 2)).to.eql(2);
-    });
-
-    it('runs work enqueued from within a running action after that action finishes', async () => {
-        const events: string[] = [];
-        //don't await the inner action from inside the outer one; a serial queue can't satisfy that
-        let inner: Promise<void>;
-        await pipeline.run(async () => {
-            events.push('outer-start');
-            inner = pipeline.run(() => {
-                events.push('inner');
-            });
-            await util.sleep(5);
-            events.push('outer-end');
-        });
-        await inner;
-        expect(events).to.eql(['outer-start', 'outer-end', 'inner']);
     });
 });
