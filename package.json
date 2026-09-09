@@ -130,11 +130,13 @@
     "vscode-jsonrpc": "^5.0.1"
   },
   "overrides": {
-    "serialize-javascript": "^7.0.5",
-    "brace-expansion": "^2.1.4",
-    "js-yaml": "^4.3.2",
-    "@babel/core": "^7.29.7",
-    "fast-uri": "^3.1.6"
+    "serialize-javascript": "^7",
+    "brace-expansion": "^2",
+    "js-yaml": "^4",
+    "@babel/core": "^7",
+    "fast-uri": "^3",
+    "istanbul-lib-processinfo": "^3.0.1",
+    "uuid": "^11.1.1"
   },
   "dependencies": {
     "@rokucommunity/bslib": "^0.1.1",
