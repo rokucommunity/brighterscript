@@ -12,25 +12,31 @@ export class ActionPipeline {
             deferred: new Deferred<any>()
         };
         this.workQueue.push(work);
-        this.process();
+        //the queue drains in the background; callers await their own work's promise instead
+        void this.process();
         return work.deferred.promise;
     }
 
-    private process() {
-        //if we're already processing,
+    private async process() {
+        //if we're already processing, the in-flight loop will pick up the work we just enqueued
         if (this.isProcessing) {
             return;
         }
-        while (this.workQueue.length > 0) {
-            const work = this.workQueue.shift();
-            try {
-                const result = Promise.resolve(
-                    work.action()
-                );
-                work.deferred.resolve(result);
-            } catch (e) {
-                work.deferred.reject(e);
+        this.isProcessing = true;
+        try {
+            while (this.workQueue.length > 0) {
+                const work = this.workQueue.shift();
+                try {
+                    //await the action so the next item doesn't start until this one has fully settled
+                    work.deferred.resolve(
+                        await work.action()
+                    );
+                } catch (e) {
+                    work.deferred.reject(e);
+                }
             }
+        } finally {
+            this.isProcessing = false;
         }
     }
     private isProcessing = false;
