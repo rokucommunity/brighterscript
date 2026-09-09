@@ -878,6 +878,11 @@ export class ScopeValidator {
             let actualReturnType = returnStmt?.value
                 ? this.getNodeTypeWrapper(file, returnStmt?.value, getTypeOptions)
                 : VoidType.instance;
+            if (!actualReturnType) {
+                // the type of the returned value could not be determined. A separate diagnostic
+                // (ie. `cannot-find-name`) will have already been raised for that expression
+                return;
+            }
             const compatibilityData: TypeCompatibilityData = {};
 
             // `return` statement by itself in non-built-in function will actually result in `invalid`
