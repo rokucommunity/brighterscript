@@ -1,7 +1,8 @@
 import { expect } from '../../chai-config.spec';
-import { WorkerPool } from './WorkerPool';
+import { getDefaultMaxWorkerThreads, MEMORY_GB_PER_V8_INSTANCE, WorkerPool } from './WorkerPool';
 import type { Worker } from 'worker_threads';
 import * as sinon from 'sinon';
+import * as os from 'os';
 
 describe('WorkerPool', () => {
     let pool: WorkerPool;
@@ -34,6 +35,44 @@ describe('WorkerPool', () => {
 
     afterEach(() => {
         sinon.restore();
+    });
+
+    describe('default max workers', () => {
+        it('should be a positive number', () => {
+            expect(getDefaultMaxWorkerThreads()).to.be.greaterThan(0);
+        });
+
+        it('should allow as many threads as CPUs if not memory bound', () => {
+            const numFakeCpus = 16;
+            const bytesInGB = 1024 * 1024 * 1024;
+            sinon.stub(os, 'cpus').returns(new Array(numFakeCpus));
+            // 2 times more memory than needed
+            sinon.stub(os, 'totalmem').returns(numFakeCpus * MEMORY_GB_PER_V8_INSTANCE * 2 * bytesInGB);
+            expect(getDefaultMaxWorkerThreads()).to.be.eq(numFakeCpus);
+            sinon.restore();
+        });
+
+        it('should only allow as many threads as memory allows', () => {
+            const numFakeCpus = 16;
+            const bytesInGB = 1024 * 1024 * 1024;
+            sinon.stub(os, 'cpus').returns(new Array(numFakeCpus));
+            // 5 GB of memory - should only allow 2 threads, even though 16 cores available
+            // That's 2 * 2GB + 1GB buffer
+            sinon.stub(os, 'totalmem').returns(5 * bytesInGB);
+            expect(getDefaultMaxWorkerThreads()).to.be.eq(2);
+            sinon.restore();
+        });
+
+        it('should not use all the memory', () => {
+            const numFakeCpus = 16;
+            const bytesInGB = 1024 * 1024 * 1024;
+            sinon.stub(os, 'cpus').returns(new Array(numFakeCpus));
+            const memory = 12 * bytesInGB;
+            sinon.stub(os, 'totalmem').returns(memory);
+            const numThreads = getDefaultMaxWorkerThreads();
+            expect(numThreads * MEMORY_GB_PER_V8_INSTANCE * bytesInGB).to.be.lessThan(memory);
+            sinon.restore();
+        });
     });
 
     describe('preload', () => {
