@@ -2576,17 +2576,8 @@ export class MethodStatement extends FunctionStatement {
             return;
         }
 
-        //check whether any calls to super exist
-        let containsSuperCall =
-            this.func.body.statements.findIndex((x) => {
-                //is a call statement
-                return isExpressionStatement(x) && isCallExpression(x.expression) &&
-                    //is a call to super
-                    util.findBeginningVariableExpression(x.expression.callee)?.name.text.toLowerCase() === 'super';
-            }) !== -1;
-
         //if a call to super exists, quit here
-        if (containsSuperCall) {
+        if (this.findSuperCallIndex() !== -1) {
             return;
         }
 
@@ -2623,10 +2614,28 @@ export class MethodStatement extends FunctionStatement {
     }
 
     /**
+     * Find the index of the `super()` call within this function's body, or -1 if there isn't one.
+     * The call is usually the first statement, but plugins are free to insert statements ahead of it,
+     * so we locate it rather than assuming a fixed position.
+     */
+    private findSuperCallIndex() {
+        return this.func.body.statements.findIndex((x) => {
+            //is a call statement
+            return isExpressionStatement(x) && isCallExpression(x.expression) &&
+                //is a call to super
+                util.findBeginningVariableExpression(x.expression.callee)?.name.text.toLowerCase() === 'super';
+        });
+    }
+
+    /**
      * Inject field initializers at the top of the `new` function (after any present `super()` call)
      */
     private injectFieldInitializersForConstructor(state: BrsTranspileState) {
-        let startingIndex = state.classStatement!.hasParentClass() ? 1 : 0;
+        //field initializers must run after the `super()` call. `ensureSuperConstructorCall` has already
+        //guaranteed a super call exists for derived classes, but it isn't necessarily at index 0 -- a plugin
+        //may have inserted statements before it -- so find it instead of assuming its position.
+        const superCallIndex = state.classStatement!.hasParentClass() ? this.findSuperCallIndex() : -1;
+        let startingIndex = superCallIndex + 1;
 
         let newStatements = [] as Statement[];
         //insert the field initializers in order
