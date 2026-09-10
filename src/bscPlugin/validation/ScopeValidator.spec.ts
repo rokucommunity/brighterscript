@@ -4742,6 +4742,29 @@ describe('ScopeValidator', () => {
             ]);
         });
 
+        it('allows comparisons on a variable whose union includes both an enum type and an enum member type', () => {
+            // https://github.com/rokucommunity/brighterscript/issues/1807
+            program.setFile('source/util.bs', `
+                enum Direction
+                    north = "n"
+                    south = "s"
+                end enum
+
+                sub makeEasterly(input as string)
+                    d = input as Direction
+                    if d = Direction.north
+                        d = Direction.south
+                    end if
+                    if d = Direction.north
+                        print "still north"
+                    end if
+                end sub
+            `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
         it('validates unary operators', () => {
             program.setFile('source/util.bs', `
                 sub doStuff()

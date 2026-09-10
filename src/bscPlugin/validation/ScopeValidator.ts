@@ -1009,8 +1009,14 @@ export class ScopeValidator {
             const leftTypesToTest = isUnionType(leftTypeToTest) ? getAllTypesFromCompoundType(leftTypeToTest) : [leftTypeToTest];
             const rightTypesToTest = isUnionType(rightTypeToTest) ? getAllTypesFromCompoundType(rightTypeToTest) : [rightTypeToTest];
 
-            for (const leftInnerType of leftTypesToTest) {
-                for (const rightInnerType of rightTypesToTest) {
+            for (let leftInnerType of leftTypesToTest) {
+                if (isEnumMemberType(leftInnerType) || isEnumType(leftInnerType)) {
+                    leftInnerType = leftInnerType.underlyingType;
+                }
+                for (let rightInnerType of rightTypesToTest) {
+                    if (isEnumMemberType(rightInnerType) || isEnumType(rightInnerType)) {
+                        rightInnerType = rightInnerType.underlyingType;
+                    }
                     if (!util.binaryOperatorResultType(leftInnerType, binaryExpr.tokens.operator, rightInnerType)) {
                         this.addMultiScopeDiagnostic({
                             ...DiagnosticMessages.operatorTypeMismatch(binaryExpr.tokens.operator.text, leftType.toString(), rightType.toString()),
