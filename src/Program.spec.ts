@@ -3756,6 +3756,124 @@ describe('Program', () => {
                 end sub
             `);
         });
+
+        it('builds files added to the event during afterPrepareProgram', async () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                end sub
+            `);
+            program.plugins.add({
+                name: 'TestPlugin',
+                afterPrepareProgram: (event) => {
+                    event.files.push(
+                        program.setFile('source/late.bs', `
+                            sub late()
+                                print true ? 1 : 2
+                            end sub
+                        `)
+                    );
+                }
+            });
+            await program.build();
+
+            //the late file should have been transpiled and written to disk
+            expect(
+                fsExtra.readFileSync(`${outDir}/source/late.brs`).toString()
+            ).to.include('bslib_ternary');
+        });
+
+        it('builds files added to the event during prepareProgram', async () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                end sub
+            `);
+            program.plugins.add({
+                name: 'TestPlugin',
+                prepareProgram: (event) => {
+                    event.files.push(
+                        program.setFile('source/late.bs', `
+                            sub late()
+                                print true ? 1 : 2
+                            end sub
+                        `)
+                    );
+                }
+            });
+            await program.build();
+
+            expect(
+                fsExtra.readFileSync(`${outDir}/source/late.brs`).toString()
+            ).to.include('bslib_ternary');
+        });
+
+        it('builds files added to the event during beforeSerializeProgram', async () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                end sub
+            `);
+            let lateFile: BrsFile;
+            program.plugins.add({
+                name: 'TestPlugin',
+                beforeSerializeProgram: (event) => {
+                    lateFile = program.setFile<BrsFile>('source/late.bs', `
+                        sub late()
+                        end sub
+                    `);
+                    event.files.push(lateFile);
+                },
+                beforeSerializeFile: (event) => {
+                    if (event.file === lateFile) {
+                        //edit the file's AST so we can verify the edit gets undone after the build
+                        const func = (event.file as BrsFile).ast.statements[0] as FunctionStatement;
+                        event.file.editor.setProperty(func.tokens.name, 'text', 'renamed');
+                    }
+                }
+            });
+            await program.build();
+
+            expect(
+                fsExtra.pathExistsSync(`${outDir}/source/late.brs`)
+            ).to.be.true;
+
+            //the edit made to the late-added file should have been undone
+            expect(
+                (lateFile.ast.statements[0] as FunctionStatement).tokens.name.text
+            ).to.eql('late');
+        });
+
+        it('undoes edits for late-added files when pruneEmptyCodeFiles is enabled', async () => {
+            //pruning copies the file array, so late-added files are not visible to the build's own list
+            program.options.pruneEmptyCodeFiles = true;
+            program.setFile('source/main.bs', `
+                sub main()
+                    print "hello"
+                end sub
+            `);
+            let lateFile: BrsFile;
+            program.plugins.add({
+                name: 'TestPlugin',
+                beforeSerializeProgram: (event) => {
+                    lateFile = program.setFile<BrsFile>('source/late.bs', `
+                        sub late()
+                            print "late"
+                        end sub
+                    `);
+                    event.files.push(lateFile);
+                },
+                beforeSerializeFile: (event) => {
+                    if (event.file === lateFile) {
+                        const func = (event.file as BrsFile).ast.statements[0] as FunctionStatement;
+                        event.file.editor.setProperty(func.tokens.name, 'text', 'renamed');
+                    }
+                }
+            });
+            await program.build();
+
+            //the edit made to the late-added file should have been undone
+            expect(
+                (lateFile.ast.statements[0] as FunctionStatement).tokens.name.text
+            ).to.eql('late');
+        });
     });
 
     describe('global symbol table', () => {

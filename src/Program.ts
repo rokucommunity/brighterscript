@@ -2268,12 +2268,7 @@ export class Program {
         };
 
         //assign an editor to every file
-        for (const file of programEvent.files) {
-            //if the file doesn't have an editor yet, assign one now
-            if (!file.editor) {
-                file.editor = new Editor();
-            }
-        }
+        this.assignEditors(programEvent.files);
 
         //sort the entries to make transpiling more deterministic
         programEvent.files.sort((a, b) => {
@@ -2293,7 +2288,11 @@ export class Program {
 
         const entries: TranspileObj[] = [];
 
-        for (const file of files) {
+        //track the index manually because plugins are allowed to add files to `programEvent.files` while we're iterating,
+        //and those files need to be prepared too
+        let fileIndex = 0;
+        while (fileIndex < programEvent.files.length) {
+            const file = programEvent.files[fileIndex++];
             const scope = this.getFirstScopeForFile(file);
             //link the symbol table for all the files in this scope
             scope?.linkSymbolTable();
@@ -2322,7 +2321,24 @@ export class Program {
         }
 
         await this.plugins.emitAsync('afterPrepareProgram', programEvent);
-        return files;
+
+        //plugins may have added files during `afterPrepareProgram`, so make sure every file has an editor
+        this.assignEditors(programEvent.files);
+
+        return programEvent.files;
+    }
+
+    /**
+     * Ensure every file has an `editor`. Plugins are allowed to add files to the build at just about any point in the
+     * build flow, so this gets called several times to catch files added after the initial assignment.
+     */
+    private assignEditors(files: BscFile[]) {
+        for (const file of files) {
+            //if the file doesn't have an editor yet, assign one now
+            if (!file.editor) {
+                file.editor = new Editor();
+            }
+        }
     }
 
     /**
@@ -2343,6 +2359,11 @@ export class Program {
             result: allFiles
         });
         await this.plugins.emitAsync('serializeProgram', serializeProgramEvent);
+
+        files = serializeProgramEvent.files;
+
+        //plugins may have added files during the serializeProgram events, so make sure every file has an editor
+        this.assignEditors(files);
 
         // serialize each file
         for (const file of files) {
@@ -2444,9 +2465,11 @@ export class Program {
 
             //undo all edits for the program
             this.editor.undoAll();
-            //undo all edits for each file
-            for (const file of event.files) {
-                file.editor.undoAll();
+            //undo all edits for each file. Include the serialized files as well, since plugins can add files to the
+            //build after `prepare` has finished (those files won't be present in `event.files`)
+            for (const file of new Set([...event.files, ...serializedFilesByFile.keys()])) {
+                //a file added by a plugin very late in the flow might not have an editor at all
+                file.editor?.undoAll();
             }
         });
 
