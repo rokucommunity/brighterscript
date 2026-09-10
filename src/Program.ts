@@ -9,7 +9,7 @@ import { Scope } from './Scope';
 import type { NamespaceContainer, NamespaceFileContribution } from './Scope';
 import { SymbolTable } from './SymbolTable';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { BsDiagnostic, FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeAddFileEvent, BeforeRemoveFileEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData, ProvideSelectionRangesEvent, ProvideInlayHintsEvent, ProvideSourceFixAllCodeActionsEvent } from './interfaces';
+import type { BsDiagnostic, FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeAddFileEvent, BeforeRemoveFileEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData, ProvideSelectionRangesEvent, ProvideInlayHintsEvent, ProvideSourceFixAllCodeActionsEvent } from './interfaces';
 import type { SourceFixAllCodeAction } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
 import { standardizePath as s, util } from './util';
@@ -191,7 +191,7 @@ export class Program {
         if (!this.globalScope.symbolTable.hasSymbol(nodeName, SymbolTypeFlag.typetime)) {
             let parentNode: ComponentType;
             if (nodeData.extends) {
-                const parentNodeData = nodes[nodeData.extends.name.toLowerCase()];
+                const parentNodeData = builtInSceneGraphNodes[nodeData.extends.name.toLowerCase()];
                 try {
                     parentNode = this.recursivelyAddNodeToSymbolTable(parentNodeData);
                 } catch (error) {
@@ -262,7 +262,7 @@ export class Program {
             this.globalScope.symbolTable.addSymbol(componentData.name, { ...builtInSymbolData, description: componentData.description }, roComponentType, SymbolTypeFlag.typetime);
         }
 
-        for (const nodeData of Object.values(nodes) as SGNodeData[]) {
+        for (const nodeData of Object.values(builtInSceneGraphNodes)) {
             this.recursivelyAddNodeToSymbolTable(nodeData);
         }
 
@@ -1458,12 +1458,12 @@ export class Program {
                 // as each iteration of the loop might add new types, need to keep checking until nothing new is added
                 const dependentTypesChanged = new Set<string>();
                 let foundDependentTypes = false;
-                const changedTypeSymbols = changedSymbols.get(SymbolTypeFlag.typetime);
+                const changedTypeSymbols = changedSymbols.get(SymbolTypeFlag.typetime) ?? new Set<string>();
                 do {
                     foundDependentTypes = false;
-                    const allChangedTypesSofar = [...Array.from(changedTypeSymbols), ...Array.from(dependentTypesChanged)];
+                    const allChangedTypesSofar: string[] = [...Array.from(changedTypeSymbols), ...Array.from(dependentTypesChanged)];
                     for (const changedSymbol of allChangedTypesSofar) {
-                        const symbolsDependentUponChangedSymbol = this.symbolDependencies.get(changedSymbol) ?? [];
+                        const symbolsDependentUponChangedSymbol = this.symbolDependencies.get(changedSymbol) ?? new Set<string>();
                         for (const symbolName of symbolsDependentUponChangedSymbol) {
                             if (!changedTypeSymbols.has(symbolName) && !dependentTypesChanged.has(symbolName)) {
                                 foundDependentTypes = true;
@@ -2250,6 +2250,7 @@ export class Program {
     private getOutDir(outDir?: string) {
         let result = outDir ?? this.options.outDir ?? this.options.outDir;
         if (!result) {
+            //eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- BsConfig and RokuDeployOptions overlap but aren't assignable
             result = rokuDeploy.getOptions(this.options as any).outDir;
         }
         result = s`${path.resolve(this.options.cwd ?? process.cwd(), result ?? '/')}`;
@@ -2286,8 +2287,6 @@ export class Program {
 
         const outDir = this.getOutDir();
 
-        const entries: TranspileObj[] = [];
-
         //plugins are allowed to add files to `programEvent.files` while we're iterating (and they may insert or reorder
         //rather than append), so track which files we've handled instead of relying on array position. Keep draining
         //until every file in the list has been prepared exactly once.
@@ -2316,9 +2315,6 @@ export class Program {
                 await this.plugins.emitAsync('beforePrepareFile', event);
                 await this.plugins.emitAsync('prepareFile', event);
                 await this.plugins.emitAsync('afterPrepareFile', event);
-
-                //TODO remove this in v1
-                entries.push(event);
 
                 //unlink the symbolTable so the next loop iteration can link theirs
                 scope?.unlinkSymbolTable();
