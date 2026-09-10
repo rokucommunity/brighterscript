@@ -191,8 +191,9 @@ export class Program {
         if (!this.globalScope.symbolTable.hasSymbol(nodeName, SymbolTypeFlag.typetime)) {
             let parentNode: ComponentType;
             if (nodeData.extends) {
-                const parentNodeData = builtInSceneGraphNodes[nodeData.extends.name.toLowerCase()];
+                const parentNodeData = nodes[nodeData.extends.name.toLowerCase()];
                 try {
+                    //eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- the `nodes` data is untyped
                     parentNode = this.recursivelyAddNodeToSymbolTable(parentNodeData);
                 } catch (error) {
                     this.logger.error(error, nodeData);
@@ -262,7 +263,7 @@ export class Program {
             this.globalScope.symbolTable.addSymbol(componentData.name, { ...builtInSymbolData, description: componentData.description }, roComponentType, SymbolTypeFlag.typetime);
         }
 
-        for (const nodeData of Object.values(builtInSceneGraphNodes)) {
+        for (const nodeData of Object.values(nodes) as SGNodeData[]) {
             this.recursivelyAddNodeToSymbolTable(nodeData);
         }
 
@@ -1458,18 +1459,20 @@ export class Program {
                 // as each iteration of the loop might add new types, need to keep checking until nothing new is added
                 const dependentTypesChanged = new Set<string>();
                 let foundDependentTypes = false;
-                const changedTypeSymbols = changedSymbols.get(SymbolTypeFlag.typetime) ?? new Set<string>();
+                const changedTypeSymbols = changedSymbols.get(SymbolTypeFlag.typetime);
                 do {
                     foundDependentTypes = false;
-                    const allChangedTypesSofar: string[] = [...Array.from(changedTypeSymbols), ...Array.from(dependentTypesChanged)];
+                    const allChangedTypesSofar = [...Array.from(changedTypeSymbols), ...Array.from(dependentTypesChanged)];
                     for (const changedSymbol of allChangedTypesSofar) {
-                        const symbolsDependentUponChangedSymbol = this.symbolDependencies.get(changedSymbol) ?? new Set<string>();
+                        const symbolsDependentUponChangedSymbol = this.symbolDependencies.get(changedSymbol) ?? [];
+                        /* eslint-disable @typescript-eslint/no-unsafe-argument -- `symbolName` is untyped because `changedSymbols` comes back as `any` */
                         for (const symbolName of symbolsDependentUponChangedSymbol) {
                             if (!changedTypeSymbols.has(symbolName) && !dependentTypesChanged.has(symbolName)) {
                                 foundDependentTypes = true;
                                 dependentTypesChanged.add(symbolName);
                             }
                         }
+                        /* eslint-enable @typescript-eslint/no-unsafe-argument */
                     }
                 } while (foundDependentTypes);
 
