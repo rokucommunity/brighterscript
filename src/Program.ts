@@ -9,7 +9,7 @@ import { Scope } from './Scope';
 import type { NamespaceContainer, NamespaceFileContribution } from './Scope';
 import { SymbolTable } from './SymbolTable';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { BsDiagnostic, FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeAddFileEvent, BeforeRemoveFileEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData, ProvideSelectionRangesEvent, ProvideInlayHintsEvent, ProvideSourceFixAllCodeActionsEvent } from './interfaces';
+import type { BsDiagnostic, FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeAddFileEvent, BeforeRemoveFileEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData, ProvideSelectionRangesEvent, ProvideInlayHintsEvent, ProvideSourceFixAllCodeActionsEvent } from './interfaces';
 import type { SourceFixAllCodeAction } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
 import { standardizePath as s, util } from './util';
@@ -193,6 +193,7 @@ export class Program {
             if (nodeData.extends) {
                 const parentNodeData = nodes[nodeData.extends.name.toLowerCase()];
                 try {
+                    //eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- the `nodes` data is untyped
                     parentNode = this.recursivelyAddNodeToSymbolTable(parentNodeData);
                 } catch (error) {
                     this.logger.error(error, nodeData);
@@ -1464,12 +1465,14 @@ export class Program {
                     const allChangedTypesSofar = [...Array.from(changedTypeSymbols), ...Array.from(dependentTypesChanged)];
                     for (const changedSymbol of allChangedTypesSofar) {
                         const symbolsDependentUponChangedSymbol = this.symbolDependencies.get(changedSymbol) ?? [];
+                        /* eslint-disable @typescript-eslint/no-unsafe-argument -- `symbolName` is untyped because `changedSymbols` comes back as `any` */
                         for (const symbolName of symbolsDependentUponChangedSymbol) {
                             if (!changedTypeSymbols.has(symbolName) && !dependentTypesChanged.has(symbolName)) {
                                 foundDependentTypes = true;
                                 dependentTypesChanged.add(symbolName);
                             }
                         }
+                        /* eslint-enable @typescript-eslint/no-unsafe-argument */
                     }
                 } while (foundDependentTypes);
 
@@ -2250,6 +2253,7 @@ export class Program {
     private getOutDir(outDir?: string) {
         let result = outDir ?? this.options.outDir ?? this.options.outDir;
         if (!result) {
+            //eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- BsConfig and RokuDeployOptions overlap but aren't assignable
             result = rokuDeploy.getOptions(this.options as any).outDir;
         }
         result = s`${path.resolve(this.options.cwd ?? process.cwd(), result ?? '/')}`;
@@ -2268,12 +2272,7 @@ export class Program {
         };
 
         //assign an editor to every file
-        for (const file of programEvent.files) {
-            //if the file doesn't have an editor yet, assign one now
-            if (!file.editor) {
-                file.editor = new Editor();
-            }
-        }
+        this.assignEditors(programEvent.files);
 
         //sort the entries to make transpiling more deterministic
         programEvent.files.sort((a, b) => {
@@ -2291,38 +2290,61 @@ export class Program {
 
         const outDir = this.getOutDir();
 
-        const entries: TranspileObj[] = [];
+        //plugins are allowed to add files to `programEvent.files` while we're iterating (and they may insert or reorder
+        //rather than append), so track which files we've handled instead of relying on array position. Keep draining
+        //until every file in the list has been prepared exactly once.
+        const preparedFiles = new Set<BscFile>();
+        let filesToPrepare = [...programEvent.files];
+        while (filesToPrepare.length > 0) {
+            for (const file of filesToPrepare) {
+                preparedFiles.add(file);
 
+                const scope = this.getFirstScopeForFile(file);
+                //link the symbol table for all the files in this scope
+                scope?.linkSymbolTable();
+
+                //if the file doesn't have an editor yet, assign one now
+                if (!file.editor) {
+                    file.editor = new Editor();
+                }
+                const event = {
+                    program: this,
+                    file: file,
+                    editor: file.editor,
+                    scope: scope,
+                    outputPath: this.getOutputPath(file, outDir)
+                } as PrepareFileEvent & { outputPath: string };
+
+                await this.plugins.emitAsync('beforePrepareFile', event);
+                await this.plugins.emitAsync('prepareFile', event);
+                await this.plugins.emitAsync('afterPrepareFile', event);
+
+                //unlink the symbolTable so the next loop iteration can link theirs
+                scope?.unlinkSymbolTable();
+            }
+            //pick up any files the plugins added during this pass
+            filesToPrepare = programEvent.files.filter(x => !preparedFiles.has(x));
+        }
+
+        await this.plugins.emitAsync('afterPrepareProgram', programEvent);
+
+        //plugins may have added files during `afterPrepareProgram`, so make sure every file has an editor
+        this.assignEditors(programEvent.files);
+
+        return programEvent.files;
+    }
+
+    /**
+     * Ensure every file has an `editor`. Plugins are allowed to add files to the build at just about any point in the
+     * build flow, so this gets called several times to catch files added after the initial assignment.
+     */
+    private assignEditors(files: BscFile[]) {
         for (const file of files) {
-            const scope = this.getFirstScopeForFile(file);
-            //link the symbol table for all the files in this scope
-            scope?.linkSymbolTable();
-
             //if the file doesn't have an editor yet, assign one now
             if (!file.editor) {
                 file.editor = new Editor();
             }
-            const event = {
-                program: this,
-                file: file,
-                editor: file.editor,
-                scope: scope,
-                outputPath: this.getOutputPath(file, outDir)
-            } as PrepareFileEvent & { outputPath: string };
-
-            await this.plugins.emitAsync('beforePrepareFile', event);
-            await this.plugins.emitAsync('prepareFile', event);
-            await this.plugins.emitAsync('afterPrepareFile', event);
-
-            //TODO remove this in v1
-            entries.push(event);
-
-            //unlink the symbolTable so the next loop iteration can link theirs
-            scope?.unlinkSymbolTable();
         }
-
-        await this.plugins.emitAsync('afterPrepareProgram', programEvent);
-        return files;
     }
 
     /**
@@ -2343,6 +2365,11 @@ export class Program {
             result: allFiles
         });
         await this.plugins.emitAsync('serializeProgram', serializeProgramEvent);
+
+        files = serializeProgramEvent.files;
+
+        //plugins may have added files during the serializeProgram events, so make sure every file has an editor
+        this.assignEditors(files);
 
         // serialize each file
         for (const file of files) {
@@ -2444,9 +2471,11 @@ export class Program {
 
             //undo all edits for the program
             this.editor.undoAll();
-            //undo all edits for each file
-            for (const file of event.files) {
-                file.editor.undoAll();
+            //undo all edits for each file. Include the serialized files as well, since plugins can add files to the
+            //build after `prepare` has finished (those files won't be present in `event.files`)
+            for (const file of new Set([...event.files, ...serializedFilesByFile.keys()])) {
+                //a file added by a plugin very late in the flow might not have an editor at all
+                file.editor?.undoAll();
             }
         });
 
