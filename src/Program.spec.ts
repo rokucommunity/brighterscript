@@ -6,6 +6,7 @@ import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { DEFAULT_MIN_FIRMWARE_VERSION } from './RokuConstants';
 import type { BrsFile } from './files/BrsFile';
+import type { BscFile } from './files/BscFile';
 import type { XmlFile } from './files/XmlFile';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
@@ -3804,6 +3805,43 @@ describe('Program', () => {
             expect(
                 fsExtra.readFileSync(`${outDir}/source/late.brs`).toString()
             ).to.include('bslib_ternary');
+        });
+
+        it('prepares each file exactly once when a plugin inserts a file during prepareFile', async () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                end sub
+            `);
+            const preparedPaths: string[] = [];
+            let programFiles: BscFile[];
+            let inserted = false;
+            program.plugins.add({
+                name: 'TestPlugin',
+                prepareProgram: (event) => {
+                    programFiles = event.files;
+                },
+                prepareFile: (event) => {
+                    preparedPaths.push(event.file.pkgPath);
+                    if (!inserted) {
+                        inserted = true;
+                        //insert at the FRONT of the list. An index-based loop would re-prepare the files that
+                        //shifted right, and could walk off the end before reaching the inserted file
+                        programFiles.unshift(
+                            program.setFile('source/inserted.bs', `
+                                sub inserted()
+                                end sub
+                            `)
+                        );
+                    }
+                }
+            });
+            await program.build();
+
+            //every file should be prepared exactly once
+            const duplicates = preparedPaths.filter((x, i) => preparedPaths.indexOf(x) !== i);
+            expect(duplicates, `these files were prepared more than once: ${duplicates.join(', ')}`).to.eql([]);
+            //the inserted file must have been prepared, even though it was added at the front of the list mid-iteration
+            expect(preparedPaths.map(x => s`${x}`)).to.include(s`source/inserted.brs`);
         });
 
         it('builds files added to the event during beforeSerializeProgram', async () => {

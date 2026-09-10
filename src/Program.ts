@@ -2288,36 +2288,43 @@ export class Program {
 
         const entries: TranspileObj[] = [];
 
-        //track the index manually because plugins are allowed to add files to `programEvent.files` while we're iterating,
-        //and those files need to be prepared too
-        let fileIndex = 0;
-        while (fileIndex < programEvent.files.length) {
-            const file = programEvent.files[fileIndex++];
-            const scope = this.getFirstScopeForFile(file);
-            //link the symbol table for all the files in this scope
-            scope?.linkSymbolTable();
+        //plugins are allowed to add files to `programEvent.files` while we're iterating (and they may insert or reorder
+        //rather than append), so track which files we've handled instead of relying on array position. Keep draining
+        //until every file in the list has been prepared exactly once.
+        const preparedFiles = new Set<BscFile>();
+        let filesToPrepare = [...programEvent.files];
+        while (filesToPrepare.length > 0) {
+            for (const file of filesToPrepare) {
+                preparedFiles.add(file);
 
-            //if the file doesn't have an editor yet, assign one now
-            if (!file.editor) {
-                file.editor = new Editor();
+                const scope = this.getFirstScopeForFile(file);
+                //link the symbol table for all the files in this scope
+                scope?.linkSymbolTable();
+
+                //if the file doesn't have an editor yet, assign one now
+                if (!file.editor) {
+                    file.editor = new Editor();
+                }
+                const event = {
+                    program: this,
+                    file: file,
+                    editor: file.editor,
+                    scope: scope,
+                    outputPath: this.getOutputPath(file, outDir)
+                } as PrepareFileEvent & { outputPath: string };
+
+                await this.plugins.emitAsync('beforePrepareFile', event);
+                await this.plugins.emitAsync('prepareFile', event);
+                await this.plugins.emitAsync('afterPrepareFile', event);
+
+                //TODO remove this in v1
+                entries.push(event);
+
+                //unlink the symbolTable so the next loop iteration can link theirs
+                scope?.unlinkSymbolTable();
             }
-            const event = {
-                program: this,
-                file: file,
-                editor: file.editor,
-                scope: scope,
-                outputPath: this.getOutputPath(file, outDir)
-            } as PrepareFileEvent & { outputPath: string };
-
-            await this.plugins.emitAsync('beforePrepareFile', event);
-            await this.plugins.emitAsync('prepareFile', event);
-            await this.plugins.emitAsync('afterPrepareFile', event);
-
-            //TODO remove this in v1
-            entries.push(event);
-
-            //unlink the symbolTable so the next loop iteration can link theirs
-            scope?.unlinkSymbolTable();
+            //pick up any files the plugins added during this pass
+            filesToPrepare = programEvent.files.filter(x => !preparedFiles.has(x));
         }
 
         await this.plugins.emitAsync('afterPrepareProgram', programEvent);
