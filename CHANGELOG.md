@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [1.0.0-alpha.53](https://github.com/rokucommunity/brighterscript/compare/1.0.0-alpha.52...v1.0.0-alpha.53) - 2026-09-09
+### Changed
+ - Merge master into v1 ([#1813](https://github.com/rokucommunity/brighterscript/pull/1813), [#1812](https://github.com/rokucommunity/brighterscript/pull/1812), [#1808](https://github.com/rokucommunity/brighterscript/pull/1808), [#1805](https://github.com/rokucommunity/brighterscript/pull/1805), [#1804](https://github.com/rokucommunity/brighterscript/pull/1804), [#1803](https://github.com/rokucommunity/brighterscript/pull/1803))
+
+
+
+## [0.73.2](https://github.com/rokucommunity/brighterscript/compare/0.73.1...v0.73.2) - 2026-09-08
 ### Added
  - Add `compilerOptions` group to bsconfig.json ([#1750](https://github.com/rokucommunity/brighterscript/pull/1750))
  - Adds `strict` mode. ([#1732](https://github.com/rokucommunity/brighterscript/pull/1732))
