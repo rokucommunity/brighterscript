@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.73.4](https://github.com/rokucommunity/brighterscript/compare/0.73.3...v0.73.4) - 2026-09-11
+### Changed
+ - Tolerate older BrsTranspileState in continue back-transpile ([#1812](https://github.com/rokucommunity/brighterscript/pull/1812))
+ - Security enhancements ([#1804](https://github.com/rokucommunity/brighterscript/pull/1804), [#1805](https://github.com/rokucommunity/brighterscript/pull/1805))
+ - Locate the super() call when injecting field initializers ([#1803](https://github.com/rokucommunity/brighterscript/pull/1803))
+
+
+
 ## [0.73.3](https://github.com/rokucommunity/brighterscript/compare/0.73.2...v0.73.3) - 2026-09-09
 ### Changed
  - Modifies default max worker thread logic to be only as much as memory allows ([#1798](https://github.com/rokucommunity/brighterscript/pull/1798))
