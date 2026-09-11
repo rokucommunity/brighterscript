@@ -458,7 +458,9 @@ export class Block extends Statement {
         //if a `continue` inside this block was rewritten into a `goto`, emit its jump target as
         //the last line of the block. Done here (rather than in the loop statements) so the label
         //picks up the block's own indent depth.
-        const loopLabel = state.peekLoopLabel();
+        //`state` can come from an older brighterscript version (i.e. a plugin bundling a newer
+        //brighterscript than the host), so guard against the loop-label api being absent
+        const loopLabel = state.peekLoopLabel?.();
         if (loopLabel?.wasAccessed && loopLabel.blockDepth === state.blockDepth) {
             results.push(
                 state.newline,
@@ -1389,9 +1391,9 @@ export class ForStatement extends Statement {
         }
         //loop body
         state.lineage.unshift(this);
-        state.pushLoopLabel();
+        state.pushLoopLabel?.();
         result.push(...this.body.transpile(state));
-        state.popLoopLabel();
+        state.popLoopLabel?.();
         state.lineage.shift();
 
         //end for
@@ -1509,9 +1511,9 @@ export class ForEachStatement extends Statement {
         result.push(...this.target.transpile(state));
         //body
         state.lineage.unshift(this);
-        state.pushLoopLabel();
+        state.pushLoopLabel?.();
         result.push(...this.body.transpile(state));
-        state.popLoopLabel();
+        state.popLoopLabel?.();
         state.lineage.shift();
 
         //end for
@@ -1616,9 +1618,9 @@ export class WhileStatement extends Statement {
         );
         state.lineage.unshift(this);
         //body
-        state.pushLoopLabel();
+        state.pushLoopLabel?.();
         result.push(...this.body.transpile(state));
-        state.popLoopLabel();
+        state.popLoopLabel?.();
         state.lineage.shift();
 
         //end while
@@ -3337,17 +3339,8 @@ export class MethodStatement extends FunctionStatement {
             return;
         }
 
-        //check whether any calls to super exist
-        let containsSuperCall =
-            this.func.body.statements.findIndex((x) => {
-                //is a call statement
-                return isExpressionStatement(x) && isCallExpression(x.expression) &&
-                    //is a call to super
-                    util.findBeginningVariableExpression(x.expression.callee as any).tokens.name?.text.toLowerCase() === 'super';
-            }) !== -1;
-
         //if a call to super exists, quit here
-        if (containsSuperCall) {
+        if (this.findSuperCallIndex() !== -1) {
             return;
         }
 
@@ -3387,10 +3380,28 @@ export class MethodStatement extends FunctionStatement {
     }
 
     /**
+     * Find the index of the `super()` call within this function's body, or -1 if there isn't one.
+     * The call is usually the first statement, but plugins are free to insert statements ahead of it,
+     * so we locate it rather than assuming a fixed position.
+     */
+    private findSuperCallIndex() {
+        return this.func.body.statements.findIndex((x) => {
+            //is a call statement
+            return isExpressionStatement(x) && isCallExpression(x.expression) &&
+                //is a call to super
+                util.findBeginningVariableExpression(x.expression.callee)?.name.text.toLowerCase() === 'super';
+        });
+    }
+
+    /**
      * Inject field initializers at the top of the `new` function (after any present `super()` call)
      */
     private injectFieldInitializersForConstructor(state: BrsTranspileState) {
-        let startingIndex = state.classStatement!.hasParentClass() ? 1 : 0;
+        //field initializers must run after the `super()` call. `ensureSuperConstructorCall` has already
+        //guaranteed a super call exists for derived classes, but it isn't necessarily at index 0 -- a plugin
+        //may have inserted statements before it -- so find it instead of assuming its position.
+        const superCallIndex = state.classStatement!.hasParentClass() ? this.findSuperCallIndex() : -1;
+        let startingIndex = superCallIndex + 1;
 
         let newStatements = [] as Statement[];
         //insert the field initializers in order
@@ -4220,8 +4231,11 @@ export class ContinueStatement extends Statement {
     transpile(state: BrsTranspileState) {
         //when targeting firmware without native `continue` support, rewrite into a jump to the
         //label at the end of the enclosing loop body
-        if (!state.firmwareCapabilities.continueStatement) {
-            const label = state.getLoopLabel();
+        //`false` means the target firmware lacks native `continue`. `undefined` means `state` came
+        //from an older brighterscript (i.e. a plugin bundling a newer brighterscript than the
+        //host) which has no back-transpile support at all, so emit `continue` as-is
+        if (state.firmwareCapabilities?.continueStatement === false) {
+            const label = state.getLoopLabel?.();
             //no enclosing loop means this is a `continue` outside a loop, which validation already
             //flags as an error. fall through to the passthrough emit rather than producing a
             //`goto undefined`
