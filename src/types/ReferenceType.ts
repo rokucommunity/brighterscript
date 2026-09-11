@@ -98,8 +98,20 @@ export class ReferenceType extends BscType {
                         if (resolvedType && !isReferenceType(resolvedType)) {
                             return resolvedType.isTypeCompatible(targetType, data);
                         } else if (isReferenceType(targetType)) {
-                            return this.fullName.toLowerCase() === targetType.fullName.toLowerCase() &&
-                                this.tableProvider === targetType.tableProvider;
+                            if (this.fullName.toLowerCase() !== targetType.fullName.toLowerCase()) {
+                                // different named references -- definitely not a match
+                                return false;
+                            }
+                            if (this.tableProvider === targetType.tableProvider) {
+                                // exact same reference source -- trivially compatible
+                                return true;
+                            }
+                            //Same name, but resolved via a different scope's symbol table -- e.g. the same
+                            //.bs `interface` imported into two different component scopes. tableProvider
+                            //identity can't tell these apart (each scope builds its own closure), and we
+                            //can't resolve `this` to compare structurally either. A same-named reference is
+                            //our best signal here, so assume compatible rather than falsely rejecting it.
+                            return true;
                         }
                         return targetType.isTypeCompatible(this, data);
                     };
