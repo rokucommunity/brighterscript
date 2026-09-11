@@ -1,5 +1,19 @@
 import type { LogLevel } from './logging';
 
+export interface BsConfigFileEntry {
+    src: string | string[];
+    dest?: string;
+}
+
+export type BsConfigFileEntryOrShortcut = string | BsConfigFileEntry;
+
+export interface BsConfigDiagnosticFilter {
+    src?: string;
+    codes?: Array<number | string>;
+}
+
+export type BsConfigDiagnosticFilterOrShortcut = string | number | BsConfigDiagnosticFilter;
+
 export interface BsConfig {
     /**
      * The inheritance tree for all parent configs used to generate this config. Do not set this, it is computed.
@@ -43,7 +57,7 @@ export interface BsConfig {
      * If using the {src;dest;} format, you can specify a different destination directory
      * for the matched files in src.
      */
-    files?: Array<string | { src: string | string[]; dest?: string }>;
+    files?: Array<BsConfigFileEntryOrShortcut>;
 
     /**
      * The path where the output zip file should be placed.
@@ -141,7 +155,7 @@ export interface BsConfig {
     /**
      * A list of filters used to exclude diagnostics from the output
      */
-    diagnosticFilters?: Array<number | string | { src: string; codes: (number | string)[] } | { src: string } | { codes: (number | string)[] }>;
+    diagnosticFilters?: Array<BsConfigDiagnosticFilterOrShortcut>;
 
     /**
      * Specify what diagnostic types should be printed to the console. Defaults to 'warn'
