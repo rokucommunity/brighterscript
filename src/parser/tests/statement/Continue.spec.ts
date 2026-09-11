@@ -7,6 +7,8 @@ import { Program } from '../../../Program';
 import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
 import { rootDir } from '../../../testHelpers.spec';
 import type { BrsFile } from '../../../files/BrsFile';
+import { BrsTranspileState } from '../../BrsTranspileState';
+import { SourceNode } from 'source-map';
 const sinon = createSandbox();
 
 describe('parser continue statements', () => {
@@ -214,6 +216,28 @@ describe('parser continue statements', () => {
                 end sub
             `);
         });
+    });
+
+    it('emits `continue` as-is when the transpile state predates the loop-label api', () => {
+        //simulates a plugin bundling a newer brighterscript than the host: the AST nodes are new
+        //but the BrsTranspileState comes from the older host, so it has none of the loop-label api
+        program = new Program({ rootDir: rootDir, sourceMap: true, minFirmwareVersion: '11.0.0' });
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            sub main()
+                for i = 0 to 10
+                    continue for
+                end for
+            end sub
+        `);
+        const state = new BrsTranspileState(file);
+        //strip the newer api from this instance only (the host's state would never have had it)
+        const legacyState = Object.create(state);
+        for (let name of ['firmwareCapabilities', 'pushLoopLabel', 'popLoopLabel', 'peekLoopLabel', 'getLoopLabel']) {
+            legacyState[name] = undefined;
+        }
+        expect(
+            new SourceNode(null, null, null, file.ast.transpile(legacyState) as any).toString()
+        ).to.include('continue for');
     });
 
     it('does not crash when missing loop type', () => {

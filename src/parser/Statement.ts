@@ -228,7 +228,9 @@ export class Block extends Statement {
         //if a `continue` inside this block was rewritten into a `goto`, emit its jump target as
         //the last line of the block. Done here (rather than in the loop statements) so the label
         //picks up the block's own indent depth.
-        const loopLabel = state.peekLoopLabel();
+        //`state` can come from an older brighterscript version (i.e. a plugin bundling a newer
+        //brighterscript than the host), so guard against the loop-label api being absent
+        const loopLabel = state.peekLoopLabel?.();
         if (loopLabel?.wasAccessed && loopLabel.blockDepth === state.blockDepth) {
             results.push(
                 state.newline,
@@ -1042,9 +1044,9 @@ export class ForStatement extends Statement {
         }
         //loop body
         state.lineage.unshift(this);
-        state.pushLoopLabel();
+        state.pushLoopLabel?.();
         result.push(...this.body.transpile(state));
-        state.popLoopLabel();
+        state.popLoopLabel?.();
         state.lineage.shift();
 
         // add new line before "end for"
@@ -1134,9 +1136,9 @@ export class ForEachStatement extends Statement {
         result.push(...this.target.transpile(state));
         //body
         state.lineage.unshift(this);
-        state.pushLoopLabel();
+        state.pushLoopLabel?.();
         result.push(...this.body.transpile(state));
-        state.popLoopLabel();
+        state.popLoopLabel?.();
         state.lineage.shift();
 
         // add new line before "end for"
@@ -1209,9 +1211,9 @@ export class WhileStatement extends Statement {
         );
         state.lineage.unshift(this);
         //body
-        state.pushLoopLabel();
+        state.pushLoopLabel?.();
         result.push(...this.body.transpile(state));
-        state.popLoopLabel();
+        state.popLoopLabel?.();
         state.lineage.shift();
 
         //trailing newline only if we have body statements
@@ -3283,8 +3285,11 @@ export class ContinueStatement extends Statement {
     transpile(state: BrsTranspileState) {
         //when targeting firmware without native `continue` support, rewrite into a jump to the
         //label at the end of the enclosing loop body
-        if (!state.firmwareCapabilities.continueStatement) {
-            const label = state.getLoopLabel();
+        //`false` means the target firmware lacks native `continue`. `undefined` means `state` came
+        //from an older brighterscript (i.e. a plugin bundling a newer brighterscript than the
+        //host) which has no back-transpile support at all, so emit `continue` as-is
+        if (state.firmwareCapabilities?.continueStatement === false) {
+            const label = state.getLoopLabel?.();
             //no enclosing loop means this is a `continue` outside a loop, which validation already
             //flags as an error. fall through to the passthrough emit rather than producing a
             //`goto undefined`
