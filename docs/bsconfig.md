@@ -3,10 +3,10 @@
 While a minimal `bsconfig.json` file is sufficient for getting started, `bsc` supports a range of helpful options.
 
 - [bsconfig.json options](#bsconfigjson-options)
+  - [`compilerOptions`](#compileroptions)
   - [`allowBrighterScriptInBrightScript`](#allowbrighterscriptinbrightscript)
   - [`autoImportComponentScript`](#autoimportcomponentscript)
   - [`bslibDestinationDir`](#bslibdestinationdir)
-  - [`createPackage`](#createpackage)
   - [`cwd`](#cwd)
   - [`deploy`](#deploy)
   - [`diagnosticFilters`](#diagnosticfilters)
@@ -41,10 +41,57 @@ While a minimal `bsconfig.json` file is sufficient for getting started, `bsc` su
     - [`relativeSourceMaps: true`](#relativesourcemaps-true)
   - [`sourceRoot`](#sourceroot)
   - [`stagingDir`](#stagingdir)
+  - [`strict`](#strict)
+    - [`strictCallFunc`](#strictCallFunc)
+    - [`strictNodeMembers`](#strictNodeMembers)
   - [`username`](#username)
   - [`watch`](#watch)
 
+## `compilerOptions`
+
+Type: `object`
+
+A dedicated group for options that control how BrighterScript interprets, validates, and compiles your code — as opposed to the other top-level `bsconfig.json` options, which mostly control project structure, file discovery, and tooling/reporting behavior. This mirrors how TypeScript's `tsconfig.json` separates `compilerOptions` from the rest of the config. For example:
+
+```jsonc
+{
+    "rootDir": "src",
+    "outDir": "out",
+    "compilerOptions": {
+        "strict": true,
+        "sourceMap": true,
+        "autoImportComponentScript": true
+    }
+}
+```
+
+The following options live inside `compilerOptions`:
+
+- [`allowBrighterScriptInBrightScript`](#allowbrighterscriptinbrightscript)
+- [`autoImportComponentScript`](#autoimportcomponentscript)
+- [`bslibDestinationDir`](#bslibdestinationdir)
+- [`emitDefinitions`](#emitdefinitions)
+- [`emitFullPaths`](#emitfullpaths)
+- `legacyCallfuncHandling`
+- `manifest`
+- [`minFirmwareVersion`](#minfirmwareversion)
+- [`pruneEmptyCodeFiles`](#pruneemptycodefiles)
+- [`relativeSourceMaps`](#relativesourcemaps)
+- [`removeParameterTypes`](#removeparametertypes)
+- [`resolveSourceRoot`](#sourceroot)
+- [`sourceMap`](#sourcemap)
+- [`sourceRoot`](#sourceroot)
+- [`strict`](#strict)
+- [`strictCallFunc`](#strictCallFunc)
+- [`strictNodeMembers`](#strictNodeMembers)
+
+Each of these options used to live at the top level of `bsconfig.json`. Those top-level locations still work for backwards compatibility, but are **deprecated** — using one emits a `deprecated-bsconfig-option` warning diagnostic pointing you at the `compilerOptions` equivalent. If an option is set in both places, the value in `compilerOptions` wins.
+
+`extends` deep-merges `compilerOptions` across the config chain (a child config that only sets one option under `compilerOptions` does not wipe out the other options set by a parent config it extends) — this is different from every other `bsconfig.json` option, where the child's value completely replaces the parent's.
+
 ## `allowBrighterScriptInBrightScript`
+
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.allowBrighterScriptInBrightScript`). The top-level location still works but is deprecated and emits a warning.
 
 Type: `boolean`
 
@@ -52,23 +99,21 @@ Allow BrighterScript features (classes, interfaces, etc...) to be included in Br
 
 ## `autoImportComponentScript`
 
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.autoImportComponentScript`). The top-level location still works but is deprecated and emits a warning.
+
 Type: `bool`
 
 BrighterScript only: will automatically import a script at transpile-time for a component with the same name if it exists. Defaults to `false`.
 
 ## `bslibDestinationDir`
 
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.bslibDestinationDir`). The top-level location still works but is deprecated and emits a warning.
+
 Type: `string`
 
-Override the destination directory for the bslib.brs file.  Use this if you want to customize where the bslib.brs file is located in the staging directory.  Note that using a location outside of `source` will break scripts inside `source` that depend on bslib.brs.
+Override the destination directory for the bslib.brs file. Use this if you want to customize where the bslib.brs file is located in the staging directory. Note that using a location outside of `source` will break scripts inside `source` that depend on bslib.brs.
 
 Defaults to `source`.
-
-## `createPackage`
-
-Type: `boolean`
-
-Causes the build to create a zip package. Defaults to `true`. This setting is ignored when [`deploy`](#deploy) is enabled.
 
 ## `cwd`
 
@@ -76,33 +121,53 @@ Type: `string`
 
 If present, overrides the current working directory when invoking `bsc`. Defaults to `process.cwd()`.
 
-## `deploy`
-
-Type: `boolean`
-
-If `true`, after a successful build, the project will be deployed to the Roku specified in host. Defaults to `false`. If this field is set to `true`, then the [`host`](#host) and [`password`](#password) fields must be set as well.
-
 ## `diagnosticFilters`
 
-Type: `Array<string | number | {src: string; codes: number[]}`
+Type: `Array<string | number | {files: string | Array<string | {src: string} | {dest: string}>; codes?: Array<number | string>}`
 
 A list of filters used to hide diagnostics.
 
-- A `string` value should be a relative-to-root-dir or absolute file path or glob pattern of the files that should be excluded. Any file matching this pattern will have all diagnostics supressed. These file paths refer to the location of the source files pre-compilation and are relative to [`rootDir`](#rootdir). Absolute file paths may be used as well.
-    - A file glob may be prefixed with `!` to make it a negative pattern which "un-ignores" the files it matches. (See examples below).
-- A `number` value should be a diagnostic code. This will supress all diagnostics with that code for the whole project.
-- An object can also be provided to filter specific diagnostic codes for a file pattern. For example,
+- A `string` value should be a diagnostic code. This will supress all diagnostics with that code for the whole project. For example:
 
-    ```jsonc
-    "diagnosticFilters": [{
-        "src": "vendor/**/*",
-        "codes": [1000, 1011] //ignore these specific codes from vendor libraries
-    }]
-    ```
+  ```jsonc
+  "diagnosticFilters": [
+      "cannot-find-name",
+      "local-var-function-shadow",
+      "mismatch-argument-count"
+  ]
+  ```
+
+- An object can also be provided to filter specific diagnostic codes for a file pattern. If no `files` property is included, any diagnostic that matches the values in the `codes` will b e suppressed. If a `string` if given for the `files` property, it is treated as a relative-to-root-dir or absolute file path or glob pattern of the files that should be excluded. These file paths refer to the location of the source files pre-compilation and are relative to [`rootDir`](#rootdir). Absolute file paths may be used as well. For example,
+
+  ```jsonc
+  "diagnosticFilters": [{
+      "files": "vendor/**/*",
+      "codes": ["cannot-find-name", "mismatch-argument-count"] //ignore these specific codes from vendor libraries
+  }]
+  ```
+
+- If an object is provided, the `files` property could also be an array, providing either a series of globs, or a specific set of files that match _either_ their `src` or `dest` paths. For example,
+
+  ```jsonc
+  "diagnosticFilters": [{
+      "files": [
+          "vendor/**/*", // all vendor files will be suppressed
+          { "src": "themes/theme1/**/*"}, // all files coming from `themes/theme1/` will be suppressed
+          { "dest": "source/common/**/*"}, // all files from `source/common/` will be suppressed
+      ]
+      "codes": ["cannot-find-name", "mismatch-argument-count"] //ignore these specific codes
+  }]
+  ```
+
+- A file glob may be prefixed with `!` to make it a negative pattern which "un-ignores" the files it matches. (See examples below).
 
 Defaults to `undefined`.
 
 If a child bsconfig extends from a parent bsconfig, and both bsconfigs specify `diagnosticFilters`, the parent bsconfig's `diagnosticFilters` field will be completely overwritten.
+
+
+**Note:** In Brighterscript v0, all diagnostics used a numerical code. Using those legacy codes will still work, but is *deprecated*. Therefore, it is possible to use `number` values instead of string codes. Using a number (or a string representation of a number) matches all diagnostic codes that have that legacy code. For example, an entry of `1234` (or `"1234"`) would suppress any diagnostic with legacy code `1234`.
+
 
 ### Negative patterns in `diagnosticFilters`
 
@@ -110,8 +175,8 @@ A negative pattern can be used to un-ignore some files or codes which were previ
 
 ```jsonc
 "diagnosticFilters": [
-    { "src": "vendor/**/*" }, //ignore all codes from vendor libraries
-    { "src": "!vendor/unreliable/**/*" } //EXCEPT do show errors from this one specific library
+    { "files": "vendor/**/*" }, //ignore all codes from vendor libraries
+    { "files": "!vendor/unreliable/**/*" } //EXCEPT do show errors from this one specific library
 ]
 ```
 
@@ -119,8 +184,8 @@ A specific error code can be unignored in multiple places by using a pattern whi
 
 ```jsonc
 "diagnosticFilters": [
-    { "src": "vendor/**/*" }, //ignore all errors from vendor libraries
-    { "src": "!*/**/*", "codes": [1000] } //EXCEPT do show this particular code everywhere
+    { "files": "vendor/**/*" }, //ignore all errors from vendor libraries
+    { "files": "!*/**/*", "codes": ["name-collision"] } //EXCEPT do show this particular code everywhere
 ]
 ```
 
@@ -179,9 +244,9 @@ If a value is invalid (typo'd preset, custom template with no known placeholders
 The CLI accepts the same value (single or repeated):
 
 ```bash
-bsc --diagnostic-reporters detailed
-bsc --diagnostic-reporters detailed github-actions
-bsc --diagnostic-reporters '{file}:{line}: {message}'
+bsc --diagnosticReporters detailed
+bsc --diagnosticReporters detailed github-actions
+bsc --diagnosticReporters '{file}:{line}: {message}'
 ```
 
 ## `diagnosticSeverityOverrides`
@@ -192,18 +257,22 @@ A map of error codes and severity levels that will override diagnostics' severit
 
 ```jsonc
 "diagnosticSeverityOverrides": {
-    "1011": "error",   //raise a warning to an error
+    "local-var-function-shadow": "error",   //raise a warning to an error
     "LINT1001": "warn" //oops we have lots of those to fix... later
 }
 ```
 
 ## `emitDefinitions`
 
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.emitDefinitions`). The top-level location still works but is deprecated and emits a warning.
+
 Type: `boolean`
 
 Emit type definition files (`d.bs`) during transpile. Defaults to `false`.
 
 ## `emitFullPaths`
+
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.emitFullPaths`). The top-level location still works but is deprecated and emits a warning.
 
 Type: `boolean`
 
@@ -222,47 +291,51 @@ Child config properties completely replace parent config properties. For example
 All relative paths found in the configuration file will be resolved relative to the configuration file they originated in.
 
 ### Optional `extends` and `project`
+
 There are situations where you want to store some compiler settings in a config file, but not fail if that config file doesn't exist. To do this, you can denote that your [`extends`](#extends) or [`project`](#project) path is optional by prefixing it with a question mark (`?`). For example:
 
 - **bsconfig.json** `extends`
-    ```json
-    {
-      "extends": "?path/to/optional/bsconfig.json"
-    }
-    ```
+  ```json
+  {
+    "extends": "?path/to/optional/bsconfig.json"
+  }
+  ```
 - CLI "extends"
-    ```
-    bsc --extends "?path/to/optional/bsconfig.json"
-    ```
+
+  ```
+  bsc --extends "?path/to/optional/bsconfig.json"
+  ```
 
 - CLI `project` argument
-    ```
-    bsc --project "?path/to/optional/bsconfig.json"
-    ```
+  ```
+  bsc --project "?path/to/optional/bsconfig.json"
+  ```
 - Node.js API `extends`
-    ```
-    var programBuilder = new ProgramBuilder({
-        "extends": "?path/to/optional/bsconfig.json"
-    });
-    ```
+  ```
+  var programBuilder = new ProgramBuilder({
+      "extends": "?path/to/optional/bsconfig.json"
+  });
+  ```
 - Node.js API `project`
-    ```
-    var programBuilder = new ProgramBuilder({
-        "project": "?path/to/optional/bsconfig.json"
-    });
-    ```
+  ```
+  var programBuilder = new ProgramBuilder({
+      "project": "?path/to/optional/bsconfig.json"
+  });
+  ```
 
 ## `files`
 
 Type:
+
 ```typescript
 Array<
-  string |
-  string[] |
-  {
-    src: string | string[],
-    dest: string
-  }>
+  | string
+  | string[]
+  | {
+      src: string | string[];
+      dest: string;
+    }
+>;
 ```
 
 The files array is how you specify what files are included in your project. Any strings found in the files array must be relative to rootDir, and are used as include filters, meaning that if a file matches the pattern, it is included.
@@ -271,12 +344,7 @@ For most standard projects, the default files array should work just fine:
 
 ```jsonc
 {
-    "files": [
-        "source/**/*",
-        "components/**/*",
-        "images/**/*",
-        "manifest"
-    ]
+  "files": ["source/**/*", "components/**/*", "images/**/*", "manifest"]
 }
 ```
 
@@ -305,10 +373,7 @@ You can exclude files from the output by prefixing your file patterns with "!". 
 
 ```jsonc
 {
-    "files": [
-        "source/**/*",
-        "!source/some/unwanted/file.brs"
-    ]
+  "files": ["source/**/*", "!source/some/unwanted/file.brs"]
 }
 ```
 
@@ -322,13 +387,13 @@ Patterns may not reference files outside of [`rootDir`](#rootdir) unless the `{ 
 
 ```jsonc
 {
-    "rootDir": "C:/projects/CatVideoPlayer",
-    "files": [
-        "source/main.brs",
+  "rootDir": "C:/projects/CatVideoPlayer",
+  "files": [
+    "source/main.brs",
 
-        //NOT allowed because it navigates outside the rootDir
-        "../common/promise.brs"
-    ]
+    //NOT allowed because it navigates outside the rootDir
+    "../common/promise.brs"
+  ]
 }
 ```
 
@@ -346,17 +411,17 @@ The object structure is as follows:
 
 ```typescript
 {
-    /**
-     * A glob pattern string or file path, or an array of glob pattern strings and/or file paths.
-     * These can be relative paths or absolute paths.
-     * All non-absolute paths are resolved relative to the rootDir
-     */
-    src: Array<string | string[]>;
-    /**
-     * The relative path to the location in the output folder where the files should be placed,
-     * relative to the root of the output folder
-     */
-    dest: string | undefined
+  /**
+   * A glob pattern string or file path, or an array of glob pattern strings and/or file paths.
+   * These can be relative paths or absolute paths.
+   * All non-absolute paths are resolved relative to the rootDir
+   */
+  src: Array<string | string[]>;
+  /**
+   * The relative path to the location in the output folder where the files should be placed,
+   * relative to the root of the output folder
+   */
+  dest: string | undefined;
 }
 ```
 
@@ -384,14 +449,14 @@ An example of combining regular and advanced file patterns:
 
 ```jsonc
 {
-    "rootDir": "C:/projects/CatVideoPlayer",
-    "files": [
-        "source/main.brs",
-        {
-          "src": "../common/promise.brs",
-          "dest": "source/common"
-        }
-    ]
+  "rootDir": "C:/projects/CatVideoPlayer",
+  "files": [
+    "source/main.brs",
+    {
+      "src": "../common/promise.brs",
+      "dest": "source/common"
+    }
+  ]
 }
 ```
 
@@ -403,15 +468,15 @@ For example, if you have a base project and a child project that wants to overri
 
 ```jsonc
 {
-    "files": [
-        {
-            //copy all files from the base project
-            "src": "../BaseProject/**/*"
-        },
-        // Override "../BaseProject/themes/theme.brs"
-        // with "${rootDir}/themes/theme.brs"
-        "themes/theme.brs"
-    ]
+  "files": [
+    {
+      //copy all files from the base project
+      "src": "../BaseProject/**/*"
+    },
+    // Override "../BaseProject/themes/theme.brs"
+    // with "${rootDir}/themes/theme.brs"
+    "themes/theme.brs"
+  ]
 }
 ```
 
@@ -422,6 +487,8 @@ Type: `string`
 The host of the Roku that this project will deploy to when the [`deploy`](#deploy) field is set to `true`. Defaults to `undefined`.
 
 ## `minFirmwareVersion`
+
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.minFirmwareVersion`). The top-level location still works but is deprecated and emits a warning.
 
 Type: `string`
 
@@ -522,11 +589,15 @@ A path to a project file. This is really only passed in from the command line or
 
 ## `pruneEmptyCodeFiles`
 
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.pruneEmptyCodeFiles`). The top-level location still works but is deprecated and emits a warning.
+
 Type: `boolean`
 
 Remove files from the final package which would be empty or consist entirely of comments after compilation. Also removes imports of any such empty scripts from XML files. This can speed up sideloading packages during development. Defaults to `false`.
 
 ## `removeParameterTypes`
+
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.removeParameterTypes`). The top-level location still works but is deprecated and emits a warning.
 
 Type: `boolean`
 
@@ -540,12 +611,6 @@ List of node scripts or npm modules to load during the startup sequence. Useful 
 
 If a child bsconfig extends from a parent bsconfig, and both bsconfigs specify a `require` field, the child's `require` field will completely overwrite the parent's `require` field.
 
-## `retainStagingDir`
-
-Type: `boolean`
-
-Prevent the staging folder from being deleted after creating the package. Defaults to `false`, meaning that the folder is deleted every time.
-
 ## `rootDir`
 
 Type: `string`
@@ -554,11 +619,15 @@ The root directory of your roku project. Defaults to `process.cwd()`.
 
 ## `sourceMap`
 
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.sourceMap`). The top-level location still works but is deprecated and emits a warning.
+
 Type: `boolean`
 
 Enables generating sourcemap files (`.map`), which allow debugging tools to show the original source code while running the emitted files. Defaults to `false`.
 
 ## `relativeSourceMaps`
+
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.relativeSourceMaps`). The top-level location still works but is deprecated and emits a warning.
 
 Type: `boolean`
 
@@ -596,6 +665,8 @@ If [`sourceRoot`](#sourceroot) is also set, the map file's `sourceRoot` field is
 
 ## `sourceRoot`
 
+> **Deprecated:** move this option (and `resolveSourceRoot`) into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.sourceRoot` / `compilerOptions.resolveSourceRoot`). The top-level location still works but is deprecated and emits a warning.
+
 Type: `string`
 
 Overrides where source files appear to live, both in sourcemaps and in the `SOURCE_FILE_PATH` / `SOURCE_LOCATION` runtime literals. Only applies to files within [`rootDir`](#rootdir) — files outside `rootDir` are unaffected.
@@ -609,17 +680,60 @@ The exact behavior depends on whether [`relativeSourceMaps`](#relativesourcemaps
 
 In both cases, `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals embedded in the transpiled output will reflect the `sourceRoot`-substituted path at runtime.
 
-## `stagingDir`
+## `strict`
 
+> **Deprecated:** move this option (and `strictCallFunc`/`strictNodeMembers`) into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.strict`). The top-level location still works but is deprecated and emits a warning.
+
+Type: `boolean`
+
+Enables a set of stricter type-checking rules and language features. When set, this acts as a default value for other `strict`-related options. Defaults to false.
+
+For example, in order to turn all all `strict` options, but disable `strictCallFunc`, you could specify:
+
+```json
+{
+    "strict": true,
+    "strictCallFunc": false
+}
+```
+
+### `strictCallFunc`
+
+Type: `boolean`
+
+Enables stricter type-checking for callfunc() invocations. When true, callfunc() invocations will not be allowed on generic Node types. Defaults to false.
+
+For example, if this were true:
+
+```brighterscript
+sub example(node as roSGNode)
+  node@.someFunction() ' error because roSGNode itself does not have any available call func's
+end sub
+```
+
+### `strictNodeMembers`
+
+Type: `boolean`
+
+Enables stricter type-checking for Node members. When true, unknown members on Node types will be treated as errors instead of dynamic values. Defaults to false.
+
+For example, if this were true:
+
+```brighterscript
+sub example()
+  myPoster = createObject("roSGNode", "Poster")
+  ' update the node with a new field
+  myPoster.update({
+    data: 1234
+  , true})
+  print myPoster.data ' error because "Poster" does not have the "data" field
+end sub
+```
+
+## `outDir`
 Type: `string`
 
-The folder where the transpiled files are placed. This folder will be created automatically if it does not exist, and will be deleted after transpilation completes unless [`retainStagingDir`](#retainstagingdir) is set to `true`. Defaults to `./out/.roku-deploy-staging`.
-
-## `username`
-
-Type: `string`
-
-The username that will be used to deploy to the Roku device when the [`deploy`](#deploy) field is set to `true`. Defaults to `undefined`.
+The folder where the transpiled files are placed. This folder will be created automatically if it does not exist. Defaults to `./out/.roku-deploy-staging`.
 
 ## `watch`
 

@@ -10,7 +10,7 @@ describe('Sequencer', () => {
             name: 'test',
             cancellationToken: cancellationTokenSource.token,
             minSyncDuration: 100
-        }).forEach([1, 2, 3], (i) => {
+        }).forEach('run', [1, 2, 3], (i) => {
             values.push(i);
             if (i === 2) {
                 cancellationTokenSource.cancel();
@@ -23,7 +23,7 @@ describe('Sequencer', () => {
     it('throws when returning a promise from runSync', () => {
         let error;
         try {
-            new Sequencer().once(() => {
+            new Sequencer().once('run', () => {
                 return Promise.resolve();
             }).runSync();
         } catch (e) {
@@ -34,7 +34,7 @@ describe('Sequencer', () => {
 
     it('waits for async actions to complete', async () => {
         const values = [];
-        await new Sequencer().forEach([1, 2, 3], async (i) => {
+        await new Sequencer().forEach('run', [1, 2, 3], async (i) => {
             await new Promise((resolve) => {
                 setTimeout(resolve, 10);
             });
@@ -47,7 +47,7 @@ describe('Sequencer', () => {
     it('runSync() calls cancel before throwing', () => {
         let cancelCalled = false;
         try {
-            new Sequencer().once(() => {
+            new Sequencer().once('run', () => {
                 throw new Error('crash');
             }).onCancel(() => {
                 cancelCalled = true;
@@ -62,7 +62,7 @@ describe('Sequencer', () => {
     it('run() calls cancel before throwing', async () => {
         let cancelCalled = false;
         try {
-            await new Sequencer().once(() => {
+            await new Sequencer().once('run', () => {
                 throw new Error('crash');
             }).onCancel(() => {
                 cancelCalled = true;

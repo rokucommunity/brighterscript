@@ -2,7 +2,7 @@ import * as path from 'path';
 import * as fsExtra from 'fs-extra';
 import { rokuDeploy } from 'roku-deploy';
 import type { StandardizedFileEntry, FileEntry } from 'roku-deploy';
-import { isBrsFile, isClassStatement, isDottedGetExpression, isImportStatement, isNamespaceStatement, isXmlFile, isXmlScope } from '../../astUtils/reflection';
+import { isBrsFile, isClassStatement, isDottedGetExpression, isImportStatement, isNamespaceStatement, isVariableExpression, isXmlFile, isXmlScope } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ProvideDefinitionEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
@@ -10,11 +10,10 @@ import type { Location, LocationLink, Range } from 'vscode-languageserver-protoc
 import type { ClassStatement, FunctionStatement, NamespaceStatement } from '../../parser/Statement';
 import { ParseMode } from '../../parser/Parser';
 import util from '../../util';
-import { URI } from 'vscode-uri';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
 import type { Token } from '../../lexer/Token';
 import type { XmlFile } from '../../files/XmlFile';
-import type { SGAttribute, SGNode } from '../../parser/SGTypes';
+import type { SGAttribute, SGElement } from '../../parser/SGTypes';
 
 export class DefinitionProvider {
     constructor(
@@ -228,32 +227,39 @@ export class DefinitionProvider {
             const constant = scope?.getConstFileLink(fullName, containingNamespace);
             if (constant) {
                 this.event.definitions.push(
-                    util.createLocation(
-                        URI.file(constant.file.srcPath).toString(),
-                        constant.item.tokens.name.range
-                    )
+                    constant.item.tokens.name?.location
                 );
                 return;
             }
-            if (isDottedGetExpression(expression)) {
+            if (isDottedGetExpression(expression) || isVariableExpression(expression)) {
 
                 const enumLink = scope.getEnumFileLink(fullName, containingNamespace);
                 if (enumLink) {
                     this.event.definitions.push(
-                        util.createLocation(
-                            URI.file(enumLink.file.srcPath).toString(),
-                            enumLink.item.tokens.name.range
-                        )
+                        enumLink.item.tokens.name.location
                     );
                     return;
                 }
                 const enumMemberLink = scope.getEnumMemberFileLink(fullName, containingNamespace);
                 if (enumMemberLink) {
                     this.event.definitions.push(
-                        util.createLocation(
-                            URI.file(enumMemberLink.file.srcPath).toString(),
-                            enumMemberLink.item.tokens.name.range
-                        )
+                        enumMemberLink.item.tokens.name.location
+                    );
+                    return;
+                }
+
+                const interfaceFileLink = scope.getInterfaceFileLink(fullName, containingNamespace);
+                if (interfaceFileLink) {
+                    this.event.definitions.push(
+                        interfaceFileLink.item.tokens.name.location
+                    );
+                    return;
+                }
+
+                const classFileLink = scope.getClassFileLink(fullName, containingNamespace);
+                if (classFileLink) {
+                    this.event.definitions.push(
+                        classFileLink.item.tokens.name.location
                     );
                     return;
                 }
@@ -262,21 +268,21 @@ export class DefinitionProvider {
 
         let textToSearchFor = token.text.toLowerCase();
 
-        const previousToken = file.getTokenAt({ line: token.range.start.line, character: token.range.start.character });
+        const previousToken = file.getTokenAt({ line: token.location?.range.start.line, character: token.location?.range.start.character });
 
         if (previousToken?.kind === TokenKind.Callfunc) {
             for (const scope of this.event.program.getScopes()) {
                 //does this xml file declare this function in its interface?
                 if (isXmlScope(scope)) {
-                    const apiFunc = scope.xmlFile.ast?.component?.api?.functions?.find(x => x.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
+                    const apiFunc = scope.xmlFile.ast?.componentElement?.interfaceElement?.functions?.find(x => x.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
                     if (apiFunc) {
                         this.event.definitions.push(
-                            util.createLocation(util.pathToUri(scope.xmlFile.srcPath), apiFunc.range)
+                            util.createLocationFromRange(util.pathToUri(scope.xmlFile.srcPath), apiFunc.getAttribute('name').tokens.value.location?.range)
                         );
                         const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
                         if (callable) {
                             this.event.definitions.push(
-                                util.createLocation(util.pathToUri((callable.callable.file as BrsFile).srcPath), callable.callable.functionStatement.name.range)
+                                util.createLocationFromRange(util.pathToUri((callable.callable.file as BrsFile).srcPath), callable.callable.functionStatement.tokens.name.location?.range)
                             );
                         }
                     }
@@ -288,12 +294,12 @@ export class DefinitionProvider {
         // eslint-disable-next-line @typescript-eslint/dot-notation
         let classToken = file['getTokenBefore'](token, TokenKind.Class);
         if (classToken) {
-            let cs = file.parser.ast.findChild<ClassStatement>((klass) => isClassStatement(klass) && klass.classKeyword.range === classToken.range);
+            let cs = file.parser.ast.findChild<ClassStatement>((klass) => isClassStatement(klass) && klass.tokens.class.location?.range === classToken.location?.range);
             if (cs?.parentClassName) {
                 const nameParts = cs.parentClassName.getNameParts();
                 let extendedClass = file.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
                 if (extendedClass) {
-                    this.event.definitions.push(util.createLocation(util.pathToUri(extendedClass.file.srcPath), extendedClass.item.range));
+                    this.event.definitions.push(util.createLocationFromRange(util.pathToUri(extendedClass.file.srcPath), extendedClass.item.location?.range));
                 }
             }
             return;
@@ -305,8 +311,8 @@ export class DefinitionProvider {
                 const importedFile = this.event.program.getFile(pkgPath);
                 if (importedFile) {
                     this.event.definitions.push(
-                        util.createLocation(
-                            URI.file(importedFile.srcPath).toString(),
+                        util.createLocationFromRange(
+                            util.pathToUri(importedFile.srcPath),
                             util.createRange(1, 0, 1, 0)
                         )
                     );
@@ -321,10 +327,10 @@ export class DefinitionProvider {
                 pathValue,
                 file.pkgPath,
                 util.createRange(
-                    token.range.start.line,
-                    token.range.start.character + 1,
-                    token.range.end.line,
-                    token.range.end.character - 1
+                    token.location.range.start.line,
+                    token.location.range.start.character + 1,
+                    token.location.range.end.line,
+                    token.location.range.end.character - 1
                 )
             );
             if (link) {
@@ -350,7 +356,7 @@ export class DefinitionProvider {
                 //we found a variable declaration with this token text!
                 if (varDeclaration.name.toLowerCase() === textToSearchFor) {
                     const uri = util.pathToUri(file.srcPath);
-                    this.event.definitions.push(util.createLocation(uri, varDeclaration.nameRange));
+                    this.event.definitions.push(util.createLocationFromRange(uri, varDeclaration.nameRange));
                 }
             }
             // eslint-disable-next-line @typescript-eslint/dot-notation
@@ -358,7 +364,7 @@ export class DefinitionProvider {
                 for (const label of functionScope.labelStatements) {
                     if (label.name.toLocaleLowerCase() === textToSearchFor) {
                         const uri = util.pathToUri(file.srcPath);
-                        this.event.definitions.push(util.createLocation(uri, label.nameRange));
+                        this.event.definitions.push(util.createLocationFromRange(uri, label.nameRange));
                     }
                 }
             }
@@ -368,7 +374,7 @@ export class DefinitionProvider {
         //look through all files in scope for matches
         for (const scope of scopesForFile) {
             for (const file of scope.getAllFiles()) {
-                if (isXmlFile(file) || filesSearched.has(file)) {
+                if (!isBrsFile(file) || filesSearched.has(file)) {
                     continue;
                 }
                 filesSearched.add(file);
@@ -385,7 +391,7 @@ export class DefinitionProvider {
                     FunctionStatement: (statement: FunctionStatement) => {
                         if (statement.getName(file.parseMode).toLowerCase() === textToSearchFor) {
                             const uri = util.pathToUri(file.srcPath);
-                            this.event.definitions.push(util.createLocation(uri, statement.range));
+                            this.event.definitions.push(util.createLocationFromRange(uri, statement.location?.range));
                         }
                     }
                 }), {
@@ -410,9 +416,9 @@ export class DefinitionProvider {
         const statementHandler = (statement: NamespaceStatement) => {
             if (!location && statement.getName(ParseMode.BrighterScript).toLowerCase() === namespaceName) {
                 const namespaceItemStatementHandler = (statement: ClassStatement | FunctionStatement) => {
-                    if (!location && statement.name.text.toLowerCase() === endName) {
+                    if (!location && statement.tokens.name.text.toLowerCase() === endName) {
                         const uri = util.pathToUri(file.srcPath);
-                        location = util.createLocation(uri, statement.range);
+                        location = util.createLocationFromRange(uri, statement.location?.range);
                     }
                 };
 
@@ -441,7 +447,7 @@ export class DefinitionProvider {
             isXmlFile(file) &&
             file.parentComponent &&
             file.parentComponentName &&
-            util.rangeContains(file.parentComponentName.range, this.event.position)
+            util.rangeContains(file.parentComponentName.location?.range, this.event.position)
         ) {
             this.event.definitions.push({
                 range: util.createRange(0, 0, 0, 0),
@@ -454,7 +460,7 @@ export class DefinitionProvider {
         // Walk the entire component tree (component attributes, script tags, children nodes,
         // customization nodes) and return a definition for the first attribute value that
         // looks like a file path and resolves to a known file.
-        const component = file.ast?.component;
+        const component = file.ast?.componentElement;
         if (!component) {
             return;
         }
@@ -464,17 +470,18 @@ export class DefinitionProvider {
             return;
         }
         // <script> tags (uri="...")
-        for (const script of component.scripts ?? []) {
+        for (const script of component.scriptElements ?? []) {
             if (this.xmlGetFilePathDefinitionFromAttributes(script.attributes, file.pkgPath)) {
                 return;
             }
         }
         // Nodes inside <children>
-        if (component.children && this.xmlWalkNodeForFilePath(component.children, file.pkgPath)) {
+        const childrenElement = component.childrenElement;
+        if (childrenElement && this.xmlWalkNodeForFilePath(childrenElement, file.pkgPath)) {
             return;
         }
         // <Customization> nodes
-        for (const custom of component.customizations ?? []) {
+        for (const custom of component.customizationElements ?? []) {
             if (this.xmlWalkNodeForFilePath(custom, file.pkgPath)) {
                 return;
             }
@@ -490,12 +497,13 @@ export class DefinitionProvider {
      */
     private xmlGetFilePathDefinitionFromAttributes(attributes: SGAttribute[] | undefined, pkgPath: string): boolean {
         for (const attr of attributes ?? []) {
-            if (attr.value?.range && util.rangeContains(attr.value.range, this.event.position)) {
-                const attrValue = attr.value.text;
+            const valueRange = attr.tokens.value?.location?.range;
+            if (valueRange && util.rangeContains(valueRange, this.event.position)) {
+                const attrValue = attr.value;
                 if (!attrValue) {
                     continue;
                 }
-                const link = this.tryGetFilePathLocationLink(attrValue, pkgPath, attr.value.range);
+                const link = this.tryGetFilePathLocationLink(attrValue, pkgPath, valueRange);
                 if (link) {
                     this.event.definitions.push(link);
                     return true;
@@ -509,11 +517,11 @@ export class DefinitionProvider {
      * Recursively walk an SGNode and its children looking for an attribute value that looks like a
      * file path at the cursor position.  Returns true and pushes a definition on first match.
      */
-    private xmlWalkNodeForFilePath(node: SGNode, pkgPath: string): boolean {
+    private xmlWalkNodeForFilePath(node: SGElement, pkgPath: string): boolean {
         if (this.xmlGetFilePathDefinitionFromAttributes(node.attributes, pkgPath)) {
             return true;
         }
-        for (const child of node.children ?? []) {
+        for (const child of node.elements ?? []) {
             if (this.xmlWalkNodeForFilePath(child, pkgPath)) {
                 return true;
             }

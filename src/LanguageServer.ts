@@ -60,9 +60,9 @@ import * as fsExtra from 'fs-extra';
 import type { FileChange, MaybePromise } from './interfaces';
 import { Deferred } from './deferred';
 import { workerPool } from './lsp/worker/WorkerThreadProject';
+import { getDefaultMaxWorkerThreads } from './lsp/worker/WorkerPool';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import isEqual = require('lodash.isequal');
-import { getDefaultMaxWorkerThreads } from './lsp/worker/WorkerPool';
 
 export class LanguageServer {
     /**
@@ -568,7 +568,7 @@ export class LanguageServer {
      * Provide a list of completion items based on the current cursor position
      */
     @AddStackToErrorMessage
-    public async onCompletion(params: CompletionParams, cancellationToken: CancellationToken, workDoneProgress: WorkDoneProgressReporter, resultProgress: ResultProgressReporter<CompletionItem[]>): Promise<CompletionList> {
+    public async onCompletion(params: CompletionParams, cancellationToken?: CancellationToken, workDoneProgress?: WorkDoneProgressReporter, resultProgress?: ResultProgressReporter<CompletionItem[]>): Promise<CompletionList> {
         this.logger.debug('onCompletion', params, cancellationToken);
 
         const srcPath = util.uriToPath(params.textDocument.uri);

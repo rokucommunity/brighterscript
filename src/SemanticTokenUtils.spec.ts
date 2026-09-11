@@ -6,6 +6,21 @@ import util from './util';
 
 describe('SemanticTokenUtils', () => {
     describe('encodeSemanticTokens', () => {
+        it('eliminates items with no range', () => {
+            expectEncodeEquals(
+                encodeSemanticTokens([{
+                    range: util.createRange(1, 0, 1, 2),
+                    tokenType: SemanticTokenTypes.class
+                }, {
+                    range: undefined,
+                    tokenType: SemanticTokenTypes.parameter
+                }]),
+                [
+                    1, 0, 2, semanticTokensLegend.tokenTypes.indexOf(SemanticTokenTypes.class), 0
+                ]
+            );
+        });
+
         it('encodes single entry at start of line', () => {
             expectEncodeEquals(
                 encodeSemanticTokens([{
@@ -51,6 +66,14 @@ describe('SemanticTokenUtils', () => {
         });
 
         it('properly combines multiple modifiers', () => {
+            expect(getModifierBitFlags([
+                SemanticTokenModifiers.declaration, //idx=0
+                SemanticTokenModifiers.static, //idx=3
+                SemanticTokenModifiers.documentation //idx=8
+            ])).to.eql(0b100001001);
+        });
+
+        it('properly handles deprecated and another', () => {
             expect(getModifierBitFlags([
                 SemanticTokenModifiers.declaration, //idx=0
                 SemanticTokenModifiers.static, //idx=3

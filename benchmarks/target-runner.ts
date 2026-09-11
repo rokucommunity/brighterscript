@@ -7,6 +7,7 @@ import * as chalk from 'chalk';
 const v8Profiler = require('v8-profiler-next');
 
 let idx = 2;
+const extraNamePadding = 20;
 
 const version = process.argv[idx++];
 const maxVersionLength = parseInt(process.argv[idx++]);
@@ -16,6 +17,7 @@ const bscAlias = process.argv[idx++];
 const projectPath = process.argv[idx++];
 const quick = JSON.parse(process.argv[idx++]);
 const profile = JSON.parse(process.argv[idx++]);
+const config = JSON.parse(process.argv[idx++]);
 
 const profileTitle = `${target}@${version}`;
 
@@ -63,7 +65,7 @@ const addTargetTestFunction = require(path.join(__dirname, 'targets', target));
                 const formattedHz = formatNumber(result.hz.toFixed(3));
                 let [name] = result.name.split('@');
                 console.log(
-                    `${name.padStart(maxTargetLength + 8, ' ')}@${version.padEnd(maxVersionLength, ' ')}`,
+                    `${name.padStart(maxTargetLength + extraNamePadding, ' ')}@${version.padEnd(maxVersionLength, ' ')}`,
                     '-'.repeat(' ###,###,###.###'.length - formattedHz.length),
                     chalk.yellow(formattedHz), 'ops/sec'
                 );
@@ -88,7 +90,8 @@ const addTargetTestFunction = require(path.join(__dirname, 'targets', target));
             projectPath: projectPath,
             suiteOptions: {
                 // minTime: quick ? undefined : 3.5
-            }
+            },
+            additionalConfig: config
         })
     );
 
@@ -104,4 +107,5 @@ export interface TargetOptions {
     brighterscript: typeof import('../src');
     projectPath: string;
     suiteOptions: Benchmark.Options;
+    additionalConfig: Record<string, unknown>;
 }

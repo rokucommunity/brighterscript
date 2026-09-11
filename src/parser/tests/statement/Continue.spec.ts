@@ -98,8 +98,8 @@ describe('parser continue statements', () => {
         expectZeroDiagnostics(program);
     });
 
-    it('transpiles properly', () => {
-        testTranspile(`
+    it('transpiles properly', async () => {
+        await testTranspile(`
             sub main()
                 while true
                     continue while
@@ -112,9 +112,9 @@ describe('parser continue statements', () => {
     });
 
     describe('rewrites continue as goto for older firmware', () => {
-        it('rewrites `continue for` into a goto label', () => {
+        it('rewrites `continue for` into a goto label', async () => {
             program = new Program({ rootDir: rootDir, sourceMap: true, minFirmwareVersion: '11.0.0' });
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     for i = 0 to 10
                         continue for
@@ -130,9 +130,9 @@ describe('parser continue statements', () => {
             `);
         });
 
-        it('rewrites `continue while` into a goto label', () => {
+        it('rewrites `continue while` into a goto label', async () => {
             program = new Program({ rootDir: rootDir, sourceMap: true, minFirmwareVersion: '11.0.0' });
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     while true
                         continue while
@@ -148,9 +148,9 @@ describe('parser continue statements', () => {
             `);
         });
 
-        it('rewrites `continue for` inside a for-each loop', () => {
+        it('rewrites `continue for` inside a for-each loop', async () => {
             program = new Program({ rootDir: rootDir, sourceMap: true, minFirmwareVersion: '11.0.0' });
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     for each item in [1, 2, 3]
                         continue for
@@ -170,9 +170,9 @@ describe('parser continue statements', () => {
             `);
         });
 
-        it('uses a distinct label per loop and targets the innermost loop', () => {
+        it('uses a distinct label per loop and targets the innermost loop', async () => {
             program = new Program({ rootDir: rootDir, sourceMap: true, minFirmwareVersion: '11.0.0' });
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     for i = 0 to 10
                         for j = 0 to 10
@@ -195,9 +195,9 @@ describe('parser continue statements', () => {
             `);
         });
 
-        it('does not emit a label for loops that contain no continue statement', () => {
+        it('does not emit a label for loops that contain no continue statement', async () => {
             program = new Program({ rootDir: rootDir, sourceMap: true, minFirmwareVersion: '11.0.0' });
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     for i = 0 to 10
                         print i
@@ -206,9 +206,9 @@ describe('parser continue statements', () => {
             `);
         });
 
-        it('emits `continue` natively when targeting 11.5.0 or higher', () => {
+        it('emits `continue` natively when targeting 11.5.0 or higher', async () => {
             program = new Program({ rootDir: rootDir, sourceMap: true, minFirmwareVersion: '11.5.0' });
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     for i = 0 to 10
                         continue for

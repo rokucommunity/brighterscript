@@ -1,31 +1,43 @@
-import type { BscType } from './BscType';
+import { isDynamicType, isObjectType, isVoidType } from '../astUtils/reflection';
+import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
+import { isUnionTypeCompatible } from './helpers';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
+import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { DynamicType } from './DynamicType';
 
-export class VoidType implements BscType {
-    constructor(
-        public typeText?: string
-    ) { }
+export class VoidType extends BscType {
 
-    public isAssignableTo(targetType: BscType) {
+    public readonly kind = BscTypeKind.VoidType;
+
+    public static instance = new VoidType();
+
+    public isBuiltIn = true;
+
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
-            targetType instanceof VoidType ||
-            targetType instanceof DynamicType
+            isVoidType(targetType) ||
+            isDynamicType(targetType) ||
+            isObjectType(targetType) ||
+            isUnionTypeCompatible(this, targetType, data)
         );
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
-    }
-
     public toString() {
-        return this.typeText ?? 'void';
+        return 'void';
     }
 
     public toTypeString(): string {
         return this.toString();
     }
 
-    public clone() {
-        return new VoidType(this.typeText);
+    public isEqual(targetType: BscType) {
+        return isVoidType(targetType);
+    }
+
+    getMemberType(memberName: string, options: GetTypeOptions) {
+        return DynamicType.instance;
     }
 }
+
+BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('void', VoidType.instance);

@@ -6,6 +6,7 @@ import { Range } from 'vscode-languageserver';
 import { Program } from '../../../Program';
 import { rootDir } from '../../../testHelpers.spec';
 import { getTestTranspile } from '../../../testHelpers.spec';
+import util from '../../../util';
 
 describe('parser print statements', () => {
 
@@ -19,26 +20,26 @@ describe('parser print statements', () => {
     });
 
     it('parses singular print statements', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.Print),
             token(TokenKind.StringLiteral, 'Hello, world'),
             EOF
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.exist;
-        expect(statements).not.to.be.null;
+        expect(ast.statements).to.exist;
+        expect(ast.statements).not.to.be.null;
     });
 
     it('supports empty print', () => {
-        let { statements, diagnostics } = Parser.parse([token(TokenKind.Print), EOF]);
+        let { ast, diagnostics } = Parser.parse([token(TokenKind.Print), EOF]);
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.exist;
-        expect(statements).not.to.be.null;
+        expect(ast.statements).to.exist;
+        expect(ast.statements).not.to.be.null;
     });
 
     it('parses print lists with no separator', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.Print),
             token(TokenKind.StringLiteral, 'Foo'),
             token(TokenKind.StringLiteral, 'bar'),
@@ -47,12 +48,12 @@ describe('parser print statements', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.exist;
-        expect(statements).not.to.be.null;
+        expect(ast.statements).to.exist;
+        expect(ast.statements).not.to.be.null;
     });
 
     it('parses print lists with separators', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.Print),
             token(TokenKind.StringLiteral, 'Foo'),
             token(TokenKind.Semicolon),
@@ -63,8 +64,8 @@ describe('parser print statements', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.exist;
-        expect(statements).not.to.be.null;
+        expect(ast.statements).to.exist;
+        expect(ast.statements).not.to.be.null;
     });
 
     it('location tracking', () => {
@@ -74,38 +75,41 @@ describe('parser print statements', () => {
          *  +--------------
          * 1| print "foo"
          */
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             {
                 kind: TokenKind.Print,
                 text: 'print',
                 isReserved: true,
-                range: Range.create(0, 0, 1, 5),
-                leadingWhitespace: ''
+                location: util.createLocation(0, 0, 0, 5),
+                leadingWhitespace: '',
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.StringLiteral,
                 text: `"foo"`,
                 isReserved: false,
-                range: Range.create(0, 6, 0, 11),
-                leadingWhitespace: ''
+                location: util.createLocation(0, 6, 0, 11),
+                leadingWhitespace: '',
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
-                range: Range.create(0, 11, 0, 12),
-                leadingWhitespace: ''
+                location: util.createLocation(0, 11, 0, 12),
+                leadingWhitespace: '',
+                leadingTrivia: []
             }
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.lengthOf(1);
-        expect(statements[0].range).to.deep.include(Range.create(0, 0, 0, 11));
+        expect(ast.statements).to.be.lengthOf(1);
+        expect(ast.statements[0].location?.range).to.deep.include(Range.create(0, 0, 0, 11));
     });
 
     describe('transpile', () => {
-        it('retains comma separators', () => {
-            testTranspile(`
+        it('retains comma separators', async () => {
+            await testTranspile(`
                 sub main()
                     a$ = "string"
                     print a$, a$, a$
@@ -113,8 +117,8 @@ describe('parser print statements', () => {
             `);
         });
 
-        it('retains semicolon separators', () => {
-            testTranspile(`
+        it('retains semicolon separators', async () => {
+            await testTranspile(`
                 sub main()
                     a$ = "string"
                     print a$; a$; a$
@@ -122,8 +126,8 @@ describe('parser print statements', () => {
             `);
         });
 
-        it('supports no space between function calls', () => {
-            testTranspile(`
+        it('supports no space between function calls', async () => {
+            await testTranspile(`
                 function getText()
                     return "text"
                 end function
@@ -134,8 +138,8 @@ describe('parser print statements', () => {
             `);
         });
 
-        it('supports print in loop', () => {
-            testTranspile(`
+        it('supports print in loop', async () => {
+            await testTranspile(`
                 sub main()
                     paramArr = ["This", "is", true, "and", "this", "is", 1]
                     print "This is one line of stuff:";
@@ -164,8 +168,8 @@ describe('parser print statements', () => {
             `);
         });
 
-        it('handles roku documentation examples', () => {
-            testTranspile(`
+        it('handles roku documentation examples', async () => {
+            await testTranspile(`
                 sub main()
                     x=5:print 25; " is equal to"; x^2
                     a$="string":print a$;a$,a$;" ";a$
@@ -185,8 +189,8 @@ describe('parser print statements', () => {
                     x = 5
                     print 25; " is equal to"; x ^ 2
                     a$ = "string"
-                    print a$; a$, a$; " "; a$
-                    print "zone 1", "zone 2", "zone 3", "zone 4"
+                    print a$;a$,a$;" ";a$
+                    print "zone 1","zone 2","zone 3","zone 4"
                     print "print statement #1 "
                     print "print statement #2"
                     print "this is a five " 5 "!!"
@@ -198,7 +202,7 @@ describe('parser print statements', () => {
                     print [
                         5
                     ]
-                    print tab(5) "tabbed 5"; tab(25) "tabbed 25"
+                    print tab(5) "tabbed 5";tab(25) "tabbed 25"
                     print tab(40) pos(0) 'prints 40 at position 40
                     print "these" tab(pos(0) + 5) "words" tab(pos(0) + 5) "are"
                     print tab(pos(0) + 5) "evenly" tab(pos(0) + 5) "spaced"

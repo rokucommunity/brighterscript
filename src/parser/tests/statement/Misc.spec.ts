@@ -6,6 +6,7 @@ import { Range } from 'vscode-languageserver';
 import type { AAMemberExpression } from '../../Expression';
 import { expectZeroDiagnostics } from '../../../testHelpers.spec';
 import type { Statement } from '../../AstNode';
+import { isAAMemberExpression, isDottedSetStatement } from '../../../astUtils/reflection';
 
 describe('parser', () => {
     describe('`end` keyword', () => {
@@ -36,7 +37,7 @@ describe('parser', () => {
             let { diagnostics } = Parser.parse(tokens);
             expect(diagnostics).to.be.lengthOf(1);
             //specifically check for the error location, because the identifier location was wrong in the past
-            expect(diagnostics[0].range).to.deep.include(
+            expect(diagnostics[0].location.range).to.deep.include(
                 Range.create(1, 4, 1, 8)
             );
         });
@@ -68,12 +69,12 @@ describe('parser', () => {
                     ${disallowedIdentifier} = true
                 end sub
             `);
-            let { statements, diagnostics } = Parser.parse(tokens);
+            let { ast, diagnostics } = Parser.parse(tokens);
             if (diagnostics.length === 0) {
                 console.log(DisallowedLocalIdentifiersText);
                 throw new Error(`'${disallowedIdentifier}' cannot be used as an identifier, but was not detected as an error`);
             }
-            statementList.push(statements);
+            statementList.push(ast.statements);
         });
     });
 
@@ -117,7 +118,6 @@ describe('parser', () => {
             TokenKind.EndWhile,
             TokenKind.Eval,
             TokenKind.Exit,
-            TokenKind.ExitFor,
             TokenKind.ExitWhile,
             TokenKind.False,
             TokenKind.For,
@@ -258,12 +258,35 @@ describe('parser', () => {
             end function
             `
         );
-        let { diagnostics, statements } = Parser.parse(tokens) as any;
-        expect(diagnostics).to.exist.and.be.lengthOf(0, 'Error count should be 0');
-        expect(statements[0].func.body.statements[0].value.elements[0].text).to.equal('rem: 1');
-        expect(statements[0].func.body.statements[1].value.elements[1].text).to.equal('rem: 2');
-        expect(statements[0].func.body.statements[2].value.elements[0].text).to.equal('rem: 3: name: "bob"');
-        expect(statements[0].func.body.statements[3].name.text).to.equal('rem');
+        let { ast, diagnostics } = Parser.parse(tokens) as any;
+        expectZeroDiagnostics(diagnostics);
+        const mainStatements = ast.statements[0].func.body.statements;
+
+        // 1st AA has no elements - `rem` denotes comment
+        expect(mainStatements[0].value.elements.length).to.eq(0);
+        let commentBeforeClose = mainStatements[0].value.tokens.close.leadingTrivia[2];
+        expect(commentBeforeClose.kind).to.equal(TokenKind.Comment);
+        expect(commentBeforeClose.text).to.equal('rem: 1');
+
+        // 2nd AA has 1 element - `rem` after colon denotes comment, but first AA member is valid
+        expect(mainStatements[1].value.elements.length).to.eq(1);
+        expect(isAAMemberExpression(mainStatements[1].value.elements[0])).to.true;
+        expect(mainStatements[1].value.elements[0].tokens.key.text).to.equal('name');
+        expect(mainStatements[1].value.elements[0].value.tokens.value.text).to.equal('"bob"');
+        commentBeforeClose = mainStatements[1].value.tokens.close.leadingTrivia[2];
+        expect(commentBeforeClose.kind).to.equal(TokenKind.Comment);
+        expect(commentBeforeClose.text).to.equal('rem: 2');
+
+        // 3nd AA has no elements - `rem` colons are included in comments
+        expect(mainStatements[2].value.elements.length).to.eq(0);
+        commentBeforeClose = mainStatements[2].value.tokens.close.leadingTrivia[2];
+        expect(commentBeforeClose.kind).to.equal(TokenKind.Comment);
+        expect(commentBeforeClose.text).to.equal('rem: 3: name: "bob"');
+
+        // `rem` CAN be uses a property of an AA, when preceded by '.'
+        expect(isDottedSetStatement(mainStatements[3])).to.true;
+        expect(mainStatements[3].tokens.name.kind).to.equal(TokenKind.Identifier);
+        expect(mainStatements[3].tokens.name.text).to.equal('rem');
     });
 
     it('handles quoted AA keys', () => {
@@ -278,79 +301,10 @@ describe('parser', () => {
                 }
             end function
         `);
-        let { statements, diagnostics } = Parser.parse(tokens);
-        let element = ((statements as any)[0].func.body.statements[0].value.elements[0] as AAMemberExpression);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        let element = ((ast.statements as any)[0].func.body.statements[0].value.elements[0] as AAMemberExpression);
         expect(diagnostics[0]?.message).not.to.exist;
-        expect(element.keyToken.text).to.equal('"has-second-layer"');
+        expect(element.tokens.key.text).to.equal('"has-second-layer"');
     });
 
-    it('extracts property names for completion', () => {
-        const { tokens } = Lexer.scan(`
-            function main(arg as string)
-                aa1 = {
-                    "sprop1": 0,
-                    prop1: 1
-                    prop2: {
-                        prop3: 2
-                    }
-                }
-                aa2 = {
-                    prop4: {
-                        prop5: 5,
-                        "sprop2": 0,
-                        prop6: 6
-                    },
-                    prop7: 7
-                }
-                calling({
-                    prop8: 8,
-                    prop9: 9
-                })
-                aa1.field1 = 1
-                aa1.field2.field3 = 2
-                calling(aa2.field4, 3 + aa2.field5.field6)
-            end function
-        `);
-
-        const expected = [
-            'field1', 'field2', 'field3', 'field4', 'field5', 'field6',
-            'prop1', 'prop2', 'prop3', 'prop4', 'prop5', 'prop6', 'prop7', 'prop8', 'prop9'
-        ];
-
-        const parser = Parser.parse(tokens);
-        const { propertyHints: initialHints } = parser.references;
-        expect(Object.keys(initialHints).sort()).to.deep.equal(expected, 'Initial hints');
-
-        parser.invalidateReferences();
-        const { propertyHints: refreshedHints } = parser.references;
-        expect(Object.keys(refreshedHints).sort()).to.deep.equal(expected, 'Refreshed hints');
-    });
-
-    it('extracts property names matching JavaScript reserved names', () => {
-        const { tokens } = Lexer.scan(`
-            function main(arg as string)
-                aa1 = {
-                    "constructor": 0,
-                    constructor: 1
-                    valueOf: {
-                        toString: 2
-                    }
-                }
-                aa1.constructor = 1
-                aa1.valueOf.toString = 2
-            end function
-        `);
-
-        const expected = [
-            'constructor', 'tostring', 'valueof'
-        ];
-
-        const parser = Parser.parse(tokens);
-        const { propertyHints: initialHints } = parser.references;
-        expect(Object.keys(initialHints).sort()).to.deep.equal(expected, 'Initial hints');
-
-        parser.invalidateReferences();
-        const { propertyHints: refreshedHints } = parser.references;
-        expect(Object.keys(refreshedHints).sort()).to.deep.equal(expected, 'Refreshed hints');
-    });
 });

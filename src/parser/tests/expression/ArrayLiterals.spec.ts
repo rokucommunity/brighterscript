@@ -4,16 +4,17 @@ import { Parser } from '../../Parser';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
-import { expectDiagnostics, expectDiagnosticsIncludes } from '../../../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics } from '../../../testHelpers.spec';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { isArrayLiteralExpression, isAssignmentStatement, isDottedGetExpression, isLiteralExpression } from '../../../astUtils/reflection';
 import type { AssignmentStatement } from '../../Statement';
 import type { ArrayLiteralExpression } from '../../Expression';
+import { util } from '../../../util';
 
 describe('parser array literals', () => {
     describe('empty arrays', () => {
         it('on one line', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -22,11 +23,11 @@ describe('parser array literals', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('on multiple lines', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -41,13 +42,13 @@ describe('parser array literals', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
     });
 
     describe('filled arrays', () => {
         it('on one line', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -61,11 +62,11 @@ describe('parser array literals', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('on multiple lines with commas', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -83,11 +84,11 @@ describe('parser array literals', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('on multiple lines without commas', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -103,13 +104,13 @@ describe('parser array literals', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
     });
 
     describe('contents', () => {
         it('can contain primitives', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -123,11 +124,11 @@ describe('parser array literals', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('can contain other arrays', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -151,11 +152,11 @@ describe('parser array literals', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('can contain expressions', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.LeftSquareBracket, '['),
@@ -170,19 +171,19 @@ describe('parser array literals', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
     });
 
     describe('unfinished', () => {
         it('will still be parsed', () => {
             // no closing brace:
-            let { statements, diagnostics } = Parser.parse(`_ = [1, data.foo`);
+            let { ast, diagnostics } = Parser.parse(`_ = [1, data.foo`);
 
-            expectDiagnostics(diagnostics, [DiagnosticMessages.unmatchedLeftSquareBraceAfterArrayLiteral()]);
-            expect(statements).to.be.lengthOf(1);
-            expect(isAssignmentStatement(statements[0])).to.be.true;
-            const assignStmt = statements[0] as AssignmentStatement;
+            expectDiagnostics(diagnostics, [DiagnosticMessages.unmatchedLeftToken('[', 'array literal')]);
+            expect(ast.statements).to.be.lengthOf(1);
+            expect(isAssignmentStatement(ast.statements[0])).to.be.true;
+            const assignStmt = ast.statements[0] as AssignmentStatement;
             expect(isArrayLiteralExpression(assignStmt.value));
             const arryLitExpr = assignStmt.value as ArrayLiteralExpression;
             expect(isLiteralExpression(arryLitExpr.elements[0])).to.be.true;
@@ -196,7 +197,7 @@ describe('parser array literals', () => {
                 end sub
             `);
             expectDiagnosticsIncludes(diagnostics, [
-                DiagnosticMessages.unmatchedLeftSquareBraceAfterArrayLiteral()
+                DiagnosticMessages.unmatchedLeftToken('[', 'array literal')
             ]);
         });
 
@@ -207,7 +208,7 @@ describe('parser array literals', () => {
                 end sub
             `);
             expectDiagnosticsIncludes(diagnostics, [
-                DiagnosticMessages.unmatchedLeftSquareBraceAfterArrayLiteral()
+                DiagnosticMessages.unmatchedLeftToken('[', 'array literal')
             ]);
         });
     });
@@ -224,93 +225,105 @@ describe('parser array literals', () => {
          * 4|
          * 5| ]
          */
-        let { statements, diagnostics } = Parser.parse(<any>[
+        const parser = Parser.parse([
             {
                 kind: TokenKind.Identifier,
                 text: 'a',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 0, 0, 1)
+                location: util.createLocation(0, 0, 0, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 2, 0, 3)
+                location: util.createLocation(0, 2, 0, 3)
             },
             {
                 kind: TokenKind.LeftSquareBracket,
                 text: '[',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 4, 0, 5)
+                location: util.createLocation(0, 4, 0, 5)
             },
             {
                 kind: TokenKind.RightSquareBracket,
                 text: ']',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 8, 0, 9)
+                location: util.createLocation(0, 8, 0, 9)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 9, 0, 10)
+                location: util.createLocation(0, 9, 0, 10)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(1, 0, 1, 1)
+                location: util.createLocation(1, 0, 1, 1)
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'b',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(2, 0, 2, 1)
+                location: util.createLocation(2, 0, 2, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(2, 2, 2, 3)
+                location: util.createLocation(2, 2, 2, 3)
             },
             {
                 kind: TokenKind.LeftSquareBracket,
                 text: '[',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(2, 4, 2, 5)
+                location: util.createLocation(2, 4, 2, 5)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(3, 0, 3, 1)
+                location: util.createLocation(3, 0, 3, 1)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(4, 0, 4, 1)
+                location: util.createLocation(4, 0, 4, 1)
             },
             {
                 kind: TokenKind.RightSquareBracket,
                 text: ']',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(5, 0, 5, 1)
+                location: util.createLocation(5, 0, 5, 1)
             },
             {
                 kind: TokenKind.Eof,
                 text: '',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(5, 1, 5, 2)
+                location: util.createLocation(5, 1, 5, 2)
             }
-        ]) as any;
+        ]);
 
-        expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.lengthOf(2);
-        expect(statements[0].value.range).deep.include(
+        expectZeroDiagnostics(parser);
+        expect((parser.ast.statements[0] as AssignmentStatement).value.location.range).deep.include(
             Range.create(0, 4, 0, 9)
         );
-        expect(statements[1].value.range).deep.include(
+        expect((parser.ast.statements[1] as AssignmentStatement).value.location.range).deep.include(
             Range.create(2, 4, 5, 1)
         );
     });

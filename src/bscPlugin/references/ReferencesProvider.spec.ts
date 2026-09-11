@@ -52,10 +52,12 @@ describe('ReferencesProvider', () => {
         ]);
     });
 
-    it('returns null when the file does not exist', () => {
+    it('returns empty results when the file does not exist', () => {
+        //master returned null here; v1's `getReferences` is typed `Location[]` and always returns
+        //an array, so plugins still get their provideReferences events for an unknown file
         expect(
             program.getReferences('source/not-there.brs', util.createPosition(1, 1))
-        ).to.be.null;
+        ).to.eql([]);
     });
 
     it('returns empty results when there is no token at the given position', () => {
@@ -240,7 +242,7 @@ describe('ReferencesProvider', () => {
             name: 'test-plugin',
             provideReferences: (event) => {
                 event.references.push(
-                    util.createLocation(util.pathToUri(file.srcPath), util.createRange(9, 9, 9, 14))
+                    util.createLocationFromRange(util.pathToUri(file.srcPath), util.createRange(9, 9, 9, 14))
                 );
             }
         });
