@@ -6590,6 +6590,95 @@ describe('ScopeValidator', () => {
             ]);
         });
 
+        it('allows an array of an interface type as a callfunc arg, when the interface is imported into two different component scopes', () => {
+            program.setFile('components/types.bs', `
+                interface MyItem
+                    sku as string
+                end interface
+            `);
+
+            program.setFile('components/A.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="A" extends="Group">
+                    <script uri="A.bs"/>
+                    <interface>
+                        <function name="doThing" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/A.bs', `
+                import "pkg:/components/types.bs"
+
+                function doThing(items as MyItem[]) as void
+                    print items.Count()
+                end function
+            `);
+
+            program.setFile('components/B.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="B" extends="Group">
+                    <script uri="B.bs"/>
+                </component>
+            `);
+
+            program.setFile('components/B.bs', `
+                import "pkg:/components/types.bs"
+
+                sub callIt(aNode as roSGNodeA)
+                    item as MyItem = { sku: "abc" }
+                    aNode@.doThing([item])
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('still catches a genuinely incompatible array arg to a callfunc, alongside a compatible interface array', () => {
+            program.setFile('components/types.bs', `
+                interface MyItem
+                    sku as string
+                end interface
+            `);
+
+            program.setFile('components/A.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="A" extends="Group">
+                    <script uri="A.bs"/>
+                    <interface>
+                        <function name="doThing" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/A.bs', `
+                import "pkg:/components/types.bs"
+
+                function doThing(items as MyItem[]) as void
+                    print items.Count()
+                end function
+            `);
+
+            program.setFile('components/B.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="B" extends="Group">
+                    <script uri="B.bs"/>
+                </component>
+            `);
+
+            program.setFile('components/B.bs', `
+                import "pkg:/components/types.bs"
+
+                sub callIt(aNode as roSGNodeA)
+                    aNode@.doThing([1, 2, 3])
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('Array<integer>', 'Array<MyItem>').message
+            ]);
+        });
+
         it('allows return value of as void functions to be dynamic', () => {
             program.setFile('components/Widget.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
