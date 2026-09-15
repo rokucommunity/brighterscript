@@ -30,6 +30,33 @@ describe('SymbolTable', () => {
         expect(st['toJSON']().siblings).to.eql([]);
     });
 
+    it('handles a symbolMap that was never populated, without throwing', () => {
+        const empty = new SymbolTable('Empty', () => parent);
+
+        expect(empty.hasSymbol('foo', SymbolTypeFlag.runtime)).to.be.false;
+        expect(empty.getSymbol('foo', SymbolTypeFlag.runtime)).not.to.be.ok;
+        expect(empty.getOwnSymbols(SymbolTypeFlag.runtime)).to.eql([]);
+        expect(empty.getAllSymbols(SymbolTypeFlag.runtime)).to.eql([]);
+        expect(() => empty.removeSymbol('foo')).not.to.throw();
+        expect(() => empty.clearSymbols()).not.to.throw();
+        expect(empty['toJSON']().symbols).to.eql([]);
+
+        const dest = new SymbolTable('Dest');
+        expect(() => dest.mergeSymbolTable(empty)).not.to.throw();
+        expect(dest.getOwnSymbols(SymbolTypeFlag.runtime)).to.eql([]);
+    });
+
+    it('handles a typeCache that was never populated, without throwing', () => {
+        const st = new SymbolTable('Child');
+        const options = { flags: SymbolTypeFlag.runtime };
+
+        expect(st.getCachedType('foo', options)).not.to.be.ok;
+
+        const stringType = new StringType();
+        st.setCachedType('foo', { type: stringType, flags: SymbolTypeFlag.runtime }, options);
+        expect(st.getCachedType('foo', options)?.type).to.equal(stringType);
+    });
+
     it('is case insensitive', () => {
         const st = new SymbolTable('Child');
         st.addSymbol('foo', null, new StringType(), SymbolTypeFlag.runtime);
