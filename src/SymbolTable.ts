@@ -85,7 +85,7 @@ export class SymbolTable implements SymbolTypeGetter {
         this.siblings ??= new Set();
         this.siblings.add(sibling);
         return () => {
-            this.siblings?.delete(sibling);
+            this.siblings.delete(sibling);
         };
     }
 
@@ -185,11 +185,13 @@ export class SymbolTable implements SymbolTypeGetter {
             }
 
             //look through any sibling maps next
-            for (let sibling of currentTable.siblings ?? []) {
-                if ((result = sibling.symbolMap?.get(key))) {
-                    // eslint-disable-next-line no-bitwise
-                    if (result.find(symbol => symbol.flags & bitFlags)) {
-                        return true;
+            if (currentTable.siblings) {
+                for (let sibling of currentTable.siblings) {
+                    if ((result = sibling.symbolMap?.get(key))) {
+                        // eslint-disable-next-line no-bitwise
+                        if (result.find(symbol => symbol.flags & bitFlags)) {
+                            return true;
+                        }
                     }
                 }
             }
@@ -270,10 +272,12 @@ export class SymbolTable implements SymbolTypeGetter {
                 break;
             }
             //look through any sibling maps next
-            for (let sibling of currentTable.siblings ?? []) {
-                result = sibling.getSymbol(key, bitFlags);
-                if (result?.length > 0) {
-                    return result.map(addAncestorInfo);
+            if (currentTable.siblings) {
+                for (let sibling of currentTable.siblings) {
+                    result = sibling.getSymbol(key, bitFlags);
+                    if (result?.length > 0) {
+                        return result.map(addAncestorInfo);
+                    }
                 }
             }
             previousTable = currentTable;
@@ -471,21 +475,23 @@ export class SymbolTable implements SymbolTypeGetter {
      * table do not leak across.
      */
     mergeSymbolTable(symbolTable: SymbolTable) {
-        for (const [key, sourceSymbols] of symbolTable.symbolMap ?? []) {
-            //skip symbols flagged `doNotMerge` (e.g. typecast/alias bindings) so they stay
-            //local to their declaring block instead of bleeding into sibling tables that
-            //share the same merge target (e.g. the per-namespace aggregate symbol table).
-            const symbolsToMerge = sourceSymbols.filter(symbol => !symbol.data?.doNotMerge);
-            if (symbolsToMerge.length === 0) {
-                continue;
+        if (symbolTable.symbolMap) {
+            for (const [key, sourceSymbols] of symbolTable.symbolMap) {
+                //skip symbols flagged `doNotMerge` (e.g. typecast/alias bindings) so they stay
+                //local to their declaring block instead of bleeding into sibling tables that
+                //share the same merge target (e.g. the per-namespace aggregate symbol table).
+                const symbolsToMerge = sourceSymbols.filter(symbol => !symbol.data?.doNotMerge);
+                if (symbolsToMerge.length === 0) {
+                    continue;
+                }
+                this.symbolMap ??= new Map();
+                let destSymbols = this.symbolMap.get(key);
+                if (!destSymbols) {
+                    destSymbols = [];
+                    this.symbolMap.set(key, destSymbols);
+                }
+                destSymbols.push(...symbolsToMerge);
             }
-            this.symbolMap ??= new Map();
-            let destSymbols = this.symbolMap.get(key);
-            if (!destSymbols) {
-                destSymbols = [];
-                this.symbolMap.set(key, destSymbols);
-            }
-            destSymbols.push(...symbolsToMerge);
         }
 
         for (let pocketTable of symbolTable.pocketTables) {
@@ -495,30 +501,34 @@ export class SymbolTable implements SymbolTypeGetter {
 
     mergeNamespaceSymbolTables(symbolTable: SymbolTable) {
         const disposables = [] as Array<() => void>;
-        for (let [_name, value] of symbolTable.symbolMap ?? []) {
-            const symbol = value[0];
-            if (symbol) {
-                if (symbol.data?.doNotMerge) {
-                    continue;
-                }
-                const existingRuntimeType = this.getSymbolType(symbol.name, { flags: symbol.flags });
+        if (symbolTable.symbolMap) {
+            for (let [_name, value] of symbolTable.symbolMap) {
+                const symbol = value[0];
+                if (symbol) {
+                    if (symbol.data?.doNotMerge) {
+                        continue;
+                    }
+                    const existingRuntimeType = this.getSymbolType(symbol.name, { flags: symbol.flags });
 
-                if (isNamespaceType(existingRuntimeType) && isNamespaceType(symbol.type)) {
-                    disposables.push(...existingRuntimeType.memberTable.mergeNamespaceSymbolTables(symbol.type.memberTable));
-                } else {
-                    this.addSymbol(
-                        symbol.name,
-                        symbol.data,
-                        symbol.type,
-                        symbol.flags
-                    );
-                    disposables.push(() => this.removeSymbol(symbol.name));
+                    if (isNamespaceType(existingRuntimeType) && isNamespaceType(symbol.type)) {
+                        disposables.push(...existingRuntimeType.memberTable.mergeNamespaceSymbolTables(symbol.type.memberTable));
+                    } else {
+                        this.addSymbol(
+                            symbol.name,
+                            symbol.data,
+                            symbol.type,
+                            symbol.flags
+                        );
+                        disposables.push(() => this.removeSymbol(symbol.name));
+                    }
                 }
             }
         }
 
-        for (let siblingTable of symbolTable.siblings ?? []) {
-            disposables.push(...this.mergeNamespaceSymbolTables(siblingTable));
+        if (symbolTable.siblings) {
+            for (let siblingTable of symbolTable.siblings) {
+                disposables.push(...this.mergeNamespaceSymbolTables(siblingTable));
+            }
         }
         return disposables;
     }
@@ -527,7 +537,7 @@ export class SymbolTable implements SymbolTypeGetter {
      * Get list of symbols declared directly in this SymbolTable (excludes parent SymbolTable).
      */
     public getOwnSymbols(bitFlags: SymbolTypeFlag): BscSymbol[] {
-        let symbols: BscSymbol[] = [].concat(...(this.symbolMap?.values() ?? []));
+        let symbols: BscSymbol[] = this.symbolMap ? [].concat(...this.symbolMap.values()) : [];
         // eslint-disable-next-line no-bitwise
         symbols = symbols.filter(symbol => symbol.flags & bitFlags);
         return symbols;
@@ -574,10 +584,12 @@ export class SymbolTable implements SymbolTypeGetter {
     }
 
     private collectAllSymbolsUnfiltered(): BscSymbol[] {
-        let symbols: BscSymbol[] = [].concat(...(this.symbolMap?.values() ?? []));
+        let symbols: BscSymbol[] = this.symbolMap ? [].concat(...this.symbolMap.values()) : [];
         //look through any sibling maps next
-        for (let sibling of this.siblings ?? []) {
-            symbols = symbols.concat(sibling.collectAllSymbolsUnfiltered());
+        if (this.siblings) {
+            for (let sibling of this.siblings) {
+                symbols = symbols.concat(sibling.collectAllSymbolsUnfiltered());
+            }
         }
 
         if (this.parent && !this.hasCircularReferenceWithAncestor()) {
@@ -644,11 +656,11 @@ export class SymbolTable implements SymbolTypeGetter {
     private toJSON() {
         return {
             name: this.name,
-            siblings: [...(this.siblings ?? [])].map(sibling => sibling.toJSON()),
+            siblings: this.siblings ? [...this.siblings].map(sibling => sibling.toJSON()) : [],
             parent: this.parent?.toJSON(),
             symbols: [
                 ...new Set(
-                    [...(this.symbolMap?.entries() ?? [])].map(([key, symbols]) => {
+                    (this.symbolMap ? [...this.symbolMap.entries()] : []).map(([key, symbols]) => {
                         return symbols.map(x => {
                             return { name: x.name, type: (x.type as any)?.__identifier };
                         });
