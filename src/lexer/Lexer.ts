@@ -1,5 +1,5 @@
 /* eslint-disable func-names */
-import { TokenKind, ReservedWords, Keywords, PreceedingRegexTypes, AllowedTriviaTokens, FixedTokenText, LexerTextCache, LEXER_TEXT_CACHE_MAX_ENTRIES } from './TokenKind';
+import { TokenKind, ReservedTokenKinds, Keywords, PreceedingRegexTypes, AllowedTriviaTokens, FixedTokenText, LexerTextCache, LEXER_TEXT_CACHE_MAX_ENTRIES } from './TokenKind';
 import type { Token } from './Token';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
 import type { Location } from 'vscode-languageserver';
@@ -1205,7 +1205,7 @@ export class Lexer {
         let token: Token = {
             kind: kind,
             text: text,
-            isReserved: ReservedWords.has(text.toLowerCase()),
+            isReserved: ReservedTokenKinds.has(kind),
             location: this.locationOf(),
             leadingWhitespace: this.leadingWhitespace,
             leadingTrivia: undefined

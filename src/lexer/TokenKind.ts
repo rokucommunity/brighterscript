@@ -336,6 +336,17 @@ export const Keywords: Record<string, TokenKind> = {
 //hide the constructor prototype method because it causes issues
 Keywords.constructor = undefined;
 
+/**
+ * The TokenKinds that represent a reserved word. Only these kinds can ever have `Token.isReserved`
+ * be true, so the lexer can check kind membership here instead of lowercasing and hashing every
+ * token's text against `ReservedWords`.
+ */
+export const ReservedTokenKinds = new Set<TokenKind>(
+    Object.entries(Keywords)
+        .filter(([text]) => ReservedWords.has(text))
+        .map(([, kind]) => kind)
+);
+
 /** Set of all keywords that end blocks. */
 export type BlockTerminator =
     | TokenKind.Else
