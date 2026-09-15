@@ -73,15 +73,17 @@ export class SymbolTable implements SymbolTypeGetter {
         return this.parentProviders[this.parentProviders.length - 1]?.();
     }
 
-    private siblings = new Set<SymbolTable>();
+    //most SymbolTables never get a sibling, so this is allocated lazily instead of in every constructor
+    private siblings: Set<SymbolTable> | undefined;
 
     /**
      * Add a sibling symbol table (which will be inspected first before walking upward to the parent
      */
     public addSibling(sibling: SymbolTable) {
+        this.siblings ??= new Set();
         this.siblings.add(sibling);
         return () => {
-            this.siblings.delete(sibling);
+            this.siblings?.delete(sibling);
         };
     }
 
@@ -89,7 +91,7 @@ export class SymbolTable implements SymbolTypeGetter {
      * Remove a sibling symbol table
      */
     public removeSibling(sibling: SymbolTable) {
-        this.siblings.delete(sibling);
+        this.siblings?.delete(sibling);
     }
 
     /**
@@ -127,13 +129,15 @@ export class SymbolTable implements SymbolTypeGetter {
         return this.pocketTables.find(pt => pt.table === symbolTable)?.index ?? -1;
     }
 
-    private complementsTables = new Set<SymbolTable>();
+    //rarely used (only branch-complement tables need this), so allocated lazily
+    private complementsTables: Set<SymbolTable> | undefined;
 
     /**
      * This table complements this other table
      * Eg. This is an else branch, it complements a then branch
      */
     public complementOtherTable(otherTable: SymbolTable) {
+        this.complementsTables ??= new Set();
         this.complementsTables.add(otherTable);
     }
 
@@ -179,7 +183,7 @@ export class SymbolTable implements SymbolTypeGetter {
             }
 
             //look through any sibling maps next
-            for (let sibling of currentTable.siblings) {
+            for (let sibling of currentTable.siblings ?? []) {
                 if ((result = sibling.symbolMap.get(key))) {
                     // eslint-disable-next-line no-bitwise
                     if (result.find(symbol => symbol.flags & bitFlags)) {
@@ -264,7 +268,7 @@ export class SymbolTable implements SymbolTypeGetter {
                 break;
             }
             //look through any sibling maps next
-            for (let sibling of currentTable.siblings) {
+            for (let sibling of currentTable.siblings ?? []) {
                 result = sibling.getSymbol(key, bitFlags);
                 if (result?.length > 0) {
                     return result.map(addAncestorInfo);
@@ -513,7 +517,7 @@ export class SymbolTable implements SymbolTypeGetter {
             }
         }
 
-        for (let siblingTable of symbolTable.siblings) {
+        for (let siblingTable of symbolTable.siblings ?? []) {
             disposables.push(...this.mergeNamespaceSymbolTables(siblingTable));
         }
         return disposables;
@@ -572,7 +576,7 @@ export class SymbolTable implements SymbolTypeGetter {
     private collectAllSymbolsUnfiltered(): BscSymbol[] {
         let symbols: BscSymbol[] = [].concat(...this.symbolMap.values());
         //look through any sibling maps next
-        for (let sibling of this.siblings) {
+        for (let sibling of this.siblings ?? []) {
             symbols = symbols.concat(sibling.collectAllSymbolsUnfiltered());
         }
 
@@ -639,7 +643,7 @@ export class SymbolTable implements SymbolTypeGetter {
     private toJSON() {
         return {
             name: this.name,
-            siblings: [...this.siblings].map(sibling => sibling.toJSON()),
+            siblings: [...(this.siblings ?? [])].map(sibling => sibling.toJSON()),
             parent: this.parent?.toJSON(),
             symbols: [
                 ...new Set(

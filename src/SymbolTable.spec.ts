@@ -19,6 +19,17 @@ describe('SymbolTable', () => {
         parent = new SymbolTable('Parent');
     });
 
+    it('handles siblings/complement tables that were never added, without throwing', () => {
+        const st = new SymbolTable('Child', () => parent);
+        st.addSymbol('foo', null, new StringType(), SymbolTypeFlag.runtime);
+
+        expect(st.hasSymbol('foo', SymbolTypeFlag.runtime)).to.be.true;
+        expect(st.getSymbol('foo', SymbolTypeFlag.runtime)).to.have.lengthOf(1);
+        expect(st.getAllSymbols(SymbolTypeFlag.runtime)).to.have.lengthOf(1);
+        expect(st.mergeNamespaceSymbolTables(new SymbolTable('Other'))).to.eql([]);
+        expect(st['toJSON']().siblings).to.eql([]);
+    });
+
     it('is case insensitive', () => {
         const st = new SymbolTable('Child');
         st.addSymbol('foo', null, new StringType(), SymbolTypeFlag.runtime);
