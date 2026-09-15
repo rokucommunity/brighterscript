@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.73.5](https://github.com/rokucommunity/brighterscript/compare/0.73.4...v0.73.5) - 2026-09-15
+### Fixed
+ - Fix crash stripping sourceMappingURL comment from non-transpiled files ([#1821](https://github.com/rokucommunity/brighterscript/pull/1821))
+
+
+
 ## [0.73.4](https://github.com/rokucommunity/brighterscript/compare/0.73.3...v0.73.4) - 2026-09-11
 ### Changed
  - Tolerate older BrsTranspileState in continue back-transpile ([#1812](https://github.com/rokucommunity/brighterscript/pull/1812))
