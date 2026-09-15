@@ -3563,6 +3563,20 @@ describe('BrsFile', () => {
             expect(code.endsWith(`'//# sourceMappingURL=./main.brs.map`)).to.be.true;
         });
 
+        it('does not crash when a non-transpiled file ends with a sourceMappingURL comment plus a trailing newline', () => {
+            //reproduces https://github.com/rokucommunity/brighterscript/issues/1818
+            program.options.sourceMap = true;
+            const file = program.setFile('source/main.brs', 'sub p()\nend sub\n\'//# sourceMappingURL=./p.brs.map\n');
+            file.needsTranspiled = false;
+            const code = file.transpile().code;
+            expect(code.match(/sourceMappingURL=/g)?.length).to.eql(1);
+            expect(code).to.eql(undent`
+                sub p()
+                end sub
+                '//# sourceMappingURL=./main.brs.map
+            `);
+        });
+
         it('replaces existing trailing sourceMappingURL comment when AST-transpiling', () => {
             program.options.sourceMap = true;
             const file = program.setFile('source/main.bs', undent`
