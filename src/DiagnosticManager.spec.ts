@@ -251,6 +251,77 @@ describe('DiagnosticManager', () => {
             program.diagnostics.clearByFilter({ scope: scope1 });
             expectZeroDiagnostics(program.getDiagnostics());
         });
+
+        it('only removes diagnostics that match every specified filter aspect', () => {
+            const location = { uri: 'source/main.brs', range: util.createRange(1, 2, 3, 4) };
+            const scope1 = new Scope('scope1', program);
+            const scope2 = new Scope('scope2', program);
+
+            program.diagnostics.register([
+                {
+                    //matches tag + scope + fileUri
+                    diagnostic: { message: 'test', location: location, code: 1 },
+                    context: { tags: ['tag1'], scope: scope1 }
+                },
+                {
+                    //right tag and fileUri, wrong scope
+                    diagnostic: { message: 'test', location: location, code: 2 },
+                    context: { tags: ['tag1'], scope: scope2 }
+                },
+                {
+                    //right tag and scope, wrong fileUri
+                    diagnostic: { message: 'test', location: { uri: 'source/other.brs', range: location.range }, code: 3 },
+                    context: { tags: ['tag1'], scope: scope1 }
+                }
+            ]);
+
+            program.diagnostics.clearByFilter({ tag: 'tag1', scope: scope1, fileUri: location.uri });
+            expectDiagnostics(program.getDiagnostics(), [
+                { code: 2 },
+                { code: 3 }
+            ]);
+        });
+
+        it('clears by segment', () => {
+            const location = { uri: 'source/main.brs', range: util.createRange(1, 2, 3, 4) };
+            const segment1 = {} as any;
+            const segment2 = {} as any;
+
+            program.diagnostics.register([
+                { diagnostic: { message: 'test', location: location, code: 1 }, context: { segment: segment1 } },
+                { diagnostic: { message: 'test', location: location, code: 2 }, context: { segment: segment2 } }
+            ]);
+
+            program.diagnostics.clearByFilter({ segment: segment1 });
+            expectDiagnostics(program.getDiagnostics(), [
+                { code: 2 }
+            ]);
+        });
+
+        it('does nothing when the filter matches no known tag, scope, fileUri, or segment', () => {
+            const location = { uri: 'source/main.brs', range: util.createRange(1, 2, 3, 4) };
+            program.diagnostics.register([{
+                diagnostic: { message: 'test', location: location, code: 1 },
+                context: { tags: ['tag1'] }
+            }]);
+
+            program.diagnostics.clearByFilter({ tag: 'unregisteredTag' });
+            program.diagnostics.clearByFilter({ fileUri: 'source/doesNotExist.brs' });
+            expectDiagnostics(program.getDiagnostics(), [
+                { code: 1 }
+            ]);
+        });
+
+        it('clears everything when no filter aspect is specified', () => {
+            const location = { uri: 'source/main.brs', range: util.createRange(1, 2, 3, 4) };
+            program.diagnostics.register([
+                { diagnostic: { message: 'test', location: location, code: 1 }, context: { tags: ['tag1'] } },
+                { diagnostic: { message: 'test', location: location, code: 2 }, context: { tags: ['tag2'] } }
+            ]);
+
+            program.diagnostics.clearByFilter({});
+            expectZeroDiagnostics(program.getDiagnostics());
+        });
     });
 
     describe('canSkipScopeValidationForFile', () => {
