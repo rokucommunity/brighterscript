@@ -1,5 +1,5 @@
-import { expect } from './chai-config.spec';
-
+import { expect } from 'chai';
+import type { BrsFile } from './files/BrsFile';
 import { FunctionScope } from './FunctionScope';
 import type { FunctionExpression } from './parser/Expression';
 import { Program } from './Program';
@@ -24,7 +24,7 @@ describe('FunctionScope', () => {
         });
 
         it('returns variables defined above the specified line number', () => {
-            let file = program.setFile('source/main.brs', `
+            let file = program.setFile<BrsFile>('source/main.brs', `
                 sub main()
                     var1 = 1
                     var2 = 2
@@ -35,7 +35,6 @@ describe('FunctionScope', () => {
             expect(file.functionScopes[0].getVariablesAbove(3)).to.be.lengthOf(1);
             expect(file.functionScopes[0].getVariablesAbove(3)[0].name).to.equal('var1');
             expect(file.functionScopes[0].getVariablesAbove(4)).to.be.lengthOf(2);
-
         });
     });
 });

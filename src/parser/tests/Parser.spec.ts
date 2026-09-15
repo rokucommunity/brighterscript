@@ -1,6 +1,5 @@
 import type { Token } from '../../lexer/Token';
 import { TokenKind, ReservedWords } from '../../lexer/TokenKind';
-import type { Range } from 'vscode-languageserver';
 
 /* A set of utilities to be used while writing tests for the BRS parser. */
 
@@ -12,8 +11,12 @@ export function token(kind: TokenKind, text?: string): Token {
         kind: kind,
         text: text!,
         isReserved: ReservedWords.has((text ?? '').toLowerCase()),
-        range: null,
-        leadingWhitespace: ''
+        //synthetic test tokens used to default to `null`, but the parser does range arithmetic
+        //on token.location.range for paths like splitting `exitwhile` into two tokens. Give a
+        //zero-width location at (0,0) so those paths work without each test having to spell it out.
+        location: { uri: '', range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } } },
+        leadingWhitespace: '',
+        leadingTrivia: []
     };
 }
 
@@ -22,16 +25,6 @@ export function token(kind: TokenKind, text?: string): Token {
  */
 export function identifier(text: string) {
     return token(TokenKind.Identifier, text);
-}
-
-/**
- * Test whether a range matches a group of elements with a `range`
- */
-export function rangeMatch(range: Range, elements: ({ range: Range })[]): boolean {
-    return range.start.line === elements[0].range.start.line &&
-        range.start.character === elements[0].range.start.character &&
-        range.end.line === elements[elements.length - 1].range.end.line &&
-        range.end.character === elements[elements.length - 1].range.end.character;
 }
 
 /** An end-of-file token. */

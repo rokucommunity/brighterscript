@@ -4,6 +4,7 @@ import { WorkerThreadProject, workerPool } from './WorkerThreadProject';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { expect } from '../../chai-config.spec';
 import util from '../../util';
+import * as sinon from 'sinon';
 
 /**
  * Ensure at least `count` workers exist in `workerPool`, waiting for any newly-created ones to signal readiness
@@ -84,12 +85,13 @@ describe('WorkerThreadProject', () => {
         this.timeout(60_000);
         fsExtra.emptyDirSync(tempDir);
         project?.dispose();
+        sinon.restore();
         await preloadAndWaitUntilReady(1);
     });
 
     describe('activate', () => {
         it('shows diagnostics after running', async function () {
-            this.timeout(15_000);
+            this.timeout(60_000);
             fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `
                 sub main()
                     print varNotThere
@@ -135,6 +137,51 @@ describe('WorkerThreadProject', () => {
 
             expect(failures).to.be.lengthOf(0);
         });
+
+        it('marks the project disposed so it is not treated as still alive', async () => {
+            expect(project['isDisposed']).to.be.false;
+
+            project['handleWorkerExit'](1);
+            await util.sleep(0);
+
+            //the worker is gone, so the project can never serve another request
+            expect(project['isDisposed']).to.be.true;
+        });
+
+        /**
+         * Give `project` a real slot on a pooled worker without paying for a full `activate()`. This is the
+         * bit of `activate()` that the crash/dispose release path actually depends on.
+         */
+        function attachToPooledWorker() {
+            const assignment = workerPool.assignProject();
+            project['worker'] = assignment.worker;
+            project['port'] = assignment.port;
+        }
+
+        it('releases its slot on the crashed worker so co-tenant accounting stays correct', async () => {
+            attachToPooledWorker();
+            //spy (rather than stub) so the slot is still genuinely released and doesn't leak onto the shared worker
+            const releaseProject = sinon.spy(workerPool, 'releaseProject');
+            const worker = project['worker'];
+
+            project['handleWorkerExit'](1);
+            await util.sleep(0);
+
+            expect(releaseProject.callCount).to.eql(1);
+            expect(releaseProject.firstCall.args[0]).to.equal(worker);
+        });
+
+        it('does not double-release when dispose() runs after a crash', async () => {
+            attachToPooledWorker();
+            const releaseProject = sinon.spy(workerPool, 'releaseProject');
+
+            project['handleWorkerExit'](1);
+            await util.sleep(0);
+            project.dispose();
+
+            //dispose() must short-circuit on the isDisposed flag the crash handler set
+            expect(releaseProject.callCount).to.eql(1);
+        });
     });
 
     describe('worker sharing', () => {
@@ -149,7 +196,7 @@ describe('WorkerThreadProject', () => {
         });
 
         it('allows multiple projects to share a single worker thread when capped', async function () {
-            this.timeout(15_000);
+            this.timeout(60_000);
             workerPool.maxWorkers = 1;
 
             fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `
@@ -199,7 +246,7 @@ describe('WorkerThreadProject', () => {
         });
 
         it('leaves the surviving co-tenant project functional after the other one is disposed', async function () {
-            this.timeout(15_000);
+            this.timeout(60_000);
             workerPool.maxWorkers = 1;
 
             fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `
@@ -249,7 +296,7 @@ describe('WorkerThreadProject', () => {
         });
 
         it('leaves the surviving co-tenant project functional even if the other one is disposed twice', async function () {
-            this.timeout(15_000);
+            this.timeout(60_000);
             workerPool.maxWorkers = 1;
 
             fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `

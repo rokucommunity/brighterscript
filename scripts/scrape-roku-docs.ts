@@ -18,6 +18,9 @@ import * as deepmerge from 'deepmerge';
 import { NodeHtmlMarkdown } from 'node-html-markdown';
 import { isVariableExpression } from '../src/astUtils/reflection';
 import { SymbolTable } from '../src/SymbolTable';
+import { SymbolTypeFlag } from '../src/SymbolTypeFlag';
+import { referenceTypeFactory } from '../src/types/ReferenceType';
+import { unionTypeFactory } from '../src/types/UnionType';
 
 
 type Token = marked.Token;
@@ -28,7 +31,9 @@ const foundTypesTranslation = {
     'object (string array)': 'object',
     'robytearray object': 'roByteArray',
     'rolist of roassociativearray items': 'roList',
-    'roassociative array': 'roAssociativeArray'
+    'roassociative array': 'roAssociativeArray',
+    'uri string': 'uri',
+    'oassociativearray': 'roAssociativeArray'
 };
 
 const turndownService = new TurndownService({
@@ -51,6 +56,8 @@ class Runner {
     public async run() {
         const outPath = s`${__dirname}/../src/roku-types/data.json`;
 
+        SymbolTable.referenceTypeFactory = referenceTypeFactory;
+        SymbolTable.unionTypeFactory = unionTypeFactory;
         loadCache();
         //load the base level roku docs data
         await this.loadReferences();
@@ -319,7 +326,7 @@ class Runner {
                         } as Signature;
                         const call = (statements[0] as ExpressionStatement).expression as CallExpression;
                         //only scan createObject calls for our own name
-                        if ((call.args[0] as LiteralExpression)?.token?.text === `"${component.name}"`) {
+                        if ((call.args[0] as LiteralExpression)?.tokens?.value.text === `"${component.name}"`) {
                             //skip the first arg because that's the name of the component
                             for (let i = 1; i < call.args.length; i++) {
                                 const arg = call.args[i];
@@ -882,6 +889,9 @@ class Runner {
         if (!opts?.allowSpaces) {
             result = result?.split(' ')?.[0];
         }
+        if (foundTypesTranslation[result.toLowerCase()]) {
+            result = foundTypesTranslation[result.toLowerCase()];
+        }
         return result;
     }
 
@@ -916,9 +926,9 @@ class Runner {
         if (statements.length > 0) {
             const func = statements[0] as FunctionStatement;
             const signature = {
-                name: func.name?.text,
+                name: func.tokens.name?.text,
                 params: [],
-                returnType: func.func.returnTypeToken?.text ?? 'Void'
+                returnType: func.func.returnTypeExpression?.getType({ flags: SymbolTypeFlag.typetime })?.toTypeString() ?? returnTypeString ?? 'Void'
             } as Func;
 
             if (variadicMatch) {
@@ -1721,10 +1731,11 @@ function fixOverloadedMethod(iface: RokuInterface, funcName: string) {
         if (!returnDescriptions.includes(originalOverload.returnDescription)) {
             returnDescriptions.push(originalOverload.returnDescription);
         }
-        if (!returnTypes.includes(originalOverload.returnType)) {
+        if (!returnTypes.map(rt => rt.toLowerCase()).includes(originalOverload.returnType.toLowerCase())) {
             returnTypes.push(originalOverload.returnType);
         }
     }
+
     const mergedFunc: Func = {
         name: originalOverloads[0].name,
         params: [],

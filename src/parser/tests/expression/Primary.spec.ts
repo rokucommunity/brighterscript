@@ -1,27 +1,29 @@
 import { expect } from '../../../chai-config.spec';
-
 import { Parser } from '../../Parser';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
+import { util } from '../../../util';
+import type { AssignmentStatement } from '../../Statement';
+import { expectZeroDiagnostics } from '../../../testHelpers.spec';
 
 describe('parser primary expressions', () => {
 
     it('parses numeric literals', () => {
         let equals = token(TokenKind.Equal, '=');
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             identifier('_'),
             equals,
             token(TokenKind.IntegerLiteral, '5'),
             EOF
         ]);
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.have.length.greaterThan(0);
+        expect(ast.statements).to.have.length.greaterThan(0);
     });
 
     it('parses string literals', () => {
         let equals = token(TokenKind.Equal, '=');
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             identifier('_'),
             equals,
             token(TokenKind.StringLiteral, 'hello'),
@@ -29,11 +31,11 @@ describe('parser primary expressions', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.have.length.greaterThan(0);
+        expect(ast.statements).to.have.length.greaterThan(0);
     });
 
     it('parses expressions in parentheses', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             identifier('_'),
             token(TokenKind.Equal, '='),
             token(TokenKind.IntegerLiteral, '1'),
@@ -47,7 +49,7 @@ describe('parser primary expressions', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.have.length.greaterThan(0);
+        expect(ast.statements).to.have.length.greaterThan(0);
 
     });
 
@@ -60,102 +62,116 @@ describe('parser primary expressions', () => {
          * 1| b = "foo"
          * 2| c = ( 0 )
          */
-        let { statements, diagnostics } = Parser.parse(<any>[
+        let parser = Parser.parse([
             {
                 kind: TokenKind.Identifier,
                 text: 'a',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 0, 0, 1)
+                location: util.createLocation(0, 0, 0, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 2, 0, 3)
+                location: util.createLocation(0, 2, 0, 3)
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '5',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 4, 0, 5)
+                location: util.createLocation(0, 4, 0, 5)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(0, 5, 0, 6)
+                location: util.createLocation(0, 5, 0, 6)
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'b',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(1, 0, 1, 1)
+                location: util.createLocation(1, 0, 1, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(1, 2, 1, 3)
+                location: util.createLocation(1, 2, 1, 3)
             },
             {
                 kind: TokenKind.StringLiteral,
                 text: `"foo"`,
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(1, 4, 1, 9)
+                location: util.createLocation(1, 4, 1, 9)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(1, 9, 1, 10)
+                location: util.createLocation(1, 9, 1, 10)
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'c',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(2, 0, 2, 1)
+                location: util.createLocation(2, 0, 2, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(2, 2, 2, 3)
+                location: util.createLocation(2, 2, 2, 3)
             },
             {
                 kind: TokenKind.LeftParen,
                 text: '(',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(2, 4, 2, 5)
+                location: util.createLocation(2, 4, 2, 5)
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '0',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(2, 6, 2, 7)
+                location: util.createLocation(2, 6, 2, 7)
             },
             {
                 kind: TokenKind.RightParen,
                 text: ')',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(2, 8, 2, 9)
+                location: util.createLocation(2, 8, 2, 9)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
+                leadingTrivia: [],
                 isReserved: false,
-                range: Range.create(1, 9, 1, 10) //TODO are these numbers right?
+                location: util.createLocation(1, 9, 1, 10) //TODO are these numbers right?
             }
-        ]) as any;
+        ]);
+        const assignments = parser.ast.statements as AssignmentStatement[];
 
-        expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.lengthOf(3);
-        expect(statements[0].value.range).to.deep.include(
+        expectZeroDiagnostics(parser);
+        expect(assignments[0].value.location.range).to.deep.include(
             Range.create(0, 4, 0, 5)
         );
-        expect(statements[1].value.range).to.deep.include(
+        expect(assignments[1].value.location.range).to.deep.include(
             Range.create(1, 4, 1, 9)
         );
-        expect(statements[2].value.range).to.deep.include(
+        expect(assignments[2].value.location.range).to.deep.include(
             Range.create(2, 4, 2, 9)
         );
     });

@@ -1,12 +1,16 @@
 import { isBrsFile } from '../../astUtils/reflection';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
-import type { Program } from '../../Program';
+import type { AfterValidateProgramEvent } from '../../interfaces';
 import { RSG_VERSIONS } from '../../RokuConstants';
 import util from '../../util';
 import * as semver from 'semver';
 
+export const ProgramValidatorDiagnosticsTag = 'ProgramValidator';
+
 export class ProgramValidator {
-    constructor(private program: Program) { }
+    constructor(
+        private event: AfterValidateProgramEvent
+    ) { }
 
     public process() {
         this.flagScopelessBrsFiles();
@@ -17,23 +21,22 @@ export class ProgramValidator {
      * Flag any files that are included in 0 scopes.
      */
     private flagScopelessBrsFiles() {
-        for (const key in this.program.files) {
-            const file = this.program.files[key];
+        for (const key in this.event.program.files) {
+            const file = this.event.program.files[key];
 
             if (
                 //if this isn't a brs file, skip
                 !isBrsFile(file) ||
                 //if the file is included in at least one scope, skip
-                this.program.getFirstScopeForFile(file)
+                this.event.program.getFirstScopeForFile(file)
             ) {
                 continue;
             }
 
-            this.program.addDiagnostics([{
+            this.event.program.diagnostics.register({
                 ...DiagnosticMessages.fileNotReferencedByAnyOtherFile(),
-                file: file,
-                range: util.createRange(0, 0, 0, Number.MAX_VALUE)
-            }]);
+                location: util.createLocationFromFileRange(file, util.createRange(0, 0, 0, Number.MAX_VALUE))
+            }, { tags: [ProgramValidatorDiagnosticsTag] });
         }
     }
 
@@ -50,8 +53,8 @@ export class ProgramValidator {
         //getManifestEntries and getManifestPath are intentionally protected for now (no stable
         //public API yet) — use bracket access here to bypass the visibility check.
         /* eslint-disable @typescript-eslint/dot-notation */
-        const entries = this.program['getManifestEntries']();
-        const manifestPath = this.program['getManifestPath']();
+        const entries = this.event.program['getManifestEntries']();
+        const manifestPath = this.event.program['getManifestPath']();
         /* eslint-enable @typescript-eslint/dot-notation */
         if (!entries || entries.length === 0 || !manifestPath) {
             return;
@@ -62,11 +65,10 @@ export class ProgramValidator {
         }
         const value = rsgEntry.value.trim();
         if (!semver.coerce(value)) {
-            this.program.addDiagnostics([{
+            this.event.program.diagnostics.register({
                 ...DiagnosticMessages.invalidRsgVersionFormat(value),
-                file: { srcPath: manifestPath, pkgPath: 'manifest' } as any,
-                range: rsgEntry.range
-            }]);
+                location: util.createLocationFromRange(manifestPath, rsgEntry.range)
+            }, { tags: [ProgramValidatorDiagnosticsTag] });
             return;
         }
 
@@ -79,32 +81,29 @@ export class ProgramValidator {
 
         //getMinFirmwareVersion returns canonical coerced semver; constants in RSG_VERSIONS are
         //hand-written valid semver. No re-coercion needed at this site.
-        const effectiveFw = this.program.getMinFirmwareVersion();
+        const effectiveFw = this.event.program.getMinFirmwareVersion();
 
         //removal takes precedence over deprecation. If `removedAt <= effectiveFw`, fire the
         //removal error and skip the deprecation warning — the manifest entry is no longer honored.
         if (info.removedAt && semver.gte(effectiveFw, info.removedAt) && info.replacement) {
-            this.program.addDiagnostics([{
+            this.event.program.diagnostics.register({
                 ...DiagnosticMessages.rsgVersionRemoved(value, info.removedAt, info.replacement),
-                file: { srcPath: manifestPath, pkgPath: 'manifest' } as any,
-                range: rsgEntry.range
-            }]);
+                location: util.createLocationFromRange(manifestPath, rsgEntry.range)
+            }, { tags: [ProgramValidatorDiagnosticsTag] });
         } else if (info.deprecatedAt && info.replacement && semver.gte(effectiveFw, info.deprecatedAt)) {
             //fire deprecation only when the effective firmware is >= the deprecation point — projects
             //targeting pre-deprecation firmware can legitimately keep using the old version.
-            this.program.addDiagnostics([{
+            this.event.program.diagnostics.register({
                 ...DiagnosticMessages.rsgVersionDeprecated(value, info.replacement),
-                file: { srcPath: manifestPath, pkgPath: 'manifest' } as any,
-                range: rsgEntry.range
-            }]);
+                location: util.createLocationFromRange(manifestPath, rsgEntry.range)
+            }, { tags: [ProgramValidatorDiagnosticsTag] });
         }
 
         if (semver.lt(effectiveFw, info.introducedAt)) {
-            this.program.addDiagnostics([{
+            this.event.program.diagnostics.register({
                 ...DiagnosticMessages.rsgVersionRequiresMinFirmware(value, info.introducedAt, effectiveFw),
-                file: { srcPath: manifestPath, pkgPath: 'manifest' } as any,
-                range: rsgEntry.range
-            }]);
+                location: util.createLocationFromRange(manifestPath, rsgEntry.range)
+            }, { tags: [ProgramValidatorDiagnosticsTag] });
         }
     }
 }

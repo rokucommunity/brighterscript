@@ -6,7 +6,6 @@ import { URI } from 'vscode-uri';
 import { rootDir } from './testHelpers.spec';
 import * as path from 'path';
 import { standardizePath } from './util';
-import { interpolatedRange } from './astUtils/creators';
 
 describe('DiagnosticCollection', () => {
     let collection: DiagnosticCollection;
@@ -206,7 +205,6 @@ describe('DiagnosticCollection', () => {
             diagnosticsByFile: {
                 'file1.brs': [{
                     message: 'message1',
-                    range: interpolatedRange,
                     uri: undefined,
                     projects: [projectId]
                 } as any]

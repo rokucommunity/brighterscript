@@ -15,3 +15,4 @@ benchmarks/*.brs
 isolate-*
 v8*.log
 *.cpuprofile
+.cache.json

@@ -1,10 +1,10 @@
 import { expect } from '../../chai-config.spec';
-import { URI } from 'vscode-uri';
 import type { CodeAction, Range } from 'vscode-languageserver';
-import type { BscFile, OnGetCodeActionsEvent } from '../../interfaces';
 import { Program } from '../../Program';
 import { expectCodeActions, trim } from '../../testHelpers.spec';
 import { standardizePath as s, util } from '../../util';
+import type { BscFile } from '../../files/BscFile';
+import type { BsDiagnostic, ProvideCodeActionsEvent } from '../../interfaces';
 import { rootDir } from '../../testHelpers.spec';
 import { CodeActionsProcessor } from './CodeActionsProcessor';
 
@@ -106,7 +106,7 @@ describe('CodeActionsProcessor', () => {
                 util.createRange(1, 5, 1, 5)
             );
             expect(
-                codeActions[0].edit!.changes![URI.file(s`${rootDir}/components/comp1.xml`).toString()][0].range
+                codeActions[0].edit!.changes![util.pathToUri(s`${rootDir}/components/comp1.xml`)][0].range
             ).to.eql(
                 util.createRange(1, 51, 1, 51)
             );
@@ -144,15 +144,9 @@ describe('CodeActionsProcessor', () => {
                 </component>
             `);
 
-            program.validate();
-
             //we should only get each file import suggestion exactly once
-            const codeActions = program.getCodeActions(
-                componentCommonFile.srcPath,
-                // doSome|thing()
-                util.createRange(2, 22, 2, 22)
-            );
-            expect(filterDisableActions(codeActions.map(x => x.title)).sort()).to.eql([
+            // doSome|thing()
+            testGetCodeActions(componentCommonFile, util.createRange(2, 22, 2, 22), [
                 `import "pkg:/components/lib1.brs"`,
                 `import "pkg:/components/lib2.brs"`
             ]);
@@ -181,13 +175,14 @@ describe('CodeActionsProcessor', () => {
 
             program.validate();
 
-            //there should be no import code actions since this is a brs file (disable directives still appear for any diagnostic)
+            //there should be no code actions since this is a brs file (other than the
+            //bs:disable suggestions, which fire on every diagnostic with a `code`)
             const codeActions = program.getCodeActions(
                 file.srcPath,
                 // DoSometh|ing()
                 util.createRange(2, 28, 2, 28)
-            );
-            expect(filterDisableActions(codeActions.map(x => x.title))).to.be.empty;
+            ).filter(action => !action.title?.startsWith('Disable '));
+            expect(codeActions).to.be.empty;
         });
 
         it('suggests class imports', () => {
@@ -209,15 +204,8 @@ describe('CodeActionsProcessor', () => {
                 end class
             `);
 
-            program.validate();
-
-            expect(
-                filterDisableActions(program.getCodeActions(
-                    file.srcPath,
-                    // new Per|son()
-                    util.createRange(2, 34, 2, 34)
-                ).map(x => x.title)).sort()
-            ).to.eql([
+            // new Per|son()
+            testGetCodeActions(file, util.createRange(2, 34, 2, 34), [
                 `import "pkg:/source/Person.bs"`
             ]);
         });
@@ -226,7 +214,7 @@ describe('CodeActionsProcessor', () => {
             //import the file in two scopes
             program.setFile('components/comp1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
-                <component name="ChildScene">
+                <component name="ChildScene" extends="Group">
                     <script uri="comp1.bs" />
                 </component>
             `);
@@ -243,15 +231,8 @@ describe('CodeActionsProcessor', () => {
                 end namespace
             `);
 
-            program.validate();
-
-            expect(
-                filterDisableActions(program.getCodeActions(
-                    file.srcPath,
-                    // new Anim|als.Cat()
-                    util.createRange(2, 36, 2, 36)
-                ).map(x => x.title)).sort()
-            ).to.eql([
+            // new Anim|als.Cat()
+            testGetCodeActions(file, util.createRange(2, 36, 2, 36), [
                 `import "pkg:/source/Animals.bs"`
             ]);
         });
@@ -269,7 +250,7 @@ describe('CodeActionsProcessor', () => {
                     end function
                 end namespace
             `);
-            program.setFile('components/MainScene.xml', trim`<component name="MainScene"></component>`);
+            program.setFile('components/MainScene.xml', trim`<component name="MainScene" extends="Scene"></component>`);
             const file = program.setFile('components/MainScene.bs', `
                 sub init()
                     print alpha.secondAction()
@@ -302,12 +283,13 @@ describe('CodeActionsProcessor', () => {
             program.validate();
 
             const range = util.createRange(2, 24, 2, 24);
-            const event: OnGetCodeActionsEvent = {
+            const fileUri = util.pathToUri(file.srcPath);
+            const event: ProvideCodeActionsEvent = {
                 program: program,
                 file: file,
                 range: range,
                 scopes: program.getScopesForFile(file),
-                diagnostics: program.getDiagnostics().filter(d => d.file === file && util.rangesIntersectOrTouch(d.range, range)),
+                diagnostics: program.getDiagnostics().filter(d => d.location?.uri === fileUri && util.rangesIntersectOrTouch(d.location.range, range)),
                 codeActions: []
             };
 
@@ -337,7 +319,7 @@ describe('CodeActionsProcessor', () => {
                     end function
                 end namespace
             `);
-            program.setFile('components/MainScene.xml', trim`<component name="MainScene"></component>`);
+            program.setFile('components/MainScene.xml', trim`<component name="MainScene" extends="Scene"></component>`);
             const file = program.setFile('components/MainScene.bs', `
                 import "pkg:/source/first.bs"
                 sub init()
@@ -480,7 +462,7 @@ describe('CodeActionsProcessor', () => {
                 end function
             end namespace
         `);
-        program.setFile('components/MainScene.xml', trim`<component name="MainScene"></component>`);
+        program.setFile('components/MainScene.xml', trim`<component name="MainScene" extends="Scene"></component>`);
         const file = program.setFile('components/MainScene.bs', `
             sub init()
                 print alpha.firstAction()
@@ -608,7 +590,7 @@ describe('CodeActionsProcessor', () => {
     });
 
     describe('typed function/sub empty return', () => {
-        it('suggests deleting the return value and converting the sub to a function', () => {
+        it('suggests adding `as void` to function declaration or converting to sub', () => {
             const file = program.setFile('source/main.brs', `
                 function test()
                     'need a return value here...
@@ -640,7 +622,7 @@ describe('CodeActionsProcessor', () => {
             expect(changes[0].newText).to.eql(' as void');
         });
 
-        it('suggests deleting the return type from void function', () => {
+        it('suggests removing the return type from sub with return type', () => {
             const file = program.setFile('source/main.brs', `
                 sub test() as integer
                     'need a return value here...
@@ -1165,9 +1147,9 @@ describe('CodeActionsProcessor', () => {
             `);
             program.validate();
             const actions = program.getCodeActions(file.srcPath, util.createRange(2, 22, 2, 22));
-            //the diagnostic for an undefined function — code is `cannotFindFunction` (1140)
-            expect(findLineAction(actions, 1140), 'expected a "Disable 1140 for this line: ..." action').to.exist;
-            expect(findFileAction(actions, 1140), 'expected a "Disable 1140 for this file: ..." action').to.exist;
+            //the diagnostic for an undefined function — code is `cannotFindFunction` (cannot-find-function)
+            expect(findLineAction(actions, 'cannot-find-function'), 'expected a "Disable cannot-find-function for this line: ..." action').to.exist;
+            expect(findFileAction(actions, 'cannot-find-function'), 'expected a "Disable cannot-find-function for this file: ..." action').to.exist;
         });
 
         it('includes the diagnostic message in the action title', () => {
@@ -1178,8 +1160,8 @@ describe('CodeActionsProcessor', () => {
             `);
             program.validate();
             const actions = program.getCodeActions(file.srcPath, util.createRange(2, 22, 2, 22));
-            const action = findLineAction(actions, 1140);
-            expect(action!.title).to.match(/^Disable 1140 for this line: .+/);
+            const action = findLineAction(actions, 'cannot-find-function');
+            expect(action!.title).to.match(/^Disable cannot-find-function for this line: .+/);
             //the message portion is the diagnostic's message, so it should mention the missing function name
             expect(action!.title).to.include('doSomething');
         });
@@ -1191,12 +1173,12 @@ describe('CodeActionsProcessor', () => {
                 end sub
             `);
             program.validate();
-            const action = findLineAction(program.getCodeActions(file.srcPath, util.createRange(2, 22, 2, 22)), 1140);
+            const action = findLineAction(program.getCodeActions(file.srcPath, util.createRange(2, 22, 2, 22)), 'cannot-find-function');
             expect(action).to.exist;
             const edits = Object.values(action!.edit!.changes!)[0];
             expect(edits).to.have.lengthOf(1);
             //"                    doSomething()" — 20 spaces of indent on line 2
-            expect(edits[0].newText).to.equal(`                    ' bs:disable-next-line: 1140\n`);
+            expect(edits[0].newText).to.equal(`                    ' bs:disable-next-line: cannot-find-function\n`);
             expect(edits[0].range).to.eql(util.createRange(2, 0, 2, 0));
         });
 
@@ -1207,10 +1189,10 @@ describe('CodeActionsProcessor', () => {
                 end sub
             `);
             program.validate();
-            const action = findFileAction(program.getCodeActions(file.srcPath, util.createRange(2, 22, 2, 22)), 1140);
+            const action = findFileAction(program.getCodeActions(file.srcPath, util.createRange(2, 22, 2, 22)), 'cannot-find-function');
             expect(action).to.exist;
             const edits = Object.values(action!.edit!.changes!)[0];
-            expect(edits[0].newText).to.equal(`' bs:disable: 1140\n`);
+            expect(edits[0].newText).to.equal(`' bs:disable: cannot-find-function\n`);
             expect(edits[0].range).to.eql(util.createRange(0, 0, 0, 0));
         });
 
@@ -1256,7 +1238,7 @@ describe('CodeActionsProcessor', () => {
             program.validate();
             //inject a diagnostic with no code into the event
             const range = util.createRange(1, 16, 1, 16);
-            const event: OnGetCodeActionsEvent = {
+            const event: ProvideCodeActionsEvent = {
                 program: program,
                 file: file as BscFile,
                 range: range,
@@ -1277,12 +1259,12 @@ describe('CodeActionsProcessor', () => {
             `);
             program.validate();
             //the diagnostic is on line 3 (the doSomething call). The existing directive sits on line 2.
-            const action = findLineAction(program.getCodeActions(file.srcPath, util.createRange(3, 22, 3, 22)), 1140);
+            const action = findLineAction(program.getCodeActions(file.srcPath, util.createRange(3, 22, 3, 22)), 'cannot-find-function');
             expect(action).to.exist;
             const edits = Object.values(action!.edit!.changes!)[0];
             expect(edits).to.have.lengthOf(1);
             //replaces the existing comment with a merged version
-            expect(edits[0].newText).to.equal(`' bs:disable-next-line: 9999 1140`);
+            expect(edits[0].newText).to.equal(`' bs:disable-next-line: 9999 cannot-find-function`);
         });
 
         it('extends an existing trailing bs:disable-line directive', () => {
@@ -1292,10 +1274,10 @@ describe('CodeActionsProcessor', () => {
                 end sub
             `);
             program.validate();
-            const action = findLineAction(program.getCodeActions(file.srcPath, util.createRange(2, 22, 2, 22)), 1140);
+            const action = findLineAction(program.getCodeActions(file.srcPath, util.createRange(2, 22, 2, 22)), 'cannot-find-function');
             expect(action).to.exist;
             const edits = Object.values(action!.edit!.changes!)[0];
-            expect(edits[0].newText).to.equal(`' bs:disable-line: 9999 1140`);
+            expect(edits[0].newText).to.equal(`' bs:disable-line: 9999 cannot-find-function`);
         });
 
         it('extends an existing header-level bs:disable directive instead of inserting a new one', () => {
@@ -1305,10 +1287,10 @@ describe('CodeActionsProcessor', () => {
                 end sub
             `);
             program.validate();
-            const action = findFileAction(program.getCodeActions(file.srcPath, util.createRange(2, 22, 2, 22)), 1140);
+            const action = findFileAction(program.getCodeActions(file.srcPath, util.createRange(2, 22, 2, 22)), 'cannot-find-function');
             expect(action).to.exist;
             const edits = Object.values(action!.edit!.changes!)[0];
-            expect(edits[0].newText).to.equal(`' bs:disable: 9999 1140`);
+            expect(edits[0].newText).to.equal(`' bs:disable: 9999 cannot-find-function`);
         });
 
         it('extends an existing XML header-level bs:disable directive', () => {
@@ -1324,7 +1306,8 @@ describe('CodeActionsProcessor', () => {
             expect(action).to.exist;
             const edits = Object.values(action!.edit!.changes!)[0];
             //the new code is appended to the existing space-separated list
-            expect(/^<!-- bs:disable: 9999 \d+ -->$/.test(edits[0].newText)).to.be.true;
+            //In this case "missing-extends-attribute"
+            expect(/^<!-- bs:disable: 9999 [\w-]+ -->$/.test(edits[0].newText)).to.be.true;
         });
 
         it('does not duplicate the code when it is already in an existing directive', () => {
@@ -1337,12 +1320,16 @@ describe('CodeActionsProcessor', () => {
             program.validate();
             //inject a synthetic diagnostic so we can exercise the no-op path with a code that's already listed in the existing directive
             const range = util.createRange(3, 22, 3, 22);
-            const event: OnGetCodeActionsEvent = {
+            const event: ProvideCodeActionsEvent = {
                 program: program,
                 file: file as BscFile,
                 range: range,
                 scopes: program.getScopesForFile(file),
-                diagnostics: [{ code: 9001, message: 'fake diagnostic', range: range, file: file } as any],
+                diagnostics: [{
+                    code: 9001,
+                    message: 'fake diagnostic',
+                    location: util.createLocationFromFileRange(file, range)
+                } as BsDiagnostic],
                 codeActions: []
             };
             new CodeActionsProcessor(event).process();
@@ -1360,12 +1347,16 @@ describe('CodeActionsProcessor', () => {
             `);
             program.validate();
             const range = util.createRange(3, 22, 3, 22);
-            const event: OnGetCodeActionsEvent = {
+            const event: ProvideCodeActionsEvent = {
                 program: program,
                 file: file as BscFile,
                 range: range,
                 scopes: program.getScopesForFile(file),
-                diagnostics: [{ code: 9001, message: 'fake diagnostic', range: range, file: file } as any],
+                diagnostics: [{
+                    code: 9001,
+                    message: 'fake diagnostic',
+                    location: util.createLocationFromFileRange(file, range)
+                } as BsDiagnostic],
                 codeActions: []
             };
             new CodeActionsProcessor(event).process();

@@ -238,8 +238,8 @@ describe('ProgramValidator', () => {
             );
             expect(diag).to.exist;
             //rsg_version is on line 1 (0-indexed); the value `1.0` starts at character 12 (after `rsg_version=`)
-            expect(diag!.range.start.line).to.equal(1);
-            expect(diag!.range.start.character).to.equal(12);
+            expect(diag!.location.range.start.line).to.equal(1);
+            expect(diag!.location.range.start.character).to.equal(12);
         });
     });
 });

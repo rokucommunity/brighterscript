@@ -1,9 +1,10 @@
-import type { Range } from 'vscode-languageserver';
-import { AstEditor } from '../astUtils/AstEditor';
+import type { Location } from 'vscode-languageserver';
+import { Editor } from '../astUtils/Editor';
 import type { BrsFile } from '../files/BrsFile';
 import type { FirmwareCapabilities } from '../RokuConstants';
-import type { ClassStatement } from './Statement';
+import type { ClassStatement, ConditionalCompileStatement } from './Statement';
 import { TranspileState } from './TranspileState';
+import type { Statement } from './AstNode';
 
 export class BrsTranspileState extends TranspileState {
     public constructor(
@@ -24,7 +25,7 @@ export class BrsTranspileState extends TranspileState {
      * Used to assist blocks in knowing when to add a comment statement to the same line as the first line of the parent
      */
     lineage = [] as Array<{
-        range?: Range;
+        location?: Location;
     }>;
 
     /**
@@ -34,9 +35,28 @@ export class BrsTranspileState extends TranspileState {
 
     /**
      * An AST editor that can be used by the AST nodes to do various transformations to the AST which will be reverted at the end of the transpile cycle
+     * TODO remove this before file_api is merged
      */
-    public editor = new AstEditor();
+    public editor = new Editor();
 
+    /**
+     * Used by ConditionalCompileStatement to determine if there's already an conditional compile going on
+     */
+    public conditionalCompileStatement?: ConditionalCompileStatement;
+
+    /**
+     * Do not transpile leading comments
+     */
+    public skipLeadingComments = false;
+
+    /**
+     * Transpile all leading trivia for a given statement, including comments mixed between annotations
+     */
+    public transpileAnnotations(node: Statement) {
+        return (node?.annotations ?? []).map(x => {
+            return x.transpile(this);
+        });
+    }
     /**
      * What the target firmware natively understands. Captured once when the state is created —
      * capabilities are derived from config and cannot change partway through a transpile.

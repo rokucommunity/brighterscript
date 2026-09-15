@@ -22,6 +22,7 @@ interface RunnerOptions {
     quick: boolean;
     profile: boolean;
     tar: boolean;
+    config: string;
 }
 class Runner {
     constructor(
@@ -65,6 +66,10 @@ class Runner {
             }
             //store the file system path for the project
             this.options.project = projectDir;
+        } else {
+            //a local path was provided - resolve it to absolute so it's not silently
+            //misinterpreted relative to whatever cwd `target-runner.ts` happens to run with
+            this.options.project = path.resolve(this.options.project);
         }
     }
 
@@ -144,8 +149,9 @@ class Runner {
                     cwd: cwd
                 });
 
-                execSync(`npx ts-node target-runner.ts "${version}" "${maxVersionLength}" "${target}" "${maxTargetLength}" "${alias}" "${this.options.project}" "${this.options.quick}" "${this.options.profile}"`, {
+                execSync(`npx ts-node target-runner.ts "${version}" "${maxVersionLength}" "${target}" "${maxTargetLength}" "${alias}" "${this.options.project}" "${this.options.quick}" "${this.options.profile}" "${(this.options.config ?? '{}').replaceAll('\"', '\\"')}"`, {
                     env: {
+                        ...process.env,
                         'NODE_OPTIONS': `--max-old-space-size=${MAX_OLD_SPACE}`
                     }
                 });
@@ -205,6 +211,11 @@ let options = yargs
         description: 'use a npm-packed tarball for local files instead of using the files directly',
         default: true
     })
+    .option('config', {
+        type: 'string',
+        description: 'add additional BsConfig settings as JSON - eg. \'{"removeParameterTypes":true}\'',
+        default: '{}'
+    })
     .strict()
     .check(argv => {
         const idx = argv.versions.indexOf('latest');
@@ -234,4 +245,16 @@ function clean() {
         }
     }
     fs.writeFileSync(`${cwd}/package.json`, JSON.stringify(packageJson, null, 4));
+
+    //regenerate package-lock.json to match the now-cleaned package.json. A hand-edited removal
+    //isn't safe here: npm's dedupe can hoist brighterscript's own transitive deps to the top level
+    //of node_modules, so there's no reliable way to tell "only needed by brighterscriptN" apart with
+    //a regex. Only bother if the lockfile actually still references a brighterscriptN dependency.
+    const packageLockPath = `${cwd}/package-lock.json`;
+    if (fs.existsSync(packageLockPath)) {
+        const packageLockText = fs.readFileSync(packageLockPath).toString();
+        if (/brighterscript\d+/.exec(packageLockText)) {
+            execSync('npm install --package-lock-only');
+        }
+    }
 }

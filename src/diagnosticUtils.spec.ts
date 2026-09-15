@@ -35,11 +35,19 @@ describe('diagnosticUtils', () => {
     }
 
     describe('printDiagnostic', () => {
+        it('does not crash when file has no content', () => {
+            //print a diagnostic that has an AssetFile. It should not explode
+            diagnosticUtils.printDiagnostic(options, DiagnosticSeverity.Error, './temp/file.brs', [], {
+                message: 'Bad thing happened',
+                location: null, //important...this needs to be null for the test to pass,
+                code: 1234
+            } as any);
+        });
         it('does not crash when range is undefined', () => {
             //print a diagnostic that doesn't have a range...it should not explode
             diagnosticUtils.printDiagnostic(options, DiagnosticSeverity.Error, './temp/file.brs', [], {
                 message: 'Bad thing happened',
-                range: null, //important...this needs to be null for the test to pass,
+                location: null, //important...this needs to be null for the test to pass,
                 code: 1234
             } as any);
         });
@@ -48,7 +56,7 @@ describe('diagnosticUtils', () => {
             //print a diagnostic that doesn't have a range...it should not explode
             diagnosticUtils.printDiagnostic(options, DiagnosticSeverity.Error, undefined, [], {
                 message: 'Bad thing happened',
-                range: Range.create(0, 0, 2, 2),
+                location: Range.create(0, 0, 2, 2),
                 code: 1234
             } as any);
         });
@@ -432,7 +440,7 @@ describe('diagnosticUtils', () => {
         it('emits the canonical workflow command for an error', () => {
             const out = capture(DiagnosticSeverity.Error, 'src/source/main.bs', {
                 message: 'Cannot find name',
-                range: Range.create(9, 4, 9, 11),
+                location: util.createLocation(9, 4, 9, 11, 'src/source/main.bs'),
                 code: 1001
             } as any);
             expect(out).to.equal('::error file=src/source/main.bs,line=10,col=5,endLine=10,endColumn=12,title=BS1001::Cannot find name');
@@ -442,18 +450,19 @@ describe('diagnosticUtils', () => {
             //info/hint are below the default 'warn' threshold, so opt them in for this test
             options = diagnosticUtils.getPrintDiagnosticOptions({ diagnosticLevel: 'info' });
             const range = Range.create(0, 0, 0, 1);
-            expect(capture(DiagnosticSeverity.Warning, 'a.bs', { message: 'w', range: range, code: 1 } as any))
+            const location = util.createLocationFromFileRange({ srcPath: 'a.bs' }, range);
+            expect(capture(DiagnosticSeverity.Warning, 'a.bs', { message: 'w', location: location, code: 1 } as any))
                 .to.match(/^::warning /);
-            expect(capture(DiagnosticSeverity.Information, 'a.bs', { message: 'i', range: range, code: 1 } as any))
+            expect(capture(DiagnosticSeverity.Information, 'a.bs', { message: 'i', location: location, code: 1 } as any))
                 .to.match(/^::notice /);
-            expect(capture(DiagnosticSeverity.Hint, 'a.bs', { message: 'h', range: range, code: 1 } as any))
+            expect(capture(DiagnosticSeverity.Hint, 'a.bs', { message: 'h', location: location, code: 1 } as any))
                 .to.match(/^::notice /);
         });
 
         it('escapes property values (commas, colons, percents) and message data (newlines)', () => {
             const out = capture(DiagnosticSeverity.Error, 'C:\\path,with,commas\\file.bs', {
                 message: 'line one\nline two\rwith % literal',
-                range: Range.create(0, 0, 0, 1),
+                location: util.createLocationFromFileRange({ srcPath: 'C:\\path,with,commas\\file.bs' }, Range.create(0, 0, 0, 1)),
                 code: 99
             } as any);
             expect(out).to.equal(
@@ -464,7 +473,7 @@ describe('diagnosticUtils', () => {
         it('omits file= when filePath is missing and omits title= when code is missing', () => {
             const out = capture(DiagnosticSeverity.Error, undefined, {
                 message: 'no file no code',
-                range: Range.create(2, 3, 2, 4)
+                location: util.createLocationFromFileRange({ srcPath: undefined }, Range.create(2, 3, 2, 4))
             } as any);
             expect(out).to.equal('::error line=3,col=4,endLine=3,endColumn=5::no file no code');
         });
@@ -512,7 +521,7 @@ describe('diagnosticUtils', () => {
                 'src/main.bs',
                 {
                     message: 'maybe bad',
-                    range: Range.create(4, 0, 4, 6),
+                    location: util.createLocationFromFileRange({ srcPath: 'src/main.bs' }, Range.create(4, 0, 4, 6)),
                     code: 42,
                     source: 'brs'
                 } as any
@@ -549,7 +558,7 @@ describe('diagnosticUtils', () => {
 
         function testGetDiagnosticLine(range: Range, squigglyText: string, lineLength = 20) {
             expect(
-                diagnosticUtils.getDiagnosticLine({ range: range } as any, '1'.repeat(lineLength), color)
+                diagnosticUtils.getDiagnosticLine({ location: { range: range } } as any, '1'.repeat(lineLength), color)
             ).to.eql([
                 chalk.bgWhite(' ' + chalk.black((range.start.line + 1).toString()) + ' ') + ' ' + '1'.repeat(lineLength),
                 chalk.bgWhite(' ' + chalk.white(' '.repeat((range.start.line + 1).toString().length)) + ' ') + ' ' + squigglyText.padEnd(lineLength, ' ')

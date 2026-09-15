@@ -175,6 +175,9 @@ export class WorkerThreadProject implements LspProject {
         if (this.isDisposed) {
             return;
         }
+        //the worker is gone, so this project can never serve another request. Mark it dead BEFORE emitting so
+        //anything reacting to the critical-failure sees an accurate `isDisposed`
+        this.isDisposed = true;
         this.logger.error(`Worker thread for project #${this.projectNumber} exited unexpectedly with code ${code}`);
         //emit() is async; this handler can't be, so void it
         void this.emit('critical-failure', {
@@ -182,6 +185,11 @@ export class WorkerThreadProject implements LspProject {
         });
         //reject any in-flight requests instead of leaving callers hanging forever on a worker that's gone
         this.messageHandler?.dispose();
+        //give up our slot on the (now-dead) worker so co-tenant projects keep an accurate projectCount
+        this.port?.close();
+        if (this.worker) {
+            workerPool.releaseProject(this.worker);
+        }
     };
 
     /**
