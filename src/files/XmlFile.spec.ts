@@ -1412,6 +1412,21 @@ end sub`);
             expect(code.endsWith(`<!--//# sourceMappingURL=./SimpleScene.xml.map -->`)).to.be.true;
         });
 
+        it('does not crash when a non-transpiled file ends with a sourceMappingURL comment plus a trailing newline', () => {
+            //reproduces https://github.com/rokucommunity/brighterscript/issues/1818
+            program.options.sourceMap = true;
+            let file = program.setFile('components/SimpleScene.xml',
+                '<?xml version="1.0" encoding="utf-8" ?>\n<component name="SimpleScene" extends="Scene">\n</component>\n<!--//# sourceMappingURL=./comp.xml.map -->\n'
+            );
+            //prevent the default auto-imports to ensure no transpilation from AST
+            (file as any).getMissingImportsForTranspile = () => [];
+            const code = file.transpile().code;
+            expect(code.match(/sourceMappingURL=/g)?.length).to.eql(1);
+            expect(code).to.eql(
+                '<?xml version="1.0" encoding="utf-8" ?>\n<component name="SimpleScene" extends="Scene">\n</component>\n<!--//# sourceMappingURL=./SimpleScene.xml.map -->'
+            );
+        });
+
         it('replaces existing trailing sourceMappingURL comment when AST-transpiling', () => {
             program.options.sourceMap = true;
             //a script tag pointing at a .bs file forces the AST transpile path, which rebuilds output

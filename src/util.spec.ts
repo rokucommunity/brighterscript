@@ -9,6 +9,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import { tempDir, rootDir } from './testHelpers.spec';
 import { Program } from './Program';
 import type { BsDiagnostic } from '.';
+import { SourceNode } from 'source-map';
 
 const sinon = createSandbox();
 
@@ -1228,6 +1229,49 @@ describe('util', () => {
                 test('/one//two///three//', '/one/two/three/');
                 test('\\\\one\\\\two\\\\three\\\\', '/one/two/three/');
             });
+        });
+    });
+
+    describe('stripTrailingSourceMappingURLComment', () => {
+        it('strips the comment from a simpleMap node whose source ends with a trailing newline', () => {
+            //reproduces https://github.com/rokucommunity/brighterscript/issues/1818: the file's final
+            //line is empty (trailing newline), so the last SourceNode produced by simpleMap has no children
+            const fileContents = 'sub p()\nend sub\n\'//# sourceMappingURL=./p.brs.map\n';
+            const sourceMapNode = util.simpleMap('source/p.brs', fileContents);
+            const strippedNode = util.stripTrailingSourceMappingURLComment(sourceMapNode);
+            expect(strippedNode.toString()).to.eql('sub p()\nend sub');
+        });
+
+        it('guards against a plugin-produced SourceNode whose rightmost descendant has no children', () => {
+            //a SourceNode can end up with an empty rightmost child from any producer, not just simpleMap
+            const emptyTrailingNode = new SourceNode(1, 0, 'source/plugin-output.brs', []);
+            const rootNode = new SourceNode(null, null, 'source/plugin-output.brs', [
+                'sub p()\nend sub\n\'//# sourceMappingURL=./plugin-output.brs.map\n',
+                emptyTrailingNode
+            ]);
+            const strippedNode = util.stripTrailingSourceMappingURLComment(rootNode);
+            expect(strippedNode.toString()).to.eql('sub p()\nend sub');
+        });
+
+        it('does not eat real content when the tree contains a SourceNode from a different installed copy of `source-map`', () => {
+            //a plugin bundling its own `source-map` dependency can produce SourceNodes that fail `instanceof` against
+            //this copy of the class, so this stand-in duck-types the same way source-map's own code does internally
+            const foreignSourceNodeStandIn = {
+                //this is the exact marker property name/spelling that source-map itself uses to identify SourceNodes
+                '$$$isSourceNode$$$': true,
+                children: ['\n'],
+                walk: function walk(visitChunk: (chunk: string) => void) {
+                    for (const child of this.children) {
+                        visitChunk(child);
+                    }
+                }
+            };
+            const rootNode = new SourceNode(null, null, 'source/plugin-output.brs', [
+                'sub p()\nend sub\n\'//# sourceMappingURL=./plugin-output.brs.map',
+                foreignSourceNodeStandIn as unknown as SourceNode
+            ]);
+            const strippedNode = util.stripTrailingSourceMappingURLComment(rootNode);
+            expect(strippedNode.toString()).to.eql('sub p()\nend sub');
         });
     });
 });

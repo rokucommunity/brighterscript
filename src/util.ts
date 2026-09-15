@@ -1466,10 +1466,13 @@ export class Util {
         let lines = src.split(/\r?\n/g);
         for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
             let line = lines[lineIndex];
-            chunks.push(
-                lineIndex > 0 ? '\n' : '',
-                new SourceNode(lineIndex + 1, 0, source, line)
-            );
+            if (lineIndex > 0) {
+                chunks.push('\n');
+            }
+            //skip wrapping empty lines in a SourceNode, since they'd have empty children
+            if (line.length > 0) {
+                chunks.push(new SourceNode(lineIndex + 1, 0, source, line));
+            }
         }
         return new SourceNode(null, null, source, chunks);
     }
@@ -1901,14 +1904,65 @@ export class Util {
     public stripTrailingSourceMappingURLComment(node: SourceNode): SourceNode {
         //`\S+` cannot backtrack across whitespace, so this stays linear-time on adversarial input
         const pattern = /(?:\r?\n)?[ \t]*(?:'\/\/# sourceMappingURL=\S+|<!--[ \t]*\/\/# sourceMappingURL=\S+[ \t]*-->)\s*$/;
-        if (pattern.test(node.toString())) {
-            //`replaceRight` operates on the right-most leaf string, which is where a trailing comment
-            //lands in both the verbatim and AST-transpiled cases. The `source-map` typings declare the
-            //pattern as a string, but it is handed straight to `String.prototype.replace`, which
-            //accepts a RegExp
-            node.replaceRight(pattern as unknown as string, '');
+        const match = pattern.exec(node.toString());
+        if (match) {
+            //trim the exact matched length off the right edge, since the match may span multiple sibling leaves
+            this.trimSourceNodeRight(node, match[0].length);
         }
         return node;
+    }
+
+    /**
+     * Trim `charCount` characters off the right edge of a SourceNode tree, walking children right to left.
+     * Collects the edits in a first pass and only applies them if the full `charCount` was accounted for,
+     * so a tree containing an unrecognized child (e.g. a SourceNode from a different installed copy of
+     * `source-map`) is left completely untouched instead of partially trimmed.
+     * Returns true if the full `charCount` was trimmed, false if the walk bailed out or ran out of content.
+     */
+    private trimSourceNodeRight(node: SourceNode, charCount: number): boolean {
+        const trimEdits: TrimEdit[] = [];
+        const trimState: TrimState = { remainingCharCount: charCount, bailedOut: false };
+        this.collectSourceNodeTrimEdits(node, trimState, trimEdits);
+        if (trimState.bailedOut || trimState.remainingCharCount > 0) {
+            return false;
+        }
+        for (const trimEdit of trimEdits) {
+            trimEdit.children[trimEdit.childIndex] = trimEdit.replacement;
+        }
+        return true;
+    }
+
+    /**
+     * Walk a SourceNode tree right to left, recording planned leaf edits into `trimEdits` without mutating
+     * anything, until `trimState.remainingCharCount` reaches zero or an unrecognized child is encountered
+     */
+    private collectSourceNodeTrimEdits(node: SourceNode, trimState: TrimState, trimEdits: TrimEdit[]): void {
+        const children = node.children as unknown as Array<SourceNode | string>;
+        for (let childIndex = children.length - 1; childIndex >= 0 && trimState.remainingCharCount > 0 && !trimState.bailedOut; childIndex--) {
+            const child = children[childIndex];
+            if (typeof child === 'string') {
+                if (child.length <= trimState.remainingCharCount) {
+                    trimState.remainingCharCount -= child.length;
+                    trimEdits.push({ children: children, childIndex: childIndex, replacement: '' });
+                } else {
+                    trimEdits.push({ children: children, childIndex: childIndex, replacement: child.slice(0, child.length - trimState.remainingCharCount) });
+                    trimState.remainingCharCount = 0;
+                }
+            } else if (this.isSourceNodeLike(child)) {
+                this.collectSourceNodeTrimEdits(child, trimState, trimEdits);
+            } else {
+                //unrecognized child shape (not a string, not a SourceNode from any installed copy of `source-map`); stop rather than skip past it
+                trimState.bailedOut = true;
+            }
+        }
+    }
+
+    /**
+     * Duck-check for a SourceNode, matching the same marker property `source-map` itself uses in `SourceNode.prototype.add()`,
+     * so this also recognizes SourceNodes produced by a different installed copy of the `source-map` package
+     */
+    private isSourceNodeLike(value: string | SourceNode): value is SourceNode {
+        return !!value && typeof value === 'object' && (value as any).$$$isSourceNode$$$ === true && Array.isArray((value as any).children);
     }
 
     /**
@@ -1996,3 +2050,21 @@ export function standardizePath(stringParts: TemplateStringsArray | string, ...e
 
 export let util = new Util();
 export default util;
+
+/**
+ * A single planned string replacement for one entry in a SourceNode's `children` array, produced by
+ * `collectSourceNodeTrimEdits` and only applied once the full trim amount has been accounted for
+ */
+interface TrimEdit {
+    children: Array<SourceNode | string>;
+    childIndex: number;
+    replacement: string;
+}
+
+/**
+ * Mutable state threaded through `collectSourceNodeTrimEdits` while walking a SourceNode tree right to left
+ */
+interface TrimState {
+    remainingCharCount: number;
+    bailedOut: boolean;
+}
