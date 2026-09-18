@@ -9,10 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0-alpha.55](https://github.com/rokucommunity/brighterscript/compare/1.0.0-alpha.54...v1.0.0-alpha.55) - 2026-09-18
 ### Changed
  - Support conditional compilation (`#if`) inside class bodies ([#1744](https://github.com/rokucommunity/brighterscript/pull/1744))
- - Lazily allocate SymbolTable siblings/complementsTables ([#1822](https://github.com/rokucommunity/brighterscript/pull/1822))
- - Skip per-token toLowerCase+Set lookup for Token.isReserved ([#1820](https://github.com/rokucommunity/brighterscript/pull/1820))
+ - Performance: Lazily allocate SymbolTable siblings/complementsTables ([#1822](https://github.com/rokucommunity/brighterscript/pull/1822))
+ - Performance: Skip per-token toLowerCase+Set lookup for Token.isReserved ([#1820](https://github.com/rokucommunity/brighterscript/pull/1820))
+ - Performance: Fix O(n^2) clearByFilter cost during validation ([#1819](https://github.com/rokucommunity/brighterscript/pull/1819))
 ### Fixed
- - Fix quadratic clearByFilter cost during validation ([#1819](https://github.com/rokucommunity/brighterscript/pull/1819))
  - Fix Array<Interface> callfunc argument false-positive across component scopes ([#1817](https://github.com/rokucommunity/brighterscript/pull/1817))
 
 
