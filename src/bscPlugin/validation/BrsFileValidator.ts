@@ -114,6 +114,13 @@ export class BrsFileValidator {
                 }
                 this.validateDeclarationLocations(node, 'class', () => util.createBoundingRange(node.tokens.class, node.tokens.name));
 
+                for (const constructor of node.getConditionalCompileConstructors()) {
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.classConstructorNotAllowedInConditionalCompile(),
+                        location: constructor.tokens.name.location
+                    });
+                }
+
                 //register this class
                 const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });
                 node.getSymbolTable().addSymbol('m', { definingNode: node, isInstance: true }, nodeType, SymbolTypeFlag.runtime);

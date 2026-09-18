@@ -723,7 +723,10 @@ export class Parser {
     private classMemberDeclaration(): Statement | undefined {
         //conditional compile blocks can wrap class members
         if (this.check(TokenKind.HashIf)) {
-            return this.conditionalCompileStatement(() => this.classBodyConditionalCompileBlock());
+            const conditionalCompile = this.conditionalCompileStatement(() => this.classBodyConditionalCompileBlock());
+            //without this, an annotation preceding the `#if` would leak onto whatever member follows the block
+            this.consumePendingAnnotations(conditionalCompile);
+            return conditionalCompile;
         }
 
         let decl: Statement;

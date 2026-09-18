@@ -2701,6 +2701,22 @@ describe('BrsFile BrighterScript classes', () => {
             `, 'trim', 'source/main.bs');
         });
 
+        it('flags a constructor declared inside a conditional compile block', () => {
+            program.setFile('source/main.bs', `
+                #const DEBUG = true
+                class Animal
+                    #if DEBUG
+                        sub new()
+                        end sub
+                    #end if
+                end class
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.classConstructorNotAllowedInConditionalCompile()
+            ]);
+        });
+
         it('does not produce diagnostics for conditional members used within the class', () => {
             program.setFile('source/main.bs', `
                 #const DEBUG = true

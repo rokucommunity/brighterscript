@@ -2625,6 +2625,29 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
     }
 }
 
+/**
+ * The one place that knows how a conditional compile branch chain links together (`elseBranch` is
+ * either a nested `ConditionalCompileStatement` for `#else if`, or a plain `Block` for a final `#else`).
+ * `branch` is `undefined` for that trailing `#else` block, since it has no condition of its own.
+ */
+function forEachConditionalCompileBranch(
+    statement: ConditionalCompileStatement,
+    callback: (statements: Statement[], branch: ConditionalCompileStatement | undefined) => void
+) {
+    let branch: ConditionalCompileStatement | undefined = statement;
+    while (branch) {
+        callback(branch.thenBranch?.statements ?? [], branch);
+        if (isConditionalCompileStatement(branch.elseBranch)) {
+            branch = branch.elseBranch;
+        } else {
+            if (isBlock(branch.elseBranch)) {
+                callback(branch.elseBranch.statements, undefined);
+            }
+            branch = undefined;
+        }
+    }
+}
+
 export class ClassStatement extends Statement implements TypedefProvider {
     constructor(options: {
         class?: Token;
@@ -2717,12 +2740,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 this.fields.push(statement);
                 this.memberMap[statement?.tokens.name?.text.toLowerCase()] = statement;
             } else if (isConditionalCompileStatement(statement)) {
-                this.registerMembers(statement.thenBranch?.statements ?? []);
-                if (isConditionalCompileStatement(statement.elseBranch)) {
-                    this.registerMembers([statement.elseBranch]);
-                } else if (isBlock(statement.elseBranch)) {
-                    this.registerMembers(statement.elseBranch.statements);
-                }
+                forEachConditionalCompileBranch(statement, (branchStatements) => {
+                    this.registerMembers(branchStatements);
+                });
             }
         }
     }
@@ -2881,9 +2901,24 @@ export class ClassStatement extends Statement implements TypedefProvider {
      * Get the constructor function for this class (if exists), or undefined if not exist
      */
     private getConstructorFunction() {
-        return this.body.find((stmt) => {
-            return (stmt as MethodStatement)?.tokens.name?.text?.toLowerCase() === 'new';
-        }) as MethodStatement;
+        return this.memberMap.new as MethodStatement;
+    }
+
+    /**
+     * `new` methods declared inside a `#if` block - not supported, since builder/class-function
+     * generation assume a single, unconditionally-present constructor signature
+     */
+    public getConditionalCompileConstructors(): MethodStatement[] {
+        return this.methods.filter((method) => {
+            return method.tokens.name?.text?.toLowerCase() === 'new' &&
+                !!method.findAncestor((node, cancellationToken) => {
+                    if (node === this) {
+                        cancellationToken.cancel();
+                        return false;
+                    }
+                    return isConditionalCompileStatement(node);
+                });
+        });
     }
 
     /**
@@ -3132,29 +3167,20 @@ export class ClassStatement extends Statement implements TypedefProvider {
             return [state.newline, leadingIndent, ...body, state.indent()] as TranspileResult;
         };
 
-        result.push('#if ');
-        if (statement.tokens.not) {
-            result.push('not ');
-        }
-        result.push(state.transpileToken(statement.tokens.condition));
-        result.push(...transpileBranchBody(statement.thenBranch?.statements ?? []));
-
-        let elseBranch = statement.elseBranch;
-        while (elseBranch) {
-            if (isConditionalCompileStatement(elseBranch)) {
-                result.push('#else if ');
-                if (elseBranch.tokens.not) {
+        let isFirstBranch = true;
+        forEachConditionalCompileBranch(statement, (branchStatements, branch) => {
+            if (branch) {
+                result.push(isFirstBranch ? '#if ' : '#else if ');
+                if (branch.tokens.not) {
                     result.push('not ');
                 }
-                result.push(state.transpileToken(elseBranch.tokens.condition));
-                result.push(...transpileBranchBody(elseBranch.thenBranch?.statements ?? []));
-                elseBranch = elseBranch.elseBranch;
+                result.push(state.transpileToken(branch.tokens.condition));
             } else {
                 result.push('#else');
-                result.push(...transpileBranchBody(elseBranch.statements));
-                elseBranch = undefined;
             }
-        }
+            result.push(...transpileBranchBody(branchStatements));
+            isFirstBranch = false;
+        });
         result.push(
             '#end if',
             state.newline,
@@ -3517,31 +3543,40 @@ export class MethodStatement extends FunctionStatement {
         //build a conditional compile statement containing the field initializers of the original's branches,
         //or undefined if there are no fields in any branch
         const buildConditionalCompile = (statement: ConditionalCompileStatement): ConditionalCompileStatement | undefined => {
-            const thenStatements = buildInitializers(statement.thenBranch?.statements ?? []);
-            let elseBranch: ConditionalCompileStatement | Block | undefined;
-            if (isConditionalCompileStatement(statement.elseBranch)) {
-                elseBranch = buildConditionalCompile(statement.elseBranch);
-            } else if (isBlock(statement.elseBranch)) {
-                const elseStatements = buildInitializers(statement.elseBranch.statements);
-                if (elseStatements.length > 0) {
-                    elseBranch = new Block({ statements: elseStatements });
-                }
-            }
-            if (thenStatements.length === 0 && !elseBranch) {
-                //no fields in any branch - nothing to initialize
-                return undefined;
-            }
-            const conditionalCompile = new ConditionalCompileStatement({
-                hashIf: util.cloneToken(statement.tokens.hashIf),
-                not: util.cloneToken(statement.tokens.not),
-                condition: util.cloneToken(statement.tokens.condition),
-                hashElse: elseBranch ? util.cloneToken(statement.tokens.hashElse) : undefined,
-                hashEndIf: util.cloneToken(statement.tokens.hashEndIf),
-                thenBranch: new Block({ statements: thenStatements }),
-                elseBranch: elseBranch
+            //fold branches back-to-front so an empty branch ahead of one with content still gets a wrapper,
+            //keeping the `#if`/`#else if`/`#else` structure intact
+            const branches: Array<{ branch: ConditionalCompileStatement | undefined; statements: Statement[] }> = [];
+            forEachConditionalCompileBranch(statement, (branchStatements, branch) => {
+                branches.push({ branch: branch, statements: buildInitializers(branchStatements) });
             });
-            conditionalCompile.parent = state.classStatement;
-            return conditionalCompile;
+
+            let elseBranch: ConditionalCompileStatement | Block | undefined;
+            for (let i = branches.length - 1; i >= 0; i--) {
+                const { branch, statements } = branches[i];
+                if (!branch) {
+                    //the trailing plain `#else` block
+                    if (statements.length > 0) {
+                        elseBranch = new Block({ statements: statements });
+                    }
+                    continue;
+                }
+                if (statements.length === 0 && !elseBranch) {
+                    //no fields in this branch, and nothing further down the chain either - skip it
+                    continue;
+                }
+                const conditionalCompile = new ConditionalCompileStatement({
+                    hashIf: util.cloneToken(branch.tokens.hashIf),
+                    not: util.cloneToken(branch.tokens.not),
+                    condition: util.cloneToken(branch.tokens.condition),
+                    hashElse: elseBranch ? util.cloneToken(branch.tokens.hashElse) : undefined,
+                    hashEndIf: util.cloneToken(branch.tokens.hashEndIf),
+                    thenBranch: new Block({ statements: statements }),
+                    elseBranch: elseBranch
+                });
+                conditionalCompile.parent = state.classStatement;
+                elseBranch = conditionalCompile;
+            }
+            return elseBranch as ConditionalCompileStatement | undefined;
         };
 
         const buildInitializers = (statements: Statement[]): Statement[] => {

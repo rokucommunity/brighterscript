@@ -683,6 +683,29 @@ describe('parser class', () => {
             expect(method.annotations?.[0]?.name).to.eq('it');
         });
 
+        it('attaches an annotation preceding a conditional compile block to the block itself', () => {
+            let { ast, diagnostics } = Parser.parse(`
+                class Person
+                    @deprecated
+                    #if DEBUG
+                        sub debugSpeak()
+                        end sub
+                    #end if
+
+                    sub speak()
+                    end sub
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            const klass = ast.statements[0] as ClassStatement;
+            const cc = klass.body[0] as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(cc)).to.be.true;
+            expect(cc.annotations?.[0]?.name).to.eq('deprecated');
+
+            const speak = klass.body[1] as MethodStatement;
+            expect(speak.annotations ?? []).to.be.empty;
+        });
+
         it('includes conditional members in the class type', () => {
             let { ast, diagnostics } = Parser.parse(`
                 class Person
