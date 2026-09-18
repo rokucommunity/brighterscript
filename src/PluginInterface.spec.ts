@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/prefer-ts-expect-error */
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 import { expect } from './chai-config.spec';
 import * as sinon from 'sinon';
 import { Logger } from './Logger';
@@ -16,8 +18,10 @@ describe('PluginInterface', () => {
             name: 'allows adding a plugin',
             beforePublish: beforePublish
         };
+        //@ts-ignore the current definition of `emit` doesn't like this third argument
         pluginInterface.emit('beforePublish', undefined, []);
         pluginInterface.add(plugin);
+        //@ts-ignore the current definition of `emit` doesn't like this third argument
         pluginInterface.emit('beforePublish', undefined, []);
         expect(beforePublish.callCount).to.equal(1);
     });
@@ -39,6 +43,7 @@ describe('PluginInterface', () => {
         };
         pluginInterface.add(plugin);
         pluginInterface.add(plugin);
+        //@ts-ignore the current definition of `emit` doesn't like this third argument
         pluginInterface.emit('beforePublish', undefined, []);
         expect(beforePublish.callCount).to.equal(1);
         pluginInterface.remove(plugin);
@@ -52,9 +57,11 @@ describe('PluginInterface', () => {
             beforePublish: beforePublish
         };
         pluginInterface.add(plugin);
+        //@ts-ignore the current definition of `emit` doesn't like this third argument
         pluginInterface.emit('beforePublish', undefined, []);
         expect(beforePublish.callCount).to.equal(1);
         pluginInterface.remove(plugin);
+        //@ts-ignore the current definition of `emit` doesn't like this third argument
         pluginInterface.emit('beforePublish', undefined, []);
         expect(beforePublish.callCount).to.equal(1);
     });

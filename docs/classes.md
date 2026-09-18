@@ -608,3 +608,41 @@ sub main()
 end sub
 ```
 </details>
+
+
+## Optional fields
+
+Classes can include optional fields, denoted with the keyword `optional` before the name. If a class has an optional field, it signifies that the value of the field may be `invalid`. Optional fields in a class do not change how the class or its members are validated.
+
+```brighterscript
+class Video
+    url as string
+    length as float
+    optional subtitleUrl as string
+    optional rating as string
+    optional genre as string
+end class
+```
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
+```BrightScript
+function __Video_builder()
+    instance = {}
+    instance.new = sub()
+        m.url = invalid
+        m.length = invalid
+        m.subtitleUrl = invalid
+        m.rating = invalid
+        m.genre = invalid
+    end sub
+    return instance
+end function
+function Video()
+    instance = __Video_builder()
+    instance.new()
+    return instance
+end function
+```
+</details>

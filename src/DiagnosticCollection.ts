@@ -1,5 +1,6 @@
 import type { BsDiagnostic } from './interfaces';
 import type { Project } from './LanguageServer';
+import { util } from './util';
 
 export class DiagnosticCollection {
     private previousDiagnosticsByFile = {} as Record<string, KeyedDiagnostic[]>;
@@ -36,13 +37,16 @@ export class DiagnosticCollection {
             }
             const diagnosticMap = result[srcPath];
 
+            //fall back to a default range if missing
+            const range = diagnostic?.range ?? util.createRange(0, 0, 0, 0);
+
             diagnostic.key =
                 srcPath.toLowerCase() + '-' +
                 diagnostic.code + '-' +
-                diagnostic.range.start.line + '-' +
-                diagnostic.range.start.character + '-' +
-                diagnostic.range.end.line + '-' +
-                diagnostic.range.end.character +
+                range.start.line + '-' +
+                range.start.character + '-' +
+                range.end.line + '-' +
+                range.end.character +
                 diagnostic.message;
 
             //don't include duplicates

@@ -43,7 +43,7 @@ describe('createStackedVisitor', () => {
             assert(stack !== undefined, 'stack is undefined');
             actual.push(`${stack.length ? stack.map(e => e.id).join('/') + '/' : ''}${item.id}`);
         });
-        visitStruct(test1Struct, undefined, stackedVisitor);
+        visitStruct(test1Struct, undefined as any, stackedVisitor);
         expect(actual).to.deep.equal([
             '1',
             '1/2',
@@ -73,7 +73,7 @@ describe('createStackedVisitor', () => {
                 assert(stack !== undefined, 'stack is undefined');
                 actual.push(`<${stack.map(e => e.id).join('/')}:${popped.id}`);
             });
-        visitStruct(test1Struct, undefined, stackedVisitor);
+        visitStruct(test1Struct, undefined as any, stackedVisitor);
         expect(actual).to.deep.equal([
             '>1:1',
             '>1/3:3',

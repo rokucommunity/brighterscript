@@ -14,7 +14,7 @@ describe('parser call expressions', () => {
     it('parses named function calls', () => {
         const { statements, diagnostics } = Parser.parse([
             identifier('RebootSystem'),
-            { kind: TokenKind.LeftParen, text: '(', range: null },
+            { kind: TokenKind.LeftParen, text: '(', range: null as any },
             token(TokenKind.RightParen, ')'),
             EOF
         ]);
@@ -65,7 +65,7 @@ describe('parser call expressions', () => {
     it('allows closing parentheses on separate line', () => {
         const { statements, diagnostics } = Parser.parse([
             identifier('RebootSystem'),
-            { kind: TokenKind.LeftParen, text: '(', range: null },
+            { kind: TokenKind.LeftParen, text: '(', range: null as any },
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.RightParen, ')'),
@@ -128,9 +128,9 @@ describe('parser call expressions', () => {
     it('accepts arguments', () => {
         const { statements, diagnostics } = Parser.parse([
             identifier('add'),
-            { kind: TokenKind.LeftParen, text: '(', range: null },
+            { kind: TokenKind.LeftParen, text: '(', range: null as any },
             token(TokenKind.IntegerLiteral, '1'),
-            { kind: TokenKind.Comma, text: ',', range: null },
+            { kind: TokenKind.Comma, text: ',', range: null as any },
             token(TokenKind.IntegerLiteral, '2'),
             token(TokenKind.RightParen, ')'),
             EOF

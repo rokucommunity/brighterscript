@@ -7,6 +7,8 @@ import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { tempDir, rootDir } from './testHelpers.spec';
+import { Program } from './Program';
+import type { BsDiagnostic } from '.';
 
 const sinon = createSandbox();
 
@@ -38,6 +40,31 @@ describe('util', () => {
         });
     });
 
+    describe('diagnosticIsSuppressed', () => {
+        it('does not crash when diagnostic is missing location information', () => {
+            const program = new Program({});
+            const file = program.setFile('source/main.brs', '');
+            const diagnostic: BsDiagnostic = {
+                file: file,
+                message: 'crash',
+                //important part of the test. range must be missing
+                range: undefined as any
+            };
+
+            file.commentFlags.push({
+                affectedRange: util.createRange(1, 2, 3, 4),
+                codes: [1, 2, 3],
+                file: file,
+                range: util.createRange(1, 2, 3, 4)
+            });
+            file.diagnostics.push(diagnostic);
+
+            util.diagnosticIsSuppressed(diagnostic);
+
+            //test passes if there's no crash
+        });
+    });
+
     describe('getRokuPkgPath', () => {
         it('replaces more than one windows slash in a path', () => {
             expect(util.getRokuPkgPath('source\\folder1\\folder2\\file.brs')).to.eql('pkg:/source/folder1/folder2/file.brs');
@@ -59,7 +86,7 @@ describe('util', () => {
             fsExtra.outputFileSync(s`${rootDir}/grandparent.json`, `{"extends": "greatgrandparent.json"}`);
             fsExtra.outputFileSync(s`${rootDir}/greatgrandparent.json`, `{}`);
             expect(
-                util.loadConfigFile(s`${rootDir}/child.json`)._ancestors.map(x => s(x))
+                util.loadConfigFile(s`${rootDir}/child.json`)?._ancestors?.map(x => s(x))
             ).to.eql([
                 s`${rootDir}/child.json`,
                 s`${rootDir}/parent.json`,
@@ -72,7 +99,7 @@ describe('util', () => {
             fsExtra.outputFileSync(s`${rootDir}/child.json`, `{}`);
             let config = util.loadConfigFile(s`${rootDir}/child.json`);
             expect(
-                config._ancestors.map(x => s(x))
+                config?._ancestors?.map(x => s(x))
             ).to.eql([
                 s`${rootDir}/child.json`
             ]);
@@ -88,7 +115,7 @@ describe('util', () => {
                 ]
             };
             util.resolvePathsRelativeTo(config, 'plugins', s`${rootDir}/config`);
-            expect(config.plugins.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
+            expect(config?.plugins?.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
                 `${rootDir}/config/plugins.js`,
                 `${rootDir}/config/scripts/plugins.js`,
                 `${rootDir}/scripts/plugins.js`,
@@ -103,11 +130,11 @@ describe('util', () => {
                     'bsplugin',
                     '../config/plugins.js',
                     'bsplugin',
-                    undefined
+                    undefined as any
                 ]
             };
             util.resolvePathsRelativeTo(config, 'plugins', s`${process.cwd()}/config`);
-            expect(config.plugins.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
+            expect(config?.plugins?.map(p => (p ? util.pathSepNormalize(p, '/') : undefined))).to.deep.equal([
                 s`${process.cwd()}/config/plugins.js`,
                 'bsplugin'
             ].map(p => util.pathSepNormalize(p, '/')));
@@ -206,6 +233,31 @@ describe('util', () => {
     });
 
     describe('normalizeAndResolveConfig', () => {
+        it('loads project by default', () => {
+            fsExtra.outputJsonSync(`${rootDir}/bsconfig.json`, {
+                rootDir: s`${cwd}/TEST`
+            });
+            expect(
+                util.normalizeAndResolveConfig({
+                    cwd: rootDir
+                }).rootDir
+            ).to.eql(
+                s`${cwd}/TEST`
+            );
+        });
+
+        it('noproject skips loading the local bsconfig.json', () => {
+            fsExtra.outputJsonSync(`${rootDir}/bsconfig.json`, {
+                rootDir: s`${cwd}/TEST`
+            });
+            expect(
+                util.normalizeAndResolveConfig({
+                    cwd: rootDir,
+                    noProject: true
+                }).rootDir
+            ).to.be.undefined;
+        });
+
         it('throws for missing project file', () => {
             expect(() => {
                 util.normalizeAndResolveConfig({ project: 'path/does/not/exist/bsconfig.json' });
@@ -249,6 +301,12 @@ describe('util', () => {
             expect(util.normalizeConfig(<any>{ emitDefinitions: 123 }).emitDefinitions).to.be.false;
             expect(util.normalizeConfig(<any>{ emitDefinitions: undefined }).emitDefinitions).to.be.false;
             expect(util.normalizeConfig(<any>{ emitDefinitions: 'true' }).emitDefinitions).to.be.false;
+        });
+
+        it('sets pruneEmptyCodeFiles to false by default, or true if explicitly true', () => {
+            expect(util.normalizeConfig({}).pruneEmptyCodeFiles).to.be.false;
+            expect(util.normalizeConfig({ pruneEmptyCodeFiles: true }).pruneEmptyCodeFiles).to.be.true;
+            expect(util.normalizeConfig({ pruneEmptyCodeFiles: false }).pruneEmptyCodeFiles).to.be.false;
         });
 
         it('loads project from disc', () => {
@@ -323,6 +381,16 @@ describe('util', () => {
             let config = util.normalizeAndResolveConfig({ watch: true });
             expect(config.watch).to.be.true;
         });
+
+        it('sets default value for bslibDestinationDir', () => {
+            expect(util.normalizeConfig(<any>{}).bslibDestinationDir).to.equal('source');
+        });
+
+        it('strips leading and/or trailing slashes from bslibDestinationDir', () => {
+            ['source/opt', '/source/opt', 'source/opt/', '/source/opt/'].forEach(input => {
+                expect(util.normalizeConfig(<any>{ bslibDestinationDir: input }).bslibDestinationDir).to.equal('source/opt');
+            });
+        });
     });
 
     describe('areArraysEqual', () => {
@@ -359,6 +427,16 @@ describe('util', () => {
             expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:/')).to.equal(null);
             expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:')).to.equal(null);
             expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg')).to.equal(s`components/pkg`);
+        });
+
+        it('supports pkg:/ and libpkg:/', () => {
+            expect(util.getPkgPathFromTarget('components/component1.xml', 'pkg:/source/lib.brs')).to.equal(s`source/lib.brs`);
+            expect(util.getPkgPathFromTarget('components/component1.xml', 'libpkg:/source/lib.brs')).to.equal(s`source/lib.brs`);
+        });
+
+        it('works case insensitive', () => {
+            expect(util.getPkgPathFromTarget('components/component1.xml', 'PKG:/source/lib.brs')).to.equal(s`source/lib.brs`);
+            expect(util.getPkgPathFromTarget('components/component1.xml', 'LIBPKG:/source/lib.brs')).to.equal(s`source/lib.brs`);
         });
     });
 
@@ -405,7 +483,16 @@ describe('util', () => {
         });
     });
 
-    describe('compareRangeToPosition', () => {
+    describe('comparePositionToRange', () => {
+        it('does not crash on undefined props', () => {
+            expect(
+                util.comparePositionToRange(undefined, util.createRange(0, 0, 0, 0))
+            ).to.eql(0);
+            expect(
+                util.comparePositionToRange(util.createPosition(1, 1), undefined)
+            ).to.eql(0);
+        });
+
         it('correctly compares positions to ranges with one line range line', () => {
             let range = Range.create(1, 10, 1, 15);
             expect(util.comparePositionToRange(Position.create(0, 13), range)).to.equal(-1);
@@ -521,9 +608,28 @@ describe('util', () => {
                 )
             ).not.to.be.null;
         });
+
+        it('copies from local bslib dependency to optionally specified destination directory', async () => {
+            await util.copyBslibToStaging(tempDir, 'source/opt');
+            expect(fsExtra.pathExistsSync(`${tempDir}/source/opt/bslib.brs`)).to.be.true;
+            expect(
+                /^function bslib_toString\(/mg.exec(
+                    fsExtra.readFileSync(`${tempDir}/source/opt/bslib.brs`).toString()
+                )
+            ).not.to.be.null;
+        });
     });
 
     describe('rangesIntersect', () => {
+        it('does not crash on undefined range', () => {
+            expect(
+                util.rangesIntersect(undefined, util.createRange(0, 0, 0, 0))
+            ).to.be.false;
+            expect(
+                util.rangesIntersect(util.createRange(0, 0, 0, 0), undefined)
+            ).to.be.false;
+        });
+
         it('does not match when ranges do not touch (a < b)', () => {
             // AA BB
             expect(util.rangesIntersectOrTouch(
@@ -614,6 +720,15 @@ describe('util', () => {
     });
 
     describe('rangesIntersectOrTouch', () => {
+        it('does not crash on undefined range', () => {
+            expect(
+                util.rangesIntersectOrTouch(undefined, util.createRange(0, 0, 0, 0))
+            ).to.be.false;
+            expect(
+                util.rangesIntersectOrTouch(util.createRange(0, 0, 0, 0), undefined)
+            ).to.be.false;
+        });
+
         it('does not match when ranges do not touch (a < b)', () => {
             // AA BB
             expect(util.rangesIntersectOrTouch(
@@ -766,11 +881,11 @@ describe('util', () => {
             expect(
                 util.toDiagnostic({
                     ...DiagnosticMessages.cannotFindName('someVar'),
-                    file: undefined,
+                    file: undefined as any,
                     range: util.createRange(1, 2, 3, 4),
                     relatedInformation: [{
                         message: 'Alpha',
-                        location: undefined
+                        location: undefined as any
                     }]
                 }, 'u/r/i').relatedInformation
             ).to.eql([{
@@ -785,7 +900,7 @@ describe('util', () => {
             expect(
                 util.toDiagnostic({
                     ...DiagnosticMessages.cannotFindName('someVar'),
-                    file: undefined,
+                    file: undefined as any,
                     range: util.createRange(1, 2, 3, 4),
                     relatedInformation: [{
                         message: 'Alpha',
@@ -794,9 +909,9 @@ describe('util', () => {
                         )
                     }, {
                         message: 'Beta',
-                        location: undefined
+                        location: undefined as any
                     }]
-                }, undefined).relatedInformation
+                }, undefined as any).relatedInformation
             ).to.eql([{
                 message: 'Alpha',
                 location: util.createLocation(

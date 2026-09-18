@@ -124,7 +124,7 @@ describe('AstEditor', () => {
 
     it('restores array after being removed', () => {
         editor.removeFromArray(obj.hobbies, 0);
-        editor.setProperty(obj, 'hobbies', undefined);
+        editor.setProperty(obj, 'hobbies', undefined as any);
         expect(obj.hobbies).to.be.undefined;
         editor.undoAll();
         expect(obj.hobbies).to.eql(['gaming', 'reading', 'cycling']);
@@ -139,7 +139,7 @@ describe('AstEditor', () => {
         editor.removeFromArray(obj.hobbies, 0);
         editor.removeFromArray(obj.hobbies, 0);
         editor.removeFromArray(obj.hobbies, 0);
-        editor.setProperty(obj, 'hobbies', undefined);
+        editor.setProperty(obj, 'hobbies', undefined as any);
 
         expect(obj).to.eql({
             name: 'bob',
@@ -294,9 +294,9 @@ describe('AstEditor', () => {
 
     it('edit handles missing functions', () => {
         //missing undo
-        editor.edit((data) => { }, undefined);
+        editor.edit((data) => { }, undefined as any);
         //missing edit
-        editor.edit(undefined, (data) => { });
+        editor.edit(undefined as any, (data) => { });
 
         //test passes if no exceptions were thrown
     });

@@ -18,8 +18,11 @@ export class Logger {
      */
     private indent = '';
 
-    constructor(logLevel?: LogLevel) {
-        this.logLevel = logLevel;
+    constructor(
+        logLevel?: LogLevel,
+        public prefix?: string
+    ) {
+        this.logLevel = logLevel ?? LogLevel.log;
     }
 
     public get logLevel() {
@@ -34,7 +37,7 @@ export class Logger {
     }
     private _logLevel = LogLevel.log;
 
-    private getTimestamp() {
+    public getTimestamp() {
         return '[' + chalk.grey(moment().format(`hh:mm:ss:SSSS A`)) + ']';
     }
 
@@ -42,7 +45,7 @@ export class Logger {
         if (this._logLevel === LogLevel.trace) {
             method = console.trace;
         }
-        let finalArgs = [];
+        let finalArgs: any[] = [];
         //evaluate any functions to get their values.
         //This allows more complicated values to only be evaluated if this log level is active
         for (let arg of args) {
@@ -51,7 +54,15 @@ export class Logger {
             }
             finalArgs.push(arg);
         }
-        method.call(console, this.getTimestamp(), this.indent, ...finalArgs);
+        const allArgs = [
+            this.getTimestamp()
+        ];
+        if (this.prefix) {
+            allArgs.push(this.prefix);
+        }
+        allArgs.push(this.indent);
+
+        method.call(console, ...allArgs, ...finalArgs);
         if (Logger.emitter.listenerCount('log') > 0) {
             Logger.emitter.emit('log', finalArgs.join(' '));
         }

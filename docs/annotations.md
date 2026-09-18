@@ -62,6 +62,9 @@ end function
 
 function init()
 end function
+
+function main()
+end
 ```
 
 Notice the annotations were completely removed (because annotations are not available at runtime).

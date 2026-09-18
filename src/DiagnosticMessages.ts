@@ -710,14 +710,19 @@ export let DiagnosticMessages = {
         code: 1136,
         severity: DiagnosticSeverity.Error
     }),
-    namespaceCannotBeReferencedDirectly: () => ({
-        message: `Namespace cannot be referenced directly`,
+    itemCannotBeUsedAsVariable: (itemType: string) => ({
+        message: `${itemType} cannot be used as a variable`,
         code: 1137,
         severity: DiagnosticSeverity.Error
     }),
     callfuncHasToManyArgs: (numberOfArgs: number) => ({
         message: `You can not have more than 5 arguments in a callFunc. ${numberOfArgs} found.`,
         code: 1138,
+        severity: DiagnosticSeverity.Error
+    }),
+    noOptionalChainingInLeftHandSideOfAssignment: () => ({
+        message: `Optional chaining may not be used in the left-hand side of an assignment`,
+        code: 1139,
         severity: DiagnosticSeverity.Error
     })
 };

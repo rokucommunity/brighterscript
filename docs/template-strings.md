@@ -17,7 +17,7 @@ text = tag`hello ${name} how are you`
 transpiles to
 ```BrightScript
 name = "John Smith"
-text = "hello " + bslib_toString(name)
+text = ("hello " + bslib_toString(name))
 text = "first line text" + chr(10) + "second line text"
 text = tag(["hello ", " how are you"], [name])
 ```

@@ -61,7 +61,7 @@ export function parseManifest(contents: string) {
  * @returns a map of key to boolean value representing the `bs_const` attribute, or an empty map if
  *          no `bs_const` attribute is found.
  */
-export function getBsConst(manifest: Manifest): Map<string, boolean> {
+export function getBsConst(manifest: Manifest, toLowerKeys = true): Map<string, boolean> {
     if (!manifest.has('bs_const')) {
         return new Map();
     }
@@ -89,7 +89,7 @@ export function getBsConst(manifest: Manifest): Map<string, boolean> {
             return [keyValuePair.slice(0, equals), keyValuePair.slice(equals + 1)];
         })
         // remove leading/trailing whitespace from keys and values, and force everything to lower case
-        .map(([key, value]) => [key.trim().toLowerCase(), value.trim().toLowerCase()])
+        .map(([key, value]) => [toLowerKeys ? key.trim().toLowerCase() : key.trim(), value.trim().toLowerCase()])
         // convert value to boolean or throw
         .map(([key, value]): [string, boolean] => {
             if (value.toLowerCase() === 'true') {

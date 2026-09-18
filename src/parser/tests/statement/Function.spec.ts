@@ -15,7 +15,7 @@ describe('parser', () => {
                 end su
             `);
             const func = parser.ast.findChild<FunctionStatement>(isFunctionStatement);
-            expect(func.func.body).to.exist;
+            expect(func?.func.body).to.exist;
         });
 
         it('recovers when using `end sub` instead of `end function`', () => {

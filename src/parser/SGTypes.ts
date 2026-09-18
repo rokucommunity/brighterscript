@@ -39,7 +39,7 @@ export class SGTag {
     }
 
     getAttributeValue(name: string): string | undefined {
-        return this.getAttribute(name)?.value?.text;
+        return this.getAttribute(name.toLowerCase())?.value?.text;
     }
 
     setAttribute(name: string, value: string) {

@@ -3,7 +3,7 @@ import * as fsExtra from 'fs-extra';
 import * as path from 'path';
 import type { CodeAction, CompletionItem, Position, Range, SignatureInformation, Location } from 'vscode-languageserver';
 import { CompletionItemKind } from 'vscode-languageserver';
-import type { BsConfig } from './BsConfig';
+import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { BrsFile } from './files/BrsFile';
@@ -16,7 +16,7 @@ import { DependencyGraph } from './DependencyGraph';
 import { Logger, LogLevel } from './Logger';
 import chalk from 'chalk';
 import { globalFile } from './globalCallables';
-import { parseManifest } from './preprocessor/Manifest';
+import { parseManifest, getBsConst } from './preprocessor/Manifest';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement } from './astUtils/reflection';
@@ -28,6 +28,7 @@ import { rokuDeploy } from 'roku-deploy';
 import type { Statement } from './parser/AstNode';
 import { CallExpressionInfo } from './bscPlugin/CallExpressionInfo';
 import { SignatureHelpUtil } from './bscPlugin/SignatureHelpUtil';
+import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
 
 const startOfSourcePkgPath = `source${path.sep}`;
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
@@ -59,7 +60,7 @@ export class Program {
         /**
          * The root directory for this program
          */
-        public options: BsConfig,
+        options: BsConfig,
         logger?: Logger,
         plugins?: PluginInterface
     ) {
@@ -76,6 +77,7 @@ export class Program {
         this.createGlobalScope();
     }
 
+    public options: FinalizedBsConfig;
     public logger: Logger;
 
     private createGlobalScope() {
@@ -102,11 +104,13 @@ export class Program {
 
     private diagnosticFilterer = new DiagnosticFilterer();
 
+    private diagnosticAdjuster = new DiagnosticSeverityAdjuster();
+
     /**
      * A scope that contains all built-in global functions.
      * All scopes should directly or indirectly inherit from this scope
      */
-    public globalScope: Scope;
+    public globalScope: Scope = undefined as any;
 
     /**
      * Plugins which can provide extra diagnostics or transform AST
@@ -133,7 +137,7 @@ export class Program {
 
             //default to the embedded version
         } else {
-            return `source${path.sep}bslib.brs`;
+            return `${this.options.bslibDestinationDir}${path.sep}bslib.brs`;
         }
     }
 
@@ -156,7 +160,6 @@ export class Program {
 
     protected addScope(scope: Scope) {
         this.scopes[scope.name] = scope;
-        this.plugins.emit('afterScopeCreate', scope);
     }
 
     /**
@@ -289,6 +292,10 @@ export class Program {
                 return finalDiagnostics;
             });
 
+            this.logger.time(LogLevel.debug, ['adjust diagnostics severity'], () => {
+                this.diagnosticAdjuster.adjust(this.options, diagnostics);
+            });
+
             this.logger.info(`diagnostic counts: total=${chalk.yellow(diagnostics.length.toString())}, after filter=${chalk.yellow(filteredDiagnostics.length.toString())}`);
             return filteredDiagnostics;
         });
@@ -314,7 +321,7 @@ export class Program {
     /**
      * roku filesystem is case INsensitive, so find the scope by key case insensitive
      */
-    public getScopeByName(scopeName: string) {
+    public getScopeByName(scopeName: string): Scope | undefined {
         if (!scopeName) {
             return undefined;
         }
@@ -322,7 +329,7 @@ export class Program {
         //so it's safe to run the standardizePkgPath method
         scopeName = s`${scopeName}`;
         let key = Object.keys(this.scopes).find(x => x.toLowerCase() === scopeName.toLowerCase());
-        return this.scopes[key];
+        return this.scopes[key!];
     }
 
     /**
@@ -467,6 +474,8 @@ export class Program {
                 //register this compoent now that we have parsed it and know its component name
                 this.registerComponent(xmlFile, scope);
 
+                //notify plugins that the scope is created and the component is registered
+                this.plugins.emit('afterScopeCreate', scope);
             } else {
                 //TODO do we actually need to implement this? Figure out how to handle img paths
                 // let genericFile = this.files[srcPath] = <any>{
@@ -487,8 +496,8 @@ export class Program {
      * @param rootDir must be a pre-normalized path
      */
     private getPaths(fileParam: string | FileObj | { srcPath?: string; pkgPath?: string }, rootDir: string) {
-        let srcPath: string;
-        let pkgPath: string;
+        let srcPath: string | undefined;
+        let pkgPath: string | undefined;
 
         assert.ok(fileParam, 'fileParam is required');
 
@@ -554,6 +563,7 @@ export class Program {
             const sourceScope = new Scope('source', this, 'scope:source');
             sourceScope.attachDependencyGraph(this.dependencyGraph);
             this.addScope(sourceScope);
+            this.plugins.emit('afterScopeCreate', sourceScope);
         }
     }
 
@@ -622,7 +632,7 @@ export class Program {
                 this.plugins.emit('beforeScopeDispose', scope);
                 scope.dispose();
                 //notify dependencies of this scope that it has been removed
-                this.dependencyGraph.remove(scope.dependencyGraphKey);
+                this.dependencyGraph.remove(scope.dependencyGraphKey!);
                 delete this.scopes[file.pkgPath];
                 this.plugins.emit('afterScopeDispose', scope);
             }
@@ -768,15 +778,15 @@ export class Program {
      * @param file the file
      */
     public getScopesForFile(file: XmlFile | BrsFile | string) {
-        if (typeof file === 'string') {
-            file = this.getFile(file);
-        }
+
+        const resolvedFile = typeof file === 'string' ? this.getFile(file) : file;
+
         let result = [] as Scope[];
-        if (file) {
+        if (resolvedFile) {
             for (let key in this.scopes) {
                 let scope = this.scopes[key];
 
-                if (scope.hasFile(file)) {
+                if (scope.hasFile(resolvedFile)) {
                     result.push(scope);
                 }
             }
@@ -787,7 +797,7 @@ export class Program {
     /**
      * Get the first found scope for a file.
      */
-    public getFirstScopeForFile(file: XmlFile | BrsFile): Scope {
+    public getFirstScopeForFile(file: XmlFile | BrsFile): Scope | undefined {
         for (let key in this.scopes) {
             let scope = this.scopes[key];
 
@@ -982,7 +992,7 @@ export class Program {
     /**
      * Get semantic tokens for the specified file
      */
-    public getSemanticTokens(srcPath: string) {
+    public getSemanticTokens(srcPath: string): SemanticToken[] | undefined {
         const file = this.getFile(srcPath);
         if (file) {
             const result = [] as SemanticToken[];
@@ -1208,6 +1218,9 @@ export class Program {
                 file: file,
                 outputPath: getOutputPath(file)
             };
+            //sort the entries to make transpiling more deterministic
+        }).sort((a, b) => {
+            return a.file.srcPath < b.file.srcPath ? -1 : 1;
         });
 
         const astEditor = new AstEditor();
@@ -1231,28 +1244,30 @@ export class Program {
             //mark this file as processed so we don't process it more than once
             processedFiles.add(outputPath?.toLowerCase());
 
-            //skip transpiling typedef files
-            if (isBrsFile(file) && file.isTypedef) {
-                return;
-            }
+            if (!this.options.pruneEmptyCodeFiles || !file.canBePruned) {
+                //skip transpiling typedef files
+                if (isBrsFile(file) && file.isTypedef) {
+                    return;
+                }
 
-            const fileTranspileResult = this._getTranspiledFileContents(file, outputPath);
+                const fileTranspileResult = this._getTranspiledFileContents(file, outputPath);
 
-            //make sure the full dir path exists
-            await fsExtra.ensureDir(path.dirname(outputPath));
+                //make sure the full dir path exists
+                await fsExtra.ensureDir(path.dirname(outputPath));
 
-            if (await fsExtra.pathExists(outputPath)) {
-                throw new Error(`Error while transpiling "${file.srcPath}". A file already exists at "${outputPath}" and will not be overwritten.`);
-            }
-            const writeMapPromise = fileTranspileResult.map ? fsExtra.writeFile(`${outputPath}.map`, fileTranspileResult.map.toString()) : null;
-            await Promise.all([
-                fsExtra.writeFile(outputPath, fileTranspileResult.code),
-                writeMapPromise
-            ]);
+                if (await fsExtra.pathExists(outputPath)) {
+                    throw new Error(`Error while transpiling "${file.srcPath}". A file already exists at "${outputPath}" and will not be overwritten.`);
+                }
+                const writeMapPromise = fileTranspileResult.map ? fsExtra.writeFile(`${outputPath}.map`, fileTranspileResult.map.toString()) : null;
+                await Promise.all([
+                    fsExtra.writeFile(outputPath, fileTranspileResult.code),
+                    writeMapPromise
+                ]);
 
-            if (fileTranspileResult.typedef) {
-                const typedefPath = outputPath.replace(/\.brs$/i, '.d.bs');
-                await fsExtra.writeFile(typedefPath, fileTranspileResult.typedef);
+                if (fileTranspileResult.typedef) {
+                    const typedefPath = outputPath.replace(/\.brs$/i, '.d.bs');
+                    await fsExtra.writeFile(typedefPath, fileTranspileResult.typedef);
+                }
             }
         };
 
@@ -1262,7 +1277,7 @@ export class Program {
 
         //if there's no bslib file already loaded into the program, copy it to the staging directory
         if (!this.getFile(bslibAliasedRokuModulesPkgPath) && !this.getFile(s`source/bslib.brs`)) {
-            promises.push(util.copyBslibToStaging(stagingDir));
+            promises.push(util.copyBslibToStaging(stagingDir, this.options.bslibDestinationDir));
         }
         await Promise.all(promises);
 
@@ -1367,29 +1382,74 @@ export class Program {
         return files;
     }
 
+    private _manifest: Map<string, string>;
+
+    /**
+     * Modify a parsed manifest map by reading `bs_const` and injecting values from `options.manifest.bs_const`
+     * @param parsedManifest The manifest map to read from and modify
+     */
+    private buildBsConstsIntoParsedManifest(parsedManifest: Map<string, string>) {
+        // Lift the bs_consts defined in the manifest
+        let bsConsts = getBsConst(parsedManifest, false);
+
+        // Override or delete any bs_consts defined in the bs config
+        for (const key in this.options?.manifest?.bs_const) {
+            const value = this.options.manifest.bs_const[key];
+            if (value === null) {
+                bsConsts.delete(key);
+            } else {
+                bsConsts.set(key, value);
+            }
+        }
+
+        // convert the new list of bs consts back into a string for the rest of the down stream systems to use
+        let constString = '';
+        for (const [key, value] of bsConsts) {
+            constString += `${constString !== '' ? ';' : ''}${key}=${value.toString()}`;
+        }
+
+        // Set the updated bs_const value
+        parsedManifest.set('bs_const', constString);
+    }
+
+    /**
+     * Try to find and load the manifest into memory
+     * @param manifestFileObj A pointer to a potential manifest file object found during loading
+     * @param replaceIfAlreadyLoaded should we overwrite the internal `_manifest` if it already exists
+     */
+    public loadManifest(manifestFileObj?: FileObj, replaceIfAlreadyLoaded = true) {
+        //if we already have a manifest instance, and should not replace...then don't replace
+        if (!replaceIfAlreadyLoaded && this._manifest) {
+            return;
+        }
+        let manifestPath = manifestFileObj
+            ? manifestFileObj.src
+            : path.join(this.options.rootDir, 'manifest');
+
+        try {
+            // we only load this manifest once, so do it sync to improve speed downstream
+            const contents = fsExtra.readFileSync(manifestPath, 'utf-8');
+            const parsedManifest = parseManifest(contents);
+            this.buildBsConstsIntoParsedManifest(parsedManifest);
+            this._manifest = parsedManifest;
+        } catch (e) {
+            this._manifest = new Map();
+        }
+    }
+
     /**
      * Get a map of the manifest information
      */
     public getManifest() {
         if (!this._manifest) {
-            //load the manifest file.
-            //TODO update this to get the manifest from the files array or require it in the options...we shouldn't assume the location of the manifest
-            let manifestPath = path.join(this.options.rootDir, 'manifest');
-
-            let contents: string;
-            try {
-                //we only load this manifest once, so do it sync to improve speed downstream
-                contents = fsExtra.readFileSync(manifestPath, 'utf-8');
-                this._manifest = parseManifest(contents);
-            } catch (err) {
-                this._manifest = new Map();
-            }
+            this.loadManifest();
         }
         return this._manifest;
     }
-    private _manifest: Map<string, string>;
 
     public dispose() {
+        this.plugins.emit('beforeProgramDispose', { program: this });
+
         for (let filePath in this.files) {
             this.files[filePath].dispose();
         }

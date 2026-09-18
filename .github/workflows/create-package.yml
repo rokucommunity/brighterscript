@@ -1,0 +1,57 @@
+name: create-package
+on:
+  pull_request:
+    types: [labeled, unlabeled, synchronize]
+jobs:
+  create-package:
+    runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'create-package')
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@master
+      - uses: actions/setup-node@master
+        with:
+          node-version: "14.19.0"
+      # Get a bot token so the bot's name shows up on all our actions
+      - name: Get Token From roku-ci-token Application
+        uses: tibdex/github-app-token@v1
+        id: generate-token
+        with:
+          app_id: ${{ secrets.BOT_APP_ID }}
+          private_key: ${{ secrets.BOT_PRIVATE_KEY }}
+      - run: echo "TOKEN=${{ steps.generate-token.outputs.token }}" >> $GITHUB_ENV
+      - name: Compute variables
+        run: |
+          CURRENT_VERSION=$(grep -o '\"version\": *\"[^\"]*\"' package.json | awk -F'\"' '{print $4}')
+          SANITIZED_BRANCH_NAME=$(echo "$GITHUB_HEAD_REF" | sed 's/[^0-9a-zA-Z-]/-/g')
+          BUILD_VERSION="$CURRENT_VERSION-$SANITIZED_BRANCH_NAME.$(date +%Y%m%d%H%M%S)"
+          NPM_PACKAGE_NAME=$(grep -o '\"name\": *\"[^\"]*\"' package.json | awk -F'\"' '{print $4}' | sed -e 's/@//g' -e 's#/#-#g')
+          ARTIFACT_NAME=$(echo "$NPM_PACKAGE_NAME-$BUILD_VERSION.tgz" | tr '/' '-')
+          ARTIFACT_URL="${{ github.server_url }}/${{ github.repository }}/releases/download/v0.0.0-packages/${ARTIFACT_NAME}"
+
+          echo "BUILD_VERSION=$BUILD_VERSION" >> $GITHUB_ENV
+          echo "ARTIFACT_URL=$ARTIFACT_URL" >> $GITHUB_ENV
+
+      - run: npm ci
+      - run: npm version "$BUILD_VERSION" --no-git-tag-version
+      - run: npm pack
+
+      # create the release if not exist
+      - run: gh release create v0.0.0-packages --title "v0.0.0-packages" --latest=false --prerelease --notes "catchall release for temp packages" -R ${{ github.repository }}
+        continue-on-error: true
+
+      # upload this artifact to the "packages" github release
+      - run: gh release upload v0.0.0-packages *.tgz -R ${{ github.repository }}
+
+      - name: Fetch build artifact
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ env.TOKEN }}
+          script: |
+              return github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: "Hey there! I just built a new temporary npm package based on ${{ github.event.pull_request.head.sha }}. You can download it [here](${{ env.ARTIFACT_URL }}) or install it by running the following command: \n```bash\nnpm install ${{ env.ARTIFACT_URL }}\n```"
+              });
