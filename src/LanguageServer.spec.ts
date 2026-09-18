@@ -2,7 +2,7 @@ import { expect } from './chai-config.spec';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
 import type { ConfigurationItem, DidChangeWatchedFilesParams, Location, PublishDiagnosticsParams, WorkspaceFolder } from 'vscode-languageserver';
-import { FileChangeType } from 'vscode-languageserver';
+import { CompletionTriggerKind, FileChangeType } from 'vscode-languageserver';
 import { Deferred } from './deferred';
 import type { BrightScriptClientConfiguration } from './LanguageServer';
 import { CustomCommands, LanguageServer } from './LanguageServer';
@@ -26,6 +26,7 @@ import { standardizePath } from 'roku-deploy';
 import undent from 'undent';
 import { ProjectManager } from './lsp/ProjectManager';
 import type { WorkspaceConfig } from './lsp/ProjectManager';
+import { workerPool } from './lsp/worker/WorkerThreadProject';
 
 const sinon = createSandbox();
 
@@ -489,6 +490,53 @@ describe('LanguageServer', () => {
         });
     });
 
+    describe('syncMaxWorkerThreads', () => {
+        function makeConfig(workspaceFolder: string, maxWorkerThreads?: number): WorkspaceConfig {
+            return {
+                languageServer: {
+                    enableThreading: false,
+                    enableProjectDiscovery: true,
+                    logLevel: 'info',
+                    ...(maxWorkerThreads !== undefined ? { maxWorkerThreads: maxWorkerThreads } : {})
+                },
+                workspaceFolder: workspaceFolder,
+                excludePatterns: []
+            };
+        }
+
+        it('defaults to LanguageServer.maxWorkerThreadsDefault when no workspaces are configured', () => {
+            server['workspaceConfigsCache'] = new Map();
+            server['syncMaxWorkerThreads']();
+            expect(workerPool.maxWorkers).to.eql(LanguageServer.maxWorkerThreadsDefault);
+        });
+
+        it('reads the limit from a single workspace config', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 4)]
+            ]);
+            server['syncMaxWorkerThreads']();
+            expect(workerPool.maxWorkers).to.eql(4);
+        });
+
+        it('uses the smallest limit from multiple workspace folders', () => {
+            const folder2 = s`${tempDir}/project2`;
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 10)],
+                [folder2, makeConfig(folder2, 2)]
+            ]);
+            server['syncMaxWorkerThreads']();
+            expect(workerPool.maxWorkers).to.eql(2);
+        });
+
+        it('defaults to 1 when the configured value is less than 1', () => {
+            server['workspaceConfigsCache'] = new Map([
+                [workspacePath, makeConfig(workspacePath, 0)]
+            ]);
+            server['syncMaxWorkerThreads']();
+            expect(workerPool.maxWorkers).to.eql(1);
+        });
+    });
+
     describe('sendDiagnostics', () => {
         it('dedupes diagnostics found at same location from multiple projects', async () => {
             fsExtra.outputFileSync(s`${rootDir}/common/lib.brs`, `
@@ -523,6 +571,27 @@ describe('LanguageServer', () => {
             await sendDiagnosticsDeferred.promise;
 
             expect(stub.getCall(0).args?.[0]?.diagnostics).to.be.lengthOf(1);
+        });
+    });
+
+    describe('critical-failure', () => {
+        it('notifies the client when a project reports a critical failure', async () => {
+            server['connection'] = connection as any;
+            const deferred = new Deferred<any>();
+            const stub = sinon.stub(server['connection'], 'sendNotification').callsFake((...args: any[]) => {
+                deferred.resolve(args);
+                return Promise.resolve();
+            });
+
+            server['projectManager']['emit']('critical-failure', {
+                project: server['projectManager'].projects[0],
+                message: 'worker thread crashed unexpectedly'
+            });
+
+            const args = await deferred.promise;
+            expect(args[0]).to.eql('critical-failure');
+            expect(args[1]).to.include('worker thread crashed unexpectedly');
+            stub.restore();
         });
     });
 
@@ -768,7 +837,8 @@ describe('LanguageServer', () => {
                         projectDiscoveryMaxDepth: 15,
                         projectDiscoveryExclude: undefined,
                         logLevel: 'info',
-                        projectActivationConcurrencyLimit: undefined
+                        projectActivationConcurrencyLimit: undefined,
+                        maxWorkerThreads: undefined
                     }
                 }
             ]);
@@ -1659,6 +1729,67 @@ describe('LanguageServer', () => {
                 isIncomplete: false
             });
         });
+
+        it('ignores the `<` trigger character in non-xml files', async () => {
+            const stub = sinon.stub(server['projectManager'], 'getCompletions').callsFake(() => Promise.resolve({ items: [{ label: 'someCompletion' }], isIncomplete: false }));
+            //`<` is the less-than operator in brightscript, so it should not trigger completions there
+            expect(
+                await (server['onCompletion'] as any)({
+                    textDocument: {
+                        uri: util.pathToUri(s`${rootDir}/source/main.brs`)
+                    },
+                    position: util.createPosition(0, 0),
+                    context: {
+                        triggerKind: CompletionTriggerKind.TriggerCharacter,
+                        triggerCharacter: '<'
+                    }
+                } as any)
+            ).to.eql({
+                items: [],
+                isIncomplete: false
+            });
+            expect(stub.called).to.be.false;
+        });
+
+        it('honors the `<` trigger character in xml files', async () => {
+            const stub = sinon.stub(server['projectManager'], 'getCompletions').callsFake(() => Promise.resolve({ items: [{ label: 'someCompletion' }], isIncomplete: false }));
+            expect(
+                await (server['onCompletion'] as any)({
+                    textDocument: {
+                        uri: util.pathToUri(s`${rootDir}/components/widget.xml`)
+                    },
+                    position: util.createPosition(0, 0),
+                    context: {
+                        triggerKind: CompletionTriggerKind.TriggerCharacter,
+                        triggerCharacter: '<'
+                    }
+                } as any)
+            ).to.eql({
+                items: [{ label: 'someCompletion' }],
+                isIncomplete: false
+            });
+            expect(stub.called).to.be.true;
+        });
+
+        it('still processes non-trigger-character completions in non-xml files', async () => {
+            const stub = sinon.stub(server['projectManager'], 'getCompletions').callsFake(() => Promise.resolve({ items: [{ label: 'someCompletion' }], isIncomplete: false }));
+            expect(
+                await (server['onCompletion'] as any)({
+                    textDocument: {
+                        uri: util.pathToUri(s`${rootDir}/source/main.brs`)
+                    },
+                    position: util.createPosition(0, 0),
+                    context: {
+                        triggerKind: CompletionTriggerKind.TriggerCharacter,
+                        triggerCharacter: '.'
+                    }
+                } as any)
+            ).to.eql({
+                items: [{ label: 'someCompletion' }],
+                isIncomplete: false
+            });
+            expect(stub.called).to.be.true;
+        });
     });
 
     describe('onReferences', () => {
@@ -1726,6 +1857,32 @@ describe('LanguageServer', () => {
             } as any);
 
             expect(references).to.be.empty;
+        });
+
+        it('does not return duplicate locations for a file shared by multiple component scopes', async () => {
+            //a variable declared and used entirely within a file that many components include
+            const sharedDocument = addScriptFile('sharedLib', `
+                sub useShared()
+                    sharedValue = 1
+                    print sharedValue
+                end sub
+            `)!;
+            for (let i = 0; i < 3; i++) {
+                addXmlFile(`SharedHost${i}`, `<script type="text/brightscript" uri="sharedLib.brs" />`);
+            }
+
+            const references = await server['onReferences']({
+                textDocument: {
+                    uri: sharedDocument.uri
+                },
+                position: util.createPosition(2, 22)
+            } as any);
+
+            //the assignment and the print usage, each reported exactly once even though the
+            //file is reachable through the source scope plus 3 component scopes
+            const keys = references.map(x => `${x.uri}:${x.range.start.line}:${x.range.start.character}`);
+            expect(keys).to.eql([...new Set(keys)]);
+            expect(references).to.be.lengthOf(2);
         });
     });
 
@@ -1817,7 +1974,7 @@ describe('LanguageServer', () => {
             });
 
             expect(locations.length).to.equal(1);
-            const location: Location = locations[0];
+            const location: Location = locations[0] as Location;
             expect(location.uri).to.equal(functionDocument.uri);
             expect(location.range.start.line).to.equal(5);
             expect(location.range.start.character).to.equal(16);
@@ -1832,7 +1989,7 @@ describe('LanguageServer', () => {
             });
 
             expect(locations.length).to.equal(1);
-            const location: Location = locations[0];
+            const location: Location = locations[0] as Location;
             expect(location.uri).to.equal(functionDocument.uri);
             expect(location.range.start.line).to.equal(5);
             expect(location.range.start.character).to.equal(16);
@@ -1857,7 +2014,7 @@ describe('LanguageServer', () => {
                 position: util.createPosition(3, 36)
             });
             expect(locations.length).to.equal(1);
-            const location: Location = locations[0];
+            const location: Location = locations[0] as Location;
             expect(location.uri).to.equal(referenceDocument.uri);
             expect(location.range.start.line).to.equal(2);
             expect(location.range.start.character).to.equal(20);
@@ -1892,7 +2049,7 @@ describe('LanguageServer', () => {
                 position: util.createPosition(3, 30)
             });
             expect(locations.length).to.equal(1);
-            const location: Location = locations[0];
+            const location: Location = locations[0] as Location;
             expect(location.uri).to.equal(functionDocument.uri);
             expect(location.range.start.line).to.equal(2);
             expect(location.range.start.character).to.equal(20);

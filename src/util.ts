@@ -7,7 +7,8 @@ import { rokuDeploy, DefaultFiles } from 'roku-deploy';
 import type { Diagnostic, Position, DiagnosticRelatedInformation } from 'vscode-languageserver';
 import { Range, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
-import type { BsConfig, FinalizedBsConfig } from './BsConfig';
+import type { BsConfig, BsConfigCompilerOptions, FinalizedBsConfig } from './BsConfig';
+import { deprecatedCompilerOptionKeys } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, Plugin, ExpressionInfo, TranspileResult, MaybePromise, DisposableLike, ExtraSymbolData, GetTypeOptions, TypeChainProcessResult, PluginFactory, TypeCircularReferenceInfo } from './interfaces';
 import { TypeChainEntry } from './interfaces';
@@ -25,7 +26,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike, isGroupingExpression, isInlineInterfaceExpression, isTypedFunctionTypeExpression } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode, SourceMapConsumer } from 'source-map';
 import type { RawSourceMap, SourceMapGenerator } from 'source-map';
@@ -228,11 +229,21 @@ export class Util {
             util.resolvePathsRelativeTo(projectConfig, 'require', projectFileCwd);
 
             let result: BsConfig;
+            let baseProjectConfigDeprecationDiagnostics: BsDiagnostic[] | undefined;
             //if the project has a base file, load it
             if (projectConfig && typeof projectConfig.extends === 'string') {
                 let baseProjectConfig = this.loadConfigFile(projectConfig.extends, [...parentProjectPaths, configFilePath], projectFileCwd);
                 //extend the base config with the current project settings
                 result = { ...baseProjectConfig, ...projectConfig };
+                //`compilerOptions` is deep-merged (like TypeScript does), so a child config only
+                //overriding one option doesn't wipe out the rest of the options set by its parent(s)
+                if (baseProjectConfig?.compilerOptions || projectConfig.compilerOptions) {
+                    result.compilerOptions = {
+                        ...baseProjectConfig?.compilerOptions,
+                        ...projectConfig.compilerOptions
+                    };
+                }
+                baseProjectConfigDeprecationDiagnostics = (baseProjectConfig as any)?._deprecationDiagnostics;
             } else {
                 result = projectConfig;
                 let ancestors = parentProjectPaths ? parentProjectPaths : [];
@@ -247,11 +258,47 @@ export class Util {
             if (result.outDir) {
                 result.outDir = path.resolve(projectFileCwd, result.outDir);
             }
+            //map the deprecated staging options to `outDir` (relative to THIS config file).
+            //the deprecated options themselves are left as-is so consumers that still read them keep working
+            if (!('outDir' in projectConfig)) {
+                if (projectConfig.stagingFolderPath) {
+                    result.outDir = path.resolve(projectFileCwd, projectConfig.stagingFolderPath);
+                } else if (projectConfig.stagingDir) {
+                    result.outDir = path.resolve(projectFileCwd, projectConfig.stagingDir);
+                }
+            }
             if (result.cwd) {
                 result.cwd = path.resolve(projectFileCwd, result.cwd);
             }
-            if (result.sourceRoot && result.resolveSourceRoot) {
-                result.sourceRoot = path.resolve(projectFileCwd, result.sourceRoot);
+
+            //flag any deprecated top-level `compilerOptions` options used directly in THIS config file
+            //(this is deliberately scoped to options loaded from an actual bsconfig.json file; options
+            //passed programmatically to `Program`/`ProgramBuilder` are not flagged)
+            const deprecationDiagnostics: BsDiagnostic[] = [...((baseProjectConfigDeprecationDiagnostics) ?? [])];
+            for (const key of deprecatedCompilerOptionKeys) {
+                if (key in projectConfig) {
+                    deprecationDiagnostics.push({
+                        ...DiagnosticMessages.deprecatedBsConfigOption(key),
+                        location: {
+                            uri: this.pathToUri(configFilePath),
+                            range: this.createRange(0, 0, 0, 0)
+                        }
+                    });
+                }
+            }
+            (result as any)._deprecationDiagnostics = deprecationDiagnostics;
+
+            //`sourceRoot`/`resolveSourceRoot` may live at the top level (deprecated) or in `compilerOptions`.
+            //resolve whichever location actually holds the value, relative to THIS config file
+            const sourceRootValue = result.compilerOptions?.sourceRoot ?? result.sourceRoot;
+            const resolveSourceRootValue = result.compilerOptions?.resolveSourceRoot ?? result.resolveSourceRoot;
+            if (sourceRootValue && resolveSourceRootValue) {
+                const resolvedSourceRoot = path.resolve(projectFileCwd, sourceRootValue);
+                if (result.compilerOptions?.sourceRoot !== undefined) {
+                    result.compilerOptions.sourceRoot = resolvedSourceRoot;
+                } else {
+                    result.sourceRoot = resolvedSourceRoot;
+                }
             }
             return result;
         }
@@ -284,27 +331,32 @@ export class Util {
      * @param config a bsconfig object to use as the baseline for the resulting config
      */
     public normalizeAndResolveConfig(config: BsConfig | undefined): FinalizedBsConfig {
-        let result = this.normalizeConfig({
-            ...config
-        });
-
         if (config?.noProject) {
-            return result;
+            return this.normalizeConfig({
+                ...config
+            });
         }
 
+        let project: string | undefined;
         //if no options were provided, try to find a bsconfig.json file
         if (!config || !config.project) {
-            result.project = this.getConfigFilePath(config?.cwd);
+            project = this.getConfigFilePath(config?.cwd);
         } else {
             //use the config's project link
-            result.project = config.project;
+            project = config.project;
         }
-        if (result.project) {
-            let configFile = this.loadConfigFile(result.project, undefined, config?.cwd);
-            result = Object.assign(result, configFile);
+
+        let mergedConfig = { ...config };
+        if (project) {
+            let configFile = this.loadConfigFile(project, undefined, config?.cwd);
+            //the project file values are the defaults; the provided options override them
+            mergedConfig = { ...configFile, ...config };
         }
-        //override the defaults with the specified options
-        result = Object.assign(result, config);
+
+        //set defaults and map deprecated options AFTER merging the project file, so that
+        //deprecated options (i.e. `stagingFolderPath`, `copyToStaging`) from the project file are properly honored
+        let result = this.normalizeConfig(mergedConfig);
+        result.project = project;
         return result;
     }
 
@@ -317,10 +369,27 @@ export class Util {
 
         const cwd = config.cwd ?? process.cwd();
 
+        //Resolve `compilerOptions`: values set there win over their deprecated top-level counterparts.
+        //(deprecation diagnostics for options loaded directly from a bsconfig.json file are collected
+        //separately, in `loadConfigFile`, and simply carried through on `config._deprecationDiagnostics`)
+        const compilerOptions: BsConfigCompilerOptions = { ...(config.compilerOptions ?? {}) };
+        for (const key of deprecatedCompilerOptionKeys) {
+            if (!(key in compilerOptions) && key in config) {
+                (compilerOptions as any)[key] = (config as any)[key];
+            }
+            //push the resolved (winning) value back onto the flat config so the rest of this function
+            //(and any code that still reads the deprecated flat option) sees the correct, resolved value
+            if (key in compilerOptions) {
+                (config as any)[key] = compilerOptions[key];
+            }
+        }
+
         let logLevel: LogLevel = LogLevel.log;
 
         if (typeof config.logLevel === 'string') {
             logLevel = LogLevel[(config.logLevel as string).toLowerCase()] ?? LogLevel.log;
+        } else if (typeof config.logLevel === 'number') {
+            logLevel = config.logLevel;
         }
 
         let bslibDestinationDir = config.bslibDestinationDir ?? 'source';
@@ -380,7 +449,8 @@ export class Util {
             validate: config.validate === false ? false : true,
             strict: strictValue,
             strictCallFunc: (typeof config.strictCallFunc === 'boolean' ? config.strictCallFunc : strictValue),
-            strictNodeMembers: (typeof config.strictNodeMembers === 'boolean' ? config.strictNodeMembers : strictValue)
+            strictNodeMembers: (typeof config.strictNodeMembers === 'boolean' ? config.strictNodeMembers : strictValue),
+            compilerOptions: compilerOptions
         };
 
         //mutate `config` in case anyone is holding a reference to the incomplete one
@@ -549,8 +619,8 @@ export class Util {
     /**
      * Walks left in a DottedGetExpression and returns a VariableExpression if found, or undefined if not found
      */
-    public findBeginningVariableExpression(dottedGet: DottedGetExpression): VariableExpression | undefined {
-        let left: any = dottedGet;
+    public findBeginningVariableExpression(expression: Expression): VariableExpression | undefined {
+        let left: Expression = expression;
         while (left) {
             if (isVariableExpression(left)) {
                 return left;
@@ -705,7 +775,7 @@ export class Util {
                 if (Array.isArray(obj)) {
                     return obj.map(visit);
                 }
-                return Object.keys(obj).reduce((result, prop) => {
+                return Object.keys(obj as Record<string, unknown>).reduce<Record<string, any>>((result, prop) => {
                     result[prop] = visit(safeGetValue(obj, prop));
                     return result;
                 }, {});
@@ -725,7 +795,7 @@ export class Util {
         const destroyCircular = (from: any, seen: any[]) => {
             const to: any = Array.isArray(from) ? [] : {};
             seen.push(from);
-            for (const [key, val] of Object.entries(from)) {
+            for (const [key, val] of Object.entries(from as Record<string, unknown>)) {
                 if (typeof val === 'function') {
                     continue;
                 }
@@ -1180,11 +1250,13 @@ export class Util {
      */
     public cloneToken<T extends Token>(token: T): T {
         if (token) {
+            //keep this field order identical to `Lexer.addToken` so cloned tokens
+            //share the same V8 hidden class as lexer-produced tokens
             const result = {
                 kind: token.kind,
-                location: this.cloneLocation(token.location),
                 text: token.text,
                 isReserved: token.isReserved,
+                location: this.cloneLocation(token.location),
                 leadingWhitespace: token.leadingWhitespace,
                 leadingTrivia: token.leadingTrivia ? token.leadingTrivia.map(x => this.cloneToken(x)) : undefined
             } as Token;
@@ -1534,7 +1606,15 @@ export class Util {
             rightType = this.getHighestPriorityType(rightType.types);
         }
 
-        if (isVoidType(leftType) || isVoidType(rightType) || isUninitializedType(leftType) || isUninitializedType(rightType)) {
+        if (isUninitializedType(leftType) || isUninitializedType(rightType)) {
+            return undefined;
+        }
+        if (isVoidType(leftType) || isVoidType(rightType)) {
+            // = and <> can still be used to check a possibly-void value against invalid/dynamic
+            if ((operator.kind === TokenKind.Equal || operator.kind === TokenKind.LessGreater) &&
+                (isInvalidTypeLike(leftType) || isInvalidTypeLike(rightType) || isDynamicType(leftType) || isDynamicType(rightType))) {
+                return BooleanType.instance;
+            }
             return undefined;
         }
 
@@ -1868,7 +1948,7 @@ export class Util {
                     acc.push(plugin);
                 } catch (err: any) {
                     if (onError) {
-                        onError(pathOrModule, err);
+                        onError(pathOrModule, err as Error);
                     } else {
                         throw err;
                     }
@@ -1887,7 +1967,7 @@ export class Util {
         const variableExpressions = [] as VariableExpression[];
         const uniqueVarNames = new Set<string>();
 
-        function expressionWalker(expression) {
+        function expressionWalker(expression: AstNode) {
             if (isExpression(expression)) {
                 expressions.push(expression);
             }
@@ -2168,6 +2248,71 @@ export class Util {
     }
 
     /**
+     * Reconstruct the written name of a "complex" type expression - one that isn't a plain
+     * dotted-get chain, so `getAllDottedGetPartsAsString` can't represent it. Handles
+     * unions/intersections, inline interfaces, typed arrays, typed function types, and groupings.
+     * Returns `undefined` for anything it can't render.
+     */
+    public getTypeExpressionName(node: Expression, parseMode = ParseMode.BrighterScript): string {
+        if (isTypeExpression(node)) {
+            return this.getTypeExpressionName(node.expression, parseMode);
+        }
+        if (isBinaryExpression(node)) {
+            //union (`or`) / intersection (`and`) types
+            const left = this.getTypeExpressionName(node.left, parseMode);
+            const right = this.getTypeExpressionName(node.right, parseMode);
+            if (left === undefined || right === undefined) {
+                return undefined;
+            }
+            return `${left} ${node.tokens.operator?.text ?? 'or'} ${right}`;
+        }
+        if (isGroupingExpression(node)) {
+            const inner = this.getTypeExpressionName(node.expression, parseMode);
+            return inner === undefined ? undefined : `(${inner})`;
+        }
+        if (isTypedArrayExpression(node)) {
+            const inner = this.getTypeExpressionName(node.innerType, parseMode);
+            return inner === undefined ? undefined : `${inner}[]`;
+        }
+        if (isInlineInterfaceExpression(node)) {
+            const members = [];
+            for (const member of node.members ?? []) {
+                const memberType = member.typeExpression
+                    ? this.getTypeExpressionName(member.typeExpression, parseMode)
+                    : undefined;
+                members.push([
+                    member.isOptional ? 'optional ' : '',
+                    member.tokens.name?.text ?? '',
+                    memberType === undefined ? '' : ` as ${memberType}`
+                ].join(''));
+            }
+            return `{ ${members.join(', ')} }`;
+        }
+        if (isTypedFunctionTypeExpression(node)) {
+            const params = [];
+            for (const param of node.params ?? []) {
+                const paramType = param.typeExpression
+                    ? this.getTypeExpressionName(param.typeExpression, parseMode)
+                    : undefined;
+                params.push([
+                    param.tokens.name?.text ?? '',
+                    paramType === undefined ? '' : ` as ${paramType}`
+                ].join(''));
+            }
+            const returnType = node.returnType
+                ? this.getTypeExpressionName(node.returnType, parseMode)
+                : undefined;
+            return [
+                node.tokens.functionType?.text ?? 'function',
+                `(${params.join(', ')})`,
+                returnType === undefined ? '' : ` as ${returnType}`
+            ].join('');
+        }
+        //fall back to the dotted-get chain (variable/dotted-get leaves of the type expression)
+        return this.getAllDottedGetPartsAsString(node, parseMode);
+    }
+
+    /**
      * Break an expression into each part.
      */
     public splitExpression(expression: Expression) {
@@ -2194,7 +2339,7 @@ export class Util {
      * Returns an integer if valid, or undefined. Eliminates checking for NaN
      */
     public parseInt(value: any) {
-        const result = parseInt(value);
+        const result = parseInt(value as string);
         if (!isNaN(result)) {
             return result;
         } else {
@@ -2312,7 +2457,30 @@ export class Util {
     ): SourceNode {
         // we can use a typecast rather than actually transforming the data because SourceNode
         // accepts a more permissive type than its typedef states
-        return new SourceNode(line, column, source, chunks as any, name);
+        return new SourceNode(line, column, source, chunks as string | SourceNode | (string | SourceNode)[], name);
+    }
+
+    /**
+     * Strip a trailing `sourceMappingURL` comment (and the newline preceding it) from the end of a
+     * transpile result, so that appending a freshly-generated one doesn't produce a duplicate. A file
+     * can already carry a comment from a previous build, which is either preserved verbatim (for
+     * files that don't need transpiling) or re-emitted as a comment by the AST transpile.
+     *
+     * Handles both BrightScript-style (`'//# sourceMappingURL=...`) and XML-style
+     * (`<!--//# sourceMappingURL=... -->`) comments. Leaves the node untouched when no trailing
+     * sourceMappingURL comment is present.
+     */
+    public stripTrailingSourceMappingURLComment(node: SourceNode): SourceNode {
+        //`\S+` cannot backtrack across whitespace, so this stays linear-time on adversarial input
+        const pattern = /(?:\r?\n)?[ \t]*(?:'\/\/# sourceMappingURL=\S+|<!--[ \t]*\/\/# sourceMappingURL=\S+[ \t]*-->)\s*$/;
+        if (pattern.test(node.toString())) {
+            //`replaceRight` operates on the right-most leaf string, which is where a trailing comment
+            //lands in both the verbatim and AST-transpiled cases. The `source-map` typings declare the
+            //pattern as a string, but it is handed straight to `String.prototype.replace`, which
+            //accepts a RegExp
+            node.replaceRight(pattern as unknown as string, '');
+        }
+        return node;
     }
 
     /**
@@ -3017,10 +3185,10 @@ export class Util {
  * A tagged template literal function for standardizing the path. This has to be defined as standalone function since it's a tagged template literal function,
  * we can't use `object.tag` syntax.
  */
-export function standardizePath(stringParts, ...expressions: any[]) {
+export function standardizePath(stringParts: TemplateStringsArray | string, ...expressions: any[]) {
     let result: string[] = [];
     for (let i = 0; i < stringParts?.length; i++) {
-        result.push(stringParts[i], expressions[i]);
+        result.push(stringParts[i], expressions[i] as string);
     }
     return util.standardizePath(
         result.join('')

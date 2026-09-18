@@ -5,7 +5,7 @@ import type { BrsFile } from './BrsFile';
 import { expect } from '../chai-config.spec';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { Range } from 'vscode-languageserver';
-import { ParseMode } from '../parser/Parser';
+import { ParseMode, Parser } from '../parser/Parser';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
 import { standardizePath as s } from '../util';
 import * as fsExtra from 'fs-extra';
@@ -429,6 +429,295 @@ describe('BrsFile BrighterScript classes', () => {
             `, undefined, 'source/main.bs');
         });
 
+        it('injects field initializers after a super call that is not the first statement', async () => {
+            await testTranspile(`
+                class Animal
+                end class
+                class Duck extends Animal
+                    name = "duck"
+                    sub new()
+                        print "before super"
+                        super()
+                    end sub
+                end class
+            `, `
+                sub __Animal_method_new()
+                end sub
+                function __Animal_builder()
+                    instance = {}
+                    instance.new = __Animal_method_new
+                    return instance
+                end function
+                function Animal()
+                    instance = __Animal_builder()
+                    instance.new()
+                    return instance
+                end function
+                sub __Duck_method_new()
+                    print "before super"
+                    m.super0_new()
+                    m.name = "duck"
+                end sub
+                function __Duck_builder()
+                    instance = __Animal_builder()
+                    instance.super0_new = instance.new
+                    instance.new = __Duck_method_new
+                    return instance
+                end function
+                function Duck()
+                    instance = __Duck_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, undefined, 'source/main.bs');
+        });
+
+        it('injects field initializers after a super call preceded by several statements', async () => {
+            await testTranspile(`
+                class Animal
+                end class
+                class Duck extends Animal
+                    name = "duck"
+                    age = 1
+                    sub new()
+                        print "one"
+                        print "two"
+                        super()
+                        print "three"
+                    end sub
+                end class
+            `, `
+                sub __Animal_method_new()
+                end sub
+                function __Animal_builder()
+                    instance = {}
+                    instance.new = __Animal_method_new
+                    return instance
+                end function
+                function Animal()
+                    instance = __Animal_builder()
+                    instance.new()
+                    return instance
+                end function
+                sub __Duck_method_new()
+                    print "one"
+                    print "two"
+                    m.super0_new()
+                    m.name = "duck"
+                    m.age = 1
+                    print "three"
+                end sub
+                function __Duck_builder()
+                    instance = __Animal_builder()
+                    instance.super0_new = instance.new
+                    instance.new = __Duck_method_new
+                    return instance
+                end function
+                function Duck()
+                    instance = __Duck_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, undefined, 'source/main.bs');
+        });
+
+        it('injects field initializers after a super call with arguments', async () => {
+            await testTranspile(`
+                class Animal
+                    sub new(name)
+                        print name
+                    end sub
+                end class
+                class Duck extends Animal
+                    sound = "quack"
+                    sub new(name)
+                        print "before super"
+                        super(name)
+                    end sub
+                end class
+            `, `
+                sub __Animal_method_new(name)
+                    print name
+                end sub
+                function __Animal_builder()
+                    instance = {}
+                    instance.new = __Animal_method_new
+                    return instance
+                end function
+                function Animal(name)
+                    instance = __Animal_builder()
+                    instance.new(name)
+                    return instance
+                end function
+                sub __Duck_method_new(name)
+                    print "before super"
+                    m.super0_new(name)
+                    m.sound = "quack"
+                end sub
+                function __Duck_builder()
+                    instance = __Animal_builder()
+                    instance.super0_new = instance.new
+                    instance.new = __Duck_method_new
+                    return instance
+                end function
+                function Duck(name)
+                    instance = __Duck_builder()
+                    instance.new(name)
+                    return instance
+                end function
+            `, undefined, 'source/main.bs');
+        });
+
+        it('injects field initializers at the top when the class has no parent', async () => {
+            await testTranspile(`
+                class Animal
+                    name = "animal"
+                    sub new()
+                        print "hello"
+                    end sub
+                end class
+            `, `
+                sub __Animal_method_new()
+                    m.name = "animal"
+                    print "hello"
+                end sub
+                function __Animal_builder()
+                    instance = {}
+                    instance.new = __Animal_method_new
+                    return instance
+                end function
+                function Animal()
+                    instance = __Animal_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, undefined, 'source/main.bs');
+        });
+
+        it('injects field initializers after an injected super call in a multi-level hierarchy', async () => {
+            await testTranspile(`
+                class Animal
+                    a = 1
+                end class
+                class Duck extends Animal
+                    b = 2
+                    sub new()
+                        print "duck"
+                        super()
+                    end sub
+                end class
+                class BabyDuck extends Duck
+                    c = 3
+                    sub new()
+                        print "baby"
+                        super()
+                    end sub
+                end class
+            `, `
+                sub __Animal_method_new()
+                    m.a = 1
+                end sub
+                function __Animal_builder()
+                    instance = {}
+                    instance.new = __Animal_method_new
+                    return instance
+                end function
+                function Animal()
+                    instance = __Animal_builder()
+                    instance.new()
+                    return instance
+                end function
+                sub __Duck_method_new()
+                    print "duck"
+                    m.super0_new()
+                    m.b = 2
+                end sub
+                function __Duck_builder()
+                    instance = __Animal_builder()
+                    instance.super0_new = instance.new
+                    instance.new = __Duck_method_new
+                    return instance
+                end function
+                function Duck()
+                    instance = __Duck_builder()
+                    instance.new()
+                    return instance
+                end function
+                sub __BabyDuck_method_new()
+                    print "baby"
+                    m.super1_new()
+                    m.c = 3
+                end sub
+                function __BabyDuck_builder()
+                    instance = __Duck_builder()
+                    instance.super1_new = instance.new
+                    instance.new = __BabyDuck_method_new
+                    return instance
+                end function
+                function BabyDuck()
+                    instance = __BabyDuck_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, undefined, 'source/main.bs');
+        });
+
+        it('injects field initializers after super when a plugin inserts a statement before it', async () => {
+            //this mirrors what rooibos' code-coverage instrumentation does: it walks the AST and splices
+            //a tracking statement in front of every statement, which used to push `super()` off index 0
+            //and cause field initializers to be emitted *before* the super call
+            program.plugins.add({
+                name: 'test-plugin',
+                beforeFileTranspile: (event) => {
+                    const classStatement = (event.file as BrsFile)['_cachedLookups'].classStatements.find(x => x.tokens.name.text === 'Duck');
+                    const ctor = classStatement?.memberMap['new'] as MethodStatement;
+                    if (ctor) {
+                        const tracker = Parser.parse(`track("line1")`).ast.statements[0];
+                        event.editor.arrayUnshift(ctor.func.body.statements, tracker);
+                    }
+                }
+            });
+            await testTranspile(`
+                class Animal
+                end class
+                class Duck extends Animal
+                    name = "duck"
+                    sub new()
+                        super()
+                    end sub
+                end class
+            `, `
+                sub __Animal_method_new()
+                end sub
+                function __Animal_builder()
+                    instance = {}
+                    instance.new = __Animal_method_new
+                    return instance
+                end function
+                function Animal()
+                    instance = __Animal_builder()
+                    instance.new()
+                    return instance
+                end function
+                sub __Duck_method_new()
+                    track("line1")
+                    m.super0_new()
+                    m.name = "duck"
+                end sub
+                function __Duck_builder()
+                    instance = __Animal_builder()
+                    instance.super0_new = instance.new
+                    instance.new = __Duck_method_new
+                    return instance
+                end function
+                function Duck()
+                    instance = __Duck_builder()
+                    instance.new()
+                    return instance
+                end function
+            `, undefined, 'source/main.bs');
+        });
+
         it('works with namespaces', async () => {
             await testTranspile(`
                 namespace Birds.WaterFowl
@@ -581,6 +870,132 @@ describe('BrsFile BrighterScript classes', () => {
                 function Duck(name as string, age as integer)
                     instance = __Duck_builder()
                     instance.new(name, age)
+                    return instance
+                end function
+            `, undefined, 'source/main.bs');
+        });
+
+        it('does not crash synthesizing an implicit constructor whose inherited param is a class type declared in a different namespace', async () => {
+            await testTranspile(`
+                namespace Foo
+                    class Thing
+                    end class
+
+                    class Base
+                        sub new(t as Thing)
+                            m.thing = t
+                        end sub
+                        thing as Thing
+                    end class
+                end namespace
+
+                namespace Bar
+                    class DerivedImplicitCtor extends Foo.Base
+                        extra as integer = 2
+                    end class
+                end namespace
+            `, `
+                sub __Foo_Thing_method_new()
+                end sub
+                function __Foo_Thing_builder()
+                    instance = {}
+                    instance.new = __Foo_Thing_method_new
+                    return instance
+                end function
+                function Foo_Thing()
+                    instance = __Foo_Thing_builder()
+                    instance.new()
+                    return instance
+                end function
+                sub __Foo_Base_method_new(t as dynamic)
+                    m.thing = invalid
+                    m.thing = t
+                end sub
+                function __Foo_Base_builder()
+                    instance = {}
+                    instance.new = __Foo_Base_method_new
+                    return instance
+                end function
+                function Foo_Base(t as dynamic)
+                    instance = __Foo_Base_builder()
+                    instance.new(t)
+                    return instance
+                end function
+                sub __Bar_DerivedImplicitCtor_method_new(t as dynamic)
+                    m.super0_new(t)
+                    m.extra = 2
+                end sub
+                function __Bar_DerivedImplicitCtor_builder()
+                    instance = __Foo_Base_builder()
+                    instance.super0_new = instance.new
+                    instance.new = __Bar_DerivedImplicitCtor_method_new
+                    return instance
+                end function
+                function Bar_DerivedImplicitCtor(t as dynamic)
+                    instance = __Bar_DerivedImplicitCtor_builder()
+                    instance.new(t)
+                    return instance
+                end function
+            `, undefined, 'source/main.bs');
+        });
+
+        it('does not crash synthesizing an implicit constructor whose inherited param is a class type declared in the same namespace', async () => {
+            await testTranspile(`
+                namespace Foo
+                    class Thing
+                    end class
+
+                    class Base
+                        sub new(t as Thing)
+                            m.thing = t
+                        end sub
+                        thing as Thing
+                    end class
+
+                    class DerivedSameNs extends Base
+                        extra as integer = 2
+                    end class
+                end namespace
+            `, `
+                sub __Foo_Thing_method_new()
+                end sub
+                function __Foo_Thing_builder()
+                    instance = {}
+                    instance.new = __Foo_Thing_method_new
+                    return instance
+                end function
+                function Foo_Thing()
+                    instance = __Foo_Thing_builder()
+                    instance.new()
+                    return instance
+                end function
+                sub __Foo_Base_method_new(t as dynamic)
+                    m.thing = invalid
+                    m.thing = t
+                end sub
+                function __Foo_Base_builder()
+                    instance = {}
+                    instance.new = __Foo_Base_method_new
+                    return instance
+                end function
+                function Foo_Base(t as dynamic)
+                    instance = __Foo_Base_builder()
+                    instance.new(t)
+                    return instance
+                end function
+                sub __Foo_DerivedSameNs_method_new(t as dynamic)
+                    m.super0_new(t)
+                    m.extra = 2
+                end sub
+                function __Foo_DerivedSameNs_builder()
+                    instance = __Foo_Base_builder()
+                    instance.super0_new = instance.new
+                    instance.new = __Foo_DerivedSameNs_method_new
+                    return instance
+                end function
+                function Foo_DerivedSameNs(t as dynamic)
+                    instance = __Foo_DerivedSameNs_builder()
+                    instance.new(t)
                     return instance
                 end function
             `, undefined, 'source/main.bs');

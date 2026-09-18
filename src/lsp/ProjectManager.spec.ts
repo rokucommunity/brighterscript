@@ -7,7 +7,7 @@ import type { SinonStub } from 'sinon';
 import { createSandbox } from 'sinon';
 import { Project } from './Project';
 import { WorkerThreadProject } from './worker/WorkerThreadProject';
-import { getWakeWorkerThreadPromise } from './worker/WorkerThreadProject.spec';
+import { getWakeWorkerThreadPromise, preloadAndWaitUntilReady } from './worker/WorkerThreadProject.spec';
 import type { LspDiagnostic } from './LspProject';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { FileChangeType } from 'vscode-languageserver-protocol';
@@ -43,10 +43,14 @@ describe('ProjectManager', () => {
         });
     });
 
-    afterEach(() => {
+    afterEach(async function keepWorkerPoolWarm() {
+        //defensive fallback in case the pool ends up empty; give it a cold-boot-sized budget
+        this.timeout(60_000);
         fsExtra.emptyDirSync(tempDir);
         sinon.restore();
         manager.dispose();
+        //keep a spare worker warm for the next real-threading test (see WorkerThreadProject.spec.ts)
+        await preloadAndWaitUntilReady(1);
     });
     let diagnosticsListeners: Array<(diagnostics: LspDiagnostic[]) => void> = [];
     let diagnosticsResponses: Array<LspDiagnostic[]> = [];
@@ -1443,7 +1447,8 @@ describe('ProjectManager', () => {
             await getWakeWorkerThreadPromise();
         });
 
-        it('spawns a worker thread when threading is enabled', async () => {
+        it('spawns a worker thread when threading is enabled', async function () {
+            this.timeout(60_000);
             //the afterEach `manager.dispose()` for this test will log a
             //'Validation phase error: ... MessageHandler is now disposed' error to the console.
             //This is expected — Phase 2 validation runs in the worker thread asynchronously
@@ -1561,7 +1566,10 @@ describe('ProjectManager', () => {
     });
 
     it('completes promise when project is disposed in the middle of a flow', async function () {
-        this.timeout(20_000);
+        //this test enables real threading without a warm-up hook, so it pays the full worker-thread
+        //cold-boot cost itself. That boot has been measured at ~18s on macOS CI runners, so give it
+        //the same budget as the other cold-boot paths in these specs rather than racing a 20s limit.
+        this.timeout(60_000);
         //small plugin to communicate over a socket inside the worker thread.
         //This transpiles from tsc use `require()` for all imports and don't reference external vars
         class Plugin {
@@ -1642,31 +1650,43 @@ describe('ProjectManager', () => {
             host: host,
             port: port
         });
+        //this test intentionally disposes the project (and thus the worker thread hosting the
+        //server) while this socket is still open, so the peer can disappear at any moment. Without
+        //an 'error' listener, node throws that ECONNRESET as an _uncaught_ exception, which mocha
+        //then attributes to whatever test happens to be running. Swallow it - a dead peer is
+        //exactly what this test is arranging.
+        connection.on('error', () => { });
 
-        //do the request to fetch symbols (this will be stalled on purpose by our test plugin)
-        let managerGetWorkspaceSymbolPromise = manager.getWorkspaceSymbol();
+        try {
+            //do the request to fetch symbols (this will be stalled on purpose by our test plugin)
+            let managerGetWorkspaceSymbolPromise = manager.getWorkspaceSymbol();
 
-        //small sleep to let things settle
-        await util.sleep(20);
+            //small sleep to let things settle
+            await util.sleep(20);
 
-        //now dispose the project (which should destroy all of the listeners)
-        manager['removeProject'](manager.projects[0]);
+            //now dispose the project (which should destroy all of the listeners)
+            manager['removeProject'](manager.projects[0]);
 
-        //settle again
-        await util.sleep(20);
+            //settle again
+            await util.sleep(20);
 
-        console.log('Asking the client to resolve');
+            console.log('Asking the client to resolve');
 
-        //resolve the request
-        connection.write('resolve');
+            //resolve the request
+            connection.write('resolve');
 
-        //now wait to see if we ever get the response back
-        let result = await managerGetWorkspaceSymbolPromise;
+            //now wait to see if we ever get the response back
+            let result = await managerGetWorkspaceSymbolPromise;
 
-        //the result should be an empty array, since the only project was rejected in the middle of the request
-        expect(result).to.eql([]);
+            //the result should be an empty array, since the only project was rejected in the middle of the request
+            expect(result).to.eql([]);
 
-        //test passes if the promise resolves
+            //test passes if the promise resolves
+        } finally {
+            //don't leave the socket open past the end of the test, otherwise a late reset from the
+            //torn-down worker thread surfaces as a failure in an unrelated test
+            connection.destroy();
+        }
     });
 
     it('properly handles reloading when bsconfig.json contents change', async () => {

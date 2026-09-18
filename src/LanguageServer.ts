@@ -49,6 +49,7 @@ import { util } from './util';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
 import { LogLevel, createLogger, logger, setLspLoggerProps } from './logging';
+import type { LogLevel as LogLevelText } from '@rokucommunity/logger';
 import ignore from 'ignore';
 import * as micromatch from 'micromatch';
 import type { LspProject, LspDiagnostic } from './lsp/LspProject';
@@ -59,6 +60,7 @@ import * as fsExtra from 'fs-extra';
 import type { FileChange, MaybePromise } from './interfaces';
 import { Deferred } from './deferred';
 import { workerPool } from './lsp/worker/WorkerThreadProject';
+import { getDefaultMaxWorkerThreads } from './lsp/worker/WorkerPool';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import isEqual = require('lodash.isequal');
 
@@ -76,6 +78,13 @@ export class LanguageServer {
      * The default number of projects that are permitted to activate concurrently.
      */
     private static projectActivationConcurrencyLimitDefault = 3;
+
+    /**
+     * The default maximum number of worker threads to use for running LSP projects. Can be overridden by
+     * per-workspace settings. Once this limit is reached, additional projects are spread evenly across the
+     * existing worker threads instead of each getting a dedicated one.
+     */
+    public static maxWorkerThreadsDefault = getDefaultMaxWorkerThreads();
 
     /**
      * The language server protocol connection, used to send and receive all requests and responses
@@ -128,6 +137,13 @@ export class LanguageServer {
         this.projectManager.on('diagnostics', (event) => {
             this.logger.debug(`Received ${event.diagnostics.length} diagnostics from project ${event.project.projectNumber}`);
             this.sendDiagnostics(event).catch(logAndIgnoreError);
+        });
+
+        //notify the client if a project's worker thread crashes unexpectedly
+        this.projectManager.on('critical-failure', (event) => {
+            const message = `[${util.getProjectLogName(event.project)}] ${event.message}`;
+            this.logger.error(message);
+            this.sendCriticalFailure(message);
         });
 
         // Send all open document changes whenever a project is activated. This is necessary because at project startup, the project loads files from disk
@@ -219,8 +235,8 @@ export class LanguageServer {
                 // Tell the client that the server supports code completion
                 completionProvider: {
                     resolveProvider: false,
-                    //anytime the user types a period, auto-show the completion results
-                    triggerCharacters: ['.'],
+                    //`.` auto-shows brightscript completions; `<` auto-shows xml element completions
+                    triggerCharacters: ['.', '<'],
                     allCommitCharacters: ['.', '@']
                 },
                 documentSymbolProvider: true,
@@ -281,6 +297,7 @@ export class LanguageServer {
         await this.syncLogLevel();
 
         this.syncProjectActivationConcurrencyLimit();
+        this.syncMaxWorkerThreads();
 
         try {
             if (this.hasConfigurationCapability) {
@@ -337,7 +354,7 @@ export class LanguageServer {
                     if (typeof value === 'string') {
                         value = value.toLowerCase();
                     }
-                    const logLevelNumeric = this.logger.getLogLevelNumeric(value as any);
+                    const logLevelNumeric = this.logger.getLogLevelNumeric(value as LogLevelText | LogLevel);
 
                     if (typeof logLevelNumeric === 'number') {
                         return logLevelNumeric;
@@ -401,8 +418,33 @@ export class LanguageServer {
             concurrencyLimit = 1;
         }
         this.projectManager.projectActivationConcurrencyLimit = concurrencyLimit;
+        this.logger.info(`projectActivationConcurrencyLimit set to ${concurrencyLimit}`);
     }
 
+    /**
+     * Get the max worker threads setting from all workspaces and set the worker pool's cap to the lowest value found.
+     * This ensures that if the user has multiple workspaces open with different limits,
+     * we respect the most restrictive limit to avoid overwhelming the user's machine.
+     */
+    private syncMaxWorkerThreads() {
+        const limits = [...this.workspaceConfigsCache]
+            .map(x => x?.[1]?.languageServer?.maxWorkerThreads)
+            .filter(x => typeof x === 'number');
+
+        //if we don't have any limits defined, use our default value
+        if (limits.length === 0) {
+            limits.push(LanguageServer.maxWorkerThreadsDefault);
+        }
+
+        let maxWorkerThreads = Math.min(...limits);
+        //we must always support at least 1 worker, otherwise no threaded projects could ever activate
+        if (!(maxWorkerThreads >= 1)) {
+            this.logger.log(`maxWorkerThreads was set to ${maxWorkerThreads}, which is not a valid value. Defaulting to 1.`);
+            maxWorkerThreads = 1;
+        }
+        workerPool.maxWorkers = maxWorkerThreads;
+        this.logger.info(`maxWorkerThreads set to ${maxWorkerThreads}`);
+    }
 
     @AddStackToErrorMessage
     private async onTextDocumentDidChangeContent(event: TextDocumentChangeEvent<TextDocument>) {
@@ -530,6 +572,16 @@ export class LanguageServer {
         this.logger.debug('onCompletion', params, cancellationToken);
 
         const srcPath = util.uriToPath(params.textDocument.uri);
+
+        //`<` is registered as a trigger character for xml element completions, but it's the less-than
+        //operator everywhere else, so ignore it for non-xml files
+        if (params.context?.triggerCharacter === '<' && !srcPath.toLowerCase().endsWith('.xml')) {
+            return {
+                items: [],
+                isIncomplete: false
+            };
+        }
+
         const completions = await this.projectManager.getCompletions({
             srcPath: srcPath,
             position: params.position,
@@ -558,7 +610,8 @@ export class LanguageServer {
                         projectDiscoveryMaxDepth: brightscriptConfig?.languageServer?.projectDiscoveryMaxDepth ?? 15,
                         projectDiscoveryExclude: brightscriptConfig?.languageServer?.projectDiscoveryExclude,
                         logLevel: brightscriptConfig?.languageServer?.logLevel,
-                        projectActivationConcurrencyLimit: brightscriptConfig?.languageServer?.projectActivationConcurrencyLimit
+                        projectActivationConcurrencyLimit: brightscriptConfig?.languageServer?.projectActivationConcurrencyLimit,
+                        maxWorkerThreads: brightscriptConfig?.languageServer?.maxWorkerThreads
                     }
                 };
             })
@@ -570,7 +623,7 @@ export class LanguageServer {
      * Extract project paths from settings' projects list, expanding the workspaceFolder variable if necessary
      */
     private normalizeProjectPaths(workspaceFolder: string, projects: (string | BrightScriptProjectConfiguration)[]): BrightScriptProjectConfiguration[] | undefined {
-        return projects?.reduce((acc, project) => {
+        return projects?.reduce<BrightScriptProjectConfiguration[]>((acc, project) => {
             if (typeof project === 'string') {
                 acc.push({ path: project });
             } else if (typeof project.path === 'string') {
@@ -601,6 +654,7 @@ export class LanguageServer {
             this.workspaceConfigsCache = configs;
 
             this.syncProjectActivationConcurrencyLimit();
+            this.syncMaxWorkerThreads();
 
             //if configuration changed, rebuild the path filterer
             await this.rebuildPathFilterer();
@@ -660,7 +714,7 @@ export class LanguageServer {
 
         const srcPath = util.uriToPath(params.textDocument.uri);
 
-        const result = this.projectManager.getDefinition({ srcPath: srcPath, position: params.position });
+        const result = await this.projectManager.getDefinition({ srcPath: srcPath, position: params.position });
         return result;
     }
 
@@ -1028,6 +1082,7 @@ export interface BrightScriptClientConfiguration {
         logLevel: LogLevel | string;
         projectDiscoveryMaxDepth?: number;
         projectActivationConcurrencyLimit?: number;
+        maxWorkerThreads?: number;
     };
 }
 

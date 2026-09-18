@@ -3275,6 +3275,26 @@ describe('ScopeValidator', () => {
             ]);
         });
 
+        it('does not crash when the returned value has an unknowable type', () => {
+            //an enum named `String` can never be referenced, because the name always resolves to
+            //the built-in `string` type, whose members are not dynamic. `String.EMPTY` therefore
+            //has no type at all, and that must not crash the return statement validation
+            program.setFile('source/util.bs', `
+                enum String
+                    EMPTY = ""
+                end enum
+
+                function getEmpty() as string
+                    return String.EMPTY
+                end function
+            `);
+            program.validate();
+            //only the cannot-find-name diagnostic, no returnTypeMismatch and no crash
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('EMPTY', undefined, 'string').message
+            ]);
+        });
+
         it('finds all return statements that do not match', () => {
             program.setFile('source/util.bs', `
                 function getPi(kind as integer) as float
@@ -4013,6 +4033,19 @@ describe('ScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('does not report cannot-find-name for unresolvable types referenced in .d.bs files', () => {
+            //simulates a .d.bs typedef whose namespace-qualified types don't actually resolve
+            //(e.g. produced by a buggy third-party rewrite tool), which should never produce diagnostics
+            program.setFile('source/util.d.bs', `
+                namespace SomeNamespace
+                    function getSomething(a as SomeNamespace.ifDraw2d) as SomeNamespace.roAssociativeArray
+                    end function
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('assignmentTypeMismatch', () => {
@@ -4709,6 +4742,29 @@ describe('ScopeValidator', () => {
             ]);
         });
 
+        it('allows comparisons on a variable whose union includes both an enum type and an enum member type', () => {
+            // https://github.com/rokucommunity/brighterscript/issues/1807
+            program.setFile('source/util.bs', `
+                enum Direction
+                    north = "n"
+                    south = "s"
+                end enum
+
+                sub makeEasterly(input as string)
+                    d = input as Direction
+                    if d = Direction.north
+                        d = Direction.south
+                    end if
+                    if d = Direction.north
+                        print "still north"
+                    end if
+                end sub
+            `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
+        });
+
         it('validates unary operators', () => {
             program.setFile('source/util.bs', `
                 sub doStuff()
@@ -4896,6 +4952,79 @@ describe('ScopeValidator', () => {
                     i1 = i + 5
                     i2 = 5 + i
                 end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('detects when a union contains an incompatible type', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                function test(x as string or integer)
+                    print x + "world"
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.operatorTypeMismatch('+', 'string or integer', 'string').message
+            ]);
+        });
+
+        it('allows comparing a void value against a dynamic value with =', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub logEvent(name as string)
+                    print name
+                end sub
+
+                sub main(input as dynamic)
+                    result = logEvent("started")
+                    if result = input
+                        print "same"
+                    else
+                        print "different"
+                    end if
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows comparing a void value against invalid with <>', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub getConfig()
+                end sub
+
+                sub main()
+                    config = getConfig()
+                    if config <> invalid
+                        print "config exists"
+                    else
+                        print "no config"
+                    end if
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows comparing a "void or <type>" union against invalid with <>', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub fetchChannelData()
+                end sub
+
+                sub main()
+                    channel = fetchChannelData()
+                    if true
+                        channel = {
+                            title: "Home"
+                        }
+                    end if
+
+                    if channel <> invalid
+                        print channel.title
+                    else
+                        print "no channel"
+                    end if
+                end sub
             `);
             program.validate();
             expectZeroDiagnostics(program);
@@ -6458,6 +6587,95 @@ describe('ScopeValidator', () => {
             program.validate();
             expectDiagnostics(program, [
                 DiagnosticMessages.argumentTypeMismatch('integer', 'string').message
+            ]);
+        });
+
+        it('allows an array of an interface type as a callfunc arg, when the interface is imported into two different component scopes', () => {
+            program.setFile('components/types.bs', `
+                interface MyItem
+                    sku as string
+                end interface
+            `);
+
+            program.setFile('components/A.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="A" extends="Group">
+                    <script uri="A.bs"/>
+                    <interface>
+                        <function name="doThing" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/A.bs', `
+                import "pkg:/components/types.bs"
+
+                function doThing(items as MyItem[]) as void
+                    print items.Count()
+                end function
+            `);
+
+            program.setFile('components/B.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="B" extends="Group">
+                    <script uri="B.bs"/>
+                </component>
+            `);
+
+            program.setFile('components/B.bs', `
+                import "pkg:/components/types.bs"
+
+                sub callIt(aNode as roSGNodeA)
+                    item as MyItem = { sku: "abc" }
+                    aNode@.doThing([item])
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('still catches a genuinely incompatible array arg to a callfunc, alongside a compatible interface array', () => {
+            program.setFile('components/types.bs', `
+                interface MyItem
+                    sku as string
+                end interface
+            `);
+
+            program.setFile('components/A.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="A" extends="Group">
+                    <script uri="A.bs"/>
+                    <interface>
+                        <function name="doThing" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/A.bs', `
+                import "pkg:/components/types.bs"
+
+                function doThing(items as MyItem[]) as void
+                    print items.Count()
+                end function
+            `);
+
+            program.setFile('components/B.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="B" extends="Group">
+                    <script uri="B.bs"/>
+                </component>
+            `);
+
+            program.setFile('components/B.bs', `
+                import "pkg:/components/types.bs"
+
+                sub callIt(aNode as roSGNodeA)
+                    aNode@.doThing([1, 2, 3])
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('Array<integer>', 'Array<MyItem>').message
             ]);
         });
 

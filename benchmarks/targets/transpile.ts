@@ -21,7 +21,8 @@ module.exports = async (options: TargetOptions) => {
         throw new Error('No files found in program');
     }
 
-    const files = Object.values(builder.program!.files) as Array<BrsFile>;
+    //only transpile files that actually support it (BrsFile/XmlFile) - other file types (e.g. AssetFile) don't implement `transpile()`
+    const files = (Object.values(builder.program!.files) as Array<BrsFile>).filter(x => typeof (x as any).transpile === 'function');
 
     //force transpile for every file
     for (const file of files) {

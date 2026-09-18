@@ -9,7 +9,7 @@ import { LogLevel, createLogger } from './logging';
 import * as diagnosticUtils from './diagnosticUtils';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import { BrsFile } from './files/BrsFile';
-import { expectZeroDiagnostics } from './testHelpers.spec';
+import { expectZeroDiagnostics, expectDiagnosticsIncludes } from './testHelpers.spec';
 import type { BsConfig } from './BsConfig';
 import type { BscFile } from './files/BscFile';
 import { tempDir, rootDir, outDir } from './testHelpers.spec';
@@ -345,6 +345,42 @@ describe('ProgramBuilder', () => {
             const programValidateStub = sinon.stub(builder.program, 'validate').callsFake(() => Promise.resolve());
             builder.program.validate();
             expect(programValidateStub.callCount).to.eql(1);
+        });
+    });
+
+    describe('compilerOptions', () => {
+        it('warns when a deprecated top-level option is loaded from bsconfig.json', async () => {
+            fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, JSON.stringify({ sourceMap: true }));
+
+            await builder.run({
+                project: `${rootDir}/bsconfig.json`,
+                rootDir: rootDir,
+                files: []
+            });
+
+            expectDiagnosticsIncludes(builder.getDiagnostics(), ['deprecated-bsconfig-option']);
+        });
+
+        it('does not warn when the option is only set via compilerOptions', async () => {
+            fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, JSON.stringify({ compilerOptions: { sourceMap: true } }));
+
+            await builder.run({
+                project: `${rootDir}/bsconfig.json`,
+                rootDir: rootDir,
+                files: []
+            });
+
+            expectZeroDiagnostics(builder.getDiagnostics());
+        });
+
+        it('does not warn when the deprecated option is passed programmatically', async () => {
+            await builder.run({
+                rootDir: rootDir,
+                sourceMap: true,
+                files: []
+            });
+
+            expectZeroDiagnostics(builder.getDiagnostics());
         });
     });
 

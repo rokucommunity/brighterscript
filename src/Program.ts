@@ -2,14 +2,14 @@ import * as assert from 'assert';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
 import * as semver from 'semver';
-import type { CodeAction, Position, Range, SignatureInformation, Location, DocumentSymbol, CancellationToken, SelectionRange, InlayHint } from 'vscode-languageserver';
+import type { CodeAction, Position, Range, SignatureInformation, Location, LocationLink, DocumentSymbol, CancellationToken, SelectionRange, InlayHint } from 'vscode-languageserver';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import { Scope } from './Scope';
 import type { NamespaceContainer, NamespaceFileContribution } from './Scope';
 import { SymbolTable } from './SymbolTable';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeAddFileEvent, BeforeRemoveFileEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, TranspileObj, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData, ProvideSelectionRangesEvent, ProvideInlayHintsEvent, OnGetSourceFixAllCodeActionsEvent } from './interfaces';
+import type { BsDiagnostic, FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeAddFileEvent, BeforeRemoveFileEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData, ProvideSelectionRangesEvent, ProvideInlayHintsEvent, ProvideSourceFixAllCodeActionsEvent } from './interfaces';
 import type { SourceFixAllCodeAction } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
 import { standardizePath as s, util } from './util';
@@ -21,7 +21,8 @@ import chalk from 'chalk';
 import { globalCallables, globalFile } from './globalCallables';
 import { parseManifest, parseManifestEntries, getBsConst } from './preprocessor/Manifest';
 import type { ManifestEntry } from './preprocessor/Manifest';
-import { DEFAULT_MIN_FIRMWARE_VERSION, RSG_VERSIONS } from './RokuConstants';
+import type { FirmwareCapabilities } from './RokuConstants';
+import { DEFAULT_MIN_FIRMWARE_VERSION, getFirmwareCapabilities, RSG_VERSIONS } from './RokuConstants';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
 import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement, isReferenceType } from './astUtils/reflection';
@@ -71,6 +72,11 @@ import { roFunctionType } from './types/roFunctionType';
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
 
+/**
+ * The built-in Roku SceneGraph nodes, keyed by their lower-case name
+ */
+const builtInSceneGraphNodes = nodes as unknown as Record<string, SGNodeData>;
+
 export interface SignatureInfoObj {
     index: number;
     key: string;
@@ -91,6 +97,13 @@ export class Program {
         this.logger = logger ?? createLogger(options);
         this.plugins = plugins || new PluginInterface([], { logger: this.logger });
         this.diagnostics = diagnosticsManager || new DiagnosticManager();
+
+        //surface warnings for any deprecated bsconfig options that were used to build `this.options`
+        const deprecationDiagnostics = (this.options as any)._deprecationDiagnostics as BsDiagnostic[];
+        if (deprecationDiagnostics?.length > 0) {
+            this.diagnostics.register(deprecationDiagnostics);
+        }
+        delete (this.options as any)._deprecationDiagnostics;
 
         //try to find a location for the diagnostic if it doesn't have one
         this.diagnostics.locationResolver = (args) => {
@@ -180,6 +193,7 @@ export class Program {
             if (nodeData.extends) {
                 const parentNodeData = nodes[nodeData.extends.name.toLowerCase()];
                 try {
+                    //eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- the `nodes` data is untyped
                     parentNode = this.recursivelyAddNodeToSymbolTable(parentNodeData);
                 } catch (error) {
                     this.logger.error(error, nodeData);
@@ -757,6 +771,117 @@ export class Program {
     }
 
     /**
+     * Get the names of all known SceneGraph nodes: the built-in Roku nodes plus every component
+     * defined in this program. Names keep their original casing and are deduplicated by lower-case name.
+     */
+    public getSceneGraphNodeNames(): string[] {
+        const namesByLowerName = new Map<string, string>();
+        for (const node of Object.values(builtInSceneGraphNodes)) {
+            namesByLowerName.set(node.name.toLowerCase(), node.name);
+        }
+        for (const componentName in this.components) {
+            const displayName = this.components[componentName][0]?.file.componentName?.text;
+            if (displayName) {
+                namesByLowerName.set(displayName.toLowerCase(), displayName);
+            }
+        }
+        return [...namesByLowerName.values()];
+    }
+
+    /**
+     * Determine whether a SceneGraph node with the given name exists, either as a built-in Roku node
+     * or as a component defined in this program.
+     */
+    public hasSceneGraphNode(nodeName: string): boolean {
+        if (!nodeName) {
+            return false;
+        }
+        return !!builtInSceneGraphNodes[nodeName.toLowerCase()] || !!this.getComponent(nodeName);
+    }
+
+    /**
+     * Get the built-in Roku node data and/or the project component file backing a SceneGraph node name.
+     * Returns `undefined` when no node or component matches.
+     */
+    public getSceneGraphNode(nodeName: string): SceneGraphNodeLookup | undefined {
+        if (!nodeName) {
+            return undefined;
+        }
+        const builtInNode = builtInSceneGraphNodes[nodeName.toLowerCase()];
+        const componentFile = this.getComponent(nodeName)?.file;
+        if (!builtInNode && !componentFile) {
+            return undefined;
+        }
+        return { builtInNode: builtInNode, componentFile: componentFile };
+    }
+
+    /**
+     * Get every field available on a SceneGraph node, walking the full `extends` chain across both
+     * built-in Roku nodes and project components. Fields declared closer to the node take precedence
+     * over inherited fields with the same name.
+     */
+    public getSceneGraphNodeFields(nodeName: string): ResolvedSceneGraphField[] {
+        const fieldsByLowerName = new Map<string, ResolvedSceneGraphField>();
+        const visitedNodeNames = new Set<string>();
+
+        const addField = (field: ResolvedSceneGraphField) => {
+            if (!field.name) {
+                return;
+            }
+            const lowerName = field.name.toLowerCase();
+            //the first definition we encounter is the closest one, so it wins
+            if (!fieldsByLowerName.has(lowerName)) {
+                fieldsByLowerName.set(lowerName, field);
+            }
+        };
+
+        const walk = (currentNodeName: string, origin: SceneGraphFieldOrigin) => {
+            const lowerName = currentNodeName?.toLowerCase();
+            if (!lowerName || visitedNodeNames.has(lowerName)) {
+                return;
+            }
+            visitedNodeNames.add(lowerName);
+
+            //prefer a project component (a project component can shadow a built-in of the same name)
+            const component = this.getComponent(currentNodeName);
+            if (component) {
+                for (const field of component.file.ast.componentElement?.interfaceElement?.fields ?? []) {
+                    addField({ name: field.id, type: field.type, default: field.value, origin: origin });
+                }
+                const parentName = component.file.ast.componentElement?.extends;
+                if (parentName) {
+                    walk(parentName, 'inherited');
+                }
+                return;
+            }
+
+            const builtInNode = builtInSceneGraphNodes[lowerName];
+            if (builtInNode) {
+                for (const field of builtInNode.fields ?? []) {
+                    addField({
+                        name: field.name,
+                        type: field.type,
+                        default: field.default,
+                        description: field.description,
+                        accessPermission: field.accessPermission,
+                        origin: origin
+                    });
+                }
+                if (builtInNode.extends?.name) {
+                    walk(builtInNode.extends.name, 'inherited');
+                } else if (lowerName !== 'node') {
+                    //some scraped node entries are missing `extends` data, but every SceneGraph node
+                    //ultimately descends from Node, so fall back to Node to keep its universal fields
+                    walk('Node', 'inherited');
+                }
+            }
+        };
+
+        walk(nodeName, 'own');
+        return [...fieldsByLowerName.values()];
+    }
+
+    /**
      * Update internal maps with this file reference
      */
     private assignFile<T extends BscFile = BscFile>(file: T) {
@@ -770,6 +895,8 @@ export class Program {
 
         this.files[file.srcPath.toLowerCase()] = file;
         this.destMap.set(file.destPath.toLowerCase(), file);
+
+        this.plugins.emit('addFile', fileAddEvent);
 
         this.plugins.emit('afterAddFile', fileAddEvent);
 
@@ -928,7 +1055,8 @@ export class Program {
             srcPath = s`${path.resolve(rootDir, fileParam)}`;
             destPath = s`${util.replaceCaseInsensitive(srcPath, rootDir, '')}`;
         } else {
-            let param: any = fileParam;
+            //`fileParam` here is `FileObj | { srcPath?: string; pkgPath?: string }`; duck-type across both shapes
+            let param = fileParam as { src?: string; srcPath?: string; dest?: string; pkgPath?: string };
 
             if (param.src) {
                 srcPath = s`${param.src}`;
@@ -1041,6 +1169,7 @@ export class Program {
 
             const event: BeforeRemoveFileEvent = { file: file, program: this };
             this.plugins.emit('beforeRemoveFile', event);
+            this.plugins.emit('removeFile', event);
 
             //if there is a scope named the same as this file's path, remove it (i.e. xml scopes)
             let scope = this.scopes[file.destPath];
@@ -1336,12 +1465,14 @@ export class Program {
                     const allChangedTypesSofar = [...Array.from(changedTypeSymbols), ...Array.from(dependentTypesChanged)];
                     for (const changedSymbol of allChangedTypesSofar) {
                         const symbolsDependentUponChangedSymbol = this.symbolDependencies.get(changedSymbol) ?? [];
+                        /* eslint-disable @typescript-eslint/no-unsafe-argument -- `symbolName` is untyped because `changedSymbols` comes back as `any` */
                         for (const symbolName of symbolsDependentUponChangedSymbol) {
                             if (!changedTypeSymbols.has(symbolName) && !dependentTypesChanged.has(symbolName)) {
                                 foundDependentTypes = true;
                                 dependentTypesChanged.add(symbolName);
                             }
                         }
+                        /* eslint-enable @typescript-eslint/no-unsafe-argument */
                     }
                 } while (foundDependentTypes);
 
@@ -1433,6 +1564,9 @@ export class Program {
                 this.detectDuplicateComponentNames();
 
 
+            })
+            .once('detect diagnostic filter issues', () => {
+                this.diagnostics.detectPathLikeDiagnosticFilterCodes(this.options, { tags: [ProgramValidatorDiagnosticsTag] });
             })
             .onCancel(() => {
                 logValidateEnd('cancelled');
@@ -1806,7 +1940,7 @@ export class Program {
      * Given a position in a file, if the position is sitting on some type of identifier,
      * go to the definition of that identifier (where this thing was first defined)
      */
-    public getDefinition(srcPath: string, position: Position): Location[] {
+    public getDefinition(srcPath: string, position: Position): Array<Location | LocationLink> {
         let file = this.getFile(srcPath);
         if (!file) {
             return [];
@@ -1822,12 +1956,10 @@ export class Program {
         this.plugins.emit('beforeProvideDefinition', event);
         this.plugins.emit('provideDefinition', event);
         this.plugins.emit('afterProvideDefinition', event);
+
         return event.definitions;
     }
 
-    /**
-     * Get hover information for a file and position
-     */
     public getHover(srcPath: string, position: Position): Hover[] {
         let file = this.getFile(srcPath);
         let result: Hover[];
@@ -1962,8 +2094,9 @@ export class Program {
 
     /**
      * Compute "source fix all" code actions for the given file.
-     * Fires the `onGetSourceFixAllCodeActions` plugin event with all diagnostics for the file (no range filter),
-     * then converts each contributed SourceFixAllCodeAction into an LSP CodeAction.
+     * Fires the `provideSourceFixAllCodeActions` plugin event (along with its before/after variants)
+     * with all diagnostics for the file (no range filter), then converts each contributed
+     * SourceFixAllCodeAction into an LSP CodeAction.
      */
     public getSourceFixAllCodeActions(srcPath: string): CodeAction[] {
         const actions: SourceFixAllCodeAction[] = [];
@@ -1974,13 +2107,16 @@ export class Program {
                 .getDiagnostics()
                 .filter(x => x.location?.uri === fileUri);
             const scopes = this.getScopesForFile(file);
-            this.plugins.emit('onGetSourceFixAllCodeActions', {
+            const event: ProvideSourceFixAllCodeActionsEvent = {
                 program: this,
                 file: file,
                 diagnostics: diagnostics,
                 scopes: scopes,
                 actions: actions
-            } as OnGetSourceFixAllCodeActionsEvent);
+            };
+            this.plugins.emit('beforeProvideSourceFixAllCodeActions', event);
+            this.plugins.emit('provideSourceFixAllCodeActions', event);
+            this.plugins.emit('afterProvideSourceFixAllCodeActions', event);
         }
         return actions.map(action => codeActionUtil.createCodeAction({
             ...action,
@@ -2117,6 +2253,7 @@ export class Program {
     private getOutDir(outDir?: string) {
         let result = outDir ?? this.options.outDir ?? this.options.outDir;
         if (!result) {
+            //eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- BsConfig and RokuDeployOptions overlap but aren't assignable
             result = rokuDeploy.getOptions(this.options as any).outDir;
         }
         result = s`${path.resolve(this.options.cwd ?? process.cwd(), result ?? '/')}`;
@@ -2135,12 +2272,7 @@ export class Program {
         };
 
         //assign an editor to every file
-        for (const file of programEvent.files) {
-            //if the file doesn't have an editor yet, assign one now
-            if (!file.editor) {
-                file.editor = new Editor();
-            }
-        }
+        this.assignEditors(programEvent.files);
 
         //sort the entries to make transpiling more deterministic
         programEvent.files.sort((a, b) => {
@@ -2158,38 +2290,61 @@ export class Program {
 
         const outDir = this.getOutDir();
 
-        const entries: TranspileObj[] = [];
+        //plugins are allowed to add files to `programEvent.files` while we're iterating (and they may insert or reorder
+        //rather than append), so track which files we've handled instead of relying on array position. Keep draining
+        //until every file in the list has been prepared exactly once.
+        const preparedFiles = new Set<BscFile>();
+        let filesToPrepare = [...programEvent.files];
+        while (filesToPrepare.length > 0) {
+            for (const file of filesToPrepare) {
+                preparedFiles.add(file);
 
+                const scope = this.getFirstScopeForFile(file);
+                //link the symbol table for all the files in this scope
+                scope?.linkSymbolTable();
+
+                //if the file doesn't have an editor yet, assign one now
+                if (!file.editor) {
+                    file.editor = new Editor();
+                }
+                const event = {
+                    program: this,
+                    file: file,
+                    editor: file.editor,
+                    scope: scope,
+                    outputPath: this.getOutputPath(file, outDir)
+                } as PrepareFileEvent & { outputPath: string };
+
+                await this.plugins.emitAsync('beforePrepareFile', event);
+                await this.plugins.emitAsync('prepareFile', event);
+                await this.plugins.emitAsync('afterPrepareFile', event);
+
+                //unlink the symbolTable so the next loop iteration can link theirs
+                scope?.unlinkSymbolTable();
+            }
+            //pick up any files the plugins added during this pass
+            filesToPrepare = programEvent.files.filter(x => !preparedFiles.has(x));
+        }
+
+        await this.plugins.emitAsync('afterPrepareProgram', programEvent);
+
+        //plugins may have added files during `afterPrepareProgram`, so make sure every file has an editor
+        this.assignEditors(programEvent.files);
+
+        return programEvent.files;
+    }
+
+    /**
+     * Ensure every file has an `editor`. Plugins are allowed to add files to the build at just about any point in the
+     * build flow, so this gets called several times to catch files added after the initial assignment.
+     */
+    private assignEditors(files: BscFile[]) {
         for (const file of files) {
-            const scope = this.getFirstScopeForFile(file);
-            //link the symbol table for all the files in this scope
-            scope?.linkSymbolTable();
-
             //if the file doesn't have an editor yet, assign one now
             if (!file.editor) {
                 file.editor = new Editor();
             }
-            const event = {
-                program: this,
-                file: file,
-                editor: file.editor,
-                scope: scope,
-                outputPath: this.getOutputPath(file, outDir)
-            } as PrepareFileEvent & { outputPath: string };
-
-            await this.plugins.emitAsync('beforePrepareFile', event);
-            await this.plugins.emitAsync('prepareFile', event);
-            await this.plugins.emitAsync('afterPrepareFile', event);
-
-            //TODO remove this in v1
-            entries.push(event);
-
-            //unlink the symbolTable so the next loop iteration can link theirs
-            scope?.unlinkSymbolTable();
         }
-
-        await this.plugins.emitAsync('afterPrepareProgram', programEvent);
-        return files;
     }
 
     /**
@@ -2210,6 +2365,11 @@ export class Program {
             result: allFiles
         });
         await this.plugins.emitAsync('serializeProgram', serializeProgramEvent);
+
+        files = serializeProgramEvent.files;
+
+        //plugins may have added files during the serializeProgram events, so make sure every file has an editor
+        this.assignEditors(files);
 
         // serialize each file
         for (const file of files) {
@@ -2251,6 +2411,9 @@ export class Program {
             files: files,
             outDir: outDir
         });
+
+        await this.plugins.emitAsync('writeProgram', programEvent);
+
         //empty the out directory
         await fsExtra.emptyDir(outDir);
 
@@ -2294,6 +2457,8 @@ export class Program {
                 files: options?.files ?? Object.values(this.files)
             });
 
+            await this.plugins.emitAsync('buildProgram', event);
+
             //prepare the program (and files) for building
             event.files = await this.prepare(event.files);
 
@@ -2306,9 +2471,11 @@ export class Program {
 
             //undo all edits for the program
             this.editor.undoAll();
-            //undo all edits for each file
-            for (const file of event.files) {
-                file.editor.undoAll();
+            //undo all edits for each file. Include the serialized files as well, since plugins can add files to the
+            //build after `prepare` has finished (those files won't be present in `event.files`)
+            for (const file of new Set([...event.files, ...serializedFilesByFile.keys()])) {
+                //a file added by a plugin very late in the flow might not have an editor at all
+                file.editor?.undoAll();
             }
         });
 
@@ -2533,6 +2700,22 @@ export class Program {
         return this._minFirmwareVersion;
     }
 
+    private _firmwareCapabilities: FirmwareCapabilities | undefined;
+
+    /**
+     * What the project's target firmware natively understands, derived from
+     * {@link getMinFirmwareVersion}. These are facts about the device, not decisions about what
+     * to do — a caller finding a missing capability decides whether to transpile around it (as
+     * `continue` does) or report a diagnostic (as optional chaining does).
+     * Cached after first call.
+     */
+    public get firmwareCapabilities(): FirmwareCapabilities {
+        if (this._firmwareCapabilities === undefined) {
+            this._firmwareCapabilities = getFirmwareCapabilities(this.getMinFirmwareVersion());
+        }
+        return this._firmwareCapabilities;
+    }
+
     private _rsgVersion: string | undefined;
 
     /**
@@ -2625,4 +2808,30 @@ export interface ProgramBuildOptions {
      * Typically you will want to leave this blank
      */
     files?: BscFile[];
+}
+
+/**
+ * Where a resolved SceneGraph field was declared, relative to the node it was resolved for:
+ * `own` = declared on the node itself, `inherited` = declared on an ancestor in the `extends` chain
+ */
+export type SceneGraphFieldOrigin = 'own' | 'inherited';
+
+/**
+ * A field available on a SceneGraph node, resolved across the node's full `extends` chain
+ */
+export interface ResolvedSceneGraphField {
+    name: string;
+    type?: string;
+    default?: string;
+    description?: string;
+    accessPermission?: string;
+    origin: SceneGraphFieldOrigin;
+}
+
+/**
+ * The built-in Roku node data and/or project component file backing a SceneGraph node name
+ */
+export interface SceneGraphNodeLookup {
+    builtInNode?: SGNodeData;
+    componentFile?: XmlFile;
 }

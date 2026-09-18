@@ -13,7 +13,8 @@ import type { Logger } from './logging';
 import { LogLevel, createLogger } from './logging';
 import type { Program } from './Program';
 import type { BrsFile } from './files/BrsFile';
-import { DiagnosticCodeMap } from './DiagnosticMessages';
+import { DiagnosticCodeMap, DiagnosticMessages } from './DiagnosticMessages';
+import * as path from 'path';
 
 interface DiagnosticWithContexts {
     diagnostic: BsDiagnosticWithKey;
@@ -323,28 +324,6 @@ export class DiagnosticManager {
         this.tagMap.get(tagLower)?.clear();
     }
 
-    /*
-     *  Filters searchData to include only those diagnostics that match the filter provided
-     *
-     * @param shouldMatch true if this is an important filter, false if it is an optional filter
-     * @param {MapIterator<DiagnosticWithContexts>} searchData Data to filter
-     * @param filteredDiagnosticKeysSet Set of keys to filter by
-     * @returns  {MapIterator<DiagnosticWithContexts>} result of intersection
-     */
-    private getSearchIntersection(shouldMatch: boolean, searchData: DiagnosticWithContexts[], filteredDiagnosticKeysSet: Set<string>, ignoreEmptyFilter = false): DiagnosticWithContexts[] {
-        if (!shouldMatch) {
-            return searchData;
-        }
-
-        if (!filteredDiagnosticKeysSet || filteredDiagnosticKeysSet.size === 0) {
-            return [];
-        }
-
-        return searchData.filter((diagnosticWithContext) => {
-            return filteredDiagnosticKeysSet.has(diagnosticWithContext.diagnostic.key);
-        });
-    }
-
     /**
      * Clears all diagnostics that match all aspects of the filter provided
      * Matches equality of tag, scope, file, segment filters. Leave filter option undefined to not filter on option
@@ -358,22 +337,62 @@ export class DiagnosticManager {
             segment: !!filter.segment
         };
 
-        let searchData = Array.from(this.diagnosticsCache.values());
-        searchData = this.getSearchIntersection(needToMatch.tag, searchData, needToMatch.tag ? this.tagMap.get(filter.tag?.toLowerCase()) : null);
-        if (searchData.length === 0) {
-            return;
+        //Intersect the indexed key-sets directly instead of copying the whole diagnosticsCache
+        //into an array and filtering it down - this is called per file/segment/scope during
+        //validation, so that copy made validation quadratic in the number of diagnostics.
+        const keySets: Array<Set<string>> = [];
+        if (needToMatch.tag) {
+            const keySet = this.tagMap.get(filter.tag?.toLowerCase());
+            if (!keySet || keySet.size === 0) {
+                return;
+            }
+            keySets.push(keySet);
         }
-        searchData = this.getSearchIntersection(needToMatch.scope, searchData, needToMatch.scope ? this.scopeMap.get(filter.scope?.name?.toLowerCase()) : null, true);
-        if (searchData.length === 0) {
-            return;
+        if (needToMatch.scope) {
+            const keySet = this.scopeMap.get(filter.scope?.name?.toLowerCase());
+            if (!keySet || keySet.size === 0) {
+                return;
+            }
+            keySets.push(keySet);
         }
-        searchData = this.getSearchIntersection(needToMatch.fileUri, searchData, needToMatch.fileUri ? this.fileUriMap.get(util.pathToUri(filter.fileUri).toLowerCase()) : null);
-        if (searchData.length === 0) {
-            return;
+        if (needToMatch.fileUri) {
+            const keySet = this.fileUriMap.get(util.pathToUri(filter.fileUri).toLowerCase());
+            if (!keySet || keySet.size === 0) {
+                return;
+            }
+            keySets.push(keySet);
         }
-        searchData = this.getSearchIntersection(needToMatch.segment, searchData, needToMatch.segment ? this.segmentMap.get(filter.segment) : null);
+        if (needToMatch.segment) {
+            const keySet = this.segmentMap.get(filter.segment);
+            if (!keySet || keySet.size === 0) {
+                return;
+            }
+            keySets.push(keySet);
+        }
 
-        for (const { diagnostic, contexts } of searchData ?? []) {
+        let candidateKeys: Iterable<string>;
+        if (keySets.length === 0) {
+            //no filter aspect specified - consider every diagnostic
+            candidateKeys = this.diagnosticsCache.keys();
+        } else {
+            //walk the smallest set and check membership in the rest
+            keySets.sort((a, b) => a.size - b.size);
+            const [smallest, ...rest] = keySets;
+            const intersection: string[] = [];
+            for (const key of smallest) {
+                if (rest.every(keySet => keySet.has(key))) {
+                    intersection.push(key);
+                }
+            }
+            candidateKeys = intersection;
+        }
+
+        for (const key of candidateKeys) {
+            const cachedData = this.diagnosticsCache.get(key);
+            if (!cachedData) {
+                continue;
+            }
+            const { diagnostic, contexts } = cachedData;
             const contextsToRemove: DiagnosticContext[] = [];
             let foundMatch = false;
             for (const context of contexts) {
@@ -488,6 +507,28 @@ export class DiagnosticManager {
             this.diagnosticFilterer.options = this.options;
         }
         return this.diagnosticFilterer.isFileCompletelyFiltered(file);
+    }
+
+    /**
+     * Flag `diagnosticFilters` entries that look like file paths/globs rather than diagnostic codes.
+     * This is a common mistake when migrating a bsconfig.json from the v0-style filters (which were file globs)
+     */
+    public detectPathLikeDiagnosticFilterCodes(config: FinalizedBsConfig, context?: DiagnosticContext) {
+        const knownDestPaths = this.program ? new Set(
+            Object.values(this.program.files).map(file => file.destPath.toLowerCase().replace(/\\/g, '/'))
+        ) : undefined;
+        const pathLikeCodes = this.diagnosticFilterer.getPathLikeDiagnosticFilterCodes(config, knownDestPaths);
+        if (pathLikeCodes.length === 0) {
+            return;
+        }
+        const location = util.createLocationFromRange(
+            util.pathToUri(config.project ?? path.join(config.cwd, 'bsconfig.json')),
+            util.createRange(0, 0, 0, 0)
+        );
+        this.register(pathLikeCodes.map(code => ({
+            ...DiagnosticMessages.diagnosticFilterLooksLikeFilePath(code.toString()),
+            location: location
+        })), context);
     }
 }
 

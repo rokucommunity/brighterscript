@@ -1,8 +1,9 @@
-module.exports = async (suite, name, brighterscript, projectPath, options) => {
+module.exports = async (options) => {
+    const { suite, fullName, brighterscript, projectPath, suiteOptions, additionalConfig } = options;
     const { ProgramBuilder } = brighterscript;
 
     let builder;
-    suite.add(name, (deferred) => {
+    suite.add(fullName, (deferred) => {
         builder = new ProgramBuilder();
         builder.run({
             cwd: projectPath,
@@ -10,12 +11,13 @@ module.exports = async (suite, name, brighterscript, projectPath, options) => {
             copyToStaging: false,
             //disable diagnostic reporting (they still get collected)
             diagnosticFilters: ['**/*'],
-            logLevel: 'error'
+            logLevel: 'error',
+            ...additionalConfig
         }).finally(() => {
             deferred.resolve();
         });
     }, {
-        ...options,
+        ...suiteOptions,
         'defer': true
     });
 };

@@ -12,6 +12,7 @@ import { ClassType } from './ClassType';
 import { ArrayType } from './ArrayType';
 import { expect } from 'chai';
 import { EnumMemberType, EnumType } from './EnumType';
+import { AssociativeArrayType } from './AssociativeArrayType';
 
 describe('BuiltInInterfaceAdder', () => {
 
@@ -133,5 +134,16 @@ describe('BuiltInInterfaceAdder', () => {
         expect(enumTrim).to.be.undefined;
         const memberTrim = myEnumMember.getMemberType('trim', { flags: SymbolTypeFlag.runtime });
         expectTypeToBe(memberTrim, TypedFunctionType);
+    });
+
+    it('does not throw when getLookupTable is not set', () => {
+        const originalGetLookupTable = BuiltInInterfaceAdder.getLookupTable;
+        BuiltInInterfaceAdder.getLookupTable = undefined;
+        try {
+            const myType = new AssociativeArrayType();
+            expect(() => BuiltInInterfaceAdder.addBuiltInInterfacesToType(myType)).to.not.throw();
+        } finally {
+            BuiltInInterfaceAdder.getLookupTable = originalGetLookupTable;
+        }
     });
 });

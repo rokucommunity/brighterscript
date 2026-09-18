@@ -3,6 +3,7 @@
 While a minimal `bsconfig.json` file is sufficient for getting started, `bsc` supports a range of helpful options.
 
 - [bsconfig.json options](#bsconfigjson-options)
+  - [`compilerOptions`](#compileroptions)
   - [`allowBrighterScriptInBrightScript`](#allowbrighterscriptinbrightscript)
   - [`autoImportComponentScript`](#autoimportcomponentscript)
   - [`bslibDestinationDir`](#bslibdestinationdir)
@@ -46,7 +47,51 @@ While a minimal `bsconfig.json` file is sufficient for getting started, `bsc` su
   - [`username`](#username)
   - [`watch`](#watch)
 
+## `compilerOptions`
+
+Type: `object`
+
+A dedicated group for options that control how BrighterScript interprets, validates, and compiles your code — as opposed to the other top-level `bsconfig.json` options, which mostly control project structure, file discovery, and tooling/reporting behavior. This mirrors how TypeScript's `tsconfig.json` separates `compilerOptions` from the rest of the config. For example:
+
+```jsonc
+{
+    "rootDir": "src",
+    "outDir": "out",
+    "compilerOptions": {
+        "strict": true,
+        "sourceMap": true,
+        "autoImportComponentScript": true
+    }
+}
+```
+
+The following options live inside `compilerOptions`:
+
+- [`allowBrighterScriptInBrightScript`](#allowbrighterscriptinbrightscript)
+- [`autoImportComponentScript`](#autoimportcomponentscript)
+- [`bslibDestinationDir`](#bslibdestinationdir)
+- [`emitDefinitions`](#emitdefinitions)
+- [`emitFullPaths`](#emitfullpaths)
+- `legacyCallfuncHandling`
+- `manifest`
+- [`minFirmwareVersion`](#minfirmwareversion)
+- [`pruneEmptyCodeFiles`](#pruneemptycodefiles)
+- [`relativeSourceMaps`](#relativesourcemaps)
+- [`removeParameterTypes`](#removeparametertypes)
+- [`resolveSourceRoot`](#sourceroot)
+- [`sourceMap`](#sourcemap)
+- [`sourceRoot`](#sourceroot)
+- [`strict`](#strict)
+- [`strictCallFunc`](#strictCallFunc)
+- [`strictNodeMembers`](#strictNodeMembers)
+
+Each of these options used to live at the top level of `bsconfig.json`. Those top-level locations still work for backwards compatibility, but are **deprecated** — using one emits a `deprecated-bsconfig-option` warning diagnostic pointing you at the `compilerOptions` equivalent. If an option is set in both places, the value in `compilerOptions` wins.
+
+`extends` deep-merges `compilerOptions` across the config chain (a child config that only sets one option under `compilerOptions` does not wipe out the other options set by a parent config it extends) — this is different from every other `bsconfig.json` option, where the child's value completely replaces the parent's.
+
 ## `allowBrighterScriptInBrightScript`
+
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.allowBrighterScriptInBrightScript`). The top-level location still works but is deprecated and emits a warning.
 
 Type: `boolean`
 
@@ -54,11 +99,15 @@ Allow BrighterScript features (classes, interfaces, etc...) to be included in Br
 
 ## `autoImportComponentScript`
 
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.autoImportComponentScript`). The top-level location still works but is deprecated and emits a warning.
+
 Type: `bool`
 
 BrighterScript only: will automatically import a script at transpile-time for a component with the same name if it exists. Defaults to `false`.
 
 ## `bslibDestinationDir`
+
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.bslibDestinationDir`). The top-level location still works but is deprecated and emits a warning.
 
 Type: `string`
 
@@ -215,11 +264,15 @@ A map of error codes and severity levels that will override diagnostics' severit
 
 ## `emitDefinitions`
 
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.emitDefinitions`). The top-level location still works but is deprecated and emits a warning.
+
 Type: `boolean`
 
 Emit type definition files (`d.bs`) during transpile. Defaults to `false`.
 
 ## `emitFullPaths`
+
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.emitFullPaths`). The top-level location still works but is deprecated and emits a warning.
 
 Type: `boolean`
 
@@ -435,6 +488,8 @@ The host of the Roku that this project will deploy to when the [`deploy`](#deplo
 
 ## `minFirmwareVersion`
 
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.minFirmwareVersion`). The top-level location still works but is deprecated and emits a warning.
+
 Type: `string`
 
 The minimum Roku firmware version required to run this project. When set, files are validated to ensure they only use language features available in that firmware version or earlier. BrightScript (`.brs`) files are always validated against the version restriction. BrighterScript (`.bs`) files are only validated for features that BrighterScript does not transpile — for example, optional chaining is emitted as-is rather than transpiled down, so it is subject to the version restriction. BrighterScript features that are fully transpiled (such as classes) are not restricted, since the transpiled output is compatible with older firmware.
@@ -458,7 +513,32 @@ With this setting, using optional chaining (`?.`) without the version requiremen
 | Feature | Minimum Version |
 |---------|----------------|
 | Optional chaining (`?.`, `?[`, `?(`) | 11.0.0 |
+| `continue for` / `continue while` | 11.5.0 |
 | Multi-line expressions / line continuation in `.brs` files | 15.3.0 |
+
+### `continue` and older firmware
+
+`continue for` and `continue while` were introduced in Roku OS 11.5, but unlike optional chaining they
+*can* be transpiled down. When a file is transpiled and `minFirmwareVersion` is below `11.5.0`, each
+`continue` is rewritten into a `goto` targeting a label at the end of the enclosing loop body:
+
+```brightscript
+' source
+for i = 0 to 10
+    continue for
+end for
+
+' transpiled output when targeting below 11.5.0
+for i = 0 to 10
+    goto BRIGHTERSCRIPT_CONTINUE_0
+    BRIGHTERSCRIPT_CONTINUE_0:
+end for
+```
+
+Files that are **not** transpiled (a `.brs` file without
+[`allowBrighterScriptInBrightScript`](#allowbrighterscriptinbrightscript)) are emitted as-is, so
+there is nothing to rewrite. Those get an error instead, since the code would fail on the target
+device.
 
 ### Line continuation in `.brs` files
 
@@ -509,11 +589,15 @@ A path to a project file. This is really only passed in from the command line or
 
 ## `pruneEmptyCodeFiles`
 
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.pruneEmptyCodeFiles`). The top-level location still works but is deprecated and emits a warning.
+
 Type: `boolean`
 
 Remove files from the final package which would be empty or consist entirely of comments after compilation. Also removes imports of any such empty scripts from XML files. This can speed up sideloading packages during development. Defaults to `false`.
 
 ## `removeParameterTypes`
+
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.removeParameterTypes`). The top-level location still works but is deprecated and emits a warning.
 
 Type: `boolean`
 
@@ -535,11 +619,15 @@ The root directory of your roku project. Defaults to `process.cwd()`.
 
 ## `sourceMap`
 
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.sourceMap`). The top-level location still works but is deprecated and emits a warning.
+
 Type: `boolean`
 
 Enables generating sourcemap files (`.map`), which allow debugging tools to show the original source code while running the emitted files. Defaults to `false`.
 
 ## `relativeSourceMaps`
+
+> **Deprecated:** move this option into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.relativeSourceMaps`). The top-level location still works but is deprecated and emits a warning.
 
 Type: `boolean`
 
@@ -577,6 +665,8 @@ If [`sourceRoot`](#sourceroot) is also set, the map file's `sourceRoot` field is
 
 ## `sourceRoot`
 
+> **Deprecated:** move this option (and `resolveSourceRoot`) into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.sourceRoot` / `compilerOptions.resolveSourceRoot`). The top-level location still works but is deprecated and emits a warning.
+
 Type: `string`
 
 Overrides where source files appear to live, both in sourcemaps and in the `SOURCE_FILE_PATH` / `SOURCE_LOCATION` runtime literals. Only applies to files within [`rootDir`](#rootdir) — files outside `rootDir` are unaffected.
@@ -591,6 +681,8 @@ The exact behavior depends on whether [`relativeSourceMaps`](#relativesourcemaps
 In both cases, `SOURCE_FILE_PATH` and `SOURCE_LOCATION` source literals embedded in the transpiled output will reflect the `sourceRoot`-substituted path at runtime.
 
 ## `strict`
+
+> **Deprecated:** move this option (and `strictCallFunc`/`strictNodeMembers`) into [`compilerOptions`](#compileroptions) (i.e. `compilerOptions.strict`). The top-level location still works but is deprecated and emits a warning.
 
 Type: `boolean`
 

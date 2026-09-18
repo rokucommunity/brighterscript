@@ -186,9 +186,11 @@ The presence of a `bsconfig.json` file in a directory indicates that the directo
         "**/*"
     ],
     "outDir": "out",
-    //this flag tells BrighterScript that for every xml file, try to import a .bs file with the same name and location
-    "autoImportComponentScript": true,
-    "sourceMap": true
+    "compilerOptions": {
+        //this flag tells BrighterScript that for every xml file, try to import a .bs file with the same name and location
+        "autoImportComponentScript": true,
+        "sourceMap": true
+    }
 }
 ```
 

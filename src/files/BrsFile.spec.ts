@@ -3841,6 +3841,34 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('replaces existing trailing sourceMappingURL comment instead of appending a second one', () => {
+            program.options.sourceMap = true;
+            //file already has a sourceMappingURL comment at the bottom (e.g. ingested from a previous build)
+            const file = program.setFile<BrsFile>('source/main.bs', undent`
+                sub main()
+                end sub
+                '//# sourceMappingURL=./some-old-path.brs.map
+            `);
+            file.needsTranspiled = false;
+            const code = file.transpile().code;
+            //should only contain a single sourceMappingURL comment (the new one)
+            expect(code.match(/sourceMappingURL=/g)?.length).to.eql(1);
+            expect(code.endsWith(`'//# sourceMappingURL=./main.brs.map`)).to.be.true;
+        });
+
+        it('replaces existing trailing sourceMappingURL comment when AST-transpiling', () => {
+            program.options.sourceMap = true;
+            const file = program.setFile<BrsFile>('source/main.bs', undent`
+                sub main()
+                end sub
+                '//# sourceMappingURL=./some-old-path.brs.map
+            `);
+            file.needsTranspiled = true;
+            const code = file.transpile().code;
+            expect(code.match(/sourceMappingURL=/g)?.length).to.eql(1);
+            expect(code.endsWith(`'//# sourceMappingURL=./main.brs.map`)).to.be.true;
+        });
+
         it('includes sourcemap.name property', () => {
             program.options.sourceMap = true;
             const file = program.setFile<BrsFile>('source/main.bs', `
@@ -4848,6 +4876,58 @@ describe('BrsFile', () => {
                     end function
                 `);
             });
+
+            it('handles this complicated typecast with intersection and inline interfaces', async () => {
+                const file = program.setFile<BrsFile>('source/main.bs', `
+                    sub someFunc()
+                        typecast m as { top as roSGNode, optional subscreen as SomeInterface, mainGroup as roSGNodeCustomComponent, config as roAssociativeArray } and SomeOtherInterface
+                        print m.top.title
+                    end sub
+                `);
+
+                await testTranspile(file, `
+                    sub someFunc()
+                        'typecast m as { top as roSGNode, optional subscreen as SomeInterface, mainGroup as roSGNodeCustomComponent, config as roAssociativeArray } and SomeOtherInterface
+                        print m.top.title
+                    end sub
+                `, undefined, undefined, false);
+            });
+
+            it('handles typecasts to other complex types', async () => {
+                const file = program.setFile<BrsFile>('source/main.bs', `
+                    sub arrays()
+                        typecast m as SomeInterface[][]
+                        print m
+                    end sub
+
+                    sub unions()
+                        typecast m as (SomeInterface or SomeOtherInterface) and { name as string }
+                        print m
+                    end sub
+
+                    sub functions()
+                        typecast m as function(a as integer, b as SomeInterface) as string
+                        print m
+                    end sub
+                `);
+
+                await testTranspile(file, `
+                    sub arrays()
+                        'typecast m as SomeInterface[][]
+                        print m
+                    end sub
+
+                    sub unions()
+                        'typecast m as (SomeInterface or SomeOtherInterface) and { name as string }
+                        print m
+                    end sub
+
+                    sub functions()
+                        'typecast m as function(a as integer, b as SomeInterface) as string
+                        print m
+                    end sub
+                `, undefined, undefined, false);
+            });
         });
     });
 
@@ -5170,6 +5250,100 @@ describe('BrsFile', () => {
                         sub new()
                         end sub
                     end class
+                end namespace
+            `);
+        });
+
+        it('uses namespace-qualified type names for function params/returns referencing a same-namespace class', () => {
+            testTypedef(`
+                namespace Shapes
+                    class Circle
+                    end class
+                    sub defineCircle(newCircle as Circle)
+                    end sub
+                    function getCircle() as Circle
+                    end function
+                end namespace
+            `, trim`
+                namespace Shapes
+                    class Circle
+                        sub new()
+                        end sub
+                    end class
+                    sub defineCircle(newCircle as Shapes.Circle)
+                    end sub
+                    function getCircle() as Shapes.Circle
+                    end function
+                end namespace
+            `);
+        });
+
+        it('uses namespace-qualified type names for function params/returns referencing a fully-qualified class', () => {
+            testTypedef(`
+                namespace Shapes
+                    class Circle
+                    end class
+                    sub defineCircle(newCircle as Shapes.Circle)
+                    end sub
+                    function getCircle() as Shapes.Circle
+                    end function
+                end namespace
+            `, trim`
+                namespace Shapes
+                    class Circle
+                        sub new()
+                        end sub
+                    end class
+                    sub defineCircle(newCircle as Shapes.Circle)
+                    end sub
+                    function getCircle() as Shapes.Circle
+                    end function
+                end namespace
+            `);
+        });
+
+        it('includes type alias statements', () => {
+            testTypedef(`
+                type fooFunc = function(a as string, b as integer) as boolean
+                function doFunc(f as fooFunc) as boolean
+                end function
+            `, trim`
+                type fooFunc = function (a as string, b as integer) as boolean
+                function doFunc(f as fooFunc) as boolean
+                end function
+            `);
+        });
+
+        it('includes namespaced type alias statements', () => {
+            testTypedef(`
+                namespace Shapes
+                    type fooFunc = function() as integer
+                    function doFunc(f as fooFunc) as integer
+                    end function
+                end namespace
+            `, trim`
+                namespace Shapes
+                    type fooFunc = function () as integer
+                    function doFunc(f as fooFunc) as integer
+                    end function
+                end namespace
+            `);
+        });
+
+        it('uses namespace-qualified type names for classes referenced by a type alias', () => {
+            testTypedef(`
+                namespace Shapes
+                    class Circle
+                    end class
+                    type circleMaker = function() as Circle
+                end namespace
+            `, trim`
+                namespace Shapes
+                    class Circle
+                        sub new()
+                        end sub
+                    end class
+                    type circleMaker = function () as Shapes.Circle
                 end namespace
             `);
         });

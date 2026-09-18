@@ -1,6 +1,6 @@
 import type { Position } from 'vscode-languageserver';
 import { DiagnosticSeverity } from 'vscode-languageserver';
-import type { BsDiagnostic, TypeCompatibilityData } from './interfaces';
+import type { BsDiagnostic, DiagnosticCode, TypeCompatibilityData } from './interfaces';
 import { TokenKind } from './lexer/TokenKind';
 import util from './util';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
@@ -1165,6 +1165,37 @@ export let DiagnosticMessages = {
         legacyCode: 1154,
         severity: DiagnosticSeverity.Error,
         code: 'rsg-version-removed'
+    }),
+    deprecatedBsConfigOption: (optionName: string) => ({
+        message: `'${optionName}' is deprecated at the top level of bsconfig.json. Move it into 'compilerOptions.${optionName}' instead`,
+        legacyCode: 1155,
+        severity: DiagnosticSeverity.Warning,
+        code: 'deprecated-bsconfig-option'
+    }),
+    diagnosticFilterLooksLikeFilePath: (value: string) => ({
+        message: `Diagnostic filter "${value}" looks like a file path or glob, not a diagnostic code. To filter diagnostics by file, use the "files" property instead: { "files": ["${value}"] }`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'diagnostic-filter-looks-like-file-path'
+    }),
+    xmlTagMismatch: (openingTag: string, closingTag: string) => ({
+        message: `Mismatched closing tag: expected '</${openingTag}>' but found '</${closingTag}>'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'xml-tag-mismatch'
+    }),
+    /**
+     * @param name the full name of the function, including namespace
+     * @param length the actual length of `name`
+     * @param maxLength the maximum length a function name may be before it gets truncated by the device at runtime
+     */
+    functionNameTooLong: (name: string, length: number, maxLength: number) => ({
+        message: `Function name '${name}' is ${length} characters long, which exceeds the maximum of ${maxLength}. It will be truncated when converted with ToStr()`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'function-name-too-long'
+    }),
+    xmlTagWrongCase: (actualTag: string, expectedTag: string) => ({
+        message: `Tag '${actualTag}' must be all lower case. Use '${expectedTag}' instead`,
+        severity: DiagnosticSeverity.Error,
+        code: 'xml-tag-wrong-case'
     })
 };
 export const defaultMaximumTruncationLength = 160;
@@ -1268,12 +1299,17 @@ function formatAvailabilityAxis(axis: AvailabilityAxis, version: string): string
 
 export const DiagnosticCodeMap = {} as Record<keyof (typeof DiagnosticMessages), string>;
 export const DiagnosticLegacyCodeMap = {} as Record<keyof (typeof DiagnosticMessages), number>;
-export let diagnosticCodes = [] as string[];
+export let diagnosticCodes = [] as DiagnosticCode[];
 for (let key in DiagnosticMessages) {
-    diagnosticCodes.push(DiagnosticMessages[key]().code);
-    diagnosticCodes.push(DiagnosticMessages[key]().legacyCode);
-    DiagnosticCodeMap[key] = DiagnosticMessages[key]().code;
-    DiagnosticLegacyCodeMap[key] = DiagnosticMessages[key]().legacyCode;
+    const typedKey = key as keyof typeof DiagnosticMessages;
+    //every factory returns an object with `code`/`legacyCode` properties regardless of its specific (possibly required)
+    //arguments, so it's safe to call each one with no arguments purely to read those codes off the result
+    const getCodes = DiagnosticMessages[typedKey] as () => { code: string; legacyCode?: number };
+    const codes = getCodes();
+    diagnosticCodes.push(codes.code);
+    diagnosticCodes.push(codes.legacyCode);
+    DiagnosticCodeMap[typedKey] = codes.code;
+    DiagnosticLegacyCodeMap[typedKey] = codes.legacyCode;
 }
 
 export interface DiagnosticInfo {

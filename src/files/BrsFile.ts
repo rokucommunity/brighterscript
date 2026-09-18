@@ -1,6 +1,6 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { CompletionItem, Position, Location } from 'vscode-languageserver';
+import type { CompletionItem, Position, Location, LocationLink } from 'vscode-languageserver';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { CompletionItemKind } from 'vscode-languageserver';
 import chalk from 'chalk';
@@ -900,7 +900,7 @@ export class BrsFile implements BscFile {
      * go to the definition of that identifier (where this thing was first defined)
      * @deprecated use `DefinitionProvider.process()` instead
      */
-    public getDefinition(position: Position): Location[] {
+    public getDefinition(position: Position): Array<Location | LocationLink> {
         return new DefinitionProvider({
             program: this.program,
             file: this,
@@ -1030,6 +1030,7 @@ export class BrsFile implements BscFile {
         }
 
         if (this.program.options.sourceMap) {
+            util.stripTrailingSourceMappingURLComment(transpileResult);
             const stagingFileName = path.basename(state.srcPath).replace(/\.bs$/, '.brs');
             return new SourceNode(null, null, stagingFileName, [
                 transpileResult,

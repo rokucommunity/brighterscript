@@ -7,7 +7,7 @@ import { TokenKind, UnreferencableBuiltins } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import { CallExpression, type FunctionExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, ImportStatement, LibraryStatement, Body, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement } from '../../parser/Statement';
+import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { DynamicType } from '../../types/DynamicType';
@@ -18,7 +18,7 @@ import type { BrightScriptDoc } from '../../parser/BrightScriptDocParser';
 import brsDocParser from '../../parser/BrightScriptDocParser';
 import { TypeStatementType } from '../../types/TypeStatementType';
 import * as semver from 'semver';
-import { OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION } from '../../RokuConstants';
+import { CONTINUE_MIN_FIRMWARE_VERSION, OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION } from '../../RokuConstants';
 import type { AvailabilityAxis } from '../../DiagnosticMessages';
 import { globalCallableMap } from '../../globalCallables';
 
@@ -68,6 +68,7 @@ export class BrsFileValidator {
                     const parentClassType = node.parent.parentClassName.getType({ flags: SymbolTypeFlag.typetime, data: data });
                     node.func.body.getSymbolTable().addSymbol('super', { ...data, isInstance: true }, parentClassType, SymbolTypeFlag.runtime);
                 }
+                this.validateFunctionNameLength(node, this.getMethodRuntimeName(node));
             },
             CallfuncExpression: (node) => {
                 if (node.args.length > 5) {
@@ -178,6 +179,8 @@ export class BrsFileValidator {
                 }
 
                 const namespace = node.findAncestor(isNamespaceStatement);
+                //the function's actual runtime name (namespaced functions get flattened into a single global name, e.g. `namespace_functionName`)
+                let runtimeName = node.tokens.name?.text;
                 //this function is declared inside a namespace
                 if (namespace) {
                     namespace.getSymbolTable().addSymbol(
@@ -186,20 +189,22 @@ export class BrsFileValidator {
                         funcType,
                         SymbolTypeFlag.runtime
                     );
-                    if (!node.tokens?.name) {
-                        return;
-                    }
-                    //add the transpiled name for namespaced functions to the root symbol table
-                    const transpiledNamespaceFunctionName = node.getName(ParseMode.BrightScript);
+                    if (node.tokens?.name) {
+                        //add the transpiled name for namespaced functions to the root symbol table
+                        const transpiledNamespaceFunctionName = node.getName(ParseMode.BrightScript);
+                        runtimeName = transpiledNamespaceFunctionName;
 
-                    this.event.file.parser.ast.symbolTable.addSymbol(
-                        transpiledNamespaceFunctionName,
-                        { definingNode: node },
-                        funcType,
-                        // eslint-disable-next-line no-bitwise
-                        SymbolTypeFlag.runtime | SymbolTypeFlag.postTranspile
-                    );
+                        this.event.file.parser.ast.symbolTable.addSymbol(
+                            transpiledNamespaceFunctionName,
+                            { definingNode: node },
+                            funcType,
+                            // eslint-disable-next-line no-bitwise
+                            SymbolTypeFlag.runtime | SymbolTypeFlag.postTranspile
+                        );
+                    }
                 }
+
+                this.validateFunctionNameLength(node, runtimeName);
             },
             FunctionExpression: (node) => {
                 const funcSymbolTable = node.getSymbolTable();
@@ -295,7 +300,7 @@ export class BrsFileValidator {
                 }
             },
             ReturnStatement: (node) => {
-                const func = node.findAncestor<FunctionExpression>(isFunctionExpression);
+                const func = node.findAncestor(isFunctionExpression);
                 //these situations cannot have a value next to `return`
                 if (
                     //`function as void`, `sub as void`
@@ -496,6 +501,40 @@ export class BrsFileValidator {
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel(keyword),
             location: rangeFactory ? util.createLocationFromFileRange(this.event.file, rangeFactory()) : statement.location
         });
+    }
+
+    /**
+     * The maximum function name length, in characters, before the Roku device truncates it
+     * when converting it to a string (e.g. via `ToStr()` or when printed in a stack trace).
+     * Verified on real devices running Roku OS 15.x. See https://github.com/rokucommunity/brighterscript/issues/1003.
+     */
+    private static MaxFunctionNameLength = 89;
+
+    /**
+     * Compute the runtime name of a class method. Methods are transpiled onto the class builder as
+     * `__<transpiledClassName>_method_<methodName>`, so the effective name is meaningfully longer than
+     * the name written in source.
+     */
+    private getMethodRuntimeName(node: MethodStatement): string | undefined {
+        const methodName = node.tokens.name?.text;
+        const classStatement = node.findAncestor<ClassStatement>(isClassStatement);
+        if (!methodName || !classStatement) {
+            return undefined;
+        }
+        const className = classStatement.getName(ParseMode.BrightScript)?.replace(/\./g, '_');
+        if (!className) {
+            return undefined;
+        }
+        return `__${className}_method_${methodName}`;
+    }
+
+    private validateFunctionNameLength(node: FunctionStatement, name: string) {
+        if (name && name.length > BrsFileValidator.MaxFunctionNameLength) {
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.functionNameTooLong(name, name.length, BrsFileValidator.MaxFunctionNameLength),
+                location: node.tokens.name?.location ?? node.location
+            });
+        }
     }
 
     private validateFunctionParameterCount(func: FunctionExpression) {
@@ -771,6 +810,29 @@ export class BrsFileValidator {
                 ...DiagnosticMessages.illegalContinueStatement()
             });
         }
+        this.validateMinFirmwareVersionForContinue(statement);
+    }
+
+    /**
+     * Add a diagnostic when a file that will NOT be transpiled uses `continue` while targeting
+     * firmware older than the version that introduced it. Transpiled files are exempt because
+     * `ContinueStatement.transpile` rewrites `continue` into a `goto` label jump for those
+     * targets, so the emitted code runs on the older device.
+     */
+    private validateMinFirmwareVersionForContinue(statement: ContinueStatement) {
+        if (this.event.file.needsTranspiled) {
+            return;
+        }
+        if (!this.event.program.firmwareCapabilities.continueStatement) {
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.featureRequiresMinFirmwareVersion(
+                    'continue',
+                    CONTINUE_MIN_FIRMWARE_VERSION,
+                    this.event.program.getMinFirmwareVersion()
+                ),
+                location: statement.location
+            });
+        }
     }
 
     /**
@@ -832,13 +894,12 @@ export class BrsFileValidator {
      * it is emitted as-is, so the target device must natively support it.
      */
     private validateMinFirmwareVersionForOptionalChaining(range: Range | undefined) {
-        const minFirmwareVersion = this.event.program.getMinFirmwareVersion();
-        if (semver.lt(minFirmwareVersion, OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION)) {
+        if (!this.event.program.firmwareCapabilities.optionalChaining) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.featureRequiresMinFirmwareVersion(
                     'optional chaining',
                     OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION,
-                    minFirmwareVersion
+                    this.event.program.getMinFirmwareVersion()
                 ),
                 location: util.createLocationFromFileRange(this.event.file, range)
             });

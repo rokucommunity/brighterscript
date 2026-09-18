@@ -709,6 +709,75 @@ describe('DiagnosticFilterer', () => {
         });
     });
 
+    describe('getPathLikeDiagnosticFilterCodes', () => {
+        it('flags entries with `./`', () => {
+            expect(filterer.getPathLikeDiagnosticFilterCodes({
+                diagnosticFilters: ['./source/main.brs']
+            })).to.eql(['./source/main.brs']);
+        });
+
+        it('flags entries with `../`', () => {
+            expect(filterer.getPathLikeDiagnosticFilterCodes({
+                diagnosticFilters: ['../vendor/lib.bs']
+            })).to.eql(['../vendor/lib.bs']);
+        });
+
+        it('flags entries with a globstar', () => {
+            expect(filterer.getPathLikeDiagnosticFilterCodes({
+                diagnosticFilters: ['source/vendor/**/*']
+            })).to.eql(['source/vendor/**/*']);
+        });
+
+        it('flags entries ending in .bs, .brs, or .xml', () => {
+            expect(filterer.getPathLikeDiagnosticFilterCodes({
+                diagnosticFilters: ['source/main.brs', 'source/lib.bs', 'components/Widget.xml']
+            })).to.eql(['source/main.brs', 'source/lib.bs', 'components/Widget.xml']);
+        });
+
+        it('flags path-like codes nested in a `codes` array', () => {
+            expect(filterer.getPathLikeDiagnosticFilterCodes({
+                diagnosticFilters: [{ codes: [1, 'lint-1000', 'source/vendor/**/*'] }]
+            })).to.eql(['source/vendor/**/*']);
+        });
+
+        it('does not flag actual diagnostic codes', () => {
+            expect(filterer.getPathLikeDiagnosticFilterCodes({
+                diagnosticFilters: [1000, 'lint-1000', { codes: [1, 'lint-1000'] }, { files: 'source/vendor/**/*' }]
+            })).to.eql([]);
+        });
+
+        it('does not flag anything when diagnosticFiltersV0Compatibility is true', () => {
+            expect(filterer.getPathLikeDiagnosticFilterCodes({
+                diagnosticFiltersV0Compatibility: true,
+                diagnosticFilters: ['source/vendor/**/*']
+            } as any)).to.eql([]);
+        });
+
+        it('does not duplicate repeated offenders', () => {
+            expect(filterer.getPathLikeDiagnosticFilterCodes({
+                diagnosticFilters: ['source/vendor/**/*', 'source/vendor/**/*']
+            })).to.eql(['source/vendor/**/*']);
+        });
+
+        it('flags entries with windows-style `.\\`', () => {
+            expect(filterer.getPathLikeDiagnosticFilterCodes({
+                diagnosticFilters: ['.\\source\\main.brs', '..\\vendor\\lib.bs']
+            })).to.eql(['.\\source\\main.brs', '..\\vendor\\lib.bs']);
+        });
+
+        it('flags entries that exactly match a known project file destPath', () => {
+            expect(filterer.getPathLikeDiagnosticFilterCodes({
+                diagnosticFilters: ['source/main.json']
+            }, new Set(['source/main.json']))).to.eql(['source/main.json']);
+        });
+
+        it('does not flag entries that only partially match a known project file destPath', () => {
+            expect(filterer.getPathLikeDiagnosticFilterCodes({
+                diagnosticFilters: ['lint-1000']
+            }, new Set(['source/main.json']))).to.eql([]);
+        });
+    });
+
 });
 
 function getDiagnostic(code: number | string, srcPath: string, destPath?: string) {

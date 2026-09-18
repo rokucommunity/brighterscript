@@ -104,6 +104,13 @@ export class ProgramBuilder {
                 this.logger.logLevel = this.options?.logLevel;
             }
 
+            //surface warnings for any deprecated bsconfig options that were used to build `this.options`
+            const deprecationDiagnostics = (this.options as any)._deprecationDiagnostics as BsDiagnostic[];
+            if (deprecationDiagnostics?.length > 0) {
+                this.diagnostics.register(deprecationDiagnostics);
+            }
+            delete (this.options as any)._deprecationDiagnostics;
+
             if (this.options.noProject) {
                 this.logger.log(`'noProject' flag is set so bsconfig.json loading is disabled'`);
             } else if (this.options.project) {

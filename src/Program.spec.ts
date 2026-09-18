@@ -6,6 +6,7 @@ import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { DEFAULT_MIN_FIRMWARE_VERSION } from './RokuConstants';
 import type { BrsFile } from './files/BrsFile';
+import type { BscFile } from './files/BscFile';
 import type { XmlFile } from './files/XmlFile';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
@@ -49,6 +50,67 @@ describe('Program', () => {
         fsExtra.ensureDirSync(tempDir);
         fsExtra.emptyDirSync(tempDir);
         program.dispose();
+    });
+
+    describe('scenegraph node metadata', () => {
+        it('getSceneGraphNodeNames includes built-in nodes and project components', () => {
+            program.setFile('components/widget.xml', trim`
+                <component name="Widget" extends="Group">
+                </component>
+            `);
+            const names = program.getSceneGraphNodeNames();
+            expect(names).to.include('Label');
+            expect(names).to.include('Widget');
+        });
+
+        it('hasSceneGraphNode recognizes built-in nodes and project components (case-insensitive)', () => {
+            program.setFile('components/widget.xml', trim`
+                <component name="Widget" extends="Group">
+                </component>
+            `);
+            expect(program.hasSceneGraphNode('label')).to.be.true;
+            expect(program.hasSceneGraphNode('widget')).to.be.true;
+            expect(program.hasSceneGraphNode('NotARealNode')).to.be.false;
+        });
+
+        it('getSceneGraphNodeFields walks the extends chain of a built-in node', () => {
+            //Label extends LabelBase extends ... eventually Node; `id` comes from Node
+            const fieldNames = program.getSceneGraphNodeFields('Label').map(x => x.name);
+            expect(fieldNames).to.include('text');
+            expect(fieldNames).to.include('id');
+        });
+
+        it('getSceneGraphNodeFields walks from a project component into its built-in parent', () => {
+            program.setFile('components/widget.xml', trim`
+                <component name="Widget" extends="Group">
+                    <interface>
+                        <field id="caption" type="string" />
+                    </interface>
+                </component>
+            `);
+            const fields = program.getSceneGraphNodeFields('Widget');
+            const own = fields.find(x => x.name === 'caption');
+            const inherited = fields.find(x => x.name === 'visible');
+            //own field from the component's interface
+            expect(own?.origin).to.equal('own');
+            //inherited field from the built-in Group (via Node)
+            expect(inherited?.origin).to.equal('inherited');
+        });
+
+        it('getSceneGraphNodeFields falls back to Node for built-in nodes missing `extends` data', () => {
+            //several node entries in the scraped roku-types data have no `extends` key (and some have
+            //no fields of their own), but every SceneGraph node ultimately descends from Node, so
+            //universal Node fields like `id` and `focusable` must still be returned
+            for (const nodeName of ['MonospaceLabel', 'InfoPane', 'ParentalControlPinPad', 'TimeGrid', 'ZoomRowList']) {
+                const fieldNames = program.getSceneGraphNodeFields(nodeName).map(x => x.name);
+                expect(fieldNames, nodeName).to.include('id');
+                expect(fieldNames, nodeName).to.include('focusable');
+            }
+        });
+
+        it('getSceneGraphNodeFields returns no fields for unknown nodes', () => {
+            expect(program.getSceneGraphNodeFields('NotARealNode')).to.eql([]);
+        });
     });
 
     it('does not throw exception after calling validate() after dispose()', () => {
@@ -409,6 +471,29 @@ describe('Program', () => {
                     message: 'Also defined here'
                 }]
             }]);
+        });
+
+        it('flags diagnosticFilters entries that look like file paths', () => {
+            program.options.diagnosticFilters = ['source/vendor/**/*'] as any;
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.diagnosticFilterLooksLikeFilePath('source/vendor/**/*')
+            ]);
+        });
+
+        it('does not flag diagnosticFilters entries that are actual codes', () => {
+            program.options.diagnosticFilters = [1000, 'lint-1000'] as any;
+            program.validate();
+            expectDiagnostics(program, []);
+        });
+
+        it('flags diagnosticFilters entries that exactly match a known project file, even without a glob-like pattern', () => {
+            program.setFile('manifest', '');
+            program.options.diagnosticFilters = ['manifest'] as any;
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.diagnosticFilterLooksLikeFilePath('manifest')
+            ]);
         });
 
         it('does not produce duplicate parse errors for different component scopes', () => {
@@ -3671,6 +3756,161 @@ describe('Program', () => {
                     alpha_test()
                 end sub
             `);
+        });
+
+        it('builds files added to the event during afterPrepareProgram', async () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                end sub
+            `);
+            program.plugins.add({
+                name: 'TestPlugin',
+                afterPrepareProgram: (event) => {
+                    event.files.push(
+                        program.setFile('source/late.bs', `
+                            sub late()
+                                print true ? 1 : 2
+                            end sub
+                        `)
+                    );
+                }
+            });
+            await program.build();
+
+            //the late file should have been transpiled and written to disk
+            expect(
+                fsExtra.readFileSync(`${outDir}/source/late.brs`).toString()
+            ).to.include('bslib_ternary');
+        });
+
+        it('builds files added to the event during prepareProgram', async () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                end sub
+            `);
+            program.plugins.add({
+                name: 'TestPlugin',
+                prepareProgram: (event) => {
+                    event.files.push(
+                        program.setFile('source/late.bs', `
+                            sub late()
+                                print true ? 1 : 2
+                            end sub
+                        `)
+                    );
+                }
+            });
+            await program.build();
+
+            expect(
+                fsExtra.readFileSync(`${outDir}/source/late.brs`).toString()
+            ).to.include('bslib_ternary');
+        });
+
+        it('prepares each file exactly once when a plugin inserts a file during prepareFile', async () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                end sub
+            `);
+            const preparedPaths: string[] = [];
+            let programFiles: BscFile[];
+            let inserted = false;
+            program.plugins.add({
+                name: 'TestPlugin',
+                prepareProgram: (event) => {
+                    programFiles = event.files;
+                },
+                prepareFile: (event) => {
+                    preparedPaths.push(event.file.pkgPath);
+                    if (!inserted) {
+                        inserted = true;
+                        //insert at the FRONT of the list. An index-based loop would re-prepare the files that
+                        //shifted right, and could walk off the end before reaching the inserted file
+                        programFiles.unshift(
+                            program.setFile('source/inserted.bs', `
+                                sub inserted()
+                                end sub
+                            `)
+                        );
+                    }
+                }
+            });
+            await program.build();
+
+            //every file should be prepared exactly once
+            const duplicates = preparedPaths.filter((x, i) => preparedPaths.indexOf(x) !== i);
+            expect(duplicates, `these files were prepared more than once: ${duplicates.join(', ')}`).to.eql([]);
+            //the inserted file must have been prepared, even though it was added at the front of the list mid-iteration
+            expect(preparedPaths.map(x => s`${x}`)).to.include(s`source/inserted.brs`);
+        });
+
+        it('builds files added to the event during beforeSerializeProgram', async () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                end sub
+            `);
+            let lateFile: BrsFile;
+            program.plugins.add({
+                name: 'TestPlugin',
+                beforeSerializeProgram: (event) => {
+                    lateFile = program.setFile<BrsFile>('source/late.bs', `
+                        sub late()
+                        end sub
+                    `);
+                    event.files.push(lateFile);
+                },
+                beforeSerializeFile: (event) => {
+                    if (event.file === lateFile) {
+                        //edit the file's AST so we can verify the edit gets undone after the build
+                        const func = (event.file as BrsFile).ast.statements[0] as FunctionStatement;
+                        event.file.editor.setProperty(func.tokens.name, 'text', 'renamed');
+                    }
+                }
+            });
+            await program.build();
+
+            expect(
+                fsExtra.pathExistsSync(`${outDir}/source/late.brs`)
+            ).to.be.true;
+
+            //the edit made to the late-added file should have been undone
+            expect(
+                (lateFile.ast.statements[0] as FunctionStatement).tokens.name.text
+            ).to.eql('late');
+        });
+
+        it('undoes edits for late-added files when pruneEmptyCodeFiles is enabled', async () => {
+            //pruning copies the file array, so late-added files are not visible to the build's own list
+            program.options.pruneEmptyCodeFiles = true;
+            program.setFile('source/main.bs', `
+                sub main()
+                    print "hello"
+                end sub
+            `);
+            let lateFile: BrsFile;
+            program.plugins.add({
+                name: 'TestPlugin',
+                beforeSerializeProgram: (event) => {
+                    lateFile = program.setFile<BrsFile>('source/late.bs', `
+                        sub late()
+                            print "late"
+                        end sub
+                    `);
+                    event.files.push(lateFile);
+                },
+                beforeSerializeFile: (event) => {
+                    if (event.file === lateFile) {
+                        const func = (event.file as BrsFile).ast.statements[0] as FunctionStatement;
+                        event.file.editor.setProperty(func.tokens.name, 'text', 'renamed');
+                    }
+                }
+            });
+            await program.build();
+
+            //the edit made to the late-added file should have been undone
+            expect(
+                (lateFile.ast.statements[0] as FunctionStatement).tokens.name.text
+            ).to.eql('late');
         });
     });
 

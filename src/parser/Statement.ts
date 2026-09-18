@@ -1,8 +1,8 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import type { DottedGetExpression, FunctionParameterExpression, LiteralExpression, TypecastExpression, TypeExpression } from './Expression';
-import { FunctionExpression } from './Expression';
+import type { DottedGetExpression, LiteralExpression, TypecastExpression } from './Expression';
+import { FunctionExpression, FunctionParameterExpression, TypeExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import type { Location } from 'vscode-languageserver';
@@ -10,10 +10,10 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isBlock, isCallExpression, isCatchStatement, isConditionalCompileStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isUninitializedType, isVoidType, isWhileStatement } from '../astUtils/reflection';
+import { isBlock, isCallExpression, isCatchStatement, isClassType, isConditionalCompileStatement, isEnumMemberStatement, isEnumType, isEnumStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isUninitializedType, isVoidType, isWhileStatement } from '../astUtils/reflection';
 import type { GetTypeOptions } from '../interfaces';
 import { TypeChainEntry, type TranspileResult, type TypedefProvider } from '../interfaces';
-import { createIdentifier, createInvalidLiteral, createMethodStatement, createToken } from '../astUtils/creators';
+import { createDottedIdentifier, createIdentifier, createInvalidLiteral, createMethodStatement, createToken, createVariableExpression } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { SymbolTable } from '../SymbolTable';
@@ -455,6 +455,19 @@ export class Block extends Statement {
             );
             state.lineage.shift();
         }
+        //if a `continue` inside this block was rewritten into a `goto`, emit its jump target as
+        //the last line of the block. Done here (rather than in the loop statements) so the label
+        //picks up the block's own indent depth.
+        //`state` can come from an older brighterscript version (i.e. a plugin bundling a newer
+        //brighterscript than the host), so guard against the loop-label api being absent
+        const loopLabel = state.peekLoopLabel?.();
+        if (loopLabel?.wasAccessed && loopLabel.blockDepth === state.blockDepth) {
+            results.push(
+                state.newline,
+                state.indent(),
+                `${loopLabel.label}:`
+            );
+        }
         state.blockDepth--;
         return results;
     }
@@ -606,7 +619,7 @@ export class FunctionStatement extends Statement implements TypedefProvider {
      * Get the name of this expression based on the parse mode
      */
     public getName(parseMode: ParseMode) {
-        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        const namespace = this.findAncestor(isNamespaceStatement);
         if (namespace) {
             let delimiter = parseMode === ParseMode.BrighterScript ? '.' : '_';
             let namespaceName = namespace.getName(parseMode);
@@ -1378,7 +1391,9 @@ export class ForStatement extends Statement {
         }
         //loop body
         state.lineage.unshift(this);
+        state.pushLoopLabel?.();
         result.push(...this.body.transpile(state));
+        state.popLoopLabel?.();
         state.lineage.shift();
 
         //end for
@@ -1496,7 +1511,9 @@ export class ForEachStatement extends Statement {
         result.push(...this.target.transpile(state));
         //body
         state.lineage.unshift(this);
+        state.pushLoopLabel?.();
         result.push(...this.body.transpile(state));
+        state.popLoopLabel?.();
         state.lineage.shift();
 
         //end for
@@ -1601,7 +1618,9 @@ export class WhileStatement extends Statement {
         );
         state.lineage.unshift(this);
         //body
+        state.pushLoopLabel?.();
         result.push(...this.body.transpile(state));
+        state.popLoopLabel?.();
         state.lineage.shift();
 
         //end while
@@ -2182,7 +2201,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
     public get fullName() {
         const name = this.tokens.name?.text;
         if (name) {
-            const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const namespace = this.findAncestor(isNamespaceStatement);
             if (namespace) {
                 let namespaceName = namespace.getName(ParseMode.BrighterScript);
                 return `${namespaceName}.${name}`;
@@ -2206,7 +2225,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
      * Get the name of this expression based on the parse mode
      */
     public getName(parseMode: ParseMode) {
-        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        const namespace = this.findAncestor(isNamespaceStatement);
         if (namespace) {
             let delimiter = parseMode === ParseMode.BrighterScript ? '.' : '_';
             let namespaceName = namespace.getName(parseMode);
@@ -2657,7 +2676,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
     public getName(parseMode: ParseMode) {
         const name = this.tokens.name?.text;
         if (name) {
-            const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const namespace = this.findAncestor(isNamespaceStatement);
             if (namespace) {
                 let namespaceName = namespace.getName(parseMode);
                 let separator = parseMode === ParseMode.BrighterScript ? '.' : '_';
@@ -2799,7 +2818,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let stmt = this as ClassStatement;
         while (stmt) {
             if (stmt.parentClassName) {
-                const namespace = stmt.findAncestor<NamespaceStatement>(isNamespaceStatement);
+                const namespace = stmt.findAncestor(isNamespaceStatement);
                 //find the parent class
                 stmt = state.file.getClassFileLink(
                     stmt.parentClassName.getName(),
@@ -2831,7 +2850,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let stmt = this as ClassStatement;
         while (stmt) {
             if (stmt.parentClassName) {
-                const namespace = stmt.findAncestor<NamespaceStatement>(isNamespaceStatement);
+                const namespace = stmt.findAncestor(isNamespaceStatement);
                 stmt = state.file.getClassFileLink(
                     stmt.parentClassName.getName(),
                     namespace?.getName(ParseMode.BrighterScript)
@@ -2883,6 +2902,31 @@ export class ClassStatement extends Statement implements TypedefProvider {
     }
 
     /**
+     * Clone a parent constructor's parameter for use in a synthesized subclass constructor.
+     * The clone is detached from the AST (no parent), so if the parameter's type is a class
+     * or enum, its type reference can't be re-resolved by symbol name once cloned - especially
+     * since the subclass may live in a different namespace than the one the parameter's type
+     * was originally declared in, where even a fully-qualified reference has no symbol table
+     * to resolve against. Resolve the type now (while the original is still properly attached),
+     * and bake the fully-qualified name/type directly into the clone.
+     */
+    private cloneConstructorParam(param: FunctionParameterExpression): FunctionParameterExpression {
+        const exprType = param.typeExpression?.getType({ flags: SymbolTypeFlag.typetime });
+        if (!isClassType(exprType) && !isEnumType(exprType)) {
+            return param.clone();
+        }
+        const nameParts = exprType.toString().split('.');
+        const qualifiedExpression = nameParts.length > 1 ? createDottedIdentifier(nameParts) : createVariableExpression(nameParts[0]);
+        return new FunctionParameterExpression({
+            name: param.tokens.name,
+            equals: param.tokens.equals,
+            defaultValue: param.defaultValue?.clone(),
+            as: param.tokens.as,
+            typeExpression: new TypeExpression({ expression: qualifiedExpression, resolvedType: exprType })
+        });
+    }
+
+    /**
      * Determine if the specified field was declared in one of the ancestor classes
      */
     public isFieldDeclaredByAncestor(fieldName: string, ancestors: ClassStatement[]) {
@@ -2909,7 +2953,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
         //construct parent class or empty object
         if (ancestors[0]) {
-            const ancestorNamespace = ancestors[0].findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const ancestorNamespace = ancestors[0].findAncestor(isNamespaceStatement);
             let fullyQualifiedClassName = util.getFullyQualifiedClassName(
                 ancestors[0].getName(ParseMode.BrighterScript)!,
                 ancestorNamespace?.getName(ParseMode.BrighterScript)
@@ -3023,7 +3067,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                         modifiers: [],
                         name: createIdentifier('new'),
                         func: new FunctionExpression({
-                            parameters: params.map(x => x.clone()),
+                            parameters: params.map(x => this.cloneConstructorParam(x)),
                             body: new Block({ statements: [call] }),
                             functionType: createToken(TokenKind.Sub),
                             endFunctionType: createToken(TokenKind.EndSub),
@@ -3133,7 +3177,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let result: TranspileResult = state.transpileAnnotations(this);
 
         const constructorFunction = this.getConstructorFunction();
-        let constructorParams = [];
+        let constructorParams: FunctionParameterExpression[] = [];
         if (constructorFunction) {
             constructorParams = constructorFunction.func.parameters;
         } else {
@@ -3384,17 +3428,8 @@ export class MethodStatement extends FunctionStatement {
             return;
         }
 
-        //check whether any calls to super exist
-        let containsSuperCall =
-            this.func.body.statements.findIndex((x) => {
-                //is a call statement
-                return isExpressionStatement(x) && isCallExpression(x.expression) &&
-                    //is a call to super
-                    util.findBeginningVariableExpression(x.expression.callee as any).tokens.name?.text.toLowerCase() === 'super';
-            }) !== -1;
-
         //if a call to super exists, quit here
-        if (containsSuperCall) {
+        if (this.findSuperCallIndex() !== -1) {
             return;
         }
 
@@ -3434,12 +3469,30 @@ export class MethodStatement extends FunctionStatement {
     }
 
     /**
+     * Find the index of the `super()` call within this function's body, or -1 if there isn't one.
+     * The call is usually the first statement, but plugins are free to insert statements ahead of it,
+     * so we locate it rather than assuming a fixed position.
+     */
+    private findSuperCallIndex() {
+        return this.func.body.statements.findIndex((x) => {
+            //is a call statement
+            return isExpressionStatement(x) && isCallExpression(x.expression) &&
+                //is a call to super
+                util.findBeginningVariableExpression(x.expression.callee)?.name.text.toLowerCase() === 'super';
+        });
+    }
+
+    /**
      * Inject field initializers at the top of the `new` function (after any present `super()` call).
      * Fields declared inside conditional compile blocks have their initializers wrapped in an equivalent
      * conditional compile statement.
      */
     private injectFieldInitializersForConstructor(state: BrsTranspileState) {
-        let startingIndex = state.classStatement!.hasParentClass() ? 1 : 0;
+        //field initializers must run after the `super()` call. `ensureSuperConstructorCall` has already
+        //guaranteed a super call exists for derived classes, but it isn't necessarily at index 0 -- a plugin
+        //may have inserted statements before it -- so find it instead of assuming its position.
+        const superCallIndex = state.classStatement!.hasParentClass() ? this.findSuperCallIndex() : -1;
+        let startingIndex = superCallIndex + 1;
 
         const buildFieldAssignment = (field: FieldStatement) => {
             let thisQualifiedName = { ...field.tokens.name };
@@ -3978,7 +4031,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
     public get fullName() {
         const name = this.tokens.name?.text;
         if (name) {
-            const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const namespace = this.findAncestor(isNamespaceStatement);
 
             if (namespace) {
                 let namespaceName = namespace.getName(ParseMode.BrighterScript);
@@ -4221,7 +4274,7 @@ export class ConstStatement extends Statement implements TypedefProvider {
     public get fullName() {
         const name = this.tokens.name?.text;
         if (name) {
-            const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const namespace = this.findAncestor(isNamespaceStatement);
             if (namespace) {
                 let namespaceName = namespace.getName(ParseMode.BrighterScript);
                 return `${namespaceName}.${name}`;
@@ -4313,6 +4366,22 @@ export class ContinueStatement extends Statement {
     public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
+        //when targeting firmware without native `continue` support, rewrite into a jump to the
+        //label at the end of the enclosing loop body
+        //`false` means the target firmware lacks native `continue`. `undefined` means `state` came
+        //from an older brighterscript (i.e. a plugin bundling a newer brighterscript than the
+        //host) which has no back-transpile support at all, so emit `continue` as-is
+        if (state.firmwareCapabilities?.continueStatement === false) {
+            const label = state.getLoopLabel?.();
+            //no enclosing loop means this is a `continue` outside a loop, which validation already
+            //flags as an error. fall through to the passthrough emit rather than producing a
+            //`goto undefined`
+            if (label) {
+                return [
+                    state.sourceNode(this.tokens.continue, `goto ${label}`)
+                ];
+            }
+        }
         return [
             state.sourceNode(this.tokens.continue, this.tokens.continue?.text ?? 'continue'),
             this.tokens.loopType?.leadingWhitespace ?? ' ',
@@ -4482,7 +4551,9 @@ export class AliasStatement extends Statement {
         readonly equals?: Token;
     };
 
-    public readonly value: Expression;
+    //the constructor only accepts these two shapes, so keep the field just as narrow. `clone()`
+    //feeds this value straight back into the constructor, which requires the narrow type.
+    public readonly value: VariableExpression | DottedGetExpression;
 
     public readonly kind = AstNodeKind.AliasStatement;
 
@@ -4747,7 +4818,7 @@ export class ConditionalCompileConstStatement extends Statement {
 }
 
 
-export class TypeStatement extends Statement {
+export class TypeStatement extends Statement implements TypedefProvider {
     constructor(options: {
         type?: Token;
         name: Token;
@@ -4785,6 +4856,27 @@ export class TypeStatement extends Statement {
     transpile(state: BrsTranspileState) {
         //type statements have no runtime representation, so they're stripped entirely
         return [];
+    }
+
+    getTypedef(state: BrsTranspileState): TranspileResult {
+        const result: TranspileResult = [];
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
+        result.push(
+            this.tokens.type ? state.tokenToSourceNode(this.tokens.type) : 'type',
+            ' ',
+            state.tokenToSourceNode(this.tokens.name),
+            ' ',
+            this.tokens.equals ? state.tokenToSourceNode(this.tokens.equals) : '=',
+            ' ',
+            ...this.value.getTypedef(state)
+        );
+        return result;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {

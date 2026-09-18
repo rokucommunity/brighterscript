@@ -6,6 +6,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.54](https://github.com/rokucommunity/brighterscript/compare/1.0.0-alpha.53...v1.0.0-alpha.54) - 2026-09-11
+### Changed
+ - Merge master into v1 ([#1814](https://github.com/rokucommunity/brighterscript/pull/1814))
+### Fixed
+ - Fix binary op false positive on enum unions of the same type ([#1811](https://github.com/rokucommunity/brighterscript/pull/1811))
+ - Fix crash on files added to the build after the prepare phase ([#1810](https://github.com/rokucommunity/brighterscript/pull/1810))
+
+
+
+## [1.0.0-alpha.53](https://github.com/rokucommunity/brighterscript/compare/1.0.0-alpha.52...v1.0.0-alpha.53) - 2026-09-09
+### Changed
+ - Merge master into v1 ([#1813](https://github.com/rokucommunity/brighterscript/pull/1813), [#1812](https://github.com/rokucommunity/brighterscript/pull/1812), [#1808](https://github.com/rokucommunity/brighterscript/pull/1808), [#1805](https://github.com/rokucommunity/brighterscript/pull/1805), [#1804](https://github.com/rokucommunity/brighterscript/pull/1804), [#1803](https://github.com/rokucommunity/brighterscript/pull/1803))
+
+
+
+## [0.73.2](https://github.com/rokucommunity/brighterscript/compare/0.73.1...v0.73.2) - 2026-09-08
+### Added
+ - Add `compilerOptions` group to bsconfig.json ([#1750](https://github.com/rokucommunity/brighterscript/pull/1750))
+ - Adds `strict` mode. ([#1732](https://github.com/rokucommunity/brighterscript/pull/1732))
+ - Report and correct mismatched XML element pairs (v1) ([#1780](https://github.com/rokucommunity/brighterscript/pull/1780))
+### Changed
+ - chore: Cover untested v1 type-system files ([#1800](https://github.com/rokucommunity/brighterscript/pull/1800))
+ - Merge master into v1 ([#1739](https://github.com/rokucommunity/brighterscript/pull/1739), [#1784](https://github.com/rokucommunity/brighterscript/pull/1784), [#1795](https://github.com/rokucommunity/brighterscript/pull/1795), [61ec47ad](https://github.com/rokucommunity/brighterscript/commit/61ec47ad))
+ - Security enhancements ([#1778](https://github.com/rokucommunity/brighterscript/pull/1778))
+ - Ensure every plugin event has before/action/after variants ([#1711](https://github.com/rokucommunity/brighterscript/pull/1711))
+ - Never report diagnostics for .d.bs typedef files ([#1759](https://github.com/rokucommunity/brighterscript/pull/1759))
+ - Validate binary operators against each type in a union operand ([#1768](https://github.com/rokucommunity/brighterscript/pull/1768))
+ - Flag path-like codes in diagnosticFilters ([#1753](https://github.com/rokucommunity/brighterscript/pull/1753))
+ - Guard unset getLookupTable in BuiltInInterfaceAdder interface loop ([#1756](https://github.com/rokucommunity/brighterscript/pull/1756))
+ - Reduce allocations in hot SymbolTable/ReferenceType lookup paths ([#1755](https://github.com/rokucommunity/brighterscript/pull/1755))
+ - Honor deprecated staging options loaded from bsconfig files ([#1747](https://github.com/rokucommunity/brighterscript/pull/1747))
+ - First Validation performance improvements ([#1729](https://github.com/rokucommunity/brighterscript/pull/1729))
+ - Do not scope validate files that are marked in the diagnosticFilters ([#1730](https://github.com/rokucommunity/brighterscript/pull/1730))
+ - upgrade to [@rokucommunity/logger@0.4.2](https://github.com/rokucommunity/logger/blob/master/CHANGELOG.md#042---2026-09-02). Notable changes since 0.3.12:
+     - Serialize Error.cause (recursively) when logging ([#33](https://github.com/rokucommunity/logger/pull/33))
+ - upgrade to [roku-deploy@3.18.4](https://github.com/rokucommunity/roku-deploy/blob/master/CHANGELOG.md#3184---2026-09-02). Notable changes since 3.17.5:
+     - Security enhancements ([#293](https://github.com/rokucommunity/roku-deploy/pull/293), [#345](https://github.com/rokucommunity/roku-deploy/pull/345))
+### Fixed
+ - Fix crash validating a return statement whose value has no type ([#1801](https://github.com/rokucommunity/brighterscript/pull/1801))
+ - Fix for transpile issue with typecast statement with intersection and inline interface ([#1652](https://github.com/rokucommunity/brighterscript/pull/1652))
+ - Fix transpile crash synthesizing implicit constructor with a class-typed param ([#1769](https://github.com/rokucommunity/brighterscript/pull/1769))
+ - Resolve high-severity npm audit findings on v1 ([#1762](https://github.com/rokucommunity/brighterscript/pull/1762))
+ - Fix .d.bs typedef emission for namespaced classes/enums and type aliases ([#1760](https://github.com/rokucommunity/brighterscript/pull/1760))
+ - Fix broken benchmark harness targets ([#1754](https://github.com/rokucommunity/brighterscript/pull/1754))
+
+
+
 ## [1.0.0-alpha.52](https://github.com/rokucommunity/brighterscript/compare/1.0.0-alpha.51...v1.0.0-alpha.52) - 2026-06-01
 ### Changed
  - Guard transpileComments against undefined trivia tokens ([#1725](https://github.com/rokucommunity/brighterscript/pull/1725))

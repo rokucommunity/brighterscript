@@ -135,9 +135,9 @@ export class ActionQueue {
 
     public on(eventName: 'idle', handler: () => any);
     public on(eventName: string, handler: (payload: any) => any) {
-        this.emitter.on(eventName, handler as any);
+        this.emitter.on(eventName, handler);
         return () => {
-            this.emitter.removeListener(eventName, handler as any);
+            this.emitter.removeListener(eventName, handler);
         };
     }
 
