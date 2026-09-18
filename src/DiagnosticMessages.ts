@@ -1196,6 +1196,11 @@ export let DiagnosticMessages = {
         message: `Tag '${actualTag}' must be all lower case. Use '${expectedTag}' instead`,
         severity: DiagnosticSeverity.Error,
         code: 'xml-tag-wrong-case'
+    }),
+    classConstructorNotAllowedInConditionalCompile: () => ({
+        message: `Class constructor 'new' cannot be declared inside a conditional compile ('#if') block`,
+        severity: DiagnosticSeverity.Error,
+        code: 'class-constructor-in-conditional-compile'
     })
 };
 export const defaultMaximumTruncationLength = 160;
