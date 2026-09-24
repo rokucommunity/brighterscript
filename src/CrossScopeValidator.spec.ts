@@ -9,6 +9,7 @@ import { SymbolTypeFlag } from './SymbolTypeFlag';
 import util from './util';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import type { Plugin } from './interfaces';
+import { ProvidedSymbolIndex } from './CrossScopeValidator';
 
 describe('CrossScopeValidator', () => {
     let sinon = sinonImport.createSandbox();
@@ -1520,6 +1521,49 @@ describe('CrossScopeValidator', () => {
             ]);
         });
 
+        it('finds and clears a duplicate from editing a file shared by several scopes', () => {
+            program.options.autoImportComponentScript = true;
+            const utilsText = `
+                interface Test
+                    name as string
+                end interface
+            `;
+            program.setFile('source/utils.bs', utilsText);
+            program.setFile('components/Button1.bs', `
+                import "pkg:/source/utils.bs"
+                const Shared = "shared"
+            `);
+            program.setFile('components/Button1.xml', `
+                <component name="Button1" extends="Group">
+                </component>
+            `);
+            program.setFile('components/Button2.bs', `
+                import "pkg:/source/utils.bs"
+            `);
+            program.setFile('components/Button2.xml', `
+                <component name="Button2" extends="Group">
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            //only clashes in Button1's scope
+            program.setFile('source/utils.bs', utilsText + `
+                interface Shared
+                    name as string
+                end interface
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.nameCollision('Const', 'Interface', 'Shared'),
+                DiagnosticMessages.nameCollision('Interface', 'Const', 'Shared')
+            ]);
+
+            program.setFile('source/utils.bs', utilsText);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         it('finds duplicates inside a namespace', () => {
             program.options.autoImportComponentScript = true;
 
@@ -1997,6 +2041,67 @@ describe('CrossScopeValidator', () => {
             const afterRevert = program.getDiagnostics().filter(d => d.message.toLowerCase().includes('commonfunc'));
             expect(afterRevert.length, `after reverting namespaced fn name, all commonFunc diagnostics should clear; got: ${afterRevert.map(d => d.message).join(' | ')}`).to.eq(0);
             expectZeroDiagnostics(program);
+        });
+    });
+
+    describe('ProvidedSymbolIndex', () => {
+        it('indexes symbols and the namespaces they create', () => {
+            const file = program.setFile<BrsFile>('source/lib.bs', `
+                namespace alpha.beta
+                    function thing()
+                    end function
+                end namespace
+                sub helper()
+                end sub
+            `);
+            program.validate();
+            const index = new ProvidedSymbolIndex();
+            index.update(file);
+            expect(index.symbolEvents.get('alpha.beta.thing')?.map(x => x.file)).to.eql([file]);
+            expect(index.symbolEvents.get('helper')?.map(x => x.file)).to.eql([file]);
+            expect(index.namespaceEvents.has('alpha')).to.be.true;
+            expect(index.namespaceEvents.has('alpha.beta')).to.be.true;
+            expect(index.namespaceEvents.has('helper')).to.be.false;
+        });
+
+        it('replaces a file once it changes, and skips it when its provided symbols are the same', () => {
+            let file = program.setFile<BrsFile>('source/lib.bs', `
+                sub first()
+                end sub
+            `);
+            program.validate();
+            const index = new ProvidedSymbolIndex();
+            index.update(file);
+            const events = index.symbolEvents.get('first');
+            index.update(file);
+            expect(index.symbolEvents.get('first')).to.equal(events);
+
+            file = program.setFile<BrsFile>('source/lib.bs', `
+                sub second()
+                end sub
+            `);
+            program.validate();
+            //setFile makes a new file object, so the old one gets pruned (same order as addDiagnosticsForScopes)
+            index.prune(program);
+            index.update(file);
+            expect(index.symbolEvents.has('first')).to.be.false;
+            expect(index.symbolEvents.get('second')?.map(x => x.file)).to.eql([file]);
+        });
+
+        it('prunes files that are no longer in the program', () => {
+            const file = program.setFile<BrsFile>('source/lib.bs', `
+                namespace alpha
+                    sub thing()
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            const index = new ProvidedSymbolIndex();
+            index.update(file);
+            program.removeFile(file.srcPath);
+            index.prune(program);
+            expect(index.symbolEvents.has('alpha.thing')).to.be.false;
+            expect(index.namespaceEvents.has('alpha')).to.be.false;
         });
     });
 });
