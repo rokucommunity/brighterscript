@@ -52,7 +52,7 @@ export class SymbolTable implements SymbolTypeGetter {
      */
     static mutationCount = 0;
 
-    static referenceTypeFactory: (memberKey: string, fullName, flags: SymbolTypeFlag, tableProvider: SymbolTypeGetterProvider) => ReferenceType;
+    static referenceTypeFactory: (memberKey: string, fullName: string, flags: SymbolTypeFlag, tableProvider: SymbolTypeGetterProvider) => ReferenceType;
     static unionTypeFactory: (types: BscType[]) => UnionType;
     static uninitializedTypeFactory: () => UninitializedType;
 

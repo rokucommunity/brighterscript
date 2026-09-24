@@ -11,7 +11,7 @@ import { util } from '../util';
 
 export type AnyReferenceType = ReferenceType | TypePropertyReferenceType | BinaryOperatorReferenceType | ArrayDefaultTypeReferenceType;
 
-export function referenceTypeFactory(memberKey: string, fullName, flags: SymbolTypeFlag, tableProvider: SymbolTypeGetterProvider) {
+export function referenceTypeFactory(memberKey: string, fullName: string, flags: SymbolTypeFlag, tableProvider: SymbolTypeGetterProvider) {
     return new ReferenceType(memberKey, fullName, flags, tableProvider);
 }
 
@@ -25,7 +25,7 @@ export class ReferenceType extends BscType {
      * @param flags is this type available at typetime, runtime, etc.
      * @param tableProvider function that returns a SymbolTable that we use for the lookup.
      */
-    constructor(public memberKey: string, public fullName, public flags: SymbolTypeFlag, public tableProvider: SymbolTypeGetterProvider) {
+    constructor(public memberKey: string, public fullName: string, public flags: SymbolTypeFlag, public tableProvider: SymbolTypeGetterProvider) {
         super(memberKey);
         // eslint-disable-next-line no-constructor-return
         return new Proxy(this, {
@@ -487,7 +487,7 @@ export class TypePropertyReferenceType extends BscType {
                 // eg: if (Reflect.has(target, name)) {
                 //   return Reflect.set(target, name, value, receiver);
 
-                let inner = this.outerType[this.propertyName];
+                let inner = this.outerType[this.propertyName] as object;
 
                 if (inner) {
                     const result = Reflect.set(inner, name, value, inner);
