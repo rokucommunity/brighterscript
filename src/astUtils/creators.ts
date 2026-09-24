@@ -193,9 +193,9 @@ export function createSGInterfaceField(id: string, attributes: { type?: string; 
     const attrs = [
         createSGAttribute('id', id)
     ];
-    for (let key in attributes) {
+    for (const [key, value] of Object.entries(attributes)) {
         attrs.push(
-            createSGAttribute(key, attributes[key])
+            createSGAttribute(key, value)
         );
     }
     return new SGInterfaceField({
@@ -251,9 +251,9 @@ export function createSGInterface() {
 
 export function createSGScript(attributes: { type?: string; uri?: string }) {
     const attrs = [] as SGAttribute[];
-    for (let key in attributes) {
+    for (const [key, value] of Object.entries(attributes)) {
         attrs.push(
-            createSGAttribute(key, attributes[key])
+            createSGAttribute(key, value)
         );
     }
     return new SGScript({
