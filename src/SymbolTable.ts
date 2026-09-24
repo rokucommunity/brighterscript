@@ -254,9 +254,15 @@ export class SymbolTable implements SymbolTypeGetter {
             // look in our map first
             let currentResults = currentTable.symbolMap?.get(key);
             if (currentResults) {
-                const lookupFilter = this.getSymbolLookupFilter(currentTable, maxStatementIndex, memberOfAncestor);
-                // eslint-disable-next-line no-bitwise
-                currentResults = currentResults.filter(symbol => (symbol.flags & bitFlags) && lookupFilter(symbol));
+                if (currentTable.isOrdered) {
+                    const lookupFilter = this.getSymbolLookupFilter(currentTable, maxStatementIndex, memberOfAncestor);
+                    // eslint-disable-next-line no-bitwise
+                    currentResults = currentResults.filter(symbol => (symbol.flags & bitFlags) && lookupFilter(symbol));
+                } else {
+                    //statement order doesn't matter here, so only the flags need checking
+                    // eslint-disable-next-line no-bitwise
+                    currentResults = currentResults.filter(symbol => symbol.flags & bitFlags);
+                }
             }
 
             let precedingAssignmentIndex = -1;
@@ -276,18 +282,24 @@ export class SymbolTable implements SymbolTypeGetter {
                 result = currentResults;
             }
 
-            let depth = additionalOptions?.depth ?? currentTable.getCurrentPocketTableDepth();
-            const augmentationResult = currentTable.augmentSymbolResultsWithPocketTableResults(name, bitFlags, result, {
-                ...additionalOptions,
-                depth: depth,
-                maxStatementIndex: maxStatementIndex,
-                precedingAssignmentIndex: precedingAssignmentIndex
-            });
-            result = augmentationResult.symbols;
-            const needCheckParent = (!augmentationResult.exhaustive && depth > 0);
+            //with no pocket tables, augmenting would just hand back `result` as exhaustive, so skip the allocations
+            let needCheckParent = false;
+            if (currentTable.pocketTables.length > 0) {
+                let depth = additionalOptions?.depth ?? currentTable.getCurrentPocketTableDepth();
+                const augmentationResult = currentTable.augmentSymbolResultsWithPocketTableResults(name, bitFlags, result, {
+                    ...additionalOptions,
+                    depth: depth,
+                    maxStatementIndex: maxStatementIndex,
+                    precedingAssignmentIndex: precedingAssignmentIndex
+                });
+                result = augmentationResult.symbols;
+                needCheckParent = (!augmentationResult.exhaustive && depth > 0);
+            }
 
             if (result?.length > 0 && !needCheckParent) {
-                result = result.map(addAncestorInfo);
+                if (memberOfAncestor) {
+                    result = result.map(addAncestorInfo);
+                }
                 break;
             }
 
