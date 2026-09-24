@@ -83,7 +83,8 @@ function run(options: RunOptions) {
                     bsc: bsc,
                     options: options,
                     runName: `${project.name}-${bsc.label}-run${runIndex}`,
-                    profileDir: profileDir
+                    profileDir: profileDir,
+                    label: label
                 });
                 console.log(` validate ${result.coldValidateMs}ms, heap ${result.heapAfterGcMB}MB`);
                 const key = `${project.name}|${bsc.label}`;
@@ -127,8 +128,8 @@ function run(options: RunOptions) {
     }
 }
 
-function runOne(params: { project: ScenarioProject; projectDir: string; bsc: { label: string; bscPath: string }; options: RunOptions; runName: string; profileDir: string }) {
-    const { project, projectDir, bsc, options, runName, profileDir } = params;
+function runOne(params: { project: ScenarioProject; projectDir: string; bsc: { label: string; bscPath: string }; options: RunOptions; runName: string; profileDir: string; label: string }) {
+    const { project, projectDir, bsc, options, runName, profileDir, label } = params;
     const workDir = path.join(tempDir, 'runs', runName);
     fsExtra.emptyDirSync(workDir);
     const outFile = path.join(workDir, 'result.json');
@@ -177,7 +178,7 @@ function runOne(params: { project: ScenarioProject; projectDir: string; bsc: { l
     const result = fsExtra.readJsonSync(outFile) as RunResult;
     if (options.diagnostics) {
         const diagnosticsFile = outFile.replace(/\.json$/, '.diagnostics.txt');
-        fsExtra.copySync(diagnosticsFile, path.join(resultsDir, 'diagnostics', `${runName}.txt`));
+        fsExtra.copySync(diagnosticsFile, path.join(resultsDir, 'diagnostics', label, `${runName}.txt`));
     }
     return result;
 }
