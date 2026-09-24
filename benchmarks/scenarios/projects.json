@@ -67,5 +67,16 @@
                 "autoImportComponentScript": true
             }
         }
+    },
+    {
+        "name": "jellyrock",
+        "description": "Large v1 BrighterScript app, lots of component scopes. Core only (its own bslint/custom plugins are turned off)",
+        "repo": "https://github.com/jellyrock/jellyrock",
+        "ref": "c4b88af04422ceb8907167a1120dd0eeb663ee27",
+        "install": true,
+        "bsconfig": "bsconfig.json",
+        "config": {
+            "plugins": []
+        }
     }
 ]
