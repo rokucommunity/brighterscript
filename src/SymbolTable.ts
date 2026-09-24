@@ -45,6 +45,13 @@ export class SymbolTable implements SymbolTypeGetter {
      */
     static cacheVerifier = new CacheVerifier();
 
+    /**
+     * Incremented whenever any SymbolTable changes in a way that could change a lookup result (symbols, parents,
+     * siblings, pocket tables). Caches of lookup results (eg. ReferenceType resolution) compare against this.
+     * Doesn't catch a parent provider closure starting to return a different table - that's what `cacheVerifier` is for
+     */
+    static mutationCount = 0;
+
     static referenceTypeFactory: (memberKey: string, fullName, flags: SymbolTypeFlag, tableProvider: SymbolTypeGetterProvider) => ReferenceType;
     static unionTypeFactory: (types: BscType[]) => UnionType;
     static uninitializedTypeFactory: () => UninitializedType;
@@ -53,6 +60,7 @@ export class SymbolTable implements SymbolTypeGetter {
      * Push a function that will provide a parent SymbolTable when requested
      */
     public pushParentProvider(provider: SymbolTableProvider) {
+        SymbolTable.mutationCount++;
         this.cachedCircularReferenceCheck = null;
         this.parentProviders.push(provider);
         return () => {
@@ -64,6 +72,7 @@ export class SymbolTable implements SymbolTypeGetter {
      * Pop the current parentProvider
      */
     public popParentProvider() {
+        SymbolTable.mutationCount++;
         this.cachedCircularReferenceCheck = null;
         this.parentProviders.pop();
     }
@@ -82,9 +91,11 @@ export class SymbolTable implements SymbolTypeGetter {
      * Add a sibling symbol table (which will be inspected first before walking upward to the parent
      */
     public addSibling(sibling: SymbolTable) {
+        SymbolTable.mutationCount++;
         this.siblings ??= new Set();
         this.siblings.add(sibling);
         return () => {
+            SymbolTable.mutationCount++;
             this.siblings.delete(sibling);
         };
     }
@@ -93,6 +104,7 @@ export class SymbolTable implements SymbolTypeGetter {
      * Remove a sibling symbol table
      */
     public removeSibling(sibling: SymbolTable) {
+        SymbolTable.mutationCount++;
         this.siblings?.delete(sibling);
     }
 
@@ -100,14 +112,23 @@ export class SymbolTable implements SymbolTypeGetter {
      * Does the order of symbols in this symbol table matter?
      * Normally, this would only be for symbol tables referencing symbols declared within a function
      */
-    public isOrdered = false;
+    public get isOrdered() {
+        return this._isOrdered;
+    }
+    public set isOrdered(value: boolean) {
+        SymbolTable.mutationCount++;
+        this._isOrdered = value;
+    }
+    private _isOrdered = false;
 
     public pocketTables = new Array<PocketTable>();
 
     public addPocketTable(pocketTable: PocketTable) {
+        SymbolTable.mutationCount++;
         pocketTable.table.isPocketTable = true;
         this.pocketTables.push(pocketTable);
         return () => {
+            SymbolTable.mutationCount++;
             const index = this.pocketTables.findIndex(pt => pt === pocketTable);
             if (index >= 0) {
                 this.pocketTables.splice(index, 1);
@@ -139,11 +160,13 @@ export class SymbolTable implements SymbolTypeGetter {
      * Eg. This is an else branch, it complements a then branch
      */
     public complementOtherTable(otherTable: SymbolTable) {
+        SymbolTable.mutationCount++;
         this.complementsTables ??= new Set();
         this.complementsTables.add(otherTable);
     }
 
     public clearSymbols() {
+        SymbolTable.mutationCount++;
         this.symbolMap?.clear();
     }
 
@@ -386,6 +409,7 @@ export class SymbolTable implements SymbolTypeGetter {
         if (!name) {
             return;
         }
+        SymbolTable.mutationCount++;
         const key = name?.toLowerCase();
         this.symbolMap ??= new Map();
         if (!this.symbolMap.has(key)) {
@@ -403,6 +427,7 @@ export class SymbolTable implements SymbolTypeGetter {
      * Removes a new symbol from the table
      */
     removeSymbol(name: string) {
+        SymbolTable.mutationCount++;
         this.symbolMap?.delete(name.toLowerCase());
     }
 
@@ -475,6 +500,7 @@ export class SymbolTable implements SymbolTypeGetter {
      * table do not leak across.
      */
     mergeSymbolTable(symbolTable: SymbolTable) {
+        SymbolTable.mutationCount++;
         if (symbolTable.symbolMap) {
             for (const [key, sourceSymbols] of symbolTable.symbolMap) {
                 //skip symbols flagged `doNotMerge` (e.g. typecast/alias bindings) so they stay
