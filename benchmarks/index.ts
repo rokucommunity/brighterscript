@@ -7,12 +7,13 @@ const tempDir = path.join(cwd, '.tmp');
 let MAX_OLD_SPACE = 8192;
 
 clean();
-execSync('npm install');
+//installing here would prune the brighterscriptN packages from the last run, which is exactly what --noprepare wants to reuse
+if (!(process.argv.includes('--noprepare') || process.argv.includes('--noinstall')) || !fs.existsSync(path.join(cwd, 'node_modules'))) {
+    execSync('npm install');
+}
 
 import * as fsExtra from 'fs-extra';
 import * as yargs from 'yargs';
-import * as rimraf from 'rimraf';
-import * as fastGlob from 'fast-glob';
 
 interface RunnerOptions {
     versions: string[];
@@ -131,10 +132,6 @@ class Runner {
             return curr.length > acc ? curr.length : acc;
         }, 0);
 
-        if (this.options.profile) {
-            console.log('Deleting previous profile runs\n');
-            rimraf.sync(path.join(__dirname, 'isolate-*'), { glob: true });
-        }
 
         //run one target at a time
         for (const target of this.options.targets) {
@@ -144,25 +141,18 @@ class Runner {
                 process.stdout.write(`Benchmarking ${target}@${version}`);
                 const alias = `brighterscript${versionIndex + 1}`;
 
-                //get the list of current profiler logs
-                const beforeLogs = fastGlob.sync('isolate-*.log', {
-                    cwd: cwd
-                });
-
                 execSync(`npx ts-node target-runner.ts "${version}" "${maxVersionLength}" "${target}" "${maxTargetLength}" "${alias}" "${this.options.project}" "${this.options.quick}" "${this.options.profile}" "${(this.options.config ?? '{}').replaceAll('\"', '\\"')}"`, {
                     env: {
                         ...process.env,
                         'NODE_OPTIONS': `--max-old-space-size=${MAX_OLD_SPACE}`
                     }
                 });
-                if (this.options.profile) {
-                    const logFile = fastGlob.sync('isolate-*.log', {
-                        cwd: cwd
-                    }).filter(x => !beforeLogs.includes(x))[0];
-                }
             }
             //print a newline to separate the targets
             console.log('');
+        }
+        if (this.options.profile) {
+            console.log(`benchmark: cpu profiles written to ${path.join(tempDir, 'profiles')}`);
         }
     }
 }

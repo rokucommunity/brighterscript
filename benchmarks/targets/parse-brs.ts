@@ -1,22 +1,11 @@
-import type { BsConfig } from '../../src';
 import type { TargetOptions } from '../target-runner';
+import { createBuilder, getConfig } from '../helpers';
 
 module.exports = async (options: TargetOptions) => {
     const { suite, name, version, fullName, brighterscript, projectPath, suiteOptions } = options;
-    const { ProgramBuilder } = brighterscript;
-
-    const builder = new ProgramBuilder();
+    const builder = createBuilder(options);
     //run the first run
-    await builder.run({
-        cwd: projectPath,
-        createPackage: false,
-        copyToStaging: false,
-        noEmit: true,
-        //disable diagnostic reporting (they still get collected)
-        diagnosticFilters: ['**/*'],
-        logLevel: 'error',
-        ...options.additionalConfig
-    } as BsConfig & Record<string, any>);
+    await builder.run(getConfig(options));
     //collect all the brs file contents
     const files = Object.values(builder.program!.files).filter(x => ['.brs', '.bs', '.d.bs'].includes(brighterscript.util.getExtension(x.srcPath)!)).map(x => ({
         destPath: x.destPath ?? x.pkgPath,

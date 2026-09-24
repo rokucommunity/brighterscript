@@ -1,5 +1,5 @@
-import type { BsConfig } from '../../src';
 import type { TargetOptions } from '../target-runner';
+import { createBuilder, getConfig } from '../helpers';
 
 /**
  * Benchmarks a full project re-validate, simulating something like a clean rebuild (as opposed
@@ -17,20 +17,11 @@ import type { TargetOptions } from '../target-runner';
  */
 module.exports = async (options: TargetOptions) => {
     const { suite, fullName, brighterscript, projectPath, suiteOptions } = options;
-    const { ProgramBuilder, isBrsFile, isXmlFile } = brighterscript;
+    const { isBrsFile, isXmlFile } = brighterscript;
 
-    const builder = new ProgramBuilder();
+    const builder = createBuilder(options);
     //run the first run so we we can focus the test on validate
-    await builder.run({
-        cwd: projectPath,
-        createPackage: false,
-        copyToStaging: false,
-        noEmit: true,
-        //disable diagnostic reporting (they still get collected)
-        diagnosticFilters: ['**/*'],
-        logLevel: 'error',
-        ...options.additionalConfig
-    } as BsConfig & Record<string, any>);
+    await builder.run(getConfig(options));
     if (Object.keys(builder.program!.files).length === 0) {
         throw new Error('No files found in program');
     }

@@ -1,5 +1,5 @@
-import type { BsConfig } from '../../src';
 import type { TargetOptions } from '../target-runner';
+import { createBuilder, getConfig } from '../helpers';
 import * as fsExtra from 'fs-extra';
 
 /**
@@ -16,8 +16,6 @@ import * as fsExtra from 'fs-extra';
  */
 module.exports = async (options: TargetOptions) => {
     const { suite, fullName, brighterscript, projectPath, suiteOptions } = options;
-    const { ProgramBuilder } = brighterscript;
-
     //cache file contents in memory so repeatedly loading/parsing fresh programs isn't dominated by disk I/O
     const fileContentsCache = new Map();
     const fileResolver = (filePath) => {
@@ -33,18 +31,9 @@ module.exports = async (options: TargetOptions) => {
     };
 
     async function createUnvalidatedBuilder() {
-        const builder = new ProgramBuilder();
+        const builder = createBuilder(options);
         builder.addFileResolver(fileResolver);
-        await builder.load({
-            cwd: projectPath,
-            createPackage: false,
-            copyToStaging: false,
-            noEmit: true,
-            //disable diagnostic reporting (they still get collected)
-            diagnosticFilters: ['**/*'],
-            logLevel: 'error',
-            ...options.additionalConfig
-        } as BsConfig & Record<string, any>);
+        await builder.load(getConfig(options));
         if (Object.keys(builder.program!.files).length === 0) {
             throw new Error('No files found in program');
         }

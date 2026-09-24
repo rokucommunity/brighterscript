@@ -16,3 +16,5 @@ isolate-*
 v8*.log
 *.cpuprofile
 .cache.json
+benchmarks/scenarios/results
+benchmarks/scenarios/projects.local.json

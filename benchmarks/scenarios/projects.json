@@ -1,0 +1,71 @@
+[
+    {
+        "name": "roku-googlephotos",
+        "description": "Small, plain BrightScript. Same default project as the ops/sec benchmarks",
+        "repo": "https://github.com/chtaylo2/Roku-GooglePhotos",
+        "ref": "69c7ffdc7f7352fb8620e1b038eb81cddbedc62e",
+        "config": {
+            "files": [
+                "manifest",
+                "source/**/*",
+                "components/**/*",
+                "images/**/*",
+                "fonts/**/*"
+            ]
+        }
+    },
+    {
+        "name": "jellyfin-roku",
+        "description": "Medium, lots of component scopes sharing source files. No plugins (its bslint is v0)",
+        "repo": "https://github.com/jellyfin/jellyfin-roku",
+        "ref": "885304d3f64cad0d843e2d58925a303003499d8a",
+        "config": {
+            "files": [
+                "manifest",
+                "source/**/*.*",
+                "components/**/*.*",
+                "images/**/*.*",
+                "locale/**/*.*",
+                "settings/*.*"
+            ],
+            "diagnosticFilters": [
+                "node_modules/**/*",
+                "**/roku_modules/**/*"
+            ],
+            "compilerOptions": {
+                "autoImportComponentScript": true
+            }
+        }
+    },
+    {
+        "name": "brighterscript-game-engine",
+        "description": "Type-heavy BrighterScript (classes, namespaces, interfaces) with rooibos tests",
+        "repo": "https://github.com/markwpearce/brighterscript-game-engine",
+        "ref": "a6c006e1704f4d113118b56dc4d59a33acaf9da3",
+        "install": true,
+        "config": {
+            "rootDir": "src",
+            "files": [
+                "**/*",
+                {
+                    "src": "../test.manifest",
+                    "dest": "manifest"
+                }
+            ],
+            "plugins": [
+                "rooibos-roku"
+            ],
+            "rooibos": {
+                "isRecordingCodeCoverage": false
+            },
+            "diagnosticFilters": [
+                {
+                    "files": "**/roku_modules/**"
+                }
+            ],
+            "compilerOptions": {
+                "autoImportComponentScript": true
+            }
+        }
+    }
+]
