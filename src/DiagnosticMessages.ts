@@ -1201,6 +1201,71 @@ export let DiagnosticMessages = {
         message: `Class constructor 'new' cannot be declared inside a conditional compile ('#if') block`,
         severity: DiagnosticSeverity.Error,
         code: 'class-constructor-in-conditional-compile'
+    }),
+    selectCaseMissingCaseElse: () => ({
+        message: `'select case' statement has no 'case else' branch, so values that match no case are silently ignored`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'select-case-missing-case-else'
+    }),
+    expectedExpressionAfterSelectCase: () => ({
+        message: `Expected expression after 'select case'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'expected-select-case-expression'
+    }),
+    expectedCaseValue: (after: string) => ({
+        message: `Expected a case value after '${after}'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'expected-case-value'
+    }),
+    statementBeforeFirstCase: () => ({
+        message: `Statements are not allowed between 'select case' and the first 'case'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'statement-before-first-case'
+    }),
+    caseElseMustBeLast: () => ({
+        message: `'case else' must be the last case in a 'select case' statement`,
+        severity: DiagnosticSeverity.Error,
+        code: 'case-else-must-be-last'
+    }),
+    duplicateCaseElse: () => ({
+        message: `A 'select case' statement may only have one 'case else'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'duplicate-case-else'
+    }),
+    caseOutsideSelectCase: () => ({
+        message: `'case' can only be used inside a 'select case' statement`,
+        severity: DiagnosticSeverity.Error,
+        code: 'case-outside-select-case'
+    }),
+    endSelectWithoutSelectCase: () => ({
+        message: `Found 'end select' without a matching 'select case'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'end-select-without-select-case'
+    }),
+    duplicateCaseValue: (value: string, line: number) => ({
+        message: `Duplicate case value '${value}'. The case on line ${line} always matches first, so this value is unreachable`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'duplicate-case-value'
+    }),
+    caseValueTypeMismatch: (actualType: string, expectedType: string) => ({
+        message: `Case value is a ${actualType} but this 'select case' compares against a ${expectedType}. Comparing mismatched types with '=' causes a 'Type Mismatch' crash at runtime`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'case-value-type-mismatch'
+    }),
+    emptyCaseDoesNotFallThrough: () => ({
+        message: `Empty case does nothing: cases do not fall through to the next case. To share one body, list the values together (i.e. 'case 1, 2'), or add a comment if doing nothing is intended`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'empty-case-does-not-fall-through'
+    }),
+    selectCaseHasNoCases: () => ({
+        message: `'select case' statement has no cases`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'select-case-has-no-cases'
+    }),
+    selectCaseNotAllowedInInlineIf: () => ({
+        message: `'select case' statements cannot be used inside an inline if statement`,
+        severity: DiagnosticSeverity.Error,
+        code: 'select-case-in-inline-if'
     })
 };
 export const defaultMaximumTruncationLength = 160;

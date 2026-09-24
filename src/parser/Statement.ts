@@ -10,14 +10,14 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isBlock, isCallExpression, isCatchStatement, isClassType, isConditionalCompileStatement, isEnumMemberStatement, isEnumType, isEnumStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isUninitializedType, isVoidType, isWhileStatement } from '../astUtils/reflection';
+import { isBinaryExpression, isBlock, isCallExpression, isCaseStatement, isCatchStatement, isClassType, isConditionalCompileStatement, isEnumMemberStatement, isEnumType, isEnumStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isSelectCaseStatement, isTryCatchStatement, isTypecastExpression, isTypedefProvider, isUnaryExpression, isUninitializedType, isVariableExpression, isVoidType, isWhileStatement } from '../astUtils/reflection';
 import type { GetTypeOptions } from '../interfaces';
 import { TypeChainEntry, type TranspileResult, type TypedefProvider } from '../interfaces';
 import { createDottedIdentifier, createIdentifier, createInvalidLiteral, createMethodStatement, createToken, createVariableExpression } from '../astUtils/creators';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { SymbolTable } from '../SymbolTable';
-import type { Expression } from './AstNode';
+import type { AstNode, Expression } from './AstNode';
 import { AstNodeKind, Statement } from './AstNode';
 import { ClassType } from '../types/ClassType';
 import { EnumMemberType, EnumType } from '../types/EnumType';
@@ -402,6 +402,11 @@ export class Block extends Statement {
                 this.parent.exceptionVariableExpression
             );
             firstBitAfter = this.parent.parent.tokens.endTry?.location;
+        } else if (isCaseStatement(this.parent) && isSelectCaseStatement(this.parent?.parent)) {
+            lastBitBefore = this.parent.headerLocation;
+            const cases = this.parent.parent.cases;
+            const nextCase = cases[cases.indexOf(this.parent) + 1];
+            firstBitAfter = nextCase?.tokens.case?.location ?? this.parent.parent.tokens.endSelect?.location;
         }
         if (lastBitBefore?.range && firstBitAfter?.range) {
             return util.createLocation(
@@ -4936,4 +4941,385 @@ export class TypeStatement extends Statement implements TypedefProvider {
             ['value']
         );
     }
+}
+
+/**
+ * The name of the temporary variable used to hold the `select case` subject when it must be evaluated exactly once
+ * (i.e. `select case getValue()`). A single name is safe to reuse, even for nested `select case` statements, because
+ * once a case body starts running, the enclosing `select case` never reads its subject again.
+ */
+export const SELECT_CASE_SUBJECT_VARIABLE = '__bsSelectCase';
+
+/**
+ * A `select case` statement.
+ *
+ * ```brighterscript
+ * select case value
+ *     case 1
+ *         print "one"
+ *     case 2, 3
+ *         print "two or three"
+ *     case else
+ *         print "something else"
+ * end select
+ * ```
+ */
+export class SelectCaseStatement extends Statement {
+    constructor(options: {
+        select: Token;
+        /**
+         * The `case` keyword that follows `select`. It is optional, so this will be undefined for `select value`
+         */
+        case?: Token;
+        endSelect?: Token;
+        /**
+         * The value being compared against each case. Undefined when missing (i.e. while the user is still typing)
+         */
+        subject?: Expression;
+        /**
+         * Any statements found between the `select case` line and the first `case`. These are invalid, but are kept so
+         * that partially-written code still produces a useful AST
+         */
+        leadingStatements?: Block;
+        cases?: CaseStatement[];
+    }) {
+        super();
+        this.tokens = {
+            select: options.select,
+            case: options.case,
+            endSelect: options.endSelect
+        };
+        this.subject = options.subject;
+        this.leadingStatements = options.leadingStatements;
+        this.cases = options.cases ?? [];
+        this.location = util.createBoundingLocation(
+            this.tokens.select,
+            this.tokens.case,
+            this.subject,
+            this.leadingStatements,
+            ...this.cases,
+            this.tokens.endSelect
+        );
+    }
+
+    public readonly tokens: {
+        readonly select: Token;
+        readonly case?: Token;
+        readonly endSelect?: Token;
+    };
+
+    public readonly subject?: Expression;
+
+    public readonly leadingStatements?: Block;
+
+    public readonly cases: CaseStatement[];
+
+    public readonly kind = AstNodeKind.SelectCaseStatement;
+
+    public readonly location: Location | undefined;
+
+    /**
+     * The `case else` branch, if there is one
+     */
+    public get elseCase() {
+        return this.cases.find(x => x.isElse);
+    }
+
+    transpile(state: BrsTranspileState) {
+        const lines = [] as TranspileResult[];
+
+        //any (invalid) statements found before the first case go ahead of the generated code
+        for (const statement of this.leadingStatements?.statements ?? []) {
+            lines.push(statement.transpile(state));
+        }
+
+        //literals and local variables can be referenced repeatedly without changing behavior (a local variable can't be
+        //modified by a call inside a case value). Everything else gets evaluated exactly once into a temp variable
+        let getSubject: () => TranspileResult;
+        if (!this.subject) {
+            getSubject = () => ['invalid'];
+        } else if (isLiteralExpression(this.subject) || isVariableExpression(this.subject)) {
+            getSubject = () => this.subject.transpile(state);
+        } else {
+            lines.push([
+                state.sourceNode(this.subject, SELECT_CASE_SUBJECT_VARIABLE),
+                ' = ',
+                ...this.subject.transpile(state)
+            ]);
+            getSubject = () => [state.sourceNode(this.subject, SELECT_CASE_SUBJECT_VARIABLE)];
+        }
+        //`select case true` is the idiom for "run the first case whose condition is true", so use the conditions directly
+        const isSelectTrue = isLiteralExpression(this.subject) && this.subject.tokens.value.kind === TokenKind.True;
+
+        const cases = this.cases.filter(x => !x.isElse);
+        //validation flags misplaced or duplicate `case else` branches. Here we just use the first one as the final `else`
+        const elseCase = this.elseCase;
+
+        const chain = [] as TranspileResult;
+        let previousCase: CaseStatement;
+        for (const caseStatement of [...cases, elseCase]) {
+            if (!caseStatement) {
+                continue;
+            }
+            let keyword: string;
+            if (caseStatement.isElse) {
+                //when there are no cases to chain off of, the `case else` body always runs
+                keyword = previousCase ? 'else' : 'if true then';
+            } else {
+                keyword = previousCase ? 'else if' : 'if';
+            }
+            if (previousCase) {
+                //comments above the `case` belong at the end of the previous case's body
+                chain.push(
+                    ...state.transpileEndBlockToken(previousCase, { ...caseStatement.tokens.case, text: keyword }, keyword)
+                );
+            } else {
+                chain.push(
+                    state.transpileToken({ ...caseStatement.tokens.case, text: keyword })
+                );
+            }
+            if (!caseStatement.isElse) {
+                chain.push(
+                    ' ',
+                    ...caseStatement.transpileCondition(state, getSubject, isSelectTrue),
+                    ' then'
+                );
+            }
+            chain.push(
+                ...caseStatement.transpileBody(state)
+            );
+            previousCase = caseStatement;
+        }
+        if (previousCase) {
+            chain.push(
+                ...state.transpileEndBlockToken(
+                    previousCase,
+                    this.tokens.endSelect ? { ...this.tokens.endSelect, text: 'end if' } : undefined,
+                    'end if'
+                )
+            );
+            lines.push(chain);
+        }
+
+        //comments above the `select case` go ahead of everything else
+        const result = [...state.transpileLeadingComments(this.tokens.select)] as TranspileResult;
+        for (let i = 0; i < lines.length; i++) {
+            if (i > 0) {
+                result.push(state.newline, state.indent());
+            }
+            result.push(...lines[i]);
+        }
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.subject && options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'subject', visitor, options);
+        }
+        if (options.walkMode & InternalWalkMode.walkStatements) {
+            if (this.leadingStatements) {
+                walk(this, 'leadingStatements', visitor, options);
+            }
+            walkArray(this.cases, visitor, options, this);
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.select?.leadingTrivia ?? [];
+    }
+
+    get endTrivia(): Token[] {
+        return this.tokens.endSelect?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new SelectCaseStatement({
+                select: util.cloneToken(this.tokens.select),
+                case: util.cloneToken(this.tokens.case),
+                endSelect: util.cloneToken(this.tokens.endSelect),
+                subject: this.subject?.clone(),
+                leadingStatements: this.leadingStatements?.clone(),
+                cases: this.cases?.map(x => x?.clone())
+            }),
+            ['subject', 'leadingStatements', 'cases']
+        );
+    }
+}
+
+/**
+ * A single `case` (or `case else`) branch within a `select case` statement
+ */
+export class CaseStatement extends Statement {
+    constructor(options: {
+        case: Token;
+        /**
+         * The `else` keyword for a `case else` branch
+         */
+        else?: Token;
+        /**
+         * The comma-separated list of values for this case. Always empty for `case else`
+         */
+        values?: Expression[];
+        body?: Block;
+    }) {
+        super();
+        this.tokens = {
+            case: options.case,
+            else: options.else
+        };
+        this.values = options.values ?? [];
+        this.body = options.body;
+        this.location = util.createBoundingLocation(
+            this.tokens.case,
+            this.tokens.else,
+            ...this.values,
+            this.body
+        );
+    }
+
+    public readonly tokens: {
+        readonly case: Token;
+        readonly else?: Token;
+    };
+
+    public readonly values: Expression[];
+
+    public readonly body?: Block;
+
+    public readonly kind = AstNodeKind.CaseStatement;
+
+    public readonly location: Location | undefined;
+
+    /**
+     * Is this the `case else` branch
+     */
+    public get isElse() {
+        return !!this.tokens.else;
+    }
+
+    /**
+     * The location of just the `case ...` line (the keyword and its values), excluding the body
+     */
+    public get headerLocation() {
+        return util.createBoundingLocation(this.tokens.case, this.tokens.else, ...this.values);
+    }
+
+    /**
+     * A case is normally transpiled by its parent `SelectCaseStatement`. On its own, the best we can do is emit its body
+     */
+    transpile(state: BrsTranspileState) {
+        return this.transpileBody(state);
+    }
+
+    /**
+     * Transpile the body of this case. Starts with a newline (unless empty) and does not include a trailing newline
+     */
+    public transpileBody(state: BrsTranspileState) {
+        if (!this.body) {
+            return [];
+        }
+        //only the `case ...` line itself counts as the parent line, so that only a trailing comment on that line stays attached to it
+        state.lineage.unshift({ location: this.headerLocation } as AstNode);
+        const result = this.body.transpile(state);
+        state.lineage.shift();
+        return result;
+    }
+
+    /**
+     * Transpile the condition for this case, i.e. `subject = 1 or subject = 2`
+     * @param state the transpile state
+     * @param getSubject returns a freshly transpiled copy of the `select case` subject
+     * @param isSelectTrue when true, the values are boolean conditions that are used directly (i.e. `select case true`)
+     */
+    public transpileCondition(state: BrsTranspileState, getSubject: () => TranspileResult, isSelectTrue: boolean) {
+        //a case without any values (a syntax error) can never match
+        if (this.values.length === 0) {
+            return ['false'];
+        }
+        const result = [] as TranspileResult;
+        for (let i = 0; i < this.values.length; i++) {
+            const value = this.values[i];
+            if (i > 0) {
+                result.push(' or ');
+            }
+            if (isSelectTrue) {
+                //`and` and `or` share the same precedence, so group them to keep each value as its own condition
+                const needsParens = this.values.length > 1 && isLogicalExpression(value);
+                result.push(...wrapInParens(value.transpile(state), needsParens));
+            } else {
+                //group anything that would bind looser than the `=` we're about to put in front of it
+                const needsParens = isLogicalExpression(value) || isComparisonExpression(value);
+                result.push(
+                    ...getSubject(),
+                    ' = ',
+                    ...wrapInParens(value.transpile(state), needsParens)
+                );
+            }
+        }
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walkArray(this.values, visitor, options, this);
+        }
+        if (this.body && options.walkMode & InternalWalkMode.walkStatements) {
+            walk(this, 'body', visitor, options);
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.case?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new CaseStatement({
+                case: util.cloneToken(this.tokens.case),
+                else: util.cloneToken(this.tokens.else),
+                values: this.values?.map(x => x?.clone()),
+                body: this.body?.clone()
+            }),
+            ['values', 'body']
+        );
+    }
+}
+
+function wrapInParens(transpiled: TranspileResult, wrap: boolean): TranspileResult {
+    return wrap ? ['(', ...transpiled, ')'] : transpiled;
+}
+
+/**
+ * Unwrap any type casts (which transpile to just their inner expression)
+ */
+function unwrapTypecast(expression: Expression) {
+    while (isTypecastExpression(expression)) {
+        expression = expression.obj;
+    }
+    return expression;
+}
+
+/**
+ * Is this an `and`, `or`, or `not` expression
+ */
+function isLogicalExpression(expression: Expression) {
+    expression = unwrapTypecast(expression);
+    return (isBinaryExpression(expression) && (expression.tokens.operator.kind === TokenKind.And || expression.tokens.operator.kind === TokenKind.Or)) ||
+        (isUnaryExpression(expression) && expression.tokens.operator.kind === TokenKind.Not);
+}
+
+/**
+ * Is this a comparison expression like `a = b` or `a < b`
+ */
+function isComparisonExpression(expression: Expression) {
+    expression = unwrapTypecast(expression);
+    return isBinaryExpression(expression) && [
+        TokenKind.Equal,
+        TokenKind.LessGreater,
+        TokenKind.Less,
+        TokenKind.LessEqual,
+        TokenKind.Greater,
+        TokenKind.GreaterEqual
+    ].includes(expression.tokens.operator.kind);
 }
