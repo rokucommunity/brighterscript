@@ -15,7 +15,6 @@ export function token(kind: TokenKind, text?: string): Token {
         //on token.location.range for paths like splitting `exitwhile` into two tokens. Give a
         //zero-width location at (0,0) so those paths work without each test having to spell it out.
         location: { uri: '', range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } } },
-        leadingWhitespace: '',
         leadingTrivia: []
     };
 }

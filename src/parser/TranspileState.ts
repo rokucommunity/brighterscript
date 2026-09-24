@@ -11,7 +11,6 @@ interface TranspileToken {
     location?: Location;
     text: string;
     kind?: TokenKind;
-    leadingWhitespace?: string;
     leadingTrivia?: Array<TranspileToken>;
 }
 

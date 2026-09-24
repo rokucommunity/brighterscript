@@ -83,7 +83,6 @@ export function createToken<T extends TokenKind>(kind: T, text?: string, locatio
         text: text ?? tokenDefaults[kind as string] ?? kind.toString().toLowerCase(),
         isReserved: !text || text === kind.toString(),
         location: location,
-        leadingWhitespace: '',
         leadingTrivia: []
     };
 }
@@ -94,7 +93,6 @@ export function createIdentifier(name: string, location?: Location): Identifier 
         text: name,
         isReserved: false,
         location: location,
-        leadingWhitespace: '',
         leadingTrivia: []
     };
 }

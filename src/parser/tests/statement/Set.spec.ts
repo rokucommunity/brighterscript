@@ -133,7 +133,6 @@ describe('parser indexed assignment', () => {
                 text: 'arr',
                 isReserved: false,
                 location: util.createLocation(0, 0, 0, 3),
-                leadingWhitespace: '',
                 leadingTrivia: []
             },
             {
@@ -141,7 +140,6 @@ describe('parser indexed assignment', () => {
                 text: '[',
                 isReserved: false,
                 location: util.createLocation(0, 3, 0, 4),
-                leadingWhitespace: '',
                 leadingTrivia: []
             },
             {
@@ -149,7 +147,6 @@ describe('parser indexed assignment', () => {
                 text: '0',
                 isReserved: false,
                 location: util.createLocation(0, 4, 0, 5),
-                leadingWhitespace: '',
                 leadingTrivia: []
             },
             {
@@ -157,7 +154,6 @@ describe('parser indexed assignment', () => {
                 text: ']',
                 isReserved: false,
                 location: util.createLocation(0, 5, 0, 6),
-                leadingWhitespace: '',
                 leadingTrivia: []
             },
             {
@@ -165,7 +161,6 @@ describe('parser indexed assignment', () => {
                 text: '=',
                 isReserved: false,
                 location: util.createLocation(0, 7, 0, 8),
-                leadingWhitespace: '',
                 leadingTrivia: []
             },
             {
@@ -173,7 +168,6 @@ describe('parser indexed assignment', () => {
                 text: '1',
                 isReserved: false,
                 location: util.createLocation(0, 9, 0, 10),
-                leadingWhitespace: '',
                 leadingTrivia: []
             },
             {
@@ -181,7 +175,6 @@ describe('parser indexed assignment', () => {
                 text: '\n',
                 isReserved: false,
                 location: util.createLocation(0, 10, 0, 11),
-                leadingWhitespace: '',
                 leadingTrivia: []
             },
             {
@@ -189,7 +182,6 @@ describe('parser indexed assignment', () => {
                 text: 'obj',
                 isReserved: false,
                 location: util.createLocation(1, 0, 1, 3),
-                leadingWhitespace: '',
                 leadingTrivia: []
             },
             {
@@ -197,7 +189,6 @@ describe('parser indexed assignment', () => {
                 text: '.',
                 isReserved: false,
                 location: util.createLocation(1, 3, 1, 4),
-                leadingWhitespace: '',
                 leadingTrivia: []
             },
             {
@@ -205,7 +196,6 @@ describe('parser indexed assignment', () => {
                 text: 'a',
                 isReserved: false,
                 location: util.createLocation(1, 4, 1, 5),
-                leadingWhitespace: '',
                 leadingTrivia: []
             },
             {
@@ -213,7 +203,6 @@ describe('parser indexed assignment', () => {
                 text: '=',
                 isReserved: false,
                 location: util.createLocation(1, 6, 1, 7),
-                leadingWhitespace: '',
                 leadingTrivia: []
             },
             {
@@ -221,7 +210,6 @@ describe('parser indexed assignment', () => {
                 text: '5',
                 isReserved: false,
                 location: util.createLocation(1, 8, 1, 9),
-                leadingWhitespace: '',
                 leadingTrivia: []
             },
             {
@@ -229,7 +217,6 @@ describe('parser indexed assignment', () => {
                 text: '\0',
                 isReserved: false,
                 location: util.createLocation(1, 10, 1, 11),
-                leadingWhitespace: '',
                 leadingTrivia: []
             }
         ]);

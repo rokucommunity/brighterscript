@@ -566,7 +566,7 @@ export class ExitStatement extends Statement {
     transpile(state: BrsTranspileState) {
         return [
             state.transpileToken(this.tokens.exit, 'exit'),
-            this.tokens.loopType?.leadingWhitespace ?? ' ',
+            (this.tokens.loopType ? util.getLeadingWhitespace(this.tokens.loopType) : ' '),
             state.transpileToken(this.tokens.loopType)
         ];
     }
@@ -784,7 +784,7 @@ export class IfStatement extends Statement {
 
                 if (body.length > 0) {
                     //zero or more spaces between the `else` and the `if`
-                    results.push(this.elseBranch.tokens.if.leadingWhitespace!);
+                    results.push(util.getLeadingWhitespace(this.elseBranch.tokens.if));
                     results.push(...body);
 
                     // stop here because chained if will transpile the rest
@@ -3468,7 +3468,6 @@ export class MethodStatement extends FunctionStatement {
                         text: 'super',
                         isReserved: false,
                         location: state.classStatement.tokens.name.location,
-                        leadingWhitespace: '',
                         leadingTrivia: []
                     }
                 }),
@@ -3477,7 +3476,6 @@ export class MethodStatement extends FunctionStatement {
                     text: '(',
                     isReserved: false,
                     location: state.classStatement.tokens.name.location,
-                    leadingWhitespace: '',
                     leadingTrivia: []
                 },
                 closingParen: {
@@ -3485,7 +3483,6 @@ export class MethodStatement extends FunctionStatement {
                     text: ')',
                     isReserved: false,
                     location: state.classStatement.tokens.name.location,
-                    leadingWhitespace: '',
                     leadingTrivia: []
                 },
                 args: []
@@ -4419,7 +4416,7 @@ export class ContinueStatement extends Statement {
         }
         return [
             state.sourceNode(this.tokens.continue, this.tokens.continue?.text ?? 'continue'),
-            this.tokens.loopType?.leadingWhitespace ?? ' ',
+            (this.tokens.loopType ? util.getLeadingWhitespace(this.tokens.loopType) : ' '),
             state.sourceNode(this.tokens.continue, this.tokens.loopType?.text)
         ];
     }
