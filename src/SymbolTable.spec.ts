@@ -113,6 +113,48 @@ describe('SymbolTable', () => {
         expect(table.hasSymbol('bar', SymbolTypeFlag.typetime)).to.be.true;
     });
 
+    describe('mutationCount', () => {
+        it('increments whenever something that could change a lookup result happens', () => {
+            const table = new SymbolTable('Table');
+            const other = new SymbolTable('Other');
+            other.addSymbol('bar', null, IntegerType.instance, SymbolTypeFlag.runtime);
+            const mutations: Array<[string, () => void]> = [
+                ['addSymbol', () => table.addSymbol('foo', null, StringType.instance, SymbolTypeFlag.runtime)],
+                ['removeSymbol', () => table.removeSymbol('foo')],
+                ['clearSymbols', () => table.clearSymbols()],
+                ['pushParentProvider', () => table.pushParentProvider(() => parent)],
+                ['popParentProvider', () => table.popParentProvider()],
+                ['addSibling', () => table.addSibling(other)],
+                ['removeSibling', () => table.removeSibling(other)],
+                ['addPocketTable', () => table.addPocketTable({ table: new SymbolTable('Pocket'), index: 0 })],
+                ['complementOtherTable', () => table.complementOtherTable(other)],
+                ['mergeSymbolTable', () => table.mergeSymbolTable(other)],
+                ['isOrdered', () => {
+                    table.isOrdered = true;
+                }]
+            ];
+            for (const [name, mutate] of mutations) {
+                const before = SymbolTable.mutationCount;
+                mutate();
+                expect(SymbolTable.mutationCount, name).to.be.greaterThan(before);
+            }
+        });
+
+        it('increments when the disposers returned by mutating methods are called', () => {
+            const table = new SymbolTable('Table');
+            const disposers = [
+                table.pushParentProvider(() => parent),
+                table.addSibling(new SymbolTable('Sibling')),
+                table.addPocketTable({ table: new SymbolTable('Pocket'), index: 0 })
+            ];
+            for (const dispose of disposers) {
+                const before = SymbolTable.mutationCount;
+                dispose();
+                expect(SymbolTable.mutationCount).to.be.greaterThan(before);
+            }
+        });
+    });
+
     describe('mergeSymbolTable', () => {
 
         it('adds each symbol to the table', () => {
