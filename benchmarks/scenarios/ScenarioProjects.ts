@@ -67,11 +67,16 @@ export function prepareProject(project: ScenarioProject): string {
         projectDir = path.join(tempDir, 'projects', `${project.name}@${(project.ref ?? 'HEAD').slice(0, 12)}`);
         if (!fsExtra.pathExistsSync(projectDir)) {
             console.log(`scenarios: cloning ${project.repo}${project.ref ? ` @ ${project.ref}` : ''}`);
+            //clone to a temp dir and only move it into place once the checkout worked, otherwise an
+            //interrupted checkout leaves a dir that later runs would silently benchmark at the wrong commit
+            const partialDir = `${projectDir}.partial`;
+            fsExtra.removeSync(partialDir);
             fsExtra.ensureDirSync(path.dirname(projectDir));
-            exec(`git clone --quiet --filter=blob:none "${project.repo}" "${projectDir}"`);
+            exec(`git clone --quiet --filter=blob:none "${project.repo}" "${partialDir}"`);
             if (project.ref) {
-                exec(`git checkout --quiet "${project.ref}"`, projectDir);
+                exec(`git checkout --quiet "${project.ref}"`, partialDir);
             }
+            fsExtra.renameSync(partialDir, projectDir);
         }
     } else {
         throw new Error(`Project '${project.name}' needs either a 'repo' or a 'path'`);
@@ -108,12 +113,17 @@ export function resolveBsc(bsc: string, build: boolean): { label: string; bscPat
     if (fsExtra.pathExistsSync(path.join(asPath, 'package.json'))) {
         return { label: path.basename(asPath), bscPath: asPath };
     }
-    const installDir = path.join(tempDir, 'bsc', bsc);
+    //resolve dist-tags/ranges (eg. `latest`) to a real version so a cached install doesn't go stale
+    const version = childProcess.execSync(`npm view "brighterscript@${bsc}" version`, { stdio: 'pipe' }).toString().trim().split('\n').pop().replace(/^.*'(.*)'$/, '$1');
+    if (!version) {
+        throw new Error(`Could not find brighterscript@${bsc} on npm`);
+    }
+    const installDir = path.join(tempDir, 'bsc', version);
     const bscPath = path.join(installDir, 'node_modules', 'brighterscript');
     if (!fsExtra.pathExistsSync(path.join(bscPath, 'package.json'))) {
-        console.log(`scenarios: installing brighterscript@${bsc}`);
+        console.log(`scenarios: installing brighterscript@${version}`);
         fsExtra.ensureDirSync(installDir);
-        exec(`npm install --no-save --no-audit --no-fund --loglevel=error --prefix "${installDir}" "brighterscript@${bsc}"`);
+        exec(`npm install --no-save --no-audit --no-fund --loglevel=error --prefix "${installDir}" "brighterscript@${version}"`);
     }
     return { label: bsc, bscPath: bscPath };
 }
