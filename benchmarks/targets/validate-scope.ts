@@ -1,5 +1,5 @@
-import type { BsConfig } from '../../src';
 import type { TargetOptions } from '../target-runner';
+import { createBuilder, getConfig } from '../helpers';
 import * as path from 'path';
 
 /**
@@ -30,22 +30,11 @@ import * as path from 'path';
  */
 module.exports = async (options: TargetOptions) => {
     const { suite, fullName, brighterscript, suiteOptions } = options;
-    const { ProgramBuilder } = brighterscript;
-
     const fixtureProjectPath = path.join(__dirname, '..', 'fixtures', 'heavy-types');
 
-    const builder = new ProgramBuilder();
+    const builder = createBuilder(options);
     //run the first run so we can focus the test on re-validating after a real change
-    await builder.run({
-        cwd: fixtureProjectPath,
-        createPackage: false,
-        copyToStaging: false,
-        noEmit: true,
-        //disable diagnostic reporting (they still get collected)
-        diagnosticFilters: ['**/*'],
-        logLevel: 'error',
-        ...options.additionalConfig
-    } as BsConfig & Record<string, any>);
+    await builder.run(getConfig(options, fixtureProjectPath));
     if (Object.keys(builder.program!.files).length === 0) {
         throw new Error('No files found in program');
     }

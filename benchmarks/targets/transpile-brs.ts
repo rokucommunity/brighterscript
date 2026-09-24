@@ -1,37 +1,35 @@
-import type { BrsFile, BsConfig } from '../../src';
 import type { TargetOptions } from '../target-runner';
+import { createBuilder, getConfig, getTranspiler } from '../helpers';
 
 module.exports = async (options: TargetOptions) => {
-    const { suite, name, version, fullName, brighterscript, projectPath, suiteOptions } = options;
-    const { ProgramBuilder } = brighterscript;
+    const { suite, fullName, brighterscript, suiteOptions } = options;
+    const { isBrsFile, isXmlFile } = brighterscript;
 
-    const builder = new ProgramBuilder();
-    //run the first run
-    await builder.run({
-        cwd: projectPath,
-        createPackage: false,
-        copyToStaging: false,
-        noEmit: true,
-        //disable diagnostic reporting (they still get collected)
-        diagnosticFilters: ['**/*'],
-        logLevel: 'error',
-        ...options.additionalConfig
-    } as BsConfig & Record<string, any>);
-    //collect all the brs files
-    const files = Object.values(builder.program!.files as Record<string, BrsFile>).filter(x => ['.brs', '.bs'].includes(x.extension));
+    const builder = createBuilder(options);
+    //run the first run outside of the test
+    await builder.run(getConfig(options));
+    if (Object.keys(builder.program!.files).length === 0) {
+        throw new Error('No files found in program');
+    }
 
-    //flag every file for transpilation
+    const transpiler = getTranspiler(builder);
+    const files = Object.values(builder.program!.files).filter((x: any) => (isBrsFile(x)) && transpiler.canTranspile(x)) as any[];
+    if (files.length === 0) {
+        console.log('[transpile-brs] No brs|bs files found in program');
+        return;
+    }
+
+    //force transpile for every file
     for (const file of files) {
         file.needsTranspiled = true;
     }
 
-    if (files.length === 0) {
-        console.log('[transpile-brs] No brs|bs|d.bs files found in program');
-        return;
-    }
-    suite.add(fullName, () => {
-        for (const x of files) {
-            x.transpile();
-        }
-    }, suiteOptions);
+    suite.add(fullName, (deferred) => {
+        Promise.all(
+            files.map(file => transpiler.transpile(file))
+        ).finally(() => deferred.resolve());
+    }, {
+        ...suiteOptions,
+        'defer': true
+    });
 };
