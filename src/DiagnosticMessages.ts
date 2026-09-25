@@ -1201,6 +1201,11 @@ export let DiagnosticMessages = {
         message: `Class constructor 'new' cannot be declared inside a conditional compile ('#if') block`,
         severity: DiagnosticSeverity.Error,
         code: 'class-constructor-in-conditional-compile'
+    }),
+    spreadOperatorNotAllowedHere: () => ({
+        message: `Spread operator is only supported in array and associative array literals assigned directly to a variable, property, or index`,
+        severity: DiagnosticSeverity.Error,
+        code: 'spread-operator-not-allowed-here'
     })
 };
 export const defaultMaximumTruncationLength = 160;

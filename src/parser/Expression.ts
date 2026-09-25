@@ -10,7 +10,7 @@ import { ParseMode } from './Parser';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -1198,6 +1198,10 @@ export class ArrayLiteralExpression extends Expression {
 
     public readonly location: Location | undefined;
 
+    public get hasSpread() {
+        return this.elements.some(e => isSpreadExpression(e));
+    }
+
     transpile(state: BrsTranspileState) {
         let result: TranspileResult = [];
         result.push(
@@ -1237,7 +1241,16 @@ export class ArrayLiteralExpression extends Expression {
     }
 
     getType(options: GetTypeOptions): BscType {
-        const innerTypes = this.elements.map(expr => expr.getType(options));
+        const innerTypes: BscType[] = [];
+        for (const element of this.elements) {
+            const type = element.getType(options);
+            //a spread array contributes its element types, not the array type itself
+            if (isSpreadExpression(element) && isArrayType(type)) {
+                innerTypes.push(...type.innerTypes);
+            } else {
+                innerTypes.push(type);
+            }
+        }
         return new ArrayType(...innerTypes);
     }
     get leadingTrivia(): Token[] {
@@ -1383,7 +1396,7 @@ export class AAIndexedMemberExpression extends Expression {
 
 export class AALiteralExpression extends Expression {
     constructor(options: {
-        readonly elements: Array<AAMemberExpression | AAIndexedMemberExpression>;
+        readonly elements: Array<AAMemberExpression | AAIndexedMemberExpression | SpreadExpression>;
         readonly open?: Token;
         readonly close?: Token;
     }
@@ -1397,7 +1410,7 @@ export class AALiteralExpression extends Expression {
         this.location = util.createBoundingLocation(this.tokens.open, ...this.elements ?? [], this.tokens.close);
     }
 
-    public readonly elements: Array<AAMemberExpression | AAIndexedMemberExpression>;
+    public readonly elements: Array<AAMemberExpression | AAIndexedMemberExpression | SpreadExpression>;
     public readonly tokens: {
         readonly open?: Token;
         readonly close?: Token;
@@ -1407,22 +1420,28 @@ export class AALiteralExpression extends Expression {
 
     public readonly location: Location | undefined;
 
+    public get hasSpread() {
+        return this.elements.some(e => isSpreadExpression(e));
+    }
+
     transpile(state: BrsTranspileState) {
+        //spread members are lowered to statements before transpile; any left over were already flagged by validation
+        const members = this.elements.filter(e => !isSpreadExpression(e)) as Array<AAMemberExpression | AAIndexedMemberExpression>;
         let result: TranspileResult = [];
         //open curly
         result.push(
             state.transpileToken(this.tokens.open, '{')
         );
-        let hasChildren = this.elements.length > 0;
+        let hasChildren = members.length > 0;
         //add newline if the object has children and the first child isn't a comment starting on the same line as opening curly
-        if (hasChildren && !util.isLeadingCommentOnSameLine(this.tokens.open, this.elements[0])) {
+        if (hasChildren && !util.isLeadingCommentOnSameLine(this.tokens.open, members[0])) {
             result.push('\n');
         }
         state.blockDepth++;
-        for (let i = 0; i < this.elements.length; i++) {
-            let element = this.elements[i];
-            let previousElement = this.elements[i - 1];
-            let nextElement = this.elements[i + 1];
+        for (let i = 0; i < members.length; i++) {
+            let element = members[i];
+            let previousElement = members[i - 1];
+            let nextElement = members[i + 1];
 
             //don't indent if comment is same-line
             if (util.isLeadingCommentOnSameLine(this.tokens.open, element) ||
@@ -1458,7 +1477,7 @@ export class AALiteralExpression extends Expression {
         }
         state.blockDepth--;
 
-        const lastElement = this.elements[this.elements.length - 1] ?? this.tokens.open;
+        const lastElement = members[members.length - 1] ?? this.tokens.open;
         result.push(...state.transpileEndBlockToken(lastElement, this.tokens.close, '}', hasChildren));
 
         return result;
@@ -1503,6 +1522,58 @@ export class AALiteralExpression extends Expression {
                 close: util.cloneToken(this.tokens.close)
             }),
             ['elements']
+        );
+    }
+}
+
+export class SpreadExpression extends Expression {
+    constructor(options: {
+        dotDotDot: Token;
+        expression: Expression;
+    }) {
+        super();
+        this.tokens = {
+            dotDotDot: options.dotDotDot
+        };
+        this.expression = options.expression;
+        this.location = util.createBoundingLocation(this.tokens.dotDotDot, this.expression);
+    }
+
+    public readonly kind = AstNodeKind.SpreadExpression;
+
+    public readonly location: Location | undefined;
+
+    public readonly tokens: {
+        readonly dotDotDot: Token;
+    };
+
+    public readonly expression: Expression;
+
+    transpile(state: BrsTranspileState) {
+        return this.expression.transpile(state);
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'expression', visitor, options);
+        }
+    }
+
+    getType(options: GetTypeOptions): BscType {
+        return this.expression.getType(options);
+    }
+
+    public get leadingTrivia(): Token[] {
+        return this.tokens.dotDotDot.leadingTrivia;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new SpreadExpression({
+                dotDotDot: util.cloneToken(this.tokens.dotDotDot),
+                expression: this.expression?.clone()
+            }),
+            ['expression']
         );
     }
 }
@@ -2695,7 +2766,7 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
     }
     if (isAALiteralExpression(expr)) {
         return expr.elements.reduce((acc, e) => {
-            if (!(isAAIndexedMemberExpression(e))) {
+            if (isAAMemberExpression(e)) {
                 acc[e.tokens.key.text] = expressionToValue(e.value, strict);
             }
             return acc;
