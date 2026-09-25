@@ -101,11 +101,36 @@ describe('ReferenceType', () => {
             expectTypeToBe(ref, IntegerType);
         });
 
-        it('does not cache an unresolved lookup', () => {
+        it('resolves once the symbol gets added', () => {
             const table = new SymbolTable('test');
             const ref = new ReferenceType('someVar', 'someVar', runtimeFlag, () => table);
             expect(ref.isResolvable()).to.be.false;
             table.addSymbol('someVar', null, StringType.instance, SymbolTypeFlag.runtime);
+            expectTypeToBe(ref, StringType);
+        });
+
+        it('does not look up a missing symbol again until a symbol table changes', () => {
+            const table = new SymbolTable('test');
+            const ref = new ReferenceType('someVar', 'someVar', runtimeFlag, () => table);
+            const getSymbolTypeSpy = sinon.spy(table, 'getSymbolType');
+            expect(ref.isResolvable()).to.be.false;
+            expect(ref.isResolvable()).to.be.false;
+            expect(ref.toString()).to.eq('someVar');
+            expect(getSymbolTypeSpy.callCount).to.eq(1);
+
+            new SymbolTable('unrelated').addSymbol('other', null, IntegerType.instance, SymbolTypeFlag.runtime);
+            expect(ref.isResolvable()).to.be.false;
+            expect(getSymbolTypeSpy.callCount).to.eq(2);
+        });
+
+        it('does not cache a lookup when there is no table yet', () => {
+            const table = new SymbolTable('test');
+            table.addSymbol('someVar', null, StringType.instance, SymbolTypeFlag.runtime);
+            let currentTable: SymbolTable;
+            const ref = new ReferenceType('someVar', 'someVar', runtimeFlag, () => currentTable);
+            expect(ref.isResolvable()).to.be.false;
+            //no symbol table changes and no new cache token, but now there's a table to look in
+            currentTable = table;
             expectTypeToBe(ref, StringType);
         });
     });
