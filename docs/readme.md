@@ -108,3 +108,18 @@ second line text`
 ```brighterscript
 authStatus = user <> invalid ? "logged in" : "not logged in"
 ```
+
+## [Tree Shaking](shaking.md)
+Tree shaking removes unused functions from your transpiled output. Opt in via `bsconfig.json`, then use `' bs:keep` to protect functions the static analysis can't see.
+```json
+{
+    "treeShaking": {
+        "enabled": true
+    }
+}
+```
+```brightscript
+sub onDynamicCallback() ' bs:keep
+    ' won't be removed even with no visible callers
+end sub
+```

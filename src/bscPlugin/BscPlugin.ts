@@ -1,8 +1,9 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
-import type { BeforeFileTranspileEvent, Plugin, OnFileValidateEvent, OnGetCodeActionsEvent, OnGetSourceFixAllCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, ProvideSelectionRangesEvent, ProvideInlayHintsEvent } from '../interfaces';
+import type { AstEditor } from '../astUtils/AstEditor';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
-import type { Program } from '../Program';
+import type { BeforeFileTranspileEvent, Plugin, OnFileValidateEvent, OnGetCodeActionsEvent, OnGetSourceFixAllCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, ProvideSelectionRangesEvent, ProvideInlayHintsEvent } from '../interfaces';
+import type { Program, TranspileObj } from '../Program';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { FixAllCodeActionsProcessor } from './codeActions/FixAllCodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
@@ -19,9 +20,12 @@ import { XmlFileValidator } from './validation/XmlFileValidator';
 import { WorkspaceSymbolProcessor } from './symbols/WorkspaceSymbolProcessor';
 import { SelectionRangesProcessor } from './selectionRanges/SelectionRangesProcessor';
 import { InlayHintProcessor } from './inlayHints/InlayHintProcessor';
+import { TreeShaker } from './treeShaker/TreeShaker';
 
 export class BscPlugin implements Plugin {
     public name = 'BscPlugin';
+
+    private treeShaker = new TreeShaker();
 
     public onGetCodeActions(event: OnGetCodeActionsEvent) {
         new CodeActionsProcessor(event).process();
@@ -90,6 +94,16 @@ export class BscPlugin implements Plugin {
         new ProgramValidator(program).process();
         //release memory once the validation cycle has finished
         this.scopeValidator.reset();
+    }
+
+    public beforeProgramTranspile(program: Program, entries: TranspileObj[], editor: AstEditor) {
+        if (program.options.treeShaking.enabled) {
+            this.treeShaker.analyze(program, program.options.treeShaking.keep);
+            for (const entry of entries) {
+                this.treeShaker.shake(entry.file, editor);
+            }
+            this.treeShaker.logSummary();
+        }
     }
 
     public beforeFileTranspile(event: BeforeFileTranspileEvent) {
