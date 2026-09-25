@@ -62,4 +62,74 @@ describe('MessageHandler', () => {
         }
         expect(error?.message).to.eql('Request 0 has been rejected because MessageHandler is now disposed');
     });
+
+    it('is safe to call dispose() twice, even with pending requests', async () => {
+        let localServer = new MessageHandler({
+            port: channel.port1,
+            onRequest: (request) => {
+                //never respond, so the request stays pending
+            }
+        });
+        let localClient = new MessageHandler<LspProject>({ port: channel.port2 });
+
+        const pendingRequest = localClient.sendRequest('activate');
+
+        //first dispose should reject the pending request
+        localClient.dispose();
+        let error: Error;
+        try {
+            await pendingRequest;
+        } catch (e) {
+            error = e as any;
+        }
+        expect(error).to.exist;
+
+        //second dispose should be a no-op, not throw
+        expect(() => localClient.dispose()).to.not.throw();
+
+        localServer.dispose();
+    });
+
+    it('reject is only sent once when dispose is called multiple times', async () => {
+        let localServer = new MessageHandler({
+            port: channel.port1,
+            onRequest: (request) => {
+                //never respond, so the request stays pending
+            }
+        });
+        let localClient = new MessageHandler<LspProject>({ port: channel.port2 });
+
+        const pendingRequest = localClient.sendRequest('activate');
+
+        //first dispose should reject the pending request
+        localClient.dispose();
+        let error: Error;
+        try {
+            await pendingRequest;
+        } catch (e) {
+            error = e as any;
+        }
+        expect(error?.message).to.eql('Request 0 has been rejected because MessageHandler is now disposed');
+
+        //second dispose should not cause any additional errors
+        localClient.dispose();
+        localClient.dispose();
+        //no errors thrown = test passes
+
+        localServer.dispose();
+    });
+
+    it('rejects sendRequest() calls made after dispose()', async () => {
+        let client = new MessageHandler<LspProject>({ port: channel.port2 });
+        client.dispose();
+
+        let error: Error;
+        try {
+            await client.sendRequest('activate');
+        } catch (e) {
+            error = e as any;
+        }
+        expect(error).to.exist;
+        expect(error.message).to.include('disposed');
+    });
 });

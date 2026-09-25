@@ -11,7 +11,7 @@ describe('DocumentManager', () => {
     beforeEach(() => {
         results = [];
         manager = new DocumentManager({
-            delay: 5,
+            delay: 100,
             flushHandler: (event) => {
                 results.push(...event.actions);
             }

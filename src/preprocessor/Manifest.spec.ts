@@ -1,6 +1,6 @@
 import * as fsExtra from 'fs';
 import { expect } from '../chai-config.spec';
-import { getManifest, getBsConst, parseManifest } from './Manifest';
+import { getManifest, getBsConst, parseManifest, parseManifestEntries } from './Manifest';
 import { createSandbox } from 'sinon';
 import { expectThrows, mapToObject, objectToMap, trim } from '../testHelpers.spec';
 const sinon = createSandbox();
@@ -60,6 +60,65 @@ describe('manifest support', () => {
                 enabled: 'true',
                 height: '1.5'
             });
+        });
+    });
+
+    describe('parseManifestEntries (line-aware)', () => {
+        it('returns entries with key, value, and a range that covers just the value', () => {
+            const entries = parseManifestEntries(trim`
+                title=t
+                rsg_version=1.2
+            `);
+            expect(entries).to.have.lengthOf(2);
+            expect(entries[0]).to.deep.include({ key: 'title', value: 't' });
+            expect(entries[0].range.start).to.eql({ line: 0, character: 6 });
+            expect(entries[0].range.end).to.eql({ line: 0, character: 7 });
+            expect(entries[1]).to.deep.include({ key: 'rsg_version', value: '1.2' });
+            expect(entries[1].range.start).to.eql({ line: 1, character: 12 });
+            expect(entries[1].range.end).to.eql({ line: 1, character: 15 });
+        });
+
+        it('skips empty lines and comments without breaking line numbers', () => {
+            const entries = parseManifestEntries(trim`
+                # comment
+
+                title=t
+                # another
+                rsg_version=1.3
+            `);
+            expect(entries).to.have.lengthOf(2);
+            expect(entries[0].key).to.equal('title');
+            expect(entries[0].range.start.line).to.equal(2);
+            expect(entries[1].key).to.equal('rsg_version');
+            expect(entries[1].range.start.line).to.equal(4);
+        });
+
+        it('handles CRLF line endings', () => {
+            //CRLF must be a literal `\r\n` in the source — template-literal whitespace stripping
+            //cannot reliably produce CRLF, so keep the explicit form here.
+            const entries = parseManifestEntries(`title=t\r\nrsg_version=1.2\r\n`);
+            expect(entries).to.have.lengthOf(2);
+            expect(entries[1].range.start.line).to.equal(1);
+        });
+
+        it('throws on lines with no equals sign', () => {
+            expect(() => parseManifestEntries('not_a_key_value_line')).to.throw(/No '=' detected/);
+        });
+
+        it('parseManifest is consistent with parseManifestEntries', () => {
+            const contents = trim`
+                title=t
+                rsg_version=1.2
+                bs_const=DEBUG=true
+            `;
+            const map = parseManifest(contents);
+            const entries = parseManifestEntries(contents);
+            //every entry's key should be in the map with the same value
+            for (const entry of entries) {
+                expect(map.get(entry.key)).to.equal(entry.value);
+            }
+            //and the map's size matches entry count
+            expect(map.size).to.equal(entries.length);
         });
     });
 

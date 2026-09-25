@@ -76,7 +76,7 @@ export class Throttler {
         return deferred.promise;
     }
 
-    public onIdle(callback) {
+    public onIdle(callback: (...args: any[]) => void) {
         this.emitter.on('idle', callback);
         return () => {
             this.emitter.off('idle', callback);

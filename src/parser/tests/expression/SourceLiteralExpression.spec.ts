@@ -1,6 +1,5 @@
 import { Program } from '../../../Program';
-import { standardizePath as s } from '../../../util';
-import * as fileUrl from 'file-url';
+import { standardizePath as s, util } from '../../../util';
 import { getTestTranspile } from '../../../testHelpers.spec';
 
 describe('SourceLiteralExpression', () => {
@@ -47,7 +46,7 @@ describe('SourceLiteralExpression', () => {
                 end sub
             `, `
                 sub main()
-                    print "${fileUrl(`${rootDir}/source/main.bs`).substring(0, 4)}" + "${fileUrl(`${rootDir}/source/main.bs`).substring(4)}"
+                    print "${util.fileUrl(`${rootDir}/source/main.bs`).substring(0, 4)}" + "${util.fileUrl(`${rootDir}/source/main.bs`).substring(4)}"
                 end sub
             `, undefined, 'source/main.bs');
         });
@@ -139,7 +138,7 @@ describe('SourceLiteralExpression', () => {
                 end sub
             `, `
                 sub main()
-                    print "${fileUrl(`${rootDir}/source/main.bs`).substring(0, 4)}" + "${fileUrl(`${rootDir}/source/main.bs`).substring(4)}:3"
+                    print "${util.fileUrl(`${rootDir}/source/main.bs`).substring(0, 4)}" + "${util.fileUrl(`${rootDir}/source/main.bs`).substring(4)}:3"
                 end sub
             `, undefined, 'source/main.bs');
         });
@@ -188,7 +187,7 @@ describe('SourceLiteralExpression', () => {
                 end sub
             `, `
                 sub main()
-                    print "${fileUrl(s`${sourceRoot}/source/main.bs`).substring(0, 4)}" + "${fileUrl(s`${sourceRoot}/source/main.bs`).substring(4)}"
+                    print "${util.fileUrl(s`${sourceRoot}/source/main.bs`).substring(0, 4)}" + "${util.fileUrl(s`${sourceRoot}/source/main.bs`).substring(4)}"
                 end sub
             `, undefined, 'source/main.bs');
         });
@@ -205,7 +204,7 @@ describe('SourceLiteralExpression', () => {
                 end sub
             `, `
                 sub main()
-                    print "${fileUrl(s`${sourceRoot}/source/main.bs`).substring(0, 4)}" + "${fileUrl(s`${sourceRoot}/source/main.bs`).substring(4)}:3"
+                    print "${util.fileUrl(s`${sourceRoot}/source/main.bs`).substring(0, 4)}" + "${util.fileUrl(s`${sourceRoot}/source/main.bs`).substring(4)}:3"
                 end sub
             `, undefined, 'source/main.bs');
         });

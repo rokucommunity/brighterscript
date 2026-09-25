@@ -1,4 +1,4 @@
-import { expectCompletionsIncludes, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile } from '../../../testHelpers.spec';
+import { expectCompletionsIncludes, expectDiagnostics, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile } from '../../../testHelpers.spec';
 import { util } from '../../../util';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
@@ -8,6 +8,7 @@ import type { ConstStatement } from '../../Statement';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { LiteralExpression } from '../../Expression';
 import { CompletionItemKind } from 'vscode-languageserver-protocol';
+import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { rootDir } from '../../../testHelpers.spec';
 
 const sinon = createSandbox();
@@ -308,6 +309,8 @@ describe('ConstStatement', () => {
         });
 
         it('handles cyclical const references without infinite loop', () => {
+            //the cycle is also reported via a diagnostic; this test only verifies
+            //the transpile output doesn't recurse forever.
             testTranspile(`
                 const A = B
                 const B = C
@@ -319,7 +322,7 @@ describe('ConstStatement', () => {
                 sub main()
                     print A
                 end sub
-            `);
+            `, 'trim', 'source/main.bs', false);
         });
 
         it('resolves consts inside array literals', () => {
@@ -419,6 +422,229 @@ describe('ConstStatement', () => {
                     }
                 end sub
             `);
+        });
+
+        it('resolves enum refs inside an aa-literal const used cross-file (issue #1618)', () => {
+            program.setFile('source/map.bs', `
+                namespace name.space
+                    enum someEnum
+                        one = "val1"
+                        two = "val2"
+                        three = "val3"
+                    end enum
+
+                    const myMap = {
+                        "key1": someEnum.one
+                        "key2": someEnum.two
+                        "key3": someEnum.three
+                    }
+                end namespace
+            `);
+            testTranspile(`
+                namespace name.space
+                    class someClass
+                        public function someFunc(key as dynamic) as object
+                            return name.space.myMap[key]
+                        end function
+                    end class
+                end namespace
+            `, `
+                sub __name_space_someClass_method_new()
+                end sub
+                function __name_space_someClass_method_someFunc(key as dynamic) as object
+                    return ({
+                        "key1": "val1"
+                        "key2": "val2"
+                        "key3": "val3"
+                    })[key]
+                end function
+                function __name_space_someClass_builder()
+                    instance = {}
+                    instance.new = __name_space_someClass_method_new
+                    instance.someFunc = __name_space_someClass_method_someFunc
+                    return instance
+                end function
+                function name_space_someClass()
+                    instance = __name_space_someClass_builder()
+                    instance.new()
+                    return instance
+                end function
+            `);
+        });
+
+        it('resolves enum refs in computed keys of an aa-literal const used cross-file', () => {
+            program.setFile('source/map.bs', `
+                namespace name.space
+                    enum someEnum
+                        one = "key1"
+                        two = "key2"
+                    end enum
+
+                    const myMap = {
+                        [someEnum.one]: "val1"
+                        [someEnum.two]: "val2"
+                    }
+                end namespace
+            `);
+            testTranspile(`
+                namespace name.space
+                    sub useMap(key as dynamic) as object
+                        return name.space.myMap[key]
+                    end sub
+                end namespace
+            `, `
+                sub name_space_useMap(key as dynamic) as object
+                    return ({
+                        "key1": "val1"
+                        "key2": "val2"
+                    })[key]
+                end sub
+            `);
+        });
+
+        it('inlines a const aa-literal at multiple consumer call sites in the same file', () => {
+            program.setFile('source/consts.bs', `
+                namespace ns
+                    enum E
+                        X = "X"
+                    end enum
+                    const M = { "x": ns.E.X }
+                end namespace
+            `);
+            testTranspile(`
+                sub main()
+                    a = ns.M
+                    b = ns.M
+                end sub
+            `, `
+                sub main()
+                    a = ({
+                        "x": "X"
+                    })
+                    b = ({
+                        "x": "X"
+                    })
+                end sub
+            `);
+        });
+
+        it('handles diamond const reference graph (one base const reached via two paths)', () => {
+            program.setFile('source/consts.bs', `
+                namespace ns
+                    enum E
+                        X = "X"
+                    end enum
+                    const C = { "c": ns.E.X }
+                    const A = { "a": ns.C }
+                    const B = { "b": ns.C }
+                end namespace
+            `);
+            testTranspile(`
+                sub main()
+                    print ns.A
+                    print ns.B
+                end sub
+            `, `
+                sub main()
+                    print ({
+                        "a": ({
+                            "c": "X"
+                        })
+                    })
+                    print ({
+                        "b": ({
+                            "c": "X"
+                        })
+                    })
+                end sub
+            `);
+        });
+
+        it('does not infinite-loop on circular const-of-aa references', function() {
+            this.timeout(2000);
+            program.setFile('source/consts.bs', `
+                namespace ns
+                    const A = { "x": ns.B }
+                    const B = { "y": ns.A }
+                end namespace
+            `);
+            //the inner-most cyclic ref is left as the original namespace path so
+            //transpile completes without recursing forever. The runtime semantics
+            //of the cyclic ref are inherently broken, but the compile must not hang.
+            //(A diagnostic is also emitted; see the dedicated cycle-diagnostic tests.)
+            testTranspile(`
+                sub main()
+                    print ns.A
+                end sub
+            `, `
+                sub main()
+                    print ({
+                        "x": ({
+                            "y": ns_A
+                        })
+                    })
+                end sub
+            `, 'trim', 'source/main.bs', false);
+        });
+
+        it('flags scalar circular const reference', () => {
+            program.setFile('source/main.bs', `
+                const A = B
+                const B = A
+            `);
+            program.validate();
+            //matches the class-hierarchy convention: one diagnostic per const in the cycle,
+            //each rotated so the diagnostic's const is at the head of the chain
+            expectDiagnostics(program, [
+                DiagnosticMessages.circularReferenceDetected(['A', 'B', 'A'], 'source').message,
+                DiagnosticMessages.circularReferenceDetected(['B', 'A', 'B'], 'source').message
+            ]);
+        });
+
+        it('flags aggregate circular const reference', () => {
+            program.setFile('source/main.bs', `
+                namespace ns
+                    const A = { "x": ns.B }
+                    const B = { "y": ns.A }
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.circularReferenceDetected(['ns.A', 'ns.B', 'ns.A'], 'source').message,
+                DiagnosticMessages.circularReferenceDetected(['ns.B', 'ns.A', 'ns.B'], 'source').message
+            ]);
+        });
+
+        it('flags three-cycle const reference once per node', () => {
+            program.setFile('source/main.bs', `
+                namespace ns
+                    const A = { "x": ns.B }
+                    const B = { "y": ns.C }
+                    const C = { "z": ns.A }
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.circularReferenceDetected(['ns.A', 'ns.B', 'ns.C', 'ns.A'], 'source').message,
+                DiagnosticMessages.circularReferenceDetected(['ns.B', 'ns.C', 'ns.A', 'ns.B'], 'source').message,
+                DiagnosticMessages.circularReferenceDetected(['ns.C', 'ns.A', 'ns.B', 'ns.C'], 'source').message
+            ]);
+        });
+
+        it('does not flag diamond const reference graph', () => {
+            program.setFile('source/main.bs', `
+                namespace ns
+                    enum E
+                        X = "X"
+                    end enum
+                    const Base = { "c": ns.E.X }
+                    const A = { "a": ns.Base }
+                    const B = { "b": ns.Base }
+                    const Root = { "left": ns.A, "right": ns.B }
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
         });
 
         it('resolves complex multi-file const-enum chain', () => {

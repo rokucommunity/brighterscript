@@ -146,7 +146,7 @@ export class AssignmentStatement extends Statement {
      * @deprecated use `.findAncestor(isFunctionExpression)` instead.
      */
     public get containingFunction() {
-        return this.findAncestor<FunctionExpression>(isFunctionExpression);
+        return this.findAncestor(isFunctionExpression);
     }
 
     transpile(state: BrsTranspileState) {
@@ -224,6 +224,19 @@ export class Block extends Statement {
                 ...statement.transpile(state)
             );
             state.lineage.shift();
+        }
+        //if a `continue` inside this block was rewritten into a `goto`, emit its jump target as
+        //the last line of the block. Done here (rather than in the loop statements) so the label
+        //picks up the block's own indent depth.
+        //`state` can come from an older brighterscript version (i.e. a plugin bundling a newer
+        //brighterscript than the host), so guard against the loop-label api being absent
+        const loopLabel = state.peekLoopLabel?.();
+        if (loopLabel?.wasAccessed && loopLabel.blockDepth === state.blockDepth) {
+            results.push(
+                state.newline,
+                state.indent(),
+                `${loopLabel.label}:`
+            );
         }
         state.blockDepth--;
         return results;
@@ -332,7 +345,8 @@ export class CommentStatement extends Statement implements Expression, TypedefPr
             new CommentStatement(
                 this.comments?.map(x => util.cloneToken(x))
             ),
-            ['comments' as any]
+            //`propsToReparent`'s constraint resolves to `never` here because `comments` holds plain `Token`s, not `AstNode`s
+            ['comments' as never]
         );
     }
 }
@@ -414,7 +428,7 @@ export class FunctionStatement extends Statement implements TypedefProvider {
      * Get the name of this expression based on the parse mode
      */
     public getName(parseMode: ParseMode) {
-        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        const namespace = this.findAncestor(isNamespaceStatement);
         if (namespace) {
             let delimiter = parseMode === ParseMode.BrighterScript ? '.' : '_';
             let namespaceName = namespace.getName(parseMode);
@@ -429,7 +443,7 @@ export class FunctionStatement extends Statement implements TypedefProvider {
      * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
      */
     public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+        return this.findAncestor(isNamespaceStatement)?.nameExpression;
     }
 
     transpile(state: BrsTranspileState) {
@@ -589,7 +603,7 @@ export class IfStatement extends Statement {
         }
     }
 
-    public clone() {
+    public clone(): IfStatement {
         return this.finalizeClone(
             new IfStatement(
                 {
@@ -692,7 +706,7 @@ export class PrintStatement extends Statement {
                 result.push(...(expressionOrSeparator as ExpressionStatement).transpile(state));
             } else {
                 result.push(
-                    state.tokenToSourceNode(expressionOrSeparator)
+                    state.tokenToSourceNode(expressionOrSeparator as Token)
                 );
             }
             //if there's an expression after us, add a space
@@ -706,7 +720,7 @@ export class PrintStatement extends Statement {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             //sometimes we have semicolon Tokens in the expressions list (should probably fix that...), so only walk the actual expressions
-            walkArray(this.expressions as AstNode[], visitor, options, this, (item) => isExpression(item as any));
+            walkArray(this.expressions as AstNode[], visitor, options, this, (item) => isExpression(item));
         }
     }
 
@@ -717,14 +731,15 @@ export class PrintStatement extends Statement {
                     print: util.cloneToken(this.tokens.print)
                 },
                 this.expressions?.map(e => {
-                    if (isExpression(e as any)) {
+                    if (isExpression(e as AstNode)) {
                         return (e as Expression).clone();
                     } else {
-                        return util.cloneToken(e as Token);
+                        return util.cloneToken(e as PrintSeparatorTab | PrintSeparatorSpace);
                     }
                 })
             ),
-            ['expressions' as any]
+            //`propsToReparent`'s constraint resolves to `never` here because `expressions` mixes `Expression`s with plain separator `Token`s
+            ['expressions' as never]
         );
     }
 }
@@ -1029,7 +1044,9 @@ export class ForStatement extends Statement {
         }
         //loop body
         state.lineage.unshift(this);
+        state.pushLoopLabel?.();
         result.push(...this.body.transpile(state));
+        state.popLoopLabel?.();
         state.lineage.shift();
 
         // add new line before "end for"
@@ -1119,7 +1136,9 @@ export class ForEachStatement extends Statement {
         result.push(...this.target.transpile(state));
         //body
         state.lineage.unshift(this);
+        state.pushLoopLabel?.();
         result.push(...this.body.transpile(state));
+        state.popLoopLabel?.();
         state.lineage.shift();
 
         // add new line before "end for"
@@ -1192,7 +1211,9 @@ export class WhileStatement extends Statement {
         );
         state.lineage.unshift(this);
         //body
+        state.pushLoopLabel?.();
         result.push(...this.body.transpile(state));
+        state.popLoopLabel?.();
         state.lineage.shift();
 
         //trailing newline only if we have body statements
@@ -1464,7 +1485,7 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     }
 
     public getName(parseMode: ParseMode) {
-        const parentNamespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        const parentNamespace = this.findAncestor(isNamespaceStatement);
         let name = this.nameExpression?.getName?.(parseMode);
         if (!name) {
             return name;
@@ -1629,7 +1650,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
      * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
      */
     public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+        return this.findAncestor(isNamespaceStatement)?.nameExpression;
     }
 
     public get fields() {
@@ -1646,7 +1667,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
     public get fullName() {
         const name = this.tokens.name?.text;
         if (name) {
-            const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const namespace = this.findAncestor(isNamespaceStatement);
             if (namespace) {
                 let namespaceName = namespace.getName(ParseMode.BrighterScript);
                 return `${namespaceName}.${name}`;
@@ -1670,7 +1691,7 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
      * Get the name of this expression based on the parse mode
      */
     public getName(parseMode: ParseMode) {
-        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        const namespace = this.findAncestor(isNamespaceStatement);
         if (namespace) {
             let delimiter = parseMode === ParseMode.BrighterScript ? '.' : '_';
             let namespaceName = namespace.getName(parseMode);
@@ -2013,14 +2034,14 @@ export class ClassStatement extends Statement implements TypedefProvider {
      * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
      */
     public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+        return this.findAncestor(isNamespaceStatement)?.nameExpression;
     }
 
 
     public getName(parseMode: ParseMode) {
         const name = this.name?.text;
         if (name) {
-            const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const namespace = this.findAncestor(isNamespaceStatement);
             if (namespace) {
                 let namespaceName = namespace.getName(parseMode);
                 let separator = parseMode === ParseMode.BrighterScript ? '.' : '_';
@@ -2072,7 +2093,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
             this.name.text
         );
         if (this.extendsKeyword && this.parentClassName) {
-            const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const namespace = this.findAncestor(isNamespaceStatement);
             const fqName = util.getFullyQualifiedClassName(
                 this.parentClassName.getName(ParseMode.BrighterScript),
                 namespace?.getName(ParseMode.BrighterScript)
@@ -2124,7 +2145,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let stmt = this as ClassStatement;
         while (stmt) {
             if (stmt.parentClassName) {
-                const namespace = stmt.findAncestor<NamespaceStatement>(isNamespaceStatement);
+                const namespace = stmt.findAncestor(isNamespaceStatement);
                 //find the parent class
                 stmt = state.file.getClassFileLink(
                     stmt.parentClassName.getName(ParseMode.BrighterScript),
@@ -2156,7 +2177,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let stmt = this as ClassStatement;
         while (stmt) {
             if (stmt.parentClassName) {
-                const namespace = stmt.findAncestor<NamespaceStatement>(isNamespaceStatement);
+                const namespace = stmt.findAncestor(isNamespaceStatement);
                 stmt = state.file.getClassFileLink(
                     stmt.parentClassName.getName(ParseMode.BrighterScript),
                     namespace?.getName(ParseMode.BrighterScript)
@@ -2228,7 +2249,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
         //construct parent class or empty object
         if (ancestors[0]) {
-            const ancestorNamespace = ancestors[0].findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const ancestorNamespace = ancestors[0].findAncestor(isNamespaceStatement);
             let fullyQualifiedClassName = util.getFullyQualifiedClassName(
                 ancestors[0].getName(ParseMode.BrighterScript)!,
                 ancestorNamespace?.getName(ParseMode.BrighterScript)
@@ -2365,7 +2386,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let result = [] as TranspileResult;
 
         const constructorFunction = this.getConstructorFunction();
-        let constructorParams = [];
+        let constructorParams: FunctionParameterExpression[] = [];
         if (constructorFunction) {
             constructorParams = constructorFunction.func.parameters;
         } else {
@@ -2557,17 +2578,8 @@ export class MethodStatement extends FunctionStatement {
             return;
         }
 
-        //check whether any calls to super exist
-        let containsSuperCall =
-            this.func.body.statements.findIndex((x) => {
-                //is a call statement
-                return isExpressionStatement(x) && isCallExpression(x.expression) &&
-                    //is a call to super
-                    util.findBeginningVariableExpression(x.expression.callee as any)?.name.text.toLowerCase() === 'super';
-            }) !== -1;
-
         //if a call to super exists, quit here
-        if (containsSuperCall) {
+        if (this.findSuperCallIndex() !== -1) {
             return;
         }
 
@@ -2604,10 +2616,28 @@ export class MethodStatement extends FunctionStatement {
     }
 
     /**
+     * Find the index of the `super()` call within this function's body, or -1 if there isn't one.
+     * The call is usually the first statement, but plugins are free to insert statements ahead of it,
+     * so we locate it rather than assuming a fixed position.
+     */
+    private findSuperCallIndex() {
+        return this.func.body.statements.findIndex((x) => {
+            //is a call statement
+            return isExpressionStatement(x) && isCallExpression(x.expression) &&
+                //is a call to super
+                util.findBeginningVariableExpression(x.expression.callee)?.name.text.toLowerCase() === 'super';
+        });
+    }
+
+    /**
      * Inject field initializers at the top of the `new` function (after any present `super()` call)
      */
     private injectFieldInitializersForConstructor(state: BrsTranspileState) {
-        let startingIndex = state.classStatement!.hasParentClass() ? 1 : 0;
+        //field initializers must run after the `super()` call. `ensureSuperConstructorCall` has already
+        //guaranteed a super call exists for derived classes, but it isn't necessarily at index 0 -- a plugin
+        //may have inserted statements before it -- so find it instead of assuming its position.
+        const superCallIndex = state.classStatement!.hasParentClass() ? this.findSuperCallIndex() : -1;
+        let startingIndex = superCallIndex + 1;
 
         let newStatements = [] as Statement[];
         //insert the field initializers in order
@@ -2946,7 +2976,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
      * @deprecated use `.findAncestor(isNamespaceStatement)` instead.
      */
     public get namespaceName() {
-        return this.findAncestor<NamespaceStatement>(isNamespaceStatement)?.nameExpression;
+        return this.findAncestor(isNamespaceStatement)?.nameExpression;
     }
 
     public getMembers() {
@@ -3012,7 +3042,7 @@ export class EnumStatement extends Statement implements TypedefProvider {
     public get fullName() {
         const name = this.tokens.name?.text;
         if (name) {
-            const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const namespace = this.findAncestor(isNamespaceStatement);
 
             if (namespace) {
                 let namespaceName = namespace.getName(ParseMode.BrighterScript);
@@ -3185,7 +3215,7 @@ export class ConstStatement extends Statement implements TypedefProvider {
     public get fullName() {
         const name = this.tokens.name?.text;
         if (name) {
-            const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const namespace = this.findAncestor(isNamespaceStatement);
             if (namespace) {
                 let namespaceName = namespace.getName(ParseMode.BrighterScript);
                 return `${namespaceName}.${name}`;
@@ -3253,6 +3283,22 @@ export class ContinueStatement extends Statement {
     public range: Range | undefined;
 
     transpile(state: BrsTranspileState) {
+        //when targeting firmware without native `continue` support, rewrite into a jump to the
+        //label at the end of the enclosing loop body
+        //`false` means the target firmware lacks native `continue`. `undefined` means `state` came
+        //from an older brighterscript (i.e. a plugin bundling a newer brighterscript than the
+        //host) which has no back-transpile support at all, so emit `continue` as-is
+        if (state.firmwareCapabilities?.continueStatement === false) {
+            const label = state.getLoopLabel?.();
+            //no enclosing loop means this is a `continue` outside a loop, which validation already
+            //flags as an error. fall through to the passthrough emit rather than producing a
+            //`goto undefined`
+            if (label) {
+                return [
+                    state.sourceNode(this.tokens.continue, `goto ${label}`)
+                ];
+            }
+        }
         return [
             state.sourceNode(this.tokens.continue, this.tokens.continue?.text ?? 'continue'),
             this.tokens.loopType?.leadingWhitespace ?? ' ',
@@ -3424,7 +3470,7 @@ export class TypeStatement extends Statement {
     public get fullName() {
         const name = this.tokens.name?.text;
         if (name) {
-            const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const namespace = this.findAncestor(isNamespaceStatement);
             if (namespace) {
                 let namespaceName = namespace.getName(ParseMode.BrighterScript);
                 return `${namespaceName}.${name}`;

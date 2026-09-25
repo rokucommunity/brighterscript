@@ -57,6 +57,10 @@ export interface SGNodeData extends BrightScriptDocLookup {
     fields: BRSFieldData[];
     events: BrightScriptDocLookup[];
     interfaces: BrightScriptDocLookup[];
+    /**
+     * The node this node extends. Absent on the root `Node` type.
+     */
+    extends?: BrightScriptDocLookup;
 }
 
 export interface BRSComponentData extends BrightScriptDocLookup, PossiblyDeprecated {

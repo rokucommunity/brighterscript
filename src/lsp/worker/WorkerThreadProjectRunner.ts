@@ -44,6 +44,12 @@ export class WorkerThreadProjectRunner {
         });
 
         this.requestInterceptors.activate = this.onActivate.bind(this);
+
+        //dispose this project's Program when its dedicated port closes, even though the shared worker keeps running
+        parentPort.on('close', () => {
+            this.project?.dispose();
+            this.messageHandler?.dispose();
+        });
     }
 
     /**

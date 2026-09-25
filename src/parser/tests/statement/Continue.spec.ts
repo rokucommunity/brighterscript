@@ -7,6 +7,8 @@ import { Program } from '../../../Program';
 import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
 import { rootDir } from '../../../testHelpers.spec';
 import type { BrsFile } from '../../../files/BrsFile';
+import { BrsTranspileState } from '../../BrsTranspileState';
+import { SourceNode } from 'source-map';
 const sinon = createSandbox();
 
 describe('parser continue statements', () => {
@@ -107,6 +109,135 @@ describe('parser continue statements', () => {
                 end for
             end sub
         `);
+    });
+
+    describe('rewrites continue as goto for older firmware', () => {
+        it('rewrites `continue for` into a goto label', () => {
+            program = new Program({ rootDir: rootDir, sourceMap: true, minFirmwareVersion: '11.0.0' });
+            testTranspile(`
+                sub main()
+                    for i = 0 to 10
+                        continue for
+                    end for
+                end sub
+            `, `
+                sub main()
+                    for i = 0 to 10
+                        goto BRIGHTERSCRIPT_CONTINUE_0
+                        BRIGHTERSCRIPT_CONTINUE_0:
+                    end for
+                end sub
+            `);
+        });
+
+        it('rewrites `continue while` into a goto label', () => {
+            program = new Program({ rootDir: rootDir, sourceMap: true, minFirmwareVersion: '11.0.0' });
+            testTranspile(`
+                sub main()
+                    while true
+                        continue while
+                    end while
+                end sub
+            `, `
+                sub main()
+                    while true
+                        goto BRIGHTERSCRIPT_CONTINUE_0
+                        BRIGHTERSCRIPT_CONTINUE_0:
+                    end while
+                end sub
+            `);
+        });
+
+        it('rewrites `continue for` inside a for-each loop', () => {
+            program = new Program({ rootDir: rootDir, sourceMap: true, minFirmwareVersion: '11.0.0' });
+            testTranspile(`
+                sub main()
+                    for each item in [1, 2, 3]
+                        continue for
+                    end for
+                end sub
+            `, `
+                sub main()
+                    for each item in [
+                        1
+                        2
+                        3
+                    ]
+                        goto BRIGHTERSCRIPT_CONTINUE_0
+                        BRIGHTERSCRIPT_CONTINUE_0:
+                    end for
+                end sub
+            `);
+        });
+
+        it('uses a distinct label per loop and targets the innermost loop', () => {
+            program = new Program({ rootDir: rootDir, sourceMap: true, minFirmwareVersion: '11.0.0' });
+            testTranspile(`
+                sub main()
+                    for i = 0 to 10
+                        for j = 0 to 10
+                            continue for
+                        end for
+                        continue for
+                    end for
+                end sub
+            `, `
+                sub main()
+                    for i = 0 to 10
+                        for j = 0 to 10
+                            goto BRIGHTERSCRIPT_CONTINUE_1
+                            BRIGHTERSCRIPT_CONTINUE_1:
+                        end for
+                        goto BRIGHTERSCRIPT_CONTINUE_0
+                        BRIGHTERSCRIPT_CONTINUE_0:
+                    end for
+                end sub
+            `);
+        });
+
+        it('does not emit a label for loops that contain no continue statement', () => {
+            program = new Program({ rootDir: rootDir, sourceMap: true, minFirmwareVersion: '11.0.0' });
+            testTranspile(`
+                sub main()
+                    for i = 0 to 10
+                        print i
+                    end for
+                end sub
+            `);
+        });
+
+        it('emits `continue` natively when targeting 11.5.0 or higher', () => {
+            program = new Program({ rootDir: rootDir, sourceMap: true, minFirmwareVersion: '11.5.0' });
+            testTranspile(`
+                sub main()
+                    for i = 0 to 10
+                        continue for
+                    end for
+                end sub
+            `);
+        });
+    });
+
+    it('emits `continue` as-is when the transpile state predates the loop-label api', () => {
+        //simulates a plugin bundling a newer brighterscript than the host: the AST nodes are new
+        //but the BrsTranspileState comes from the older host, so it has none of the loop-label api
+        program = new Program({ rootDir: rootDir, sourceMap: true, minFirmwareVersion: '11.0.0' });
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            sub main()
+                for i = 0 to 10
+                    continue for
+                end for
+            end sub
+        `);
+        const state = new BrsTranspileState(file);
+        //strip the newer api from this instance only (the host's state would never have had it)
+        const legacyState = Object.create(state);
+        for (let name of ['firmwareCapabilities', 'pushLoopLabel', 'popLoopLabel', 'peekLoopLabel', 'getLoopLabel']) {
+            legacyState[name] = undefined;
+        }
+        expect(
+            new SourceNode(null, null, null, file.ast.transpile(legacyState) as any).toString()
+        ).to.include('continue for');
     });
 
     it('does not crash when missing loop type', () => {

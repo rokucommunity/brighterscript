@@ -1,4 +1,4 @@
-import type { Location, Position } from 'vscode-languageserver';
+import type { Location, LocationLink, Position } from 'vscode-languageserver';
 import { Scope } from './Scope';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { XmlFile } from './files/XmlFile';
@@ -169,7 +169,7 @@ export class XmlScope extends Scope {
      * Get the definition (where was this thing first defined) of the symbol under the position
      * @deprecated use `DefinitionProvider.process()`
      */
-    public getDefinition(file: BscFile, position: Position): Location[] {
+    public getDefinition(file: BscFile, position: Position): Array<Location | LocationLink> {
         return new DefinitionProvider({
             program: this.program,
             file: file,

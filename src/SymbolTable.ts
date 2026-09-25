@@ -115,18 +115,19 @@ export class SymbolTable {
     }
 
     /**
-     * Adds all the symbols from another table to this one
-     * It will overwrite any existing symbols in this table
+     * Adds all the symbols from another table to this one.
+     * Source symbols are shared by reference (not cloned) since BscSymbol is treated as immutable.
+     * The destination still owns its own array per key, so subsequent addSymbol calls on either
+     * table do not leak across.
      */
     mergeSymbolTable(symbolTable: SymbolTable) {
-        for (let [, value] of symbolTable.symbolMap) {
-            for (const symbol of value) {
-                this.addSymbol(
-                    symbol.name,
-                    symbol.range,
-                    symbol.type
-                );
+        for (const [key, sourceSymbols] of symbolTable.symbolMap) {
+            let destSymbols = this.symbolMap.get(key);
+            if (!destSymbols) {
+                destSymbols = [];
+                this.symbolMap.set(key, destSymbols);
             }
+            destSymbols.push(...sourceSymbols);
         }
     }
 
@@ -148,6 +149,11 @@ export class SymbolTable {
     }
 }
 
+/**
+ * A symbol entry stored in a SymbolTable.
+ * Treated as immutable once added: range and type must not be reassigned, and the object
+ * may be shared by reference across multiple symbol tables (e.g. via mergeSymbolTable).
+ */
 export interface BscSymbol {
     name: string;
     range: Range;

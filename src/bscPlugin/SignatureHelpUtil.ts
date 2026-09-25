@@ -13,7 +13,7 @@ import { util } from '../util';
 
 export class SignatureHelpUtil {
     getSignatureHelpItems(callExpressionInfo: CallExpressionInfo): SignatureInfoObj[] {
-        let signatureHelpItems = [];
+        let signatureHelpItems: SignatureInfoObj[] = [];
         let file = callExpressionInfo.file;
         let dotPart = callExpressionInfo.dotPart;
         let name = callExpressionInfo.name;
