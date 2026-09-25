@@ -4,7 +4,7 @@ import { TokenKind } from '../../../lexer/TokenKind';
 import { Parser, ParseMode } from '../../Parser';
 import { Program } from '../../../Program';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
-import { expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
 import { isArrayLiteralExpression, isSpreadExpression, isAALiteralExpression } from '../../../astUtils/reflection';
 import type { AssignmentStatement } from '../../Statement';
 import type { AALiteralExpression, ArrayLiteralExpression } from '../../Expression';
@@ -145,6 +145,85 @@ describe('SpreadExpression', () => {
         });
     });
 
+    describe('validation', () => {
+        let rootDir = process.cwd();
+        let program: Program;
+
+        beforeEach(() => {
+            program = new Program({ rootDir: rootDir });
+        });
+        afterEach(() => {
+            program.dispose();
+        });
+
+        it('allows spread when the literal is assigned to a variable, property, or index', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    arr = [1]
+                    a = [...arr]
+                    m.b = [...arr]
+                    m["c"] = {...m}
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags spread in a function argument', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    arr = [1]
+                    takesArray([...arr])
+                end sub
+                sub takesArray(value)
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.spreadOperatorNotAllowedHere()
+            ]);
+        });
+
+        it('flags spread in a return statement', () => {
+            program.setFile('source/main.bs', `
+                function main()
+                    arr = [1]
+                    return [...arr]
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.spreadOperatorNotAllowedHere()
+            ]);
+        });
+
+        it('flags spread in a nested literal', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    arr = [1]
+                    result = [[...arr]]
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.spreadOperatorNotAllowedHere()
+            ]);
+        });
+
+        it('flags spread in an augmented assignment', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    arr = [1]
+                    arr += [...arr]
+                end sub
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.spreadOperatorNotAllowedHere()
+            ]);
+        });
+    });
+
     describe('transpile', () => {
         let rootDir = process.cwd();
         let program: Program;
@@ -157,25 +236,23 @@ describe('SpreadExpression', () => {
             program.dispose();
         });
 
-        it('transpiles array spread to IIFE with append', async () => {
+        it('keeps leading elements in the literal and appends the rest', async () => {
             await testTranspile(`
                 sub main()
-                    arr = [10, 20]
-                    result = [1, ...arr, 2]
+                    defaults = [1, 2]
+                    result = [0, ...defaults, 4]
                 end sub
             `, `
                 sub main()
-                    arr = [
-                        10
-                        20
+                    defaults = [
+                        1
+                        2
                     ]
-                    result = (function(arr)
-                        __bsc_tmp = []
-                        __bsc_tmp.push(1)
-                        __bsc_tmp.append(arr)
-                        __bsc_tmp.push(2)
-                        return __bsc_tmp
-                    end function)(arr)
+                    result = [
+                        0
+                    ]
+                    result.append(defaults)
+                    result.push(4)
                 end sub
             `);
         });
@@ -191,21 +268,18 @@ describe('SpreadExpression', () => {
                     arr = [
                         1
                     ]
-                    result = (function(arr)
-                        __bsc_tmp = []
-                        __bsc_tmp.append(arr)
-                        return __bsc_tmp
-                    end function)(arr)
+                    result = []
+                    result.append(arr)
                 end sub
             `);
         });
 
-        it('transpiles array with multiple spreads', async () => {
+        it('preserves element order across multiple spreads', async () => {
             await testTranspile(`
                 sub main()
                     arr1 = [1]
                     arr2 = [2]
-                    result = [...arr1, ...arr2]
+                    result = [...arr1, 5, ...arr2]
                 end sub
             `, `
                 sub main()
@@ -215,17 +289,15 @@ describe('SpreadExpression', () => {
                     arr2 = [
                         2
                     ]
-                    result = (function(arr1, arr2)
-                        __bsc_tmp = []
-                        __bsc_tmp.append(arr1)
-                        __bsc_tmp.append(arr2)
-                        return __bsc_tmp
-                    end function)(arr1, arr2)
+                    result = []
+                    result.append(arr1)
+                    result.push(5)
+                    result.append(arr2)
                 end sub
             `);
         });
 
-        it('transpiles AA spread to IIFE with append', async () => {
+        it('transpiles AA spread with leading and trailing members', async () => {
             await testTranspile(`
                 sub main()
                     obj = {}
@@ -234,13 +306,11 @@ describe('SpreadExpression', () => {
             `, `
                 sub main()
                     obj = {}
-                    result = (function(obj)
-                        __bsc_tmp = {}
-                        __bsc_tmp.a = 1
-                        __bsc_tmp.append(obj)
-                        __bsc_tmp.b = 2
-                        return __bsc_tmp
-                    end function)(obj)
+                    result = {
+                        a: 1
+                    }
+                    result.append(obj)
+                    result.b = 2
                 end sub
             `);
         });
@@ -254,59 +324,134 @@ describe('SpreadExpression', () => {
             `, `
                 sub main()
                     obj = {}
-                    result = (function(obj)
-                        __bsc_tmp = {}
-                        __bsc_tmp.append(obj)
-                        return __bsc_tmp
-                    end function)(obj)
+                    result = {}
+                    result.append(obj)
                 end sub
             `);
         });
 
-        it('passes locals referenced by non-spread elements into the IIFE', async () => {
+        it('uses indexed set for string-literal and computed keys after a spread', async () => {
+            await testTranspile(`
+                const KEY = "k"
+                sub main()
+                    obj = {}
+                    result = {...obj, "my-key": 1, [KEY]: 2}
+                end sub
+            `, `
+                sub main()
+                    obj = {}
+                    result = {}
+                    result.append(obj)
+                    result["my-key"] = 1
+                    result["k"] = 2
+                end sub
+            `);
+        });
+
+        it('transpiles spread assigned to a property', async () => {
             await testTranspile(`
                 sub main()
                     arr = [1]
-                    x = 2
-                    result = [x, ...arr, x + 1]
+                    m.list = [...arr]
                 end sub
             `, `
                 sub main()
                     arr = [
                         1
                     ]
-                    x = 2
-                    result = (function(arr, x)
-                        __bsc_tmp = []
-                        __bsc_tmp.push(x)
-                        __bsc_tmp.append(arr)
-                        __bsc_tmp.push(x + 1)
-                        return __bsc_tmp
-                    end function)(arr, x)
+                    m.list = []
+                    m.list.append(arr)
                 end sub
             `);
         });
 
-        it('does not pass non-referenceable global functions into the IIFE', async () => {
+        it('transpiles spread assigned to an index', async () => {
+            await testTranspile(`
+                sub main()
+                    arr = [1]
+                    m["list"] = [...arr]
+                end sub
+            `, `
+                sub main()
+                    arr = [
+                        1
+                    ]
+                    m["list"] = []
+                    m["list"].append(arr)
+                end sub
+            `);
+        });
+
+        it('builds in a temp when a trailing element reads the target variable', async () => {
+            await testTranspile(`
+                sub main()
+                    list = [1]
+                    list = [...list, 4]
+                end sub
+            `, `
+                sub main()
+                    list = [
+                        1
+                    ]
+                    __bsc_tmp = []
+                    __bsc_tmp.append(list)
+                    __bsc_tmp.push(4)
+                    list = __bsc_tmp
+                end sub
+            `);
+        });
+
+        it('builds in a temp when a trailing element reads the target property', async () => {
+            await testTranspile(`
+                sub main()
+                    m.list = [...m.list, 4]
+                end sub
+            `, `
+                sub main()
+                    __bsc_tmp = []
+                    __bsc_tmp.append(m.list)
+                    __bsc_tmp.push(4)
+                    m.list = __bsc_tmp
+                end sub
+            `);
+        });
+
+        it('does not use a temp when trailing elements read a sibling property', async () => {
+            await testTranspile(`
+                sub main()
+                    m.list = [...m.other]
+                end sub
+            `, `
+                sub main()
+                    m.list = []
+                    m.list.append(m.other)
+                end sub
+            `);
+        });
+
+        it('still lowers a ternary inside a trailing AA member', async () => {
             await testTranspile(`
                 sub main()
                     obj = {}
-                    result = {...obj, node: createObject("roSGNode", "Node")}
+                    x = true
+                    result = {...obj, b: x ? 1 : 2}
                 end sub
             `, `
                 sub main()
                     obj = {}
-                    result = (function(obj)
-                        __bsc_tmp = {}
-                        __bsc_tmp.append(obj)
-                        __bsc_tmp.node = createObject("roSGNode", "Node")
-                        return __bsc_tmp
-                    end function)(obj)
+                    x = true
+                    result = {}
+                    result.append(obj)
+                    if x then
+                        result.b = 1
+                    else
+                        result.b = 2
+                    end if
                 end sub
             `);
         });
 
-        it('does not use IIFE for arrays without spread', async () => {
+        it('leaves arrays without spread untouched', async () => {
             await testTranspile(`
                 sub main()
                     result = [1, 2, 3]
@@ -322,7 +467,7 @@ describe('SpreadExpression', () => {
             `);
         });
 
-        it('does not use IIFE for AAs without spread', async () => {
+        it('leaves AAs without spread untouched', async () => {
             await testTranspile(`
                 sub main()
                     result = {a: 1, b: 2}

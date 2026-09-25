@@ -1203,9 +1203,6 @@ export class ArrayLiteralExpression extends Expression {
     }
 
     transpile(state: BrsTranspileState) {
-        if (this.hasSpread) {
-            return this.transpileSpread(state);
-        }
         let result: TranspileResult = [];
         result.push(
             state.transpileToken(this.tokens.open, '[')
@@ -1234,39 +1231,6 @@ export class ArrayLiteralExpression extends Expression {
         const lastLocatable = this.elements[this.elements.length - 1] ?? this.tokens.open;
         result.push(...state.transpileEndBlockToken(lastLocatable, this.tokens.close, ']', hasChildren));
 
-        return result;
-    }
-
-    private transpileSpread(state: BrsTranspileState) {
-        let result: TranspileResult = [];
-        let params = getSpreadIifeParams(this, state);
-        state.blockDepth++;
-        result.push(
-            `(function(${params})`,
-            state.newline,
-            state.indent(),
-            '__bsc_tmp = []',
-            state.newline
-        );
-        for (let element of this.elements) {
-            result.push(
-                state.indent(),
-                isSpreadExpression(element) ? '__bsc_tmp.append(' : '__bsc_tmp.push(',
-                ...element.transpile(state),
-                ')',
-                state.newline
-            );
-        }
-        result.push(
-            state.indent(),
-            'return __bsc_tmp',
-            state.newline
-        );
-        state.blockDepth--;
-        result.push(
-            state.indent(),
-            `end function)(${params})`
-        );
         return result;
     }
 
@@ -1461,11 +1425,8 @@ export class AALiteralExpression extends Expression {
     }
 
     transpile(state: BrsTranspileState) {
-        if (this.hasSpread) {
-            return this.transpileSpread(state);
-        }
-        //hasSpread is false here, so no SpreadExpression can be present
-        const members = this.elements as Array<AAMemberExpression | AAIndexedMemberExpression>;
+        //spread members are lowered to statements before transpile; any left over were already flagged by validation
+        const members = this.elements.filter(e => !isSpreadExpression(e)) as Array<AAMemberExpression | AAIndexedMemberExpression>;
         let result: TranspileResult = [];
         //open curly
         result.push(
@@ -1519,55 +1480,6 @@ export class AALiteralExpression extends Expression {
         const lastElement = members[members.length - 1] ?? this.tokens.open;
         result.push(...state.transpileEndBlockToken(lastElement, this.tokens.close, '}', hasChildren));
 
-        return result;
-    }
-
-    private transpileSpread(state: BrsTranspileState) {
-        let result: TranspileResult = [];
-        let params = getSpreadIifeParams(this, state);
-        state.blockDepth++;
-        result.push(
-            `(function(${params})`,
-            state.newline,
-            state.indent(),
-            '__bsc_tmp = {}',
-            state.newline
-        );
-        for (let element of this.elements) {
-            result.push(state.indent());
-            if (isSpreadExpression(element)) {
-                result.push(
-                    '__bsc_tmp.append(',
-                    ...element.transpile(state),
-                    ')'
-                );
-            } else if (isAAIndexedMemberExpression(element)) {
-                result.push(
-                    '__bsc_tmp[',
-                    ...element.key.transpile(state),
-                    '] = ',
-                    ...element.value.transpile(state)
-                );
-            } else {
-                result.push(
-                    '__bsc_tmp.',
-                    state.transpileToken(element.tokens.key),
-                    ' = ',
-                    ...element.value.transpile(state)
-                );
-            }
-            result.push(state.newline);
-        }
-        result.push(
-            state.indent(),
-            'return __bsc_tmp',
-            state.newline
-        );
-        state.blockDepth--;
-        result.push(
-            state.indent(),
-            `end function)(${params})`
-        );
         return result;
     }
 
@@ -2875,17 +2787,6 @@ function numberExpressionToValue(expr: LiteralExpression, operator = '') {
     } else {
         return parseFloat(operator + expr.tokens.value.text);
     }
-}
-
-/**
- * BrightScript anonymous functions cannot see the enclosing function's locals, so any variables
- * referenced inside a spread IIFE must be passed in as parameters.
- */
-function getSpreadIifeParams(literal: ArrayLiteralExpression | AALiteralExpression, state: BrsTranspileState) {
-    return util.getExpressionInfo(literal, state.file).uniqueVarNames
-        .filter(name => !nonReferenceableFunctions.includes(name.toLowerCase()))
-        .sort()
-        .join(', ');
 }
 
 export class TypeExpression extends Expression implements TypedefProvider {

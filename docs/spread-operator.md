@@ -1,5 +1,5 @@
 # Spread Operator: `...`
-The spread operator allows you to expand the contents of an array or associative array into another array or associative array literal. This is useful for cloning, merging, and composing data structures concisely.
+The spread operator expands the contents of an array or associative array into another array or associative array literal. This is useful for cloning, merging, and composing data structures concisely.
 
 ## Array Spread
 Use `...` inside an array literal to expand another array's elements inline.
@@ -21,13 +21,11 @@ sub main()
         2
         3
     ]
-    result = (function(defaults)
-        __bsc_tmp = []
-        __bsc_tmp.push(0)
-        __bsc_tmp.append(defaults)
-        __bsc_tmp.push(4)
-        return __bsc_tmp
-    end function)(defaults)
+    result = [
+        0
+    ]
+    result.append(defaults)
+    result.push(4)
 end sub
 ```
 
@@ -60,13 +58,10 @@ sub main()
         color: "red"
         size: 10
     }
-    result = (function(defaults)
-        __bsc_tmp = {}
-        __bsc_tmp.append(defaults)
-        __bsc_tmp.size = 20
-        __bsc_tmp.name = "widget"
-        return __bsc_tmp
-    end function)(defaults)
+    result = {}
+    result.append(defaults)
+    result.size = 20
+    result.name = "widget"
 end sub
 ```
 
@@ -81,13 +76,23 @@ merged = {...defaults, ...overrides}
 ```
 
 ## How it works
-When a spread expression is present in an array or associative array literal, BrighterScript transpiles the literal into an immediately-invoked function expression (IIFE). Because BrightScript anonymous functions cannot see the enclosing function's local variables, every variable referenced inside the literal is passed into the IIFE as a parameter (the same approach used by the ternary and null-coalescing operators). Inside the IIFE:
+A literal containing a spread is lowered into plain statements, so there is no runtime helper or anonymous function involved:
 
-- For **arrays**: regular elements are added with `.push()`, and spread elements are expanded with `.append()` (the native `roArray` method that appends all elements from another array).
-- For **associative arrays**: regular key/value pairs are assigned directly, and spread elements are expanded with `.append()` (the native `roAssociativeArray` method that merges all entries from another AA, overwriting duplicate keys).
+1. Elements before the first spread stay in the literal, which is assigned as normal.
+2. Each remaining element becomes a statement against the assigned target: spreads call `.append()` (the native `roArray` / `roAssociativeArray` method), other array elements call `.push()`, and other AA members become property or index assignments. Order is preserved.
 
-When no spread is present, the literal transpiles normally with no IIFE overhead.
+If any element after the spread reads from the target itself (for example `list = [...list, 4]` or `m.items = [...m.items, item]`), the literal is built in a temporary variable first and assigned to the target at the end, so those reads still see the original value:
+
+```brightscript
+__bsc_tmp = []
+__bsc_tmp.append(list)
+__bsc_tmp.push(4)
+list = __bsc_tmp
+```
+
+Literals without a spread transpile exactly as they always have.
 
 ## Limitations
+- **The literal must be the direct right-hand side of an assignment.** Spread is supported when the array or AA literal is assigned to a variable (`x = [...a]`), a property (`m.x = [...a]`), or an index (`m["x"] = [...a]`). Using it anywhere else — a function argument, a `return` value, a nested literal, an augmented assignment such as `x += [...a]` — reports a diagnostic. This keeps the transpiled output to simple statements rather than wrapping the literal in a function.
 - **Function call spread is not supported.** You cannot use `...` to expand an array into function arguments (e.g., `someFunc(...args)`). BrightScript has no mechanism for dynamically invoking a function with a variable number of arguments.
 - **Only available in BrighterScript (`.bs`) files.** Using `...` in a `.brs` file produces a "spread operator is not supported in BrightScript files" diagnostic.

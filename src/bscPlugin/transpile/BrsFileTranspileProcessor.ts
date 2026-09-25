@@ -1,16 +1,18 @@
-import { createAssignmentStatement, createBlock, createDottedSetStatement, createIfStatement, createIndexedSetStatement, createToken } from '../../astUtils/creators';
+import { createAssignmentStatement, createBlock, createCall, createDottedSetStatement, createIdentifier, createIfStatement, createIndexedSetStatement, createToken, createVariableExpression } from '../../astUtils/creators';
 import type { Editor } from '../../astUtils/Editor';
-import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression, isAliasStatement, isCallExpression, isCallfuncExpression, isEnumType, isAssignmentStatement, isBlock, isBody, isDottedSetStatement, isGroupingExpression, isIndexedSetStatement, isAugmentedAssignmentStatement, isNamespaceStatement } from '../../astUtils/reflection';
+import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression, isAliasStatement, isCallExpression, isCallfuncExpression, isEnumType, isAssignmentStatement, isBlock, isBody, isDottedSetStatement, isGroupingExpression, isIndexedSetStatement, isAugmentedAssignmentStatement, isNamespaceStatement, isSpreadExpression, isArrayLiteralExpression, isAAIndexedMemberExpression, isAAMemberExpression } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, OnPrepareFileEvent } from '../../interfaces';
+import type { Identifier } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
-import type { Expression, Statement } from '../../parser/AstNode';
-import type { TernaryExpression } from '../../parser/Expression';
-import { LiteralExpression, VariableExpression } from '../../parser/Expression';
+import type { AstNode, Expression, Statement } from '../../parser/AstNode';
+import type { AALiteralExpression, ArrayLiteralExpression, TernaryExpression } from '../../parser/Expression';
+import { DottedGetExpression, IndexedGetExpression, LiteralExpression, VariableExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { ConstStatement, NamespaceStatement } from '../../parser/Statement';
-import { AugmentedAssignmentStatement, type AliasStatement, type IfStatement } from '../../parser/Statement';
+import type { AssignmentStatement, Block, Body, ConstStatement, DottedSetStatement, IndexedSetStatement, NamespaceStatement } from '../../parser/Statement';
+import { AugmentedAssignmentStatement, ExpressionStatement, type AliasStatement, type IfStatement } from '../../parser/Statement';
+import type { Location } from 'vscode-languageserver';
 import type { Scope } from '../../Scope';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import util from '../../util';
@@ -57,9 +59,148 @@ export class BrsFilePreTranspileProcessor {
         const visitor = createVisitor({
             TernaryExpression: (ternaryExpression) => {
                 this.processTernaryExpression(ternaryExpression, visitor, walkMode);
+            },
+            ArrayLiteralExpression: (literal) => {
+                this.processSpreadLiteral(literal, visitor, walkMode);
+            },
+            AALiteralExpression: (literal) => {
+                this.processSpreadLiteral(literal, visitor, walkMode);
             }
         });
         this.event.file.ast.walk(visitor, { walkMode: walkMode });
+    }
+
+    /**
+     * Lower `x = [a, ...b, c]` into `x = [a]` followed by `x.append(b)` and `x.push(c)` (and the AA equivalents).
+     * When the trailing elements read from `x` itself, the literal is built in a temp variable first so those
+     * reads still see the original value.
+     */
+    private processSpreadLiteral(literal: ArrayLiteralExpression | AALiteralExpression, visitor: ReturnType<typeof createVisitor>, walkMode: WalkMode) {
+        if (!literal.hasSpread) {
+            return;
+        }
+        const statement = util.getSpreadLiteralOwnerStatement(literal);
+        if (!statement) {
+            //validation already flagged this spread as unsupported
+            return;
+        }
+        const block = statement.parent as Block | Body;
+        const index = block.statements.indexOf(statement);
+        if (index < 0) {
+            return;
+        }
+        const editor = this.event.editor;
+        const isArray = isArrayLiteralExpression(literal);
+        const elements = literal.elements as Expression[];
+        const firstSpreadIndex = elements.findIndex(e => isSpreadExpression(e));
+        const trailing = elements.slice(firstSpreadIndex);
+        editor.arraySplice(elements, firstSpreadIndex, trailing.length);
+
+        let statements: Statement[];
+        if (this.spreadReferencesTarget(statement, trailing)) {
+            const tmpName = '__bsc_tmp';
+            const createTarget = () => createVariableExpression(tmpName, literal.location);
+            statements = [
+                createAssignmentStatement({ name: createIdentifier(tmpName, literal.location), value: literal }),
+                ...trailing.map(element => this.createSpreadStatement(createTarget, element, isArray))
+            ];
+            editor.setProperty(statement, 'value', createTarget());
+            editor.arraySplice(block.statements, index, 0, ...statements);
+        } else {
+            const createTarget = () => this.createSpreadTarget(statement);
+            statements = trailing.map(element => this.createSpreadStatement(createTarget, element, isArray));
+            editor.arraySplice(block.statements, index + 1, 0, ...statements);
+        }
+        for (const newStatement of statements) {
+            newStatement.parent = block;
+            newStatement.walk(visitor, { walkMode: walkMode });
+        }
+    }
+
+    /**
+     * Build a fresh expression that reads the location the spread literal was assigned to
+     */
+    private createSpreadTarget(statement: AssignmentStatement | DottedSetStatement | IndexedSetStatement): Expression {
+        if (isAssignmentStatement(statement)) {
+            return createVariableExpression(statement.tokens.name.text, statement.tokens.name.location);
+        } else if (isDottedSetStatement(statement)) {
+            return new DottedGetExpression({
+                obj: statement.obj.clone(),
+                name: util.cloneToken(statement.tokens.name),
+                dot: createToken(TokenKind.Dot, '.', statement.tokens.dot?.location)
+            });
+        } else {
+            return new IndexedGetExpression({
+                obj: statement.obj.clone(),
+                indexes: statement.indexes.map(x => x.clone()),
+                openingSquare: util.cloneToken(statement.tokens.openingSquare),
+                closingSquare: util.cloneToken(statement.tokens.closingSquare)
+            });
+        }
+    }
+
+    private createSpreadStatement(createTarget: () => Expression, element: Expression, isArray: boolean): Statement {
+        if (isSpreadExpression(element)) {
+            return this.createMethodCallStatement(createTarget(), 'append', element.expression, element.location);
+        }
+        if (isArray) {
+            return this.createMethodCallStatement(createTarget(), 'push', element, element.location);
+        }
+        if (isAAIndexedMemberExpression(element)) {
+            return createIndexedSetStatement({ obj: createTarget(), indexes: [element.key], value: element.value });
+        }
+        if (isAAMemberExpression(element)) {
+            if (element.tokens.key.kind === TokenKind.StringLiteral) {
+                return createIndexedSetStatement({
+                    obj: createTarget(),
+                    indexes: [new LiteralExpression({ value: element.tokens.key })],
+                    value: element.value
+                });
+            }
+            return createDottedSetStatement({ obj: createTarget(), name: element.tokens.key as Identifier, value: element.value });
+        }
+    }
+
+    private createMethodCallStatement(obj: Expression, methodName: string, arg: Expression, location: Location) {
+        return new ExpressionStatement({
+            expression: createCall(
+                new DottedGetExpression({
+                    obj: obj,
+                    name: createIdentifier(methodName, location),
+                    dot: createToken(TokenKind.Dot, '.', location)
+                }),
+                [arg]
+            )
+        });
+    }
+
+    /**
+     * Does any trailing element read from the spread's assignment target (e.g. `list = [...list, 1]`)?
+     * Errs on the side of `true` whenever the target can't be expressed as a simple dotted path.
+     */
+    private spreadReferencesTarget(statement: AssignmentStatement | DottedSetStatement | IndexedSetStatement, trailing: Expression[]) {
+        const getParts = (node: AstNode) => util.getAllDottedGetParts(node)?.map(x => x.text.toLowerCase());
+        let targetParts: string[];
+        if (isAssignmentStatement(statement)) {
+            targetParts = [statement.tokens.name.text.toLowerCase()];
+        } else {
+            targetParts = getParts(statement.obj);
+            if (targetParts && isDottedSetStatement(statement)) {
+                targetParts.push(statement.tokens.name.text.toLowerCase());
+            }
+        }
+        if (!targetParts) {
+            return true;
+        }
+        for (const element of trailing) {
+            for (const expression of util.getExpressionInfo(element, this.event.file).expressions) {
+                const parts = getParts(expression);
+                if (parts && parts.length >= targetParts.length && targetParts.every((part, i) => part === parts[i])) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
 
