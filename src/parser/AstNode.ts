@@ -370,6 +370,7 @@ export enum AstNodeKind {
     AALiteralExpression = 'AALiteralExpression',
     AAIndexedMemberExpression = 'AAIndexedMemberExpression',
     UnaryExpression = 'UnaryExpression',
+    SpreadExpression = 'SpreadExpression',
     VariableExpression = 'VariableExpression',
     SourceLiteralExpression = 'SourceLiteralExpression',
     NewExpression = 'NewExpression',
