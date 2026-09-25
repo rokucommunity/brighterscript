@@ -152,6 +152,7 @@
     "jsonc-parser": "^2.3.0",
     "lodash.isequal": "^4.5.0",
     "micromatch": "^4.0.4",
+    "minimatch": "^3.1.5",
     "require-relative": "^0.8.7",
     "roku-deploy": "^3.18.4",
     "semver": "^7.7.3",

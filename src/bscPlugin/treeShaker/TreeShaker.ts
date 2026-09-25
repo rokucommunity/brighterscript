@@ -431,7 +431,7 @@ export class TreeShaker {
                 // within the same namespace are correctly detected — allFunctions only
                 // stores fully-qualified names so allFunctions.has('helper') would miss
                 // a function defined as 'ns.helper'.
-                const name = (expr as any).name?.text?.toLowerCase();
+                const name = expr.name?.text?.toLowerCase();
                 if (name && (this.allFunctions.has(name) || this.allSimpleNames.has(name))) {
                     this.calledNames.add(name);
                 }

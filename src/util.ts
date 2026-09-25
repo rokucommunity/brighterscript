@@ -420,7 +420,7 @@ export class Util {
         Object.defineProperty(merged, 'treeShaking', {
             get: () => normalizedTreeShaking,
             set: (value: TreeShakingConfig | NormalizedTreeShakingConfig | undefined) => {
-                normalizedTreeShaking = this.normalizeTreeShakingConfig(value as any);
+                normalizedTreeShaking = this.normalizeTreeShakingConfig(value);
             },
             enumerable: true,
             configurable: true
