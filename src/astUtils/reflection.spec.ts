@@ -192,7 +192,6 @@ describe('reflection', () => {
             location: undefined,
             isReserved: false,
             charCode: 0,
-            leadingWhitespace: '',
             leadingTrivia: []
         };
 

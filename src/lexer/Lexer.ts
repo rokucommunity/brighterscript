@@ -2,7 +2,7 @@
 import { TokenKind, ReservedTokenKinds, Keywords, PreceedingRegexTypes, AllowedTriviaTokens, FixedTokenText, LexerTextCache, LEXER_TEXT_CACHE_MAX_ENTRIES } from './TokenKind';
 import type { Token } from './Token';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
-import type { Location } from 'vscode-languageserver';
+import type { Location, Position } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util from '../util';
 import type { BsDiagnostic } from '../interfaces';
@@ -64,11 +64,6 @@ export class Lexer {
     public options: ScanOptions;
 
     /**
-     * Contains all of the leading whitespace that has not yet been consumed by a token
-     */
-    private leadingWhitespace = '';
-
-    /**
      * Contains trivia/comments, etc. before this line
      */
     private leadingTrivia: Token[] = [];
@@ -110,6 +105,7 @@ export class Lexer {
         this.columnEnd = 0;
         this.tokens = [];
         this.diagnostics = [];
+        this.previousEndPosition = undefined;
         this.uri = util.pathToUri(options?.srcPath);
         while (!this.isAtEnd()) {
             this.scanToken();
@@ -122,10 +118,8 @@ export class Lexer {
             location: this.options.trackLocations
                 ? util.createLocation(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1, this.uri)
                 : undefined,
-            leadingWhitespace: this.leadingWhitespace,
             leadingTrivia: this.leadingTrivia.length > 0 ? this.leadingTrivia : undefined
         });
-        this.leadingWhitespace = '';
         return this;
     }
 
@@ -418,8 +412,7 @@ export class Lexer {
         //`leadingTrivia` (see `isTrivia`), and this branch reconstructs spacing and comments from
         //trivia. Skipping it silently drops all whitespace trivia. `addToken` interns the text for
         //us, so the memory half of that optimization still applies.
-        const whitespaceToken = this.addToken(TokenKind.Whitespace);
-        this.leadingWhitespace = whitespaceToken.text;
+        this.addToken(TokenKind.Whitespace);
         //if we aren't keeping the whitespace tokens, then remove this one from the token output.
         //it stays referenced by `leadingTrivia`, which is why it must be created above.
         if (this.options.includeWhitespace === false) {
@@ -1207,7 +1200,6 @@ export class Lexer {
             text: text,
             isReserved: ReservedTokenKinds.has(kind),
             location: this.locationOf(),
-            leadingWhitespace: this.leadingWhitespace,
             leadingTrivia: undefined
         };
 
@@ -1217,7 +1209,6 @@ export class Lexer {
             token.leadingTrivia = [...this.leadingTrivia];
             this.leadingTrivia = [];
         }
-        this.leadingWhitespace = '';
         if (kind !== TokenKind.Comment) {
             this.tokens.push(token);
         }
@@ -1240,11 +1231,24 @@ export class Lexer {
      */
     private locationOf(): Location {
         if (this.options.trackLocations) {
-            return util.createLocation(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd, this.uri);
+            //tokens (including trivia) are almost always back to back, so share the previous token's end position
+            //as this token's start instead of making a new one. Positions are never mutated in place
+            let start = this.previousEndPosition;
+            if (start?.line !== this.lineBegin || start?.character !== this.columnBegin) {
+                start = { line: this.lineBegin, character: this.columnBegin };
+            }
+            const end = { line: this.lineEnd, character: this.columnEnd };
+            this.previousEndPosition = end;
+            return {
+                uri: this.uri,
+                range: { start: start, end: end }
+            };
         } else {
             return undefined;
         }
     }
+
+    private previousEndPosition: Position;
 }
 
 export interface ScanOptions {

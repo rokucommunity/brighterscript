@@ -1111,7 +1111,7 @@ export class PrintSeparatorExpression extends Expression {
 
     transpile(state: BrsTranspileState) {
         return [
-            ...this.tokens.separator.leadingWhitespace ?? [],
+            util.getLeadingWhitespace(this.tokens.separator),
             ...state.transpileToken(this.tokens.separator)
         ];
     }
@@ -1532,9 +1532,9 @@ export class UnaryExpression extends Expression {
     transpile(state: BrsTranspileState) {
         let separatingWhitespace: string | undefined;
         if (isVariableExpression(this.right)) {
-            separatingWhitespace = this.right.tokens.name.leadingWhitespace;
+            separatingWhitespace = util.getLeadingWhitespace(this.right.tokens.name);
         } else if (isLiteralExpression(this.right)) {
-            separatingWhitespace = this.right.tokens.value.leadingWhitespace;
+            separatingWhitespace = util.getLeadingWhitespace(this.right.tokens.value);
         } else {
             separatingWhitespace = ' ';
         }

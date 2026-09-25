@@ -83,7 +83,6 @@ export function createToken<T extends TokenKind>(kind: T, text?: string, locatio
         text: text ?? tokenDefaults[kind as string] ?? kind.toString().toLowerCase(),
         isReserved: !text || text === kind.toString(),
         location: location,
-        leadingWhitespace: '',
         leadingTrivia: []
     };
 }
@@ -94,7 +93,6 @@ export function createIdentifier(name: string, location?: Location): Identifier 
         text: name,
         isReserved: false,
         location: location,
-        leadingWhitespace: '',
         leadingTrivia: []
     };
 }
@@ -195,9 +193,9 @@ export function createSGInterfaceField(id: string, attributes: { type?: string; 
     const attrs = [
         createSGAttribute('id', id)
     ];
-    for (let key in attributes) {
+    for (const [key, value] of Object.entries(attributes)) {
         attrs.push(
-            createSGAttribute(key, attributes[key])
+            createSGAttribute(key, value)
         );
     }
     return new SGInterfaceField({
@@ -253,9 +251,9 @@ export function createSGInterface() {
 
 export function createSGScript(attributes: { type?: string; uri?: string }) {
     const attrs = [] as SGAttribute[];
-    for (let key in attributes) {
+    for (const [key, value] of Object.entries(attributes)) {
         attrs.push(
-            createSGAttribute(key, attributes[key])
+            createSGAttribute(key, value)
         );
     }
     return new SGScript({

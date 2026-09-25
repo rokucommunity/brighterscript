@@ -1248,6 +1248,15 @@ export class Util {
     /**
      * Clone every token
      */
+    /**
+     * The whitespace directly before this token (on the same line), from its leading trivia
+     */
+    public getLeadingWhitespace(token: Token): string {
+        const trivia = token?.leadingTrivia;
+        const last = trivia?.[trivia.length - 1];
+        return last?.kind === TokenKind.Whitespace ? last.text : '';
+    }
+
     public cloneToken<T extends Token>(token: T): T {
         if (token) {
             //keep this field order identical to `Lexer.addToken` so cloned tokens
@@ -1257,7 +1266,6 @@ export class Util {
                 text: token.text,
                 isReserved: token.isReserved,
                 location: this.cloneLocation(token.location),
-                leadingWhitespace: token.leadingWhitespace,
                 leadingTrivia: token.leadingTrivia ? token.leadingTrivia.map(x => this.cloneToken(x)) : undefined
             } as Token;
             //handle those tokens that have charCode
@@ -1316,7 +1324,11 @@ export class Util {
             }
         }
         if (startPosition && endPosition) {
-            return util.createLocation(startPosition.line, startPosition.character, endPosition.line, endPosition.character, uri);
+            //reuse the positions instead of copying them - positions are never mutated in place, and every AST node gets one of these
+            return {
+                uri: util.pathToUri(uri),
+                range: { start: startPosition, end: endPosition }
+            };
         } else {
             return undefined;
         }

@@ -81,7 +81,6 @@ describe('parser print statements', () => {
                 text: 'print',
                 isReserved: true,
                 location: util.createLocation(0, 0, 0, 5),
-                leadingWhitespace: '',
                 leadingTrivia: []
             },
             {
@@ -89,7 +88,6 @@ describe('parser print statements', () => {
                 text: `"foo"`,
                 isReserved: false,
                 location: util.createLocation(0, 6, 0, 11),
-                leadingWhitespace: '',
                 leadingTrivia: []
             },
             {
@@ -97,7 +95,6 @@ describe('parser print statements', () => {
                 text: '\0',
                 isReserved: false,
                 location: util.createLocation(0, 11, 0, 12),
-                leadingWhitespace: '',
                 leadingTrivia: []
             }
         ]);

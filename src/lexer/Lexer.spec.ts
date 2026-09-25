@@ -8,6 +8,7 @@ import { isToken } from './Token';
 import { rangeToArray } from '../parser/Parser.spec';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
+import { util } from '../util';
 
 describe('lexer', () => {
     it('recognizes the `const` keyword', () => {
@@ -1671,7 +1672,7 @@ describe('lexer', () => {
         ]);
     });
 
-    it('properly tracks leadingWhitespace', () => {
+    it('keeps the whitespace before each token in its leading trivia', () => {
         /**
          * Convert a list of tokens into a string, including their leading whitespace
          */
@@ -1679,7 +1680,7 @@ describe('lexer', () => {
             let result = '';
             //skip iterating the final token
             for (let token of tokens) {
-                result += token.leadingWhitespace + token.text;
+                result += util.getLeadingWhitespace(token) + token.text;
             }
             return result;
         }

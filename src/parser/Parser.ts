@@ -922,7 +922,6 @@ export class Parser {
                     isReserved: true,
                     //zero-length location means derived
                     location: this.peek().location,
-                    leadingWhitespace: '',
                     leadingTrivia: []
                 };
             }
