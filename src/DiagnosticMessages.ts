@@ -1280,6 +1280,16 @@ export let DiagnosticMessages = {
         message: `Case value is a member of enum '${actualEnumName}' but this 'select case' compares against enum '${expectedEnumName}'`,
         severity: DiagnosticSeverity.Warning,
         code: 'case-value-enum-mismatch'
+    }),
+    exitSelectOutsideSelectCase: () => ({
+        message: `'exit select' can only be used inside a 'select case' statement`,
+        severity: DiagnosticSeverity.Error,
+        code: 'exit-select-outside-select-case'
+    }),
+    exitSelectInLoop: () => ({
+        message: `'exit select' cannot be used inside a loop within a case. Use 'exit for' or 'exit while' to leave the loop first`,
+        severity: DiagnosticSeverity.Error,
+        code: 'exit-select-in-loop'
     })
 };
 export const defaultMaximumTruncationLength = 160;

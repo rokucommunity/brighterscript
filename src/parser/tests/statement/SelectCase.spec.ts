@@ -1,5 +1,5 @@
 import { expect } from '../../../chai-config.spec';
-import { isCaseStatement, isFunctionExpression, isFunctionStatement, isSelectCaseStatement } from '../../../astUtils/reflection';
+import { isCaseStatement, isExitStatement, isFunctionExpression, isFunctionStatement, isSelectCaseStatement } from '../../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../../astUtils/visitors';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import type { BrsFile } from '../../../files/BrsFile';
@@ -9,8 +9,8 @@ import util from '../../../util';
 import { BrsTranspileState } from '../../BrsTranspileState';
 import type { FunctionExpression, LiteralExpression } from '../../Expression';
 import { Parser, ParseMode } from '../../Parser';
-import type { FunctionStatement, SelectCaseStatement } from '../../Statement';
-import { CaseStatement, SELECT_CASE_SUBJECT_VARIABLE } from '../../Statement';
+import type { ExitStatement, FunctionStatement, SelectCaseStatement } from '../../Statement';
+import { CaseStatement, SELECT_CASE_SUBJECT_VARIABLE, isExitSelectStatement } from '../../Statement';
 
 describe('select case statement', () => {
     let program: Program;
@@ -165,6 +165,46 @@ describe('select case statement', () => {
             expectZeroDiagnostics(parser);
             expect(getSelect(parser, 0).cases.map(x => x.body.statements.length)).to.eql([1, 2, 1]);
             expect(getSelect(parser, 1).cases.map(x => x.body.statements.length)).to.eql([1, 1]);
+        });
+
+        it('parses `exit select`', () => {
+            const parser = parse(`
+                sub main(value)
+                    select case value
+                        case 1
+                            exit select
+                        case else
+                            if value then exit select
+                    end select
+                end sub
+            `);
+            expectZeroDiagnostics(parser);
+            const exits = parser.ast.findChildren<ExitStatement>(isExitStatement, { walkMode: WalkMode.visitAllRecursive });
+            expect(exits.map(x => x.tokens.loopType.text)).to.eql(['select', 'select']);
+            expect(exits.every(x => isExitSelectStatement(x))).to.be.true;
+        });
+
+        it('supports values starting on the line after `case`', () => {
+            const parser = parse(`
+                sub main(value)
+                    select case value
+                        case
+                            1, 2
+                            print "one or two"
+                        case
+                            ' comments and blank lines are skipped
+
+                            3,
+                            4
+                            print "three or four"
+                        case else
+                    end select
+                end sub
+            `);
+            expectZeroDiagnostics(parser);
+            const stmt = getSelect(parser);
+            expect(stmt.cases.map(x => x.values.length)).to.eql([2, 2, 0]);
+            expect(stmt.cases.map(x => x.body.statements.length)).to.eql([1, 1, 0]);
         });
 
         it('keeps comments found before the first case', () => {
@@ -473,6 +513,39 @@ describe('select case statement', () => {
                 expect(getSelect(parser).cases[0].body.statements).to.be.lengthOf(1);
             });
 
+            it('does not treat a line that is not a value list as the values of a bare `case`', () => {
+                const parser = parse(`
+                    sub main(a)
+                        select case a
+                            case
+                                print "body"
+                            case
+                                a++
+                            case
+                                a = 1 : print "two statements"
+                            case
+                            case else
+                        end select
+                        select case a
+                            case
+                        end select
+                        select case a
+                            case
+                    end sub
+                `);
+                expectDiagnostics(parser, [
+                    { ...DiagnosticMessages.expectedCaseValue('case'), location: { range: util.createRange(3, 28, 3, 32) } },
+                    { ...DiagnosticMessages.expectedCaseValue('case'), location: { range: util.createRange(5, 28, 5, 32) } },
+                    { ...DiagnosticMessages.expectedCaseValue('case'), location: { range: util.createRange(9, 28, 9, 32) } },
+                    { ...DiagnosticMessages.expectedCaseValue('case'), location: { range: util.createRange(13, 28, 13, 32) } },
+                    { ...DiagnosticMessages.expectedCaseValue('case'), location: { range: util.createRange(16, 28, 16, 32) } },
+                    DiagnosticMessages.couldNotFindMatchingEndKeyword('select')
+                ]);
+                const stmt = getSelect(parser);
+                expect(stmt.cases.map(x => x.values.length)).to.eql([0, 0, 1, 0, 0]);
+                expect(stmt.cases.map(x => x.body.statements.length)).to.eql([1, 1, 1, 0, 0]);
+            });
+
             it('flags a trailing comma', () => {
                 const parser = parse(`
                     sub main(a)
@@ -759,6 +832,99 @@ describe('select case statement', () => {
             }, {
                 ...DiagnosticMessages.emptyCaseDoesNotFallThrough(),
                 location: { range: util.createRange(8, 24, 8, 28) }
+            }]);
+        });
+
+        it('does not flag empty cases followed by another case on the same line', () => {
+            validate(`
+                sub main(a)
+                    select case a : case 1 : case 2 : print "two" : case else : end select
+                    select case a
+                        case 1 : case 2
+                            print "one does nothing"
+                        case else
+                    end select
+                end sub
+            `);
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not flag a case that only contains `exit select`', () => {
+            validate(`
+                sub main(a)
+                    select case a
+                        case 1
+                            exit select
+                        case 2
+                            print "two"
+                        case else
+                    end select
+                    select case a : case 1 : exit select : case 2 : print "two" : case else : end select
+                end sub
+            `);
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags `exit select` outside of a select case', () => {
+            validate(`
+                sub main(a)
+                    exit select
+                    while true
+                        exit select
+                    end while
+                    select case a
+                        case 1
+                            callback = sub()
+                                exit select
+                            end sub
+                        case else
+                    end select
+                end sub
+            `);
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.exitSelectOutsideSelectCase(),
+                location: { range: util.createRange(2, 20, 2, 31) }
+            }, {
+                ...DiagnosticMessages.exitSelectOutsideSelectCase(),
+                location: { range: util.createRange(4, 24, 4, 35) }
+            }, {
+                ...DiagnosticMessages.exitSelectOutsideSelectCase(),
+                location: { range: util.createRange(9, 32, 9, 43) }
+            }]);
+        });
+
+        it('flags `exit select` inside a loop within a case', () => {
+            validate(`
+                sub main(a, items)
+                    select case a
+                        case 1
+                            for each item in items
+                                exit select
+                            end for
+                        case 2
+                            while true
+                                if a then
+                                    exit select
+                                end if
+                            end while
+                        case else
+                            for each item in items
+                                select case item
+                                    case 1
+                                        'exits the inner select, so this is fine
+                                        exit select
+                                    case else
+                                end select
+                            end for
+                    end select
+                end sub
+            `);
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.exitSelectInLoop(),
+                location: { range: util.createRange(5, 32, 5, 43) }
+            }, {
+                ...DiagnosticMessages.exitSelectInLoop(),
+                location: { range: util.createRange(10, 36, 10, 47) }
             }]);
         });
 
@@ -1458,6 +1624,103 @@ describe('select case statement', () => {
                     ${SELECT_CASE_SUBJECT_VARIABLE} = "up"
                     if ${SELECT_CASE_SUBJECT_VARIABLE} = a then
                         ' nothing
+                    else
+                    end if
+                end sub
+            `);
+        });
+
+        it('drops an `exit select` at the end of a case, keeping its comments', async () => {
+            await testTranspile(`
+                sub main(key)
+                    select case key
+                        case "back"
+                            ' handled elsewhere
+                            exit select
+                        case "options"
+                            print "options"
+                            exit select
+                        case else
+                            exit select
+                    end select
+                    select case key : case 1 : exit select : case 2 : print "two" : case else : end select
+                end sub
+            `, `
+                sub main(key)
+                    if key = "back" then
+                        ' handled elsewhere
+                    else if key = "options" then
+                        print "options"
+                    else
+                    end if
+                    if key = 1 then
+                    else if key = 2 then
+                        print "two"
+                    else
+                    end if
+                end sub
+            `);
+        });
+
+        it('turns an `exit select` in the middle of a case into a goto', async () => {
+            await testTranspile(`
+                sub main(key, isDirty)
+                    select case key
+                        case "save"
+                            if not isDirty then
+                                exit select
+                            end if
+                            print "saving"
+                        case else
+                            select case isDirty
+                                case true
+                                    if key = invalid then
+                                        exit select
+                                    end if
+                                    print "inner"
+                                case else
+                            end select
+                            exit select
+                    end select
+                    print "after"
+                end sub
+            `, `
+                sub main(key, isDirty)
+                    if key = "save" then
+                        if not isDirty then
+                            goto BRIGHTERSCRIPT_EXIT_SELECT_0
+                        end if
+                        print "saving"
+                    else
+                        if isDirty = true then
+                            if key = invalid then
+                                goto BRIGHTERSCRIPT_EXIT_SELECT_1
+                            end if
+                            print "inner"
+                        else
+                        end if
+                        BRIGHTERSCRIPT_EXIT_SELECT_1:
+                    end if
+                    BRIGHTERSCRIPT_EXIT_SELECT_0:
+                    print "after"
+                end sub
+            `);
+        });
+
+        it('transpiles values on the line after `case`', async () => {
+            await testTranspile(`
+                sub main(key)
+                    select case key
+                        case
+                            1, 2
+                            print "one or two"
+                        case else
+                    end select
+                end sub
+            `, `
+                sub main(key)
+                    if key = 1 or key = 2 then
+                        print "one or two"
                     else
                     end if
                 end sub

@@ -10,7 +10,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isBinaryExpression, isBlock, isCallExpression, isCaseStatement, isCatchStatement, isClassType, isConditionalCompileStatement, isEnumMemberStatement, isEnumType, isEnumStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isSelectCaseStatement, isTryCatchStatement, isTypecastExpression, isTypedefProvider, isUnaryExpression, isUninitializedType, isVariableExpression, isVoidType, isWhileStatement } from '../astUtils/reflection';
+import { isBinaryExpression, isBlock, isCallExpression, isCaseStatement, isCatchStatement, isClassType, isConditionalCompileStatement, isEnumMemberStatement, isEnumType, isEnumStatement, isExitStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isSelectCaseStatement, isTryCatchStatement, isTypecastExpression, isTypedefProvider, isUnaryExpression, isUninitializedType, isVariableExpression, isVoidType, isWhileStatement } from '../astUtils/reflection';
 import type { GetTypeOptions } from '../interfaces';
 import { TypeChainEntry, type TranspileResult, type TypedefProvider } from '../interfaces';
 import { createDottedIdentifier, createIdentifier, createInvalidLiteral, createMethodStatement, createToken, createVariableExpression } from '../astUtils/creators';
@@ -569,6 +569,19 @@ export class ExitStatement extends Statement {
     public readonly location?: Location;
 
     transpile(state: BrsTranspileState) {
+        //`select case` is transpiled to an if/else chain, so there's nothing to exit. Jump past the end of it instead.
+        //(An `exit select` at the end of a case is dropped by the case itself, so it never gets here)
+        if (this.tokens.loopType?.kind === TokenKind.Select) {
+            const selectCase = getExitSelectTarget(this)?.selectCase;
+            if (!selectCase) {
+                //validation flags this. Keep any comments, but there's nothing sensible to emit
+                return state.transpileLeadingComments(this.tokens.exit);
+            }
+            return [
+                ...state.transpileLeadingComments(this.tokens.exit),
+                state.sourceNode(this, `goto ${state.getExitSelectLabel(selectCase)}`)
+            ];
+        }
         return [
             state.transpileToken(this.tokens.exit, 'exit'),
             (this.tokens.loopType ? util.getLeadingWhitespace(this.tokens.loopType) : ' '),
@@ -5071,7 +5084,7 @@ export class SelectCaseStatement extends Statement {
             if (previousCase) {
                 //comments above the `case` belong at the end of the previous case's body
                 chain.push(
-                    ...state.transpileEndBlockToken(previousCase, { ...caseStatement.tokens.case, text: keyword }, keyword)
+                    ...state.transpileEndBlockToken(previousCase, withTrailingExitSelectTrivia(previousCase, { ...caseStatement.tokens.case, text: keyword }), keyword)
                 );
             } else {
                 chain.push(
@@ -5094,11 +5107,17 @@ export class SelectCaseStatement extends Statement {
             chain.push(
                 ...state.transpileEndBlockToken(
                     previousCase,
-                    this.tokens.endSelect ? { ...this.tokens.endSelect, text: 'end if' } : undefined,
+                    withTrailingExitSelectTrivia(previousCase, this.tokens.endSelect ? { ...this.tokens.endSelect, text: 'end if' } : createToken(TokenKind.EndIf, 'end if')),
                     'end if'
                 )
             );
             lines.push(chain);
+        }
+
+        //an `exit select` in the middle of a case jumps here
+        const exitLabel = state.peekExitSelectLabel?.(this);
+        if (exitLabel) {
+            lines.push([`${exitLabel}:`]);
         }
 
         //comments above the `select case` go ahead of everything else
@@ -5213,6 +5232,17 @@ export class CaseStatement extends Statement {
     }
 
     /**
+     * The `exit select` at the very end of this case's body, if there is one. It doesn't need to do anything, since the
+     * case ends right after it anyway
+     */
+    public get trailingExitSelect(): ExitStatement | undefined {
+        const lastStatement = this.body?.statements[this.body.statements.length - 1];
+        if (isExitSelectStatement(lastStatement)) {
+            return lastStatement;
+        }
+    }
+
+    /**
      * Transpile the body of this case. Starts with a newline (unless empty) and does not include a trailing newline
      */
     public transpileBody(state: BrsTranspileState) {
@@ -5221,7 +5251,13 @@ export class CaseStatement extends Statement {
         }
         //only the `case ...` line itself counts as the parent line, so that only a trailing comment on that line stays attached to it
         state.lineage.unshift({ location: this.headerLocation } as AstNode);
-        const result = this.body.transpile(state);
+        let result: TranspileResult;
+        if (this.trailingExitSelect) {
+            //leave out the trailing `exit select`. (Its comments get emitted by the parent `select case`)
+            result = new Block({ statements: this.body.statements.slice(0, -1) }).transpile(state);
+        } else {
+            result = this.body.transpile(state);
+        }
         state.lineage.shift();
         return result;
     }
@@ -5284,6 +5320,44 @@ export class CaseStatement extends Statement {
             ['values', 'body']
         );
     }
+}
+
+/**
+ * Is this an `exit select` statement
+ */
+export function isExitSelectStatement(node: AstNode | undefined): node is ExitStatement {
+    return isExitStatement(node) && node.tokens.loopType?.kind === TokenKind.Select;
+}
+
+/**
+ * Find the `select case` that an `exit select` would exit (the nearest enclosing one, without leaving the current function).
+ * `isInLoop` is true when there's a loop between the `exit select` and its case
+ */
+export function getExitSelectTarget(exitStatement: ExitStatement): { selectCase: SelectCaseStatement; isInLoop: boolean } | undefined {
+    let isInLoop = false;
+    let node = exitStatement.parent;
+    while (node && !isFunctionExpression(node)) {
+        if (isCaseStatement(node) && isSelectCaseStatement(node.parent)) {
+            return { selectCase: node.parent, isInLoop: isInLoop };
+        }
+        if (isForStatement(node) || isForEachStatement(node) || isWhileStatement(node)) {
+            isInLoop = true;
+        }
+        node = node.parent;
+    }
+}
+
+/**
+ * A trailing `exit select` is left out of the output, so move any comments above it onto the keyword that comes next
+ */
+function withTrailingExitSelectTrivia(previousCase: CaseStatement, token: Token): Token {
+    const exitToken = previousCase.trailingExitSelect?.tokens.exit;
+    if (!util.hasLeadingComments(exitToken)) {
+        return token;
+    }
+    //the newline after the last comment is already part of the next keyword's trivia
+    const lastCommentIndex = exitToken.leadingTrivia.map(x => x.kind).lastIndexOf(TokenKind.Comment);
+    return { ...token, leadingTrivia: [...exitToken.leadingTrivia.slice(0, lastCommentIndex + 1), ...(token.leadingTrivia ?? [])] };
 }
 
 function wrapInParens(transpiled: TranspileResult, wrap: boolean): TranspileResult {

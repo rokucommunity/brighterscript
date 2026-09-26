@@ -1429,8 +1429,8 @@ export class Parser {
         }
 
         const loopTypeToken = this.tryConsume(
-            DiagnosticMessages.expectedToken(TokenKind.While, TokenKind.For),
-            TokenKind.While, TokenKind.For
+            DiagnosticMessages.expectedToken(TokenKind.While, TokenKind.For, TokenKind.Select),
+            TokenKind.While, TokenKind.For, TokenKind.Select
         );
 
         return new ExitStatement({
@@ -2091,36 +2091,16 @@ export class Parser {
             this.flagUntil(TokenKind.Newline, TokenKind.Colon, TokenKind.Comment);
 
         } else if (this.checkEndOfStatement()) {
-            this.diagnostics.push({
-                ...DiagnosticMessages.expectedCaseValue(caseToken.text),
-                location: caseToken.location
-            });
+            //the values may start on the next line, since a `case` with no values can't be anything else
+            if (!this.tryCaseValuesOnNextLine(values)) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.expectedCaseValue(caseToken.text),
+                    location: caseToken.location
+                });
+            }
 
         } else {
-            //a comma-separated list of values, which may span multiple lines as long as each line ends with a comma
-            while (true) {
-                const value = this.tryExpressionForRestOfLine();
-                if (!value) {
-                    break;
-                }
-                values.push(value);
-                if (!this.check(TokenKind.Comma)) {
-                    this.flagUntil(TokenKind.Newline, TokenKind.Colon, TokenKind.Comment);
-                    break;
-                }
-                const comma = this.advance();
-                while (this.checkAny(TokenKind.Newline, TokenKind.Comment)) {
-                    this.advance();
-                }
-                //a trailing comma with nothing after it (i.e. the user is still typing, or the next line is the case body)
-                if (this.isAtEnd() || this.check(TokenKind.Colon) || this.checkSelectCaseTerminator() || this.checkAny(TokenKind.EndSub, TokenKind.EndFunction)) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.expectedCaseValue(comma.text),
-                        location: comma.location
-                    });
-                    break;
-                }
-            }
+            this.caseValues(values);
         }
 
         const body = this.block() ?? new Block({ statements: [] });
@@ -2131,6 +2111,63 @@ export class Parser {
             values: values,
             body: body
         });
+    }
+
+    /**
+     * Look for a `case` value list on the line after a bare `case`. The next line only counts when the whole line is a
+     * value list, so anything else (i.e. `print "x"`, or the next `case`) is left alone for the case body.
+     * @returns true if values were found (and added to `values`)
+     */
+    private tryCaseValuesOnNextLine(values: Expression[]) {
+        if (!this.checkAny(TokenKind.Newline, TokenKind.Comment)) {
+            return false;
+        }
+        const startIndex = this.current;
+        const diagnosticCount = this.diagnostics.length;
+        while (this.checkAny(TokenKind.Newline, TokenKind.Comment)) {
+            this.advance();
+        }
+        if (!this.isAtEnd() && !this.checkSelectCaseTerminator() && !this.checkAny(TokenKind.Colon, TokenKind.EndSub, TokenKind.EndFunction)) {
+            const foundValues = [] as Expression[];
+            this.caseValues(foundValues);
+            if (foundValues.length > 0 && this.diagnostics.length === diagnosticCount && this.checkEndOfStatement()) {
+                values.push(...foundValues);
+                return true;
+            }
+        }
+        //not a value list. Pretend we never looked
+        this.current = startIndex;
+        this.diagnostics.length = diagnosticCount;
+        return false;
+    }
+
+    /**
+     * Parse a comma-separated list of case values, which may span multiple lines as long as each line ends with a comma
+     */
+    private caseValues(values: Expression[]) {
+        while (true) {
+            const value = this.tryExpressionForRestOfLine();
+            if (!value) {
+                break;
+            }
+            values.push(value);
+            if (!this.check(TokenKind.Comma)) {
+                this.flagUntil(TokenKind.Newline, TokenKind.Colon, TokenKind.Comment);
+                break;
+            }
+            const comma = this.advance();
+            while (this.checkAny(TokenKind.Newline, TokenKind.Comment)) {
+                this.advance();
+            }
+            //a trailing comma with nothing after it (i.e. the user is still typing, or the next line is the case body)
+            if (this.isAtEnd() || this.check(TokenKind.Colon) || this.checkSelectCaseTerminator() || this.checkAny(TokenKind.EndSub, TokenKind.EndFunction)) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.expectedCaseValue(comma.text),
+                    location: comma.location
+                });
+                break;
+            }
+        }
     }
 
     /**

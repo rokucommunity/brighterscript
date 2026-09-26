@@ -8,6 +8,7 @@ import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import { CallExpression, type FunctionExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement, SelectCaseStatement } from '../../parser/Statement';
+import { getExitSelectTarget, isExitSelectStatement } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { DynamicType } from '../../types/DynamicType';
@@ -380,6 +381,17 @@ export class BrsFileValidator {
             },
             IfStatement: (node) => {
                 this.setUpComplementSymbolTables(node, isIfStatement);
+            },
+            ExitStatement: (node) => {
+                if (isExitSelectStatement(node)) {
+                    const target = getExitSelectTarget(node);
+                    if (!target || target.isInLoop) {
+                        this.event.program.diagnostics.register({
+                            ...(target ? DiagnosticMessages.exitSelectInLoop() : DiagnosticMessages.exitSelectOutsideSelectCase()),
+                            location: node.location
+                        });
+                    }
+                }
             },
             SelectCaseStatement: (node) => {
                 //a variable assigned in every case (including `case else`) is known to exist after the `select case`
@@ -826,13 +838,16 @@ export class BrsFileValidator {
         }
 
         //people coming from C-style languages might expect an empty case to fall through to the next one. It doesn't.
-        //A case containing only a comment is treated as intentionally empty. (Comments are trivia, so they live on the next `case` keyword)
+        //A case containing only a comment is treated as intentionally empty. (Comments are trivia, so they live on the next `case` keyword).
+        //So is one followed by another case on the same line, since there's no way to put a comment there
         for (let i = 0; i < statement.cases.length - 1; i++) {
             const caseStatement = statement.cases[i];
+            const nextCaseToken = statement.cases[i + 1].tokens.case;
             if (
                 !caseStatement.isElse &&
                 !(caseStatement.body?.statements.length > 0) &&
-                !util.hasLeadingComments(statement.cases[i + 1].tokens.case)
+                !util.hasLeadingComments(nextCaseToken) &&
+                caseStatement.headerLocation?.range.end.line !== nextCaseToken.location?.range.start.line
             ) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.emptyCaseDoesNotFallThrough(),
