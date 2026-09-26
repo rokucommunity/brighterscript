@@ -1,4 +1,4 @@
-import { bscFactory } from '../../BscFactory';
+import { bscFactory } from '../../factory/BscFactory';
 import { isXmlFile } from '../../astUtils/reflection';
 import { isSGScript } from '../../astUtils/xml';
 import type { XmlFile } from '../../files/XmlFile';
@@ -49,7 +49,7 @@ export class XmlFilePreTranspileProcessor {
     private injectScriptImports() {
         // eslint-disable-next-line @typescript-eslint/dot-notation
         const extraImportScripts = this.event.file['getMissingImportsForTranspile']().map(uri => {
-            return bscFactory.createSGScript({
+            return bscFactory.sg.createSGScript({
                 attributes: {
                     type: 'text/brightscript',
                     uri: util.sanitizePkgPath(uri.replace(/\.bs$/, '.brs'))

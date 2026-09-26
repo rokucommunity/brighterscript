@@ -20,7 +20,7 @@ import type { BscType } from '../../types/BscType';
 import type { AstNode } from '../../parser/AstNode';
 import type { ClassStatement, FunctionStatement, NamespaceStatement, AliasStatement } from '../../parser/Statement';
 import type { Token } from '../../lexer/Token';
-import { bscFactory } from '../../BscFactory';
+import { bscFactory } from '../../factory/BscFactory';
 import type { FunctionExpression } from '../../parser/Expression';
 import { LogLevel } from '../../Logger';
 
@@ -465,7 +465,7 @@ export class CompletionsProcessor {
             return CompletionItemKind.Value;
 
         }
-        const tokenIdentifier = util.tokenToBscType(bscFactory.createIdentifier(symbol.name));
+        const tokenIdentifier = util.tokenToBscType(bscFactory.brs.createIdentifier(symbol.name));
         if (isNativeType(tokenIdentifier)) {
             return CompletionItemKind.Keyword;
 

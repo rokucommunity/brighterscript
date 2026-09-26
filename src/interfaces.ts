@@ -19,7 +19,7 @@ import type { BscFile } from './files/BscFile';
 import type { LazyFileData } from './files/LazyFileData';
 import { TokenKind } from './lexer/TokenKind';
 import type { BscTypeKind } from './types/BscTypeKind';
-import { bscFactory } from './BscFactory';
+import { bscFactory } from './factory/BscFactory';
 import type { SourceFixAllCodeAction } from './CodeActionUtil';
 import type { Availability } from './RokuConstants';
 
@@ -1288,7 +1288,7 @@ export class TypeChainEntry {
         this.data = { ...options.data };
         this.type = options.type;
         this._location = options.location;
-        this.separatorToken = options.separatorToken ?? bscFactory.createToken(TokenKind.Dot);
+        this.separatorToken = options.separatorToken ?? bscFactory.brs.createToken(TokenKind.Dot);
         this.astNode = options.astNode;
         this.isResolved = this.type?.isResolvable();
     }

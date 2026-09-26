@@ -40,7 +40,7 @@ import { LongIntegerType } from './types/LongIntegerType';
 import { ObjectType } from './types/ObjectType';
 import { VoidType } from './types/VoidType';
 import { FunctionType } from './types/FunctionType';
-import { BscFactory } from './BscFactory';
+import { BscFactory } from './factory/BscFactory';
 import { ActionPipeline } from './ActionPipeline';
 import type { FileData } from './files/LazyFileData';
 import { LazyFileData } from './files/LazyFileData';
@@ -159,7 +159,7 @@ export class Program {
     public editor = new Editor();
 
     /**
-     * A factory that plugins should use to create tokens, AST nodes, and files (i.e. `program.factory.createCallExpression(...)` instead of `new CallExpression(...)`).
+     * A factory that plugins should use to create tokens, AST nodes, and files (i.e. `program.factory.brs.createCallExpression(...)` instead of `new CallExpression(...)`).
      * This ensures everything is created by the brighterscript version that is actually running the plugin, rather than the plugin's own copy of brighterscript.
      */
     public readonly factory: BscFactory;
@@ -952,7 +952,7 @@ export class Program {
             //if no files were provided, create a AssetFile to represent it.
             if (event.files.length === 0) {
                 event.files.push(
-                    this.factory.createAssetFile({
+                    this.factory.files.createAssetFile({
                         srcPath: event.srcPath,
                         destPath: event.destPath,
                         pkgPath: event.destPath,

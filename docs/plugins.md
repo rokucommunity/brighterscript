@@ -627,11 +627,11 @@ This plugin will search through every LiteralExpression in the entire project, a
 ### Factory
 Your plugin will be written against a specific version of BrighterScript, but it may be loaded by a different version (either by the brighterscript cli or through an editor like vscode). If your plugin creates objects with direct constructors (i.e. `new CallExpression(...)` or `new BrsFile(...)`), those objects come from your plugin's copy of brighterscript, and may be missing bug fixes or new fields that the running version of brighterscript expects.
 
-To avoid this, use `program.factory` to create tokens, AST nodes, and files. This factory always comes from the brighterscript version that is running your plugin.
- - **AST nodes:** every AST node class has a matching `create` method (i.e. `program.factory.createCallExpression(...)` instead of `new CallExpression(...)`). Most syntax tokens are optional and will be given their default text, and identifier names can be passed as plain strings.
- - **SceneGraph xml nodes:** prefixed with `SG` (i.e. `program.factory.createSGComponent({ attributes: { name: 'MyComponent' } })`).
- - **Files:** `createBrsFile`, `createXmlFile`, and `createAssetFile` (i.e. `program.factory.createBrsFile(...)` instead of `new BrsFile(...)`).
- - **Tokens and literals:** `createToken`, `createIdentifier`, `createStringLiteral`, `createIntegerLiteral`, `createDottedIdentifier`, etc.
+To avoid this, use `program.factory`, which always comes from the brighterscript version that is running your plugin. It is grouped by domain:
+ - **`brs`:** BrightScript/BrighterScript tokens and AST nodes. Every AST node class has a matching `create` method (i.e. `program.factory.brs.createCallExpression(...)` instead of `new CallExpression(...)`). Most syntax tokens are optional and will be given their default text, and identifier names can be passed as plain strings. There are also helpers like `createToken`, `createIdentifier`, `createStringLiteral`, and `createDottedIdentifier`.
+ - **`sg`:** SceneGraph component nodes (the contents of a component `.xml` file), i.e. `program.factory.sg.createSGComponent({ attributes: { name: 'MyComponent' } })`. Tokens can be passed as plain strings.
+ - **`files`:** `createBrsFile`, `createXmlFile`, and `createAssetFile` (i.e. `program.factory.files.createBrsFile(...)` instead of `new BrsFile(...)`).
+ - **`plugins`:** factories contributed by other plugins (see [Plugin factories](#plugin-factories)).
 
 The factory methods are a stable contract, so they will keep accepting the same options even if the underlying constructors change.
 
@@ -646,10 +646,10 @@ export default function () {
                 const factory = event.program.factory;
                 for (const func of event.file.ast.findChildren(isFunctionExpression)) {
                     //creates `print "entering function"`
-                    const printStatement = factory.createPrintStatement({
-                        print: factory.createToken(TokenKind.Print),
+                    const printStatement = factory.brs.createPrintStatement({
+                        print: factory.brs.createToken(TokenKind.Print),
                         expressions: [
-                            factory.createStringLiteral('entering function')
+                            factory.brs.createStringLiteral('entering function')
                         ]
                     });
                     event.editor.arrayUnshift(func.body.statements, printStatement);
@@ -660,7 +660,49 @@ export default function () {
 };
 ```
 
-New factory methods may be added in future versions of brighterscript. If your plugin needs to support older versions, check that a method exists before calling it (i.e. `if (program.factory.createTypeStatement) { ... }`).
+New factory methods may be added in future versions of brighterscript. If your plugin needs to support older versions, check that a method exists before calling it (i.e. `if (program.factory.brs.createTypeStatement) { ... }`).
+
+### Plugin factories
+Plugins can contribute their own factories to `program.factory.plugins`, so that other plugins can create that plugin's objects without being locked to a specific version of it. The plugin that owns the factory registers it early in the program's lifecycle, using a unique name (the plugin's npm package name is recommended):
+
+```typescript
+// bsc-plugin-example
+export class ExampleFactory {
+    public createExampleStatement(options: { name: string }) {
+        return new ExampleStatement(options);
+    }
+}
+
+export default function () {
+    return {
+        name: 'bsc-plugin-example',
+        afterProvideProgram: (event: AfterProvideProgramEvent) => {
+            event.program.factory.plugins.register('bsc-plugin-example', new ExampleFactory());
+        }
+    } as CompilerPlugin;
+}
+```
+
+Other plugins look up the factory whenever they need it. `get()` returns `undefined` if the plugin is not installed. Only import the _types_ from the owning plugin (`import type`), so the objects are always created by the copy of that plugin that is actually running:
+
+```typescript
+import type { ExampleFactory } from 'bsc-plugin-example';
+
+const exampleFactory = event.program.factory.plugins.get<ExampleFactory>('bsc-plugin-example');
+if (exampleFactory) {
+    const statement = exampleFactory.createExampleStatement({ name: 'alpha' });
+}
+```
+
+The owning plugin can also use declaration merging so that `get()` is typed without needing a type argument:
+
+```typescript
+declare module 'brighterscript' {
+    interface PluginFactories {
+        'bsc-plugin-example': ExampleFactory;
+    }
+}
+```
 
 ## Remove Comment and Print Statements
 
@@ -752,7 +794,7 @@ export default function plugin() {
                 const brsCode = convertJsToBrsUsingMagic(jsCode);
 
                 //create a new BrsFile which will hold the final brs code after the js file was parsed
-                const file = event.program.factory.createBrsFile({
+                const file = event.program.factory.files.createBrsFile({
                     srcPath: event.srcPath,
                     //rename the .js extension to .brs
                     destPath: event.destPath.replace(/\.js$/, '.brs')
@@ -790,7 +832,7 @@ export default function plugin() {
                 const code = event.getFileData().toString();
 
                 //create a new BrsFile to act as the primary .brs script for this file
-                const brsFile = event.program.factory.createBrsFile({
+                const brsFile = event.program.factory.files.createBrsFile({
                     srcPath: event.srcPath.replace(/\.component$/, '.brs'),
                     destPath: event.destPath.replace(/\.component$/, '.brs')
                 });
@@ -800,7 +842,7 @@ export default function plugin() {
                 event.files.push(brsFile);
 
                 //create an XmlFile which will serve as the SceneGraph component for this file
-                const xmlFile = event.program.factory.createXmlFile({
+                const xmlFile = event.program.factory.files.createXmlFile({
                     srcPath: event.srcPath.replace(/\.component$/, '.xml'),
                     destPath: event.destPath.replace(/\.component$/, '.xml')
                 });
@@ -818,7 +860,7 @@ export default function plugin() {
 ```
 
 ### Creating files
-Always create files using `event.program.factory` (i.e. `event.program.factory.createBrsFile(...)` instead of `new BrsFile(...)`), as shown in the snippets above. This ensures the file classes come from the brighterscript version that is running your plugin. See [Factory](#factory) for more details.
+Always create files using `event.program.factory` (i.e. `event.program.factory.files.createBrsFile(...)` instead of `new BrsFile(...)`), as shown in the snippets above. This ensures the file classes come from the brighterscript version that is running your plugin. See [Factory](#factory) for more details.
 
 ### Program changes
 Historically, only `.brs`, `.bs`, and `.xml` files would be present in the `Program`. As a result of the File API being introduced, now all files included as a result of the bsconfig.json `files` array will be present in the program. Unhandled files will be loaded as generic `AssetFile` instances. This may impact plugins that aren't properly guarding against specific file types. Consider this plugin code:

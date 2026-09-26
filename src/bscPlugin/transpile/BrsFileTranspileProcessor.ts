@@ -1,4 +1,4 @@
-import { bscFactory } from '../../BscFactory';
+import { bscFactory } from '../../factory/BscFactory';
 import type { Editor } from '../../astUtils/Editor';
 import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression, isAliasStatement, isCallExpression, isCallfuncExpression, isEnumType, isAssignmentStatement, isBlock, isBody, isDottedSetStatement, isGroupingExpression, isIndexedSetStatement, isAugmentedAssignmentStatement, isNamespaceStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
@@ -79,39 +79,39 @@ export class BrsFilePreTranspileProcessor {
         let ifStatement: IfStatement;
 
         if (isAssignmentStatement(parent)) {
-            ifStatement = bscFactory.createIfStatement({
-                if: bscFactory.createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark.location),
+            ifStatement = bscFactory.brs.createIfStatement({
+                if: bscFactory.brs.createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark.location),
                 condition: ternaryExpression.test,
-                then: bscFactory.createToken(TokenKind.Then, 'then', ternaryExpression.tokens.questionMark.location),
-                thenBranch: bscFactory.createBlock({
+                then: bscFactory.brs.createToken(TokenKind.Then, 'then', ternaryExpression.tokens.questionMark.location),
+                thenBranch: bscFactory.brs.createBlock({
                     statements: [
-                        bscFactory.createAssignmentStatement({
+                        bscFactory.brs.createAssignmentStatement({
                             name: parent.tokens.name,
                             equals: parent.tokens.equals,
                             value: ternaryExpression.consequent
                         })
                     ]
                 }),
-                else: bscFactory.createToken(TokenKind.Else, 'else', ternaryExpression.tokens.questionMark.location),
-                elseBranch: bscFactory.createBlock({
+                else: bscFactory.brs.createToken(TokenKind.Else, 'else', ternaryExpression.tokens.questionMark.location),
+                elseBranch: bscFactory.brs.createBlock({
                     statements: [
-                        bscFactory.createAssignmentStatement({
+                        bscFactory.brs.createAssignmentStatement({
                             name: util.cloneToken(parent.tokens.name),
                             equals: util.cloneToken(parent.tokens.equals),
                             value: ternaryExpression.alternate
                         })
                     ]
                 }),
-                endIf: bscFactory.createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark.location)
+                endIf: bscFactory.brs.createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark.location)
             });
         } else if (isDottedSetStatement(parent)) {
-            ifStatement = bscFactory.createIfStatement({
-                if: bscFactory.createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark.location),
+            ifStatement = bscFactory.brs.createIfStatement({
+                if: bscFactory.brs.createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark.location),
                 condition: ternaryExpression.test,
-                then: bscFactory.createToken(TokenKind.Then, 'then', ternaryExpression.tokens.questionMark.location),
-                thenBranch: bscFactory.createBlock({
+                then: bscFactory.brs.createToken(TokenKind.Then, 'then', ternaryExpression.tokens.questionMark.location),
+                thenBranch: bscFactory.brs.createBlock({
                     statements: [
-                        bscFactory.createDottedSetStatement({
+                        bscFactory.brs.createDottedSetStatement({
                             obj: parent.obj,
                             name: parent.tokens.name,
                             equals: parent.tokens.equals,
@@ -119,10 +119,10 @@ export class BrsFilePreTranspileProcessor {
                         })
                     ]
                 }),
-                else: bscFactory.createToken(TokenKind.Else, 'else', ternaryExpression.tokens.questionMark.location),
-                elseBranch: bscFactory.createBlock({
+                else: bscFactory.brs.createToken(TokenKind.Else, 'else', ternaryExpression.tokens.questionMark.location),
+                elseBranch: bscFactory.brs.createBlock({
                     statements: [
-                        bscFactory.createDottedSetStatement({
+                        bscFactory.brs.createDottedSetStatement({
                             obj: parent.obj.clone(),
                             name: util.cloneToken(parent.tokens.name),
                             equals: util.cloneToken(parent.tokens.equals),
@@ -130,18 +130,18 @@ export class BrsFilePreTranspileProcessor {
                         })
                     ]
                 }),
-                endIf: bscFactory.createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark.location)
+                endIf: bscFactory.brs.createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark.location)
             });
 
             //if this is an indexedSetStatement, and the ternary expression is NOT an index
         } else if (isIndexedSetStatement(parent) && !parent.indexes?.includes(ternaryExpression)) {
-            ifStatement = bscFactory.createIfStatement({
-                if: bscFactory.createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark.location),
+            ifStatement = bscFactory.brs.createIfStatement({
+                if: bscFactory.brs.createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark.location),
                 condition: ternaryExpression.test,
-                then: bscFactory.createToken(TokenKind.Then, 'then', ternaryExpression.tokens.questionMark.location),
-                thenBranch: bscFactory.createBlock({
+                then: bscFactory.brs.createToken(TokenKind.Then, 'then', ternaryExpression.tokens.questionMark.location),
+                thenBranch: bscFactory.brs.createBlock({
                     statements: [
-                        bscFactory.createIndexedSetStatement({
+                        bscFactory.brs.createIndexedSetStatement({
                             obj: parent.obj,
                             openingSquare: parent.tokens.openingSquare,
                             indexes: parent.indexes,
@@ -151,10 +151,10 @@ export class BrsFilePreTranspileProcessor {
                         })
                     ]
                 }),
-                else: bscFactory.createToken(TokenKind.Else, 'else', ternaryExpression.tokens.questionMark.location),
-                elseBranch: bscFactory.createBlock({
+                else: bscFactory.brs.createToken(TokenKind.Else, 'else', ternaryExpression.tokens.questionMark.location),
+                elseBranch: bscFactory.brs.createBlock({
                     statements: [
-                        bscFactory.createIndexedSetStatement({
+                        bscFactory.brs.createIndexedSetStatement({
                             obj: parent.obj,
                             openingSquare: util.cloneToken(parent.tokens.openingSquare),
                             indexes: parent.indexes?.map(x => x.clone()),
@@ -164,14 +164,14 @@ export class BrsFilePreTranspileProcessor {
                         })
                     ]
                 }),
-                endIf: bscFactory.createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark.location)
+                endIf: bscFactory.brs.createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark.location)
             });
         } else if (isAugmentedAssignmentStatement(parent)) {
-            ifStatement = bscFactory.createIfStatement({
-                if: bscFactory.createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark.location),
+            ifStatement = bscFactory.brs.createIfStatement({
+                if: bscFactory.brs.createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark.location),
                 condition: ternaryExpression.test,
-                then: bscFactory.createToken(TokenKind.Then, 'then', ternaryExpression.tokens.questionMark.location),
-                thenBranch: bscFactory.createBlock({
+                then: bscFactory.brs.createToken(TokenKind.Then, 'then', ternaryExpression.tokens.questionMark.location),
+                thenBranch: bscFactory.brs.createBlock({
                     statements: [
                         new AugmentedAssignmentStatement({
                             item: parent.item,
@@ -180,8 +180,8 @@ export class BrsFilePreTranspileProcessor {
                         })
                     ]
                 }),
-                else: bscFactory.createToken(TokenKind.Else, 'else', ternaryExpression.tokens.questionMark.location),
-                elseBranch: bscFactory.createBlock({
+                else: bscFactory.brs.createToken(TokenKind.Else, 'else', ternaryExpression.tokens.questionMark.location),
+                elseBranch: bscFactory.brs.createBlock({
                     statements: [
                         new AugmentedAssignmentStatement({
                             item: parent.item.clone(),
@@ -190,7 +190,7 @@ export class BrsFilePreTranspileProcessor {
                         })
                     ]
                 }),
-                endIf: bscFactory.createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark.location)
+                endIf: bscFactory.brs.createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark.location)
             });
         }
 
@@ -227,7 +227,7 @@ export class BrsFilePreTranspileProcessor {
             return {
                 enum: result.item,
                 value: new LiteralExpression({
-                    value: bscFactory.createToken(
+                    value: bscFactory.brs.createToken(
                         //just use float literal for now...it will transpile properly with any literal value
                         value?.startsWith('"') ? TokenKind.StringLiteral : TokenKind.FloatLiteral,
                         value
@@ -260,7 +260,7 @@ export class BrsFilePreTranspileProcessor {
                 return {
                     namespace: result,
                     value: new VariableExpression({
-                        name: bscFactory.createToken(TokenKind.Identifier, parts.join('_') + '_' + memberName)
+                        name: bscFactory.brs.createToken(TokenKind.Identifier, parts.join('_') + '_' + memberName)
                     })
                 };
             }

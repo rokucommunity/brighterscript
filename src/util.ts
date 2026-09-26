@@ -38,7 +38,7 @@ import { AstNodeKind } from './parser/AstNode';
 import type { UnresolvedSymbol } from './AstValidationSegmenter';
 import type { GetSymbolTypeOptions, SymbolTable } from './SymbolTable';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
-import { bscFactory } from './BscFactory';
+import { bscFactory } from './factory/BscFactory';
 import { MAX_RELATED_INFOS_COUNT } from './diagnosticUtils';
 import type { BscType } from './types/BscType';
 import { UnionType, unionTypeFactory } from './types/UnionType';
@@ -1482,7 +1482,7 @@ export class Util {
             typeDescriptorLower = parensFilter[1].trim();
         }
 
-        const bscType = this.tokenToBscType(bscFactory.createToken(TokenKind.Identifier, typeDescriptorLower));
+        const bscType = this.tokenToBscType(bscFactory.brs.createToken(TokenKind.Identifier, typeDescriptorLower));
         if (bscType) {
             return bscType;
         }
@@ -2226,7 +2226,7 @@ export class Util {
                 case AstNodeKind.FunctionParameterExpression:
                     return [(nextPart as FunctionParameterExpression).tokens.name];
                 case AstNodeKind.GroupingExpression:
-                    parts.push(bscFactory.createIdentifier('()', nextPart.location));
+                    parts.push(bscFactory.brs.createIdentifier('()', nextPart.location));
                     break loop;
                 default:
                     //we found a non-DottedGet expression, so return because this whole operation is invalid.
@@ -2920,7 +2920,7 @@ export class Util {
                 type: funcType,
                 data: options.data,
                 location: methodNameToken.location,
-                separatorToken: bscFactory.createToken(TokenKind.Callfunc),
+                separatorToken: bscFactory.brs.createToken(TokenKind.Callfunc),
                 astNode: callExpr
             }));
             if (options.ignoreCall) {

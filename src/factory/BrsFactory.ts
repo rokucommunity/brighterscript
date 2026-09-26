@@ -1,18 +1,11 @@
 import type { Location } from 'vscode-languageserver';
-import type { Identifier, Token } from './lexer/Token';
-import type { PrintSeparatorToken } from './lexer/TokenKind';
-import { TokenKind } from './lexer/TokenKind';
-import type { Expression, Statement } from './parser/AstNode';
-import type { BscType } from './types/BscType';
-import type { SGToken } from './parser/SGTypes';
-import { BinaryExpression, CallExpression, FunctionExpression, FunctionParameterExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, LiteralExpression, PrintSeparatorExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AAMemberExpression, AAIndexedMemberExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, TernaryExpression, NullCoalescingExpression, RegexLiteralExpression, TypeExpression, TypecastExpression, TypedArrayExpression, InlineInterfaceExpression, InlineInterfaceMemberExpression, TypedFunctionTypeExpression } from './parser/Expression';
-import { EmptyStatement, Body, AssignmentStatement, AugmentedAssignmentStatement, Block, ExpressionStatement, ExitStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, DimStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, InterfaceStatement, InterfaceFieldStatement, InterfaceMethodStatement, ClassStatement, MethodStatement, FieldStatement, TryCatchStatement, CatchStatement, ThrowStatement, EnumStatement, EnumMemberStatement, ConstStatement, ContinueStatement, TypecastStatement, ConditionalCompileErrorStatement, AliasStatement, ConditionalCompileStatement, ConditionalCompileConstStatement, TypeStatement } from './parser/Statement';
-import { SGAttribute, SGElement, SGProlog, SGNode, SGChildren, SGCustomization, SGScript, SGInterfaceField, SGInterfaceFunction, SGInterface, SGComponent, SGAst } from './parser/SGTypes';
-import { BrsFile } from './files/BrsFile';
-import { XmlFile } from './files/XmlFile';
-import { AssetFile } from './files/AssetFile';
-import type { FileData } from './files/LazyFileData';
-import type { Program } from './Program';
+import type { Identifier, Token } from '../lexer/Token';
+import type { PrintSeparatorToken } from '../lexer/TokenKind';
+import { TokenKind } from '../lexer/TokenKind';
+import type { Expression, Statement } from '../parser/AstNode';
+import type { BscType } from '../types/BscType';
+import { BinaryExpression, CallExpression, FunctionExpression, FunctionParameterExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, LiteralExpression, PrintSeparatorExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AAMemberExpression, AAIndexedMemberExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, TernaryExpression, NullCoalescingExpression, RegexLiteralExpression, TypeExpression, TypecastExpression, TypedArrayExpression, InlineInterfaceExpression, InlineInterfaceMemberExpression, TypedFunctionTypeExpression } from '../parser/Expression';
+import { EmptyStatement, Body, AssignmentStatement, AugmentedAssignmentStatement, Block, ExpressionStatement, ExitStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, DimStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, InterfaceStatement, InterfaceFieldStatement, InterfaceMethodStatement, ClassStatement, MethodStatement, FieldStatement, TryCatchStatement, CatchStatement, ThrowStatement, EnumStatement, EnumMemberStatement, ConstStatement, ContinueStatement, TypecastStatement, ConditionalCompileErrorStatement, AliasStatement, ConditionalCompileStatement, ConditionalCompileConstStatement, TypeStatement } from '../parser/Statement';
 
 const tokenDefaults = {
     [TokenKind.BackTick]: '`',
@@ -85,57 +78,12 @@ const tokenDefaults = {
 };
 
 /**
- * A token for SceneGraph xml nodes. Can be passed as a plain string, which will be converted to an `SGToken` with no location.
- */
-export type SGTokenLike = SGToken | string;
-
-/**
- * The options used to create any SceneGraph xml element
- */
-export interface SGElementFactoryOptions {
-    startTagOpen?: SGTokenLike;
-    startTagName?: SGTokenLike;
-    /**
-     * The attributes for this element. Can be an array of `SGAttribute`, or an object whose keys are the attribute names and values are the attribute values
-     */
-    attributes?: SGAttribute[] | Record<string, string>;
-    startTagClose?: SGTokenLike;
-    elements?: SGElement[];
-    endTagOpen?: SGTokenLike;
-    endTagName?: SGTokenLike;
-    endTagClose?: SGTokenLike;
-}
-
-/**
- * A factory for creating everything in BrighterScript: tokens, AST nodes, SceneGraph xml nodes, and files.
- *
- * Plugins should use the factory provided by the program (`program.factory`) instead of calling constructors directly
- * (i.e. `program.factory.createCallExpression(...)` instead of `new CallExpression(...)`). A plugin may be bundled with a
- * different version of brighterscript than the one actually running it (the cli or the language server). Objects created
- * from the plugin's own copy of brighterscript would miss any bug fixes or new fields from the running version, while objects
- * created through `program.factory` always come from the running version.
- *
- * The method signatures here are a stable contract. The constructors may change over time, but these methods will
- * continue to accept the same options. Methods may be added in future versions, so plugins that need to support older
- * versions of brighterscript can check for a method before calling it (i.e. `if (program.factory.createTypeStatement) {...}`).
+ * A factory for creating BrightScript and BrighterScript tokens and AST nodes.
  *
  * Every AST method is named `create` followed by the class name (i.e. `createCallExpression` creates a `CallExpression`).
- * SceneGraph xml nodes are prefixed with `SG` (i.e. `createSGComponent`). Most syntax tokens are optional and will be
- * given their default text when omitted, and identifier names may be passed as plain strings.
+ * Most syntax tokens are optional and will be given their default text when omitted, and identifier names may be passed as plain strings.
  */
-export class BscFactory {
-    public constructor(
-        /**
-         * The program that files created by this factory will belong to
-         */
-        public readonly program?: Program
-    ) {
-    }
-
-    ////////////////////////////////
-    // Tokens
-    ////////////////////////////////
-
+export class BrsFactory {
     /**
      * Create a token. If `text` is omitted, the default text for that token kind is used (i.e. `(` for `TokenKind.LeftParen`)
      */
@@ -167,48 +115,6 @@ export class BscFactory {
      */
     private toIdentifier(name: Identifier | string): Identifier {
         return typeof name === 'string' ? this.createIdentifier(name) : name;
-    }
-
-    /**
-     * Create a token for a SceneGraph xml node
-     */
-    public createSGToken(text: string, location?: Location): SGToken {
-        return {
-            text: text,
-            location: location
-        };
-    }
-
-    /**
-     * Convert a string to an `SGToken`. If an `SGToken` (or undefined) is passed, it is returned unchanged
-     */
-    private toSGToken(token: SGTokenLike): SGToken {
-        return typeof token === 'string' ? this.createSGToken(token) : token;
-    }
-
-    ////////////////////////////////
-    // Files
-    ////////////////////////////////
-
-    /**
-     * Create a new `BrsFile` (for `.brs`, `.bs`, and `.d.bs` files)
-     */
-    public createBrsFile(options: { srcPath: string; destPath: string; pkgPath?: string; program?: Program }): BrsFile {
-        return new BrsFile({ ...options, program: options.program ?? this.program });
-    }
-
-    /**
-     * Create a new `XmlFile`
-     */
-    public createXmlFile(options: { srcPath: string; destPath: string; pkgPath?: string; program?: Program }): XmlFile {
-        return new XmlFile({ ...options, program: options.program ?? this.program });
-    }
-
-    /**
-     * Create a new `AssetFile` (for any file that brighterscript does not handle directly, like images or fonts)
-     */
-    public createAssetFile(options: { srcPath: string; destPath: string; pkgPath?: string; data?: FileData }): AssetFile {
-        return new AssetFile(options);
     }
 
     ////////////////////////////////
@@ -1000,141 +906,4 @@ export class BscFactory {
     }): TypeStatement {
         return new TypeStatement(options);
     }
-
-    ////////////////////////////////
-    // SceneGraph xml
-    ////////////////////////////////
-
-    /**
-     * Build the constructor options for an SG element, filling in default tokens.
-     * @param options the options passed by the caller
-     * @param defaultTagName the tag name to use when `options.startTagName` is not provided
-     * @param defaultSelfClosing if true, the element will be self-closing (i.e. `<field />`) when it has no child elements
-     */
-    private getSGElementOptions(options: SGElementFactoryOptions | undefined, defaultTagName: string | undefined, defaultSelfClosing: boolean) {
-        const startTagName = this.toSGToken(options?.startTagName ?? defaultTagName);
-        const selfClosing = defaultSelfClosing && !options?.elements?.length;
-
-        let attributes: SGAttribute[];
-        if (Array.isArray(options?.attributes)) {
-            attributes = options.attributes;
-        } else {
-            attributes = Object.entries(options?.attributes ?? {}).map(([key, value]) => this.createSGAttribute({ key: key, value: value }));
-        }
-        return {
-            startTagOpen: this.toSGToken(options?.startTagOpen ?? '<'),
-            startTagName: startTagName,
-            attributes: attributes,
-            startTagClose: this.toSGToken(options?.startTagClose ?? (selfClosing ? '/>' : '>')),
-            elements: options?.elements ?? [],
-            endTagOpen: selfClosing ? undefined : this.toSGToken(options?.endTagOpen ?? '</'),
-            endTagName: selfClosing ? undefined : this.toSGToken(options?.endTagName ?? startTagName?.text),
-            endTagClose: selfClosing ? undefined : this.toSGToken(options?.endTagClose ?? '>')
-        };
-    }
-
-    /**
-     * Create an `SGAttribute` (i.e. `name="value"`). The `=` and quotes default to their standard text
-     */
-    public createSGAttribute(options: {
-        key: SGTokenLike;
-        equals?: SGTokenLike;
-        openingQuote?: SGTokenLike;
-        value?: SGTokenLike;
-        closingQuote?: SGTokenLike;
-    }): SGAttribute {
-        return new SGAttribute({
-            key: this.toSGToken(options.key),
-            equals: this.toSGToken(options.equals ?? '='),
-            openingQuote: this.toSGToken(options.openingQuote ?? '"'),
-            value: this.toSGToken(options.value ?? ''),
-            closingQuote: this.toSGToken(options.closingQuote ?? '"')
-        });
-    }
-
-    /**
-     * Create a generic SceneGraph xml element. `startTagName` is required
-     */
-    public createSGElement(options: SGElementFactoryOptions & { startTagName: SGTokenLike }): SGElement {
-        return new SGElement(this.getSGElementOptions(options, undefined, true));
-    }
-
-    /**
-     * Create the xml prolog (i.e. `<?xml version="1.0" encoding="utf-8" ?>`)
-     */
-    public createSGProlog(options?: SGElementFactoryOptions): SGProlog {
-        return new SGProlog(this.getSGElementOptions({ startTagOpen: '<?', startTagClose: '?>', ...options }, 'xml', true));
-    }
-
-    /**
-     * Create a SceneGraph node element (i.e. `<Label />`). `startTagName` is required
-     */
-    public createSGNode(options: SGElementFactoryOptions & { startTagName: SGTokenLike }): SGNode {
-        return new SGNode(this.getSGElementOptions(options, undefined, true));
-    }
-
-    /**
-     * Create a `<children>` element
-     */
-    public createSGChildren(options?: SGElementFactoryOptions): SGChildren {
-        return new SGChildren(this.getSGElementOptions(options, 'children', false));
-    }
-
-    /**
-     * Create a `<customization>` element
-     */
-    public createSGCustomization(options?: SGElementFactoryOptions): SGCustomization {
-        return new SGCustomization(this.getSGElementOptions(options, 'customization', false));
-    }
-
-    /**
-     * Create a `<script>` element
-     */
-    public createSGScript(options?: SGElementFactoryOptions): SGScript {
-        return new SGScript(this.getSGElementOptions(options, 'script', true));
-    }
-
-    /**
-     * Create an interface `<field>` element
-     */
-    public createSGInterfaceField(options?: SGElementFactoryOptions): SGInterfaceField {
-        return new SGInterfaceField(this.getSGElementOptions(options, 'field', true));
-    }
-
-    /**
-     * Create an interface `<function>` element
-     */
-    public createSGInterfaceFunction(options?: SGElementFactoryOptions): SGInterfaceFunction {
-        return new SGInterfaceFunction(this.getSGElementOptions(options, 'function', true));
-    }
-
-    /**
-     * Create an `<interface>` element
-     */
-    public createSGInterface(options?: SGElementFactoryOptions): SGInterface {
-        return new SGInterface(this.getSGElementOptions(options, 'interface', false));
-    }
-
-    /**
-     * Create a `<component>` element
-     */
-    public createSGComponent(options?: SGElementFactoryOptions): SGComponent {
-        return new SGComponent(this.getSGElementOptions(options, 'component', false));
-    }
-
-    public createSGAst(options?: {
-        prologElement?: SGProlog;
-        rootElement?: SGElement;
-        componentElement?: SGComponent;
-    }): SGAst {
-        return new SGAst(options);
-    }
 }
-
-/**
- * A shared factory used internally by brighterscript.
- *
- * Plugins should NOT use this. Use `program.factory` instead, which ensures that objects are created by the version of
- * brighterscript that is actually running the plugin.
- */
-export const bscFactory = new BscFactory();

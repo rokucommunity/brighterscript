@@ -17,7 +17,7 @@ import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiag
 import { ParseMode, Parser } from '../parser/Parser';
 import { Block, FunctionStatement } from '../parser/Statement';
 import { ImportStatement, PrintStatement } from '../parser/Statement';
-import { bscFactory } from '../BscFactory';
+import { bscFactory } from '../factory/BscFactory';
 import * as fsExtra from 'fs-extra';
 import undent from 'undent';
 import { tempDir, rootDir } from '../testHelpers.spec';
@@ -614,8 +614,8 @@ describe('BrsFile', () => {
         expect(file.ownScriptImports).to.be.empty;
         file.parser.ast.statements.push(
             new ImportStatement({
-                import: bscFactory.createToken(TokenKind.Import),
-                path: bscFactory.createToken(TokenKind.StringLiteral, 'pkg:/source/lib.brs')
+                import: bscFactory.brs.createToken(TokenKind.Import),
+                path: bscFactory.brs.createToken(TokenKind.StringLiteral, 'pkg:/source/lib.brs')
             })
         );
         expect(file.ownScriptImports).to.be.empty;
@@ -2543,8 +2543,8 @@ describe('BrsFile', () => {
                 `);
                 const body = file.ast.findChild<Block>(isBlock);
                 body.statements.push(new CallExpression({
-                    callee: new LiteralExpression({ value: bscFactory.createIdentifier('lcase') }),
-                    args: [bscFactory.createStringLiteral('HELLO')]
+                    callee: new LiteralExpression({ value: bscFactory.brs.createIdentifier('lcase') }),
+                    args: [bscFactory.brs.createStringLiteral('HELLO')]
                 }));
 
                 await testTranspile(file, `
@@ -2561,7 +2561,7 @@ describe('BrsFile', () => {
                 `);
                 const body = file.ast.findChild<Block>(isBlock);
                 body.statements.push(new PrintStatement({
-                    expressions: [bscFactory.createStringLiteral('HELLO')]
+                    expressions: [bscFactory.brs.createStringLiteral('HELLO')]
                 }));
 
                 await testTranspile(file, `
@@ -2579,7 +2579,7 @@ describe('BrsFile', () => {
                     func: new FunctionExpression({
                         body: new Block({ statements: [] })
                     }),
-                    name: bscFactory.createIdentifier('main')
+                    name: bscFactory.brs.createIdentifier('main')
                 }));
 
                 await testTranspile(file, `
@@ -4769,20 +4769,20 @@ describe('BrsFile', () => {
                 `);
                 program.validate();
                 const funcStmt = mainFile.ast.statements[0] as FunctionStatement;
-                funcStmt.leadingTrivia.push(bscFactory.createToken(TokenKind.Comment, `'comment before function`), bscFactory.createToken(TokenKind.Newline));
-                funcStmt.func.body.statements[0].leadingTrivia.unshift(bscFactory.createToken(TokenKind.Comment, `'comment after func declaration`));
+                funcStmt.leadingTrivia.push(bscFactory.brs.createToken(TokenKind.Comment, `'comment before function`), bscFactory.brs.createToken(TokenKind.Newline));
+                funcStmt.func.body.statements[0].leadingTrivia.unshift(bscFactory.brs.createToken(TokenKind.Comment, `'comment after func declaration`));
 
                 funcStmt.func.body.statements[0].leadingTrivia.push(
-                    bscFactory.createToken(TokenKind.Comment, `'comment at start of function`),
-                    bscFactory.createToken(TokenKind.Newline)
+                    bscFactory.brs.createToken(TokenKind.Comment, `'comment at start of function`),
+                    bscFactory.brs.createToken(TokenKind.Newline)
                 );
 
                 funcStmt.func.endTrivia.push(
-                    bscFactory.createToken(TokenKind.Comment, `'comment at end of function`),
-                    bscFactory.createToken(TokenKind.Newline)
+                    bscFactory.brs.createToken(TokenKind.Comment, `'comment at end of function`),
+                    bscFactory.brs.createToken(TokenKind.Newline)
                 );
 
-                mainFile.parser.eofToken.leadingTrivia.push(bscFactory.createToken(TokenKind.Comment, `'comment at end of file`));
+                mainFile.parser.eofToken.leadingTrivia.push(bscFactory.brs.createToken(TokenKind.Comment, `'comment at end of file`));
 
 
                 await testTranspile(mainFile, `

@@ -14,7 +14,7 @@ import { ReferenceType } from './types/ReferenceType';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InterfaceType, InvalidType, LongIntegerType, ObjectType, StringType, TypedFunctionType, UninitializedType, UnionType, VoidType } from './types';
 import { TokenKind } from './lexer/TokenKind';
-import { bscFactory } from './BscFactory';
+import { bscFactory } from './factory/BscFactory';
 import { Parser } from './parser/Parser';
 import type { FunctionStatement } from './parser/Statement';
 import { ComponentType } from './types/ComponentType';
@@ -58,13 +58,13 @@ describe('util', () => {
 
         it('returns var name', () => {
             expect(
-                util.getAllDottedGetPartsAsString(bscFactory.createVariableExpression({ name: 'alpha' }))
+                util.getAllDottedGetPartsAsString(bscFactory.brs.createVariableExpression({ name: 'alpha' }))
             ).to.eql('alpha');
         });
 
         it('returns dotted get name', () => {
             expect(
-                util.getAllDottedGetPartsAsString(bscFactory.createDottedIdentifier(['alpha', 'beta']))
+                util.getAllDottedGetPartsAsString(bscFactory.brs.createDottedIdentifier(['alpha', 'beta']))
             ).to.eql('alpha.beta');
         });
     });
@@ -1389,9 +1389,9 @@ describe('util', () => {
     describe('processTypeChain', () => {
         it('should  find the correct details in a list of type resolutions', () => {
             const nodes = [
-                bscFactory.createVariableExpression({ name: bscFactory.createIdentifier('Alpha', util.createLocation(1, 1, 2, 2)) }),
-                bscFactory.createVariableExpression({ name: bscFactory.createIdentifier('Beta', util.createLocation(2, 2, 3, 3)) }),
-                bscFactory.createVariableExpression({ name: bscFactory.createIdentifier('CharlieProp', util.createLocation(3, 3, 4, 4)) })
+                bscFactory.brs.createVariableExpression({ name: bscFactory.brs.createIdentifier('Alpha', util.createLocation(1, 1, 2, 2)) }),
+                bscFactory.brs.createVariableExpression({ name: bscFactory.brs.createIdentifier('Beta', util.createLocation(2, 2, 3, 3)) }),
+                bscFactory.brs.createVariableExpression({ name: bscFactory.brs.createIdentifier('CharlieProp', util.createLocation(3, 3, 4, 4)) })
             ];
 
             const chain = [
@@ -1410,12 +1410,12 @@ describe('util', () => {
 
         it('respects the separatorToken', () => {
             const nodes = [
-                bscFactory.createVariableExpression({ name: bscFactory.createIdentifier('Custom', util.createLocation(1, 1, 2, 2)) }),
-                bscFactory.createVariableExpression({ name: bscFactory.createIdentifier('someCallFunc', util.createLocation(2, 2, 3, 3)) })
+                bscFactory.brs.createVariableExpression({ name: bscFactory.brs.createIdentifier('Custom', util.createLocation(1, 1, 2, 2)) }),
+                bscFactory.brs.createVariableExpression({ name: bscFactory.brs.createIdentifier('someCallFunc', util.createLocation(2, 2, 3, 3)) })
             ];
             const chain = [
                 new TypeChainEntry({ name: 'roSGNodeCustom', type: new ComponentType('Custom'), data: { flags: SymbolTypeFlag.runtime }, astNode: nodes[0] }),
-                new TypeChainEntry({ name: 'someCallFunc', type: new TypedFunctionType(VoidType.instance), data: { flags: SymbolTypeFlag.runtime }, astNode: nodes[1], separatorToken: bscFactory.createToken(TokenKind.Callfunc) })
+                new TypeChainEntry({ name: 'someCallFunc', type: new TypedFunctionType(VoidType.instance), data: { flags: SymbolTypeFlag.runtime }, astNode: nodes[1], separatorToken: bscFactory.brs.createToken(TokenKind.Callfunc) })
             ];
 
             const result = util.processTypeChain(chain);
@@ -1426,9 +1426,9 @@ describe('util', () => {
     describe('binaryOperatorResultType', () => {
         it('returns the correct type for math operations', () => {
             // String + String is string
-            expectTypeToBe(util.binaryOperatorResultType(StringType.instance, bscFactory.createToken(TokenKind.Plus), StringType.instance), StringType);
+            expectTypeToBe(util.binaryOperatorResultType(StringType.instance, bscFactory.brs.createToken(TokenKind.Plus), StringType.instance), StringType);
             // string plus anything else is an error - return dynamic
-            expect(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Plus), StringType.instance)).to.be.undefined;
+            expect(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Plus), StringType.instance)).to.be.undefined;
 
             const boxedInt = new InterfaceType('roInt');
             boxedInt.isBuiltIn = true;
@@ -1436,53 +1436,53 @@ describe('util', () => {
             boxedFloat.isBuiltIn = true;
 
             // Plus
-            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, bscFactory.createToken(TokenKind.Plus), IntegerType.instance), DoubleType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Plus), FloatType.instance), FloatType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Plus), LongIntegerType.instance), LongIntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.createToken(TokenKind.Plus), boxedFloat), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, bscFactory.brs.createToken(TokenKind.Plus), IntegerType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Plus), FloatType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Plus), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.brs.createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.brs.createToken(TokenKind.Plus), boxedFloat), FloatType);
 
             // Subtract
-            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, bscFactory.createToken(TokenKind.Minus), IntegerType.instance), DoubleType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Minus), FloatType.instance), FloatType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Minus), LongIntegerType.instance), LongIntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Minus), IntegerType.instance), IntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.createToken(TokenKind.Plus), boxedFloat), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, bscFactory.brs.createToken(TokenKind.Minus), IntegerType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Minus), FloatType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Minus), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Minus), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.brs.createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.brs.createToken(TokenKind.Plus), boxedFloat), FloatType);
 
             // Multiply
-            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, bscFactory.createToken(TokenKind.Star), IntegerType.instance), DoubleType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Star), FloatType.instance), FloatType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Star), LongIntegerType.instance), LongIntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Star), IntegerType.instance), IntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.createToken(TokenKind.Star), IntegerType.instance), IntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.createToken(TokenKind.Star), boxedFloat), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, bscFactory.brs.createToken(TokenKind.Star), IntegerType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Star), FloatType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Star), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Star), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.brs.createToken(TokenKind.Star), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.brs.createToken(TokenKind.Star), boxedFloat), FloatType);
 
             // Mod
-            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, bscFactory.createToken(TokenKind.Mod), IntegerType.instance), DoubleType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Mod), FloatType.instance), FloatType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Mod), LongIntegerType.instance), LongIntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Mod), IntegerType.instance), IntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.createToken(TokenKind.Mod), IntegerType.instance), IntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.createToken(TokenKind.Mod), boxedFloat), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, bscFactory.brs.createToken(TokenKind.Mod), IntegerType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Mod), FloatType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Mod), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Mod), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.brs.createToken(TokenKind.Mod), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.brs.createToken(TokenKind.Mod), boxedFloat), FloatType);
 
             // Divide
-            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, bscFactory.createToken(TokenKind.Forwardslash), IntegerType.instance), DoubleType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Forwardslash), FloatType.instance), FloatType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Forwardslash), LongIntegerType.instance), LongIntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Forwardslash), IntegerType.instance), FloatType); // int/int -> float
-            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.createToken(TokenKind.Plus), boxedFloat), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, bscFactory.brs.createToken(TokenKind.Forwardslash), IntegerType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Forwardslash), FloatType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Forwardslash), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Forwardslash), IntegerType.instance), FloatType); // int/int -> float
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.brs.createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.brs.createToken(TokenKind.Plus), boxedFloat), FloatType);
 
 
             // Exponent
-            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, bscFactory.createToken(TokenKind.Caret), IntegerType.instance), DoubleType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Caret), FloatType.instance), FloatType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Caret), LongIntegerType.instance), DoubleType);// long^int -> Double, int^long -> Double
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Caret), IntegerType.instance), IntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.createToken(TokenKind.Caret), IntegerType.instance), IntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.createToken(TokenKind.Caret), boxedFloat), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, bscFactory.brs.createToken(TokenKind.Caret), IntegerType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Caret), FloatType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Caret), LongIntegerType.instance), DoubleType);// long^int -> Double, int^long -> Double
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Caret), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.brs.createToken(TokenKind.Caret), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.brs.createToken(TokenKind.Caret), boxedFloat), FloatType);
         });
 
         it('returns the correct type for Bitshift operations', () => {
@@ -1492,20 +1492,20 @@ describe('util', () => {
             boxedFloat.isBuiltIn = true;
 
             // <<
-            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, bscFactory.createToken(TokenKind.LeftShift), IntegerType.instance), IntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.LeftShift), FloatType.instance), IntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.LeftShift), LongIntegerType.instance), LongIntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.LeftShift), IntegerType.instance), IntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.createToken(TokenKind.LeftShift), IntegerType.instance), IntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.createToken(TokenKind.LeftShift), boxedFloat), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, bscFactory.brs.createToken(TokenKind.LeftShift), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.LeftShift), FloatType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.LeftShift), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.LeftShift), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.brs.createToken(TokenKind.LeftShift), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.brs.createToken(TokenKind.LeftShift), boxedFloat), IntegerType);
 
             // >>
-            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, bscFactory.createToken(TokenKind.RightShift), IntegerType.instance), IntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.RightShift), FloatType.instance), IntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.RightShift), LongIntegerType.instance), LongIntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.RightShift), IntegerType.instance), IntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.createToken(TokenKind.RightShift), IntegerType.instance), IntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.createToken(TokenKind.RightShift), boxedFloat), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, bscFactory.brs.createToken(TokenKind.RightShift), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.RightShift), FloatType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.RightShift), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.RightShift), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.brs.createToken(TokenKind.RightShift), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.brs.createToken(TokenKind.RightShift), boxedFloat), IntegerType);
         });
 
         it('returns the correct type for Comparison operations', () => {
@@ -1515,115 +1515,115 @@ describe('util', () => {
             boxedFloat.isBuiltIn = true;
 
             // =
-            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, bscFactory.createToken(TokenKind.Equal), IntegerType.instance), BooleanType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Equal), FloatType.instance), BooleanType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Equal), LongIntegerType.instance), BooleanType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Equal), IntegerType.instance), BooleanType);
-            expectTypeToBe(util.binaryOperatorResultType(InvalidType.instance, bscFactory.createToken(TokenKind.Equal), IntegerType.instance), BooleanType); // = accepts invalid
-            expect(util.binaryOperatorResultType(StringType.instance, bscFactory.createToken(TokenKind.Equal), IntegerType.instance)).to.be.undefined; // only one string is not accepted
-            expectTypeToBe(util.binaryOperatorResultType(StringType.instance, bscFactory.createToken(TokenKind.Equal), StringType.instance), BooleanType); // both strings is accepted
-            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.createToken(TokenKind.Equal), IntegerType.instance), BooleanType);
-            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.createToken(TokenKind.Equal), boxedFloat), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, bscFactory.brs.createToken(TokenKind.Equal), IntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Equal), FloatType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Equal), LongIntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Equal), IntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(InvalidType.instance, bscFactory.brs.createToken(TokenKind.Equal), IntegerType.instance), BooleanType); // = accepts invalid
+            expect(util.binaryOperatorResultType(StringType.instance, bscFactory.brs.createToken(TokenKind.Equal), IntegerType.instance)).to.be.undefined; // only one string is not accepted
+            expectTypeToBe(util.binaryOperatorResultType(StringType.instance, bscFactory.brs.createToken(TokenKind.Equal), StringType.instance), BooleanType); // both strings is accepted
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.brs.createToken(TokenKind.Equal), IntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.brs.createToken(TokenKind.Equal), boxedFloat), BooleanType);
             // <>
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.LessGreater), InvalidType.instance), BooleanType); // <> accepts invalid
-            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.createToken(TokenKind.LessGreater), InvalidType.instance), BooleanType);
-            expectTypeToBe(util.binaryOperatorResultType(boxedFloat, bscFactory.createToken(TokenKind.LessGreater), InvalidType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.LessGreater), InvalidType.instance), BooleanType); // <> accepts invalid
+            expectTypeToBe(util.binaryOperatorResultType(boxedInt, bscFactory.brs.createToken(TokenKind.LessGreater), InvalidType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(boxedFloat, bscFactory.brs.createToken(TokenKind.LessGreater), InvalidType.instance), BooleanType);
             // > - does not accept invalid
-            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, bscFactory.createToken(TokenKind.Greater), IntegerType.instance), BooleanType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Greater), FloatType.instance), BooleanType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Greater), LongIntegerType.instance), BooleanType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Greater), IntegerType.instance), BooleanType);
-            expect(util.binaryOperatorResultType(InvalidType.instance, bscFactory.createToken(TokenKind.Greater), IntegerType.instance)).to.be.undefined; // invalid not accepted
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, bscFactory.brs.createToken(TokenKind.Greater), IntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Greater), FloatType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Greater), LongIntegerType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Greater), IntegerType.instance), BooleanType);
+            expect(util.binaryOperatorResultType(InvalidType.instance, bscFactory.brs.createToken(TokenKind.Greater), IntegerType.instance)).to.be.undefined; // invalid not accepted
             // etc. - all should be boolean
         });
 
         it('returns the correct type for Logical/bitwise operations', () => {
             // and
-            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, bscFactory.createToken(TokenKind.And), IntegerType.instance), IntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.And), FloatType.instance), IntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.And), BooleanType.instance), BooleanType);
-            expectTypeToBe(util.binaryOperatorResultType(BooleanType.instance, bscFactory.createToken(TokenKind.And), IntegerType.instance), BooleanType);
-            expect(util.binaryOperatorResultType(InvalidType.instance, bscFactory.createToken(TokenKind.And), IntegerType.instance)).to.be.undefined; // invalid not accepted
-            expect(util.binaryOperatorResultType(StringType.instance, bscFactory.createToken(TokenKind.And), IntegerType.instance)).to.be.undefined; // strings are not accepted
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, bscFactory.brs.createToken(TokenKind.And), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.And), FloatType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.And), BooleanType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(BooleanType.instance, bscFactory.brs.createToken(TokenKind.And), IntegerType.instance), BooleanType);
+            expect(util.binaryOperatorResultType(InvalidType.instance, bscFactory.brs.createToken(TokenKind.And), IntegerType.instance)).to.be.undefined; // invalid not accepted
+            expect(util.binaryOperatorResultType(StringType.instance, bscFactory.brs.createToken(TokenKind.And), IntegerType.instance)).to.be.undefined; // strings are not accepted
             // or
-            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, bscFactory.createToken(TokenKind.Or), IntegerType.instance), IntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Or), FloatType.instance), IntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Or), LongIntegerType.instance), LongIntegerType);
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Or), IntegerType.instance), IntegerType);
-            expect(util.binaryOperatorResultType(InvalidType.instance, bscFactory.createToken(TokenKind.Or), IntegerType.instance)).to.be.undefined;
+            expectTypeToBe(util.binaryOperatorResultType(DoubleType.instance, bscFactory.brs.createToken(TokenKind.Or), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Or), FloatType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Or), LongIntegerType.instance), LongIntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Or), IntegerType.instance), IntegerType);
+            expect(util.binaryOperatorResultType(InvalidType.instance, bscFactory.brs.createToken(TokenKind.Or), IntegerType.instance)).to.be.undefined;
         });
 
         it('assumes a dynamic type is a valid type', () => {
-            expectTypeToBe(util.binaryOperatorResultType(StringType.instance, bscFactory.createToken(TokenKind.Plus), DynamicType.instance), StringType);
-            expectTypeToBe(util.binaryOperatorResultType(DynamicType.instance, bscFactory.createToken(TokenKind.Plus), StringType.instance), StringType);
-            expectTypeToBe(util.binaryOperatorResultType(FloatType.instance, bscFactory.createToken(TokenKind.ForwardslashEqual), DynamicType.instance), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(StringType.instance, bscFactory.brs.createToken(TokenKind.Plus), DynamicType.instance), StringType);
+            expectTypeToBe(util.binaryOperatorResultType(DynamicType.instance, bscFactory.brs.createToken(TokenKind.Plus), StringType.instance), StringType);
+            expectTypeToBe(util.binaryOperatorResultType(FloatType.instance, bscFactory.brs.createToken(TokenKind.ForwardslashEqual), DynamicType.instance), FloatType);
 
             // "and" / "or" are logic operators with booleans
-            expectTypeToBe(util.binaryOperatorResultType(DynamicType.instance, bscFactory.createToken(TokenKind.And), BooleanType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(DynamicType.instance, bscFactory.brs.createToken(TokenKind.And), BooleanType.instance), BooleanType);
 
             // "and" / "or" are bitwise operators with number
-            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.createToken(TokenKind.Or), DynamicType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(IntegerType.instance, bscFactory.brs.createToken(TokenKind.Or), DynamicType.instance), IntegerType);
         });
 
         it('handles union types ', () => {
             const floatIntUnion = new UnionType([IntegerType.instance, FloatType.instance]);
-            expectTypeToBe(util.binaryOperatorResultType(floatIntUnion, bscFactory.createToken(TokenKind.Plus), DoubleType.instance), DoubleType);
+            expectTypeToBe(util.binaryOperatorResultType(floatIntUnion, bscFactory.brs.createToken(TokenKind.Plus), DoubleType.instance), DoubleType);
         });
 
         it('handles 2 union types', () => {
             const floatIntUnion = new UnionType([IntegerType.instance, FloatType.instance]);
-            expectTypeToBe(util.binaryOperatorResultType(floatIntUnion, bscFactory.createToken(TokenKind.Plus), floatIntUnion), FloatType);
+            expectTypeToBe(util.binaryOperatorResultType(floatIntUnion, bscFactory.brs.createToken(TokenKind.Plus), floatIntUnion), FloatType);
         });
 
         it('handles union types with diverse member types', () => {
             const myUnion = new UnionType([FloatType.instance, StringType.instance, BooleanType.instance]);
-            expectTypeToBe(util.binaryOperatorResultType(myUnion, bscFactory.createToken(TokenKind.Plus), myUnion), DynamicType);
+            expectTypeToBe(util.binaryOperatorResultType(myUnion, bscFactory.brs.createToken(TokenKind.Plus), myUnion), DynamicType);
         });
 
         it('handles union types with self-referencing unions', () => {
             const myUnion = new UnionType([FloatType.instance, StringType.instance, DynamicType.instance]);
             myUnion.addType(myUnion);
-            expectTypeToBe(util.binaryOperatorResultType(myUnion, bscFactory.createToken(TokenKind.Plus), myUnion), DynamicType);
+            expectTypeToBe(util.binaryOperatorResultType(myUnion, bscFactory.brs.createToken(TokenKind.Plus), myUnion), DynamicType);
         });
 
         it('handles object Types', () => {
-            expectTypeToBe(util.binaryOperatorResultType(new ObjectType(), bscFactory.createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(new ObjectType(), bscFactory.brs.createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
         });
 
         it('handles object Types', () => {
-            expectTypeToBe(util.binaryOperatorResultType(new ObjectType(), bscFactory.createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+            expectTypeToBe(util.binaryOperatorResultType(new ObjectType(), bscFactory.brs.createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
         });
 
         it('allows = and <> comparisons of a void type against invalid', () => {
-            expectTypeToBe(util.binaryOperatorResultType(VoidType.instance, bscFactory.createToken(TokenKind.Equal), InvalidType.instance), BooleanType);
-            expectTypeToBe(util.binaryOperatorResultType(InvalidType.instance, bscFactory.createToken(TokenKind.Equal), VoidType.instance), BooleanType);
-            expectTypeToBe(util.binaryOperatorResultType(VoidType.instance, bscFactory.createToken(TokenKind.LessGreater), InvalidType.instance), BooleanType);
-            expectTypeToBe(util.binaryOperatorResultType(InvalidType.instance, bscFactory.createToken(TokenKind.LessGreater), VoidType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(VoidType.instance, bscFactory.brs.createToken(TokenKind.Equal), InvalidType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(InvalidType.instance, bscFactory.brs.createToken(TokenKind.Equal), VoidType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(VoidType.instance, bscFactory.brs.createToken(TokenKind.LessGreater), InvalidType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(InvalidType.instance, bscFactory.brs.createToken(TokenKind.LessGreater), VoidType.instance), BooleanType);
         });
 
         it('allows = and <> comparisons of a void type against dynamic', () => {
-            expectTypeToBe(util.binaryOperatorResultType(VoidType.instance, bscFactory.createToken(TokenKind.Equal), DynamicType.instance), BooleanType);
-            expectTypeToBe(util.binaryOperatorResultType(VoidType.instance, bscFactory.createToken(TokenKind.LessGreater), DynamicType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(VoidType.instance, bscFactory.brs.createToken(TokenKind.Equal), DynamicType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(VoidType.instance, bscFactory.brs.createToken(TokenKind.LessGreater), DynamicType.instance), BooleanType);
         });
 
         it('still disallows non-comparison operators on a void type', () => {
-            expect(util.binaryOperatorResultType(VoidType.instance, bscFactory.createToken(TokenKind.Plus), InvalidType.instance)).to.be.undefined;
-            expect(util.binaryOperatorResultType(VoidType.instance, bscFactory.createToken(TokenKind.Less), InvalidType.instance)).to.be.undefined;
+            expect(util.binaryOperatorResultType(VoidType.instance, bscFactory.brs.createToken(TokenKind.Plus), InvalidType.instance)).to.be.undefined;
+            expect(util.binaryOperatorResultType(VoidType.instance, bscFactory.brs.createToken(TokenKind.Less), InvalidType.instance)).to.be.undefined;
         });
 
         it('still disallows comparisons of a void type against non-invalid/dynamic types', () => {
-            expect(util.binaryOperatorResultType(VoidType.instance, bscFactory.createToken(TokenKind.Equal), StringType.instance)).to.be.undefined;
+            expect(util.binaryOperatorResultType(VoidType.instance, bscFactory.brs.createToken(TokenKind.Equal), StringType.instance)).to.be.undefined;
         });
 
         it('still disallows = and <> comparisons of an uninitialized type against invalid', () => {
-            expect(util.binaryOperatorResultType(UninitializedType.instance, bscFactory.createToken(TokenKind.Equal), InvalidType.instance)).to.be.undefined;
-            expect(util.binaryOperatorResultType(UninitializedType.instance, bscFactory.createToken(TokenKind.LessGreater), InvalidType.instance)).to.be.undefined;
+            expect(util.binaryOperatorResultType(UninitializedType.instance, bscFactory.brs.createToken(TokenKind.Equal), InvalidType.instance)).to.be.undefined;
+            expect(util.binaryOperatorResultType(UninitializedType.instance, bscFactory.brs.createToken(TokenKind.LessGreater), InvalidType.instance)).to.be.undefined;
         });
     });
 
     describe('unaryOperatorResultType', () => {
         it('returns the correct type for minus operation', () => {
-            let minus = bscFactory.createToken(TokenKind.Minus);
+            let minus = bscFactory.brs.createToken(TokenKind.Minus);
             expectTypeToBe(util.unaryOperatorResultType(minus, IntegerType.instance), IntegerType);
             expectTypeToBe(util.unaryOperatorResultType(minus, FloatType.instance), FloatType);
             expect(util.unaryOperatorResultType(minus, BooleanType.instance)).to.be.undefined;
@@ -1638,7 +1638,7 @@ describe('util', () => {
         });
 
         it('returns the correct type for not operation', () => {
-            let notToken = bscFactory.createToken(TokenKind.Not);
+            let notToken = bscFactory.brs.createToken(TokenKind.Not);
             const boxedFloat = new InterfaceType('roFloat');
             boxedFloat.isBuiltIn = true;
             expectTypeToBe(util.unaryOperatorResultType(notToken, IntegerType.instance), IntegerType);
@@ -1652,7 +1652,7 @@ describe('util', () => {
         });
 
         it('handles object Types', () => {
-            expectTypeToBe(util.unaryOperatorResultType(bscFactory.createToken(TokenKind.Minus), new ObjectType()), ObjectType);
+            expectTypeToBe(util.unaryOperatorResultType(bscFactory.brs.createToken(TokenKind.Minus), new ObjectType()), ObjectType);
         });
     });
 
@@ -2057,20 +2057,20 @@ describe('util', () => {
         });
 
         it('returns false when there are no leading comments', () => {
-            const token = bscFactory.createToken(TokenKind.Identifier);
+            const token = bscFactory.brs.createToken(TokenKind.Identifier);
             token.leadingTrivia = [];
             expect(util.hasLeadingComments(token)).to.be.false;
         });
 
         it('returns true when there are leading comments', () => {
-            const token = bscFactory.createToken(TokenKind.Identifier);
-            token.leadingTrivia = [bscFactory.createToken(TokenKind.Comment, `'comment`)];
+            const token = bscFactory.brs.createToken(TokenKind.Identifier);
+            token.leadingTrivia = [bscFactory.brs.createToken(TokenKind.Comment, `'comment`)];
             expect(util.hasLeadingComments(token)).to.be.true;
         });
 
         it('does not crash on unexpected trivia item types', () => {
-            const token = bscFactory.createToken(TokenKind.Identifier);
-            token.leadingTrivia = [undefined, null, 1, true, 'string', {}, bscFactory.createToken(TokenKind.Comment, `'comment`)] as any[];
+            const token = bscFactory.brs.createToken(TokenKind.Identifier);
+            token.leadingTrivia = [undefined, null, 1, true, 'string', {}, bscFactory.brs.createToken(TokenKind.Comment, `'comment`)] as any[];
             expect(util.hasLeadingComments(token)).to.be.true;
         });
     });
@@ -2081,21 +2081,21 @@ describe('util', () => {
         });
 
         it('returns [] when there are no leading comments', () => {
-            const token = bscFactory.createToken(TokenKind.Identifier);
+            const token = bscFactory.brs.createToken(TokenKind.Identifier);
             token.leadingTrivia = [];
             expect(util.getLeadingComments(token)).to.eql([]);
         });
 
         it('returns true when there are leading comments', () => {
-            const token = bscFactory.createToken(TokenKind.Identifier);
-            token.leadingTrivia = [bscFactory.createToken(TokenKind.Comment, `'comment 1`)];
-            expect(util.getLeadingComments(token)).eql([bscFactory.createToken(TokenKind.Comment, `'comment 1`)]);
+            const token = bscFactory.brs.createToken(TokenKind.Identifier);
+            token.leadingTrivia = [bscFactory.brs.createToken(TokenKind.Comment, `'comment 1`)];
+            expect(util.getLeadingComments(token)).eql([bscFactory.brs.createToken(TokenKind.Comment, `'comment 1`)]);
         });
 
         it('does not crash on unexpected trivia item types', () => {
-            const token = bscFactory.createToken(TokenKind.Identifier);
-            token.leadingTrivia = [undefined, null, 1, true, 'string', {}, bscFactory.createToken(TokenKind.Comment, `'comment 2`)] as any[];
-            expect(util.getLeadingComments(token)).eql([bscFactory.createToken(TokenKind.Comment, `'comment 2`)]);
+            const token = bscFactory.brs.createToken(TokenKind.Identifier);
+            token.leadingTrivia = [undefined, null, 1, true, 'string', {}, bscFactory.brs.createToken(TokenKind.Comment, `'comment 2`)] as any[];
+            expect(util.getLeadingComments(token)).eql([bscFactory.brs.createToken(TokenKind.Comment, `'comment 2`)]);
         });
     });
 });

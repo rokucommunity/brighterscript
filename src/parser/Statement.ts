@@ -13,7 +13,7 @@ import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../a
 import { isBlock, isCallExpression, isCatchStatement, isClassType, isConditionalCompileStatement, isEnumMemberStatement, isEnumType, isEnumStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isUninitializedType, isVoidType, isWhileStatement } from '../astUtils/reflection';
 import type { GetTypeOptions } from '../interfaces';
 import { TypeChainEntry, type TranspileResult, type TypedefProvider } from '../interfaces';
-import { bscFactory } from '../BscFactory';
+import { bscFactory } from '../factory/BscFactory';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { SymbolTable } from '../SymbolTable';
@@ -188,7 +188,7 @@ export class AssignmentStatement extends Statement {
         return [
             state.transpileToken(this.tokens.name),
             ' ',
-            state.transpileToken(this.tokens.equals ?? bscFactory.createToken(TokenKind.Equal), '='),
+            state.transpileToken(this.tokens.equals ?? bscFactory.brs.createToken(TokenKind.Equal), '='),
             ' ',
             ...this.value.transpile(state)
         ];
@@ -752,7 +752,7 @@ export class IfStatement extends Statement {
     transpile(state: BrsTranspileState) {
         let results = [] as TranspileResult;
         //if   (already indented by block)
-        results.push(state.transpileToken(this.tokens.if ?? bscFactory.createToken(TokenKind.If)));
+        results.push(state.transpileToken(this.tokens.if ?? bscFactory.brs.createToken(TokenKind.If)));
         results.push(' ');
         //conditions
         results.push(...this.condition.transpile(state));
@@ -2801,7 +2801,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         let body = this.body;
         //inject an empty "new" method if missing
         if (!this.getConstructorFunction()) {
-            const constructor = bscFactory.createMethodStatement({ name: 'new', func: bscFactory.createFunctionExpression({ functionType: bscFactory.createToken(TokenKind.Sub) }) });
+            const constructor = bscFactory.brs.createMethodStatement({ name: 'new', func: bscFactory.brs.createFunctionExpression({ functionType: bscFactory.brs.createToken(TokenKind.Sub) }) });
             constructor.parent = this;
             //walk the constructor to set up parent links
             constructor.link();
@@ -2951,7 +2951,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
             return param.clone();
         }
         const nameParts = exprType.toString().split('.');
-        const qualifiedExpression = nameParts.length > 1 ? bscFactory.createDottedIdentifier(nameParts) : bscFactory.createVariableExpression({ name: nameParts[0] });
+        const qualifiedExpression = nameParts.length > 1 ? bscFactory.brs.createDottedIdentifier(nameParts) : bscFactory.brs.createVariableExpression({ name: nameParts[0] });
         return new FunctionParameterExpression({
             name: param.tokens.name,
             equals: param.tokens.equals,
@@ -3082,32 +3082,32 @@ export class ClassStatement extends Statement implements TypedefProvider {
         //inject an empty "new" method if missing
         if (!this.getConstructorFunction()) {
             if (ancestors.length === 0) {
-                body.unshift(bscFactory.createMethodStatement({ name: 'new', func: bscFactory.createFunctionExpression({ functionType: bscFactory.createToken(TokenKind.Sub) }) }));
+                body.unshift(bscFactory.brs.createMethodStatement({ name: 'new', func: bscFactory.brs.createFunctionExpression({ functionType: bscFactory.brs.createToken(TokenKind.Sub) }) }));
             } else {
                 const params = this.getConstructorParams(ancestors);
                 const call = new ExpressionStatement({
                     expression: new CallExpression({
                         callee: new VariableExpression({
-                            name: bscFactory.createToken(TokenKind.Identifier, 'super')
+                            name: bscFactory.brs.createToken(TokenKind.Identifier, 'super')
                         }),
-                        openingParen: bscFactory.createToken(TokenKind.LeftParen),
+                        openingParen: bscFactory.brs.createToken(TokenKind.LeftParen),
                         args: params.map(x => new VariableExpression({
                             name: x.tokens.name
                         })),
-                        closingParen: bscFactory.createToken(TokenKind.RightParen)
+                        closingParen: bscFactory.brs.createToken(TokenKind.RightParen)
                     })
                 });
                 body.unshift(
                     new MethodStatement({
                         modifiers: [],
-                        name: bscFactory.createIdentifier('new'),
+                        name: bscFactory.brs.createIdentifier('new'),
                         func: new FunctionExpression({
                             parameters: params.map(x => this.cloneConstructorParam(x)),
                             body: new Block({ statements: [call] }),
-                            functionType: bscFactory.createToken(TokenKind.Sub),
-                            endFunctionType: bscFactory.createToken(TokenKind.EndSub),
-                            leftParen: bscFactory.createToken(TokenKind.LeftParen),
-                            rightParen: bscFactory.createToken(TokenKind.RightParen)
+                            functionType: bscFactory.brs.createToken(TokenKind.Sub),
+                            endFunctionType: bscFactory.brs.createToken(TokenKind.EndSub),
+                            leftParen: bscFactory.brs.createToken(TokenKind.LeftParen),
+                            rightParen: bscFactory.brs.createToken(TokenKind.RightParen)
                         }),
                         override: null
                     })
@@ -3527,10 +3527,10 @@ export class MethodStatement extends FunctionStatement {
                     value: field.initialValue
                 })
                 : new AssignmentStatement({
-                    equals: bscFactory.createToken(TokenKind.Equal, '=', field.tokens.name.location),
+                    equals: bscFactory.brs.createToken(TokenKind.Equal, '=', field.tokens.name.location),
                     name: thisQualifiedName,
                     //if there is no initial value, set the initial value to `invalid`
-                    value: bscFactory.createInvalidLiteral('invalid', field.tokens.name.location)
+                    value: bscFactory.brs.createInvalidLiteral('invalid', field.tokens.name.location)
                 });
             // Add parent so namespace lookups work
             fieldAssignment.parent = state.classStatement;
@@ -4679,7 +4679,7 @@ export class ConditionalCompileStatement extends Statement {
         //if   (already indented by block)
         if (!state.conditionalCompileStatement) {
             // only transpile the #if in the case when we're not in a conditionalCompileStatement already
-            results.push(state.transpileToken(this.tokens.hashIf ?? bscFactory.createToken(TokenKind.HashIf)));
+            results.push(state.transpileToken(this.tokens.hashIf ?? bscFactory.brs.createToken(TokenKind.HashIf)));
         }
 
         results.push(' ');
@@ -4700,10 +4700,10 @@ export class ConditionalCompileStatement extends Statement {
         //else branch
         if (this.elseBranch) {
             const elseIsCC = isConditionalCompileStatement(this.elseBranch);
-            const endBlockToken = elseIsCC ? (this.elseBranch as ConditionalCompileStatement).tokens.hashIf ?? bscFactory.createToken(TokenKind.HashElseIf) : this.tokens.hashElse;
+            const endBlockToken = elseIsCC ? (this.elseBranch as ConditionalCompileStatement).tokens.hashIf ?? bscFactory.brs.createToken(TokenKind.HashElseIf) : this.tokens.hashElse;
             //else
 
-            results.push(...state.transpileEndBlockToken(this.thenBranch, endBlockToken, bscFactory.createToken(TokenKind.HashElse).text));
+            results.push(...state.transpileEndBlockToken(this.thenBranch, endBlockToken, bscFactory.brs.createToken(TokenKind.HashElse).text));
 
             if (elseIsCC) {
                 //chained else if

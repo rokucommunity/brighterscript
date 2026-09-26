@@ -29,7 +29,7 @@ export class FileProvider {
     }
 
     private handleBrsFile() {
-        const file = this.event.program.factory.createBrsFile(this.event);
+        const file = this.event.program.factory.files.createBrsFile(this.event);
         const text = this.event.data.value.toString();
 
         this.logger.time(LogLevel.debug, ['parse', chalk.green(this.event.srcPath)], () => {
@@ -46,7 +46,7 @@ export class FileProvider {
         }
         const text = this.event.data.value.toString();
         //add the file to the program
-        const file = this.event.program.factory.createXmlFile(this.event);
+        const file = this.event.program.factory.files.createXmlFile(this.event);
 
         this.logger.time(LogLevel.debug, ['parse', chalk.green(this.event.srcPath)], () => {
             file.parse(text);
