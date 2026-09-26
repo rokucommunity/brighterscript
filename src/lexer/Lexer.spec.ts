@@ -1880,6 +1880,23 @@ describe('lexer', () => {
             ).to.eql(input);
         });
 
+        it('shares whitespace and newline trivia tokens across files', () => {
+            const getTrivia = (input: string) => Lexer.scan(input).tokens.flatMap(x => x.leadingTrivia ?? []);
+            const first = getTrivia(`sub a()\n    print 1\nend sub`);
+            const second = getTrivia(`sub b()\n    print 2\nend sub`);
+            const firstIndent = first.find(x => x.text === '    ');
+            expect(firstIndent.kind).to.eql(TokenKind.Whitespace);
+            expect(firstIndent.location).to.be.undefined;
+            expect(Object.isFrozen(firstIndent)).to.be.true;
+            expect(second.find(x => x.text === '    ')).to.equal(firstIndent);
+            expect(second.find(x => x.kind === TokenKind.Newline)).to.equal(first.find(x => x.kind === TokenKind.Newline));
+        });
+
+        it('keeps locations on comment trivia', () => {
+            const comment = Lexer.scan(`'hello\nprint 1`).tokens.flatMap(x => x.leadingTrivia ?? []).find(x => x.kind === TokenKind.Comment);
+            expect(comment.location.range.start).to.eql({ line: 0, character: 0 });
+        });
+
         it('tokens only have leadingTrivia array when they have at least one trivia item', () => {
             const input = `
                 function   test(  )
