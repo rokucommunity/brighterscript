@@ -294,7 +294,7 @@ export class DefinitionProvider {
         // eslint-disable-next-line @typescript-eslint/dot-notation
         let classToken = file['getTokenBefore'](token, TokenKind.Class);
         if (classToken) {
-            let cs = file.parser.ast.findChild<ClassStatement>((klass) => isClassStatement(klass) && util.getLocation(klass.tokens.class)?.range === util.getLocation(classToken)?.range);
+            let cs = file.parser.ast.findChild<ClassStatement>((klass) => isClassStatement(klass) && klass.tokens.class === classToken);
             if (cs?.parentClassName) {
                 const nameParts = cs.parentClassName.getNameParts();
                 let extendedClass = file.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
