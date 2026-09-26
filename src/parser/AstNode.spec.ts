@@ -387,7 +387,7 @@ describe('AstNode', () => {
 
                     //skip these properties
                     if (
-                        ['parent', 'symbolTable', 'range'].includes(key) ||
+                        ['parent', 'symbolTable', 'pos', 'end', 'source'].includes(key) ||
                         //this is a circular reference property or the `returnType` prop, skip it
                         (isFunctionExpression(original) && (key === 'functionStatement' || key === 'returnType')) ||
                         //circular reference property for annotations
@@ -1912,7 +1912,7 @@ describe('AstNode', () => {
          */
         function getText(code: string, node: AstNode) {
             const lines = code.split(/\r?\n/);
-            const { start, end } = node.range;
+            const { start, end } = util.getLocation(node).range;
             if (start.line === end.line) {
                 return lines[start.line].slice(start.character, end.character);
             }

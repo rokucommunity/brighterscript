@@ -3970,7 +3970,7 @@ describe('BrsFile', () => {
                 //remove newlines and EOF
                 //set each token to a different file
                 for (const token of file.parser.tokens) {
-                    token.location.uri = util.pathToUri(s`${rootDir}/source/file${i++}.bs`);
+                    util.getLocation(token).uri = util.pathToUri(s`${rootDir}/source/file${i++}.bs`);
                 }
 
                 const result = await program.getTranspiledFileContents(file.srcPath);
@@ -3981,8 +3981,8 @@ describe('BrsFile', () => {
                     let sourcemapResult = tokens.map(token => {
                         let originalPosition = consumer.originalPositionFor({
                             //convert token 0-based line to source-map 1-based line for the lookup
-                            line: token.location?.range.start.line + 1,
-                            column: token.location?.range.start.character
+                            line: util.getLocation(token)?.range.start.line + 1,
+                            column: util.getLocation(token)?.range.start.character
                         });
                         return {
                             kind: token.kind,
@@ -3997,8 +3997,8 @@ describe('BrsFile', () => {
                     expect(sourcemapResult).to.eql(
                         tokens.map(token => ({
                             kind: token.kind,
-                            start: token.location?.range.start,
-                            source: util.uriToPath(token.location.uri)
+                            start: util.getLocation(token)?.range.start,
+                            source: util.uriToPath(util.getLocation(token).uri)
                         }))
                     );
                 });

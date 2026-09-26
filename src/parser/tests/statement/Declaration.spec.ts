@@ -4,7 +4,7 @@ import { Parser } from '../../Parser';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
-import { expectZeroDiagnostics } from '../../../testHelpers.spec';
+import { expectZeroDiagnostics, testLocatable } from '../../../testHelpers.spec';
 import { util } from '../../../util';
 
 describe('parser variable declarations', () => {
@@ -92,33 +92,33 @@ describe('parser variable declarations', () => {
                 text: 'foo',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(0, 0, 0, 3)
+                ...testLocatable(0, 0, 0, 3)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(0, 4, 0, 5)
+                ...testLocatable(0, 4, 0, 5)
             },
             {
                 kind: TokenKind.Invalid,
                 text: 'invalid',
                 leadingTrivia: [],
                 isReserved: true,
-                location: util.createLocation(0, 6, 0, 13)
+                ...testLocatable(0, 6, 0, 13)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(0, 13, 0, 14)
+                ...testLocatable(0, 13, 0, 14)
             }
         ]);
 
         expectZeroDiagnostics(parser);
-        expect(parser.ast.statements[0].location?.range).to.deep.include(
+        expect(util.getLocation(parser.ast.statements[0])?.range).to.deep.include(
             Range.create(0, 0, 0, 13)
         );
     });

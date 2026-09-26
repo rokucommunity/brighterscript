@@ -6,7 +6,7 @@ import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import util from '../../../util';
-import { expectDiagnostics } from '../../../testHelpers.spec';
+import { expectDiagnostics, testLocatable } from '../../../testHelpers.spec';
 
 describe('parser postfix unary expressions', () => {
     it('parses postfix \'++\' for variables', () => {
@@ -107,27 +107,27 @@ describe('parser postfix unary expressions', () => {
                 text: 'someNumber',
                 isReserved: false,
                 leadingTrivia: [],
-                location: util.createLocation(0, 0, 0, 10)
+                ...testLocatable(0, 0, 0, 10)
             },
             {
                 kind: TokenKind.PlusPlus,
                 text: '++',
                 isReserved: false,
                 leadingTrivia: [],
-                location: util.createLocation(0, 10, 0, 12)
+                ...testLocatable(0, 10, 0, 12)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
                 leadingTrivia: [],
-                location: util.createLocation(0, 12, 0, 13)
+                ...testLocatable(0, 12, 0, 13)
             }
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(ast.statements).to.be.lengthOf(1);
-        expect(ast.statements[0].location?.range).deep.include(
+        expect(util.getLocation(ast.statements[0])?.range).deep.include(
             Range.create(0, 0, 0, 12)
         );
     });

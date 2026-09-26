@@ -1,3 +1,4 @@
+import { testLocatable } from '../../../testHelpers.spec';
 import { expect } from '../../../chai-config.spec';
 
 import { Parser } from '../../Parser';
@@ -132,98 +133,98 @@ describe('parser indexed assignment', () => {
                 kind: TokenKind.Identifier,
                 text: 'arr',
                 isReserved: false,
-                location: util.createLocation(0, 0, 0, 3),
+                ...testLocatable(0, 0, 0, 3),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.LeftSquareBracket,
                 text: '[',
                 isReserved: false,
-                location: util.createLocation(0, 3, 0, 4),
+                ...testLocatable(0, 3, 0, 4),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '0',
                 isReserved: false,
-                location: util.createLocation(0, 4, 0, 5),
+                ...testLocatable(0, 4, 0, 5),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.RightSquareBracket,
                 text: ']',
                 isReserved: false,
-                location: util.createLocation(0, 5, 0, 6),
+                ...testLocatable(0, 5, 0, 6),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
-                location: util.createLocation(0, 7, 0, 8),
+                ...testLocatable(0, 7, 0, 8),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '1',
                 isReserved: false,
-                location: util.createLocation(0, 9, 0, 10),
+                ...testLocatable(0, 9, 0, 10),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
-                location: util.createLocation(0, 10, 0, 11),
+                ...testLocatable(0, 10, 0, 11),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'obj',
                 isReserved: false,
-                location: util.createLocation(1, 0, 1, 3),
+                ...testLocatable(1, 0, 1, 3),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.Dot,
                 text: '.',
                 isReserved: false,
-                location: util.createLocation(1, 3, 1, 4),
+                ...testLocatable(1, 3, 1, 4),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'a',
                 isReserved: false,
-                location: util.createLocation(1, 4, 1, 5),
+                ...testLocatable(1, 4, 1, 5),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 isReserved: false,
-                location: util.createLocation(1, 6, 1, 7),
+                ...testLocatable(1, 6, 1, 7),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '5',
                 isReserved: false,
-                location: util.createLocation(1, 8, 1, 9),
+                ...testLocatable(1, 8, 1, 9),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
-                location: util.createLocation(1, 10, 1, 11),
+                ...testLocatable(1, 10, 1, 11),
                 leadingTrivia: []
             }
         ]);
 
         expect(diagnostics).to.be.empty;
         expect(ast.statements).to.be.lengthOf(2);
-        expect(ast.statements.map(s => s.location?.range)).to.deep.equal([
+        expect(ast.statements.map(s => util.getLocation(s)?.range)).to.deep.equal([
             Range.create(0, 0, 0, 10),
             Range.create(1, 0, 1, 9)
         ]);

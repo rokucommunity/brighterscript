@@ -6,7 +6,7 @@ import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import { tempDir, rootDir, expectTypeToBe } from './testHelpers.spec';
+import { tempDir, rootDir, expectTypeToBe, testLocatable } from './testHelpers.spec';
 import { TypeChainEntry } from './interfaces';
 import { NamespaceType } from './types/NamespaceType';
 import { ClassType } from './types/ClassType';
@@ -1390,9 +1390,9 @@ describe('util', () => {
     describe('processTypeChain', () => {
         it('should  find the correct details in a list of type resolutions', () => {
             const nodes = [
-                createVariableExpression('Alpha', util.createLocation(1, 1, 2, 2)),
-                createVariableExpression('Beta', util.createLocation(2, 2, 3, 3)),
-                createVariableExpression('CharlieProp', util.createLocation(3, 3, 4, 4))
+                createVariableExpression('Alpha', testLocatable(1, 1, 2, 2)),
+                createVariableExpression('Beta', testLocatable(2, 2, 3, 3)),
+                createVariableExpression('CharlieProp', testLocatable(3, 3, 4, 4))
             ];
 
             const chain = [
@@ -1411,8 +1411,8 @@ describe('util', () => {
 
         it('respects the separatorToken', () => {
             const nodes = [
-                createVariableExpression('Custom', util.createLocation(1, 1, 2, 2)),
-                createVariableExpression('someCallFunc', util.createLocation(2, 2, 3, 3))
+                createVariableExpression('Custom', testLocatable(1, 1, 2, 2)),
+                createVariableExpression('someCallFunc', testLocatable(2, 2, 3, 3))
             ];
             const chain = [
                 new TypeChainEntry({ name: 'roSGNodeCustom', type: new ComponentType('Custom'), data: { flags: SymbolTypeFlag.runtime }, astNode: nodes[0] }),

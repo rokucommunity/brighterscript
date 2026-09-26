@@ -17,7 +17,7 @@ import { IntegerType } from '../types/IntegerType';
 import { FloatType } from '../types/FloatType';
 import { StringType } from '../types/StringType';
 import { ArrayType, DynamicType, UnionType } from '../types';
-import { standardizePath as s } from '../util';
+import { standardizePath as s, util } from '../util';
 import { InlineInterfaceType } from '../types/InlineInterfaceType';
 
 describe('parser', () => {
@@ -3618,5 +3618,5 @@ function expectCommentWithText(stat: Statement, text: string) {
 }
 
 export function failStatementType(stat: Statement, type: string) {
-    assert.fail(`Statement ${stat.constructor.name} line ${stat.location?.range.start.line} is not a ${type}`);
+    assert.fail(`Statement ${stat.constructor.name} line ${util.getLocation(stat)?.range.start.line} is not a ${type}`);
 }
