@@ -1,15 +1,17 @@
 import { expect } from '../../../chai-config.spec';
-import { isBlock, isCaseStatement, isExitStatement, isIfStatement, isFunctionExpression, isFunctionStatement, isSelectCaseStatement } from '../../../astUtils/reflection';
+import { isBlock, isCaseStatement, isExitStatement, isIfStatement, isFunctionExpression, isFunctionStatement, isLiteralExpression, isPrintStatement, isSelectCaseStatement, isUnionType } from '../../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../../astUtils/visitors';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import type { BrsFile } from '../../../files/BrsFile';
 import { Program } from '../../../Program';
-import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, rootDir } from '../../../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile, rootDir } from '../../../testHelpers.spec';
 import util from '../../../util';
+import { SymbolTypeFlag } from '../../../SymbolTypeFlag';
+import type { BscType } from '../../../types/BscType';
 import { BrsTranspileState } from '../../BrsTranspileState';
 import type { FunctionExpression, LiteralExpression } from '../../Expression';
 import { Parser, ParseMode } from '../../Parser';
-import type { ExitStatement, FunctionStatement, IfStatement, SelectCaseStatement } from '../../Statement';
+import type { ExitStatement, FunctionStatement, IfStatement, PrintStatement, SelectCaseStatement } from '../../Statement';
 import { CaseStatement, SELECT_CASE_SUBJECT_VARIABLE, isExitSelectStatement } from '../../Statement';
 
 describe('select case statement', () => {
@@ -1341,6 +1343,1328 @@ describe('select case statement', () => {
             expectDiagnostics(program, [
                 DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('select case statements')
             ]);
+        });
+    });
+
+    describe('type flow', () => {
+        /**
+         * Get a readable name for a type. Union members are sorted so tests don't depend on their order
+         */
+        function getTypeName(type: BscType) {
+            if (isUnionType(type)) {
+                return type.types.map(x => x.toString()).sort().join(' or ');
+            }
+            return type?.toString();
+        }
+
+        /**
+         * Validate the code, then get the type of the first expression in every `print` statement, in the order they appear.
+         * Statements that just print a literal (ie. `print "other"`) are skipped
+         */
+        function getPrintTypes(text: string) {
+            const file = program.setFile<BrsFile>('source/main.bs', text);
+            program.validate();
+            return file.ast.findChildren<PrintStatement>(isPrintStatement, { walkMode: WalkMode.visitAllRecursive })
+                .map(x => x.expressions[0])
+                .filter(x => !isLiteralExpression(x))
+                .map(x => getTypeName(x.getType({ flags: SymbolTypeFlag.runtime })));
+        }
+
+        /**
+         * Validate the code, and make sure the type of each `print` statement's first expression is what we expect.
+         * Union types can be written in any order (ie. `'string or integer'`)
+         */
+        function expectPrintTypes(text: string, expected: string[]) {
+            expect(getPrintTypes(text)).to.eql(
+                expected.map(x => x.split(' or ').sort().join(' or '))
+            );
+        }
+
+        /**
+         * A `select case` should produce the same types as the `if` chain it transpiles to
+         */
+        function expectSameTypesAsIfStatement(selectCaseCode: string, ifStatementCode: string) {
+            const selectCaseTypes = getPrintTypes(selectCaseCode);
+            const ifStatementTypes = getPrintTypes(ifStatementCode);
+            //make sure the test is actually checking something
+            expect(selectCaseTypes.length).to.be.greaterThan(0);
+            expect(selectCaseTypes).to.eql(ifStatementTypes);
+        }
+
+        it('knows a variable assigned in every case (including `case else`) has the new type after the select', () => {
+            expectPrintTypes(`
+                sub main()
+                    x = 1
+                    y = 0
+                    print y ' y is integer here
+                    select x
+                        case 1
+                            y = "one"
+                            print y
+                        case else
+                            y = "not one"
+                            print y
+                    end select
+                    print y ' y *must* be a string here
+                end sub
+            `, ['integer', 'string', 'string', 'string']);
+            expectZeroDiagnostics(program);
+        });
+
+        it('works the same with the `case` keyword after `select`', () => {
+            expectPrintTypes(`
+                sub main()
+                    x = 1
+                    y = 0
+                    select case x
+                        case 1
+                            y = "one"
+                        case else
+                            y = "not one"
+                    end select
+                    print y
+                end sub
+            `, ['string']);
+            expectZeroDiagnostics(program);
+        });
+
+        it('works with many cases', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    y = 0
+                    select case x
+                        case 1
+                            y = "one"
+                        case 2, 3
+                            y = "two or three"
+                        case 4
+                            y = "four"
+                        case 5
+                            y = "five"
+                        case else
+                            y = "something else"
+                    end select
+                    print y
+                end sub
+            `, ['string']);
+            expectZeroDiagnostics(program);
+        });
+
+        it('works with a single case plus `case else`', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    y = 0
+                    select case x
+                        case 1
+                            y = "one"
+                        case else
+                            y = "other"
+                    end select
+                    print y
+                end sub
+            `, ['string']);
+        });
+
+        it('works when `case else` is the only case', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    y = 0
+                    select case x
+                        case else
+                            y = "always"
+                    end select
+                    print y
+                end sub
+            `, ['string']);
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags using the variable as its old type after the select', () => {
+            validate(`
+                sub main(x as integer)
+                    y = 0
+                    select case x
+                        case 1
+                            y = "one"
+                        case else
+                            y = "not one"
+                    end select
+                    takesString(y)
+                    takesInteger(y)
+                end sub
+
+                sub takesString(value as string)
+                end sub
+
+                sub takesInteger(value as integer)
+                end sub
+            `);
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            ]);
+        });
+
+        it('allows using the variable as its new type after the select', () => {
+            validate(`
+                sub main(x as integer)
+                    y = 0
+                    select case x
+                        case 1
+                            y = "one"
+                        case else
+                            y = "not one"
+                    end select
+                    print y.len()
+                    print lcase(y)
+                end sub
+            `);
+            expectZeroDiagnostics(program);
+        });
+
+        it('uses a union when there is no `case else`', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    y = 0
+                    select case x
+                        case 1
+                            y = "one"
+                        case 2
+                            y = "two"
+                    end select
+                    print y
+                end sub
+            `, ['integer or string']);
+            expectDiagnostics(program, [
+                DiagnosticMessages.selectCaseMissingCaseElse()
+            ]);
+        });
+
+        it('uses a union when only some cases assign the variable', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    y = 0
+                    select case x
+                        case 1
+                            y = "one"
+                        case 2
+                            print "two"
+                        case else
+                            y = "other"
+                    end select
+                    print y
+                end sub
+            `, ['integer or string']);
+        });
+
+        it('uses a union when only `case else` assigns the variable', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    y = 0
+                    select case x
+                        case 1
+                            print "one"
+                        case else
+                            y = "other"
+                    end select
+                    print y
+                end sub
+            `, ['integer or string']);
+        });
+
+        it('uses a union when `case else` does not assign the variable', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    y = 0
+                    select case x
+                        case 1
+                            y = "one"
+                        case 2
+                            y = "two"
+                        case else
+                            print "other"
+                    end select
+                    print y
+                end sub
+            `, ['integer or string']);
+        });
+
+        it('uses a union of every case type (but not the original type) when every case assigns a different type', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    y = 0
+                    select case x
+                        case 1
+                            y = "one"
+                        case 2
+                            y = true
+                        case else
+                            y = 3.5
+                    end select
+                    print y
+                end sub
+            `, ['string or boolean or float']);
+        });
+
+        it('includes the original type when every case assigns a different type, but there is no `case else`', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    y = 0
+                    select case x
+                        case 1
+                            y = "one"
+                        case 2
+                            y = true
+                    end select
+                    print y
+                end sub
+            `, ['integer or string or boolean']);
+        });
+
+        it('keeps the original type inside a case until the variable is reassigned', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    y = 0
+                    select case x
+                        case 1
+                            print y
+                            y = "one"
+                            print y
+                        case 2
+                            print y
+                        case else
+                            print y
+                            y = true
+                            print y
+                    end select
+                end sub
+            `, ['integer', 'string', 'integer', 'integer', 'boolean']);
+        });
+
+        it('does not leak a type from one case into the next case', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    y = 0
+                    select case x
+                        case 1
+                            y = "one"
+                        case 2
+                            print y
+                        case else
+                            print y
+                    end select
+                end sub
+            `, ['integer', 'integer']);
+        });
+
+        it('tracks multiple reassignments within a single case', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    y = 0
+                    select case x
+                        case 1
+                            y = "one"
+                            print y
+                            y = true
+                            print y
+                            y = 3.5
+                            print y
+                        case else
+                            y = 1.5
+                    end select
+                    print y
+                end sub
+            `, ['string', 'boolean', 'float', 'float']);
+        });
+
+        it('uses the last assignment in each case for the type after the select', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    y = 0
+                    select case x
+                        case 1
+                            y = true
+                            y = "one"
+                        case else
+                            y = 1.5
+                            y = "other"
+                    end select
+                    print y
+                end sub
+            `, ['string']);
+        });
+
+        it('knows about a variable that is first created in every case', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    select case x
+                        case 1
+                            label = "one"
+                        case 2
+                            label = "two"
+                        case else
+                            label = "other"
+                    end select
+                    print label
+                end sub
+            `, ['string']);
+            expectZeroDiagnostics(program);
+        });
+
+        it('knows a variable first created in only some cases might be uninitialized', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    select case x
+                        case 1
+                            label = "one"
+                        case else
+                            print "other"
+                    end select
+                    print label
+                end sub
+            `, ['string or uninitialized']);
+        });
+
+        it('knows a variable first created in every case might be uninitialized when there is no `case else`', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    select case x
+                        case 1
+                            label = "one"
+                        case 2
+                            label = "two"
+                    end select
+                    print label
+                end sub
+            `, ['string or uninitialized']);
+        });
+
+        it('does not know about a variable created in a case when used in a different case', () => {
+            validate(`
+                sub main(x as integer)
+                    select case x
+                        case 1
+                            label = "one"
+                        case else
+                            print label
+                    end select
+                end sub
+            `);
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('label').message
+            ]);
+        });
+
+        it('tracks several variables at once', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    a = 0
+                    b = 0
+                    c = 0
+                    select case x
+                        case 1
+                            a = "one"
+                            b = "one"
+                        case else
+                            a = "other"
+                            c = "other"
+                    end select
+                    print a
+                    print b
+                    print c
+                end sub
+            `, ['string', 'integer or string', 'integer or string']);
+        });
+
+        it('does not change the type of a variable that no case assigns', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    y = 0
+                    select case x
+                        case 1
+                            z = "one"
+                        case else
+                            z = "other"
+                    end select
+                    print y
+                end sub
+            `, ['integer']);
+        });
+
+        it('knows the type of the subject after it is reassigned in a case', () => {
+            expectPrintTypes(`
+                sub main()
+                    x = 1
+                    select case x
+                        case 1
+                            x = "one"
+                        case else
+                            x = "other"
+                    end select
+                    print x
+                end sub
+            `, ['string']);
+        });
+
+        it('uses the subject type for values computed from it', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    select case x
+                        case 1
+                            y = x + 1
+                        case else
+                            y = x * 2
+                    end select
+                    print y
+                end sub
+            `, ['integer']);
+        });
+
+        it('supports compound assignments in a case', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    y = "a"
+                    select case x
+                        case 1
+                            y += "b"
+                        case else
+                            y += "c"
+                    end select
+                    print y
+                end sub
+            `, ['string']);
+        });
+
+        it('works with `select case true`', () => {
+            expectPrintTypes(`
+                sub main(age as integer)
+                    group = 0
+                    select case true
+                        case age < 13
+                            group = "child"
+                        case age < 20
+                            group = "teen"
+                        case else
+                            group = "adult"
+                    end select
+                    print group
+                end sub
+            `, ['string']);
+            expectZeroDiagnostics(program);
+        });
+
+        it('works with a subject that is a function call', () => {
+            expectPrintTypes(`
+                sub main()
+                    y = 0
+                    select case getStatus()
+                        case "on"
+                            y = true
+                        case else
+                            y = false
+                    end select
+                    print y
+                end sub
+
+                function getStatus() as string
+                    return "on"
+                end function
+            `, ['boolean']);
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not create a symbol for the temporary subject variable', () => {
+            validate(`
+                sub main()
+                    select case getStatus()
+                        case "on"
+                            print "on"
+                        case else
+                            print "off"
+                    end select
+                    print ${SELECT_CASE_SUBJECT_VARIABLE}
+                end sub
+
+                function getStatus() as string
+                    return "on"
+                end function
+            `);
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName(SELECT_CASE_SUBJECT_VARIABLE).message
+            ]);
+        });
+
+        it('works with values on the same line as `case`, separated by a colon', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    y = 0
+                    select case x
+                        case 1: y = "one"
+                        case 2: y = "two"
+                        case else: y = "other"
+                    end select
+                    print y
+                end sub
+            `, ['string']);
+        });
+
+        it('works with values that wrap across lines', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    y = 0
+                    select case x
+                        case 1,
+                            2,
+                            3
+                            y = "small"
+                        case else
+                            y = "big"
+                    end select
+                    print y
+                end sub
+            `, ['string']);
+        });
+
+        it('works with values that start on the line after `case`', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    y = 0
+                    select case x
+                        case
+                            1, 2
+                            y = "small"
+                        case else
+                            y = "big"
+                    end select
+                    print y
+                end sub
+            `, ['string']);
+        });
+
+        it('knows the type after a select that is nested in a case', () => {
+            expectPrintTypes(`
+                sub main(x as integer, z as integer)
+                    y = 0
+                    select case x
+                        case 1
+                            select case z
+                                case 1
+                                    y = "one one"
+                                case else
+                                    y = "one other"
+                            end select
+                            print y
+                        case else
+                            y = "other"
+                    end select
+                    print y
+                end sub
+            `, ['string', 'string']);
+        });
+
+        it('includes the original type inside a case when a nested select does not assign in every case', () => {
+            expectPrintTypes(`
+                sub main(x as integer, z as integer)
+                    y = 0
+                    select case x
+                        case 1
+                            select case z
+                                case 1
+                                    y = "one one"
+                                case else
+                                    print "one other"
+                            end select
+                            print y
+                        case else
+                            y = "other"
+                    end select
+                end sub
+            `, ['integer or string']);
+        });
+
+        it('knows the type of a variable first created in every case of nested selects', () => {
+            expectPrintTypes(`
+                sub main(x as integer, z as integer)
+                    select case x
+                        case 1
+                            select case z
+                                case 1
+                                    label = "one one"
+                                case else
+                                    label = "one other"
+                            end select
+                        case else
+                            label = "other"
+                    end select
+                    print label
+                end sub
+            `, ['string']);
+            expectZeroDiagnostics(program);
+        });
+
+        it('works with a select nested in an `if` branch', () => {
+            expectPrintTypes(`
+                sub main(x as integer, flag as boolean)
+                    y = 0
+                    if flag
+                        select case x
+                            case 1
+                                y = "one"
+                            case else
+                                y = "other"
+                        end select
+                        print y
+                    else
+                        y = "not flagged"
+                    end if
+                    print y
+                end sub
+            `, ['string', 'string']);
+        });
+
+        it('works with an `if` nested in a case', () => {
+            expectPrintTypes(`
+                sub main(x as integer, flag as boolean)
+                    y = 0
+                    select case x
+                        case 1
+                            if flag
+                                y = "flagged"
+                            else
+                                y = "not flagged"
+                            end if
+                            print y
+                        case else
+                            y = "other"
+                    end select
+                    print y
+                end sub
+            `, ['string', 'string']);
+        });
+
+        it('includes the original type inside a case when an `if` in the case does not assign in every branch', () => {
+            expectPrintTypes(`
+                sub main(x as integer, flag as boolean)
+                    y = 0
+                    select case x
+                        case 1
+                            if flag
+                                y = "flagged"
+                            end if
+                            print y
+                        case else
+                            y = "other"
+                    end select
+                end sub
+            `, ['integer or string']);
+        });
+
+        it('works with a loop in a case', () => {
+            expectPrintTypes(`
+                sub main(x as integer, items as string[])
+                    y = 0
+                    select case x
+                        case 1
+                            for each item in items
+                                y = item
+                                print y
+                            end for
+                            print y
+                        case else
+                            y = "other"
+                    end select
+                end sub
+            `, ['string', 'integer or string']);
+        });
+
+        it('works with a select in a loop', () => {
+            expectPrintTypes(`
+                sub main(values as integer[])
+                    y = 0
+                    for each value in values
+                        select case value
+                            case 1
+                                y = "one"
+                            case else
+                                y = "other"
+                        end select
+                        print y
+                    end for
+                    print y
+                end sub
+            `, ['string', 'integer or string']);
+        });
+
+        it('does not leak variables from a function expression in a case', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    y = 0
+                    select case x
+                        case 1
+                            callback = function()
+                                y = "inner"
+                                return y
+                            end function
+                        case else
+                            callback = invalid
+                    end select
+                    print y
+                end sub
+            `, ['integer']);
+        });
+
+        it('knows the type of a variable used inside a function expression in a case', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    select case x
+                        case else
+                            callback = function(value as string)
+                                print value
+                            end function
+                    end select
+                end sub
+            `, ['string']);
+        });
+
+        it('works with class instances', () => {
+            validate(`
+                class Animal
+                    function speak() as string
+                        return "..."
+                    end function
+                end class
+
+                class Dog extends Animal
+                    function bark() as string
+                        return "woof"
+                    end function
+                end class
+
+                class Cat extends Animal
+                end class
+
+                sub main(x as integer)
+                    select case x
+                        case 1
+                            pet = new Dog()
+                        case else
+                            pet = new Cat()
+                    end select
+                    print pet.speak()
+                    print pet.bark()
+                end sub
+            `);
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.cannotFindFunction('bark', 'pet.bark', '(Dog or Cat)').message
+            ]);
+        });
+
+        it('knows the class type when every case creates the same class', () => {
+            expectPrintTypes(`
+                class Dog
+                    function bark() as string
+                        return "woof"
+                    end function
+                end class
+
+                sub main(x as integer)
+                    pet = invalid
+                    select case x
+                        case 1
+                            pet = new Dog()
+                        case else
+                            pet = new Dog()
+                    end select
+                    print pet
+                    print pet.bark()
+                end sub
+            `, ['Dog', 'string']);
+            expectZeroDiagnostics(program);
+        });
+
+        it('knows the type of an enum value assigned in every case', () => {
+            expectPrintTypes(`
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+
+                sub main(x as integer)
+                    select case x
+                        case 1
+                            direction = Direction.up
+                            print direction
+                        case else
+                            direction = Direction.down
+                            print direction
+                    end select
+                    print direction
+                    print direction.len()
+                end sub
+            `, ['Direction', 'Direction', 'Direction or Direction', 'integer']);
+            expectZeroDiagnostics(program);
+        });
+
+        it('includes the original type when an enum subject is fully covered, but there is no `case else`', () => {
+            //an enum is just a string at runtime, so the subject could still hold some other value
+            expectPrintTypes(`
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+
+                sub main(value as Direction)
+                    y = 0
+                    select case value
+                        case Direction.up
+                            y = "up"
+                        case Direction.down
+                            y = "down"
+                    end select
+                    print y
+                end sub
+            `, ['integer or string']);
+            expectZeroDiagnostics(program);
+        });
+
+        it('keeps the type from before the select when a case returns before assigning', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    y = 0
+                    select case x
+                        case 1
+                            return
+                        case else
+                            y = "other"
+                    end select
+                    print y
+                end sub
+            `, ['integer or string']);
+        });
+
+        it('includes the original type when a case might `exit select` before assigning', () => {
+            expectPrintTypes(`
+                sub main(x as integer, flag as boolean)
+                    y = 0
+                    select case x
+                        case 1
+                            if flag
+                                exit select
+                            end if
+                            y = "one"
+                        case else
+                            y = "other"
+                    end select
+                    print y
+                end sub
+            `, ['integer or string']);
+        });
+
+        it('includes the original type when `case else` might `exit select` before assigning', () => {
+            expectPrintTypes(`
+                sub main(x as integer, flag as boolean)
+                    y = 0
+                    select case x
+                        case 1
+                            y = "one"
+                        case else
+                            if flag then exit select
+                            y = "other"
+                    end select
+                    print y
+                end sub
+            `, ['integer or string']);
+        });
+
+        it('knows a variable first created after an early `exit select` might be uninitialized', () => {
+            expectPrintTypes(`
+                sub main(x as integer, flag as boolean)
+                    select case x
+                        case 1
+                            if flag
+                                exit select
+                            end if
+                            label = "one"
+                        case else
+                            label = "other"
+                    end select
+                    print label
+                end sub
+            `, ['string or uninitialized']);
+        });
+
+        it('uses the new type when `exit select` is the last statement of a case', () => {
+            expectPrintTypes(`
+                sub main(x as integer)
+                    y = 0
+                    select case x
+                        case 1
+                            y = "one"
+                            exit select
+                        case else
+                            y = "other"
+                            exit select
+                    end select
+                    print y
+                end sub
+            `, ['string']);
+            expectZeroDiagnostics(program);
+        });
+
+        it('uses the new type when an early `exit select` belongs to a nested select', () => {
+            expectPrintTypes(`
+                sub main(x as integer, z as integer)
+                    y = 0
+                    select case x
+                        case 1
+                            select case z
+                                case 1
+                                    if z > 0 then exit select
+                                    print "positive"
+                                case else
+                                    print "other"
+                            end select
+                            y = "one"
+                        case else
+                            y = "other"
+                    end select
+                    print y
+                end sub
+            `, ['string']);
+        });
+
+        describe('matches the equivalent if statement', () => {
+            it('when every branch assigns', () => {
+                expectSameTypesAsIfStatement(`
+                    sub main(x as integer)
+                        y = 0
+                        select case x
+                            case 1
+                                y = "one"
+                            case 2
+                                y = "two"
+                            case else
+                                y = "other"
+                        end select
+                        print y
+                    end sub
+                `, `
+                    sub main(x as integer)
+                        y = 0
+                        if x = 1
+                            y = "one"
+                        else if x = 2
+                            y = "two"
+                        else
+                            y = "other"
+                        end if
+                        print y
+                    end sub
+                `);
+            });
+
+            it('when there is no else branch', () => {
+                expectSameTypesAsIfStatement(`
+                    sub main(x as integer)
+                        y = 0
+                        select case x
+                            case 1
+                                y = "one"
+                            case 2
+                                y = true
+                        end select
+                        print y
+                    end sub
+                `, `
+                    sub main(x as integer)
+                        y = 0
+                        if x = 1
+                            y = "one"
+                        else if x = 2
+                            y = true
+                        end if
+                        print y
+                    end sub
+                `);
+            });
+
+            it('when only some branches assign', () => {
+                expectSameTypesAsIfStatement(`
+                    sub main(x as integer)
+                        y = 0
+                        select case x
+                            case 1
+                                y = "one"
+                            case 2
+                                print "two"
+                            case else
+                                y = 1.5
+                        end select
+                        print y
+                    end sub
+                `, `
+                    sub main(x as integer)
+                        y = 0
+                        if x = 1
+                            y = "one"
+                        else if x = 2
+                            print "two"
+                        else
+                            y = 1.5
+                        end if
+                        print y
+                    end sub
+                `);
+            });
+
+            it('when a variable is first created in the branches', () => {
+                expectSameTypesAsIfStatement(`
+                    sub main(x as integer)
+                        select case x
+                            case 1
+                                a = "one"
+                                b = "one"
+                            case else
+                                a = "other"
+                        end select
+                        print a
+                        print b
+                    end sub
+                `, `
+                    sub main(x as integer)
+                        if x = 1
+                            a = "one"
+                            b = "one"
+                        else
+                            a = "other"
+                        end if
+                        print a
+                        print b
+                    end sub
+                `);
+            });
+
+            it('when a variable is first created in the branches, but there is no else branch', () => {
+                expectSameTypesAsIfStatement(`
+                    sub main(x as integer)
+                        select case x
+                            case 1
+                                a = "one"
+                            case 2
+                                a = "two"
+                        end select
+                        print a
+                    end sub
+                `, `
+                    sub main(x as integer)
+                        if x = 1
+                            a = "one"
+                        else if x = 2
+                            a = "two"
+                        end if
+                        print a
+                    end sub
+                `);
+            });
+
+            it('inside each branch', () => {
+                expectSameTypesAsIfStatement(`
+                    sub main(x as integer)
+                        y = 0
+                        select case x
+                            case 1
+                                print y
+                                y = "one"
+                                print y
+                            case 2
+                                print y
+                            case else
+                                print y
+                                y = true
+                                print y
+                        end select
+                        print y
+                    end sub
+                `, `
+                    sub main(x as integer)
+                        y = 0
+                        if x = 1
+                            print y
+                            y = "one"
+                            print y
+                        else if x = 2
+                            print y
+                        else
+                            print y
+                            y = true
+                            print y
+                        end if
+                        print y
+                    end sub
+                `);
+            });
+
+            it('when a branch returns', () => {
+                expectSameTypesAsIfStatement(`
+                    sub main(x as integer)
+                        y = 0
+                        select case x
+                            case 1
+                                return
+                            case else
+                                y = "other"
+                        end select
+                        print y
+                    end sub
+                `, `
+                    sub main(x as integer)
+                        y = 0
+                        if x = 1
+                            return
+                        else
+                            y = "other"
+                        end if
+                        print y
+                    end sub
+                `);
+            });
+
+            it('when an `if` inside a branch does not assign in every branch', () => {
+                expectSameTypesAsIfStatement(`
+                    sub main(x as integer, flag as boolean)
+                        y = 0
+                        select case x
+                            case 1
+                                if flag
+                                    y = "flagged"
+                                end if
+                            case else
+                                y = "other"
+                        end select
+                        print y
+                    end sub
+                `, `
+                    sub main(x as integer, flag as boolean)
+                        y = 0
+                        if x = 1
+                            if flag
+                                y = "flagged"
+                            end if
+                        else
+                            y = "other"
+                        end if
+                        print y
+                    end sub
+                `);
+            });
+
+            it('when a loop inside a branch assigns', () => {
+                expectSameTypesAsIfStatement(`
+                    sub main(x as integer, items as string[])
+                        y = 0
+                        select case x
+                            case 1
+                                for each item in items
+                                    y = item
+                                end for
+                            case else
+                                y = "other"
+                        end select
+                        print y
+                    end sub
+                `, `
+                    sub main(x as integer, items as string[])
+                        y = 0
+                        if x = 1
+                            for each item in items
+                                y = item
+                            end for
+                        else
+                            y = "other"
+                        end if
+                        print y
+                    end sub
+                `);
+            });
+
+            it('when assigning enum values', () => {
+                expectSameTypesAsIfStatement(`
+                    enum Direction
+                        up = "up"
+                        down = "down"
+                    end enum
+
+                    sub main(x as integer)
+                        select case x
+                            case 1
+                                direction = Direction.up
+                            case else
+                                direction = Direction.down
+                        end select
+                        print direction
+                    end sub
+                `, `
+                    enum Direction
+                        up = "up"
+                        down = "down"
+                    end enum
+
+                    sub main(x as integer)
+                        if x = 1
+                            direction = Direction.up
+                        else
+                            direction = Direction.down
+                        end if
+                        print direction
+                    end sub
+                `);
+            });
+
+            it('when nested', () => {
+                expectSameTypesAsIfStatement(`
+                    sub main(x as integer, z as integer)
+                        y = 0
+                        select case x
+                            case 1
+                                select case z
+                                    case 1
+                                        y = "one one"
+                                    case else
+                                        y = true
+                                end select
+                                print y
+                            case 2
+                                select case z
+                                    case 1
+                                        y = 1.5
+                                end select
+                                print y
+                            case else
+                                y = "other"
+                        end select
+                        print y
+                    end sub
+                `, `
+                    sub main(x as integer, z as integer)
+                        y = 0
+                        if x = 1
+                            if z = 1
+                                y = "one one"
+                            else
+                                y = true
+                            end if
+                            print y
+                        else if x = 2
+                            if z = 1
+                                y = 1.5
+                            end if
+                            print y
+                        else
+                            y = "other"
+                        end if
+                        print y
+                    end sub
+                `);
+            });
         });
     });
 

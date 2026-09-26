@@ -1,4 +1,4 @@
-import { isAliasStatement, isBlock, isBody, isCallExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isTypecastExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isTypecastExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -394,9 +394,10 @@ export class BrsFileValidator {
                 }
             },
             SelectCaseStatement: (node) => {
-                //a variable assigned in every case (including `case else`) is known to exist after the `select case`
+                //a variable assigned in every case (including `case else`) is known to exist after the `select case`.
+                //But if any case might `exit select` part way through, the rest of that case might not run
                 const elseCase = node.elseCase;
-                if (elseCase?.body) {
+                if (elseCase?.body && !node.cases.some(x => x.canExitEarly)) {
                     for (const caseStatement of node.cases) {
                         if (caseStatement !== elseCase && caseStatement.body) {
                             elseCase.body.symbolTable.complementOtherTable(caseStatement.body.symbolTable);
@@ -418,7 +419,7 @@ export class BrsFileValidator {
                         index: node.parent.statementIndex,
                         table: blockSymbolTable,
                         // code always flows through ConditionalCompiles, because we walk according to defined BSConsts
-                        willAlwaysBeExecuted: isConditionalCompileStatement(node.parent)
+                        willAlwaysBeExecuted: isConditionalCompileStatement(node.parent) || this.isAlwaysExecutedCase(node.parent)
                     });
 
                     if (isForStatement(node.parent)) {
@@ -1037,6 +1038,17 @@ export class BrsFileValidator {
                 nodes.push(node.parent);
             }
         }
+    }
+
+    /**
+     * A `case else` that is the only case in its `select case` always runs all the way through (unless it can `exit select` early)
+     */
+    private isAlwaysExecutedCase(node: AstNode) {
+        return isCaseStatement(node) &&
+            node.isElse &&
+            isSelectCaseStatement(node.parent) &&
+            node.parent.cases.length === 1 &&
+            !node.canExitEarly;
     }
 
     private setUpComplementSymbolTables(node: IfStatement | ConditionalCompileStatement, predicate: (node: AstNode) => boolean) {

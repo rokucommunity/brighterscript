@@ -5243,6 +5243,17 @@ export class CaseStatement extends Statement {
     }
 
     /**
+     * Can this case be left with an `exit select` before the end of its body? (ie. `if done then exit select`). If so,
+     * the statements after it might not run. `exit select` statements that belong to a nested `select case` don't count
+     */
+    public get canExitEarly(): boolean {
+        const trailingExitSelect = this.trailingExitSelect;
+        return !!this.body?.findChild((node) => {
+            return isExitSelectStatement(node) && node !== trailingExitSelect && getExitSelectTarget(node)?.selectCase === this.parent;
+        }, { walkMode: WalkMode.visitStatementsRecursive });
+    }
+
+    /**
      * Transpile the body of this case. Starts with a newline (unless empty) and does not include a trailing newline
      */
     public transpileBody(state: BrsTranspileState) {

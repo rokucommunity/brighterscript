@@ -293,6 +293,28 @@ A few details:
 - Case values that are neither a member reference nor a literal (i.e. `case getDirection()`) don't count as covering any member.
 - A case value from a *different* enum than the subject (i.e. `case OtherEnum.up` when the subject is a `RemoteDirection`) is flagged too, because it's almost always a mistake.
 
+## Variable types after a `select case`
+BrighterScript tracks variable types through a `select case` the same way it does through the `if` chain it becomes. A variable assigned in every case, including `case else`, has the new type afterward:
+
+```brighterscript
+sub main(x as integer)
+    y = 0 ' y is an integer here
+    select case x
+        case 1
+            y = "one"
+        case else
+            y = "not one"
+    end select
+    print y ' y is a string here
+end sub
+```
+
+If any case (or the `case else`) doesn't assign it, or there's no `case else`, the variable could still hold its old type, so it becomes a union (`integer or string`). A variable that's first created in only some of the cases might be uninitialized afterward.
+
+A few details:
+- Covering every member of an enum subject still counts as having no `case else` here. An enum is just a string or number at runtime, so the subject could still hold some other value.
+- If a case can `exit select` before the end of its body (i.e. `if done then exit select`), the assignments after that point might not run, so they don't count as happening in every case. An `exit select` as the last statement in a case doesn't affect this.
+
 ## Loops, `exit`, `continue`, and `return`
 Because a `select case` becomes an `if` statement, loop control inside a case applies to the enclosing loop, just like it would inside an `if`:
 
