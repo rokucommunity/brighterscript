@@ -436,7 +436,7 @@ Only comments may appear before the first `case`. Any other statement there is a
 ## `.brs` files
 `select case` is a BrighterScript feature, so it's only allowed in `.bs` files.
 
-## Not supported (yet)
+## Not supported
 A few other VB features are not supported:
 
 - Range cases: `case 1 to 5`
