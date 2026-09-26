@@ -1286,7 +1286,7 @@ export class Util {
      *  Gets the bounding range of a bunch of ranges or objects that have ranges
      *  TODO: this does a full iteration of the args. If the args were guaranteed to be in range order, we could optimize this
      */
-    public createBoundingLocation(...locatables: Array<{ location?: Location } | Location | { range?: Range } | Range | undefined>): Location | undefined {
+    public createBoundingLocation(...locatables: Array<RangeLike>): Location | undefined {
         let uri: string | undefined;
         let startPosition: Position | undefined;
         let endPosition: Position | undefined;
@@ -1295,6 +1295,12 @@ export class Util {
             let range: Range;
             if (!locatable) {
                 continue;
+            } else if ('source' in locatable) {
+                const location = this.getLocation(locatable);
+                range = location?.range;
+                if (!uri) {
+                    uri = location?.uri;
+                }
             } else if ('location' in locatable) {
                 range = locatable.location?.range;
                 if (!uri) {
@@ -2253,7 +2259,7 @@ export class Util {
                 case AstNodeKind.FunctionParameterExpression:
                     return [(nextPart as FunctionParameterExpression).tokens.name];
                 case AstNodeKind.GroupingExpression:
-                    parts.push(createIdentifier('()', nextPart.location));
+                    parts.push(createIdentifier('()', nextPart));
                     break loop;
                 default:
                     //we found a non-DottedGet expression, so return because this whole operation is invalid.
@@ -2859,7 +2865,7 @@ export class Util {
     public isLeadingCommentOnSameLine(line: RangeLike, input: Token | AstNode) {
         const leadingCommentRange = this.getLeadingComments(input)?.[0];
         if (leadingCommentRange) {
-            return this.linesTouch(line, leadingCommentRange?.location);
+            return this.linesTouch(line, util.getLocation(leadingCommentRange));
         }
         return false;
     }
@@ -2946,7 +2952,7 @@ export class Util {
                 name: methodName,
                 type: funcType,
                 data: options.data,
-                location: methodNameToken.location,
+                locatable: methodNameToken,
                 separatorToken: createToken(TokenKind.Callfunc),
                 astNode: callExpr
             }));

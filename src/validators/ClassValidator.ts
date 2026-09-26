@@ -13,6 +13,7 @@ import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import type { BscFile } from '../files/BscFile';
+import { util } from '../util';
 
 export class BsClassValidator {
     private scope: Scope;
@@ -56,7 +57,7 @@ export class BsClassValidator {
                         if (expressionNameLower === 'm') {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall(),
-                                location: expression.location
+                                location: util.getLocation(expression)
                             });
                         }
                         if (isCallExpression(parent) && expressionNameLower === 'super') {
@@ -74,7 +75,7 @@ export class BsClassValidator {
                 if (!superCall && !(classStatement.file as BrsFile).isTypedef) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.classConstructorMissingSuperCall(),
-                        location: newMethod.location
+                        location: util.getLocation(newMethod)
                     });
                 }
             }
@@ -95,7 +96,7 @@ export class BsClassValidator {
                     this.diagnostics.push({
                         ...DiagnosticMessages.circularReferenceDetected(
                             Array.from(names.values()).concat(className)),
-                        location: cls.tokens.name.location
+                        location: util.getLocation(cls.tokens.name)
                     });
                     break;
                 }
@@ -130,7 +131,7 @@ export class BsClassValidator {
                     if (methods[lowerMemberName] || fields[lowerMemberName]) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.duplicateIdentifier(memberName.text),
-                            location: memberName.location
+                            location: util.getLocation(memberName)
                         });
                     }
 
@@ -156,7 +157,7 @@ export class BsClassValidator {
                                     childFieldType.toString(),
                                     ancestorMemberType.toString()
                                 ),
-                                location: member.location
+                                location: util.getLocation(member)
                             });
                         }
 
@@ -179,7 +180,7 @@ export class BsClassValidator {
                                         childFieldType.toString(),
                                         ancestorMemberType.toString()
                                     ),
-                                    location: member.location
+                                    location: util.getLocation(member)
                                 });
                             }
                         }
@@ -197,7 +198,7 @@ export class BsClassValidator {
                                 ...DiagnosticMessages.missingOverrideKeyword(
                                     ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
-                                location: member.location
+                                location: util.getLocation(member)
                             });
                         }
 
@@ -215,7 +216,7 @@ export class BsClassValidator {
                                     ancestorAndMember.member.accessModifier?.text || 'public',
                                     ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
-                                location: member.location
+                                location: util.getLocation(member)
                             });
                         }
                     }

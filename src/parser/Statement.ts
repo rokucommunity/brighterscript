@@ -103,7 +103,7 @@ export class Body extends Statement implements TypedefProvider {
                 //this is the first statement. do nothing related to spacing and newlines
 
                 //if comment is on same line as prior sibling
-            } else if (util.hasLeadingComments(statement) && previousStatement && util.getLeadingComments(statement)?.[0]?.location?.range?.start.line === previousStatement.location?.range?.end.line) {
+            } else if (util.hasLeadingComments(statement) && previousStatement && util.getLocation(util.getLeadingComments(statement)?.[0])?.range?.start.line === util.getLocation(previousStatement)?.range?.end.line) {
                 result.push(
                     ' '
                 );
@@ -215,7 +215,7 @@ export class AssignmentStatement extends Statement {
 
         // Note: compound assignments (eg. +=) are internally dealt with via the RHS being a BinaryExpression
         // so this.value will be a BinaryExpression, and BinaryExpressions can figure out their own types
-        options.typeChain?.push(new TypeChainEntry({ name: this.tokens.name.text, type: variableType, data: options.data, location: this.tokens.name?.location, astNode: this }));
+        options.typeChain?.push(new TypeChainEntry({ name: this.tokens.name.text, type: variableType, data: options.data, locatable: this.tokens.name, astNode: this }));
         return variableType;
     }
 
@@ -443,7 +443,7 @@ export class Block extends Statement {
             //is not a comment
             //if comment is on same line as parent
             if (util.isLeadingCommentOnSameLine(state.lineage[0]?.location, statement) ||
-                util.isLeadingCommentOnSameLine(previousStatement?.location, statement)
+                util.isLeadingCommentOnSameLine(util.getLocation(previousStatement), statement)
             ) {
                 results.push(' ');
 
@@ -1766,7 +1766,7 @@ export class DottedSetStatement extends Statement {
         options.typeChain?.push(new TypeChainEntry({
             name: this.tokens.name?.text,
             type: result, data: options.data,
-            location: this.tokens.name?.location,
+            locatable: this.tokens.name,
             astNode: this
         }));
         return result;

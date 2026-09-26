@@ -240,7 +240,7 @@ export class CachedLookups {
                         node = node.obj;
                     } else {
                         //some expression we don't understand. log it and quit the loop
-                        this.file.program.logger.debug('Encountered unknown expression while calculating function expression chain', node.kind, node.location);
+                        this.file.program.logger.debug('Encountered unknown expression while calculating function expression chain', node.kind, util.getLocation(node));
                         break;
                     }
                 }

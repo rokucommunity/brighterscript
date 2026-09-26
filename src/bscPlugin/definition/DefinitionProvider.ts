@@ -227,7 +227,7 @@ export class DefinitionProvider {
             const constant = scope?.getConstFileLink(fullName, containingNamespace);
             if (constant) {
                 this.event.definitions.push(
-                    constant.item.tokens.name?.location
+                    util.getLocation(constant.item.tokens.name)
                 );
                 return;
             }
@@ -236,14 +236,14 @@ export class DefinitionProvider {
                 const enumLink = scope.getEnumFileLink(fullName, containingNamespace);
                 if (enumLink) {
                     this.event.definitions.push(
-                        enumLink.item.tokens.name.location
+                        util.getLocation(enumLink.item.tokens.name)
                     );
                     return;
                 }
                 const enumMemberLink = scope.getEnumMemberFileLink(fullName, containingNamespace);
                 if (enumMemberLink) {
                     this.event.definitions.push(
-                        enumMemberLink.item.tokens.name.location
+                        util.getLocation(enumMemberLink.item.tokens.name)
                     );
                     return;
                 }
@@ -251,7 +251,7 @@ export class DefinitionProvider {
                 const interfaceFileLink = scope.getInterfaceFileLink(fullName, containingNamespace);
                 if (interfaceFileLink) {
                     this.event.definitions.push(
-                        interfaceFileLink.item.tokens.name.location
+                        util.getLocation(interfaceFileLink.item.tokens.name)
                     );
                     return;
                 }
@@ -259,7 +259,7 @@ export class DefinitionProvider {
                 const classFileLink = scope.getClassFileLink(fullName, containingNamespace);
                 if (classFileLink) {
                     this.event.definitions.push(
-                        classFileLink.item.tokens.name.location
+                        util.getLocation(classFileLink.item.tokens.name)
                     );
                     return;
                 }
@@ -268,7 +268,7 @@ export class DefinitionProvider {
 
         let textToSearchFor = token.text.toLowerCase();
 
-        const previousToken = file.getTokenAt({ line: token.location?.range.start.line, character: token.location?.range.start.character });
+        const previousToken = file.getTokenAt({ line: util.getLocation(token)?.range.start.line, character: util.getLocation(token)?.range.start.character });
 
         if (previousToken?.kind === TokenKind.Callfunc) {
             for (const scope of this.event.program.getScopes()) {
@@ -282,7 +282,7 @@ export class DefinitionProvider {
                         const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
                         if (callable) {
                             this.event.definitions.push(
-                                util.createLocationFromRange(util.pathToUri((callable.callable.file as BrsFile).srcPath), callable.callable.functionStatement.tokens.name.location?.range)
+                                util.createLocationFromRange(util.pathToUri((callable.callable.file as BrsFile).srcPath), util.getLocation(callable.callable.functionStatement.tokens.name)?.range)
                             );
                         }
                     }
@@ -294,12 +294,12 @@ export class DefinitionProvider {
         // eslint-disable-next-line @typescript-eslint/dot-notation
         let classToken = file['getTokenBefore'](token, TokenKind.Class);
         if (classToken) {
-            let cs = file.parser.ast.findChild<ClassStatement>((klass) => isClassStatement(klass) && klass.tokens.class.location?.range === classToken.location?.range);
+            let cs = file.parser.ast.findChild<ClassStatement>((klass) => isClassStatement(klass) && util.getLocation(klass.tokens.class)?.range === util.getLocation(classToken)?.range);
             if (cs?.parentClassName) {
                 const nameParts = cs.parentClassName.getNameParts();
                 let extendedClass = file.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
                 if (extendedClass) {
-                    this.event.definitions.push(util.createLocationFromRange(util.pathToUri(extendedClass.file.srcPath), extendedClass.item.location?.range));
+                    this.event.definitions.push(util.createLocationFromRange(util.pathToUri(extendedClass.file.srcPath), util.getLocation(extendedClass.item)?.range));
                 }
             }
             return;
@@ -327,10 +327,10 @@ export class DefinitionProvider {
                 pathValue,
                 file.pkgPath,
                 util.createRange(
-                    token.location.range.start.line,
-                    token.location.range.start.character + 1,
-                    token.location.range.end.line,
-                    token.location.range.end.character - 1
+                    util.getLocation(token).range.start.line,
+                    util.getLocation(token).range.start.character + 1,
+                    util.getLocation(token).range.end.line,
+                    util.getLocation(token).range.end.character - 1
                 )
             );
             if (link) {
@@ -391,7 +391,7 @@ export class DefinitionProvider {
                     FunctionStatement: (statement: FunctionStatement) => {
                         if (statement.getName(file.parseMode).toLowerCase() === textToSearchFor) {
                             const uri = util.pathToUri(file.srcPath);
-                            this.event.definitions.push(util.createLocationFromRange(uri, statement.location?.range));
+                            this.event.definitions.push(util.createLocationFromRange(uri, util.getLocation(statement)?.range));
                         }
                     }
                 }), {
@@ -418,7 +418,7 @@ export class DefinitionProvider {
                 const namespaceItemStatementHandler = (statement: ClassStatement | FunctionStatement) => {
                     if (!location && statement.tokens.name.text.toLowerCase() === endName) {
                         const uri = util.pathToUri(file.srcPath);
-                        location = util.createLocationFromRange(uri, statement.location?.range);
+                        location = util.createLocationFromRange(uri, util.getLocation(statement)?.range);
                     }
                 };
 

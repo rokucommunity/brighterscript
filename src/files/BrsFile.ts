@@ -212,7 +212,7 @@ export class BrsFile implements BscFile {
                                 file: this,
                                 fullName: loopName,
                                 lastPartName: part,
-                                nameRange: namespaceStatement.nameExpression.location?.range,
+                                nameRange: util.getLocation(namespaceStatement.nameExpression)?.range,
                                 namespaceStatements: undefined,
                                 statements: undefined,
                                 classStatements: undefined,
@@ -264,7 +264,7 @@ export class BrsFile implements BscFile {
                 //register import statements
                 if (isImportStatement(statement) && statement.tokens.path) {
                     result.push({
-                        filePathRange: statement.tokens.path.location?.range,
+                        filePathRange: util.getLocation(statement.tokens.path)?.range,
                         destPath: util.getPkgPathFromTarget(this.destPath, statement.filePath),
                         sourceFile: this,
                         text: statement.tokens.path.text
@@ -303,7 +303,7 @@ export class BrsFile implements BscFile {
      */
     public getTokenAt(position: Position) {
         for (let token of this.parser.tokens) {
-            if (util.rangeContains(token.location?.range, position)) {
+            if (util.rangeContains(util.getLocation(token)?.range, position)) {
                 return token;
             }
         }
@@ -314,7 +314,7 @@ export class BrsFile implements BscFile {
      */
     public getCurrentOrNextTokenAt(position: Position) {
         for (let token of this.parser.tokens) {
-            if (util.comparePositionToRange(position, token.location?.range) < 0) {
+            if (util.comparePositionToRange(position, util.getLocation(token)?.range) < 0) {
                 return token;
             }
         }
@@ -332,7 +332,7 @@ export class BrsFile implements BscFile {
         this.ast.walk((node) => {
             const latestContainer = containingNode;
             //bsc walks depth-first
-            if (node.location?.range && util.rangeContains(node.location?.range, position)) {
+            if (util.getLocation(node)?.range && util.rangeContains(util.getLocation(node)?.range, position)) {
                 containingNode = node;
             }
             //we had a match before, and don't now. this means we've finished walking down the whole way, and found our match
@@ -528,7 +528,7 @@ export class BrsFile implements BscFile {
         for (let lexerToken of tokens) {
             for (let triviaToken of lexerToken.leadingTrivia ?? []) {
                 if (triviaToken.kind === TokenKind.Comment) {
-                    processor.tryAdd(triviaToken.text, triviaToken.location?.range);
+                    processor.tryAdd(triviaToken.text, util.getLocation(triviaToken)?.range);
                 }
             }
         }
@@ -569,8 +569,8 @@ export class BrsFile implements BscFile {
             //add every parameter
             for (let param of func.parameters) {
                 scope.variableDeclarations.push({
-                    nameRange: param.tokens.name.location?.range,
-                    lineIndex: param.tokens.name.location?.range?.start.line,
+                    nameRange: util.getLocation(param.tokens.name)?.range,
+                    lineIndex: util.getLocation(param.tokens.name)?.range?.start.line,
                     name: param.tokens.name.text,
                     getType: () => {
                         return param.getType({ flags: SymbolTypeFlag.typetime });
@@ -582,8 +582,8 @@ export class BrsFile implements BscFile {
             func.body?.walk(createVisitor({
                 ForEachStatement: (stmt) => {
                     scope.variableDeclarations.push({
-                        nameRange: stmt.tokens.item.location?.range,
-                        lineIndex: stmt.tokens.item.location?.range?.start.line,
+                        nameRange: util.getLocation(stmt.tokens.item)?.range,
+                        lineIndex: util.getLocation(stmt.tokens.item)?.range?.start.line,
                         name: stmt.tokens.item.text,
                         getType: () => stmt.getType({ flags: SymbolTypeFlag.runtime })
                     });
@@ -591,8 +591,8 @@ export class BrsFile implements BscFile {
                 LabelStatement: (stmt) => {
                     const { name: identifier } = stmt.tokens;
                     scope.labelStatements.push({
-                        nameRange: identifier.location?.range,
-                        lineIndex: identifier.location?.range?.start.line,
+                        nameRange: util.getLocation(identifier)?.range,
+                        lineIndex: util.getLocation(identifier)?.range?.start.line,
                         name: identifier.text
                     });
                 }
@@ -620,8 +620,8 @@ export class BrsFile implements BscFile {
             if (scope) {
                 const variableName = statement.tokens.name;
                 scope.variableDeclarations.push({
-                    nameRange: variableName.location?.range,
-                    lineIndex: variableName.location?.range?.start.line,
+                    nameRange: util.getLocation(variableName)?.range,
+                    lineIndex: util.getLocation(variableName)?.range?.start.line,
                     name: variableName.text,
                     getType: () => {
                         return statement.getType({ flags: SymbolTypeFlag.runtime });
@@ -662,10 +662,10 @@ export class BrsFile implements BscFile {
                 callables.push({
                     isSub: statement.func.tokens.functionType?.text.toLowerCase() === 'sub',
                     name: statement.tokens.name?.text,
-                    nameRange: statement.tokens.name?.location?.range,
+                    nameRange: util.getLocation(statement.tokens.name)?.range,
                     file: this,
                     params: params,
-                    range: statement.func.location?.range,
+                    range: util.getLocation(statement.func)?.range,
                     type: funcType,
                     getName: statement.getName.bind(statement),
                     hasNamespace: !!statement.findAncestor<NamespaceStatement>(isNamespaceStatement),
@@ -714,9 +714,9 @@ export class BrsFile implements BscFile {
             return this.cache.getOrAdd(`namespaceStatementForPosition-${position.line}:${position.character}`, () => {
                 let mostSpecificNamespace: NamespaceStatement;
                 for (const statement of this._cachedLookups.namespaceStatements) {
-                    if (util.rangeContains(statement.location?.range, position)) {
+                    if (util.rangeContains(util.getLocation(statement)?.range, position)) {
                         if (mostSpecificNamespace) {
-                            if (util.isRangeInRange(statement.location?.range, mostSpecificNamespace.location?.range)) {
+                            if (util.isRangeInRange(util.getLocation(statement)?.range, util.getLocation(mostSpecificNamespace)?.range)) {
                                 mostSpecificNamespace = statement;
                             }
                         } else {
@@ -859,11 +859,11 @@ export class BrsFile implements BscFile {
         let tokens = this.parser.tokens;
         for (let i = 0; i < tokens.length; i++) {
             let token = tokens[i];
-            if (util.rangeContains(token.location?.range, position)) {
+            if (util.rangeContains(util.getLocation(token)?.range, position)) {
                 return token;
             }
             //if the position less than this token range, then this position touches no token,
-            if (util.positionIsGreaterThanRange(position, token.location?.range) === false) {
+            if (util.positionIsGreaterThanRange(position, util.getLocation(token)?.range) === false) {
                 let t = tokens[i - 1];
                 //return the token or the first token
                 return t ? t : tokens[0];
@@ -914,12 +914,12 @@ export class BrsFile implements BscFile {
         //get class fields and members
         const statementHandler = (statement: MethodStatement) => {
             if (statement.getName(file.parseMode).toLowerCase() === textToSearchFor) {
-                results.push(util.createLocationFromRange(util.pathToUri(file.srcPath), statement.location?.range));
+                results.push(util.createLocationFromRange(util.pathToUri(file.srcPath), util.getLocation(statement)?.range));
             }
         };
         const fieldStatementHandler = (statement: FieldStatement) => {
             if (statement.tokens.name.text.toLowerCase() === textToSearchFor) {
-                results.push(util.createLocationFromRange(util.pathToUri(file.srcPath), statement.location?.range));
+                results.push(util.createLocationFromRange(util.pathToUri(file.srcPath), util.getLocation(statement)?.range));
             }
         };
         file.parser.ast.walk(createVisitor({
@@ -1006,7 +1006,7 @@ export class BrsFile implements BscFile {
             const astTranspile = this.ast.transpile(state);
             const trailingComments = [];
             if (util.hasLeadingComments(this.parser.eofToken)) {
-                if (util.isLeadingCommentOnSameLine(this.ast.statements[this.ast.statements.length - 1]?.location, this.parser.eofToken)) {
+                if (util.isLeadingCommentOnSameLine(util.getLocation(this.ast.statements[this.ast.statements.length - 1]), this.parser.eofToken)) {
                     trailingComments.push(' ');
                 } else {
                     trailingComments.push('\n');
@@ -1361,7 +1361,7 @@ export class BrsFile implements BscFile {
                         fullNameLower: lowerLoopName,
                         parentNameLower: parentNameLower,
                         nameParts: nameParts.slice(0, i),
-                        nameRange: namespaceStatement.nameExpression.location?.range,
+                        nameRange: util.getLocation(namespaceStatement.nameExpression)?.range,
                         lastPartName: part.text,
                         lastPartNameLower: lowerPartName,
                         namespaceStatements: [],

@@ -743,7 +743,7 @@ export class DottedGetExpression extends Expression {
             name: this.tokens.name?.text,
             type: result,
             data: options.data,
-            location: this.tokens.name?.location ?? this.location,
+            locatable: this.tokens.name,
             astNode: this
         }));
         if (result ||
@@ -1764,8 +1764,8 @@ export class SourceLiteralExpression extends Expression {
     private getClosestLineNumber() {
         let node: AstNode = this;
         while (node) {
-            if (node.location?.range) {
-                return node.location.range.start.line + 1;
+            if (util.getLocation(node)?.range) {
+                return util.getLocation(node).range.start.line + 1;
             }
             node = node.parent;
         }

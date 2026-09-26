@@ -11,7 +11,7 @@ import type { AstNode, Expression } from './parser/AstNode';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
-import type { Token } from './lexer/Token';
+import type { Locatable, Token } from './lexer/Token';
 import type { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-languageserver';
 import type { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { Editor } from './astUtils/Editor';
@@ -21,6 +21,7 @@ import type { LazyFileData } from './files/LazyFileData';
 import { TokenKind } from './lexer/TokenKind';
 import type { BscTypeKind } from './types/BscTypeKind';
 import { createToken } from './astUtils/creators';
+import { util } from './util';
 import type { SourceFixAllCodeAction } from './CodeActionUtil';
 import type { Availability } from './RokuConstants';
 
@@ -1286,7 +1287,10 @@ export class TypeChainEntry {
         name: string;
         type: BscType;
         data: ExtraSymbolData;
-        location?: Location;
+        /**
+         * The item to get the location from. Falls back to `astNode` if this has no location
+         */
+        locatable?: Locatable;
         separatorToken?: Token;
         astNode: AstNode;
     }) {
@@ -1294,20 +1298,20 @@ export class TypeChainEntry {
         // make a copy of this data
         this.data = { ...options.data };
         this.type = options.type;
-        this._location = options.location;
+        this.locatable = options.locatable;
         this.separatorToken = options.separatorToken ?? createToken(TokenKind.Dot);
         this.astNode = options.astNode;
         this.isResolved = this.type?.isResolvable();
     }
 
     get location(): Location {
-        return this._location ?? this.astNode?.location;
+        return util.getLocation(this.locatable) ?? util.getLocation(this.astNode);
     }
 
     public readonly name: string;
     public readonly type: BscType;
     public readonly data: ExtraSymbolData;
-    private readonly _location: Location;
+    private readonly locatable: Locatable;
     public readonly separatorToken: Token;
     public isResolved: boolean;
     public astNode: AstNode;
