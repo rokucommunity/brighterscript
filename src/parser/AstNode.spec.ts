@@ -217,6 +217,34 @@ describe('AstNode', () => {
             const foxtrot = file.ast.findChildAtPosition<DottedGetExpression>(util.createPosition(3, 71))!;
             expect(foxtrot.tokens.name.text).to.eql('foxtrot');
         });
+
+        function testPositionBoundaries(newline: string) {
+            const file = program.setFile<BrsFile>('source/main.brs', [
+                'sub main()',
+                '    alpha = 1',
+                '    s = "😀" + alpha',
+                'end sub'
+            ].join(newline));
+            //start of the literal
+            expect(file.ast.findChildAtPosition<LiteralExpression>(util.createPosition(1, 12)).tokens.value.text).to.eql('1');
+            //just after the end of the literal (range end is inclusive)
+            expect(file.ast.findChildAtPosition<LiteralExpression>(util.createPosition(1, 13)).tokens.value.text).to.eql('1');
+            //column 0 of the next line is not inside the previous statement
+            expect(isBlock(file.ast.findChildAtPosition(util.createPosition(2, 0)))).to.be.true;
+            //after a surrogate pair on the same line
+            expect(file.ast.findChildAtPosition<VariableExpression>(util.createPosition(2, 15)).tokens.name.text).to.eql('alpha');
+            expect(file.ast.findChildAtPosition<VariableExpression>(util.createPosition(2, 20)).tokens.name.text).to.eql('alpha');
+            //past the end of the last line
+            expect(file.ast.findChildAtPosition(util.createPosition(9, 0))).to.be.undefined;
+        }
+
+        it('handles position boundaries with LF line endings', () => {
+            testPositionBoundaries('\n');
+        });
+
+        it('handles position boundaries with CRLF line endings', () => {
+            testPositionBoundaries('\r\n');
+        });
     });
 
     describe('findChild', () => {

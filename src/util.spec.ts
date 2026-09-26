@@ -17,7 +17,10 @@ import { TokenKind } from './lexer/TokenKind';
 import { createToken } from './astUtils/creators';
 import { createDottedIdentifier, createVariableExpression } from './astUtils/creators';
 import { Parser } from './parser/Parser';
-import type { FunctionStatement } from './parser/Statement';
+import type { ExitStatement, FunctionStatement } from './parser/Statement';
+import { Lexer } from './lexer/Lexer';
+import type { Locatable } from './lexer/Token';
+import { isExitStatement } from './astUtils/reflection';
 import { ComponentType } from './types/ComponentType';
 
 const sinon = createSandbox();
@@ -1025,6 +1028,96 @@ describe('util', () => {
             expect((plugins[0] as any).initOptions).to.eql({
                 version: util.getBrighterScriptVersion()
             });
+        });
+    });
+
+    describe('getLocation', () => {
+        function getRanges(code: string) {
+            return Lexer.scan(code).tokens.map(x => [x.kind, util.getLocation(x)?.range]);
+        }
+
+        it('returns undefined for synthetic items', () => {
+            expect(util.getLocation(createToken(TokenKind.Identifier, 'a'))).to.be.undefined;
+            expect(util.getLocation(undefined)).to.be.undefined;
+        });
+
+        it('uses the uri from the source', () => {
+            const token = Lexer.scan('a', { srcPath: s`${rootDir}/source/main.brs` }).tokens[0];
+            expect(util.getLocation(token).uri).to.eql(util.pathToUri(s`${rootDir}/source/main.brs`));
+        });
+
+        it('keeps a LF newline token on its own line', () => {
+            expect(getRanges('a\nb')).to.eql([
+                [TokenKind.Identifier, util.createRange(0, 0, 0, 1)],
+                [TokenKind.Newline, util.createRange(0, 1, 0, 2)],
+                [TokenKind.Identifier, util.createRange(1, 0, 1, 1)],
+                [TokenKind.Eof, util.createRange(1, 1, 1, 2)]
+            ]);
+        });
+
+        it('keeps a CRLF newline token on its own line', () => {
+            expect(getRanges('a\r\nb')).to.eql([
+                [TokenKind.Identifier, util.createRange(0, 0, 0, 1)],
+                [TokenKind.Newline, util.createRange(0, 1, 0, 3)],
+                [TokenKind.Identifier, util.createRange(1, 0, 1, 1)],
+                [TokenKind.Eof, util.createRange(1, 1, 1, 2)]
+            ]);
+        });
+
+        it('handles a trailing newline at the end of the file', () => {
+            expect(getRanges('a\n')).to.eql([
+                [TokenKind.Identifier, util.createRange(0, 0, 0, 1)],
+                [TokenKind.Newline, util.createRange(0, 1, 0, 2)],
+                [TokenKind.Eof, util.createRange(1, 0, 1, 1)]
+            ]);
+        });
+
+        it('counts surrogate pairs as two characters', () => {
+            const tokens = Lexer.scan('x = "😀" + y').tokens;
+            expect(util.getLocation(tokens.find(x => x.text === 'y')).range).to.eql(util.createRange(0, 11, 0, 12));
+        });
+
+        it('tracks lines through multi-line template strings', () => {
+            // eslint-disable-next-line no-template-curly-in-string
+            const tokens = Lexer.scan('x = `one\ntwo ${y}\r\nthree`\nz').tokens;
+            expect(util.getLocation(tokens.find(x => x.text === 'y')).range).to.eql(util.createRange(1, 6, 1, 7));
+            expect(util.getLocation(tokens.find(x => x.text === 'z')).range).to.eql(util.createRange(3, 0, 3, 1));
+        });
+
+        it('handles the split `elseif` tokens', () => {
+            const tokens = Lexer.scan('if a then\nelseif b then\nend if').tokens;
+            expect(util.getLocation(tokens.find(x => x.kind === TokenKind.Else)).range).to.eql(util.createRange(1, 0, 1, 4));
+            expect(util.getLocation(tokens.filter(x => x.kind === TokenKind.If)[1]).range).to.eql(util.createRange(1, 4, 1, 6));
+        });
+
+        it('handles the split `exitwhile` tokens', () => {
+            const { ast } = Parser.parse('sub main()\n    while true\n        exitwhile\n    end while\nend sub');
+            const exitStatement = ast.findChild<ExitStatement>(isExitStatement);
+            expect(util.getLocation(exitStatement.tokens.exit).range).to.eql(util.createRange(2, 8, 2, 12));
+            expect(util.getLocation(exitStatement.tokens.loopType).range).to.eql(util.createRange(2, 12, 2, 17));
+        });
+
+        it('builds locations for multi-line nodes', () => {
+            const { ast } = Parser.parse('sub main()\r\n    print 1\r\nend sub');
+            expect(util.getLocation(ast.statements[0]).range).to.eql(util.createRange(0, 0, 2, 7));
+        });
+    });
+
+    describe('setBounds', () => {
+        it('uses the min start and max end of the locatables', () => {
+            const result = util.setBounds({} as Locatable, testLocatable(1, 5, 1, 8), undefined, testLocatable(0, 2, 0, 4), createToken(TokenKind.Identifier, 'synthetic'));
+            expect(util.getLocation(result).range).to.eql(util.createRange(0, 2, 1, 8));
+        });
+
+        it('ignores locatables from a different source', () => {
+            const other = Lexer.scan('\n\nabcdef').tokens[2];
+            const result = util.setBounds({} as Locatable, testLocatable(0, 2, 0, 4), other);
+            expect(util.getLocation(result).range).to.eql(util.createRange(0, 2, 0, 4));
+        });
+
+        it('clears the bounds when nothing has a source', () => {
+            const result = util.setBounds({ pos: 1, end: 2, source: testLocatable(0, 0, 0, 0).source }, createToken(TokenKind.Identifier, 'a'));
+            expect(result).to.eql({ pos: undefined, end: undefined, source: undefined });
         });
     });
 
