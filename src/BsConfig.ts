@@ -1,18 +1,48 @@
 import type { LogLevel } from './logging';
 
-export interface BsConfigFileEntry {
+/**
+ * An object entry in the `files` array of a bsconfig. Maps one or more source paths to a location in the package.
+ */
+export interface FilesArrayEntry {
+    /**
+     * A path or glob (or array of them) relative to `rootDir`. Prefix a pattern with `!` to exclude matches.
+     */
     src: string | string[];
+    /**
+     * The path relative to the root of the package where the matched files should be placed.
+     * If `src` is a single non-glob path, this is the full destination path for that file.
+     */
     dest?: string;
 }
 
-export type BsConfigFileEntryOrShortcut = string | BsConfigFileEntry;
-
-export interface BsConfigDiagnosticFilter {
-    src?: string;
-    codes?: Array<number | string>;
+/**
+ * A `FilesArrayEntry` whose `src` has been resolved to a single file path.
+ */
+export interface ResolvedFilesArrayEntry {
+    /**
+     * The full path to the source file
+     */
+    src: string;
+    /**
+     * The path relative to the root of the package where the file should be placed
+     */
+    dest: string;
 }
 
-export type BsConfigDiagnosticFilterOrShortcut = string | number | BsConfigDiagnosticFilter;
+/**
+ * An object entry in the `diagnosticFilters` array of a bsconfig.
+ */
+export interface DiagnosticFilter {
+    /**
+     * The files whose diagnostics should be filtered. Each entry is a glob matched against `src` paths,
+     * or an object explicitly matching against `src` or `dest` paths. If omitted, applies to all files.
+     */
+    files?: string | Array<string | { src: string } | { dest: string }>;
+    /**
+     * The diagnostic codes to filter. If omitted, all diagnostics in the matched files are filtered.
+     */
+    codes?: Array<number | string>;
+}
 
 export interface BsConfig {
     /**
@@ -60,7 +90,7 @@ export interface BsConfig {
      * If using the {src;dest;} format, you can specify a different destination directory
      * for the matched files in src.
      */
-    files?: Array<BsConfigFileEntryOrShortcut>;
+    files?: Array<string | FilesArrayEntry>;
 
     /**
      * If true, the files are not copied to outDir.
@@ -132,7 +162,7 @@ export interface BsConfig {
     /**
      * A list of filters used to exclude diagnostics from the output
      */
-    diagnosticFilters?: Array<string | number | { files?: string | Array<string | { src: string } | { dest: string }>; codes?: Array<number | string> }>;
+    diagnosticFilters?: Array<string | number | DiagnosticFilter>;
 
     /**
      * Use the deprecated diagnosticFilters format from v0. This is useful for backwards compatibility.

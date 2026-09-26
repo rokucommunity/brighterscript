@@ -4,12 +4,12 @@ import * as path from 'path';
 import * as semver from 'semver';
 import type { CodeAction, Position, Range, SignatureInformation, Location, LocationLink, DocumentSymbol, CancellationToken, SelectionRange, InlayHint } from 'vscode-languageserver';
 import { CancellationTokenSource } from 'vscode-languageserver';
-import type { BsConfig, FinalizedBsConfig } from './BsConfig';
+import type { BsConfig, FinalizedBsConfig, ResolvedFilesArrayEntry } from './BsConfig';
 import { Scope } from './Scope';
 import type { NamespaceContainer, NamespaceFileContribution } from './Scope';
 import { SymbolTable } from './SymbolTable';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { BsDiagnostic, FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeAddFileEvent, BeforeRemoveFileEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData, ProvideSelectionRangesEvent, ProvideInlayHintsEvent, ProvideSourceFixAllCodeActionsEvent } from './interfaces';
+import type { BsDiagnostic, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeAddFileEvent, BeforeRemoveFileEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData, ProvideSelectionRangesEvent, ProvideInlayHintsEvent, ProvideSourceFixAllCodeActionsEvent } from './interfaces';
 import type { SourceFixAllCodeAction } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
 import { standardizePath as s, util } from './util';
@@ -925,8 +925,8 @@ export class Program {
      * @param fileEntry an object that specifies src and dest for the file.
      * @param fileData the file contents. omit or pass `undefined` to prevent loading the data at this time
      */
-    public setFile<T extends BscFile>(fileEntry: FileObj, fileData: FileData): T;
-    public setFile<T extends BscFile>(fileParam: FileObj | string, fileData: FileData): T {
+    public setFile<T extends BscFile>(fileEntry: ResolvedFilesArrayEntry, fileData: FileData): T;
+    public setFile<T extends BscFile>(fileParam: ResolvedFilesArrayEntry | string, fileData: FileData): T {
         //normalize the file paths
         const { srcPath, destPath } = this.getPaths(fileParam, this.options.rootDir);
 
@@ -1043,7 +1043,7 @@ export class Program {
      * @param fileParam an object representing file paths
      * @param rootDir must be a pre-normalized path
      */
-    private getPaths(fileParam: string | FileObj | { srcPath?: string; pkgPath?: string }, rootDir: string) {
+    private getPaths(fileParam: string | ResolvedFilesArrayEntry | { srcPath?: string; pkgPath?: string }, rootDir: string) {
         let srcPath: string | undefined;
         let destPath: string | undefined;
 
@@ -1055,7 +1055,7 @@ export class Program {
             srcPath = s`${path.resolve(rootDir, fileParam)}`;
             destPath = s`${util.replaceCaseInsensitive(srcPath, rootDir, '')}`;
         } else {
-            //`fileParam` here is `FileObj | { srcPath?: string; pkgPath?: string }`; duck-type across both shapes
+            //`fileParam` here is `ResolvedFilesArrayEntry | { srcPath?: string; pkgPath?: string }`; duck-type across both shapes
             let param = fileParam as { src?: string; srcPath?: string; dest?: string; pkgPath?: string };
 
             if (param.src) {
@@ -2613,7 +2613,7 @@ export class Program {
      * @param manifestFileObj A pointer to a potential manifest file object found during loading
      * @param replaceIfAlreadyLoaded should we overwrite the internal `_manifest` if it already exists
      */
-    public loadManifest(manifestFileObj?: FileObj, replaceIfAlreadyLoaded = true) {
+    public loadManifest(manifestFileObj?: ResolvedFilesArrayEntry, replaceIfAlreadyLoaded = true) {
         //if we already have a manifest instance, and should not replace...then don't replace
         if (!replaceIfAlreadyLoaded && this._manifest) {
             return;
