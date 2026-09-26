@@ -49,7 +49,7 @@ end select
 - `end select` can also be written as `endselect`. Like the rest of BrightScript, the keywords are case-insensitive (`Select Case`, `End Select`, and so on).
 
 ## No fallthrough
-If you're coming from C, Java, or JavaScript, this is the big difference: **cases never fall through**, and there's no `break` statement. Once a case body finishes, execution continues after `end select`.
+If you're coming from C, Java, or JavaScript, this is the big difference: **cases never fall through**, and you don't need a `break` statement. Once a case body finishes, execution continues after `end select`. (To leave a case early, use [`exit select`](#exit-select).)
 
 To run the same code for several values, list them together in one case:
 
@@ -73,16 +73,24 @@ select case key
 end select
 ```
 
-If you really do want a case that does nothing, put a comment in it. That tells the compiler it's on purpose:
+If you really do want a case that does nothing, put a comment or an `exit select` in it. Either one tells the compiler it's on purpose:
 
 ```brighterscript
 select case key
     case "back"
         ' handled by the parent screen
+    case "options"
+        exit select
     case "OK"
         m.select()
     case else
 end select
+```
+
+Empty cases in the [single-line form](#single-line-form) aren't flagged when the next `case` is on the same line, since a comment there would hide the rest of the line. So this is fine as-is:
+
+```brighterscript
+select case key : case "back" : case "OK" : m.select() : end select
 ```
 
 ## Values on multiple lines
@@ -98,6 +106,20 @@ select case errorCode
         showGenericError()
 end select
 ```
+
+The values can also start on the line after `case`:
+
+```brighterscript
+select case errorCode
+    case
+        401, 403, 407
+        showLoginScreen()
+    case else
+        showGenericError()
+end select
+```
+
+The next line is only treated as the value list when the entire line is a comma-separated list of expressions. If it's anything else (like `print "x"`, another `case`, or `end select`), you'll get an error that the `case` has no value. Keep in mind that a function call or a comparison (like `doSomething()` or `a = b`) is a valid value, so a `case` whose value was accidentally left off will use its first body line as the value.
 
 ## Single-line form
 Use `:` to separate statements, like everywhere else in BrightScript:
@@ -283,6 +305,31 @@ end for
 
 `return` works the same way.
 
+## `exit select`
+`exit select` leaves the `select case` immediately and continues after `end select`, like `exit for` and `exit while` do for loops:
+
+```brighterscript
+select case command
+    case "save"
+        if not m.isDirty then
+            exit select
+        end if
+        m.save()
+    case else
+end select
+```
+
+On its own, `exit select` is also a clear way to write a case that intentionally does nothing (see [no fallthrough](#no-fallthrough)).
+
+When `exit select` is the last statement of a case, it's simply removed from the output. Anywhere else, it becomes a `goto` to a label placed right after the generated `end if`, which works on every firmware version.
+
+`exit select` can't be used:
+- outside of a `select case`
+- inside a loop within a case (i.e. `case 1 : for each item in items : exit select`). Use `exit for` or `exit while` to leave the loop first.
+- inside a function defined within a case (the function has its own body, so there's no `select case` to exit)
+
+In a nested `select case`, `exit select` leaves the innermost one.
+
 ## The optional `case` keyword
 Like VB, the `case` right after `select` is optional:
 
@@ -344,7 +391,6 @@ A few other VB features are not supported:
 
 - Range cases: `case 1 to 5`
 - Relational cases: `case is > 5`
-- `exit select`
 
 For ranges and relational checks, use `select case true` with a condition:
 
@@ -369,7 +415,7 @@ Besides the usual syntax errors (a missing `end select`, a `case` with no value,
 | `case-value-enum-mismatch` | warning | A case value is a member of a different enum than the subject. |
 | `duplicate-case-value` | warning | The same value appears in more than one case. The later one can never match. |
 | `case-value-type-mismatch` | warning | A literal case value has a different type than the subject (or than the other literal values). Comparing them crashes at runtime. |
-| `empty-case-does-not-fall-through` | warning | A case is empty. It does nothing and does **not** fall through to the next case. |
+| `empty-case-does-not-fall-through` | warning | A case is empty. It does nothing and does **not** fall through to the next case. Not reported when the case contains a comment or `exit select`, or when the next `case` is on the same line. |
 | `select-case-has-no-cases` | warning | The `select case` has no cases at all. |
 | `statement-before-first-case` | error | A statement (other than a comment) appears before the first `case`. |
 | `case-else-must-be-last` | error | `case else` isn't the last case. |
@@ -377,6 +423,8 @@ Besides the usual syntax errors (a missing `end select`, a `case` with no value,
 | `case-outside-select-case` | error | `case` was used outside of a `select case`. |
 | `end-select-without-select-case` | error | `end select` was found without a matching `select case`. |
 | `select-case-in-inline-if` | error | A `select case` was used inside an inline `if`. |
+| `exit-select-outside-select-case` | error | `exit select` was used outside of a `select case`. |
+| `exit-select-in-loop` | error | `exit select` was used inside a loop within a case. Leave the loop with `exit for` or `exit while` first. |
 
 Many teams leave out `case else` on purpose. For enum subjects, covering every member is enough (see [covering every enum member](#covering-every-enum-member)). For everything else, if you don't want the `select-case-missing-case-else` warning, turn it off or lower its severity for your whole project with [`diagnosticSeverityOverrides`](bsconfig.md#diagnosticseverityoverrides) or [`diagnosticFilters`](bsconfig.md#diagnosticfilters) in `bsconfig.json`. To silence it for a single statement, use a `' bs:disable-next-line` comment (see [suppressing compiler messages](suppressing-compiler-messages.md)):
 
