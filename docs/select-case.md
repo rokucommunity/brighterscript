@@ -309,19 +309,64 @@ end for
 `exit select` leaves the `select case` immediately and continues after `end select`, like `exit for` and `exit while` do for loops:
 
 ```brighterscript
-select case command
-    case "save"
-        if not m.isDirty then
-            exit select
-        end if
-        m.save()
-    case else
-end select
+sub onCommand(command)
+    select case command
+        case "save"
+            if not m.isDirty then
+                exit select
+            end if
+            m.save()
+        case else
+    end select
+    print "done"
+end sub
 ```
 
-On its own, `exit select` is also a clear way to write a case that intentionally does nothing (see [no fallthrough](#no-fallthrough)).
+BrightScript has no way to leave an `if` early, so an `exit select` in the middle of a case becomes a `goto` to a label placed right after the generated `end if`. This works on every firmware version:
 
-When `exit select` is the last statement of a case, it's simply removed from the output. Anywhere else, it becomes a `goto` to a label placed right after the generated `end if`, which works on every firmware version.
+```brightscript
+sub onCommand(command)
+    if command = "save" then
+        if not m.isDirty then
+            goto BRIGHTERSCRIPT_EXIT_SELECT_0
+        end if
+        m.save()
+    else
+    end if
+    BRIGHTERSCRIPT_EXIT_SELECT_0:
+    print "done"
+end sub
+```
+
+When `exit select` is the last statement of a case, there's nothing left to skip, so it's simply removed. That makes it a clear way to write a case that intentionally does nothing (see [no fallthrough](#no-fallthrough)):
+
+```brighterscript
+sub onKey(key)
+    select case key
+        case "back"
+            ' handled by the parent screen
+            exit select
+        case "OK"
+            m.select()
+        case else
+    end select
+end sub
+```
+
+transpiles to:
+
+```brightscript
+sub onKey(key)
+    if key = "back" then
+        ' handled by the parent screen
+    else if key = "OK" then
+        m.select()
+    else
+    end if
+end sub
+```
+
+The label is only generated when something jumps to it. A `select case` with no `exit select`, or whose only `exit select`s are at the end of a case, gets no label at all. Each `select case` that needs one gets its own numbered label.
 
 `exit select` can't be used:
 - outside of a `select case`
