@@ -53,12 +53,12 @@ describe('BscFactory', () => {
         expect(missing).to.eql([]);
     });
 
-    it('has an sg create method for every SceneGraph node class', () => {
+    it('has an sgXml create method for every SceneGraph node class', () => {
         const classNames = getClassNames(SGTypesModule);
         //sanity check to make sure we actually found the classes
         expect(classNames).to.include.members(['SGComponent', 'SGAst']);
 
-        const missing = classNames.filter(name => typeof factory.sg[`create${name}`] !== 'function');
+        const missing = classNames.filter(name => typeof factory.sgXml[`create${name}`] !== 'function');
         expect(missing).to.eql([]);
     });
 
@@ -154,7 +154,7 @@ describe('BscFactory', () => {
 
         it('creates SG tokens', () => {
             const location = util.createLocation(1, 2, 3, 4);
-            expect(factory.sg.createToken('component', location)).to.eql({
+            expect(factory.sgXml.createToken('component', location)).to.eql({
                 text: 'component',
                 location: location
             });
@@ -308,7 +308,7 @@ describe('BscFactory', () => {
 
     describe('SceneGraph', () => {
         it('creates attributes with default tokens', () => {
-            const attr = factory.sg.createSGAttribute({ key: 'name', value: 'MyComponent' });
+            const attr = factory.sgXml.createSGAttribute({ key: 'name', value: 'MyComponent' });
             expect(attr.tokens.key.text).to.eql('name');
             expect(attr.tokens.equals.text).to.eql('=');
             expect(attr.tokens.openingQuote.text).to.eql('"');
@@ -317,7 +317,7 @@ describe('BscFactory', () => {
         });
 
         it('creates a component with default tokens and object attributes', () => {
-            const component = factory.sg.createSGComponent({
+            const component = factory.sgXml.createSGComponent({
                 attributes: {
                     name: 'MyComponent',
                     extends: 'Group'
@@ -333,11 +333,11 @@ describe('BscFactory', () => {
         });
 
         it('accepts full tokens', () => {
-            const component = factory.sg.createSGComponent({
+            const component = factory.sgXml.createSGComponent({
                 startTagOpen: { text: '<' },
                 startTagName: { text: 'component' },
                 attributes: [
-                    factory.sg.createSGAttribute({ key: { text: 'name' }, value: { text: 'MyComponent' } })
+                    factory.sgXml.createSGAttribute({ key: { text: 'name' }, value: { text: 'MyComponent' } })
                 ],
                 startTagClose: { text: '>' },
                 elements: [],
@@ -349,20 +349,20 @@ describe('BscFactory', () => {
         });
 
         it('creates self-closing elements', () => {
-            const field = factory.sg.createSGInterfaceField({ attributes: { id: 'title', type: 'string' } });
+            const field = factory.sgXml.createSGInterfaceField({ attributes: { id: 'title', type: 'string' } });
             expect(field).to.be.instanceOf(SGInterfaceField);
             expect(field.id).to.eql('title');
             expect(field.type).to.eql('string');
             expect(field.tokens.startTagClose.text).to.eql('/>');
             expect(field.tokens.endTagName).to.be.undefined;
 
-            const script = factory.sg.createSGScript({ attributes: { uri: 'pkg:/source/main.brs' } });
+            const script = factory.sgXml.createSGScript({ attributes: { uri: 'pkg:/source/main.brs' } });
             expect(script).to.be.instanceOf(SGScript);
             expect(script.uri).to.eql('pkg:/source/main.brs');
         });
 
         it('creates a prolog', () => {
-            const prolog = factory.sg.createSGProlog({ attributes: { version: '1.0' } });
+            const prolog = factory.sgXml.createSGProlog({ attributes: { version: '1.0' } });
             expect(prolog).to.be.instanceOf(SGProlog);
             expect(prolog.tokens.startTagOpen.text).to.eql('<?');
             expect(prolog.tokens.startTagName.text).to.eql('xml');
@@ -370,11 +370,11 @@ describe('BscFactory', () => {
         });
 
         it('creates an SGAst', () => {
-            const component = factory.sg.createSGComponent({ attributes: { name: 'MyComponent' } });
-            const ast = factory.sg.createSGAst({ rootElement: component, componentElement: component });
+            const component = factory.sgXml.createSGComponent({ attributes: { name: 'MyComponent' } });
+            const ast = factory.sgXml.createSGAst({ rootElement: component, componentElement: component });
             expect(ast).to.be.instanceOf(SGAst);
             expect(ast.componentElement).to.equal(component);
-            expect(factory.sg.createSGAst()).to.be.instanceOf(SGAst);
+            expect(factory.sgXml.createSGAst()).to.be.instanceOf(SGAst);
         });
     });
 });

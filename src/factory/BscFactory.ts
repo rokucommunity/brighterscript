@@ -1,13 +1,13 @@
 import type { Program } from '../Program';
 import { BrsFactory } from './BrsFactory';
-import { SGFactory } from './SGFactory';
+import { SGXmlFactory } from './SGXmlFactory';
 import { FileFactory } from './FileFactory';
 import { PluginFactoryRegistry } from './PluginFactoryRegistry';
 
 /**
  * A factory for creating everything in BrighterScript, grouped by domain:
  *  - `brs`: BrightScript/BrighterScript tokens and AST nodes (i.e. `factory.brs.createCallExpression(...)`)
- *  - `sg`: SceneGraph component nodes (i.e. `factory.sg.createSGComponent(...)`)
+ *  - `sgXml`: SceneGraph component nodes (i.e. `factory.sgXml.createSGComponent(...)`)
  *  - `files`: files (i.e. `factory.files.createBrsFile(...)`)
  *  - `plugins`: factories contributed by plugins (i.e. `factory.plugins.get('bsc-plugin-example')`)
  *
@@ -39,7 +39,7 @@ export class BscFactory {
     /**
      * Create SceneGraph component nodes (the contents of a component `.xml` file)
      */
-    public readonly sg = new SGFactory();
+    public readonly sgXml = new SGXmlFactory();
 
     /**
      * Create files

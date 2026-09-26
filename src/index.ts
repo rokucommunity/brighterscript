@@ -23,7 +23,7 @@ export * from './astUtils/stackedVisitor';
 export * from './astUtils/reflection';
 export { BscFactory } from './factory/BscFactory';
 export * from './factory/BrsFactory';
-export * from './factory/SGFactory';
+export * from './factory/SGXmlFactory';
 export * from './factory/FileFactory';
 export * from './factory/PluginFactoryRegistry';
 export * from './astUtils/xml';

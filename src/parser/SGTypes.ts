@@ -265,7 +265,7 @@ export class SGElement {
             let attr = this.getAttribute(name);
             //create an attribute with this name if we don't have one yet
             if (!attr) {
-                attr = bscFactory.sg.createSGAttribute({ key: name, value: value });
+                attr = bscFactory.sgXml.createSGAttribute({ key: name, value: value });
                 this.attributes.push(
                     attr
                 );
@@ -308,7 +308,7 @@ export class SGElement {
         } else {
             // it is possible that the original tag isSelfClosing, but new elements have been added to it
             // in that case, create a new startTagClose token for transpilation.
-            const startTagClose = this.isSelfClosing ? bscFactory.sg.createToken('>', this.tokens.startTagClose.location) : this.tokens.startTagClose;
+            const startTagClose = this.isSelfClosing ? bscFactory.sgXml.createToken('>', this.tokens.startTagClose.location) : this.tokens.startTagClose;
             const chunks: TranspileResult = [
                 state.transpileToken(startTagClose, '>'),
                 state.newline
@@ -330,7 +330,7 @@ export class SGElement {
                 //itself is reported by XmlFileValidator.
                 state.transpileToken(
                     this.tokens.endTagName
-                        ? bscFactory.sg.createToken(this.tokens.startTagName.text, this.tokens.endTagName.location)
+                        ? bscFactory.sgXml.createToken(this.tokens.startTagName.text, this.tokens.endTagName.location)
                         : this.tokens.startTagName
                 ),
                 state.transpileToken(this.tokens.endTagClose, '>'),
@@ -416,7 +416,7 @@ export class SGScript extends SGElement {
         }
         if (!foundType) {
             modifiedAttributes.push(
-                bscFactory.sg.createSGAttribute({ key: 'type', value: 'text/brightscript' })
+                bscFactory.sgXml.createSGAttribute({ key: 'type', value: 'text/brightscript' })
             );
         }
         return super.transpileAttributes(state, modifiedAttributes);
@@ -562,7 +562,7 @@ export class SGInterface extends SGElement {
         let field = this.getField(id);
         if (!field) {
             field = this.addChild(
-                bscFactory.sg.createSGInterfaceField({ attributes: { id: id } })
+                bscFactory.sgXml.createSGInterfaceField({ attributes: { id: id } })
             );
         }
         field.type = type;
@@ -605,7 +605,7 @@ export class SGInterface extends SGElement {
         let func = this.getFunction(name);
         if (!func) {
             func = this.addChild(
-                bscFactory.sg.createSGInterfaceFunction({ attributes: { name: name } })
+                bscFactory.sgXml.createSGInterfaceFunction({ attributes: { name: name } })
             );
         }
         return func;
@@ -769,7 +769,7 @@ export class SGComponent extends SGElement {
             }
         }
         return this.addChild(
-            bscFactory.sg.createSGInterface()
+            bscFactory.sgXml.createSGInterface()
         );
     }
 

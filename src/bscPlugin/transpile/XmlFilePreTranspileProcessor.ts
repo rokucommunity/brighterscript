@@ -49,7 +49,7 @@ export class XmlFilePreTranspileProcessor {
     private injectScriptImports() {
         // eslint-disable-next-line @typescript-eslint/dot-notation
         const extraImportScripts = this.event.file['getMissingImportsForTranspile']().map(uri => {
-            return bscFactory.sg.createSGScript({
+            return bscFactory.sgXml.createSGScript({
                 attributes: {
                     type: 'text/brightscript',
                     uri: util.sanitizePkgPath(uri.replace(/\.bs$/, '.brs'))

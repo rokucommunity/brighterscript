@@ -30,7 +30,7 @@ export interface SGElementFactoryOptions {
  * Every method is named `create` followed by the class name (i.e. `createSGComponent` creates an `SGComponent`).
  * Most tokens are optional and will be given their default text when omitted, and tokens may be passed as plain strings.
  */
-export class SGFactory {
+export class SGXmlFactory {
     /**
      * Create a token for a SceneGraph xml node
      */

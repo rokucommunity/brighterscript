@@ -629,7 +629,7 @@ Your plugin will be written against a specific version of BrighterScript, but it
 
 To avoid this, use `program.factory`, which always comes from the brighterscript version that is running your plugin. It is grouped by domain:
  - **`brs`:** BrightScript/BrighterScript tokens and AST nodes. Every AST node class has a matching `create` method (i.e. `program.factory.brs.createCallExpression(...)` instead of `new CallExpression(...)`). Most syntax tokens are optional and will be given their default text, and identifier names can be passed as plain strings. There are also helpers like `createToken`, `createIdentifier`, `createStringLiteral`, and `createDottedIdentifier`.
- - **`sg`:** SceneGraph component nodes (the contents of a component `.xml` file), i.e. `program.factory.sg.createSGComponent({ attributes: { name: 'MyComponent' } })`. Tokens can be passed as plain strings.
+ - **`sgXml`:** SceneGraph component nodes (the contents of a component `.xml` file), i.e. `program.factory.sgXml.createSGComponent({ attributes: { name: 'MyComponent' } })`. Tokens can be passed as plain strings.
  - **`files`:** `createBrsFile`, `createXmlFile`, and `createAssetFile` (i.e. `program.factory.files.createBrsFile(...)` instead of `new BrsFile(...)`).
  - **`plugins`:** factories contributed by other plugins (see [Plugin factories](#plugin-factories)).
 
