@@ -8,7 +8,7 @@ import { Program } from '../Program';
 import { trim } from '../testHelpers.spec';
 import type { BrsFile } from '../files/BrsFile';
 import { tempDir } from '../testHelpers.spec';
-import { createStringLiteral, createToken, createVariableExpression } from '../astUtils/creators';
+import { bscFactory } from '../BscFactory';
 import { TokenKind } from '../lexer/TokenKind';
 import { FunctionExpression } from './Expression';
 import type { AstNode } from './AstNode';
@@ -120,9 +120,9 @@ describe('Statement', () => {
         let allStatements: AstNode[] = [];
 
         beforeEach(() => {
-            const ident = createToken(TokenKind.Identifier, 'a');
-            const expr = createStringLiteral('');
-            const token = createToken(TokenKind.StringLiteral, '');
+            const ident = bscFactory.createToken(TokenKind.Identifier, 'a');
+            const expr = bscFactory.createStringLiteral('');
+            const token = bscFactory.createToken(TokenKind.StringLiteral, '');
             const body = new Body({ statements: [] });
             const assignment = new AssignmentStatement({ equals: undefined, name: ident, value: expr });
             const block = new Block({ statements: [] });
@@ -154,12 +154,12 @@ describe('Statement', () => {
             const dottedSet = new DottedSetStatement({ obj: expr, name: ident, value: expr });
             const indexedSet = new IndexedSetStatement({ obj: expr, indexes: [expr], value: expr, openingSquare: token, closingSquare: token });
             const library = new LibraryStatement({ library: token, filePath: token });
-            const namespace = new NamespaceStatement({ namespace: token, nameExpression: createVariableExpression('a'), body: body, endNamespace: token });
+            const namespace = new NamespaceStatement({ namespace: token, nameExpression: bscFactory.createVariableExpression({ name: 'a' }), body: body, endNamespace: token });
             const cls = new ClassStatement({ class: token, name: ident, body: [], endClass: token });
             const imports = new ImportStatement({ import: token, path: token });
-            const catchStmt = new CatchStatement({ catch: token, exceptionVariableExpression: createVariableExpression('e'), catchBranch: block });
+            const catchStmt = new CatchStatement({ catch: token, exceptionVariableExpression: bscFactory.createVariableExpression({ name: 'e' }), catchBranch: block });
             const tryCatch = new TryCatchStatement({ try: token, tryBranch: block, catchStatement: catchStmt });
-            const throwSt = new ThrowStatement({ throw: createToken(TokenKind.Throw) });
+            const throwSt = new ThrowStatement({ throw: bscFactory.createToken(TokenKind.Throw) });
 
             allStatements = [
                 expression,
@@ -194,7 +194,7 @@ describe('Statement', () => {
             for (const stmt of allStatements) {
                 const beforeTrivia = stmt.leadingTrivia;
                 expect(beforeTrivia.length, `${stmt.kind} already has leading trivia`).to.eq(0);
-                stmt.leadingTrivia.push(createToken(TokenKind.Comment, 'This is an added comment'));
+                stmt.leadingTrivia.push(bscFactory.createToken(TokenKind.Comment, 'This is an added comment'));
                 const afterComments = stmt.leadingTrivia.filter(t => t.kind === TokenKind.Comment);
                 expect(afterComments.length, `${stmt.kind} leading trivia was not edited`).to.eq(1);
                 expect(afterComments[0].text, `${stmt.kind} leading trivia was not edited`).to.eq('This is an added comment');

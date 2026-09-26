@@ -16,11 +16,10 @@ import type { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-language
 import type { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { Editor } from './astUtils/Editor';
 import type { BscFile } from './files/BscFile';
-import type { FileFactory } from './files/Factory';
 import type { LazyFileData } from './files/LazyFileData';
 import { TokenKind } from './lexer/TokenKind';
 import type { BscTypeKind } from './types/BscTypeKind';
-import { createToken } from './astUtils/creators';
+import { bscFactory } from './BscFactory';
 import type { SourceFixAllCodeAction } from './CodeActionUtil';
 import type { Availability } from './RokuConstants';
 
@@ -1011,12 +1010,6 @@ export interface ProvideFileEvent<TFile extends BscFile = BscFile> {
      * The program for this event
      */
     program: Program;
-    /**
-     * A factory used to create new instances of the BrighterScript built-in file types. This mitigates the issue
-     * of a plugin's version of a File not being the same as the LanguageServer or CLI version of BrighterScript
-     * (due to npm installing multiple versions of brighterscript)
-     */
-    fileFactory: FileFactory;
 }
 export type AfterProvideFileEvent<TFile extends BscFile = BscFile> = ProvideFileEvent<TFile>;
 
@@ -1295,7 +1288,7 @@ export class TypeChainEntry {
         this.data = { ...options.data };
         this.type = options.type;
         this._location = options.location;
-        this.separatorToken = options.separatorToken ?? createToken(TokenKind.Dot);
+        this.separatorToken = options.separatorToken ?? bscFactory.createToken(TokenKind.Dot);
         this.astNode = options.astNode;
         this.isResolved = this.type?.isResolvable();
     }

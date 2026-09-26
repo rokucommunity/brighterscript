@@ -40,7 +40,7 @@ import { LongIntegerType } from './types/LongIntegerType';
 import { ObjectType } from './types/ObjectType';
 import { VoidType } from './types/VoidType';
 import { FunctionType } from './types/FunctionType';
-import { FileFactory } from './files/Factory';
+import { BscFactory } from './BscFactory';
 import { ActionPipeline } from './ActionPipeline';
 import type { FileData } from './files/LazyFileData';
 import { LazyFileData } from './files/LazyFileData';
@@ -147,7 +147,7 @@ export class Program {
 
         this.createGlobalScope();
 
-        this.fileFactory = new FileFactory(this);
+        this.factory = new BscFactory(this);
     }
 
     public options: FinalizedBsConfig;
@@ -159,9 +159,10 @@ export class Program {
     public editor = new Editor();
 
     /**
-     * A factory that creates `File` instances
+     * A factory that plugins should use to create tokens, AST nodes, and files (i.e. `program.factory.createCallExpression(...)` instead of `new CallExpression(...)`).
+     * This ensures everything is created by the brighterscript version that is actually running the plugin, rather than the plugin's own copy of brighterscript.
      */
-    private fileFactory: FileFactory;
+    public readonly factory: BscFactory;
 
     private createGlobalScope() {
         //create the 'global' scope
@@ -942,7 +943,7 @@ export class Program {
 
             const data = new LazyFileData(fileData);
 
-            const event = new ProvideFileEventInternal(this, srcPath, destPath, data, this.fileFactory);
+            const event = new ProvideFileEventInternal(this, srcPath, destPath, data);
 
             this.plugins.emit('beforeProvideFile', event);
             this.plugins.emit('provideFile', event);
@@ -951,7 +952,7 @@ export class Program {
             //if no files were provided, create a AssetFile to represent it.
             if (event.files.length === 0) {
                 event.files.push(
-                    this.fileFactory.AssetFile({
+                    this.factory.createAssetFile({
                         srcPath: event.srcPath,
                         destPath: event.destPath,
                         pkgPath: event.destPath,
@@ -2787,8 +2788,7 @@ class ProvideFileEventInternal<TFile extends BscFile = BscFile> implements Provi
         public program: Program,
         public srcPath: string,
         public destPath: string,
-        public data: LazyFileData,
-        public fileFactory: FileFactory
+        public data: LazyFileData
     ) {
         this.srcExtension = path.extname(srcPath)?.toLowerCase();
     }

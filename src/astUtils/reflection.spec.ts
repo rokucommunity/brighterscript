@@ -5,7 +5,7 @@ import { FunctionExpression, BinaryExpression, CallExpression, DottedGetExpressi
 import type { Token } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
 import { isPrintStatement, isIfStatement, isBody, isAssignmentStatement, isBlock, isExpressionStatement, isFunctionStatement, isIncrementStatement, isGotoStatement, isLabelStatement, isReturnStatement, isEndStatement, isStopStatement, isForStatement, isForEachStatement, isWhileStatement, isDottedSetStatement, isIndexedSetStatement, isLibraryStatement, isNamespaceStatement, isImportStatement, isExpression, isBinaryExpression, isCallExpression, isFunctionExpression, isDottedGetExpression, isXmlAttributeGetExpression, isIndexedGetExpression, isGroupingExpression, isLiteralExpression, isEscapedCharCodeLiteralExpression, isArrayLiteralExpression, isAALiteralExpression, isUnaryExpression, isVariableExpression, isSourceLiteralExpression, isNewExpression, isCallfuncExpression, isTemplateStringQuasiExpression, isTemplateStringExpression, isTaggedTemplateStringExpression, isBrsFile, isXmlFile, isClassStatement, isStatement, isAnnotationExpression, isTryCatchStatement, isCatchStatement, isThrowStatement, isLiteralInvalid, isLiteralBoolean, isLiteralNumber, isLiteralInteger, isLiteralLongInteger, isLiteralFloat, isLiteralDouble, isExitStatement } from './reflection';
-import { createToken, createStringLiteral, createInvalidLiteral, createBooleanLiteral, createIntegerLiteral, createVariableExpression, createFloatLiteral, createDoubleLiteral, createLongIntegerLiteral } from './creators';
+import { bscFactory } from '../BscFactory';
 import { Program } from '../Program';
 import { BrsFile } from '../files/BrsFile';
 import { XmlFile } from '../files/XmlFile';
@@ -24,9 +24,9 @@ describe('reflection', () => {
     });
 
     describe('Statements', () => {
-        const ident = createToken(TokenKind.Identifier, 'a');
-        const expr = createStringLiteral('');
-        const token = createToken(TokenKind.StringLiteral, '');
+        const ident = bscFactory.createToken(TokenKind.Identifier, 'a');
+        const expr = bscFactory.createStringLiteral('');
+        const token = bscFactory.createToken(TokenKind.StringLiteral, '');
         const body = new Body({ statements: [] });
         const assignment = new AssignmentStatement({ equals: undefined, name: ident, value: expr });
         const block = new Block({ statements: [] });
@@ -57,18 +57,18 @@ describe('reflection', () => {
         const dottedSet = new DottedSetStatement({ obj: expr, name: ident, value: expr });
         const indexedSet = new IndexedSetStatement({ obj: expr, indexes: [expr], value: expr, openingSquare: token, closingSquare: token });
         const library = new LibraryStatement({ library: token, filePath: token });
-        const namespace = new NamespaceStatement({ namespace: token, nameExpression: createVariableExpression('a'), body: body, endNamespace: token });
+        const namespace = new NamespaceStatement({ namespace: token, nameExpression: bscFactory.createVariableExpression({ name: 'a' }), body: body, endNamespace: token });
         const cls = new ClassStatement({ class: token, name: ident, body: [], endClass: token });
         const imports = new ImportStatement({ import: token, path: token });
-        const catchStmt = new CatchStatement({ catch: token, exceptionVariableExpression: createVariableExpression('e'), catchBranch: block });
+        const catchStmt = new CatchStatement({ catch: token, exceptionVariableExpression: bscFactory.createVariableExpression({ name: 'e' }), catchBranch: block });
         const tryCatch = new TryCatchStatement({ try: token, tryBranch: block, catchStatement: catchStmt });
-        const throwSt = new ThrowStatement({ throw: createToken(TokenKind.Throw) });
+        const throwSt = new ThrowStatement({ throw: bscFactory.createToken(TokenKind.Throw) });
 
         it('isStatement', () => {
             expect(isStatement(library)).to.be.true;
             expect(
                 isStatement(
-                    createStringLiteral('test')
+                    bscFactory.createStringLiteral('test')
                 )
             ).to.be.false;
             //doesn't fail for undefined
@@ -182,9 +182,9 @@ describe('reflection', () => {
     });
 
     describe('Expressions', () => {
-        const ident = createToken(TokenKind.Identifier, 'a');
-        const expr = createStringLiteral('');
-        const token = createToken(TokenKind.StringLiteral, '');
+        const ident = bscFactory.createToken(TokenKind.Identifier, 'a');
+        const expr = bscFactory.createStringLiteral('');
+        const token = bscFactory.createToken(TokenKind.StringLiteral, '');
         const block = new Block({ statements: [] });
         const charCode: Token & { charCode: number } = {
             kind: TokenKind.EscapedCharCodeLiteral,
@@ -209,7 +209,7 @@ describe('reflection', () => {
         const xmlAttrGet = new XmlAttributeGetExpression({ obj: expr, name: ident, at: token });
         const indexedGet = new IndexedGetExpression({ obj: expr, indexes: [expr], openingSquare: token, closingSquare: token });
         const grouping = new GroupingExpression({ leftParen: token, rightParen: token, expression: expr });
-        const literal = createStringLiteral('test');
+        const literal = bscFactory.createStringLiteral('test');
         const escapedCarCode = new EscapedCharCodeLiteralExpression({ value: charCode });
         const arrayLit = new ArrayLiteralExpression({ elements: [], open: token, close: token });
         const aaLit = new AALiteralExpression({ elements: [], open: token, close: token });
@@ -320,90 +320,90 @@ describe('reflection', () => {
 
     describe('isLiteralInvalid', () => {
         it('handles true cases', () => {
-            expect(isLiteralInvalid(createInvalidLiteral('invalid'))).to.be.true;
-            expect(isLiteralInvalid(createInvalidLiteral('Invalid'))).to.be.true;
-            expect(isLiteralInvalid(createInvalidLiteral('INVALID'))).to.be.true;
+            expect(isLiteralInvalid(bscFactory.createInvalidLiteral('invalid'))).to.be.true;
+            expect(isLiteralInvalid(bscFactory.createInvalidLiteral('Invalid'))).to.be.true;
+            expect(isLiteralInvalid(bscFactory.createInvalidLiteral('INVALID'))).to.be.true;
         });
         it('handles false cases', () => {
-            expect(isLiteralInvalid(createBooleanLiteral('true'))).to.be.false;
-            expect(isLiteralInvalid(createIntegerLiteral('1'))).to.be.false;
-            expect(isLiteralInvalid(createVariableExpression('cat'))).to.be.false;
+            expect(isLiteralInvalid(bscFactory.createBooleanLiteral('true'))).to.be.false;
+            expect(isLiteralInvalid(bscFactory.createIntegerLiteral('1'))).to.be.false;
+            expect(isLiteralInvalid(bscFactory.createVariableExpression({ name: 'cat' }))).to.be.false;
         });
     });
 
     describe('isLiteralBoolean', () => {
         it('handles true cases', () => {
-            expect(isLiteralBoolean(createBooleanLiteral('true'))).to.be.true;
-            expect(isLiteralBoolean(createBooleanLiteral('TRUE'))).to.be.true;
-            expect(isLiteralBoolean(createBooleanLiteral('false'))).to.be.true;
-            expect(isLiteralBoolean(createBooleanLiteral('FALSE'))).to.be.true;
+            expect(isLiteralBoolean(bscFactory.createBooleanLiteral('true'))).to.be.true;
+            expect(isLiteralBoolean(bscFactory.createBooleanLiteral('TRUE'))).to.be.true;
+            expect(isLiteralBoolean(bscFactory.createBooleanLiteral('false'))).to.be.true;
+            expect(isLiteralBoolean(bscFactory.createBooleanLiteral('FALSE'))).to.be.true;
         });
         it('handles false cases', () => {
-            expect(isLiteralBoolean(createInvalidLiteral('invalid'))).to.be.false;
-            expect(isLiteralBoolean(createIntegerLiteral('1'))).to.be.false;
-            expect(isLiteralBoolean(createVariableExpression('cat'))).to.be.false;
+            expect(isLiteralBoolean(bscFactory.createInvalidLiteral('invalid'))).to.be.false;
+            expect(isLiteralBoolean(bscFactory.createIntegerLiteral('1'))).to.be.false;
+            expect(isLiteralBoolean(bscFactory.createVariableExpression({ name: 'cat' }))).to.be.false;
         });
     });
 
     describe('isLiteralNumber', () => {
         it('handles true cases', () => {
-            expect(isLiteralNumber(createIntegerLiteral('1'))).to.be.true;
-            expect(isLiteralNumber(createLongIntegerLiteral('1'))).to.be.true;
-            expect(isLiteralNumber(createFloatLiteral('1.2'))).to.be.true;
-            expect(isLiteralNumber(createDoubleLiteral('2.3'))).to.be.true;
+            expect(isLiteralNumber(bscFactory.createIntegerLiteral('1'))).to.be.true;
+            expect(isLiteralNumber(bscFactory.createLongIntegerLiteral('1'))).to.be.true;
+            expect(isLiteralNumber(bscFactory.createFloatLiteral('1.2'))).to.be.true;
+            expect(isLiteralNumber(bscFactory.createDoubleLiteral('2.3'))).to.be.true;
         });
         it('handles false cases', () => {
-            expect(isLiteralNumber(createInvalidLiteral('invalid'))).to.be.false;
-            expect(isLiteralNumber(createBooleanLiteral('true'))).to.be.false;
-            expect(isLiteralNumber(createVariableExpression('cat'))).to.be.false;
+            expect(isLiteralNumber(bscFactory.createInvalidLiteral('invalid'))).to.be.false;
+            expect(isLiteralNumber(bscFactory.createBooleanLiteral('true'))).to.be.false;
+            expect(isLiteralNumber(bscFactory.createVariableExpression({ name: 'cat' }))).to.be.false;
         });
     });
 
     describe('isLiteralInteger', () => {
         it('handles true cases', () => {
-            expect(isLiteralInteger(createIntegerLiteral('1'))).to.be.true;
-            expect(isLiteralInteger(createIntegerLiteral('100'))).to.be.true;
+            expect(isLiteralInteger(bscFactory.createIntegerLiteral('1'))).to.be.true;
+            expect(isLiteralInteger(bscFactory.createIntegerLiteral('100'))).to.be.true;
         });
         it('handles false cases', () => {
-            expect(isLiteralInteger(createInvalidLiteral('invalid'))).to.be.false;
-            expect(isLiteralInteger(createBooleanLiteral('true'))).to.be.false;
-            expect(isLiteralInteger(createVariableExpression('cat'))).to.be.false;
+            expect(isLiteralInteger(bscFactory.createInvalidLiteral('invalid'))).to.be.false;
+            expect(isLiteralInteger(bscFactory.createBooleanLiteral('true'))).to.be.false;
+            expect(isLiteralInteger(bscFactory.createVariableExpression({ name: 'cat' }))).to.be.false;
         });
     });
 
     describe('isLiteralLongInteger', () => {
         it('handles true cases', () => {
-            expect(isLiteralLongInteger(createLongIntegerLiteral('1'))).to.be.true;
-            expect(isLiteralLongInteger(createLongIntegerLiteral('100'))).to.be.true;
+            expect(isLiteralLongInteger(bscFactory.createLongIntegerLiteral('1'))).to.be.true;
+            expect(isLiteralLongInteger(bscFactory.createLongIntegerLiteral('100'))).to.be.true;
         });
         it('handles false cases', () => {
-            expect(isLiteralLongInteger(createInvalidLiteral('invalid'))).to.be.false;
-            expect(isLiteralLongInteger(createBooleanLiteral('true'))).to.be.false;
-            expect(isLiteralLongInteger(createVariableExpression('cat'))).to.be.false;
+            expect(isLiteralLongInteger(bscFactory.createInvalidLiteral('invalid'))).to.be.false;
+            expect(isLiteralLongInteger(bscFactory.createBooleanLiteral('true'))).to.be.false;
+            expect(isLiteralLongInteger(bscFactory.createVariableExpression({ name: 'cat' }))).to.be.false;
         });
     });
 
     describe('isLiteralFloat', () => {
         it('handles true cases', () => {
-            expect(isLiteralFloat(createFloatLiteral('1.2'))).to.be.true;
-            expect(isLiteralFloat(createFloatLiteral('1.234'))).to.be.true;
+            expect(isLiteralFloat(bscFactory.createFloatLiteral('1.2'))).to.be.true;
+            expect(isLiteralFloat(bscFactory.createFloatLiteral('1.234'))).to.be.true;
         });
         it('handles false cases', () => {
-            expect(isLiteralFloat(createInvalidLiteral('invalid'))).to.be.false;
-            expect(isLiteralFloat(createBooleanLiteral('true'))).to.be.false;
-            expect(isLiteralFloat(createVariableExpression('cat'))).to.be.false;
+            expect(isLiteralFloat(bscFactory.createInvalidLiteral('invalid'))).to.be.false;
+            expect(isLiteralFloat(bscFactory.createBooleanLiteral('true'))).to.be.false;
+            expect(isLiteralFloat(bscFactory.createVariableExpression({ name: 'cat' }))).to.be.false;
         });
     });
 
     describe('isLiteralDouble', () => {
         it('handles true cases', () => {
-            expect(isLiteralDouble(createDoubleLiteral('1.2'))).to.be.true;
-            expect(isLiteralDouble(createDoubleLiteral('1.234'))).to.be.true;
+            expect(isLiteralDouble(bscFactory.createDoubleLiteral('1.2'))).to.be.true;
+            expect(isLiteralDouble(bscFactory.createDoubleLiteral('1.234'))).to.be.true;
         });
         it('handles false cases', () => {
-            expect(isLiteralDouble(createInvalidLiteral('invalid'))).to.be.false;
-            expect(isLiteralDouble(createBooleanLiteral('true'))).to.be.false;
-            expect(isLiteralDouble(createVariableExpression('cat'))).to.be.false;
+            expect(isLiteralDouble(bscFactory.createInvalidLiteral('invalid'))).to.be.false;
+            expect(isLiteralDouble(bscFactory.createBooleanLiteral('true'))).to.be.false;
+            expect(isLiteralDouble(bscFactory.createVariableExpression({ name: 'cat' }))).to.be.false;
         });
     });
 });
