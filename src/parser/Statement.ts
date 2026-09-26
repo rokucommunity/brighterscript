@@ -4961,7 +4961,7 @@ export class TypeStatement extends Statement implements TypedefProvider {
  * (i.e. `select case getValue()`). A single name is safe to reuse, even for nested `select case` statements, because
  * once a case body starts running, the enclosing `select case` never reads its subject again.
  */
-export const SELECT_CASE_SUBJECT_VARIABLE = '__bsSelectCase';
+export const SELECT_CASE_SUBJECT_VARIABLE = '__bsSelectCaseSubject';
 
 /**
  * A `select case` statement.

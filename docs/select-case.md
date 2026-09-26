@@ -177,17 +177,17 @@ end select
 transpiles to:
 
 ```brightscript
-__bsSelectCase = getStatus()
-if __bsSelectCase = "ready" then
+__bsSelectCaseSubject = getStatus()
+if __bsSelectCaseSubject = "ready" then
     start()
-else if __bsSelectCase = "loading" or __bsSelectCase = "buffering" then
+else if __bsSelectCaseSubject = "loading" or __bsSelectCaseSubject = "buffering" then
     showSpinner()
 else
     showError()
 end if
 ```
 
-The same `__bsSelectCase` variable is reused, even for nested `select case` statements. That's safe because once a case body starts running, the outer `select case` never reads its subject again. Just avoid naming your own variables `__bsSelectCase`.
+The same `__bsSelectCaseSubject` variable is reused, even for nested `select case` statements. That's safe because once a case body starts running, the outer `select case` never reads its subject again. Just avoid naming your own variables `__bsSelectCaseSubject`.
 
 ## How values are compared
 Each value is compared to the subject with BrightScript's `=` operator, so the usual BrightScript rules apply:
