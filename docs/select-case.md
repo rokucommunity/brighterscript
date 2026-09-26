@@ -261,7 +261,8 @@ This is most useful when the enum changes. If you later add `center` to `RemoteD
 A few details:
 - A member counts as covered if it appears anywhere in a case's value list, either as `RemoteDirection.up` or as its literal value (`"up"`).
 - A `case else` counts as handling everything, so there's no coverage warning when there is one.
-- The check only happens when the subject's type is known to be a single enum, i.e. a parameter or variable declared `as RemoteDirection`, or an enum member like `RemoteDirection.up`. When the type is anything else (`dynamic`, `string`, a union, or unknown), the regular warning for a missing `case else` applies instead, since there's no way to list every possible value.
+- The check only happens when the subject's type is known to come from a single enum, i.e. a parameter declared `as RemoteDirection`. If BrighterScript can tell the subject only holds *some* of the members (i.e. a local variable that was only ever assigned `RemoteDirection.up` or `RemoteDirection.down`), only those members need a case. When the type is anything else (`dynamic`, `string`, or unknown), the regular warning for a missing `case else` applies instead, since there's no way to list every possible value.
+- Case values that are neither a member reference nor a literal (i.e. `case getDirection()`) don't count as covering any member.
 - A case value from a *different* enum than the subject (i.e. `case OtherEnum.up` when the subject is a `RemoteDirection`) is flagged too, because it's almost always a mistake.
 
 ## Loops, `exit`, `continue`, and `return`

@@ -1,12 +1,12 @@
 import * as path from 'path';
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
-import { isAliasStatement, isArrayType, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallFuncableTypeLike, isCallableType, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isIterableType, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypeStatementType, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isArrayType, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallFuncableTypeLike, isCallableType, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberStatement, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isIterableType, isLiteralExpression, isLiteralString, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypeStatementType, isTypedFunctionType, isUnaryExpression, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BsDiagnostic, CallableContainer, ExtraSymbolData, FileReference, GetTypeOptions, ValidateScopeEvent, TypeChainEntry, TypeChainProcessResult, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
-import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConstStatement, DottedSetStatement, ForEachStatement, ForStatement, IncrementStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
+import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConstStatement, DottedSetStatement, ForEachStatement, ForStatement, IncrementStatement, NamespaceStatement, ReturnStatement, SelectCaseStatement, EnumMemberStatement, EnumStatement } from '../../parser/Statement';
 import { util } from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
@@ -39,6 +39,7 @@ import { LogLevel } from '../../Logger';
 import { Stopwatch } from '../../Stopwatch';
 import chalk from 'chalk';
 import { IntegerType } from '../../types/IntegerType';
+import type { EnumType } from '../../types/EnumType';
 import type { Scope } from '../../Scope';
 
 /**
@@ -289,6 +290,11 @@ export class ScopeValidator {
                     ForStatement: (forStmt) => {
                         this.addValidationKindMetric('ForStatement', () => {
                             this.validateForStatement(file, forStmt);
+                        });
+                    },
+                    SelectCaseStatement: (selectCaseStmt) => {
+                        this.addValidationKindMetric('SelectCaseStatement', () => {
+                            this.validateSelectCaseStatement(file, selectCaseStmt);
                         });
                     },
                     AAIndexedMemberExpression: (member) => {
@@ -1690,6 +1696,116 @@ export class ScopeValidator {
                 });
             }
         }
+    }
+
+    /**
+     * Check that a `select case` handles every value it can receive. When the subject is an enum, covering every
+     * member is enough. Otherwise, there must be a `case else`
+     */
+    private validateSelectCaseStatement(file: BrsFile, selectCaseStmt: SelectCaseStatement) {
+        //an empty `select case` is flagged separately by the BrsFileValidator
+        if (selectCaseStmt.cases.length === 0) {
+            return;
+        }
+        const typeOptions = { flags: SymbolTypeFlag.runtime, statementIndex: selectCaseStmt.statementIndex };
+        const subjectType = selectCaseStmt.subject ? this.getNodeTypeWrapper(file, selectCaseStmt.subject, typeOptions) : undefined;
+        const { enumType, members: enumMembers } = this.getPossibleEnumMembers(subjectType) ?? {};
+
+        //values from a different enum than the subject are almost always a mistake
+        if (enumMembers) {
+            for (const caseStatement of selectCaseStmt.cases) {
+                for (const value of caseStatement.values) {
+                    const valueType = this.getNodeTypeWrapper(file, value, typeOptions);
+                    if (isEnumMemberType(valueType) && valueType.enumName?.toLowerCase() !== enumType.name.toLowerCase()) {
+                        this.addMultiScopeDiagnostic({
+                            ...DiagnosticMessages.caseValueEnumMismatch(valueType.enumName, enumType.name),
+                            location: value.location
+                        });
+                    }
+                }
+            }
+        }
+
+        if (selectCaseStmt.elseCase) {
+            return;
+        }
+        const headerLocation = util.createBoundingLocation(selectCaseStmt.tokens.select, selectCaseStmt.tokens.case);
+        if (!enumMembers) {
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.selectCaseMissingCaseElse(),
+                location: headerLocation
+            });
+            return;
+        }
+
+        const missingMembers = enumMembers.filter(member => {
+            return !selectCaseStmt.cases.some(caseStatement => caseStatement.values.some(value => {
+                return this.isCaseValueForEnumMember(file, value, member, enumType.name, typeOptions);
+            }));
+        });
+        if (missingMembers.length > 0) {
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.selectCaseMissingEnumMembers(enumType.name, missingMembers.map(x => x.tokens.name.text)),
+                location: headerLocation
+            });
+        }
+    }
+
+    /**
+     * Get the enum members that a value of this type could hold, in the order they were declared. An enum type could hold
+     * any of its members, but the type of a local variable is often narrowed down to specific members (i.e. `RemoteDirection.up or RemoteDirection.down`).
+     * Returns undefined when the type isn't limited to the members of a single enum
+     */
+    private getPossibleEnumMembers(type: BscType): { enumType: EnumType; members: EnumMemberStatement[] } | undefined {
+        let enumType: EnumType;
+        //undefined means every member
+        let memberNames = new Set<string>();
+        for (const innerType of isUnionType(type) ? type.types : [type]) {
+            let innerEnumType: BscType;
+            if (isEnumMemberType(innerType)) {
+                innerEnumType = innerType.parentEnumType;
+                //the default member type stands in for "some member of this enum"
+                memberNames?.add(innerType === innerType.parentEnumType?.defaultMemberType ? undefined : innerType.memberName?.toLowerCase());
+            } else {
+                innerEnumType = innerType;
+                memberNames = undefined;
+            }
+            if (!isEnumType(innerEnumType) || (enumType && enumType.name.toLowerCase() !== innerEnumType.name.toLowerCase())) {
+                return undefined;
+            }
+            enumType = innerEnumType;
+        }
+        if (memberNames?.has(undefined)) {
+            memberNames = undefined;
+        }
+        const members = enumType?.getMemberTable().getOwnSymbols(SymbolTypeFlag.runtime)
+            .map(symbol => symbol.data?.definingNode)
+            .filter(node => isEnumMemberStatement(node) && (!memberNames || memberNames.has(node.name.toLowerCase()))) as EnumMemberStatement[];
+        if (members?.length > 0) {
+            return { enumType: enumType, members: members };
+        }
+    }
+
+    /**
+     * Does this case value match the given enum member, either as a reference to it (`Direction.up`) or as its literal value (`"up"`)
+     */
+    private isCaseValueForEnumMember(file: BrsFile, value: Expression, member: EnumMemberStatement, enumName: string, typeOptions: GetTypeOptions) {
+        const valueType = this.getNodeTypeWrapper(file, value, typeOptions);
+        if (isEnumMemberType(valueType)) {
+            return valueType.enumName?.toLowerCase() === enumName.toLowerCase() &&
+                valueType.memberName?.toLowerCase() === member.name.toLowerCase();
+        }
+        let literalText: string;
+        if (isLiteralExpression(value)) {
+            literalText = value.tokens.value.text;
+        } else if (isUnaryExpression(value) && value.tokens.operator.kind === TokenKind.Minus && isLiteralExpression(value.right)) {
+            literalText = '-' + value.right.tokens.value.text;
+        } else {
+            return false;
+        }
+        const memberValue = (member.parent as EnumStatement)?.getMemberValue(member.name);
+        //string comparisons are case sensitive, but everything else (`&HFF`, etc) is not
+        return isLiteralString(value) ? literalText === memberValue : literalText.toLowerCase() === memberValue?.toLowerCase();
     }
 
     private validateXmlInterface(scope: XmlScope) {

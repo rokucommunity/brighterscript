@@ -1266,6 +1266,20 @@ export let DiagnosticMessages = {
         message: `'select case' statements cannot be used inside an inline if statement`,
         severity: DiagnosticSeverity.Error,
         code: 'select-case-in-inline-if'
+    }),
+    /**
+     * @param enumName the name of the enum the `select case` subject belongs to
+     * @param missingMembers the names of the enum members that no case handles
+     */
+    selectCaseMissingEnumMembers: (enumName: string, missingMembers: string[]) => ({
+        message: `'select case' on '${enumName}' does not handle: ${[].concat(missingMembers ?? []).join(', ')}`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'select-case-missing-enum-members'
+    }),
+    caseValueEnumMismatch: (actualEnumName: string, expectedEnumName: string) => ({
+        message: `Case value is a member of enum '${actualEnumName}' but this 'select case' compares against enum '${expectedEnumName}'`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'case-value-enum-mismatch'
     })
 };
 export const defaultMaximumTruncationLength = 160;

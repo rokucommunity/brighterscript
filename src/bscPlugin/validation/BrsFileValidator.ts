@@ -806,14 +806,10 @@ export class BrsFileValidator {
             return;
         }
 
-        //`case else` must be the last case, and there can only be one of them
+        //`case else` must be the last case, and there can only be one of them.
+        //(A missing `case else` depends on the subject's type, so the ScopeValidator checks for that)
         const elseCases = statement.cases.filter(x => x.isElse);
-        if (elseCases.length === 0) {
-            this.event.program.diagnostics.register({
-                ...DiagnosticMessages.selectCaseMissingCaseElse(),
-                location: headerLocation
-            });
-        } else {
+        if (elseCases.length > 0) {
             for (const elseCase of elseCases.slice(1)) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.duplicateCaseElse(),

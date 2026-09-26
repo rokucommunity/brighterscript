@@ -920,6 +920,234 @@ describe('select case statement', () => {
             expectZeroDiagnostics(program);
         });
 
+        describe('enum coverage', () => {
+            const remoteDirection = `
+                enum RemoteDirection
+                    up = "up"
+                    down = "down"
+                    left = "left"
+                    right = "right"
+                end enum
+            `;
+
+            it('does not require `case else` when every member is covered', () => {
+                program.setFile('source/enums.bs', remoteDirection);
+                validate(`
+                    sub move(direction as RemoteDirection)
+                        select case direction
+                            case RemoteDirection.up, RemoteDirection.down
+                                print "vertical"
+                            case RemoteDirection.left
+                                print "left"
+                            case RemoteDirection.right
+                                print "right"
+                        end select
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('lists the members that are not covered', () => {
+                program.setFile('source/enums.bs', remoteDirection);
+                validate(`
+                    sub move(direction as RemoteDirection)
+                        select case direction
+                            case RemoteDirection.up
+                                print "up"
+                            case RemoteDirection.down
+                                print "down"
+                        end select
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.selectCaseMissingEnumMembers('RemoteDirection', ['left', 'right']),
+                    location: { range: util.createRange(2, 24, 2, 35) }
+                }]);
+            });
+
+            it('does not check coverage when there is a `case else`', () => {
+                program.setFile('source/enums.bs', remoteDirection);
+                validate(`
+                    sub move(direction as RemoteDirection)
+                        select case direction
+                            case RemoteDirection.up
+                                print "up"
+                            case else
+                                print "other"
+                        end select
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts literal values as covering members', () => {
+                program.setFile('source/enums.bs', `
+                    ${remoteDirection}
+                    enum Level
+                        low
+                        medium = 5
+                        high
+                        negative = -1
+                        hex = &HFF
+                    end enum
+                `);
+                validate(`
+                    sub move(direction as RemoteDirection, lvl as Level)
+                        select case direction
+                            case "up", "down"
+                                print "vertical"
+                            case "left", RemoteDirection.right
+                                print "horizontal"
+                        end select
+                        select case lvl
+                            case 0, 5
+                                print "low or medium"
+                            case 6, -1, &hff
+                                print "other"
+                        end select
+                        select case direction
+                            'strings are compared case sensitively
+                            case "UP", "down", "left", "right"
+                                print "not up"
+                        end select
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.selectCaseMissingEnumMembers('RemoteDirection', ['up'])
+                ]);
+            });
+
+            it('supports enums inside namespaces', () => {
+                program.setFile('source/enums.bs', `
+                    namespace alpha
+                        enum Level
+                            low
+                            high
+                        end enum
+                    end namespace
+                `);
+                validate(`
+                    sub a(level as alpha.Level)
+                        select case level
+                            case alpha.Level.low
+                                print "low"
+                        end select
+                    end sub
+                    namespace alpha
+                        sub b(level as Level)
+                            select case level
+                                case Level.low
+                                    print "low"
+                                case Level.high
+                                    print "high"
+                            end select
+                        end sub
+                    end namespace
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.selectCaseMissingEnumMembers('alpha.Level', ['high'])
+                ]);
+            });
+
+            it('only requires the members a narrowed variable can hold', () => {
+                program.setFile('source/enums.bs', remoteDirection);
+                validate(`
+                    sub move(flag)
+                        if flag then
+                            direction = RemoteDirection.up
+                        else
+                            direction = RemoteDirection.down
+                        end if
+                        select case direction
+                            case RemoteDirection.up
+                                print "up"
+                            case RemoteDirection.down
+                                print "down"
+                        end select
+                        select case direction
+                            case RemoteDirection.up
+                                print "up"
+                        end select
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.selectCaseMissingEnumMembers('RemoteDirection', ['down'])
+                ]);
+            });
+
+            it('still requires `case else` for subjects that are not an enum', () => {
+                program.setFile('source/enums.bs', remoteDirection);
+                validate(`
+                    sub move(direction, name as string)
+                        select case direction
+                            case RemoteDirection.up
+                                print "up"
+                            case RemoteDirection.down
+                                print "down"
+                            case RemoteDirection.left
+                                print "left"
+                            case RemoteDirection.right
+                                print "right"
+                        end select
+                        select case name
+                            case "up"
+                                print "up"
+                        end select
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.selectCaseMissingCaseElse(),
+                    DiagnosticMessages.selectCaseMissingCaseElse()
+                ]);
+            });
+
+            it('flags existing statements when a member is added to the enum', () => {
+                program.setFile('source/enums.bs', remoteDirection);
+                validate(`
+                    sub move(direction as RemoteDirection)
+                        select case direction
+                            case RemoteDirection.up, RemoteDirection.down, RemoteDirection.left, RemoteDirection.right
+                                print "moved"
+                        end select
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+
+                program.setFile('source/enums.bs', remoteDirection.replace('right = "right"', 'right = "right"\n    center = "center"'));
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.selectCaseMissingEnumMembers('RemoteDirection', ['center'])
+                ]);
+
+                program.setFile('source/enums.bs', remoteDirection);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('flags case values from a different enum', () => {
+                program.setFile('source/enums.bs', `
+                    ${remoteDirection}
+                    enum Other
+                        up = "up"
+                    end enum
+                `);
+                validate(`
+                    sub move(direction as RemoteDirection)
+                        select case direction
+                            case Other.up
+                                print "up"
+                            case else
+                                print "other"
+                        end select
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.caseValueEnumMismatch('Other', 'RemoteDirection'),
+                    location: { range: util.createRange(3, 33, 3, 41) }
+                }]);
+            });
+        });
+
         it('flags select case in brs files', () => {
             validate(`
                 sub main(a)
