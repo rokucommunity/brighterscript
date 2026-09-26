@@ -538,6 +538,34 @@ describe('AST output', () => {
             expect(transpile(func.func.body)).to.eql(`\n    print "hello"`);
         });
 
+        it('keeps comments above method modifiers', async () => {
+            await testTranspile(`
+                class Movie
+                    'above public
+                    public sub play()
+                    end sub
+                end class
+            `, `
+                sub __Movie_method_new()
+                end sub
+                'above public
+                sub __Movie_method_play()
+                end sub
+                function __Movie_builder()
+                    instance = {}
+                    instance.new = __Movie_method_new
+                    'above public
+                    instance.play = __Movie_method_play
+                    return instance
+                end function
+                function Movie()
+                    instance = __Movie_builder()
+                    instance.new()
+                    return instance
+                end function
+            `);
+        });
+
         it('transpiles super calls on non-variable expressions in class methods', async () => {
             program.setFile('source/main.bs', `
                 class Animal
@@ -677,6 +705,175 @@ describe('AST output', () => {
             `);
         });
 
+        it('keeps comments above and below annotations in source order', async () => {
+            await testGetTypedef(`
+                'above function annotation
+                @anno
+                'between function annotation
+                sub test()
+                end sub
+                'above class annotation
+                @anno
+                'between class annotation
+                class Movie extends Base
+                    'above field annotation
+                    @anno
+                    'between field annotation
+                    public name as string
+                    'above method annotation
+                    @anno
+                    'between method annotation
+                    override sub stop()
+                    end sub
+                end class
+                class Base
+                    sub stop()
+                    end sub
+                end class
+                'above interface annotation
+                @anno
+                interface IMovie
+                    'above field annotation
+                    @anno
+                    name as string
+                    'above method annotation
+                    @anno
+                    function getName() as string
+                end interface
+                'above enum annotation
+                @anno
+                enum Direction
+                    'above member annotation
+                    @anno
+                    up
+                end enum
+                'above namespace annotation
+                @anno
+                namespace alpha
+                    'above const annotation
+                    @anno
+                    const A = 1
+                    'above type annotation
+                    @anno
+                    type T = string
+                end namespace
+            `, `
+                'above function annotation
+                @anno
+                'between function annotation
+                sub test()
+                end sub
+                'above class annotation
+                @anno
+                'between class annotation
+                class Movie extends Base
+                    sub new()
+                    end sub
+                    'above field annotation
+                    @anno
+                    'between field annotation
+                    public name as string
+                    'above method annotation
+                    @anno
+                    'between method annotation
+                    override sub stop()
+                    end sub
+                end class
+                class Base
+                    sub new()
+                    end sub
+                    sub stop()
+                    end sub
+                end class
+                'above interface annotation
+                @anno
+                interface IMovie
+                    'above field annotation
+                    @anno
+                    name as string
+                    'above method annotation
+                    @anno
+                    function getName() as string
+                end interface
+
+                'above enum annotation
+                @anno
+                enum Direction
+                    'above member annotation
+                    up
+                end enum
+                'above namespace annotation
+                namespace alpha
+                    'above const annotation
+                    const A = 1
+                    'above type annotation
+                    type T = string
+                end namespace
+            `);
+        });
+
+        it('keeps comments above method modifiers', async () => {
+            await testGetTypedef(`
+                class Movie extends Base
+                    'above public
+                    public sub play()
+                    end sub
+                    'above override
+                    override sub stop()
+                    end sub
+                end class
+                class Base
+                    sub stop()
+                    end sub
+                end class
+            `, `
+                class Movie extends Base
+                    sub new()
+                    end sub
+                    'above public
+                    public sub play()
+                    end sub
+                    'above override
+                    override sub stop()
+                    end sub
+                end class
+                class Base
+                    sub new()
+                    end sub
+                    sub stop()
+                    end sub
+                end class
+            `);
+        });
+
+        it('handles leading trivia and modifiers created by plugins', () => {
+            const state = new BrsTranspileState(file);
+            const statement = new ExpressionStatement({ expression: createVariableExpression('a') });
+            (statement.expression as any).tokens.name.leadingTrivia = [undefined, createToken(TokenKind.Comment, `'comment`)];
+            expect(state.toSourceNode(...state.getTypedefLeadingCommentsAndAnnotations(statement) as any[]).toString()).to.eql(`'comment\n`);
+
+            //no modifiers and no function
+            expect(new MethodStatement({ name: createIdentifier('test'), func: undefined }).leadingTrivia).to.be.undefined;
+
+            //modifiers without locations
+            const publicToken = createToken(TokenKind.Public);
+            publicToken.leadingTrivia = [createToken(TokenKind.Comment, `'comment`), createToken(TokenKind.Newline, '\n')];
+            const method = new MethodStatement({
+                modifiers: [publicToken],
+                override: createToken(TokenKind.Override),
+                name: createIdentifier('test'),
+                func: new FunctionExpression({
+                    functionType: createToken(TokenKind.Sub),
+                    leftParen: createToken(TokenKind.LeftParen),
+                    rightParen: createToken(TokenKind.RightParen),
+                    body: new Block({ statements: [] }),
+                    endFunctionType: createToken(TokenKind.EndSub)
+                })
+            });
+            expect(method.leadingTrivia).to.equal(publicToken.leadingTrivia);
+            expect(method.toString()).to.eql(`'comment\npublic override sub test()\nend sub`);
+        });
+
         it('uses dynamic for fields whose type cannot be used in a typedef', async () => {
             await testGetTypedef(`
                 class Movie
@@ -690,7 +887,6 @@ describe('AST output', () => {
                 end class
             `);
         });
-
 
         it('includes interface parents, and handles empty interfaces and non-member statements', async () => {
             await testGetTypedef(`
