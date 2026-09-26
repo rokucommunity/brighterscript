@@ -2,6 +2,7 @@ import type { Token, Identifier } from '../lexer/Token';
 import { isToken } from '../lexer/Token';
 import type { BlockTerminator, PrintSeparatorToken } from '../lexer/TokenKind';
 import { Lexer } from '../lexer/Lexer';
+import { TranspileState } from './TranspileState';
 import {
     AllowedLocalIdentifiers,
     AllowedTypeIdentifiers,
@@ -15,7 +16,8 @@ import {
     BlockTerminators,
     ReservedWords,
     CompoundAssignmentOperators,
-    BinaryExpressionOperatorTokens
+    BinaryExpressionOperatorTokens,
+    AllowedTriviaTokens
 } from '../lexer/TokenKind';
 import {
     AliasStatement,
@@ -229,10 +231,18 @@ export class Parser {
         ];
         this.current = 0;
         this.diagnostics = [];
+        this.hasDiscardedDiagnostics = false;
+        this.claimedTriviaTokens.clear();
         this.namespaceAndFunctionDepth = 0;
         this.pendingAnnotations = [];
 
         this.ast = this.body();
+        //the eof token holds all of the trivia after the last statement
+        this.ast.tokens.eof = this.eofToken;
+        //when there are syntax errors, some tokens may have been skipped. keep them in the AST so it still represents the full source code
+        if (this.diagnostics.length > 0 || this.hasDiscardedDiagnostics) {
+            this.reclaimSkippedTokens();
+        }
         this.ast.bsConsts = options.bsConsts;
         //now that we've built the AST, link every node to its parent
         this.ast.link();
@@ -240,6 +250,53 @@ export class Parser {
     }
 
     private logger: Logger;
+
+    /**
+     * Set to true whenever diagnostics were discarded during parsing (i.e. errors inside a `#if false` block)
+     */
+    private hasDiscardedDiagnostics = false;
+
+    /**
+     * Trivia tokens that were moved out of the leading trivia of the next token by `claimTriviaToken`
+     */
+    private claimedTriviaTokens = new Set<Token>();
+
+    /**
+     * Remove all diagnostics after the given index (i.e. to ignore errors inside a `#if false` block)
+     */
+    private discardDiagnosticsAfter(index: number) {
+        if (this.diagnostics.length > index) {
+            this.diagnostics.splice(index, this.diagnostics.length - index);
+            this.hasDiscardedDiagnostics = true;
+        }
+    }
+
+    /**
+     * When the parser recovers from a syntax error, it skips tokens that don't fit into the AST, which means they would be lost
+     * when converting the AST back into source code. Move each skipped token (and its leading trivia) into the leading trivia
+     * of the next token that is part of the AST, so that `ast.toString()` still produces the original source code.
+     */
+    private reclaimSkippedTokens() {
+        //find every token that is referenced by the AST
+        const state = new TranspileState('', {});
+        state.writtenTokens = new Set();
+        state.nodeToSourceNode(this.ast);
+
+        let skipped: Token[] = [];
+        for (const token of this.tokens) {
+            if (state.writtenTokens.has(token)) {
+                if (skipped.length > 0) {
+                    token.leadingTrivia = [...skipped, ...(token.leadingTrivia ?? [])];
+                    skipped = [];
+                }
+                //trivia tokens are already included in the leading trivia of the next non-trivia token
+            } else if (!AllowedTriviaTokens.includes(token.kind) || this.claimedTriviaTokens.has(token)) {
+                //skipped tokens (including trivia tokens that were removed from the leading trivia of the next token by `claimTriviaToken`)
+                skipped.push(...(token.leadingTrivia ?? []), token);
+                token.leadingTrivia = undefined;
+            }
+        }
+    }
 
     private body() {
         const parentAnnotations = this.enterAnnotationBlock();
@@ -462,6 +519,7 @@ export class Parser {
         const leftParen = this.consume(DiagnosticMessages.expectedToken(TokenKind.LeftParen), TokenKind.LeftParen);
 
         let params = [] as FunctionParameterExpression[];
+        const commas: Token[] = [];
         if (!this.check(TokenKind.RightParen)) {
             do {
                 if (params.length >= CallExpression.MaximumArguments) {
@@ -472,7 +530,7 @@ export class Parser {
                 }
 
                 params.push(this.functionParameter());
-            } while (this.match(TokenKind.Comma));
+            } while (this.matchSeparator(TokenKind.Comma, commas));
         }
         const rightParen = this.consumeToken(TokenKind.RightParen);
         // let asToken = null as Token;
@@ -488,6 +546,7 @@ export class Parser {
             name: name,
             leftParen: leftParen,
             params: params,
+            commas: commas,
             rightParen: rightParen,
             as: asToken,
             returnTypeExpression: returnTypeExpression,
@@ -696,12 +755,17 @@ export class Parser {
             this.consumeStatementSeparators();
         }
 
+        //at the end of the file, `advance()` returns the previous token, so don't keep it
+        const isAtEnd = this.isAtEnd();
         let endingKeyword = this.advance();
         if (endingKeyword.kind !== TokenKind.EndClass) {
             this.diagnostics.push({
                 ...DiagnosticMessages.couldNotFindMatchingEndKeyword('class'),
                 location: endingKeyword.location
             });
+        }
+        if (isAtEnd) {
+            endingKeyword = undefined;
         }
 
         const result = new ClassStatement({
@@ -921,7 +985,12 @@ export class Parser {
                     text: 'function',
                     isReserved: true,
                     //zero-length location means derived
-                    location: this.peek().location,
+                    location: this.peek().location ? util.createLocationFromRange(this.peek().location.uri, util.createRange(
+                        this.peek().location.range.start.line,
+                        this.peek().location.range.start.character,
+                        this.peek().location.range.start.line,
+                        this.peek().location.range.start.character
+                    )) : undefined,
                     leadingTrivia: []
                 };
             }
@@ -966,12 +1035,13 @@ export class Parser {
             }
 
             let params = [] as FunctionParameterExpression[];
+            const commas: Token[] = [];
             let asToken: Token;
             let typeExpression: TypeExpression;
             if (!this.check(TokenKind.RightParen)) {
                 do {
                     params.push(this.functionParameter());
-                } while (this.match(TokenKind.Comma));
+                } while (this.matchSeparator(TokenKind.Comma, commas));
             }
             let rightParen = this.consume(
                 DiagnosticMessages.unmatchedLeftToken(leftParen.text, 'function parameter list'),
@@ -999,8 +1069,9 @@ export class Parser {
             let body = this.block();
             //if the parser was unable to produce a block, make an empty one so the AST makes some sense...
 
-            // consume 'end sub' or 'end function'
-            const endFunctionType = this.advance();
+            // consume 'end sub' or 'end function' (at the end of the file, `advance()` returns the previous token, so don't keep it)
+            const isAtEnd = this.isAtEnd();
+            let endFunctionType = this.advance();
             let expectedEndKind = isSub ? TokenKind.EndSub : TokenKind.EndFunction;
 
             //if `function` is ended with `end sub`, or `sub` is ended with `end function`, then
@@ -1011,6 +1082,9 @@ export class Parser {
                     location: endFunctionType.location
                 });
             }
+            if (isAtEnd) {
+                endFunctionType = undefined;
+            }
 
             if (!body) {
                 body = new Block({ statements: [] });
@@ -1018,6 +1092,7 @@ export class Parser {
 
             let func = new FunctionExpression({
                 parameters: params,
+                commas: commas,
                 body: body,
                 functionType: functionType,
                 endFunctionType: endFunctionType,
@@ -1390,7 +1465,9 @@ export class Parser {
                 originalStart.line,
                 originalStart.character + exitToken.text.length);
 
+            const leadingTrivia = exitToken.leadingTrivia;
             exitToken = createToken(TokenKind.Exit, exitText, util.createLocationFromRange(exitToken.location.uri, exitRange));
+            exitToken.leadingTrivia = leadingTrivia;
             this.tokens[this.current - 1] = exitToken;
             const newLoopToken = createToken(TokenKind.While, whileText, util.createLocationFromRange(exitToken.location.uri, whileRange));
             this.tokens.splice(this.current, 0, newLoopToken);
@@ -1632,8 +1709,8 @@ export class Parser {
      */
     private consumeUntil(...stopTokenKinds: TokenKind[]) {
         let result = [] as Token[];
-        //take tokens until we encounter one of the stopTokenKinds
-        while (!stopTokenKinds.includes(this.peek().kind)) {
+        //take tokens until we encounter one of the stopTokenKinds (or the end of the file, otherwise this would loop forever)
+        while (!this.isAtEnd() && !stopTokenKinds.includes(this.peek().kind)) {
             result.push(this.advance());
         }
         return result;
@@ -1788,7 +1865,7 @@ export class Parser {
             this.advance();
         }
 
-        const colonToken = this.tryConsumeToken(TokenKind.Colon);
+        const colonToken = this.claimTriviaToken(this.tryConsumeToken(TokenKind.Colon));
 
         //consume newlines
         while (this.checkAny(TokenKind.Newline, TokenKind.Comment)) {
@@ -1842,6 +1919,8 @@ export class Parser {
         let openingBacktick = this.peek();
         this.advance();
         let currentQuasiExpressionParts: Array<LiteralExpression | EscapedCharCodeLiteralExpression> = [];
+        const expressionBegins: Token[] = [];
+        const expressionEnds: Token[] = [];
         while (!this.isAtEnd() && !this.check(TokenKind.BackTick)) {
             let next = this.peek();
             if (next.kind === TokenKind.TemplateStringQuasi) {
@@ -1863,13 +1942,13 @@ export class Parser {
                 currentQuasiExpressionParts = [];
 
                 if (next.kind === TokenKind.TemplateStringExpressionBegin) {
-                    this.advance();
+                    expressionBegins[expressions.length] = this.advance();
                 }
                 //now keep this expression
                 expressions.push(this.expression());
                 if (!this.isAtEnd() && this.check(TokenKind.TemplateStringExpressionEnd)) {
                     //TODO is it an error if this is not present?
-                    this.advance();
+                    expressionEnds[expressions.length - 1] = this.advance();
                 } else {
                     this.diagnostics.push({
                         ...DiagnosticMessages.unterminatedTemplateExpression(),
@@ -1907,14 +1986,18 @@ export class Parser {
                     openingBacktick: openingBacktick,
                     quasis: quasis,
                     expressions: expressions,
-                    closingBacktick: closingBacktick
+                    closingBacktick: closingBacktick,
+                    expressionBegins: expressionBegins,
+                    expressionEnds: expressionEnds
                 });
             } else {
                 return new TemplateStringExpression({
                     openingBacktick: openingBacktick,
                     quasis: quasis,
                     expressions: expressions,
-                    closingBacktick: closingBacktick
+                    closingBacktick: closingBacktick,
+                    expressionBegins: expressionBegins,
+                    expressionEnds: expressionEnds
                 });
             }
         }
@@ -2000,13 +2083,14 @@ export class Parser {
         let leftSquareBracket = this.tryConsume(DiagnosticMessages.expectedToken('['), TokenKind.LeftSquareBracket);
 
         let expressions: Expression[] = [];
+        const commas: Token[] = [];
         let expression: Expression;
         do {
             try {
                 expression = this.expression();
                 expressions.push(expression);
                 if (this.check(TokenKind.Comma)) {
-                    this.advance();
+                    commas[expressions.length - 1] = this.advance();
                 } else {
                     // will also exit for right square braces
                     break;
@@ -2027,6 +2111,7 @@ export class Parser {
             name: identifier,
             openingSquare: leftSquareBracket,
             dimensions: expressions,
+            commas: commas,
             closingSquare: rightSquareBracket
         });
     }
@@ -2130,7 +2215,7 @@ export class Parser {
                 if (peek.kind !== TokenKind.Newline && peek.kind !== TokenKind.Comment && peek.kind !== TokenKind.Else && !this.isAtEnd()) {
                     //ignore last error if it was about a colon
                     if (this.previous().kind === TokenKind.Colon) {
-                        this.diagnostics.pop();
+                        this.discardDiagnosticsAfter(this.diagnostics.length - 1);
                         this.current--;
                     }
                     //newline is required
@@ -2204,7 +2289,7 @@ export class Parser {
             //throw out any new diagnostics created as a result of a `then` block parse failure.
             //the block() function will discard the current line, so any discarded diagnostics will
             //resurface if they are legitimate, and not a result of a malformed if statement
-            this.diagnostics.splice(diagnosticsLengthBeforeBlock, this.diagnostics.length - diagnosticsLengthBeforeBlock);
+            this.discardDiagnosticsAfter(diagnosticsLengthBeforeBlock);
 
             //this whole if statement is bogus...add error to the if token and hard-fail
             this.diagnostics.push({
@@ -2238,7 +2323,8 @@ export class Parser {
         }
 
 
-        const condition = this.advance();
+        //if the condition is missing, this could be a trivia token like a newline, so make sure it's not included twice in the AST
+        const condition = this.claimTriviaToken(this.advance());
 
         let thenBranch: Block;
         let elseBranch: ConditionalCompileStatement | Block | undefined;
@@ -2254,7 +2340,7 @@ export class Parser {
         const conditionTextLower = condition.text.toLowerCase();
         if (!this.options.bsConsts?.get(conditionTextLower) || conditionTextLower === 'false') {
             //throw out any new diagnostics created as a result of a false block
-            this.diagnostics.splice(diagnosticsLengthBeforeBlock, this.diagnostics.length - diagnosticsLengthBeforeBlock);
+            this.discardDiagnosticsAfter(diagnosticsLengthBeforeBlock);
         }
 
         this.ensureNewLine();
@@ -2273,7 +2359,7 @@ export class Parser {
 
             if (condition.text.toLowerCase() === 'true') {
                 //throw out any new diagnostics created as a result of a false block
-                this.diagnostics.splice(diagnosticsLengthBeforeBlock, this.diagnostics.length - diagnosticsLengthBeforeBlock);
+                this.discardDiagnosticsAfter(diagnosticsLengthBeforeBlock);
             }
             this.ensureNewLine();
             this.advance();
@@ -2317,7 +2403,7 @@ export class Parser {
             //throw out any new diagnostics created as a result of a `then` block parse failure.
             //the block() function will discard the current line, so any discarded diagnostics will
             //resurface if they are legitimate, and not a result of a malformed if statement
-            this.diagnostics.splice(diagnosticsLengthBeforeBlock, this.diagnostics.length - diagnosticsLengthBeforeBlock);
+            this.discardDiagnosticsAfter(diagnosticsLengthBeforeBlock);
 
             //this whole if statement is bogus...add error to the if token and hard-fail
             this.diagnostics.push({
@@ -2462,7 +2548,10 @@ export class Parser {
     private conditionalCompileErrorStatement() {
         const hashErrorToken = this.advance();
         const tokensUntilEndOfLine = this.consumeUntil(TokenKind.Newline);
-        const message = createToken(TokenKind.HashErrorMessage, tokensUntilEndOfLine.map(t => t.text).join(' '));
+        //the lexer produces a single token for the whole message, so use it directly to keep its location and leading whitespace
+        const message = tokensUntilEndOfLine.length === 1
+            ? tokensUntilEndOfLine[0]
+            : createToken(TokenKind.HashErrorMessage, tokensUntilEndOfLine.map(t => t.text).join(' '));
         return new ConditionalCompileErrorStatement({ hashError: hashErrorToken, message: message });
     }
 
@@ -2628,6 +2717,8 @@ export class Parser {
                 return new IndexedSetStatement({
                     obj: left.obj,
                     indexes: left.indexes,
+                    commas: left.tokens.commas,
+                    dot: left.tokens.dot,
                     value: right,
                     openingSquare: left.tokens.openingSquare,
                     closingSquare: left.tokens.closingSquare,
@@ -2672,7 +2763,13 @@ export class Parser {
 
         //print statements can be empty, so look for empty print conditions
         if (!values.length) {
-            const endOfStatementLocation = util.createBoundingLocation(printKeyword, this.peek());
+            //this literal is not actually in the source code, so give it a zero-width location to mark it as derived
+            const endOfStatementLocation = printKeyword.location ? util.createLocationFromRange(printKeyword.location.uri, util.createRange(
+                printKeyword.location.range.end.line,
+                printKeyword.location.range.end.character,
+                printKeyword.location.range.end.line,
+                printKeyword.location.range.end.character
+            )) : undefined;
             let emptyStringLiteral = createStringLiteral('', endOfStatementLocation);
             values.push(emptyStringLiteral);
         }
@@ -2716,6 +2813,7 @@ export class Parser {
             this.current -= 2;
             throw new CancelStatementError();
         }
+        this.claimTriviaToken(options.colon);
 
         return new LabelStatement(options);
     }
@@ -3009,7 +3107,10 @@ export class Parser {
     private indexedGet(expr: Expression) {
         let openingSquare = this.previous();
         let questionDotToken = this.getMatchingTokenAtOffset(-2, TokenKind.QuestionDot);
+        //the optional `.` in `obj.[index]`
+        let dotToken = this.getMatchingTokenAtOffset(-2, TokenKind.Dot);
         let indexes: Expression[] = [];
+        const commas: Token[] = [];
 
 
         //consume leading newlines
@@ -3021,8 +3122,7 @@ export class Parser {
             );
             //consume additional indexes separated by commas
             while (this.check(TokenKind.Comma)) {
-                //discard the comma
-                this.advance();
+                commas[indexes.length - 1] = this.advance();
                 indexes.push(
                     this.expression()
                 );
@@ -3041,9 +3141,11 @@ export class Parser {
         return new IndexedGetExpression({
             obj: expr,
             indexes: indexes,
+            commas: commas,
             openingSquare: openingSquare,
             closingSquare: closingSquare,
-            questionDot: questionDotToken
+            questionDot: questionDotToken,
+            dot: dotToken
         });
     }
 
@@ -3096,6 +3198,7 @@ export class Parser {
             methodName: methodName as Identifier,
             openingParen: openParen,
             args: call?.args,
+            commas: call?.tokens?.commas,
             closingParen: call?.tokens?.closingParen
         });
     }
@@ -3159,6 +3262,7 @@ export class Parser {
 
     private finishCall(openingParen: Token, callee: Expression, addToCallExpressionList = true) {
         let args = [] as Expression[];
+        const commas: Token[] = [];
         this.consumeNewlinesIfAllowed();
 
         if (!this.check(TokenKind.RightParen)) {
@@ -3194,7 +3298,7 @@ export class Parser {
                     // we were unable to get an expression, so don't continue
                     break;
                 }
-            } while (this.match(TokenKind.Comma));
+            } while (this.matchSeparator(TokenKind.Comma, commas));
         }
 
         this.consumeNewlinesIfAllowed();
@@ -3218,6 +3322,7 @@ export class Parser {
             callee: callee,
             openingParen: openingParen,
             args: args,
+            commas: commas,
             closingParen: closingParen
         });
         if (addToCallExpressionList) {
@@ -3357,6 +3462,7 @@ export class Parser {
         const funcOrSub = this.advance();
         const openParen = this.consume(DiagnosticMessages.expectedToken(TokenKind.LeftParen), TokenKind.LeftParen);
         const params: FunctionParameterExpression[] = [];
+        const commas: Token[] = [];
 
         if (!this.check(TokenKind.RightParen)) {
             do {
@@ -3368,7 +3474,7 @@ export class Parser {
                 }
 
                 params.push(this.functionParameter());
-            } while (this.match(TokenKind.Comma));
+            } while (this.matchSeparator(TokenKind.Comma, commas));
         }
 
         const closeParen = this.consume(
@@ -3384,9 +3490,10 @@ export class Parser {
         }
         return new TypedFunctionTypeExpression({
             functionType: funcOrSub,
-            rightParen: openParen,
+            leftParen: openParen,
             params: params,
-            leftParen: closeParen,
+            commas: commas,
+            rightParen: closeParen,
             as: asToken,
             returnType: returnType
         });
@@ -3399,11 +3506,17 @@ export class Parser {
         const openToken = this.previous();
         this.warnIfNotBrighterScriptMode('inline interface');
         const members: InlineInterfaceMemberExpression[] = [];
+        const commas: Token[] = [];
         while (this.match(TokenKind.Newline)) { }
         while (this.checkAny(TokenKind.Identifier, ...AllowedProperties, TokenKind.StringLiteral, TokenKind.Optional)) {
             const member = this.inlineInterfaceMember();
             members.push(member);
-            while (this.matchAny(TokenKind.Comma, TokenKind.Newline)) { }
+            while (this.matchAny(TokenKind.Comma, TokenKind.Newline)) {
+                //keep the first comma after each member
+                if (this.checkPrevious(TokenKind.Comma) && !commas[members.length - 1]) {
+                    commas[members.length - 1] = this.previous();
+                }
+            }
         }
         if (!this.check(TokenKind.RightCurlyBrace)) {
             this.diagnostics.push({
@@ -3414,7 +3527,7 @@ export class Parser {
         }
         const closeToken = this.advance();
 
-        expr = new InlineInterfaceExpression({ open: openToken, members: members, close: closeToken });
+        expr = new InlineInterfaceExpression({ open: openToken, members: members, commas: commas, close: closeToken });
         return expr;
     }
 
@@ -3547,6 +3660,7 @@ export class Parser {
 
     private arrayLiteral() {
         let elements: Array<Expression> = [];
+        const commas: Token[] = [];
         let openingSquare = this.previous();
 
         while (this.match(TokenKind.Newline)) {
@@ -3558,6 +3672,9 @@ export class Parser {
                 elements.push(this.expression());
 
                 while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Comment)) {
+                    if (this.checkPrevious(TokenKind.Comma)) {
+                        commas[elements.length - 1] = this.previous();
+                    }
 
                     while (this.match(TokenKind.Newline)) {
 
@@ -3582,7 +3699,7 @@ export class Parser {
         }
 
         //this.consume("Expected newline or ':' after array literal", TokenKind.Newline, TokenKind.Colon, TokenKind.Eof);
-        return new ArrayLiteralExpression({ elements: elements, open: openingSquare, close: closingSquare });
+        return new ArrayLiteralExpression({ elements: elements, commas: commas, open: openingSquare, close: closingSquare });
     }
 
     private aaLiteral() {
@@ -3615,10 +3732,10 @@ export class Parser {
                 throw this.lastDiagnosticAsError();
             }
 
-            result.colon = this.consume(
+            result.colon = this.claimTriviaToken(this.consume(
                 DiagnosticMessages.expectedColonBetweenAAKeyAndvalue(),
                 TokenKind.Colon
-            );
+            ));
             result.range = util.createBoundingRange(result.keyToken ?? result.leftBracket, result.colon);
             return result;
         };
@@ -3684,6 +3801,47 @@ export class Parser {
     private match(tokenKind: TokenKind) {
         if (this.check(tokenKind)) {
             this.current++; //advance
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Some trivia tokens (i.e. `:`) are also meaningful tokens in certain places (like `{ key: value }`, `a ? b : c`, and `label:`).
+     * The lexer adds these to the leading trivia of the next token, so when one is used as a real token, move it (and any trivia before it)
+     * out of the next token's leading trivia so it is not included twice when rebuilding the source code from the AST.
+     * @param token a token that was just consumed
+     */
+    private claimTriviaToken<T extends Token>(token: T): T {
+        if (!token || !AllowedTriviaTokens.includes(token.kind)) {
+            return token;
+        }
+        //find the next token that could own this trivia token
+        for (let i = this.tokens.indexOf(token, this.current - 1) + 1; i < this.tokens.length; i++) {
+            const owner = this.tokens[i];
+            if (!AllowedTriviaTokens.includes(owner.kind)) {
+                const index = owner.leadingTrivia?.indexOf(token) ?? -1;
+                if (index >= 0) {
+                    token.leadingTrivia = owner.leadingTrivia.slice(0, index);
+                    owner.leadingTrivia = owner.leadingTrivia.slice(index + 1);
+                    this.claimedTriviaTokens.add(token);
+                }
+                break;
+            }
+        }
+        return token;
+    }
+
+    /**
+     * Pop token if we encounter the specified token, and store it in `separators` at the index matching the item it follows
+     * (i.e. the comma after the 2nd argument is stored at index 1)
+     * @param tokenKind the kind of separator token to look for
+     * @param separators the list of separators to store the token in
+     */
+    private matchSeparator(tokenKind: TokenKind, separators: Token[]) {
+        if (this.check(tokenKind)) {
+            //the separator belongs to the item that was just parsed. Items that fail to parse don't get a separator
+            separators.push(this.advance());
             return true;
         }
         return false;

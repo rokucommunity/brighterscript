@@ -391,6 +391,8 @@ export class Lexer {
                 ...DiagnosticMessages.unexpectedCharacter(c),
                 location: this.locationOf()
             });
+            //skip the unexpected character so it doesn't get included in the text of the next token
+            this.sync();
         }
     }
 

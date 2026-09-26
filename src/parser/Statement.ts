@@ -29,6 +29,8 @@ import { ArrayType } from '../types/ArrayType';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import brsDocParser from './BrightScriptDocParser';
 import { ArrayDefaultTypeReferenceType } from '../types/ReferenceType';
+import type { SourceNode } from 'source-map';
+import type { TranspileState } from './TranspileState';
 export class EmptyStatement extends Statement {
     constructor(options?: { range?: Location }
     ) {
@@ -49,6 +51,10 @@ export class EmptyStatement extends Statement {
         //nothing to walk
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode();
+    }
+
     public clone() {
         return this.finalizeClone(
             new EmptyStatement({
@@ -64,12 +70,26 @@ export class EmptyStatement extends Statement {
 export class Body extends Statement implements TypedefProvider {
     constructor(options?: {
         statements?: Statement[];
+        /**
+         * The end-of-file token. Only present on the root body of a file, and holds all of the trivia (whitespace, comments, etc) after the last statement
+         */
+        eof?: Token;
     }) {
         super();
         this.statements = options?.statements ?? [];
+        this.tokens = {
+            eof: options?.eof
+        };
     }
 
     public readonly statements: Statement[] = [];
+
+    public readonly tokens: {
+        /**
+         * The end-of-file token. Only present on the root body of a file, and holds all of the trivia (whitespace, comments, etc) after the last statement
+         */
+        eof?: Token;
+    };
     public readonly kind = AstNodeKind.Body;
 
     public readonly symbolTable = new SymbolTable('Body', () => this.parent?.getSymbolTable());
@@ -141,10 +161,19 @@ export class Body extends Statement implements TypedefProvider {
         }
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            //the first statement in a namespace body comes after the namespace name, so it needs to be on a new line
+            state.statementsToSourceNode(this.statements, isNamespaceStatement(this.parent)),
+            state.tokenToSourceNodeWithTrivia(this.tokens.eof)
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new Body({
-                statements: this.statements?.map(s => s?.clone())
+                statements: this.statements?.map(s => s?.clone()),
+                eof: util.cloneToken(this.tokens.eof)
             }),
             ['statements']
         );
@@ -215,6 +244,16 @@ export class AssignmentStatement extends Statement {
 
     get leadingTrivia(): Token[] {
         return this.tokens.name.leadingTrivia;
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.name),
+            state.tokenToSourceNodeWithTrivia(this.tokens.as, ' '),
+            state.nodeToSourceNode(this.typeExpression, ' '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.equals, ' '),
+            state.nodeToSourceNode(this.value, ' ')
+        );
     }
 
     public clone() {
@@ -289,6 +328,14 @@ export class AugmentedAssignmentStatement extends Statement {
 
     get leadingTrivia(): Token[] {
         return this.item.leadingTrivia;
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.nodeToSourceNode(this.item),
+            state.tokenToSourceNodeWithTrivia(this.tokens.operator, ' '),
+            state.nodeToSourceNode(this.value, ' ')
+        );
     }
 
     public clone() {
@@ -482,6 +529,10 @@ export class Block extends Statement {
         }
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.statementsToSourceNode(this.statements);
+    }
+
     public clone() {
         return this.finalizeClone(
             new Block({
@@ -526,6 +577,10 @@ export class ExpressionStatement extends Statement {
 
     get leadingTrivia(): Token[] {
         return this.expression.leadingTrivia;
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.nodeToSourceNode(this.expression);
     }
 
     public clone() {
@@ -577,6 +632,13 @@ export class ExitStatement extends Statement {
 
     get leadingTrivia(): Token[] {
         return this.tokens.exit?.leadingTrivia;
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.exit),
+            state.tokenToSourceNodeWithTrivia(this.tokens.loopType, ' ')
+        );
     }
 
     public clone() {
@@ -679,6 +741,10 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         const funcExprType = this.func.getType(options);
         funcExprType.setName(this.getName(ParseMode.BrighterScript));
         return funcExprType;
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return this.func?.toSourceNodeWithName(state, this.tokens.name);
     }
 
     public clone() {
@@ -831,6 +897,19 @@ export class IfStatement extends Statement {
         return this.tokens.endIf?.leadingTrivia ?? [];
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.if),
+            state.nodeToSourceNode(this.condition, ' '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.then, ' '),
+            state.nodeToSourceNode(this.thenBranch),
+            state.tokenToSourceNodeWithTrivia(this.tokens.else, state.newline),
+            //an `else if` should stay on the same line as the `else`
+            state.nodeToSourceNode(this.elseBranch, isIfStatement(this.elseBranch) ? ' ' : ''),
+            state.tokenToSourceNodeWithTrivia(this.tokens.endIf, state.newline)
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new IfStatement({
@@ -887,6 +966,13 @@ export class IncrementStatement extends Statement {
 
     get leadingTrivia(): Token[] {
         return this.value?.leadingTrivia ?? [];
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.nodeToSourceNode(this.value),
+            state.tokenToSourceNodeWithTrivia(this.tokens.operator)
+        );
     }
 
     public clone() {
@@ -973,6 +1059,16 @@ export class PrintStatement extends Statement {
         return this.tokens.print?.leadingTrivia ?? [];
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.print),
+            ...(this.expressions ?? [])
+                //the parser adds an empty string literal with a zero-width location to empty print statements. It's not in the source code, so skip it
+                .filter(x => !(isLiteralExpression(x) && x.location?.range && util.comparePosition(x.location.range.start, x.location.range.end) === 0))
+                .map(x => state.nodeToSourceNode(x, ' '))
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new PrintStatement({
@@ -991,13 +1087,18 @@ export class DimStatement extends Statement {
         openingSquare?: Token;
         dimensions: Expression[];
         closingSquare?: Token;
+        /**
+         * The commas between the dimensions, where `commas[i]` is the comma after `dimensions[i]`
+         */
+        commas?: Token[];
     }) {
         super();
         this.tokens = {
             dim: options?.dim,
             name: options.name,
             openingSquare: options.openingSquare,
-            closingSquare: options.closingSquare
+            closingSquare: options.closingSquare,
+            commas: options.commas
         };
         this.dimensions = options.dimensions;
         this.location = util.createBoundingLocation(
@@ -1014,6 +1115,10 @@ export class DimStatement extends Statement {
         readonly name: Identifier;
         readonly openingSquare?: Token;
         readonly closingSquare?: Token;
+        /**
+         * The commas between the dimensions, where `commas[i]` is the comma after `dimensions[i]`
+         */
+        readonly commas?: Token[];
     };
     public readonly dimensions: Expression[];
 
@@ -1060,9 +1165,20 @@ export class DimStatement extends Statement {
         return this.tokens.dim?.leadingTrivia ?? [];
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.dim),
+            state.tokenToSourceNodeWithTrivia(this.tokens.name, ' '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.openingSquare),
+            state.nodesToSourceNode(this.dimensions, this.tokens.commas, ', '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.closingSquare)
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new DimStatement({
+                commas: this.tokens.commas?.map(x => util.cloneToken(x)),
                 dim: util.cloneToken(this.tokens.dim),
                 name: util.cloneToken(this.tokens.name),
                 openingSquare: util.cloneToken(this.tokens.openingSquare),
@@ -1115,6 +1231,13 @@ export class GotoStatement extends Statement {
         return this.tokens.goto?.leadingTrivia ?? [];
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.goto),
+            state.tokenToSourceNodeWithTrivia(this.tokens.label, ' ')
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new GotoStatement({
@@ -1162,6 +1285,13 @@ export class LabelStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.name),
+            state.tokenToSourceNodeWithTrivia(this.tokens.colon)
+        );
     }
 
     public clone() {
@@ -1220,6 +1350,13 @@ export class ReturnStatement extends Statement {
         return this.tokens.return?.leadingTrivia ?? [];
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.return),
+            state.nodeToSourceNode(this.value, ' ')
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new ReturnStatement({
@@ -1262,6 +1399,10 @@ export class EndStatement extends Statement {
         return this.tokens.end?.leadingTrivia ?? [];
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.tokenToSourceNodeWithTrivia(this.tokens.end);
+    }
+
     public clone() {
         return this.finalizeClone(
             new EndStatement({
@@ -1299,6 +1440,10 @@ export class StopStatement extends Statement {
 
     get leadingTrivia(): Token[] {
         return this.tokens.stop?.leadingTrivia ?? [];
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.tokenToSourceNodeWithTrivia(this.tokens.stop);
     }
 
     public clone() {
@@ -1421,6 +1566,19 @@ export class ForStatement extends Statement {
 
     public get endTrivia(): Token[] {
         return this.tokens.endFor?.leadingTrivia ?? [];
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.for),
+            state.nodeToSourceNode(this.counterDeclaration, ' '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.to, ' '),
+            state.nodeToSourceNode(this.finalValue, ' '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.step, ' '),
+            state.nodeToSourceNode(this.increment, ' '),
+            state.nodeToSourceNode(this.body),
+            state.tokenToSourceNodeWithTrivia(this.tokens.endFor, state.newline)
+        );
     }
 
     public clone() {
@@ -1555,6 +1713,19 @@ export class ForEachStatement extends Statement {
         return this.tokens.endFor?.leadingTrivia ?? [];
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.forEach),
+            state.tokenToSourceNodeWithTrivia(this.tokens.item, ' '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.as, ' '),
+            state.nodeToSourceNode(this.typeExpression, ' '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.in, ' '),
+            state.nodeToSourceNode(this.target, ' '),
+            state.nodeToSourceNode(this.body),
+            state.tokenToSourceNodeWithTrivia(this.tokens.endFor, state.newline)
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new ForEachStatement({
@@ -1644,6 +1815,15 @@ export class WhileStatement extends Statement {
 
     public get endTrivia(): Token[] {
         return this.tokens.endWhile?.leadingTrivia ?? [];
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.while),
+            state.nodeToSourceNode(this.condition, ' '),
+            state.nodeToSourceNode(this.body),
+            state.tokenToSourceNodeWithTrivia(this.tokens.endWhile, state.newline)
+        );
     }
 
     public clone() {
@@ -1736,6 +1916,16 @@ export class DottedSetStatement extends Statement {
         return this.obj.leadingTrivia;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.nodeToSourceNode(this.obj),
+            state.tokenToSourceNodeWithTrivia(this.tokens.dot),
+            state.tokenToSourceNodeWithTrivia(this.tokens.name),
+            state.tokenToSourceNodeWithTrivia(this.tokens.equals, ' '),
+            state.nodeToSourceNode(this.value, ' ')
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new DottedSetStatement({
@@ -1758,12 +1948,22 @@ export class IndexedSetStatement extends Statement {
         openingSquare?: Token;
         closingSquare?: Token;
         equals?: Token;
+        /**
+         * The `.` in `obj.[index] = value` (an alternate syntax for `obj[index] = value`)
+         */
+        dot?: Token;
+        /**
+         * The commas between the indexes, where `commas[i]` is the comma after `indexes[i]`
+         */
+        commas?: Token[];
     }) {
         super();
         this.tokens = {
             openingSquare: options.openingSquare,
             closingSquare: options.closingSquare,
-            equals: options.equals
+            equals: options.equals,
+            dot: options.dot,
+            commas: options.commas
         };
         this.obj = options.obj;
         this.indexes = options.indexes ?? [];
@@ -1781,6 +1981,14 @@ export class IndexedSetStatement extends Statement {
         readonly openingSquare?: Token;
         readonly closingSquare?: Token;
         readonly equals?: Token;
+        /**
+         * The `.` in `obj.[index] = value` (an alternate syntax for `obj[index] = value`)
+         */
+        readonly dot?: Token;
+        /**
+         * The commas between the indexes, where `commas[i]` is the comma after `indexes[i]`
+         */
+        readonly commas?: Token[];
     };
     public readonly obj: Expression;
     public readonly indexes: Expression[];
@@ -1831,10 +2039,24 @@ export class IndexedSetStatement extends Statement {
         return this.obj.leadingTrivia;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.nodeToSourceNode(this.obj),
+            state.tokenToSourceNodeWithTrivia(this.tokens.dot),
+            state.tokenToSourceNodeWithTrivia(this.tokens.openingSquare),
+            state.nodesToSourceNode(this.indexes, this.tokens.commas, ', '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.closingSquare),
+            state.tokenToSourceNodeWithTrivia(this.tokens.equals, ' '),
+            state.nodeToSourceNode(this.value, ' ')
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new IndexedSetStatement({
+                commas: this.tokens.commas?.map(x => util.cloneToken(x)),
                 obj: this.obj?.clone(),
+                dot: util.cloneToken(this.tokens.dot),
                 openingSquare: util.cloneToken(this.tokens.openingSquare),
                 indexes: this.indexes?.map(x => x?.clone()),
                 closingSquare: util.cloneToken(this.tokens.closingSquare),
@@ -1897,6 +2119,13 @@ export class LibraryStatement extends Statement implements TypedefProvider {
         return this.tokens.library?.leadingTrivia ?? [];
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.library),
+            state.tokenToSourceNodeWithTrivia(this.tokens.filePath, ' ')
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new LibraryStatement({
@@ -1921,6 +2150,9 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         };
         this.nameExpression = options.nameExpression;
         this.body = options.body;
+        if (this.body) {
+            this.body.parent = this;
+        }
         this.symbolTable = new SymbolTable(`NamespaceStatement: '${this.name}'`, () => this.getRoot()?.getSymbolTable());
     }
 
@@ -2036,6 +2268,15 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         return resultType;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.namespace),
+            state.nodeToSourceNode(this.nameExpression, ' '),
+            state.nodeToSourceNode(this.body),
+            state.tokenToSourceNodeWithTrivia(this.tokens.endNamespace, state.newline)
+        );
+    }
+
     public clone() {
         const clone = this.finalizeClone(
             new NamespaceStatement({
@@ -2120,6 +2361,13 @@ export class ImportStatement extends Statement implements TypedefProvider {
 
     get leadingTrivia(): Token[] {
         return this.tokens.import?.leadingTrivia ?? [];
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.import),
+            state.tokenToSourceNodeWithTrivia(this.tokens.path, ' ')
+        );
     }
 
     public clone() {
@@ -2333,6 +2581,17 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         return resultType;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.interface),
+            state.tokenToSourceNodeWithTrivia(this.tokens.name, ' '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.extends, ' '),
+            state.nodeToSourceNode(this.parentInterfaceName, ' '),
+            state.statementsToSourceNode(this.body),
+            state.tokenToSourceNodeWithTrivia(this.tokens.endInterface, state.newline)
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new InterfaceStatement({
@@ -2442,6 +2701,15 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
         return this.typeExpression?.getType(options) ?? DynamicType.instance;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.optional),
+            state.tokenToSourceNodeWithTrivia(this.tokens.name, this.tokens.optional ? ' ' : ''),
+            state.tokenToSourceNodeWithTrivia(this.tokens.as, ' '),
+            state.nodeToSourceNode(this.typeExpression, ' ')
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new InterfaceFieldStatement({
@@ -2470,6 +2738,10 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         as?: Token;
         returnTypeExpression?: TypeExpression;
         optional?: Token;
+        /**
+         * The commas between the parameters, where `commas[i]` is the comma after `params[i]`
+         */
+        commas?: Token[];
     }) {
         super();
         this.tokens = {
@@ -2478,7 +2750,8 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
             name: options.name,
             leftParen: options.leftParen,
             rightParen: options.rightParen,
-            as: options.as
+            as: options.as,
+            commas: options.commas
         };
         this.params = options.params ?? [];
         this.returnTypeExpression = options.returnTypeExpression;
@@ -2512,6 +2785,10 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         readonly leftParen?: Token;
         readonly rightParen?: Token;
         readonly as?: Token;
+        /**
+         * The commas between the parameters, where `commas[i]` is the comma after `params[i]`
+         */
+        readonly commas?: Token[];
     };
 
     public readonly params: FunctionParameterExpression[];
@@ -2608,9 +2885,23 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         return resultType;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.optional),
+            state.tokenToSourceNodeWithTrivia(this.tokens.functionType, this.tokens.optional ? ' ' : ''),
+            state.tokenToSourceNodeWithTrivia(this.tokens.name, ' '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.leftParen),
+            state.nodesToSourceNode(this.params, this.tokens.commas, ', '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.rightParen),
+            state.tokenToSourceNodeWithTrivia(this.tokens.as, ' '),
+            state.nodeToSourceNode(this.returnTypeExpression, ' ')
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new InterfaceMethodStatement({
+                commas: this.tokens.commas?.map(x => util.cloneToken(x)),
                 optional: util.cloneToken(this.tokens.optional),
                 functionType: util.cloneToken(this.tokens.functionType),
                 name: util.cloneToken(this.tokens.name),
@@ -3307,6 +3598,17 @@ export class ClassStatement extends Statement implements TypedefProvider {
         return resultType;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.class),
+            state.tokenToSourceNodeWithTrivia(this.tokens.name, ' '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.extends, ' '),
+            state.nodeToSourceNode(this.parentClassName, ' '),
+            state.statementsToSourceNode(this.body),
+            state.tokenToSourceNodeWithTrivia(this.tokens.endClass, state.newline)
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new ClassStatement({
@@ -3602,6 +3904,18 @@ export class MethodStatement extends FunctionStatement {
         }
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        //write the modifiers (i.e. `public`, `override`) in the order they appear in the source code
+        const modifiers = [...this.modifiers, this.tokens.override].filter(x => !!x);
+        if (modifiers.every(x => x.location?.range)) {
+            modifiers.sort((a, b) => util.comparePosition(a.location.range.start, b.location.range.start));
+        }
+        return state.toSourceNode(
+            ...modifiers.map((x, i) => state.tokenToSourceNodeWithTrivia(x, i > 0 ? ' ' : '')),
+            this.func?.toSourceNodeWithName(state, this.tokens.name, modifiers.length > 0 ? ' ' : '')
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new MethodStatement({
@@ -3731,6 +4045,18 @@ export class FieldStatement extends Statement implements TypedefProvider {
         }
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.accessModifier),
+            state.tokenToSourceNodeWithTrivia(this.tokens.optional, this.tokens.accessModifier ? ' ' : ''),
+            state.tokenToSourceNodeWithTrivia(this.tokens.name, this.tokens.accessModifier || this.tokens.optional ? ' ' : ''),
+            state.tokenToSourceNodeWithTrivia(this.tokens.as, ' '),
+            state.nodeToSourceNode(this.typeExpression, ' '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.equals, ' '),
+            state.nodeToSourceNode(this.initialValue, ' ')
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new FieldStatement({
@@ -3811,6 +4137,15 @@ export class TryCatchStatement extends Statement {
         return this.tokens.endTry?.leadingTrivia ?? [];
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.try),
+            state.nodeToSourceNode(this.tryBranch),
+            state.nodeToSourceNode(this.catchStatement, state.newline),
+            state.tokenToSourceNodeWithTrivia(this.tokens.endTry, state.newline)
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new TryCatchStatement({
@@ -3879,6 +4214,14 @@ export class CatchStatement extends Statement {
         return this.tokens.catch?.leadingTrivia ?? [];
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.catch),
+            state.nodeToSourceNode(this.exceptionVariableExpression, ' '),
+            state.nodeToSourceNode(this.catchBranch)
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new CatchStatement({
@@ -3943,6 +4286,13 @@ export class ThrowStatement extends Statement {
 
     public get leadingTrivia(): Token[] {
         return this.tokens.throw?.leadingTrivia ?? [];
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.throw),
+            state.nodeToSourceNode(this.expression, ' ')
+        );
     }
 
     public clone() {
@@ -4148,6 +4498,15 @@ export class EnumStatement extends Statement implements TypedefProvider {
         return resultType;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.enum),
+            state.tokenToSourceNodeWithTrivia(this.tokens.name, ' '),
+            state.statementsToSourceNode(this.body),
+            state.tokenToSourceNodeWithTrivia(this.tokens.endEnum, state.newline)
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new EnumStatement({
@@ -4249,6 +4608,14 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
             (this.parent as EnumStatement)?.fullName,
             this.tokens?.name?.text,
             this.value?.getType(options)
+        );
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.name),
+            state.tokenToSourceNodeWithTrivia(this.tokens.equals, ' '),
+            state.nodeToSourceNode(this.value, ' ')
         );
     }
 
@@ -4358,6 +4725,15 @@ export class ConstStatement extends Statement implements TypedefProvider {
         return this.value.getType(options);
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.const),
+            state.tokenToSourceNodeWithTrivia(this.tokens.name, ' '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.equals, ' '),
+            state.nodeToSourceNode(this.value, ' ')
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new ConstStatement({
@@ -4429,6 +4805,13 @@ export class ContinueStatement extends Statement {
         return this.tokens.continue?.leadingTrivia ?? [];
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.continue),
+            state.tokenToSourceNodeWithTrivia(this.tokens.loopType, ' ')
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new ContinueStatement({
@@ -4493,6 +4876,13 @@ export class TypecastStatement extends Statement {
         return this.typecastExpression.getType(options);
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.typecast),
+            state.nodeToSourceNode(this.typecastExpression, ' ')
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new TypecastStatement({
@@ -4542,6 +4932,13 @@ export class ConditionalCompileErrorStatement extends Statement {
 
     get leadingTrivia(): Token[] {
         return this.tokens.hashError.leadingTrivia ?? [];
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.hashError),
+            state.tokenToSourceNodeWithTrivia(this.tokens.message, ' ')
+        );
     }
 
     public clone() {
@@ -4616,6 +5013,15 @@ export class AliasStatement extends Statement {
 
     getType(options: GetTypeOptions): BscType {
         return this.value.getType(options);
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.alias),
+            state.tokenToSourceNodeWithTrivia(this.tokens.name, ' '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.equals, ' '),
+            state.nodeToSourceNode(this.value, ' ')
+        );
     }
 
     public clone() {
@@ -4767,6 +5173,18 @@ export class ConditionalCompileStatement extends Statement {
         return this.tokens.hashIf?.leadingTrivia ?? [];
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.hashIf),
+            state.tokenToSourceNodeWithTrivia(this.tokens.not, ' '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.condition, ' '),
+            state.nodeToSourceNode(this.thenBranch),
+            state.tokenToSourceNodeWithTrivia(this.tokens.hashElse, state.newline),
+            state.nodeToSourceNode(this.elseBranch, isConditionalCompileStatement(this.elseBranch) ? state.newline : ''),
+            state.tokenToSourceNodeWithTrivia(this.tokens.hashEndIf, state.newline)
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new ConditionalCompileStatement({
@@ -4836,6 +5254,13 @@ export class ConditionalCompileConstStatement extends Statement {
 
     get leadingTrivia(): Token[] {
         return this.tokens.hashConst.leadingTrivia ?? [];
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.hashConst),
+            state.nodeToSourceNode(this.assignment, ' ')
+        );
     }
 
     public clone() {
@@ -4923,6 +5348,15 @@ export class TypeStatement extends Statement implements TypedefProvider {
 
     getType(options: GetTypeOptions): BscType {
         return this.value.getType(options);
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.type),
+            state.tokenToSourceNodeWithTrivia(this.tokens.name, ' '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.equals, ' '),
+            state.nodeToSourceNode(this.value, ' ')
+        );
     }
 
     public clone() {

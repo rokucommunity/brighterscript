@@ -12,6 +12,8 @@ import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import type { Token } from '../lexer/Token';
 import { isBlock, isBody, isFunctionParameterExpression } from '../astUtils/reflection';
+import type { SourceNode } from 'source-map';
+import { TranspileState } from './TranspileState';
 
 /**
  * A BrightScript AST node
@@ -275,6 +277,21 @@ export abstract class AstNode {
      * All tokens, statements, expressions, range, and location are cloned.
      */
     public abstract clone(): AstNode;
+
+    /**
+     * Generate a SourceNode that represents the source code of this node (including all leading trivia such as whitespace and comments).
+     * Unlike `transpile`, this does not convert BrighterScript into BrightScript, it produces the code exactly as it appears in the AST.
+     * Annotations are written by `TranspileState.nodeToSourceNode`, so implementations should use that for writing child nodes.
+     */
+    public abstract toSourceNode(state: TranspileState): SourceNode;
+
+    /**
+     * Get the source code for this node, exactly as it appears in the AST (including all leading trivia such as whitespace and comments).
+     * For an unmodified AST, calling this on the root node produces the exact text that was parsed.
+     */
+    public toString(): string {
+        return new TranspileState('', {}).nodeToSourceNode(this).toString();
+    }
 
     /**
      * Helper function for creating a clone. This will clone any attached annotations, as well as reparent the cloned node's children to the clone

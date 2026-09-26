@@ -15,6 +15,15 @@ interface TranspileToken {
 }
 
 /**
+ * Anything that can be converted to a SourceNode representing its source code (i.e. an AstNode)
+ */
+interface SourceNodeProvider {
+    toSourceNode(state: TranspileState): SourceNode;
+    location?: Location;
+    annotations?: SourceNodeProvider[];
+}
+
+/**
  * Holds the state of a transpile operation as it works its way through the transpile process
  */
 export class TranspileState {
@@ -38,6 +47,11 @@ export class TranspileState {
     }
 
     public indentText = '';
+
+    /**
+     * If set, every token written by `tokenToSourceNodeWithTrivia` is added to this set
+     */
+    public writtenTokens?: Set<TranspileToken>;
 
     /**
      * Append whitespace until we reach the current blockDepth amount
@@ -108,6 +122,100 @@ export class TranspileState {
             this.getSource(token),
             token.text
         );
+    }
+
+    /**
+     * Create a container SourceNode (one that has no location of its own) from a list of chunks. Empty chunks are ignored.
+     */
+    public toSourceNode(...chunks: Array<string | SourceNode | undefined>): SourceNode {
+        return new SourceNode(null, null, null, chunks.filter(x => x !== undefined && x !== null && x !== ''));
+    }
+
+    /**
+     * Create a SourceNode from a token, including all of its leading trivia (whitespace, newlines, comments, etc).
+     * This is used when rebuilding the original source code from the AST.
+     *
+     * Tokens created by plugins frequently have no location and no leading trivia, which would cause them to be
+     * smashed into the previous token. For those tokens, `defaultLeadingTrivia` is written in place of the missing trivia.
+     * @param token the token to convert
+     * @param defaultLeadingTrivia text to write before the token when the token has no location and no leading trivia
+     */
+    public tokenToSourceNodeWithTrivia(token: TranspileToken, defaultLeadingTrivia = ''): SourceNode | undefined {
+        if (!token) {
+            return undefined;
+        }
+        const chunks: Array<string | SourceNode> = [];
+        if (token.leadingTrivia?.length > 0) {
+            for (const trivia of token.leadingTrivia) {
+                if (trivia?.text) {
+                    chunks.push(this.tokenToSourceNode(trivia));
+                }
+            }
+        } else if (!token.location && defaultLeadingTrivia && token.text) {
+            chunks.push(defaultLeadingTrivia);
+        }
+        if (token.text) {
+            chunks.push(this.tokenToSourceNode(token));
+        }
+        this.writtenTokens?.add(token);
+        return new SourceNode(null, null, null, chunks);
+    }
+
+    /**
+     * Convert an AstNode to a SourceNode that represents the node's source code, including any annotations attached to it
+     * @param node the node to convert
+     * @param defaultLeadingTrivia text to write before the node when the node has no location and no leading trivia (i.e. it was created by a plugin)
+     */
+    public nodeToSourceNode(node: SourceNodeProvider, defaultLeadingTrivia = ''): SourceNode | undefined {
+        if (!node) {
+            return undefined;
+        }
+        const chunks: Array<string | SourceNode> = [];
+        for (const annotation of node.annotations ?? []) {
+            chunks.push(this.nodeToSourceNode(annotation));
+        }
+        chunks.push(node.toSourceNode(this));
+        const result = this.toSourceNode(...chunks);
+        //nodes without a location (i.e. created by a plugin) might not have any leading trivia, so add the default if it's missing
+        if (defaultLeadingTrivia && !node.location && /^\S/.test(result.toString())) {
+            result.prepend(defaultLeadingTrivia);
+        }
+        return result;
+    }
+
+    /**
+     * Convert a list of statements to a SourceNode. Statements added by plugins (i.e. that have no location or leading trivia) are placed on a new line.
+     * @param statements the statements to convert
+     * @param isFirstStatementOnNewLine should the first statement be placed on a new line when it has no location or leading trivia
+     */
+    public statementsToSourceNode(statements: SourceNodeProvider[], isFirstStatementOnNewLine = true): SourceNode {
+        return this.toSourceNode(
+            ...(statements ?? []).map((statement, i) => {
+                return this.nodeToSourceNode(statement, i > 0 || isFirstStatementOnNewLine ? this.newline : '');
+            })
+        );
+    }
+
+    /**
+     * Convert a list of AstNodes to a SourceNode, writing the separator token found at the same index after each node
+     * (i.e. the commas between function call arguments).
+     * @param nodes the nodes to convert
+     * @param separators the separator tokens, where `separators[i]` is the separator that comes after `nodes[i]`
+     * @param defaultSeparator text to write when a separator is missing before a node that has no location (i.e. was added by a plugin)
+     */
+    public nodesToSourceNode(nodes: SourceNodeProvider[], separators?: TranspileToken[], defaultSeparator?: string): SourceNode {
+        const nodeSourceNodes = (nodes ?? []).map(x => this.nodeToSourceNode(x));
+        const chunks: Array<string | SourceNode> = [];
+        for (let i = 0; i < nodeSourceNodes.length; i++) {
+            chunks.push(nodeSourceNodes[i]);
+            if (separators?.[i]) {
+                chunks.push(this.tokenToSourceNodeWithTrivia(separators[i]));
+                //the next node has no location and no leading trivia (i.e. it was added by a plugin), so add the default separator
+            } else if (defaultSeparator && i < nodes.length - 1 && !nodes[i + 1]?.location && !/^\s/.test(nodeSourceNodes[i + 1]?.toString() ?? '')) {
+                chunks.push(defaultSeparator);
+            }
+        }
+        return this.toSourceNode(...chunks);
     }
 
     public transpileLeadingCommentsForAstNode(node: { leadingTrivia?: Token[] }) {
