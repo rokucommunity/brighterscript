@@ -13,7 +13,7 @@ import type { Callable, CallableParam, CommentFlag, BsDiagnostic, FileReference,
 import type { NamespaceContainer } from '../Scope';
 import type { Token } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
-import { TokenKind, AllowedLocalIdentifiers } from '../lexer/TokenKind';
+import { TokenKind, AllowedLocalIdentifiers, AllowedTriviaTokens } from '../lexer/TokenKind';
 import { Parser, ParseMode } from '../parser/Parser';
 import type { FunctionExpression } from '../parser/Expression';
 import type { ClassStatement, NamespaceStatement, MethodStatement, FieldStatement } from '../parser/Statement';
@@ -828,6 +828,21 @@ export class BrsFile implements BscFile {
         const parser = this.parser;
         let idx = parser.tokens.indexOf(token);
         return parser.tokens[idx - 1];
+    }
+
+    /**
+     * Get the location of each of a token's `leadingTrivia` (whitespace and newline trivia tokens don't store one)
+     */
+    public getLeadingTriviaLocations(token: Token): Location[] {
+        const tokens = this.parser.tokens;
+        let previousToken: Token;
+        for (let i = tokens.indexOf(token) - 1; i >= 0; i--) {
+            if (!AllowedTriviaTokens.includes(tokens[i].kind)) {
+                previousToken = tokens[i];
+                break;
+            }
+        }
+        return util.getLeadingTriviaLocations(token, previousToken);
     }
 
     /**
