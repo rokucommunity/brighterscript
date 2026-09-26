@@ -5,8 +5,8 @@ A `select case` always transpiles to a plain `if`/`else if`/`else` chain, so it 
 
 ## Basic usage
 ```brighterscript
-sub describe(number)
-    select case number
+sub describe(numericValue)
+    select case numericValue
         case 1
             print "one"
         case 6, 7, 8
@@ -20,10 +20,10 @@ end sub
 transpiles to:
 
 ```brightscript
-sub describe(number)
-    if number = 1 then
+sub describe(numericValue)
+    if numericValue = 1 then
         print "one"
-    else if number = 6 or number = 7 or number = 8 then
+    else if numericValue = 6 or numericValue = 7 or numericValue = 8 then
         print "between 6 and 8, inclusive"
     else
         print "no matching case"

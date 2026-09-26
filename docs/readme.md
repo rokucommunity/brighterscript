@@ -151,7 +151,7 @@ print /hello world/ig
 
 ## [Select Case Statement](select-case.md)
 ```brighterscript
-select case number
+select case numericValue
     case 1
         print "one"
     case 6, 7, 8
