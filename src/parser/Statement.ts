@@ -442,7 +442,7 @@ export class Block extends Statement {
             let statement = this.statements[i];
             //is not a comment
             //if comment is on same line as parent
-            if (util.isLeadingCommentOnSameLine(state.lineage[0]?.location, statement) ||
+            if (util.isLeadingCommentOnSameLine(state.lineage[0], statement) ||
                 util.isLeadingCommentOnSameLine(util.getLocation(previousStatement), statement)
             ) {
                 results.push(' ');

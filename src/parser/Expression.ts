@@ -3,7 +3,6 @@ import type { Token, Identifier, Locatable, SourceInfo } from '../lexer/Token';
 import type { PrintSeparatorToken } from '../lexer/TokenKind';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Block, NamespaceStatement } from './Statement';
-import type { Location } from 'vscode-languageserver';
 import util from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';

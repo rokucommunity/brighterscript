@@ -80,9 +80,9 @@ export class BrsFilePreTranspileProcessor {
 
         if (isAssignmentStatement(parent)) {
             ifStatement = createIfStatement({
-                if: createToken(TokenKind.If, 'if', util.getLocation(ternaryExpression.tokens.questionMark)),
+                if: createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark),
                 condition: ternaryExpression.test,
-                then: createToken(TokenKind.Then, 'then', util.getLocation(ternaryExpression.tokens.questionMark)),
+                then: createToken(TokenKind.Then, 'then', ternaryExpression.tokens.questionMark),
                 thenBranch: createBlock({
                     statements: [
                         createAssignmentStatement({
@@ -92,7 +92,7 @@ export class BrsFilePreTranspileProcessor {
                         })
                     ]
                 }),
-                else: createToken(TokenKind.Else, 'else', util.getLocation(ternaryExpression.tokens.questionMark)),
+                else: createToken(TokenKind.Else, 'else', ternaryExpression.tokens.questionMark),
                 elseBranch: createBlock({
                     statements: [
                         createAssignmentStatement({
@@ -102,13 +102,13 @@ export class BrsFilePreTranspileProcessor {
                         })
                     ]
                 }),
-                endIf: createToken(TokenKind.EndIf, 'end if', util.getLocation(ternaryExpression.tokens.questionMark))
+                endIf: createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark)
             });
         } else if (isDottedSetStatement(parent)) {
             ifStatement = createIfStatement({
-                if: createToken(TokenKind.If, 'if', util.getLocation(ternaryExpression.tokens.questionMark)),
+                if: createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark),
                 condition: ternaryExpression.test,
-                then: createToken(TokenKind.Then, 'then', util.getLocation(ternaryExpression.tokens.questionMark)),
+                then: createToken(TokenKind.Then, 'then', ternaryExpression.tokens.questionMark),
                 thenBranch: createBlock({
                     statements: [
                         createDottedSetStatement({
@@ -119,7 +119,7 @@ export class BrsFilePreTranspileProcessor {
                         })
                     ]
                 }),
-                else: createToken(TokenKind.Else, 'else', util.getLocation(ternaryExpression.tokens.questionMark)),
+                else: createToken(TokenKind.Else, 'else', ternaryExpression.tokens.questionMark),
                 elseBranch: createBlock({
                     statements: [
                         createDottedSetStatement({
@@ -130,15 +130,15 @@ export class BrsFilePreTranspileProcessor {
                         })
                     ]
                 }),
-                endIf: createToken(TokenKind.EndIf, 'end if', util.getLocation(ternaryExpression.tokens.questionMark))
+                endIf: createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark)
             });
 
             //if this is an indexedSetStatement, and the ternary expression is NOT an index
         } else if (isIndexedSetStatement(parent) && !parent.indexes?.includes(ternaryExpression)) {
             ifStatement = createIfStatement({
-                if: createToken(TokenKind.If, 'if', util.getLocation(ternaryExpression.tokens.questionMark)),
+                if: createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark),
                 condition: ternaryExpression.test,
-                then: createToken(TokenKind.Then, 'then', util.getLocation(ternaryExpression.tokens.questionMark)),
+                then: createToken(TokenKind.Then, 'then', ternaryExpression.tokens.questionMark),
                 thenBranch: createBlock({
                     statements: [
                         createIndexedSetStatement({
@@ -151,7 +151,7 @@ export class BrsFilePreTranspileProcessor {
                         })
                     ]
                 }),
-                else: createToken(TokenKind.Else, 'else', util.getLocation(ternaryExpression.tokens.questionMark)),
+                else: createToken(TokenKind.Else, 'else', ternaryExpression.tokens.questionMark),
                 elseBranch: createBlock({
                     statements: [
                         createIndexedSetStatement({
@@ -164,13 +164,13 @@ export class BrsFilePreTranspileProcessor {
                         })
                     ]
                 }),
-                endIf: createToken(TokenKind.EndIf, 'end if', util.getLocation(ternaryExpression.tokens.questionMark))
+                endIf: createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark)
             });
         } else if (isAugmentedAssignmentStatement(parent)) {
             ifStatement = createIfStatement({
-                if: createToken(TokenKind.If, 'if', util.getLocation(ternaryExpression.tokens.questionMark)),
+                if: createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark),
                 condition: ternaryExpression.test,
-                then: createToken(TokenKind.Then, 'then', util.getLocation(ternaryExpression.tokens.questionMark)),
+                then: createToken(TokenKind.Then, 'then', ternaryExpression.tokens.questionMark),
                 thenBranch: createBlock({
                     statements: [
                         new AugmentedAssignmentStatement({
@@ -180,7 +180,7 @@ export class BrsFilePreTranspileProcessor {
                         })
                     ]
                 }),
-                else: createToken(TokenKind.Else, 'else', util.getLocation(ternaryExpression.tokens.questionMark)),
+                else: createToken(TokenKind.Else, 'else', ternaryExpression.tokens.questionMark),
                 elseBranch: createBlock({
                     statements: [
                         new AugmentedAssignmentStatement({
@@ -190,7 +190,7 @@ export class BrsFilePreTranspileProcessor {
                         })
                     ]
                 }),
-                endIf: createToken(TokenKind.EndIf, 'end if', util.getLocation(ternaryExpression.tokens.questionMark))
+                endIf: createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark)
             });
         }
 
