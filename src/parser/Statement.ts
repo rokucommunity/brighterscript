@@ -621,8 +621,9 @@ export class ExitStatement extends Statement {
     transpile(state: BrsTranspileState) {
         return [
             state.transpileToken(this.tokens.exit, 'exit'),
-            (this.tokens.loopType ? util.getLeadingWhitespace(this.tokens.loopType) : ' '),
-            state.transpileToken(this.tokens.loopType)
+            //tokens created by plugins have no location or whitespace, so separate them with a space
+            (this.tokens.loopType?.location ? util.getLeadingWhitespace(this.tokens.loopType) : ' '),
+            state.transpileToken(this.tokens.loopType, '')
         ];
     }
 
@@ -2799,7 +2800,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
     }
 
     public get leadingTrivia(): Token[] {
-        return this.tokens.optional?.leadingTrivia ?? this.tokens.functionType.leadingTrivia;
+        return this.tokens.optional?.leadingTrivia ?? this.tokens.functionType?.leadingTrivia;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -4792,7 +4793,8 @@ export class ContinueStatement extends Statement {
         }
         return [
             state.sourceNode(this.tokens.continue, this.tokens.continue?.text ?? 'continue'),
-            (this.tokens.loopType ? util.getLeadingWhitespace(this.tokens.loopType) : ' '),
+            //tokens created by plugins have no location or whitespace, so separate them with a space
+            (this.tokens.loopType?.location ? util.getLeadingWhitespace(this.tokens.loopType) : ' '),
             state.sourceNode(this.tokens.continue, this.tokens.loopType?.text)
         ];
     }

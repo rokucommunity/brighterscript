@@ -8,6 +8,7 @@ import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpress
 import { AssignmentStatement, Block, DottedSetStatement, IfStatement, IndexedSetStatement, MethodStatement } from '../parser/Statement';
 
 const tokenDefaults = {
+    [TokenKind.At]: '@',
     [TokenKind.BackTick]: '`',
     [TokenKind.Backslash]: '\\',
     [TokenKind.BackslashEqual]: '\\=',

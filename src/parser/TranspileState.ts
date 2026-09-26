@@ -77,7 +77,7 @@ export class TranspileState {
     public newline = '\n';
 
     private getSource(locatable: RangeLike) {
-        let srcPath = (locatable as { location: Location })?.location?.uri ?? (locatable as Location).uri;
+        let srcPath = (locatable as { location: Location })?.location?.uri ?? (locatable as Location)?.uri;
         if (srcPath) {
             srcPath = util.uriToPath(srcPath);
             //if a sourceRoot is specified, use that instead of the rootDir

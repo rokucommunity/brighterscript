@@ -419,7 +419,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
         const lastLocatable = hasBody ? this.body : this.returnTypeExpression ?? this.tokens.leftParen ?? this.tokens.functionType;
         results.push(
-            ...state.transpileEndBlockToken(lastLocatable, this.tokens.endFunctionType, `end ${this.tokens.functionType ?? 'function'}`)
+            ...state.transpileEndBlockToken(lastLocatable, this.tokens.endFunctionType, `end ${this.tokens.functionType?.text ?? 'function'}`)
         );
         return results;
     }
@@ -453,7 +453,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 '\n',
                 state.indent(),
                 //'end sub'|'end function'
-                this.tokens.endFunctionType?.text ?? `end ${this.tokens.functionType ?? 'function'}`
+                this.tokens.endFunctionType?.text ?? `end ${this.tokens.functionType?.text ?? 'function'}`
             ])
         ];
         return results;
@@ -560,7 +560,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         const isFunctionTypeDerived = functionType?.location?.range && util.comparePosition(functionType.location.range.start, functionType.location.range.end) === 0;
         return state.toSourceNode(
             isFunctionTypeDerived ? undefined : state.tokenToSourceNodeWithTrivia(functionType, defaultLeadingTrivia),
-            state.tokenToSourceNodeWithTrivia(name, isFunctionTypeDerived ? '' : ' '),
+            state.tokenToSourceNodeWithTrivia(name, functionType && !isFunctionTypeDerived ? ' ' : ''),
             state.tokenToSourceNodeWithTrivia(this.tokens.leftParen),
             state.nodesToSourceNode(this.parameters, this.tokens.commas, ', '),
             state.tokenToSourceNodeWithTrivia(this.tokens.rightParen),
