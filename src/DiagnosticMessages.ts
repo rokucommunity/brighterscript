@@ -1253,7 +1253,7 @@ export let DiagnosticMessages = {
         code: 'case-value-type-mismatch'
     }),
     emptyCaseDoesNotFallThrough: () => ({
-        message: `Empty case does nothing: cases do not fall through to the next case. To share one body, list the values together (i.e. 'case 1, 2'), or add a comment if doing nothing is intended`,
+        message: `Empty case does nothing: cases do not fall through to the next case. To share one body, list the values together (i.e. 'case 1, 2'), or add 'exit select' if doing nothing is intended`,
         severity: DiagnosticSeverity.Warning,
         code: 'empty-case-does-not-fall-through'
     }),

@@ -838,16 +838,13 @@ export class BrsFileValidator {
         }
 
         //people coming from C-style languages might expect an empty case to fall through to the next one. It doesn't.
-        //A case containing only a comment is treated as intentionally empty. (Comments are trivia, so they live on the next `case` keyword).
-        //So is one followed by another case on the same line, since there's no way to put a comment there
+        //A case containing only a comment (or `exit select`) is treated as intentionally empty. (Comments are trivia, so they live on the next `case` keyword)
         for (let i = 0; i < statement.cases.length - 1; i++) {
             const caseStatement = statement.cases[i];
-            const nextCaseToken = statement.cases[i + 1].tokens.case;
             if (
                 !caseStatement.isElse &&
                 !(caseStatement.body?.statements.length > 0) &&
-                !util.hasLeadingComments(nextCaseToken) &&
-                caseStatement.headerLocation?.range.end.line !== nextCaseToken.location?.range.start.line
+                !util.hasLeadingComments(statement.cases[i + 1].tokens.case)
             ) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.emptyCaseDoesNotFallThrough(),

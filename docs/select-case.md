@@ -87,10 +87,10 @@ select case key
 end select
 ```
 
-Empty cases in the [single-line form](#single-line-form) aren't flagged when the next `case` is on the same line, since a comment there would hide the rest of the line. So this is fine as-is:
+In the [single-line form](#single-line-form), a comment would hide the rest of the line, so use `exit select`:
 
 ```brighterscript
-select case key : case "back" : case "OK" : m.select() : end select
+select case key : case "back" : exit select : case "OK" : m.select() : end select
 ```
 
 ## Values on multiple lines
@@ -415,7 +415,7 @@ Besides the usual syntax errors (a missing `end select`, a `case` with no value,
 | `case-value-enum-mismatch` | warning | A case value is a member of a different enum than the subject. |
 | `duplicate-case-value` | warning | The same value appears in more than one case. The later one can never match. |
 | `case-value-type-mismatch` | warning | A literal case value has a different type than the subject (or than the other literal values). Comparing them crashes at runtime. |
-| `empty-case-does-not-fall-through` | warning | A case is empty. It does nothing and does **not** fall through to the next case. Not reported when the case contains a comment or `exit select`, or when the next `case` is on the same line. |
+| `empty-case-does-not-fall-through` | warning | A case is empty. It does nothing and does **not** fall through to the next case. Not reported when the case contains a comment or `exit select`. |
 | `select-case-has-no-cases` | warning | The `select case` has no cases at all. |
 | `statement-before-first-case` | error | A statement (other than a comment) appears before the first `case`. |
 | `case-else-must-be-last` | error | `case else` isn't the last case. |

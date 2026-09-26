@@ -835,7 +835,7 @@ describe('select case statement', () => {
             }]);
         });
 
-        it('does not flag empty cases followed by another case on the same line', () => {
+        it('flags empty cases followed by another case on the same line', () => {
             validate(`
                 sub main(a)
                     select case a : case 1 : case 2 : print "two" : case else : end select
@@ -846,7 +846,13 @@ describe('select case statement', () => {
                     end select
                 end sub
             `);
-            expectZeroDiagnostics(program);
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.emptyCaseDoesNotFallThrough(),
+                location: { range: util.createRange(2, 36, 2, 40) }
+            }, {
+                ...DiagnosticMessages.emptyCaseDoesNotFallThrough(),
+                location: { range: util.createRange(4, 24, 4, 28) }
+            }]);
         });
 
         it('does not flag a case that only contains `exit select`', () => {
