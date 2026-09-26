@@ -1200,6 +1200,8 @@ export class Program {
                 this.logger.debug('Removing file symbol info', file.srcPath);
 
                 if (!keepSymbolInformation) {
+                    //the symbols this file provided are gone, so anything that required them needs to be revalidated
+                    this.addRemovedFileSymbolsToChangedSymbols(file);
                     this.fileSymbolInformation.delete(file.pkgPath);
                 }
                 this.crossScopeValidation.clearResolutionsForFile(file);
@@ -1223,6 +1225,27 @@ export class Program {
             file?.dispose?.();
 
             this.plugins.emit('afterRemoveFile', event);
+        }
+    }
+
+    /**
+     * Record every symbol a removed file previously provided as changed, so the next validation
+     * revalidates the files and scopes that depended on them
+     */
+    private addRemovedFileSymbolsToChangedSymbols(file: BrsFile) {
+        const previouslyProvidedSymbols = this.fileSymbolInformation.get(file.pkgPath)?.provides.symbolMap;
+        if (!previouslyProvidedSymbols) {
+            return;
+        }
+        const changedSymbols = this.validationDetails.changedSymbols;
+        for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
+            if (!changedSymbols.has(flag)) {
+                changedSymbols.set(flag, new Set<string>());
+            }
+            const changedSymbolsForFlag = changedSymbols.get(flag);
+            for (const symbolKey of previouslyProvidedSymbols.get(flag)?.keys() ?? []) {
+                changedSymbolsForFlag.add(symbolKey);
+            }
         }
     }
 
