@@ -134,6 +134,12 @@ select case x
 end select
 ```
 
+A `select case` can also be used inside a single-line `if`:
+
+```brighterscript
+if isReady then select case x : case 1 : print "one" : case else : print "other" : end select else print "not ready"
+```
+
 ## `select case true`
 A common VB idiom is to select on `true` and use a condition for each case. The first case whose condition is `true` runs. BrighterScript recognizes this pattern and emits the conditions directly:
 
@@ -427,9 +433,8 @@ end if
 
 Only comments may appear before the first `case`. Any other statement there is an error.
 
-## Where it can't be used
-- **`.brs` files.** `select case` is a BrighterScript feature, so it's only allowed in `.bs` files.
-- **Inside an inline `if`.** `if ready then select case x ...` is not allowed. Use a multi-line `if`.
+## `.brs` files
+`select case` is a BrighterScript feature, so it's only allowed in `.bs` files.
 
 ## Not supported (yet)
 A few other VB features are not supported:
@@ -448,36 +453,4 @@ select case true
     case else
         grade = "C"
 end select
-```
-
-## Diagnostics
-Besides the usual syntax errors (a missing `end select`, a `case` with no value, a trailing comma, and so on), BrighterScript checks for these mistakes in `select case` statements:
-
-| Code | Severity | What it means |
-|------|----------|---------------|
-| `select-case-missing-case-else` | warning | The `select case` has no `case else`, so values that don't match any case are silently ignored. Not reported when the subject is an enum; see `select-case-missing-enum-members` instead. |
-| `select-case-missing-enum-members` | warning | The subject is an enum, there's no `case else`, and some enum members aren't handled by any case. The message lists the missing members. |
-| `case-value-enum-mismatch` | warning | A case value is a member of a different enum than the subject. |
-| `duplicate-case-value` | warning | The same value appears in more than one case. The later one can never match. |
-| `case-value-type-mismatch` | warning | A literal case value has a different type than the subject (or than the other literal values). Comparing them crashes at runtime. |
-| `empty-case-does-not-fall-through` | warning | A case is empty. It does nothing and does **not** fall through to the next case. Not reported when the case contains a comment or `exit select`. |
-| `select-case-has-no-cases` | warning | The `select case` has no cases at all. |
-| `statement-before-first-case` | error | A statement (other than a comment) appears before the first `case`. |
-| `case-else-must-be-last` | error | `case else` isn't the last case. |
-| `duplicate-case-else` | error | There's more than one `case else`. |
-| `case-outside-select-case` | error | `case` was used outside of a `select case`. |
-| `end-select-without-select-case` | error | `end select` was found without a matching `select case`. |
-| `select-case-in-inline-if` | error | A `select case` was used inside an inline `if`. |
-| `exit-select-outside-select-case` | error | `exit select` was used outside of a `select case`. |
-| `exit-select-in-loop` | error | `exit select` was used inside a loop within a case. Leave the loop with `exit for` or `exit while` first. |
-
-Many teams leave out `case else` on purpose. For enum subjects, covering every member is enough (see [covering every enum member](#covering-every-enum-member)). For everything else, if you don't want the `select-case-missing-case-else` warning, turn it off or lower its severity for your whole project with [`diagnosticSeverityOverrides`](bsconfig.md#diagnosticseverityoverrides) or [`diagnosticFilters`](bsconfig.md#diagnosticfilters) in `bsconfig.json`. To silence it for a single statement, use a `' bs:disable-next-line` comment (see [suppressing compiler messages](suppressing-compiler-messages.md)):
-
-```jsonc
-// bsconfig.json
-{
-    "diagnosticSeverityOverrides": {
-        "select-case-missing-case-else": "hint"
-    }
-}
 ```

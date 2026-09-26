@@ -1,5 +1,5 @@
 import { expect } from '../../../chai-config.spec';
-import { isCaseStatement, isExitStatement, isFunctionExpression, isFunctionStatement, isSelectCaseStatement } from '../../../astUtils/reflection';
+import { isBlock, isCaseStatement, isExitStatement, isIfStatement, isFunctionExpression, isFunctionStatement, isSelectCaseStatement } from '../../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../../astUtils/visitors';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import type { BrsFile } from '../../../files/BrsFile';
@@ -9,7 +9,7 @@ import util from '../../../util';
 import { BrsTranspileState } from '../../BrsTranspileState';
 import type { FunctionExpression, LiteralExpression } from '../../Expression';
 import { Parser, ParseMode } from '../../Parser';
-import type { ExitStatement, FunctionStatement, SelectCaseStatement } from '../../Statement';
+import type { ExitStatement, FunctionStatement, IfStatement, SelectCaseStatement } from '../../Statement';
 import { CaseStatement, SELECT_CASE_SUBJECT_VARIABLE, isExitSelectStatement } from '../../Statement';
 
 describe('select case statement', () => {
@@ -340,15 +340,25 @@ describe('select case statement', () => {
             }]);
         });
 
-        it('flags select case inside an inline if', () => {
+        it('allows select case inside an inline if', () => {
             const parser = parse(`
-                sub main(value)
-                    if true then select case value : case 1 : print 1 : end select
+                sub main(value, ready)
+                    if ready then select case value : case 1 : print 1 : case else : end select
+                    if ready then select case value : case 1 : print 1 : case else : end select else print "no"
+                    if ready then select case value
+                        case 1
+                            print 1
+                        case else
+                    end select
+                    print "after"
                 end sub
             `);
-            expectDiagnostics(parser, [
-                DiagnosticMessages.selectCaseNotAllowedInInlineIf()
-            ]);
+            expectZeroDiagnostics(parser);
+            const ifStatements = parser.ast.findChildren<IfStatement>(isIfStatement, { walkMode: WalkMode.visitAllRecursive });
+            expect(ifStatements.map(x => isSelectCaseStatement(x.thenBranch.statements[0]))).to.eql([true, true, true]);
+            expect(ifStatements.map(x => x.thenBranch.statements.length)).to.eql([1, 1, 1]);
+            expect(isBlock(ifStatements[1].elseBranch)).to.be.true;
+            expect(getFunctionExpressions(parser)[0].body.statements).to.be.lengthOf(4);
         });
 
         it('only walks the leading statements when there are some', () => {
@@ -1709,6 +1719,37 @@ describe('select case statement', () => {
                     end if
                     BRIGHTERSCRIPT_EXIT_SELECT_0:
                     print "after"
+                end sub
+            `);
+        });
+
+        it('transpiles select case inside an inline if', async () => {
+            await testTranspile(`
+                sub main(key, ready)
+                    if ready then select case key : case 1 : print "one" : case else : print "other" : end select else print "not ready"
+                    if ready then select case key
+                        case 1
+                            print "one"
+                        case else
+                    end select
+                end sub
+            `, `
+                sub main(key, ready)
+                    if ready then
+                        if key = 1 then
+                            print "one"
+                        else
+                            print "other"
+                        end if
+                    else
+                        print "not ready"
+                    end if
+                    if ready then
+                        if key = 1 then
+                            print "one"
+                        else
+                        end if
+                    end if
                 end sub
             `);
         });

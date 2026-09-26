@@ -105,7 +105,7 @@ import {
 import type { Range } from 'vscode-languageserver';
 import type { Logger } from '../logging';
 import { createLogger } from '../logging';
-import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isSelectCaseStatement, isVariableExpression, isConditionalCompileStatement, isLiteralBoolean, isTypecastExpression, isXmlAttributeGetExpression } from '../astUtils/reflection';
+import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression, isConditionalCompileStatement, isLiteralBoolean, isTypecastExpression, isXmlAttributeGetExpression } from '../astUtils/reflection';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { Expression, Statement } from './AstNode';
 import type { BsDiagnostic, DeepWriteable } from '../interfaces';
@@ -2764,11 +2764,6 @@ export class Parser {
                 this.diagnostics.push({
                     ...DiagnosticMessages.expectedInlineIfStatement(),
                     location: stat.location
-                });
-            } else if (isSelectCaseStatement(stat)) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.selectCaseNotAllowedInInlineIf(),
-                    location: stat.tokens.select.location
                 });
             }
         }

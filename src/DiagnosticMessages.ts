@@ -1262,11 +1262,6 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Warning,
         code: 'select-case-has-no-cases'
     }),
-    selectCaseNotAllowedInInlineIf: () => ({
-        message: `'select case' statements cannot be used inside an inline if statement`,
-        severity: DiagnosticSeverity.Error,
-        code: 'select-case-in-inline-if'
-    }),
     /**
      * @param enumName the name of the enum the `select case` subject belongs to
      * @param missingMembers the names of the enum members that no case handles
