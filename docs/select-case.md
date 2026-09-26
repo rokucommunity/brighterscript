@@ -217,6 +217,53 @@ sub move(direction)
 end sub
 ```
 
+## Covering every enum member
+When the subject is typed as an enum, BrighterScript knows every value it can hold. If your cases cover every member, you don't need a `case else`:
+
+```brighterscript
+enum RemoteDirection
+    up = "up"
+    down = "down"
+    left = "left"
+    right = "right"
+end enum
+
+sub move(direction as RemoteDirection)
+    select case direction
+        case RemoteDirection.up
+            m.y -= 1
+        case RemoteDirection.down
+            m.y += 1
+        case RemoteDirection.left
+            m.x -= 1
+        case RemoteDirection.right
+            m.x += 1
+    end select
+end sub
+```
+
+If you leave a member out, and there's no `case else`, you'll get a warning that names the missing members:
+
+```brighterscript
+sub move(direction as RemoteDirection)
+    ' warning: 'select case' on 'RemoteDirection' does not handle: left, right
+    select case direction
+        case RemoteDirection.up
+            m.y -= 1
+        case RemoteDirection.down
+            m.y += 1
+    end select
+end sub
+```
+
+This is most useful when the enum changes. If you later add `center` to `RemoteDirection`, every `select case` on it that has no `case else` gets flagged, so you can find each one that needs a new case.
+
+A few details:
+- A member counts as covered if it appears anywhere in a case's value list, either as `RemoteDirection.up` or as its literal value (`"up"`).
+- A `case else` counts as handling everything, so there's no coverage warning when there is one.
+- The check only happens when the subject's type is known to be a single enum, i.e. a parameter or variable declared `as RemoteDirection`, or an enum member like `RemoteDirection.up`. When the type is anything else (`dynamic`, `string`, a union, or unknown), the regular warning for a missing `case else` applies instead, since there's no way to list every possible value.
+- A case value from a *different* enum than the subject (i.e. `case OtherEnum.up` when the subject is a `RemoteDirection`) is flagged too, because it's almost always a mistake.
+
 ## Loops, `exit`, `continue`, and `return`
 Because a `select case` becomes an `if` statement, loop control inside a case applies to the enclosing loop, just like it would inside an `if`:
 
@@ -316,7 +363,9 @@ Besides the usual syntax errors (a missing `end select`, a `case` with no value,
 
 | Code | Severity | What it means |
 |------|----------|---------------|
-| `select-case-missing-case-else` | warning | The `select case` has no `case else`, so values that don't match any case are silently ignored. |
+| `select-case-missing-case-else` | warning | The `select case` has no `case else`, so values that don't match any case are silently ignored. Not reported when the subject is an enum; see `select-case-missing-enum-members` instead. |
+| `select-case-missing-enum-members` | warning | The subject is an enum, there's no `case else`, and some enum members aren't handled by any case. The message lists the missing members. |
+| `case-value-enum-mismatch` | warning | A case value is a member of a different enum than the subject. |
 | `duplicate-case-value` | warning | The same value appears in more than one case. The later one can never match. |
 | `case-value-type-mismatch` | warning | A literal case value has a different type than the subject (or than the other literal values). Comparing them crashes at runtime. |
 | `empty-case-does-not-fall-through` | warning | A case is empty. It does nothing and does **not** fall through to the next case. |
@@ -328,7 +377,7 @@ Besides the usual syntax errors (a missing `end select`, a `case` with no value,
 | `end-select-without-select-case` | error | `end select` was found without a matching `select case`. |
 | `select-case-in-inline-if` | error | A `select case` was used inside an inline `if`. |
 
-Many teams leave out `case else` on purpose. If you don't want the `select-case-missing-case-else` warning, turn it off or lower its severity for your whole project with [`diagnosticSeverityOverrides`](bsconfig.md#diagnosticseverityoverrides) or [`diagnosticFilters`](bsconfig.md#diagnosticfilters) in `bsconfig.json`. To silence it for a single statement, use a `' bs:disable-next-line` comment (see [suppressing compiler messages](suppressing-compiler-messages.md)):
+Many teams leave out `case else` on purpose. For enum subjects, covering every member is enough (see [covering every enum member](#covering-every-enum-member)). For everything else, if you don't want the `select-case-missing-case-else` warning, turn it off or lower its severity for your whole project with [`diagnosticSeverityOverrides`](bsconfig.md#diagnosticseverityoverrides) or [`diagnosticFilters`](bsconfig.md#diagnosticfilters) in `bsconfig.json`. To silence it for a single statement, use a `' bs:disable-next-line` comment (see [suppressing compiler messages](suppressing-compiler-messages.md)):
 
 ```jsonc
 // bsconfig.json
