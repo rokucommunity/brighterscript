@@ -24,7 +24,7 @@ import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
 import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionParameterExpression, IndexedGetExpression, LiteralExpression, TypeExpression, VariableExpression } from './parser/Expression';
 import { LogLevel, createLogger } from './logging';
-import { isToken, type Identifier, type Token } from './lexer/Token';
+import { isToken, type Identifier, type Locatable, type SourceInfo, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
 import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike, isGroupingExpression, isInlineInterfaceExpression, isTypedFunctionTypeExpression } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
@@ -1069,6 +1069,8 @@ export class Util {
     public extractRange(rangeIsh: RangeLike): Range | undefined {
         if (!rangeIsh) {
             return undefined;
+        } else if ('source' in rangeIsh) {
+            return this.getLocation(rangeIsh)?.range;
         } else if ('location' in rangeIsh) {
             return rangeIsh.location?.range;
         } else if ('range' in rangeIsh) {
@@ -1265,7 +1267,9 @@ export class Util {
                 kind: token.kind,
                 text: token.text,
                 isReserved: token.isReserved,
-                location: this.cloneLocation(token.location),
+                pos: token.pos,
+                end: token.end,
+                source: token.source,
                 leadingTrivia: token.leadingTrivia ? token.leadingTrivia.map(x => this.cloneToken(x)) : undefined
             } as Token;
             //handle those tokens that have charCode
@@ -1343,40 +1347,63 @@ export class Util {
     }
 
     /**
-     * Gets the bounding range of an object that contains a bunch of tokens
-     * @param tokens Object with tokens in it
-     * @returns Range containing all the tokens
+     * Set the `pos`, `end`, and `source` of `target` to the bounds of all the locatables.
+     * Offsets from different sources can't be compared, so only locatables from the same source as the first one are included
      */
-    public createBoundingLocationFromTokens(tokens: Record<string, { location?: Location }>): Location | undefined {
-        let uri: string;
-        let startPosition: Position | undefined;
-        let endPosition: Position | undefined;
-        for (let key in tokens) {
-            let token = tokens?.[key];
-            let locatableRange = token?.location?.range;
-            if (!locatableRange) {
+    public setBounds<T extends Locatable>(target: T, ...locatables: Array<Locatable | undefined>): T {
+        let pos: number;
+        let end: number;
+        let source: SourceInfo;
+        for (const locatable of locatables) {
+            if (!locatable?.source) {
                 continue;
-            }
-
-            if (!startPosition) {
-                startPosition = locatableRange.start;
-            } else if (this.comparePosition(locatableRange.start, startPosition) < 0) {
-                startPosition = locatableRange.start;
-            }
-            if (!endPosition) {
-                endPosition = locatableRange.end;
-            } else if (this.comparePosition(locatableRange.end, endPosition) > 0) {
-                endPosition = locatableRange.end;
-            }
-            if (!uri) {
-                uri = token.location.uri;
+            } else if (!source) {
+                source = locatable.source;
+                pos = locatable.pos;
+                end = locatable.end;
+            } else if (locatable.source === source) {
+                pos = Math.min(pos, locatable.pos);
+                end = Math.max(end, locatable.end);
             }
         }
-        if (startPosition && endPosition) {
-            return this.createLocation(startPosition.line, startPosition.character, endPosition.line, endPosition.character, uri);
-        } else {
+        target.pos = pos;
+        target.end = end;
+        target.source = source;
+        return target;
+    }
+
+    /**
+     * Build a line/character `Location` for the locatable. Returns `undefined` for synthetic items (those without a `source`)
+     */
+    public getLocation(locatable: Locatable): Location | undefined {
+        const source = locatable?.source;
+        if (!source) {
             return undefined;
         }
+        const lineStarts = source.lineStarts;
+        const startLine = this.getLineIndex(lineStarts, locatable.pos, 0);
+        //`end` is exclusive, so use the line of the last character. This keeps a token that ends with a newline on its own line
+        const endLine = locatable.end > locatable.pos ? this.getLineIndex(lineStarts, locatable.end - 1, startLine) : startLine;
+        return {
+            uri: source.uri,
+            range: this.createRange(startLine, locatable.pos - lineStarts[startLine], endLine, locatable.end - lineStarts[endLine])
+        };
+    }
+
+    /**
+     * Binary search `lineStarts` (beginning at line index `low`) for the index of the line that contains `offset`
+     */
+    private getLineIndex(lineStarts: number[], offset: number, low: number) {
+        let high = lineStarts.length - 1;
+        while (low < high) {
+            const mid = Math.floor((low + high + 1) / 2);
+            if (lineStarts[mid] <= offset) {
+                low = mid;
+            } else {
+                high = mid - 1;
+            }
+        }
+        return low;
     }
 
     /**
@@ -3210,7 +3237,7 @@ export function standardizePath(stringParts: TemplateStringsArray | string, ...e
 /**
  * An item that can be coerced into a `Range`
  */
-export type RangeLike = { location?: Location } | Location | { range?: Range } | Range | undefined;
+export type RangeLike = Locatable | { location?: Location } | Location | { range?: Range } | Range | undefined;
 
 export let util = new Util();
 export default util;

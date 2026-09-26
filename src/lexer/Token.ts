@@ -1,10 +1,9 @@
 import { TokenKind } from './TokenKind';
-import type { Location } from 'vscode-languageserver';
 
 /**
  * Represents a chunk of BrightScript scanned by the lexer.
  */
-export interface Token {
+export interface Token extends Locatable {
     /**
      * The type of token this represents.
      */
@@ -19,20 +18,41 @@ export interface Token {
      */
     isReserved?: boolean;
     /**
-     * Where the token was found.
-     */
-    location: Location;
-    /**
      * Any tokens starting on the next line of the previous token, up to the start of this token
      */
     leadingTrivia?: Token[];
 }
 
 /**
- * Any object that has a range
+ * Any object that has a location in a source file. Use `util.getLocation()` to get the line/character `Location`
  */
 export interface Locatable {
-    location: Location;
+    /**
+     * Absolute UTF-16 offset into the source text where this item starts
+     */
+    pos: number;
+    /**
+     * Absolute UTF-16 offset into the source text where this item ends (exclusive)
+     */
+    end: number;
+    /**
+     * Info about the source this item was parsed from. Shared by every item from the same parse. `undefined` for synthetic items
+     */
+    source: SourceInfo | undefined;
+}
+
+/**
+ * Info about a parsed source, shared by every `Locatable` produced from the same parse
+ */
+export interface SourceInfo {
+    /**
+     * The uri of the file
+     */
+    uri: string;
+    /**
+     * The offset of the start of each line
+     */
+    lineStarts: number[];
 }
 
 /**

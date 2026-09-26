@@ -921,7 +921,9 @@ export class Parser {
                     text: 'function',
                     isReserved: true,
                     //zero-length location means derived
-                    location: this.peek().location,
+                    pos: this.peek().pos,
+                    end: this.peek().end,
+                    source: this.peek().source,
                     leadingTrivia: []
                 };
             }
@@ -1376,23 +1378,13 @@ export class Parser {
 
             const exitText = exitToken.text.substring(0, 4);
             const whileText = exitToken.text.substring(4);
-            const originalRange = exitToken.location?.range;
-            const originalStart = originalRange?.start;
+            const originalToken = exitToken;
 
-            const exitRange = util.createRange(
-                originalStart.line,
-                originalStart.character,
-                originalStart.line,
-                originalStart.character + 4);
-            const whileRange = util.createRange(
-                originalStart.line,
-                originalStart.character + 4,
-                originalStart.line,
-                originalStart.character + exitToken.text.length);
-
-            exitToken = createToken(TokenKind.Exit, exitText, util.createLocationFromRange(exitToken.location.uri, exitRange));
+            exitToken = createToken(TokenKind.Exit, exitText, originalToken);
+            exitToken.end = exitToken.pos + 4;
             this.tokens[this.current - 1] = exitToken;
-            const newLoopToken = createToken(TokenKind.While, whileText, util.createLocationFromRange(exitToken.location.uri, whileRange));
+            const newLoopToken = createToken(TokenKind.While, whileText, originalToken);
+            newLoopToken.pos += 4;
             this.tokens.splice(this.current, 0, newLoopToken);
         }
 
@@ -1561,8 +1553,6 @@ export class Parser {
             endNamespace: endKeyword
         });
 
-        //cache the range property so that plugins can't affect it
-        result.cacheLocation();
         result.body.symbolTable.name += `: namespace '${result.name}'`;
         return result;
     }
