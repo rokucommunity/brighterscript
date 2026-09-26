@@ -12,6 +12,8 @@ import type { BsDiagnostic } from '../interfaces';
  */
 const numericTypeDesignatorCharsRegexp = /[#d!e&%]/;
 
+const SharedTriviaTokens = new Map<string, Token>();
+
 export class Lexer {
     /**
      * The zero-indexed position at which the token under consideration begins.
@@ -1092,6 +1094,25 @@ export class Lexer {
         return AllowedTriviaTokens.includes(token.kind);
     }
 
+    private getSharedTriviaToken(token: Token): Token {
+        const cacheKey = token.kind + token.text;
+        let shared = SharedTriviaTokens.get(cacheKey);
+        if (!shared) {
+            if (SharedTriviaTokens.size >= LEXER_TEXT_CACHE_MAX_ENTRIES) {
+                return token;
+            }
+            shared = Object.freeze({
+                kind: token.kind,
+                text: token.text,
+                isReserved: false,
+                location: undefined,
+                leadingTrivia: undefined
+            }) as Token;
+            SharedTriviaTokens.set(cacheKey, shared);
+        }
+        return shared;
+    }
+
     /**
      * Returns a single shared string instance for `text`, so that repeated occurrences of
      * the same text all reference one string rather than each holding its own copy from
@@ -1204,7 +1225,10 @@ export class Lexer {
         };
 
         if (this.isTrivia(token)) {
-            this.pushTrivia(token);
+            //trivia whitespace/newlines are only read for their text, so share one token per text
+            this.pushTrivia(
+                (kind === TokenKind.Whitespace || kind === TokenKind.Newline) ? this.getSharedTriviaToken(token) : token
+            );
         } else if (this.leadingTrivia.length > 0) {
             token.leadingTrivia = [...this.leadingTrivia];
             this.leadingTrivia = [];

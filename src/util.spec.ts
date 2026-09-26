@@ -17,6 +17,8 @@ import { TokenKind } from './lexer/TokenKind';
 import { createToken } from './astUtils/creators';
 import { createDottedIdentifier, createVariableExpression } from './astUtils/creators';
 import { Parser } from './parser/Parser';
+import { Lexer } from './lexer/Lexer';
+import type { Token } from './lexer/Token';
 import type { FunctionStatement } from './parser/Statement';
 import { ComponentType } from './types/ComponentType';
 
@@ -40,6 +42,50 @@ describe('util', () => {
     describe('fileExists', () => {
         it('returns false when no value is passed', async () => {
             expect(await util.pathExists(undefined)).to.be.false;
+        });
+    });
+
+    describe('getLeadingTriviaLocations', () => {
+        function expectMatchesLexer(source: string) {
+            //with `includeWhitespace`, the token stream still has located whitespace and newline tokens to compare against
+            const tokens = Lexer.scan(source, { includeWhitespace: true }).tokens;
+            let pending: Token[] = [];
+            let previousToken: Token;
+            let triviaCount = 0;
+            for (const token of tokens) {
+                if (token.kind === TokenKind.Whitespace || token.kind === TokenKind.Newline) {
+                    pending.push(token);
+                    continue;
+                } else if (token.kind === TokenKind.Colon) {
+                    //colons are also trivia, and keep their own location
+                    continue;
+                }
+                const expected = (token.leadingTrivia ?? []).map(x => x.location ?? pending.shift().location);
+                expect(util.getLeadingTriviaLocations(token, previousToken)).to.eql(expected);
+                expect(pending).to.be.empty;
+                triviaCount += expected.length;
+                previousToken = token;
+            }
+            expect(triviaCount).to.be.greaterThan(0);
+        }
+
+        it('matches the locations from the lexer', () => {
+            expectMatchesLexer(`
+                sub main()  'comment
+                    print   "hello"
+
+                    'another comment
+                    x = 1 + 2 : y = true ? 1 : 2
+                end sub
+            `);
+        });
+
+        it('handles windows line endings', () => {
+            expectMatchesLexer(`sub main()\r\n    'comment\r\n\r\n    print 1\r\nend sub\r\n`);
+        });
+
+        it('handles trivia at the start of the file', () => {
+            expectMatchesLexer(`\n\n   'comment\n  print 1`);
         });
     });
 

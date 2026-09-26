@@ -95,6 +95,19 @@ describe('BrsFile', () => {
         });
     });
 
+    describe('getLeadingTriviaLocations', () => {
+        it('gets the location of whitespace and newline trivia', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', `sub main()\n    print 1\nend sub`);
+            const printToken = file.parser.tokens.find(x => x.kind === TokenKind.Print);
+            expect(printToken.leadingTrivia.map(x => x.location)).to.eql([undefined, undefined]);
+            expect(file.getLeadingTriviaLocations(printToken).map(x => x.range)).to.eql([
+                util.createRange(0, 10, 0, 11),
+                util.createRange(1, 0, 1, 4)
+            ]);
+            expect(file.getLeadingTriviaLocations(printToken)[0].uri).to.eql(printToken.location.uri);
+        });
+    });
+
     describe('dispose', () => {
         it('does not crash the program after it has been disposed', () => {
             const file = program.setFile('source/main.bs', `sub main(): end sub`);

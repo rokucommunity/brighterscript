@@ -13,6 +13,7 @@ import { ParseMode, Parser } from './Parser';
 import type { AstNode } from './AstNode';
 import { WalkMode } from '../astUtils/visitors';
 import { isStatement } from '../astUtils/reflection';
+import { TokenKind } from '../lexer/TokenKind';
 
 type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };
 
@@ -399,7 +400,9 @@ describe('AstNode', () => {
                     //if this is an object, recurse
                     if (typeOfValue === 'object' && originalValue !== null) {
                         //skip circular references (but give some tollerance)
-                        if (seenNodes.get(originalValue) > 2) {
+                        const isSharedTrivia = ancestors[ancestors.length - 1] === 'leadingTrivia' && !originalValue.location &&
+                            (originalValue.kind === TokenKind.Whitespace || originalValue.kind === TokenKind.Newline);
+                        if (!isSharedTrivia && seenNodes.get(originalValue) > 2) {
                             throw new Error(`${fullKey} is a circular reference`);
                         }
                         seenNodes.set(originalValue, (seenNodes.get(originalValue) ?? 0) + 1);

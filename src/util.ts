@@ -1257,6 +1257,36 @@ export class Util {
         return last?.kind === TokenKind.Whitespace ? last.text : '';
     }
 
+    /**
+     * Get the location of each of a token's `leadingTrivia` (whitespace and newline trivia tokens don't store one)
+     * @param token the token that owns the trivia
+     * @param previousToken the last non-trivia token before `token` (undefined at the start of the file)
+     */
+    public getLeadingTriviaLocations(token: Token, previousToken?: Token): Location[] {
+        const uri = token?.location?.uri ?? previousToken?.location?.uri;
+        let line = previousToken?.location?.range.end.line ?? 0;
+        let character = previousToken?.location?.range.end.character ?? 0;
+        const locations: Location[] = [];
+        for (const trivia of token?.leadingTrivia ?? []) {
+            let location = trivia.location;
+            if (!location) {
+                location = {
+                    uri: uri,
+                    range: this.createRange(line, character, line, character + trivia.text.length)
+                };
+            }
+            locations.push(location);
+            if (trivia.kind === TokenKind.Newline) {
+                line = location.range.end.line + 1;
+                character = 0;
+            } else {
+                line = location.range.end.line;
+                character = location.range.end.character;
+            }
+        }
+        return locations;
+    }
+
     public cloneToken<T extends Token>(token: T): T {
         if (token) {
             //keep this field order identical to `Lexer.addToken` so cloned tokens
