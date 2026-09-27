@@ -391,8 +391,8 @@ export class Lexer {
                 ...DiagnosticMessages.unexpectedCharacter(c),
                 location: this.locationOf()
             });
-            //skip the unexpected character so it doesn't get included in the text of the next token
-            this.sync();
+            //keep the character as leading trivia (so the source code can be rebuilt from the AST), but not in the token list, so the parser never sees it
+            this.addToken(TokenKind.UnexpectedCharacter);
         }
     }
 
@@ -1211,7 +1211,7 @@ export class Lexer {
             token.leadingTrivia = [...this.leadingTrivia];
             this.leadingTrivia = [];
         }
-        if (kind !== TokenKind.Comment) {
+        if (kind !== TokenKind.Comment && kind !== TokenKind.UnexpectedCharacter) {
             this.tokens.push(token);
         }
         this.sync();

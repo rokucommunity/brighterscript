@@ -8,6 +8,7 @@ import { createIntegerLiteral, createStringLiteral, createToken } from '../astUt
 import { Lexer } from '../lexer/Lexer';
 import { TranspileState } from './TranspileState';
 import { util } from '../util';
+import { DiagnosticMessages } from '../DiagnosticMessages';
 import { TokenKind } from '../lexer/TokenKind';
 import { PrintStatement } from './Statement';
 import type { Body } from './Statement';
@@ -836,6 +837,18 @@ describe('AST toString', () => {
             `, ParseMode.BrighterScript, true);
         });
 
+        it('keeps unexpected characters', () => {
+            testRoundTrip(`
+                sub main()
+                    print thi|
+                    z::;;%%%%%% 'comment
+                    #if %
+                        print "true"
+                    #end if
+                end sub
+            `, ParseMode.BrighterScript, true);
+        });
+
         it('keeps tokens for unterminated blocks', () => {
             testRoundTrip(`
                 sub test()
@@ -978,6 +991,27 @@ end sub`);
         it('does not include unexpected characters in the next token', () => {
             const tokens = Lexer.scan(`x = 1 |\ny = 2`).tokens;
             expect(tokens.find(x => x.kind === TokenKind.Newline).text).to.eql('\n');
+        });
+
+        it('keeps unexpected characters as leading trivia, but not in the token list', () => {
+            const { tokens, diagnostics } = Lexer.scan(`x = 1 |%\ny = 2`);
+            //the lexer still reports them
+            expect(diagnostics.map(x => x.message)).to.eql([
+                DiagnosticMessages.unexpectedCharacter('|').message,
+                DiagnosticMessages.unexpectedCharacter('%').message
+            ]);
+            //but the parser never sees them
+            expect(tokens.map(x => x.kind)).not.to.include(TokenKind.UnexpectedCharacter);
+            const newline = tokens.find(x => x.kind === TokenKind.Newline);
+            expect(newline.text).to.eql('\n');
+            //they're in the leading trivia of the next token
+            const y = tokens.find(x => x.text === 'y');
+            expect(y.leadingTrivia.map(x => `${x.kind}:${x.text}`)).to.eql([
+                'Whitespace: ',
+                'UnexpectedCharacter:|',
+                'UnexpectedCharacter:%',
+                'Newline:\n'
+            ]);
         });
     });
 

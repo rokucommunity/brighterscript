@@ -390,6 +390,18 @@ describe('AST output', () => {
             `, 'trim', 'source/main.bs', false);
         });
 
+        it('does not transpile unexpected characters', async () => {
+            await testTranspile(`
+                sub main()
+                    print "hello" |
+                end sub
+            `, `
+                sub main()
+                    print "hello"
+                end sub
+            `, 'trim', 'source/main.bs', false);
+        });
+
         it('transpiles a `library` statement with no path', async () => {
             await testTranspile(`library`, `library`, 'trim', 'source/main.brs', false);
         });
