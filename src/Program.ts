@@ -329,7 +329,7 @@ export class Program {
     /**
      * The path to bslib.brs (the BrightScript runtime for certain BrighterScript features)
      */
-    public get bslibPkgPath() {
+    public get bslibPkgPath(): string {
         //if there's an aliased (preferred) version of bslib from roku_modules loaded into the program, use that
         if (this.getFile(bslibAliasedRokuModulesPkgPath)) {
             return bslibAliasedRokuModulesPkgPath;

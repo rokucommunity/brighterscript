@@ -31,17 +31,15 @@ export class LazyFileData {
      * Resolve the initialData into the actual data
      */
     private resolve() {
-        let result: any;
+        let result: Buffer;
         if (Buffer.isBuffer(this.initialData)) {
             result = this.initialData;
         } else if (typeof this.initialData === 'string') {
             result = Buffer.from(this.initialData);
         } else if (typeof this.initialData === 'function') {
-            result = this.initialData();
+            const functionResult = this.initialData();
             //convert result to buffer
-            if (!Buffer.isBuffer(result)) {
-                result = Buffer.from(result);
-            }
+            result = Buffer.isBuffer(functionResult) ? functionResult : Buffer.from(functionResult);
         } else if (isLazyFileData(this.initialData)) {
             result = this.initialData.value;
         }

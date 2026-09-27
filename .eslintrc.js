@@ -54,10 +54,7 @@ module.exports = {
         '@typescript-eslint/no-parameter-properties': 'off',
         //had to add this rule to prevent eslint from crashing
         '@typescript-eslint/no-restricted-imports': ['off', {}],
-        //master enabled this as 'error' in #1785 after cleaning up the v0 call sites. v1's parser/validator
-        //rewrites introduced ~76 more violations that were never part of that cleanup, so it's a warning here
-        //until they're addressed. TODO raise back to 'error' once the remaining violations are fixed.
-        '@typescript-eslint/no-unsafe-argument': 'warn',
+        '@typescript-eslint/no-unsafe-argument': 'error',
         'object-curly-spacing': 'off',
         '@typescript-eslint/object-curly-spacing': [
             'error',
