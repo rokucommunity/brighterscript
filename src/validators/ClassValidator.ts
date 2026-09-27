@@ -2,7 +2,7 @@ import type { Scope } from '../Scope';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { CallExpression } from '../parser/Expression';
 import { ParseMode } from '../parser/Parser';
-import type { ClassStatement, MemberStatement, MethodStatement, NamespaceStatement } from '../parser/Statement';
+import type { ClassStatement, MethodStatement, NamespaceStatement } from '../parser/Statement';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { isCallExpression, isFieldStatement, isMethodStatement, isNamespaceStatement } from '../astUtils/reflection';
 import type { BsDiagnostic } from '../interfaces';
@@ -240,7 +240,7 @@ export class BsClassValidator {
     /**
      * Get the closest member with the specified name (case-insensitive)
      */
-    getAncestorMember(classStatement: AugmentedClassStatement, memberName: string): { member: MemberStatement; classStatement: AugmentedClassStatement } | undefined {
+    getAncestorMember(classStatement: AugmentedClassStatement, memberName: string) {
         let lowerMemberName = memberName.toLowerCase();
         let ancestor = classStatement.parentClass;
         while (ancestor) {
