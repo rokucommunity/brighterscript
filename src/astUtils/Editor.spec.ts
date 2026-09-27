@@ -182,7 +182,7 @@ describe('Editor', () => {
             }
         }
         it('overrides existing transpile method', () => {
-            const expression = new LiteralExpression({ value: bscFactory.brs.createToken(TokenKind.IntegerLiteral, 'original') });
+            const expression = new LiteralExpression({ value: bscFactory.ast.brs.createToken(TokenKind.IntegerLiteral, 'original') });
 
             expect(transpileToString(expression)).to.eql('original');
 

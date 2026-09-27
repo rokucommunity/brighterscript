@@ -465,7 +465,7 @@ export class CompletionsProcessor {
             return CompletionItemKind.Value;
 
         }
-        const tokenIdentifier = util.tokenToBscType(bscFactory.brs.createIdentifier(symbol.name));
+        const tokenIdentifier = util.tokenToBscType(bscFactory.ast.brs.createIdentifier(symbol.name));
         if (isNativeType(tokenIdentifier)) {
             return CompletionItemKind.Keyword;
 

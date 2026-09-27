@@ -159,7 +159,7 @@ export class Program {
     public editor = new Editor();
 
     /**
-     * A factory that plugins should use to create tokens, AST nodes, and files (i.e. `program.factory.brs.createCallExpression(...)` instead of `new CallExpression(...)`).
+     * A factory that plugins should use to create tokens, AST nodes, and files (i.e. `program.factory.ast.brs.createCallExpression(...)` instead of `new CallExpression(...)`).
      * This ensures everything is created by the brighterscript version that is actually running the plugin, rather than the plugin's own copy of brighterscript.
      */
     public readonly factory: BscFactory;

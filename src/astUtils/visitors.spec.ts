@@ -251,7 +251,7 @@ describe('astUtils visitors', () => {
                 Block: blockHandler
             });
             const printStatement = new PrintStatement({
-                print: bscFactory.brs.createToken(TokenKind.Print),
+                print: bscFactory.ast.brs.createToken(TokenKind.Print),
                 expressions: []
             });
             const blockStatement = new Block({ statements: [] });
@@ -267,17 +267,17 @@ describe('astUtils visitors', () => {
     describe('Statement editor', () => {
         it('allows replacing statements', () => {
             const printStatement1 = new PrintStatement({
-                print: bscFactory.brs.createToken(TokenKind.Print),
+                print: bscFactory.ast.brs.createToken(TokenKind.Print),
                 expressions: []
             });
             const printStatement2 = new PrintStatement({
-                print: bscFactory.brs.createToken(TokenKind.Print),
+                print: bscFactory.ast.brs.createToken(TokenKind.Print),
                 expressions: []
             });
             const block = new Block({
                 statements: [
                     printStatement1,
-                    new ReturnStatement({ return: bscFactory.brs.createToken(TokenKind.Return) })
+                    new ReturnStatement({ return: bscFactory.ast.brs.createToken(TokenKind.Return) })
                 ]
             });
             const visitor = createVisitor({
@@ -291,12 +291,12 @@ describe('astUtils visitors', () => {
             const editor = new Editor();
 
             const printStatement1 = new PrintStatement({
-                print: bscFactory.brs.createToken(TokenKind.Print),
+                print: bscFactory.ast.brs.createToken(TokenKind.Print),
                 expressions: []
             });
 
             const printStatement2 = new PrintStatement({
-                print: bscFactory.brs.createToken(TokenKind.Print),
+                print: bscFactory.ast.brs.createToken(TokenKind.Print),
                 expressions: []
             });
 
@@ -1209,10 +1209,10 @@ describe('astUtils visitors', () => {
                     printStatementCount++;
                     //add another expression to the list every time. This should result in 1 the first time, 2 the second, 3 the third.
                     calls.push(new ExpressionStatement({
-                        expression: bscFactory.brs.createCallExpression({
-                            callee: bscFactory.brs.createVariableExpression({ name: 'doSomethingBeforePrint' }),
+                        expression: bscFactory.ast.brs.createCallExpression({
+                            callee: bscFactory.ast.brs.createVariableExpression({ name: 'doSomethingBeforePrint' }),
                             args: [
-                                bscFactory.brs.createIntegerLiteral(callExpressionCount.toString())
+                                bscFactory.ast.brs.createIntegerLiteral(callExpressionCount.toString())
                             ]
                         })
                     }));
@@ -1352,9 +1352,9 @@ describe('astUtils visitors', () => {
                     //replace the `1 + 2` binary expression with a new binary expression
                     if (isLiteralExpression(node.left) && node.left.tokens.value.text === '1') {
                         return new BinaryExpression({
-                            left: bscFactory.brs.createIntegerLiteral('3'),
-                            operator: bscFactory.brs.createToken(TokenKind.Plus),
-                            right: bscFactory.brs.createIntegerLiteral('4')
+                            left: bscFactory.ast.brs.createIntegerLiteral('3'),
+                            operator: bscFactory.ast.brs.createToken(TokenKind.Plus),
+                            right: bscFactory.ast.brs.createIntegerLiteral('4')
                         });
                     }
                 },
@@ -1466,9 +1466,9 @@ describe('astUtils visitors', () => {
                     //replace the `1 + 2` binary expression with a new binary expression
                     if (isLiteralExpression(node.left) && node.left.tokens.value.text === '1') {
                         return new BinaryExpression({
-                            left: bscFactory.brs.createIntegerLiteral('3'),
-                            operator: bscFactory.brs.createToken(TokenKind.Plus),
-                            right: bscFactory.brs.createIntegerLiteral('4')
+                            left: bscFactory.ast.brs.createIntegerLiteral('3'),
+                            operator: bscFactory.ast.brs.createToken(TokenKind.Plus),
+                            right: bscFactory.ast.brs.createIntegerLiteral('4')
                         });
                     }
                 },
@@ -1485,11 +1485,11 @@ describe('astUtils visitors', () => {
     });
 
     describe('walkArray', () => {
-        const one = bscFactory.brs.createVariableExpression({ name: 'one' });
-        const two = bscFactory.brs.createVariableExpression({ name: 'two' });
-        const three = bscFactory.brs.createVariableExpression({ name: 'three' });
-        const four = bscFactory.brs.createVariableExpression({ name: 'four' });
-        const five = bscFactory.brs.createVariableExpression({ name: 'five' });
+        const one = bscFactory.ast.brs.createVariableExpression({ name: 'one' });
+        const two = bscFactory.ast.brs.createVariableExpression({ name: 'two' });
+        const three = bscFactory.ast.brs.createVariableExpression({ name: 'three' });
+        const four = bscFactory.ast.brs.createVariableExpression({ name: 'four' });
+        const five = bscFactory.ast.brs.createVariableExpression({ name: 'five' });
 
         function doTest(startingArray: VariableExpression[], expected: VariableExpression[], visitor?: (item: AstNode, parent: AstNode, owner: any, key: number) => any) {
             const visitedItems: VariableExpression[] = [];

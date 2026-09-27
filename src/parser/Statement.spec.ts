@@ -120,9 +120,9 @@ describe('Statement', () => {
         let allStatements: AstNode[] = [];
 
         beforeEach(() => {
-            const ident = bscFactory.brs.createToken(TokenKind.Identifier, 'a');
-            const expr = bscFactory.brs.createStringLiteral('');
-            const token = bscFactory.brs.createToken(TokenKind.StringLiteral, '');
+            const ident = bscFactory.ast.brs.createToken(TokenKind.Identifier, 'a');
+            const expr = bscFactory.ast.brs.createStringLiteral('');
+            const token = bscFactory.ast.brs.createToken(TokenKind.StringLiteral, '');
             const body = new Body({ statements: [] });
             const assignment = new AssignmentStatement({ equals: undefined, name: ident, value: expr });
             const block = new Block({ statements: [] });
@@ -154,12 +154,12 @@ describe('Statement', () => {
             const dottedSet = new DottedSetStatement({ obj: expr, name: ident, value: expr });
             const indexedSet = new IndexedSetStatement({ obj: expr, indexes: [expr], value: expr, openingSquare: token, closingSquare: token });
             const library = new LibraryStatement({ library: token, filePath: token });
-            const namespace = new NamespaceStatement({ namespace: token, nameExpression: bscFactory.brs.createVariableExpression({ name: 'a' }), body: body, endNamespace: token });
+            const namespace = new NamespaceStatement({ namespace: token, nameExpression: bscFactory.ast.brs.createVariableExpression({ name: 'a' }), body: body, endNamespace: token });
             const cls = new ClassStatement({ class: token, name: ident, body: [], endClass: token });
             const imports = new ImportStatement({ import: token, path: token });
-            const catchStmt = new CatchStatement({ catch: token, exceptionVariableExpression: bscFactory.brs.createVariableExpression({ name: 'e' }), catchBranch: block });
+            const catchStmt = new CatchStatement({ catch: token, exceptionVariableExpression: bscFactory.ast.brs.createVariableExpression({ name: 'e' }), catchBranch: block });
             const tryCatch = new TryCatchStatement({ try: token, tryBranch: block, catchStatement: catchStmt });
-            const throwSt = new ThrowStatement({ throw: bscFactory.brs.createToken(TokenKind.Throw) });
+            const throwSt = new ThrowStatement({ throw: bscFactory.ast.brs.createToken(TokenKind.Throw) });
 
             allStatements = [
                 expression,
@@ -194,7 +194,7 @@ describe('Statement', () => {
             for (const stmt of allStatements) {
                 const beforeTrivia = stmt.leadingTrivia;
                 expect(beforeTrivia.length, `${stmt.kind} already has leading trivia`).to.eq(0);
-                stmt.leadingTrivia.push(bscFactory.brs.createToken(TokenKind.Comment, 'This is an added comment'));
+                stmt.leadingTrivia.push(bscFactory.ast.brs.createToken(TokenKind.Comment, 'This is an added comment'));
                 const afterComments = stmt.leadingTrivia.filter(t => t.kind === TokenKind.Comment);
                 expect(afterComments.length, `${stmt.kind} leading trivia was not edited`).to.eq(1);
                 expect(afterComments[0].text, `${stmt.kind} leading trivia was not edited`).to.eq('This is an added comment');

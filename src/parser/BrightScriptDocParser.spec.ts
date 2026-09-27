@@ -332,7 +332,7 @@ describe('BrightScriptDocParser', () => {
     describe('getTypeExpressionFromTypeString', () => {
         it('should get the location of the type', () => {
             const text = '\' @param {integer} test';
-            const commentToken = bscFactory.brs.createToken(TokenKind.Comment, text, util.createLocation(1, 0, 1, text.length));
+            const commentToken = bscFactory.ast.brs.createToken(TokenKind.Comment, text, util.createLocation(1, 0, 1, text.length));
             const typeLoc = brsDocParser.getTypeLocationFromToken(commentToken);
             expect(typeLoc.range.start.character).to.equal(10);
             expect(typeLoc.range.end.character).to.equal(17);
@@ -348,7 +348,7 @@ describe('BrightScriptDocParser', () => {
                 '\' @param }integer{ }}'
             ];
             for (const text of texts) {
-                const commentToken = bscFactory.brs.createToken(TokenKind.Comment, text, util.createLocation(1, 0, 1, text.length));
+                const commentToken = bscFactory.ast.brs.createToken(TokenKind.Comment, text, util.createLocation(1, 0, 1, text.length));
                 const typeLoc = brsDocParser.getTypeLocationFromToken(commentToken);
                 expect(typeLoc).to.be.undefined;
             }

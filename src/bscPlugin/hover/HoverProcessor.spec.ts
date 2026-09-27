@@ -44,9 +44,9 @@ describe('HoverProcessor', () => {
             const file = program.setFile<BrsFile>('source/main.bs', ``);
 
             const processor = new HoverProcessor({} as any);
-            const expression = bscFactory.brs.createIntegerLiteral('1');
+            const expression = bscFactory.ast.brs.createIntegerLiteral('1');
             expect(
-                processor['getConstHover'](bscFactory.brs.createIdentifier('hello'), file, program.getScopeByName('source'), expression)
+                processor['getConstHover'](bscFactory.ast.brs.createIdentifier('hello'), file, program.getScopeByName('source'), expression)
             ).to.eql(undefined);
         });
 

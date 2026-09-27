@@ -627,11 +627,14 @@ This plugin will search through every LiteralExpression in the entire project, a
 ### Factory
 Your plugin will be written against a specific version of BrighterScript, but it may be loaded by a different version (either by the brighterscript cli or through an editor like vscode). If your plugin creates objects with direct constructors (i.e. `new CallExpression(...)` or `new BrsFile(...)`), those objects come from your plugin's copy of brighterscript, and may be missing bug fixes or new fields that the running version of brighterscript expects.
 
-To avoid this, use `program.factory`, which always comes from the brighterscript version that is running your plugin. It is grouped by domain:
- - **`brs`:** BrightScript/BrighterScript tokens and AST nodes. Every AST node class has a matching `create` method (i.e. `program.factory.brs.createCallExpression(...)` instead of `new CallExpression(...)`). Most syntax tokens are optional and will be given their default text, and identifier names can be passed as plain strings. There are also helpers like `createToken`, `createIdentifier`, `createStringLiteral`, and `createDottedIdentifier`.
- - **`sgXml`:** SceneGraph component nodes (the contents of a component `.xml` file), i.e. `program.factory.sgXml.createSGComponent({ attributes: { name: 'MyComponent' } })`. Tokens can be passed as plain strings.
+To avoid this, use `program.factory`, which always comes from the brighterscript version that is running your plugin. It is grouped by the kind of thing being created:
+ - **`ast`:** the syntax (tokens and AST nodes) inside files, grouped by file format:
+    - **`ast.brs`:** BrightScript/BrighterScript. Every AST node class has a matching `create` method (i.e. `program.factory.ast.brs.createCallExpression(...)` instead of `new CallExpression(...)`). Most syntax tokens are optional and will be given their default text, and identifier names can be passed as plain strings. There are also helpers like `createToken`, `createIdentifier`, `createStringLiteral`, and `createDottedIdentifier`.
+    - **`ast.sgXml`:** SceneGraph component nodes (the contents of a component `.xml` file), i.e. `program.factory.ast.sgXml.createSGComponent({ attributes: { name: 'MyComponent' } })`. Tokens can be passed as plain strings.
  - **`files`:** `createBrsFile`, `createXmlFile`, and `createAssetFile` (i.e. `program.factory.files.createBrsFile(...)` instead of `new BrsFile(...)`).
  - **`plugins`:** factories contributed by other plugins (see [Plugin factories](#plugin-factories)).
+
+If you are creating a lot of nodes, grab the group you need once (i.e. `const { brs } = program.factory.ast;`).
 
 The factory methods are a stable contract, so they will keep accepting the same options even if the underlying constructors change.
 
@@ -643,13 +646,13 @@ export default function () {
         name: 'addLogCall',
         beforePrepareFile: (event: BeforePrepareFileEvent) => {
             if (isBrsFile(event.file)) {
-                const factory = event.program.factory;
+                const { brs } = event.program.factory.ast;
                 for (const func of event.file.ast.findChildren(isFunctionExpression)) {
                     //creates `print "entering function"`
-                    const printStatement = factory.brs.createPrintStatement({
-                        print: factory.brs.createToken(TokenKind.Print),
+                    const printStatement = brs.createPrintStatement({
+                        print: brs.createToken(TokenKind.Print),
                         expressions: [
-                            factory.brs.createStringLiteral('entering function')
+                            brs.createStringLiteral('entering function')
                         ]
                     });
                     event.editor.arrayUnshift(func.body.statements, printStatement);
@@ -660,7 +663,7 @@ export default function () {
 };
 ```
 
-New factory methods may be added in future versions of brighterscript. If your plugin needs to support older versions, check that a method exists before calling it (i.e. `if (program.factory.brs.createTypeStatement) { ... }`).
+New factory methods may be added in future versions of brighterscript. If your plugin needs to support older versions, check that a method exists before calling it (i.e. `if (program.factory.ast.brs.createTypeStatement) { ... }`).
 
 ### Plugin factories
 Plugins can contribute their own factories to `program.factory.plugins`, so that other plugins can create that plugin's objects without being locked to a specific version of it. The plugin that owns the factory registers it early in the program's lifecycle, using a unique name (the plugin's npm package name is recommended):

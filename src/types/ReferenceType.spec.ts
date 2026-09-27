@@ -159,10 +159,10 @@ describe('ReferenceType', () => {
         it('catches circular references in a binary expression', () => {
             const table = new SymbolTable('test');
             const ref = new ReferenceType('notHere', 'notHere', runtimeFlag, () => table);
-            const binRef = new BinaryOperatorReferenceType(ref, bscFactory.brs.createToken(TokenKind.Plus), StringType.instance, (l, o, r) => {
+            const binRef = new BinaryOperatorReferenceType(ref, bscFactory.ast.brs.createToken(TokenKind.Plus), StringType.instance, (l, o, r) => {
                 return util.binaryOperatorResultType(l, o, r);
             });
-            const binRef2 = new BinaryOperatorReferenceType(ref, bscFactory.brs.createToken(TokenKind.Plus), binRef, (l, o, r) => {
+            const binRef2 = new BinaryOperatorReferenceType(ref, bscFactory.ast.brs.createToken(TokenKind.Plus), binRef, (l, o, r) => {
                 return util.binaryOperatorResultType(l, o, r);
             });
             table.addSymbol('notHere', null, binRef2, SymbolTypeFlag.runtime);

@@ -1482,7 +1482,7 @@ export class Util {
             typeDescriptorLower = parensFilter[1].trim();
         }
 
-        const bscType = this.tokenToBscType(bscFactory.brs.createToken(TokenKind.Identifier, typeDescriptorLower));
+        const bscType = this.tokenToBscType(bscFactory.ast.brs.createToken(TokenKind.Identifier, typeDescriptorLower));
         if (bscType) {
             return bscType;
         }
@@ -2226,7 +2226,7 @@ export class Util {
                 case AstNodeKind.FunctionParameterExpression:
                     return [(nextPart as FunctionParameterExpression).tokens.name];
                 case AstNodeKind.GroupingExpression:
-                    parts.push(bscFactory.brs.createIdentifier('()', nextPart.location));
+                    parts.push(bscFactory.ast.brs.createIdentifier('()', nextPart.location));
                     break loop;
                 default:
                     //we found a non-DottedGet expression, so return because this whole operation is invalid.
@@ -2920,7 +2920,7 @@ export class Util {
                 type: funcType,
                 data: options.data,
                 location: methodNameToken.location,
-                separatorToken: bscFactory.brs.createToken(TokenKind.Callfunc),
+                separatorToken: bscFactory.ast.brs.createToken(TokenKind.Callfunc),
                 astNode: callExpr
             }));
             if (options.ignoreCall) {

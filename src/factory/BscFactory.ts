@@ -1,25 +1,25 @@
 import type { Program } from '../Program';
-import { BrsFactory } from './BrsFactory';
-import { SGXmlFactory } from './SGXmlFactory';
+import { AstFactory } from './AstFactory';
 import { FileFactory } from './FileFactory';
 import { PluginFactoryRegistry } from './PluginFactoryRegistry';
 
 /**
- * A factory for creating everything in BrighterScript, grouped by domain:
- *  - `brs`: BrightScript/BrighterScript tokens and AST nodes (i.e. `factory.brs.createCallExpression(...)`)
- *  - `sgXml`: SceneGraph component nodes (i.e. `factory.sgXml.createSGComponent(...)`)
+ * A factory for creating everything in BrighterScript, grouped by the kind of thing being created:
+ *  - `ast`: the syntax (tokens and AST nodes) inside files, grouped by file format
+ *      - `ast.brs`: BrightScript/BrighterScript (i.e. `factory.ast.brs.createCallExpression(...)`)
+ *      - `ast.sgXml`: SceneGraph component xml (i.e. `factory.ast.sgXml.createSGComponent(...)`)
  *  - `files`: files (i.e. `factory.files.createBrsFile(...)`)
  *  - `plugins`: factories contributed by plugins (i.e. `factory.plugins.get('bsc-plugin-example')`)
  *
  * Plugins should use the factory provided by the program (`program.factory`) instead of calling constructors directly
- * (i.e. `program.factory.brs.createCallExpression(...)` instead of `new CallExpression(...)`). A plugin may be bundled with a
+ * (i.e. `program.factory.ast.brs.createCallExpression(...)` instead of `new CallExpression(...)`). A plugin may be bundled with a
  * different version of brighterscript than the one actually running it (the cli or the language server). Objects created
  * from the plugin's own copy of brighterscript would miss any bug fixes or new fields from the running version, while objects
  * created through `program.factory` always come from the running version.
  *
  * The method signatures are a stable contract. The constructors may change over time, but these methods will continue to
  * accept the same options. Methods and groups may be added in future versions, so plugins that need to support older versions
- * of brighterscript can check for them before calling (i.e. `if (program.factory.brs.createTypeStatement) {...}`).
+ * of brighterscript can check for them before calling (i.e. `if (program.factory.ast.brs.createTypeStatement) {...}`).
  */
 export class BscFactory {
     public constructor(
@@ -32,14 +32,9 @@ export class BscFactory {
     }
 
     /**
-     * Create BrightScript/BrighterScript tokens and AST nodes
+     * Create the syntax (tokens and AST nodes) inside files, grouped by file format
      */
-    public readonly brs = new BrsFactory();
-
-    /**
-     * Create SceneGraph component nodes (the contents of a component `.xml` file)
-     */
-    public readonly sgXml = new SGXmlFactory();
+    public readonly ast = new AstFactory();
 
     /**
      * Create files

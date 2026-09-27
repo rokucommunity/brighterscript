@@ -1288,7 +1288,7 @@ export class TypeChainEntry {
         this.data = { ...options.data };
         this.type = options.type;
         this._location = options.location;
-        this.separatorToken = options.separatorToken ?? bscFactory.brs.createToken(TokenKind.Dot);
+        this.separatorToken = options.separatorToken ?? bscFactory.ast.brs.createToken(TokenKind.Dot);
         this.astNode = options.astNode;
         this.isResolved = this.type?.isResolvable();
     }

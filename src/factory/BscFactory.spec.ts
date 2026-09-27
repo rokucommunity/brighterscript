@@ -3,6 +3,9 @@ import * as ExpressionModule from '../parser/Expression';
 import * as StatementModule from '../parser/Statement';
 import * as SGTypesModule from '../parser/SGTypes';
 import { BscFactory, bscFactory } from './BscFactory';
+import { AstFactory } from './AstFactory';
+import { BrsFactory } from './BrsFactory';
+import { SGXmlFactory } from './SGXmlFactory';
 import { TokenKind } from '../lexer/TokenKind';
 import { Program } from '../Program';
 import { rootDir } from '../testHelpers.spec';
@@ -49,7 +52,7 @@ describe('BscFactory', () => {
         //sanity check to make sure we actually found the classes
         expect(classNames).to.include.members(['CallExpression', 'IfStatement']);
 
-        const missing = classNames.filter(name => typeof factory.brs[`create${name}`] !== 'function');
+        const missing = classNames.filter(name => typeof factory.ast.brs[`create${name}`] !== 'function');
         expect(missing).to.eql([]);
     });
 
@@ -58,13 +61,19 @@ describe('BscFactory', () => {
         //sanity check to make sure we actually found the classes
         expect(classNames).to.include.members(['SGComponent', 'SGAst']);
 
-        const missing = classNames.filter(name => typeof factory.sgXml[`create${name}`] !== 'function');
+        const missing = classNames.filter(name => typeof factory.ast.sgXml[`create${name}`] !== 'function');
         expect(missing).to.eql([]);
     });
 
     it('is available on the program, bound to that program', () => {
         expect(program.factory).to.be.instanceOf(BscFactory);
         expect(program.factory.program).to.equal(program);
+    });
+
+    it('groups syntax factories under ast', () => {
+        expect(factory.ast).to.be.instanceOf(AstFactory);
+        expect(factory.ast.brs).to.be.instanceOf(BrsFactory);
+        expect(factory.ast.sgXml).to.be.instanceOf(SGXmlFactory);
     });
 
     it('exports a shared instance with no program', () => {
@@ -128,25 +137,25 @@ describe('BscFactory', () => {
 
     describe('tokens', () => {
         it('creates tokens with default text', () => {
-            expect(factory.brs.createToken(TokenKind.LeftParen)).to.include({
+            expect(factory.ast.brs.createToken(TokenKind.LeftParen)).to.include({
                 kind: TokenKind.LeftParen,
                 text: '('
             });
-            expect(factory.brs.createToken(TokenKind.EndSub)).to.include({
+            expect(factory.ast.brs.createToken(TokenKind.EndSub)).to.include({
                 kind: TokenKind.EndSub,
                 text: 'end sub'
             });
         });
 
         it('creates tokens with custom text', () => {
-            expect(factory.brs.createToken(TokenKind.StringLiteral, '"hello"')).to.include({
+            expect(factory.ast.brs.createToken(TokenKind.StringLiteral, '"hello"')).to.include({
                 kind: TokenKind.StringLiteral,
                 text: '"hello"'
             });
         });
 
         it('creates identifiers', () => {
-            expect(factory.brs.createIdentifier('alpha')).to.include({
+            expect(factory.ast.brs.createIdentifier('alpha')).to.include({
                 kind: TokenKind.Identifier,
                 text: 'alpha'
             });
@@ -154,7 +163,7 @@ describe('BscFactory', () => {
 
         it('creates SG tokens', () => {
             const location = util.createLocation(1, 2, 3, 4);
-            expect(factory.sgXml.createToken('component', location)).to.eql({
+            expect(factory.ast.sgXml.createToken('component', location)).to.eql({
                 text: 'component',
                 location: location
             });
@@ -188,49 +197,49 @@ describe('BscFactory', () => {
 
     describe('literals', () => {
         it('creates literals of each type', () => {
-            expect(factory.brs.createIntegerLiteral('1').tokens.value.kind).to.eql(TokenKind.IntegerLiteral);
-            expect(factory.brs.createFloatLiteral('1.5').tokens.value.kind).to.eql(TokenKind.FloatLiteral);
-            expect(factory.brs.createDoubleLiteral('1.5#').tokens.value.kind).to.eql(TokenKind.DoubleLiteral);
-            expect(factory.brs.createLongIntegerLiteral('1&').tokens.value.kind).to.eql(TokenKind.LongIntegerLiteral);
-            expect(factory.brs.createInvalidLiteral().tokens.value.kind).to.eql(TokenKind.Invalid);
-            expect(factory.brs.createBooleanLiteral('true').tokens.value.kind).to.eql(TokenKind.True);
-            expect(factory.brs.createBooleanLiteral('false').tokens.value.kind).to.eql(TokenKind.False);
+            expect(factory.ast.brs.createIntegerLiteral('1').tokens.value.kind).to.eql(TokenKind.IntegerLiteral);
+            expect(factory.ast.brs.createFloatLiteral('1.5').tokens.value.kind).to.eql(TokenKind.FloatLiteral);
+            expect(factory.ast.brs.createDoubleLiteral('1.5#').tokens.value.kind).to.eql(TokenKind.DoubleLiteral);
+            expect(factory.ast.brs.createLongIntegerLiteral('1&').tokens.value.kind).to.eql(TokenKind.LongIntegerLiteral);
+            expect(factory.ast.brs.createInvalidLiteral().tokens.value.kind).to.eql(TokenKind.Invalid);
+            expect(factory.ast.brs.createBooleanLiteral('true').tokens.value.kind).to.eql(TokenKind.True);
+            expect(factory.ast.brs.createBooleanLiteral('false').tokens.value.kind).to.eql(TokenKind.False);
         });
 
         describe('createStringLiteral', () => {
             it('wraps the value in quotes', () => {
-                expect(factory.brs.createStringLiteral('hello world').tokens.value.text).to.equal('"hello world"');
+                expect(factory.ast.brs.createStringLiteral('hello world').tokens.value.text).to.equal('"hello world"');
             });
 
             it('does not wrap already-quoted value in extra quotes', () => {
-                expect(factory.brs.createStringLiteral('"hello world"').tokens.value.text).to.equal('"hello world"');
+                expect(factory.ast.brs.createStringLiteral('"hello world"').tokens.value.text).to.equal('"hello world"');
             });
 
             it('does not wrap badly quoted value in additional quotes', () => {
                 //leading
-                expect(factory.brs.createStringLiteral('"hello world').tokens.value.text).to.equal('"hello world');
+                expect(factory.ast.brs.createStringLiteral('"hello world').tokens.value.text).to.equal('"hello world');
                 //trailing
-                expect(factory.brs.createStringLiteral('hello world"').tokens.value.text).to.equal('hello world"');
+                expect(factory.ast.brs.createStringLiteral('hello world"').tokens.value.text).to.equal('hello world"');
             });
         });
 
         it('creates dotted identifiers', () => {
             const path = ['alpha', 'beta', 'charlie'];
-            const expression = factory.brs.createDottedIdentifier(path);
+            const expression = factory.ast.brs.createDottedIdentifier(path);
             expect(expression).to.be.instanceOf(DottedGetExpression);
             expect(util.getAllDottedGetPartsAsString(expression)).to.eql('alpha.beta.charlie');
             //does not mutate the input array
             expect(path).to.eql(['alpha', 'beta', 'charlie']);
 
-            expect(factory.brs.createDottedIdentifier(['alpha'])).to.be.instanceOf(VariableExpression);
+            expect(factory.ast.brs.createDottedIdentifier(['alpha'])).to.be.instanceOf(VariableExpression);
         });
     });
 
     describe('AST nodes', () => {
         it('creates a CallExpression with default parens', () => {
-            const callee = factory.brs.createVariableExpression({ name: 'doSomething' });
-            const arg = factory.brs.createIntegerLiteral('1');
-            const call = factory.brs.createCallExpression({
+            const callee = factory.ast.brs.createVariableExpression({ name: 'doSomething' });
+            const arg = factory.ast.brs.createIntegerLiteral('1');
+            const call = factory.ast.brs.createCallExpression({
                 callee: callee,
                 args: [arg]
             });
@@ -242,36 +251,36 @@ describe('BscFactory', () => {
         });
 
         it('creates statements with optional options', () => {
-            expect(factory.brs.createEmptyStatement()).to.be.instanceOf(EmptyStatement);
-            expect(factory.brs.createReturnStatement().value).to.be.undefined;
-            expect(factory.brs.createBody().statements).to.eql([]);
-            expect(factory.brs.createBlock().statements).to.eql([]);
+            expect(factory.ast.brs.createEmptyStatement()).to.be.instanceOf(EmptyStatement);
+            expect(factory.ast.brs.createReturnStatement().value).to.be.undefined;
+            expect(factory.ast.brs.createBody().statements).to.eql([]);
+            expect(factory.ast.brs.createBlock().statements).to.eql([]);
         });
 
         it('creates an empty function by default', () => {
-            expect(transpile(factory.brs.createFunctionExpression())).to.eql('function() end function');
+            expect(transpile(factory.ast.brs.createFunctionExpression())).to.eql('function() end function');
         });
 
         it('uses `end sub` for sub functions', () => {
-            const func = factory.brs.createFunctionExpression({ functionType: factory.brs.createToken(TokenKind.Sub) });
+            const func = factory.ast.brs.createFunctionExpression({ functionType: factory.ast.brs.createToken(TokenKind.Sub) });
             expect(transpile(func)).to.eql('sub() end sub');
         });
 
         it('creates a MethodStatement with a string name', () => {
-            const method = factory.brs.createMethodStatement({ name: 'new' });
+            const method = factory.ast.brs.createMethodStatement({ name: 'new' });
             expect(method.tokens.name.text).to.eql('new');
             expect(method.func.tokens.functionType.kind).to.eql(TokenKind.Function);
         });
 
         it('creates an IfStatement with default tokens', () => {
-            const ifStatement = factory.brs.createIfStatement({
-                condition: factory.brs.createBooleanLiteral('true'),
-                thenBranch: factory.brs.createBlock({
+            const ifStatement = factory.ast.brs.createIfStatement({
+                condition: factory.ast.brs.createBooleanLiteral('true'),
+                thenBranch: factory.ast.brs.createBlock({
                     statements: [
-                        factory.brs.createPrintStatement({
-                            print: factory.brs.createToken(TokenKind.Print),
+                        factory.ast.brs.createPrintStatement({
+                            print: factory.ast.brs.createToken(TokenKind.Print),
                             expressions: [
-                                factory.brs.createStringLiteral('hello')
+                                factory.ast.brs.createStringLiteral('hello')
                             ]
                         })
                     ]
@@ -285,30 +294,30 @@ describe('BscFactory', () => {
         });
 
         it('creates an IfStatement with an else branch', () => {
-            const ifStatement = factory.brs.createIfStatement({
-                condition: factory.brs.createBooleanLiteral('true'),
-                thenBranch: factory.brs.createBlock(),
-                elseBranch: factory.brs.createBlock()
+            const ifStatement = factory.ast.brs.createIfStatement({
+                condition: factory.ast.brs.createBooleanLiteral('true'),
+                thenBranch: factory.ast.brs.createBlock(),
+                elseBranch: factory.ast.brs.createBlock()
             });
             expect(ifStatement.tokens.else.kind).to.eql(TokenKind.Else);
         });
 
         it('creates assignments with default tokens', () => {
             expect(
-                transpile(factory.brs.createAssignmentStatement({ name: 'a', value: factory.brs.createIntegerLiteral('1') }))
+                transpile(factory.ast.brs.createAssignmentStatement({ name: 'a', value: factory.ast.brs.createIntegerLiteral('1') }))
             ).to.eql('a = 1');
             expect(
-                transpile(factory.brs.createDottedSetStatement({ obj: factory.brs.createVariableExpression({ name: 'a' }), name: 'b', value: factory.brs.createIntegerLiteral('1') }))
+                transpile(factory.ast.brs.createDottedSetStatement({ obj: factory.ast.brs.createVariableExpression({ name: 'a' }), name: 'b', value: factory.ast.brs.createIntegerLiteral('1') }))
             ).to.eql('a.b = 1');
             expect(
-                transpile(factory.brs.createIndexedSetStatement({ obj: factory.brs.createVariableExpression({ name: 'a' }), indexes: [factory.brs.createIntegerLiteral('0')], value: factory.brs.createIntegerLiteral('1') }))
+                transpile(factory.ast.brs.createIndexedSetStatement({ obj: factory.ast.brs.createVariableExpression({ name: 'a' }), indexes: [factory.ast.brs.createIntegerLiteral('0')], value: factory.ast.brs.createIntegerLiteral('1') }))
             ).to.eql('a[0] = 1');
         });
     });
 
     describe('SceneGraph', () => {
         it('creates attributes with default tokens', () => {
-            const attr = factory.sgXml.createSGAttribute({ key: 'name', value: 'MyComponent' });
+            const attr = factory.ast.sgXml.createSGAttribute({ key: 'name', value: 'MyComponent' });
             expect(attr.tokens.key.text).to.eql('name');
             expect(attr.tokens.equals.text).to.eql('=');
             expect(attr.tokens.openingQuote.text).to.eql('"');
@@ -317,7 +326,7 @@ describe('BscFactory', () => {
         });
 
         it('creates a component with default tokens and object attributes', () => {
-            const component = factory.sgXml.createSGComponent({
+            const component = factory.ast.sgXml.createSGComponent({
                 attributes: {
                     name: 'MyComponent',
                     extends: 'Group'
@@ -333,11 +342,11 @@ describe('BscFactory', () => {
         });
 
         it('accepts full tokens', () => {
-            const component = factory.sgXml.createSGComponent({
+            const component = factory.ast.sgXml.createSGComponent({
                 startTagOpen: { text: '<' },
                 startTagName: { text: 'component' },
                 attributes: [
-                    factory.sgXml.createSGAttribute({ key: { text: 'name' }, value: { text: 'MyComponent' } })
+                    factory.ast.sgXml.createSGAttribute({ key: { text: 'name' }, value: { text: 'MyComponent' } })
                 ],
                 startTagClose: { text: '>' },
                 elements: [],
@@ -349,20 +358,20 @@ describe('BscFactory', () => {
         });
 
         it('creates self-closing elements', () => {
-            const field = factory.sgXml.createSGInterfaceField({ attributes: { id: 'title', type: 'string' } });
+            const field = factory.ast.sgXml.createSGInterfaceField({ attributes: { id: 'title', type: 'string' } });
             expect(field).to.be.instanceOf(SGInterfaceField);
             expect(field.id).to.eql('title');
             expect(field.type).to.eql('string');
             expect(field.tokens.startTagClose.text).to.eql('/>');
             expect(field.tokens.endTagName).to.be.undefined;
 
-            const script = factory.sgXml.createSGScript({ attributes: { uri: 'pkg:/source/main.brs' } });
+            const script = factory.ast.sgXml.createSGScript({ attributes: { uri: 'pkg:/source/main.brs' } });
             expect(script).to.be.instanceOf(SGScript);
             expect(script.uri).to.eql('pkg:/source/main.brs');
         });
 
         it('creates a prolog', () => {
-            const prolog = factory.sgXml.createSGProlog({ attributes: { version: '1.0' } });
+            const prolog = factory.ast.sgXml.createSGProlog({ attributes: { version: '1.0' } });
             expect(prolog).to.be.instanceOf(SGProlog);
             expect(prolog.tokens.startTagOpen.text).to.eql('<?');
             expect(prolog.tokens.startTagName.text).to.eql('xml');
@@ -370,11 +379,11 @@ describe('BscFactory', () => {
         });
 
         it('creates an SGAst', () => {
-            const component = factory.sgXml.createSGComponent({ attributes: { name: 'MyComponent' } });
-            const ast = factory.sgXml.createSGAst({ rootElement: component, componentElement: component });
+            const component = factory.ast.sgXml.createSGComponent({ attributes: { name: 'MyComponent' } });
+            const ast = factory.ast.sgXml.createSGAst({ rootElement: component, componentElement: component });
             expect(ast).to.be.instanceOf(SGAst);
             expect(ast.componentElement).to.equal(component);
-            expect(factory.sgXml.createSGAst()).to.be.instanceOf(SGAst);
+            expect(factory.ast.sgXml.createSGAst()).to.be.instanceOf(SGAst);
         });
     });
 });

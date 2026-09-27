@@ -614,8 +614,8 @@ describe('BrsFile', () => {
         expect(file.ownScriptImports).to.be.empty;
         file.parser.ast.statements.push(
             new ImportStatement({
-                import: bscFactory.brs.createToken(TokenKind.Import),
-                path: bscFactory.brs.createToken(TokenKind.StringLiteral, 'pkg:/source/lib.brs')
+                import: bscFactory.ast.brs.createToken(TokenKind.Import),
+                path: bscFactory.ast.brs.createToken(TokenKind.StringLiteral, 'pkg:/source/lib.brs')
             })
         );
         expect(file.ownScriptImports).to.be.empty;
@@ -2543,8 +2543,8 @@ describe('BrsFile', () => {
                 `);
                 const body = file.ast.findChild<Block>(isBlock);
                 body.statements.push(new CallExpression({
-                    callee: new LiteralExpression({ value: bscFactory.brs.createIdentifier('lcase') }),
-                    args: [bscFactory.brs.createStringLiteral('HELLO')]
+                    callee: new LiteralExpression({ value: bscFactory.ast.brs.createIdentifier('lcase') }),
+                    args: [bscFactory.ast.brs.createStringLiteral('HELLO')]
                 }));
 
                 await testTranspile(file, `
@@ -2561,7 +2561,7 @@ describe('BrsFile', () => {
                 `);
                 const body = file.ast.findChild<Block>(isBlock);
                 body.statements.push(new PrintStatement({
-                    expressions: [bscFactory.brs.createStringLiteral('HELLO')]
+                    expressions: [bscFactory.ast.brs.createStringLiteral('HELLO')]
                 }));
 
                 await testTranspile(file, `
@@ -2579,7 +2579,7 @@ describe('BrsFile', () => {
                     func: new FunctionExpression({
                         body: new Block({ statements: [] })
                     }),
-                    name: bscFactory.brs.createIdentifier('main')
+                    name: bscFactory.ast.brs.createIdentifier('main')
                 }));
 
                 await testTranspile(file, `
@@ -4769,20 +4769,20 @@ describe('BrsFile', () => {
                 `);
                 program.validate();
                 const funcStmt = mainFile.ast.statements[0] as FunctionStatement;
-                funcStmt.leadingTrivia.push(bscFactory.brs.createToken(TokenKind.Comment, `'comment before function`), bscFactory.brs.createToken(TokenKind.Newline));
-                funcStmt.func.body.statements[0].leadingTrivia.unshift(bscFactory.brs.createToken(TokenKind.Comment, `'comment after func declaration`));
+                funcStmt.leadingTrivia.push(bscFactory.ast.brs.createToken(TokenKind.Comment, `'comment before function`), bscFactory.ast.brs.createToken(TokenKind.Newline));
+                funcStmt.func.body.statements[0].leadingTrivia.unshift(bscFactory.ast.brs.createToken(TokenKind.Comment, `'comment after func declaration`));
 
                 funcStmt.func.body.statements[0].leadingTrivia.push(
-                    bscFactory.brs.createToken(TokenKind.Comment, `'comment at start of function`),
-                    bscFactory.brs.createToken(TokenKind.Newline)
+                    bscFactory.ast.brs.createToken(TokenKind.Comment, `'comment at start of function`),
+                    bscFactory.ast.brs.createToken(TokenKind.Newline)
                 );
 
                 funcStmt.func.endTrivia.push(
-                    bscFactory.brs.createToken(TokenKind.Comment, `'comment at end of function`),
-                    bscFactory.brs.createToken(TokenKind.Newline)
+                    bscFactory.ast.brs.createToken(TokenKind.Comment, `'comment at end of function`),
+                    bscFactory.ast.brs.createToken(TokenKind.Newline)
                 );
 
-                mainFile.parser.eofToken.leadingTrivia.push(bscFactory.brs.createToken(TokenKind.Comment, `'comment at end of file`));
+                mainFile.parser.eofToken.leadingTrivia.push(bscFactory.ast.brs.createToken(TokenKind.Comment, `'comment at end of file`));
 
 
                 await testTranspile(mainFile, `
