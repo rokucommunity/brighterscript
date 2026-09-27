@@ -348,7 +348,82 @@ describe('SpreadExpression', () => {
             `);
         });
 
-        it('transpiles spread assigned to a property', async () => {
+        it('never groups trailing AA members into an append', async () => {
+            await testTranspile(`
+                sub main()
+                    obj = {}
+                    result = {...obj, a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8}
+                end sub
+            `, `
+                sub main()
+                    obj = {}
+                    result = {}
+                    result.append(obj)
+                    result.a = 1
+                    result.b = 2
+                    result.c = 3
+                    result.d = 4
+                    result.e = 5
+                    result.f = 6
+                    result.g = 7
+                    result.h = 8
+                end sub
+            `);
+        });
+
+        it('keeps pushing trailing array elements below the append threshold', async () => {
+            await testTranspile(`
+                sub main()
+                    arr = [1]
+                    result = [...arr, 1, 2, 3, 4, 5, 6, 7]
+                end sub
+            `, `
+                sub main()
+                    arr = [
+                        1
+                    ]
+                    result = []
+                    result.append(arr)
+                    result.push(1)
+                    result.push(2)
+                    result.push(3)
+                    result.push(4)
+                    result.push(5)
+                    result.push(6)
+                    result.push(7)
+                end sub
+            `);
+        });
+
+        it('appends a long run of trailing array elements as one literal', async () => {
+            await testTranspile(`
+                sub main()
+                    arr = [1]
+                    result = [...arr, 1, 2, 3, 4, 5, 6, 7, 8, ...arr]
+                end sub
+            `, `
+                sub main()
+                    arr = [
+                        1
+                    ]
+                    result = []
+                    result.append(arr)
+                    result.append([
+                        1
+                        2
+                        3
+                        4
+                        5
+                        6
+                        7
+                        8
+                    ])
+                    result.append(arr)
+                end sub
+            `);
+        });
+
+        it('builds in a temp when assigned to a property', async () => {
             await testTranspile(`
                 sub main()
                     arr = [1]
@@ -359,13 +434,14 @@ describe('SpreadExpression', () => {
                     arr = [
                         1
                     ]
-                    m.list = []
-                    m.list.append(arr)
+                    __bsc_tmp = []
+                    __bsc_tmp.append(arr)
+                    m.list = __bsc_tmp
                 end sub
             `);
         });
 
-        it('transpiles spread assigned to an index', async () => {
+        it('builds in a temp when assigned to an index', async () => {
             await testTranspile(`
                 sub main()
                     arr = [1]
@@ -376,8 +452,9 @@ describe('SpreadExpression', () => {
                     arr = [
                         1
                     ]
-                    m["list"] = []
-                    m["list"].append(arr)
+                    __bsc_tmp = []
+                    __bsc_tmp.append(arr)
+                    m["list"] = __bsc_tmp
                 end sub
             `);
         });
@@ -401,7 +478,7 @@ describe('SpreadExpression', () => {
             `);
         });
 
-        it('builds in a temp when a trailing element reads the target property', async () => {
+        it('temp path keeps the original property value readable', async () => {
             await testTranspile(`
                 sub main()
                     m.list = [...m.list, 4]
@@ -416,15 +493,19 @@ describe('SpreadExpression', () => {
             `);
         });
 
-        it('does not use a temp when trailing elements read a sibling property', async () => {
+        it('does not use a temp for a local target that is not read by trailing elements', async () => {
             await testTranspile(`
                 sub main()
-                    m.list = [...m.other]
+                    other = [1]
+                    list = [...other]
                 end sub
             `, `
                 sub main()
-                    m.list = []
-                    m.list.append(m.other)
+                    other = [
+                        1
+                    ]
+                    list = []
+                    list.append(other)
                 end sub
             `);
         });

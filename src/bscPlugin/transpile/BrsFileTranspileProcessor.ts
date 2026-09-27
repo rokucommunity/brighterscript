@@ -6,17 +6,26 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, OnPrepareFileEvent } from '../../interfaces';
 import type { Identifier } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
-import type { AstNode, Expression, Statement } from '../../parser/AstNode';
-import type { AALiteralExpression, ArrayLiteralExpression, TernaryExpression } from '../../parser/Expression';
-import { DottedGetExpression, IndexedGetExpression, LiteralExpression, VariableExpression } from '../../parser/Expression';
+import type { Expression, Statement } from '../../parser/AstNode';
+import type { AALiteralExpression, TernaryExpression } from '../../parser/Expression';
+import { ArrayLiteralExpression, DottedGetExpression, LiteralExpression, VariableExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { AssignmentStatement, Block, Body, ConstStatement, DottedSetStatement, IndexedSetStatement, NamespaceStatement } from '../../parser/Statement';
+import type { Block, Body, ConstStatement, NamespaceStatement } from '../../parser/Statement';
 import { AugmentedAssignmentStatement, ExpressionStatement, type AliasStatement, type IfStatement } from '../../parser/Statement';
 import type { Location } from 'vscode-languageserver';
 import type { Scope } from '../../Scope';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import util from '../../util';
 import { BslibManager } from '../serialize/BslibManager';
+
+/**
+ * When at least this many plain array elements follow a spread, they are appended as one literal
+ * (`x.append([1, 2, 3])`) instead of one `x.push(n)` each. Measured with bsbench (`SpreadTrailing*` suites,
+ * Roku Express 4K): `push` wins up to 6 elements, the two tie at 8, and `append` pulls ahead from 12 (+6%)
+ * to 32 (+44%). AA members are never grouped: `x.a = 1` statements beat `x.append({a: 1, ...})` by 35-70%
+ * at every size, target, key kind and value kind tested.
+ */
+const ARRAY_SPREAD_APPEND_THRESHOLD = 8;
 
 export class BrsFilePreTranspileProcessor {
     public constructor(
@@ -72,8 +81,8 @@ export class BrsFilePreTranspileProcessor {
 
     /**
      * Lower `x = [a, ...b, c]` into `x = [a]` followed by `x.append(b)` and `x.push(c)` (and the AA equivalents).
-     * When the trailing elements read from `x` itself, the literal is built in a temp variable first so those
-     * reads still see the original value.
+     * The literal is built in a local temp first (then assigned to the real target) when the target is not a
+     * plain local variable, or when the trailing elements read from the target itself.
      */
     private processSpreadLiteral(literal: ArrayLiteralExpression | AALiteralExpression, visitor: ReturnType<typeof createVisitor>, walkMode: WalkMode) {
         if (!literal.hasSpread) {
@@ -84,6 +93,7 @@ export class BrsFilePreTranspileProcessor {
             //validation already flagged this spread as unsupported
             return;
         }
+        //the statement must live in a statement list so we have somewhere to insert the follow-up statements
         const block = statement.parent as Block | Body;
         const index = block.statements.indexOf(statement);
         if (index < 0) {
@@ -91,26 +101,34 @@ export class BrsFilePreTranspileProcessor {
         }
         const editor = this.event.editor;
         const isArray = isArrayLiteralExpression(literal);
+
+        //everything from the first spread onward leaves the literal and becomes statements
         const elements = literal.elements as Expression[];
         const firstSpreadIndex = elements.findIndex(e => isSpreadExpression(e));
         const trailing = elements.slice(firstSpreadIndex);
         editor.arraySplice(elements, firstSpreadIndex, trailing.length);
 
         let statements: Statement[];
-        if (this.spreadReferencesTarget(statement, trailing)) {
+        if (!isAssignmentStatement(statement) || this.spreadReferencesLocal(statement.tokens.name.text, trailing)) {
+            //Build into a local temp and assign it to the real target at the end. Two reasons:
+            // - `m.list = [...]`: every follow-up statement would re-evaluate `m.list`; a local is 10-40% faster (bsbench)
+            // - `list = [...list, 4]`: assigning the trimmed literal first would clobber `list` before we read it
             const tmpName = '__bsc_tmp';
             const createTarget = () => createVariableExpression(tmpName, literal.location);
             statements = [
                 createAssignmentStatement({ name: createIdentifier(tmpName, literal.location), value: literal }),
-                ...trailing.map(element => this.createSpreadStatement(createTarget, element, isArray))
+                ...this.createSpreadStatements(createTarget, trailing, isArray)
             ];
             editor.setProperty(statement, 'value', createTarget());
             editor.arraySplice(block.statements, index, 0, ...statements);
         } else {
-            const createTarget = () => this.createSpreadTarget(statement);
-            statements = trailing.map(element => this.createSpreadStatement(createTarget, element, isArray));
+            //local variable target: assign the trimmed literal, then append/push/set the rest directly on it
+            const createTarget = () => createVariableExpression(statement.tokens.name.text, statement.tokens.name.location);
+            statements = this.createSpreadStatements(createTarget, trailing, isArray);
             editor.arraySplice(block.statements, index + 1, 0, ...statements);
         }
+
+        //new statements were built outside the walk, so link them into the tree and walk them for nested rewrites (e.g. ternaries)
         for (const newStatement of statements) {
             newStatement.parent = block;
             newStatement.walk(visitor, { walkMode: walkMode });
@@ -118,49 +136,66 @@ export class BrsFilePreTranspileProcessor {
     }
 
     /**
-     * Build a fresh expression that reads the location the spread literal was assigned to
+     * Turn the elements that followed the first spread into statements against the target, in order.
+     * Spreads become `target.append(source)`. Plain elements become one statement each, except a long run of
+     * array elements, which is cheaper as a single `target.append([...])` (see ARRAY_SPREAD_APPEND_THRESHOLD).
+     * `createTarget` is called once per statement because each needs its own copy of the target node.
      */
-    private createSpreadTarget(statement: AssignmentStatement | DottedSetStatement | IndexedSetStatement): Expression {
-        if (isAssignmentStatement(statement)) {
-            return createVariableExpression(statement.tokens.name.text, statement.tokens.name.location);
-        } else if (isDottedSetStatement(statement)) {
-            return new DottedGetExpression({
-                obj: statement.obj.clone(),
-                name: util.cloneToken(statement.tokens.name),
-                dot: createToken(TokenKind.Dot, '.', statement.tokens.dot?.location)
-            });
-        } else {
-            return new IndexedGetExpression({
-                obj: statement.obj.clone(),
-                indexes: statement.indexes.map(x => x.clone()),
-                openingSquare: util.cloneToken(statement.tokens.openingSquare),
-                closingSquare: util.cloneToken(statement.tokens.closingSquare)
-            });
+    private createSpreadStatements(createTarget: () => Expression, trailing: Expression[], isArray: boolean): Statement[] {
+        const statements: Statement[] = [];
+        let run: Expression[] = [];
+        const flushRun = () => {
+            if (isArray && run.length >= ARRAY_SPREAD_APPEND_THRESHOLD) {
+                const literal = new ArrayLiteralExpression({ elements: run });
+                statements.push(this.createMethodCallStatement(createTarget(), 'append', literal, run[0].location));
+            } else {
+                for (const element of run) {
+                    statements.push(this.createElementStatement(createTarget(), element, isArray));
+                }
+            }
+            run = [];
+        };
+        for (const element of trailing) {
+            if (isSpreadExpression(element)) {
+                flushRun();
+                statements.push(this.createMethodCallStatement(createTarget(), 'append', element.expression, element.location));
+            } else {
+                run.push(element);
+            }
         }
+        flushRun();
+        return statements;
     }
 
-    private createSpreadStatement(createTarget: () => Expression, element: Expression, isArray: boolean): Statement {
-        if (isSpreadExpression(element)) {
-            return this.createMethodCallStatement(createTarget(), 'append', element.expression, element.location);
-        }
+    /**
+     * Statement that adds a single plain (non-spread) element to the target
+     */
+    private createElementStatement(target: Expression, element: Expression, isArray: boolean): Statement {
         if (isArray) {
-            return this.createMethodCallStatement(createTarget(), 'push', element, element.location);
+            //`target.push(value)`
+            return this.createMethodCallStatement(target, 'push', element, element.location);
         }
         if (isAAIndexedMemberExpression(element)) {
-            return createIndexedSetStatement({ obj: createTarget(), indexes: [element.key], value: element.value });
+            //`[key]: value` -> `target[key] = value`
+            return createIndexedSetStatement({ obj: target, indexes: [element.key], value: element.value });
         }
         if (isAAMemberExpression(element)) {
             if (element.tokens.key.kind === TokenKind.StringLiteral) {
+                //`"my-key": value` -> `target["my-key"] = value` (the key may not be a valid identifier)
                 return createIndexedSetStatement({
-                    obj: createTarget(),
+                    obj: target,
                     indexes: [new LiteralExpression({ value: element.tokens.key })],
                     value: element.value
                 });
             }
-            return createDottedSetStatement({ obj: createTarget(), name: element.tokens.key as Identifier, value: element.value });
+            //`key: value` -> `target.key = value`
+            return createDottedSetStatement({ obj: target, name: element.tokens.key as Identifier, value: element.value });
         }
     }
 
+    /**
+     * `obj.methodName(arg)` as a standalone statement
+     */
     private createMethodCallStatement(obj: Expression, methodName: string, arg: Expression, location: Location) {
         return new ExpressionStatement({
             expression: createCall(
@@ -175,32 +210,13 @@ export class BrsFilePreTranspileProcessor {
     }
 
     /**
-     * Does any trailing element read from the spread's assignment target (e.g. `list = [...list, 1]`)?
-     * Errs on the side of `true` whenever the target can't be expressed as a simple dotted path.
+     * Does any trailing element read the local variable being assigned (e.g. `list = [...list, 1]`)?
      */
-    private spreadReferencesTarget(statement: AssignmentStatement | DottedSetStatement | IndexedSetStatement, trailing: Expression[]) {
-        const getParts = (node: AstNode) => util.getAllDottedGetParts(node)?.map(x => x.text.toLowerCase());
-        let targetParts: string[];
-        if (isAssignmentStatement(statement)) {
-            targetParts = [statement.tokens.name.text.toLowerCase()];
-        } else {
-            targetParts = getParts(statement.obj);
-            if (targetParts && isDottedSetStatement(statement)) {
-                targetParts.push(statement.tokens.name.text.toLowerCase());
-            }
-        }
-        if (!targetParts) {
-            return true;
-        }
-        for (const element of trailing) {
-            for (const expression of util.getExpressionInfo(element, this.event.file).expressions) {
-                const parts = getParts(expression);
-                if (parts && parts.length >= targetParts.length && targetParts.every((part, i) => part === parts[i])) {
-                    return true;
-                }
-            }
-        }
-        return false;
+    private spreadReferencesLocal(name: string, trailing: Expression[]) {
+        const lowerName = name.toLowerCase();
+        return trailing.some(element => {
+            return util.getExpressionInfo(element, this.event.file).uniqueVarNames.some(varName => varName.toLowerCase() === lowerName);
+        });
     }
 
 

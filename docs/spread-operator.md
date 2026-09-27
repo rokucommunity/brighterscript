@@ -80,17 +80,21 @@ A literal containing a spread is lowered into plain statements, so there is no r
 
 1. Elements before the first spread stay in the literal, which is assigned as normal.
 2. Each remaining element becomes a statement against the assigned target: spreads call `.append()` (the native `roArray` / `roAssociativeArray` method), other array elements call `.push()`, and other AA members become property or index assignments. Order is preserved.
+3. A run of eight or more plain array elements after a spread is appended together as a single literal — `result.append([1, 2, 3, 4, 5, 6, 7, 8])` — since at that size one append is cheaper than the individual pushes. AA members are never grouped this way: individual property sets are faster than appending a literal at every size measured.
 
-If any element after the spread reads from the target itself (for example `list = [...list, 4]` or `m.items = [...m.items, item]`), the literal is built in a temporary variable first and assigned to the target at the end, so those reads still see the original value:
+The literal is built in a temporary local variable and assigned to the target at the end in two situations:
+
+- **The target is not a plain local variable** (`m.items = [...]`, `store["items"] = [...]`). Statements against a local are 10-40% faster than repeatedly re-evaluating `m.items`.
+- **An element after the spread reads the target itself** (`list = [...list, 4]`), so the read still sees the original value.
 
 ```brightscript
 __bsc_tmp = []
-__bsc_tmp.append(list)
-__bsc_tmp.push(4)
-list = __bsc_tmp
+__bsc_tmp.append(m.items)
+__bsc_tmp.push(item)
+m.items = __bsc_tmp
 ```
 
-Literals without a spread transpile exactly as they always have.
+These choices were measured on device with the `SpreadTrailing*` suites in [bsbench](https://github.com/rokucommunity/bsbench). Literals without a spread transpile exactly as they always have.
 
 ## Limitations
 - **The literal must be the direct right-hand side of an assignment.** Spread is supported when the array or AA literal is assigned to a variable (`x = [...a]`), a property (`m.x = [...a]`), or an index (`m["x"] = [...a]`). Using it anywhere else — a function argument, a `return` value, a nested literal, an augmented assignment such as `x += [...a]` — reports a diagnostic. This keeps the transpiled output to simple statements rather than wrapping the literal in a function.
