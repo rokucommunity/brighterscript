@@ -1169,4 +1169,288 @@ describe('HoverProcessor', () => {
             expect(hover?.contents).eql([`${fence('data as string')}${commentSep}A cool JSON string of data`]);
         });
     });
+
+    describe('location boundaries', () => {
+        //NOTE: these tests intentionally only use public `Program` APIs (Position in, Range out) so they
+        //can be run against any implementation of token/node locations. All expected values are hand-counted.
+
+        /**
+         * Join lines with the given line ending. No trailing newline is added
+         */
+        function lines(eol: string, ...items: string[]) {
+            return items.join(eol);
+        }
+
+        function hoverAt(srcPath: string, line: number, character: number) {
+            return program.getHover(srcPath, util.createPosition(line, character));
+        }
+
+        it('finds the identifier at its first character, middle, and immediately after its last character', () => {
+            const file = program.setFile('source/main.brs', lines('\n',
+                'sub main()',
+                '    alpha = 1',
+                '    print alpha',
+                'end sub'
+            ));
+            program.validate();
+            const expected = [{
+                range: util.createRange(2, 10, 2, 15),
+                contents: [fence('alpha as integer')]
+            }];
+            //print |alpha
+            expect(hoverAt(file.srcPath, 2, 10)).to.eql(expected);
+            //print al|pha
+            expect(hoverAt(file.srcPath, 2, 12)).to.eql(expected);
+            //print alpha|  (the end of a range is inclusive)
+            expect(hoverAt(file.srcPath, 2, 15)).to.eql(expected);
+
+            //alpha| = 1  (immediately after the declaration, which is followed by whitespace)
+            expect(hoverAt(file.srcPath, 1, 9)).to.eql([{
+                range: util.createRange(1, 4, 1, 9),
+                contents: [fence('alpha as integer')]
+            }]);
+
+            //print| alpha  (immediately after `print`, which is not hoverable)
+            expect(hoverAt(file.srcPath, 2, 9)).to.eql([]);
+            //pri|nt
+            expect(hoverAt(file.srcPath, 2, 6)).to.eql([]);
+            //leading whitespace
+            expect(hoverAt(file.srcPath, 2, 2)).to.eql([]);
+        });
+
+        it('finds identifiers at column 0 of a line and at the end of a line', () => {
+            const file = program.setFile('source/main.brs', lines('\n',
+                'sub main()',
+                'beta = 1',
+                'print beta',
+                'end sub'
+            ));
+            program.validate();
+            //|beta = 1
+            expect(hoverAt(file.srcPath, 1, 0)).to.eql([{
+                range: util.createRange(1, 0, 1, 4),
+                contents: [fence('beta as integer')]
+            }]);
+            //print beta|
+            expect(hoverAt(file.srcPath, 2, 10)).to.eql([{
+                range: util.createRange(2, 6, 2, 10),
+                contents: [fence('beta as integer')]
+            }]);
+            //|end sub
+            expect(hoverAt(file.srcPath, 3, 0)).to.eql([{
+                range: util.createRange(3, 0, 3, 7),
+                contents: [fence('sub main() as void')]
+            }]);
+        });
+
+        it('handles CRLF line endings', () => {
+            const file = program.setFile('source/main.brs', lines('\r\n',
+                'sub main()',
+                '    gamma = 1',
+                '    print gamma',
+                '    print gamma + 1',
+                'delta = gamma',
+                'end sub'
+            ));
+            program.validate();
+            const gammaLine3 = [{
+                range: util.createRange(3, 10, 3, 15),
+                contents: [fence('gamma as integer')]
+            }];
+            expect(hoverAt(file.srcPath, 3, 10)).to.eql(gammaLine3);
+            expect(hoverAt(file.srcPath, 3, 13)).to.eql(gammaLine3);
+            expect(hoverAt(file.srcPath, 3, 15)).to.eql(gammaLine3);
+
+            //end of the line, right before the `\r\n`
+            expect(hoverAt(file.srcPath, 2, 15)).to.eql([{
+                range: util.createRange(2, 10, 2, 15),
+                contents: [fence('gamma as integer')]
+            }]);
+
+            //column 0 after a `\r\n`
+            expect(hoverAt(file.srcPath, 4, 0)).to.eql([{
+                range: util.createRange(4, 0, 4, 5),
+                contents: [fence('delta as integer')]
+            }]);
+            //last identifier on the line before the `\r\n`
+            expect(hoverAt(file.srcPath, 4, 13)).to.eql([{
+                range: util.createRange(4, 8, 4, 13),
+                contents: [fence('gamma as integer')]
+            }]);
+            expect(hoverAt(file.srcPath, 5, 0)).to.eql([{
+                range: util.createRange(5, 0, 5, 7),
+                contents: [fence('sub main() as void')]
+            }]);
+        });
+
+        it('uses utf-16 code units for characters after a surrogate pair emoji on the same line', () => {
+            const file = program.setFile('source/main.brs', lines('\n',
+                'sub main()',
+                '    name = "x"',
+                '    print "😀😀" + name',
+                `    ' 😀 comment`,
+                '    print name',
+                'end sub'
+            ));
+            program.validate();
+            //each emoji is 2 utf-16 code units, so `name` starts at 19 (not 17)
+            const expected = [{
+                range: util.createRange(2, 19, 2, 23),
+                contents: [fence('name as string')]
+            }];
+            expect(hoverAt(file.srcPath, 2, 19)).to.eql(expected);
+            expect(hoverAt(file.srcPath, 2, 21)).to.eql(expected);
+            expect(hoverAt(file.srcPath, 2, 23)).to.eql(expected);
+
+            //the line after the emoji comment is unaffected
+            expect(hoverAt(file.srcPath, 4, 10)).to.eql([{
+                range: util.createRange(4, 10, 4, 14),
+                contents: [fence('name as string')]
+            }]);
+        });
+
+        it('counts lines through multi-line template strings', () => {
+            const file = program.setFile('source/main.bs', lines('\n',
+                'sub main()',
+                '    name = "bob"',
+                /* eslint-disable no-template-curly-in-string */
+                '    msg = `hello ${name}',
+                'line two ${name}',
+                'and ${name} three`',
+                /* eslint-enable no-template-curly-in-string */
+                '    print msg + name',
+                'end sub'
+            ));
+            program.validate();
+            //after the template string
+            const nameAfter = [{
+                range: util.createRange(5, 16, 5, 20),
+                contents: [fence('name as string')]
+            }];
+            expect(hoverAt(file.srcPath, 5, 16)).to.eql(nameAfter);
+            expect(hoverAt(file.srcPath, 5, 18)).to.eql(nameAfter);
+            expect(hoverAt(file.srcPath, 5, 20)).to.eql(nameAfter);
+
+            expect(hoverAt(file.srcPath, 5, 10)).to.eql([{
+                range: util.createRange(5, 10, 5, 13),
+                contents: [fence('msg as string')]
+            }]);
+
+            //the first character of an identifier directly after `${` is also the (inclusive) end of the `${`
+            //token, which is found first and is not hoverable
+            expect(hoverAt(file.srcPath, 2, 19)).to.eql([]);
+            expect(hoverAt(file.srcPath, 3, 11)).to.eql([]);
+            expect(hoverAt(file.srcPath, 4, 6)).to.eql([]);
+
+            //inside `${}` on the first line of the template string
+            expect(hoverAt(file.srcPath, 2, 20)).to.eql([{
+                range: util.createRange(2, 19, 2, 23),
+                contents: [fence('name as string')]
+            }]);
+            //inside `${}` on the second line of the template string
+            expect(hoverAt(file.srcPath, 3, 12)).to.eql([{
+                range: util.createRange(3, 11, 3, 15),
+                contents: [fence('name as string')]
+            }]);
+            expect(hoverAt(file.srcPath, 3, 15)).to.eql([{
+                range: util.createRange(3, 11, 3, 15),
+                contents: [fence('name as string')]
+            }]);
+            //inside `${}` on the third line of the template string
+            expect(hoverAt(file.srcPath, 4, 8)).to.eql([{
+                range: util.createRange(4, 6, 4, 10),
+                contents: [fence('name as string')]
+            }]);
+            expect(hoverAt(file.srcPath, 4, 10)).to.eql([{
+                range: util.createRange(4, 6, 4, 10),
+                contents: [fence('name as string')]
+            }]);
+        });
+
+        it('finds items on the last line of a file with no trailing newline', () => {
+            const file = program.setFile('source/main.brs', lines('\n',
+                'sub main()',
+                'end sub',
+                'sub last(): value = 1: print value: end sub'
+            ));
+            program.validate();
+            //sub |last()
+            expect(hoverAt(file.srcPath, 2, 4)).to.eql([{
+                range: util.createRange(2, 4, 2, 8),
+                contents: [fence('sub last() as void')]
+            }]);
+            //value| = 1
+            expect(hoverAt(file.srcPath, 2, 17)).to.eql([{
+                range: util.createRange(2, 12, 2, 17),
+                contents: [fence('value as integer')]
+            }]);
+            //print value|:
+            expect(hoverAt(file.srcPath, 2, 34)).to.eql([{
+                range: util.createRange(2, 29, 2, 34),
+                contents: [fence('value as integer')]
+            }]);
+            //end sub|<EOF>
+            expect(hoverAt(file.srcPath, 2, 43)).to.eql([{
+                range: util.createRange(2, 36, 2, 43),
+                contents: [fence('sub last() as void')]
+            }]);
+        });
+
+        it('finds symbols in namespaces, classes, and empty function bodies', () => {
+            const file = program.setFile('source/main.bs', lines('\n',
+                'namespace alpha.beta',
+                '    function noop()',
+                '    end function',
+                '    class Widget',
+                '        sub render()',
+                '        end sub',
+                '    end class',
+                'end namespace',
+                'sub main()',
+                '    alpha.beta.noop()',
+                '    w = new alpha.beta.Widget()',
+                '    w.render()',
+                'end sub'
+            ));
+            program.validate();
+            //function |noop()  (a function with an empty body)
+            const noopDeclaration = [{
+                range: util.createRange(1, 13, 1, 17),
+                contents: [fence('function alpha.beta.noop() as dynamic')]
+            }];
+            expect(hoverAt(file.srcPath, 1, 13)).to.eql(noopDeclaration);
+            expect(hoverAt(file.srcPath, 1, 15)).to.eql(noopDeclaration);
+            expect(hoverAt(file.srcPath, 1, 17)).to.eql(noopDeclaration);
+
+            //alpha.beta.|noop()  (the inclusive end of the `.` token wins, and `.` is not hoverable)
+            expect(hoverAt(file.srcPath, 9, 15)).to.eql([]);
+            //alpha.beta.n|oop()
+            expect(hoverAt(file.srcPath, 9, 16)).to.eql([{
+                range: util.createRange(9, 15, 9, 19),
+                contents: [fence('function alpha.beta.noop() as dynamic')]
+            }]);
+            //alpha.beta.noop|()
+            expect(hoverAt(file.srcPath, 9, 19)).to.eql([{
+                range: util.createRange(9, 15, 9, 19),
+                contents: [fence('function alpha.beta.noop() as dynamic')]
+            }]);
+
+            //sub |render()  (a method with an empty body)
+            expect(hoverAt(file.srcPath, 4, 12)).to.eql([{
+                range: util.createRange(4, 12, 4, 18),
+                contents: [fence('sub alpha.beta.Widget.render() as void')]
+            }]);
+
+            //w.render|()
+            expect(hoverAt(file.srcPath, 11, 12)).to.eql([{
+                range: util.createRange(11, 6, 11, 12),
+                contents: [fence('sub alpha.beta.Widget.render() as void')]
+            }]);
+
+            //new alpha.beta.Widget|()
+            expect(hoverAt(file.srcPath, 10, 29)[0]?.range).to.eql(util.createRange(10, 23, 10, 29));
+            //class |Widget
+            expect(hoverAt(file.srcPath, 3, 10)[0]?.range).to.eql(util.createRange(3, 10, 3, 16));
+        });
+    });
 });

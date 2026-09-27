@@ -8,7 +8,8 @@ import { isToken } from './Token';
 import { rangeToArray } from '../parser/Parser.spec';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { util } from '../util';
+import { util, standardizePath as s } from '../util';
+import { expectDiagnostics, rootDir } from '../testHelpers.spec';
 
 describe('lexer', () => {
     it('recognizes the `const` keyword', () => {
@@ -1933,6 +1934,71 @@ describe('lexer', () => {
                     //EOF
                     { leadingTrivia: [` `, `'trueComment`, `\n`, `'eof`], text: `` }
                 ]);
+        });
+    });
+
+    describe('location boundaries', () => {
+        const srcPath = s`${rootDir}/source/main.brs`;
+        const uri = util.pathToUri(srcPath);
+
+        function scan(text: string) {
+            return Lexer.scan(text, { srcPath: srcPath }).diagnostics;
+        }
+
+        it('flags an unterminated string at the end of the file', () => {
+            expectDiagnostics(scan('x = "abc'), [{
+                ...DiagnosticMessages.unterminatedString(),
+                location: { uri: uri, range: Range.create(0, 4, 0, 8) }
+            }]);
+        });
+
+        it('flags an unterminated string followed by a LF newline', () => {
+            expectDiagnostics(scan('x = "abc\ny = 1'), [{
+                ...DiagnosticMessages.unterminatedString(),
+                location: { uri: uri, range: Range.create(0, 4, 0, 7) }
+            }]);
+        });
+
+        it('flags an unterminated string on a CRLF line', () => {
+            expectDiagnostics(scan('x = 1\r\ny = "abc\r\nz = 3'), [{
+                ...DiagnosticMessages.unterminatedString(),
+                location: { uri: uri, range: Range.create(1, 4, 1, 7) }
+            }]);
+        });
+
+        it('flags an unterminated string at the end of a CRLF file', () => {
+            expectDiagnostics(scan('x = 1\r\ny = 2\r\nz = "abc'), [{
+                ...DiagnosticMessages.unterminatedString(),
+                location: { uri: uri, range: Range.create(2, 4, 2, 8) }
+            }]);
+        });
+
+        it('flags an unexpected character on a CRLF line', () => {
+            expectDiagnostics(scan('x = 1\r\ny = 2 ~ 3'), [{
+                ...DiagnosticMessages.unexpectedCharacter('~'),
+                location: { uri: uri, range: Range.create(1, 6, 1, 7) }
+            }]);
+        });
+
+        it('flags an unexpected character in a file mixing LF and CRLF', () => {
+            expectDiagnostics(scan('x = 1\r\ny = 2\n\r\nz = 3 ~ 4'), [{
+                ...DiagnosticMessages.unexpectedCharacter('~'),
+                location: { uri: uri, range: Range.create(3, 6, 3, 7) }
+            }]);
+        });
+
+        it('flags an unexpected character after a surrogate-pair emoji on the same line', () => {
+            expectDiagnostics(scan('x = 1\ny = "😀" ~ 1'), [{
+                ...DiagnosticMessages.unexpectedCharacter('~'),
+                location: { uri: uri, range: Range.create(1, 9, 1, 10) }
+            }]);
+        });
+
+        it('flags an unexpected character after a multi-line template string', () => {
+            expectDiagnostics(scan('x = `a\r\n${b}\nc` ~ 1'), [{
+                ...DiagnosticMessages.unexpectedCharacter('~'),
+                location: { uri: uri, range: Range.create(2, 3, 2, 4) }
+            }]);
         });
     });
 });

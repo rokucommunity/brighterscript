@@ -3584,6 +3584,68 @@ describe('parser', () => {
         });
     });
 
+    /* eslint-disable no-template-curly-in-string */
+    describe('location boundaries', () => {
+        const srcPath = s`${rootDir}/source/main.bs`;
+        const uri = util.pathToUri(srcPath);
+
+        function parseDiagnostics(text: string, mode = ParseMode.BrighterScript) {
+            return Parser.parse(text, {
+                srcPath: srcPath,
+                mode: mode
+            }).diagnostics;
+        }
+
+        it('flags a CRLF newline token at the end of a line', () => {
+            expectDiagnostics(parseDiagnostics('sub main()\r\n    print 1 +\r\nend sub', ParseMode.BrightScript), [{
+                ...DiagnosticMessages.unexpectedToken('\r\n'),
+                location: { uri: uri, range: Range.create(1, 13, 1, 15) }
+            }]);
+        });
+
+        it('flags a LF newline token at the end of a line after a surrogate-pair emoji', () => {
+            expectDiagnostics(parseDiagnostics('sub main()\n    print "😀" +\nend sub', ParseMode.BrightScript), [{
+                ...DiagnosticMessages.unexpectedToken('\n'),
+                location: { uri: uri, range: Range.create(1, 16, 1, 17) }
+            }]);
+        });
+
+        it('flags a token at column 0 after a multi-line template string containing CRLF', () => {
+            expectDiagnostics(parseDiagnostics('sub main()\n    x = `a\r\n${1}\n` +\nend sub'), [{
+                ...DiagnosticMessages.unexpectedToken('end sub'),
+                location: { uri: uri, range: Range.create(4, 0, 4, 7) }
+            }]);
+        });
+
+        it('flags a token inside a template string expression', () => {
+            expectDiagnostics(parseDiagnostics('sub main()\n    x = `a ${1 +}`\nend sub'), [{
+                ...DiagnosticMessages.unexpectedToken('}'),
+                location: { uri: uri, range: Range.create(1, 16, 1, 17) }
+            }]);
+        });
+
+        it('flags a token inside a template string expression on a later line of the template', () => {
+            expectDiagnostics(parseDiagnostics('sub main()\r\n    x = `😀 ${1}\r\n  and ${1 +}`\r\nend sub'), [{
+                ...DiagnosticMessages.unexpectedToken('}'),
+                location: { uri: uri, range: Range.create(2, 11, 2, 12) }
+            }]);
+        });
+
+        it('flags the end of a file with no trailing newline', () => {
+            expectDiagnostics(parseDiagnostics('sub main()\n    print 1\nend sub\nsub'), [{
+                ...DiagnosticMessages.expectedIdentifier('sub'),
+                location: { uri: uri, range: Range.create(3, 3, 3, 4) }
+            }]);
+        });
+
+        it('flags an unmatched token at the end of a file with no trailing newline', () => {
+            expectDiagnostics(parseDiagnostics('sub main()\r\n    print 1\r\nend sub\r\nprint (1'), [{
+                ...DiagnosticMessages.unmatchedLeftToken('(', 'expression'),
+                location: { uri: uri, range: Range.create(3, 8, 3, 9) }
+            }]);
+        });
+    });
+    /* eslint-enable no-template-curly-in-string */
 });
 
 export function parse(text: string, mode?: ParseMode, bsConsts: Record<string, boolean> = {}) {
