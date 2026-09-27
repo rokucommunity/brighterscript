@@ -308,6 +308,28 @@ export class Parser {
     }
 
     /**
+     * Parse a spread expression (`...operand`) inside an array or AA literal.
+     * The current token must be `...`. The operand must start immediately after the `...` token
+     * (no whitespace or newline in between); otherwise a diagnostic is reported but parsing continues.
+     */
+    private spreadExpression() {
+        this.warnIfNotBrighterScriptMode('spread operator');
+        let dotDotDot = this.advance();
+        let operandStart = this.peek();
+        //a newline token starts exactly where `...` ends, so it must be checked by kind rather than by position
+        let isAdjacent = operandStart.kind !== TokenKind.Newline &&
+            operandStart.kind !== TokenKind.Eof &&
+            util.comparePosition(dotDotDot.location?.range?.end, operandStart.location?.range?.start) === 0;
+        if (!isAdjacent) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.spreadOperatorMustBeAdjacent(),
+                location: util.createBoundingLocation(dotDotDot, operandStart)
+            });
+        }
+        return new SpreadExpression({ dotDotDot: dotDotDot, expression: this.expression() });
+    }
+
+    /**
      * Throws an exception using the last diagnostic message
      */
     private lastDiagnosticAsError() {
@@ -3552,8 +3574,7 @@ export class Parser {
 
         let parseArrayElement = () => {
             if (this.check(TokenKind.DotDotDot)) {
-                this.warnIfNotBrighterScriptMode('spread operator');
-                return new SpreadExpression({ dotDotDot: this.advance(), expression: this.expression() });
+                return this.spreadExpression();
             }
             return this.expression();
         };
@@ -3634,8 +3655,7 @@ export class Parser {
 
         let parseAAMember = () => {
             if (this.check(TokenKind.DotDotDot)) {
-                this.warnIfNotBrighterScriptMode('spread operator');
-                members.push(new SpreadExpression({ dotDotDot: this.advance(), expression: this.expression() }));
+                members.push(this.spreadExpression());
                 return null;
             }
             let k = key();
