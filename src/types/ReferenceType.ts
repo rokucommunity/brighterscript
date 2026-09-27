@@ -1,5 +1,5 @@
 import type { GetTypeOptions, TypeChainEntry, TypeCircularReferenceInfo, TypeCompatibilityData } from '../interfaces';
-import type { GetSymbolTypeOptions, SymbolTableProvider, SymbolTypeGetterProvider } from '../SymbolTable';
+import type { GetSymbolTypeOptions, SymbolTableProvider, SymbolTypeGetter, SymbolTypeGetterProvider } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
 import type { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isBinaryOperatorReferenceType, isComponentType, isDynamicType, isParamTypeFromValueReferenceType, isReferenceType, isTypePropertyReferenceType } from '../astUtils/reflection';
@@ -254,37 +254,37 @@ export class ReferenceType extends BscType {
      * Resolves the type based on the original name and the table provider
      */
     private resolve(): BscType {
-        //once resolved, it stays resolved until a scope gets linked (new cache token) or any symbol table changes.
+        //the result (found or not) stays the same until a scope gets linked (new cache token) or any symbol table changes.
         //Without this, every property access on the proxy does the full symbol table lookup again
         const cacheToken = SymbolTable.cacheVerifier?.getToken();
-        if (this.cachedResolvedType &&
+        if (this.hasCachedResolvedType &&
             this.cachedResolvedTypeToken === cacheToken &&
             this.cachedResolvedTypeMutationCount === SymbolTable.mutationCount
         ) {
             return this.cachedResolvedType;
         }
-        const resolvedType = this.resolveFromTable();
-        //only cache real types - an unresolved reference might resolve later
-        if (resolvedType && !isAnyReferenceType(resolvedType) && cacheToken) {
+        const symbolTable = this.tableProvider();
+        const resolvedType = symbolTable ? this.resolveFromTable(symbolTable) : undefined;
+        //cache misses too (they get looked up over and over while walking a file), but not when there's no table to look in yet
+        if (cacheToken && symbolTable && !isAnyReferenceType(resolvedType)) {
+            this.hasCachedResolvedType = true;
             this.cachedResolvedType = resolvedType;
             this.cachedResolvedTypeToken = cacheToken;
             //read after resolving, since resolving can itself add symbols (eg. built-in interfaces)
             this.cachedResolvedTypeMutationCount = SymbolTable.mutationCount;
         } else {
+            this.hasCachedResolvedType = false;
             this.cachedResolvedType = undefined;
         }
         return resolvedType;
     }
 
+    private hasCachedResolvedType = false;
     private cachedResolvedType: BscType;
     private cachedResolvedTypeToken: string;
     private cachedResolvedTypeMutationCount: number;
 
-    private resolveFromTable(): BscType {
-        const symbolTable = this.tableProvider();
-        if (!symbolTable) {
-            return;
-        }
+    private resolveFromTable(symbolTable: SymbolTypeGetter): BscType {
         // Look for circular references
         let resolvedType = symbolTable.getSymbolType(this.memberKey, { flags: this.flags, onlyCacheResolvedTypes: true });
         if (!resolvedType) {

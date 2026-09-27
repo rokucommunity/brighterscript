@@ -75,6 +75,26 @@ export class DiagnosticFilterer {
         if (!this.options || !this.filters) {
             return false;
         }
+        //this gets asked for every file in every scope, and the glob matching isn't cheap
+        if (this.completelyFilteredCacheOptions !== this.options || this.completelyFilteredCacheFilters !== this.filters) {
+            this.completelyFilteredCache.clear();
+            this.completelyFilteredCacheOptions = this.options;
+            this.completelyFilteredCacheFilters = this.filters;
+        }
+        const cacheKey = `${file.srcPath}|${file.destPath}`;
+        let isMatch = this.completelyFilteredCache.get(cacheKey);
+        if (isMatch === undefined) {
+            isMatch = this.getIsFileCompletelyFiltered(file);
+            this.completelyFilteredCache.set(cacheKey, isMatch);
+        }
+        return isMatch;
+    }
+
+    private completelyFilteredCache = new Map<string, boolean>();
+    private completelyFilteredCacheOptions: BsConfig;
+    private completelyFilteredCacheFilters: NormalizedFilter[];
+
+    private getIsFileCompletelyFiltered(file: { srcPath: string; destPath: string }) {
         this.rootDir = this.options.rootDir;
         let isMatch = false;
         //filter each matched file

@@ -1707,6 +1707,70 @@ describe('Program', () => {
             program.removeFiles([`${rootDir}/source/main.brs`]);
             expect(program.getFile(s`source/main.brs`)).not.to.exist;
         });
+
+        it('revalidates files that called a function from the removed file', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    helper()
+                end sub
+            `);
+            program.setFile('source/helper.bs', `
+                sub helper()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            program.removeFile(s`${rootDir}/source/helper.bs`);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindFunction('helper')
+            ]);
+        });
+
+        it('revalidates component files that called a function from the removed file', () => {
+            program.setFile('components/Widget.xml', trim`
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs" />
+                    <script uri="helper.bs" />
+                </component>
+            `);
+            program.setFile('components/Widget.bs', `
+                sub init()
+                    helper()
+                end sub
+            `);
+            program.setFile('components/helper.bs', `
+                sub helper()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            program.removeFile(s`${rootDir}/components/helper.bs`);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindFunction('helper'),
+                DiagnosticMessages.referencedFileDoesNotExist()
+            ]);
+        });
+
+        it('clears name collisions with the removed file', () => {
+            program.setFile('source/a.bs', `
+                interface Thing
+                    name as string
+                end interface
+            `);
+            program.setFile('source/b.bs', `
+                const Thing = "thing"
+            `);
+            program.validate();
+            expectHasDiagnostics(program, 2);
+
+            program.removeFile(s`${rootDir}/source/b.bs`);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('getDiagnostics', () => {

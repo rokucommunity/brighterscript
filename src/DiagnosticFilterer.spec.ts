@@ -433,6 +433,22 @@ describe('DiagnosticFilterer', () => {
             expect(filterer.isFileCompletelyFiltered({ srcPath: `${rootDir}/lib/some/file.brs`, destPath: `source/some/file.brs` })).true;
             expect(filterer.isFileCompletelyFiltered({ srcPath: `${rootDir}/lib/special/file.brs`, destPath: `source/special/file.brs` })).false;
         });
+
+        it('only matches each file once until the filters change', () => {
+            filterer.options = options;
+            const matchSpy = sinon.spy(filterer as any, 'matchFileSrcUris');
+            const file = { srcPath: `${rootDir}/lib/some/file.brs`, destPath: `source/some/file.brs` };
+            expect(filterer.isFileCompletelyFiltered(file)).true;
+            const callCount = matchSpy.callCount;
+            expect(callCount).to.be.greaterThan(0);
+            expect(filterer.isFileCompletelyFiltered(file)).true;
+            expect(matchSpy.callCount).to.eql(callCount);
+
+            //filter() rebuilds the filters from the new options
+            filterer.filter({ rootDir: rootDir, diagnosticFilters: [{ files: 'notlib/**/*.brs' }] }, []);
+            expect(filterer.isFileCompletelyFiltered(file)).false;
+            expect(matchSpy.callCount).to.be.greaterThan(callCount);
+        });
     });
 
     describe('v0 compatibility', () => {
