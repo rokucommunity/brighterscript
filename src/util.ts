@@ -1388,8 +1388,11 @@ export class Util {
         }
         const lineStarts = source.lineStarts;
         const startLine = this.getLineIndex(lineStarts, locatable.pos, 0);
-        //`end` is exclusive, so use the line of the last character. This keeps a token that ends with a newline on its own line
-        const endLine = locatable.end > locatable.pos ? this.getLineIndex(lineStarts, locatable.end - 1, startLine) : startLine;
+        let endLine = this.getLineIndex(lineStarts, locatable.end, startLine);
+        //a token that ends with a newline ends on its own line rather than at the start of the next one
+        if (endLine > startLine && lineStarts[endLine] === locatable.end && /[\r\n]$/.test((locatable as Token).text)) {
+            endLine--;
+        }
         return {
             uri: source.uri,
             range: this.createRange(startLine, locatable.pos - lineStarts[startLine], endLine, locatable.end - lineStarts[endLine])
