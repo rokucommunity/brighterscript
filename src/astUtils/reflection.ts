@@ -576,7 +576,7 @@ const nativeTypeKinds = [
     BscTypeKind.FunctionType
 ];
 export function isNativeType(value: any): value is IntegerType | LongIntegerType | FloatType | DoubleType | StringType | BooleanType | VoidType | DynamicType | ObjectType | FunctionType | InterfaceType {
-    return isPrimitiveType(value) || nativeTypeKinds.includes((value as BscType)?.kind);
+    return isPrimitiveType(value) || nativeTypeKinds.includes(value?.kind);
 }
 
 export function isTypeStatementTypeOf(value: any, typeGuard: (val: any) => boolean) {
@@ -618,28 +618,28 @@ export function isIterableType(value: any): boolean {
 
 // Literal reflection
 
-export function isLiteralInvalid(value: AstNode | undefined): value is LiteralExpression & { type: InvalidType } {
+export function isLiteralInvalid(value: any): value is LiteralExpression & { type: InvalidType } {
     return isLiteralExpression(value) && value.tokens.value.kind === TokenKind.Invalid;
 }
-export function isLiteralBoolean(value: AstNode | undefined): value is LiteralExpression & { type: BooleanType } {
+export function isLiteralBoolean(value: any): value is LiteralExpression & { type: BooleanType } {
     return isLiteralExpression(value) && isBooleanType(value.getType());
 }
-export function isLiteralString(value: AstNode | undefined): value is LiteralExpression & { type: StringType } {
+export function isLiteralString(value: any): value is LiteralExpression & { type: StringType } {
     return isLiteralExpression(value) && isStringType(value.getType());
 }
-export function isLiteralNumber(value: AstNode | undefined): value is LiteralExpression & { type: IntegerType | LongIntegerType | FloatType | DoubleType } {
+export function isLiteralNumber(value: any): value is LiteralExpression & { type: IntegerType | LongIntegerType | FloatType | DoubleType } {
     return isLiteralExpression(value) && isNumberType(value.getType());
 }
-export function isLiteralInteger(value: AstNode | undefined): value is LiteralExpression & { type: IntegerType } {
+export function isLiteralInteger(value: any): value is LiteralExpression & { type: IntegerType } {
     return isLiteralExpression(value) && isIntegerType(value.getType());
 }
-export function isLiteralLongInteger(value: AstNode | undefined): value is LiteralExpression & { type: LongIntegerType } {
+export function isLiteralLongInteger(value: any): value is LiteralExpression & { type: LongIntegerType } {
     return isLiteralExpression(value) && isLongIntegerType(value.getType());
 }
-export function isLiteralFloat(value: AstNode | undefined): value is LiteralExpression & { type: FloatType } {
+export function isLiteralFloat(value: any): value is LiteralExpression & { type: FloatType } {
     return isLiteralExpression(value) && isFloatType(value.getType());
 }
-export function isLiteralDouble(value: AstNode | undefined): value is LiteralExpression & { type: DoubleType } {
+export function isLiteralDouble(value: any): value is LiteralExpression & { type: DoubleType } {
     return isLiteralExpression(value) && isDoubleType(value.getType());
 }
 
