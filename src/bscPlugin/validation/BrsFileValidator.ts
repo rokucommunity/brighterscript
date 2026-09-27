@@ -852,7 +852,7 @@ export class BrsFileValidator {
      * Validate that there are no optional chaining operators on the left-hand-side of an assignment, indexed set, or dotted get
      */
     private validateSpreadPosition(node: ArrayLiteralExpression | AALiteralExpression) {
-        if (!node.hasSpread || util.getSpreadLiteralOwnerStatement(node)) {
+        if (util.getSpreadLiteralOwnerStatement(node)) {
             return;
         }
         for (const element of node.elements) {

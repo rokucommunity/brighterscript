@@ -85,7 +85,9 @@ export class BrsFilePreTranspileProcessor {
      * plain local variable, or when the trailing elements read from the target itself.
      */
     private processSpreadLiteral(literal: ArrayLiteralExpression | AALiteralExpression, visitor: ReturnType<typeof createVisitor>, walkMode: WalkMode) {
-        if (!literal.hasSpread) {
+        const elements = literal.elements as Expression[];
+        const firstSpreadIndex = elements.findIndex(e => isSpreadExpression(e));
+        if (firstSpreadIndex < 0) {
             return;
         }
         const statement = util.getSpreadLiteralOwnerStatement(literal);
@@ -103,8 +105,6 @@ export class BrsFilePreTranspileProcessor {
         const isArray = isArrayLiteralExpression(literal);
 
         //everything from the first spread onward leaves the literal and becomes statements
-        const elements = literal.elements as Expression[];
-        const firstSpreadIndex = elements.findIndex(e => isSpreadExpression(e));
         const trailing = elements.slice(firstSpreadIndex);
         editor.arraySplice(elements, firstSpreadIndex, trailing.length);
 

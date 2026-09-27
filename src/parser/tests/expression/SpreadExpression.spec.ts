@@ -39,7 +39,6 @@ describe('SpreadExpression', () => {
             expectZeroDiagnostics(diagnostics);
             let arrayLit = value as ArrayLiteralExpression;
             expect(isArrayLiteralExpression(arrayLit)).to.be.true;
-            expect(arrayLit.hasSpread).to.be.true;
             expect(arrayLit.elements).to.have.lengthOf(3);
             expect(isSpreadExpression(arrayLit.elements[1])).to.be.true;
         });
@@ -52,7 +51,6 @@ describe('SpreadExpression', () => {
             `);
             expectZeroDiagnostics(diagnostics);
             let arrayLit = value as ArrayLiteralExpression;
-            expect(arrayLit.hasSpread).to.be.true;
             expect(arrayLit.elements).to.have.lengthOf(1);
             expect(isSpreadExpression(arrayLit.elements[0])).to.be.true;
         });
@@ -65,20 +63,19 @@ describe('SpreadExpression', () => {
             `);
             expectZeroDiagnostics(diagnostics);
             let arrayLit = value as ArrayLiteralExpression;
-            expect(arrayLit.hasSpread).to.be.true;
             expect(arrayLit.elements).to.have.lengthOf(2);
             expect(isSpreadExpression(arrayLit.elements[0])).to.be.true;
             expect(isSpreadExpression(arrayLit.elements[1])).to.be.true;
         });
 
-        it('hasSpread is false when no spread elements', () => {
+        it('parses plain arrays without spread elements', () => {
             let { value, diagnostics } = parseFirstAssignmentValue(`
                 sub main()
                     result = [1, 2, 3]
                 end sub
             `);
             expectZeroDiagnostics(diagnostics);
-            expect((value as ArrayLiteralExpression).hasSpread).to.be.false;
+            expect((value as ArrayLiteralExpression).elements.some(e => isSpreadExpression(e))).to.be.false;
         });
 
         it('flags spread as a BrighterScript-only feature in brs mode', () => {
@@ -103,7 +100,6 @@ describe('SpreadExpression', () => {
             expectZeroDiagnostics(diagnostics);
             let aaLit = value as AALiteralExpression;
             expect(isAALiteralExpression(aaLit)).to.be.true;
-            expect(aaLit.hasSpread).to.be.true;
             expect(aaLit.elements).to.have.lengthOf(3);
             expect(isSpreadExpression(aaLit.elements[1])).to.be.true;
         });
@@ -116,7 +112,6 @@ describe('SpreadExpression', () => {
             `);
             expectZeroDiagnostics(diagnostics);
             let aaLit = value as AALiteralExpression;
-            expect(aaLit.hasSpread).to.be.true;
             expect(aaLit.elements).to.have.lengthOf(1);
             expect(isSpreadExpression(aaLit.elements[0])).to.be.true;
         });
@@ -129,7 +124,6 @@ describe('SpreadExpression', () => {
             `);
             expectZeroDiagnostics(diagnostics);
             let aaLit = value as AALiteralExpression;
-            expect(aaLit.hasSpread).to.be.true;
             expect(aaLit.elements).to.have.lengthOf(2);
         });
 

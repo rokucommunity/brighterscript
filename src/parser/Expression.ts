@@ -1198,10 +1198,6 @@ export class ArrayLiteralExpression extends Expression {
 
     public readonly location: Location | undefined;
 
-    public get hasSpread() {
-        return this.elements.some(e => isSpreadExpression(e));
-    }
-
     transpile(state: BrsTranspileState) {
         let result: TranspileResult = [];
         result.push(
@@ -1419,10 +1415,6 @@ export class AALiteralExpression extends Expression {
     public readonly kind = AstNodeKind.AALiteralExpression;
 
     public readonly location: Location | undefined;
-
-    public get hasSpread() {
-        return this.elements.some(e => isSpreadExpression(e));
-    }
 
     transpile(state: BrsTranspileState) {
         //spread members are lowered to statements before transpile; any left over were already flagged by validation
