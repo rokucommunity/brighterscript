@@ -12,11 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  - Add scenario benchmarks and fix ops/sec benchmarks on v1 ([#1830](https://github.com/rokucommunity/brighterscript/pull/1830))
 ### Changed
  - Revalidate dependents of a removed file ([#1846](https://github.com/rokucommunity/brighterscript/pull/1846))
- - Cache isFileCompletelyFiltered per file ([#1840](https://github.com/rokucommunity/brighterscript/pull/1840))
- - Cache unresolved ReferenceType lookups ([#1837](https://github.com/rokucommunity/brighterscript/pull/1837))
- - Drop Token.leadingWhitespace and share token positions ([#1836](https://github.com/rokucommunity/brighterscript/pull/1836))
- - Back CrossScopeValidator provided symbols with a program-wide index ([#1833](https://github.com/rokucommunity/brighterscript/pull/1833))
- - Cache ReferenceType resolution and skip allocations in getSymbol ([#1831](https://github.com/rokucommunity/brighterscript/pull/1831))
+ - (Performance) Cache isFileCompletelyFiltered per file ([#1840](https://github.com/rokucommunity/brighterscript/pull/1840))
+ - (Performance) Cache unresolved ReferenceType lookups ([#1837](https://github.com/rokucommunity/brighterscript/pull/1837))
+ - (Performance) Drop Token.leadingWhitespace and share token positions ([#1836](https://github.com/rokucommunity/brighterscript/pull/1836))
+ - (Performance) Back CrossScopeValidator provided symbols with a program-wide index ([#1833](https://github.com/rokucommunity/brighterscript/pull/1833))
+ - (Performance) Cache ReferenceType resolution and skip allocations in getSymbol ([#1831](https://github.com/rokucommunity/brighterscript/pull/1831))
 
 
 
