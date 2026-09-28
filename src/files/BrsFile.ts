@@ -267,7 +267,8 @@ export class BrsFile implements BscFile {
                         filePathRange: statement.tokens.path.location?.range,
                         destPath: util.getPkgPathFromTarget(this.destPath, statement.filePath),
                         sourceFile: this,
-                        text: statement.tokens.path.text
+                        text: statement.tokens.path.text,
+                        isTypeOnly: statement.isTypeOnly
                     });
                 }
             }
@@ -1047,16 +1048,22 @@ export class BrsFile implements BscFile {
 
     public validationSegmenter = new AstValidationSegmenter(this);
 
-    public getNamespaceSymbolTable(allowCache = true) {
+    /**
+     * Get a symbol table containing the namespace types declared in this file
+     * @param allowCache when false, a new table is constructed every time
+     * @param typeOnly when true, the namespace members only include interfaces, enums and type aliases
+     *                 (used when this file was brought into a scope by an `import type` statement)
+     */
+    public getNamespaceSymbolTable(allowCache = true, typeOnly = false) {
         if (!allowCache) {
-            return this.constructNamespaceSymbolTable();
+            return this.constructNamespaceSymbolTable(typeOnly);
         }
-        return this.cache?.getOrAdd(`namespaceSymbolTable`, () => this.constructNamespaceSymbolTable());
+        return this.cache?.getOrAdd(typeOnly ? `namespaceSymbolTable-typeOnly` : `namespaceSymbolTable`, () => this.constructNamespaceSymbolTable(typeOnly));
     }
 
-    private constructNamespaceSymbolTable() {
+    private constructNamespaceSymbolTable(typeOnly = false) {
         const nsTable = new SymbolTable(`File NamespaceTypes ${this.destPath}`, () => this.program?.globalScope.symbolTable);
-        this.populateNameSpaceSymbolTable(nsTable);
+        this.populateNameSpaceSymbolTable(nsTable, typeOnly);
         return nsTable;
     }
 
@@ -1081,7 +1088,11 @@ export class BrsFile implements BscFile {
     private linkSymbolTableDisposables = [];
 
 
-    public populateNameSpaceSymbolTable(namespaceSymbolTable: SymbolTable) {
+    /**
+     * @param namespaceSymbolTable the table to add the namespace types to
+     * @param typeOnly when true, only interfaces, enums and type aliases are added as namespace members
+     */
+    public populateNameSpaceSymbolTable(namespaceSymbolTable: SymbolTable, typeOnly = false) {
         //Add namespace aggregates to namespace member tables
         const namespaceTypesKnown = new Map<string, BscType>();
         // eslint-disable-next-line no-bitwise
@@ -1123,7 +1134,14 @@ export class BrsFile implements BscFile {
             if (!namespaceTypesKnown.has(nsName)) {
                 namespaceTypesKnown.set(nsName, currentNSType);
             }
-            currentNSType.memberTable.addSibling(nsContainer.symbolTable);
+            if (typeOnly) {
+                //only expose the members that a type-only import is allowed to provide
+                const typeOnlyTable = new SymbolTable(`Namespace File Aggregate (type-only): '${nsContainer.fullName}'`);
+                typeOnlyTable.mergeSymbolTable(nsContainer.symbolTable, util.isTypeOnlyImportableSymbol);
+                currentNSType.memberTable.addSibling(typeOnlyTable);
+            } else {
+                currentNSType.memberTable.addSibling(nsContainer.symbolTable);
+            }
         }
     }
 

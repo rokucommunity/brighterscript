@@ -188,6 +188,12 @@ export class ScopeProvidedSymbols {
 
     public fileIndex = new Map<BscFile, number>();
 
+    /**
+     * Files that are only in this scope because of `import type` statements. Only their interfaces, enums and
+     * type aliases count as provided symbols in this scope
+     */
+    public typeOnlyFiles = new Set<BscFile>();
+
     private referenceSymbols = new Map<string, PositionedSymbol>();
     private referenceNamespaces = new Map<string, number>();
     private nextReferencePosition = referenceSymbolPositionStart;
@@ -203,8 +209,18 @@ export class ScopeProvidedSymbols {
      * The events for this name in this scope, in the order they'd be added
      */
     public getEvents(symbolName: string) {
-        const events = this.index.symbolEvents.get(symbolName)?.filter(x => this.fileIndex.has(x.file)) ?? [];
+        const events = this.index.symbolEvents.get(symbolName)?.filter(x => this.isProvidedInScope(x)) ?? [];
         return events.sort((a, b) => this.getPosition(a) - this.getPosition(b));
+    }
+
+    /**
+     * Does this event's file provide this symbol in this scope? (type-only files only provide interfaces, enums and type aliases)
+     */
+    private isProvidedInScope(event: ProvidedSymbolEvent) {
+        if (!this.fileIndex.has(event.file)) {
+            return false;
+        }
+        return !this.typeOnlyFiles.has(event.file) || util.isTypeOnlyImportableSymbol(event.symbolObj.symbol);
     }
 
     /**
@@ -576,6 +592,10 @@ export class CrossScopeValidator {
         let fileIndex = 0;
         scope.enumerateBrsFiles((file) => {
             scopeSymbols.fileIndex.set(file, fileIndex++);
+            const isTypeOnlyFile = scope.isTypeOnlyFile(file);
+            if (isTypeOnlyFile) {
+                scopeSymbols.typeOnlyFiles.add(file);
+            }
             for (const symbolName of this.getPossibleDuplicateNames(file)) {
                 possibleDuplicateNames.add(symbolName);
             }
@@ -583,6 +603,10 @@ export class CrossScopeValidator {
             // find all "provided symbols" that are reference types
             for (const [_, nameMap] of file.providedSymbols.referenceSymbolMap.entries()) {
                 for (const [symbolName, symbolObj] of nameMap.entries()) {
+                    if (isTypeOnlyFile && !util.isTypeOnlyImportableSymbol(symbolObj.symbol)) {
+                        //runtime symbols are not provided by type-only imports
+                        continue;
+                    }
                     const symbolType = symbolObj.symbol.type;
                     const namespaceLower = symbolObj.symbol.data?.definingNode?.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase();
                     const allNames = getAllRequiredSymbolNames(symbolType, namespaceLower);
@@ -590,7 +614,7 @@ export class CrossScopeValidator {
                     referenceTypesMap.set({ symbolName: symbolName, file: file, symbolObj: symbolObj }, allNames);
                 }
             }
-        });
+        }, true);
 
         //everything else is only provided once in this scope, and can't clash with anything
         for (const symbolName of possibleDuplicateNames) {
@@ -791,9 +815,10 @@ export class CrossScopeValidator {
         this.possibleDuplicateNamesCache = new Map();
         this.providedSymbolIndex.prune(this.program);
         for (const scope of scopes) {
+            //index type-only files too, since their interfaces, enums and type aliases are provided to the scope
             scope.enumerateBrsFiles((file) => {
                 this.providedSymbolIndex.update(file);
-            });
+            }, true);
         }
 
         // Check scope for duplicates and missing symbols
@@ -978,6 +1003,11 @@ export class CrossScopeValidator {
     }
 
     private getCannotFindDiagnostic(scope: Scope, unresolvedSymbol: UnresolvedSymbol, typeChainResult: TypeChainProcessResult) {
+        //is this a function/class/const from a file that was only imported with `import type`? If so, explain that instead
+        const typeOnlyFile = scope.getTypeOnlyFileProvidingRuntimeSymbol(typeChainResult.fullNameOfItem);
+        if (typeOnlyFile) {
+            return DiagnosticMessages.cannotFindRuntimeSymbolFromTypeOnlyImport(typeChainResult.fullNameOfItem, util.getPkgPathFromDestPath(typeOnlyFile.destPath));
+        }
         const parentDescriptor = this.getParentTypeDescriptor(this.getProvidedTree(scope)?.providedTree, typeChainResult);
         const symbolType = typeChainResult.astNode?.getType({ flags: unresolvedSymbol.flags });
         if (isReferenceType(symbolType)) {

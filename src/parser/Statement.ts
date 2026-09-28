@@ -2054,15 +2054,23 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
 export class ImportStatement extends Statement implements TypedefProvider {
     constructor(options: {
         import?: Token;
+        /**
+         * The optional `type` keyword (i.e. `import type "pkg:/source/lib.bs"`).
+         * When present, only the type information (interfaces, enums, type aliases) from the imported file
+         * is made available, and the imported file is NOT added as a `<script>` tag to the component xml.
+         */
+        type?: Token;
         path?: Token;
     }) {
         super();
         this.tokens = {
             import: options.import,
+            type: options.type,
             path: options.path
         };
         this.location = util.createBoundingLocation(
             this.tokens.import,
+            this.tokens.type,
             this.tokens.path
         );
         if (this.tokens.path) {
@@ -2083,6 +2091,7 @@ export class ImportStatement extends Statement implements TypedefProvider {
 
     public readonly tokens: {
         readonly import?: Token;
+        readonly type?: Token;
         readonly path: Token;
     };
 
@@ -2092,12 +2101,22 @@ export class ImportStatement extends Statement implements TypedefProvider {
 
     public readonly filePath: string;
 
+    /**
+     * Is this a type-only import (i.e. `import type "pkg:/source/lib.bs"`)?
+     * Type-only imports contribute interfaces, enums and type aliases to the importing scope,
+     * but do not bring along any runtime code (functions, classes, consts) and are not added to the xml as `<script>` tags.
+     */
+    public get isTypeOnly() {
+        return !!this.tokens.type;
+    }
+
     transpile(state: BrsTranspileState) {
         //The xml files are responsible for adding the additional script imports, but
         //add the import statement as a comment just for debugging purposes
         return [
             state.transpileToken(this.tokens.import, 'import', true),
             ' ',
+            ...(this.tokens.type ? [state.transpileToken(this.tokens.type, 'type'), ' '] : []),
             state.transpileToken(this.tokens.path)
         ];
     }
@@ -2109,6 +2128,7 @@ export class ImportStatement extends Statement implements TypedefProvider {
         return [
             this.tokens.import?.text ?? 'import',
             ' ',
+            ...(this.tokens.type ? [this.tokens.type.text, ' '] : []),
             //replace any `.bs` extension with `.brs`
             this.tokens.path.text.replace(/\.bs"?$/i, '.brs"')
         ];
@@ -2126,6 +2146,7 @@ export class ImportStatement extends Statement implements TypedefProvider {
         return this.finalizeClone(
             new ImportStatement({
                 import: util.cloneToken(this.tokens.import),
+                type: util.cloneToken(this.tokens.type),
                 path: util.cloneToken(this.tokens.path)
             })
         );

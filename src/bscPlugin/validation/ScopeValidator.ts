@@ -922,7 +922,7 @@ export class ScopeValidator {
         if (!expectedLHSType || !expectedLHSType?.isResolvable()) {
             const typeChainScan = util.processTypeChain(typeChainExpectedLHS);
             this.addMultiScopeDiagnostic({
-                ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
+                ...this.getCannotFindDiagnostic(typeChainScan, false),
                 location: typeChainScan?.location
             });
             return;
@@ -1180,12 +1180,12 @@ export class ScopeValidator {
                     //if this is a function call, provide a different diagnostic code
                     if (isCallExpression(typeChainScan.astNode.parent) && typeChainScan.astNode.parent.callee === expression) {
                         this.addMultiScopeDiagnostic({
-                            ...DiagnosticMessages.cannotFindFunction(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
+                            ...this.getCannotFindDiagnostic(typeChainScan, true),
                             location: typeChainScan?.location
                         });
                     } else {
                         this.addMultiScopeDiagnostic({
-                            ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
+                            ...this.getCannotFindDiagnostic(typeChainScan, false),
                             location: typeChainScan?.location
                         });
                     }
@@ -1197,7 +1197,7 @@ export class ScopeValidator {
                 const circularReferenceInfo = this.getCircularReference(exprType);
                 if (isCallExpression(typeChainScan.astNode.parent) && typeChainScan.astNode.parent.callee === expression) {
                     this.addMultiScopeDiagnostic({
-                        ...DiagnosticMessages.cannotFindFunction(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
+                        ...this.getCannotFindDiagnostic(typeChainScan, true),
                         location: typeChainScan?.location
                     });
                 } else if (circularReferenceInfo?.isCircularReference) {
@@ -1208,7 +1208,7 @@ export class ScopeValidator {
                     });
                 } else {
                     this.addMultiScopeDiagnostic({
-                        ...DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
+                        ...this.getCannotFindDiagnostic(typeChainScan, false),
                         location: typeChainScan?.location
                     });
                 }
@@ -1835,6 +1835,24 @@ export class ScopeValidator {
 
         // by default return the result of node.getType()
         return type;
+    }
+
+    /**
+     * Get the "cannot find ..." diagnostic for an unresolved item.
+     * If the item is a runtime symbol (function, class, const, etc.) declared in a file that is only in this scope because of
+     * an `import type` statement, a more specific diagnostic is returned that explains why the item is not available.
+     * @param typeChainScan the processed type chain of the unresolved item
+     * @param isFunctionCall is the unresolved item being called as a function?
+     */
+    private getCannotFindDiagnostic(typeChainScan: TypeChainProcessResult, isFunctionCall: boolean) {
+        const typeOnlyFile = this.event.scope.getTypeOnlyFileProvidingRuntimeSymbol(typeChainScan.fullNameOfItem);
+        if (typeOnlyFile) {
+            return DiagnosticMessages.cannotFindRuntimeSymbolFromTypeOnlyImport(typeChainScan.fullNameOfItem, util.getPkgPathFromDestPath(typeOnlyFile.destPath));
+        }
+        if (isFunctionCall) {
+            return DiagnosticMessages.cannotFindFunction(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan));
+        }
+        return DiagnosticMessages.cannotFindName(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan));
     }
 
     private getParentTypeDescriptor(typeChainResult: TypeChainProcessResult) {

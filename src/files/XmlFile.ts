@@ -20,6 +20,8 @@ import type { BscFile } from './BscFile';
 import type { Editor } from '../astUtils/Editor';
 import type { FunctionScope } from '../FunctionScope';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
+import { isXmlScope } from '../astUtils/reflection';
+import type { XmlScope } from '../XmlScope';
 
 /**
  * Names of the `@xml-tools` lexer token types we inspect for completions and hover
@@ -195,6 +197,13 @@ export class XmlFile implements BscFile {
     }
 
     /**
+     * The scope that this xml file defines (if the program has registered one for it)
+     */
+    private get scope(): XmlScope | undefined {
+        return this.program?.getScopesForFile(this)?.find(x => isXmlScope(x) && x.xmlFile === this) as XmlScope;
+    }
+
+    /**
      * List of all destPaths to scripts that this XmlFile depends on that are actually loaded into the program.
      * This does not account for parent component scripts.
      * coming from:
@@ -211,7 +220,13 @@ export class XmlFile implements BscFile {
 
             let result = [] as string[];
             let filesInProgram = this.program.getFiles(allDependencies);
+            //files that are only referenced through `import type` statements contain no runtime code this component
+            //depends on, so they must not become `<script>` tags
+            const typeOnlyFiles = this.scope?.getTypeOnlyFiles();
             for (let file of filesInProgram) {
+                if (typeOnlyFiles?.has(file)) {
+                    continue;
+                }
                 result.push(file.destPath);
             }
             this.logDebug('computed allAvailableScriptImports', () => result);

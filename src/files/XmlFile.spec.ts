@@ -1304,6 +1304,76 @@ end sub`);
             `, 'none', 'components/SimpleScene.xml');
         });
 
+        it('does not add script tags for type-only imports', async () => {
+            program.setFile('source/lib.bs', `
+                import "pkg:/source/util.bs"
+                interface Options
+                    name as string
+                end interface
+            `);
+            program.setFile('source/util.bs', ``);
+            program.setFile('source/runtime.bs', `
+                sub doThing()
+                end sub
+            `);
+            program.setFile(`components/SimpleScene.bs`, `
+                import type "pkg:/source/lib.bs"
+                import "pkg:/source/runtime.bs"
+
+                sub init()
+                    options = { name: "a" } as Options
+                    print options.name
+                    doThing()
+                end sub
+            `);
+
+            await testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene">
+                    <script type="text/brighterscript" uri="SimpleScene.bs"/>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene">
+                    <script type="text/brightscript" uri="SimpleScene.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/runtime.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/SimpleScene.xml');
+        });
+
+        it('adds a script tag when a file is imported both normally and as a type', async () => {
+            program.setFile('source/lib.bs', `
+                interface Options
+                    name as string
+                end interface
+                sub doThing()
+                end sub
+            `);
+            program.setFile(`components/SimpleScene.bs`, `
+                import type "pkg:/source/lib.bs"
+                import "pkg:/source/lib.bs"
+
+                sub init()
+                    doThing()
+                end sub
+            `);
+
+            await testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene">
+                    <script type="text/brighterscript" uri="SimpleScene.bs"/>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="SimpleScene" extends="Scene">
+                    <script type="text/brightscript" uri="SimpleScene.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/lib.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/SimpleScene.xml');
+        });
+
         it('does not fail on missing script type', async () => {
             program.setFile('components/SimpleScene.brs', '');
             await testTranspile(trim`

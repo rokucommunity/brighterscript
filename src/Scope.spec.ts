@@ -5,7 +5,7 @@ import util, { standardizePath as s } from './util';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { Program } from './Program';
 import PluginInterface from './PluginInterface';
-import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim } from './testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, getTestTranspile, trim } from './testHelpers.spec';
 import type { BrsFile } from './files/BrsFile';
 import type { AssignmentStatement, ForEachStatement, IfStatement, NamespaceStatement, PrintStatement, TypeStatement } from './parser/Statement';
 import type { CompilerPlugin, ValidateScopeEvent } from './interfaces';
@@ -46,6 +46,372 @@ describe('Scope', () => {
     afterEach(() => {
         sinon.restore();
         program.dispose();
+    });
+
+    describe('import type', () => {
+        let testTranspile = getTestTranspile(() => [program, rootDir]);
+
+        /**
+         * Set up a `Button` component with an interface, an enum, a namespace and some runtime code,
+         * and a `MainMenu` component whose codebehind is `mainMenuSource`
+         */
+        function setupComponents(mainMenuSource: string, buttonSource?: string) {
+            program.setFile('components/Button.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Button" extends="Group">
+                    <script type="text/brighterscript" uri="Button.bs" />
+                </component>
+            `);
+            program.setFile('components/Button.bs', buttonSource ?? `
+                interface ButtonBase
+                    text as string
+                    enabled as boolean
+                end interface
+
+                enum ButtonStyle
+                    primary = "primary"
+                    secondary = "secondary"
+                end enum
+
+                namespace Buttons
+                    interface Themed
+                        theme as string
+                    end interface
+
+                    enum Size
+                        small = 1
+                        large = 2
+                    end enum
+
+                    function create(text as string) as ButtonBase
+                        return { text: text, enabled: true }
+                    end function
+                end namespace
+
+                const DEFAULT_TEXT = "Ok"
+
+                class ButtonModel
+                    text as string
+                end class
+
+                sub init()
+                    m.top.observeField("buttonSelected", "onSelected")
+                end sub
+
+                sub onSelected()
+                end sub
+
+                function createButton(text as string) as ButtonBase
+                    return { text: text, enabled: true }
+                end function
+            `);
+            program.setFile('components/MainMenu.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MainMenu" extends="Group">
+                    <script type="text/brighterscript" uri="MainMenu.bs" />
+                </component>
+            `);
+            program.setFile('components/MainMenu.bs', mainMenuSource);
+        }
+
+        it('does not flag duplicate functions from a type-only import', () => {
+            setupComponents(`
+                import type "pkg:/components/Button.bs"
+
+                sub init()
+                    button = { text: "Play", enabled: true } as ButtonBase
+                    print button.text
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags duplicate functions when the same file is imported normally', () => {
+            setupComponents(`
+                import "pkg:/components/Button.bs"
+
+                sub init()
+                end sub
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.duplicateFunctionImplementation('init')
+            ]);
+        });
+
+        it('makes interfaces available for member validation', () => {
+            setupComponents(`
+                import type "pkg:/components/Button.bs"
+
+                sub render(button as ButtonBase)
+                    print button.text
+                    print button.enabled
+                    print button.txt
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('txt', 'ButtonBase.txt', 'ButtonBase')
+            ]);
+        });
+
+        it('makes enums available and transpiles them to literals', async () => {
+            setupComponents(``);
+            await testTranspile(`
+                import type "pkg:/components/Button.bs"
+
+                sub init()
+                    style = ButtonStyle.primary
+                    print style
+                end sub
+            `, `
+                'import type "pkg:/components/Button.bs"
+
+                sub init()
+                    style = "primary"
+                    print style
+                end sub
+            `, 'trim', 'components/MainMenu.bs');
+        });
+
+        it('makes namespaced interfaces and enums available', () => {
+            setupComponents(`
+                import type "pkg:/components/Button.bs"
+
+                sub render(button as Buttons.Themed)
+                    print button.theme
+                    print Buttons.Size.large
+                    print button.color
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('color', 'Buttons.Themed.color', 'Buttons.Themed')
+            ]);
+        });
+
+        it('flags calls to functions that are only available through a type-only import', () => {
+            setupComponents(`
+                import type "pkg:/components/Button.bs"
+
+                sub init()
+                    button = createButton("Play")
+                    print button
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindRuntimeSymbolFromTypeOnlyImport('createButton', 'pkg:/components/Button.bs')
+            ]);
+        });
+
+        it('flags references to namespaced functions, consts and classes from a type-only import', () => {
+            setupComponents(`
+                import type "pkg:/components/Button.bs"
+
+                sub init()
+                    button = Buttons.create("Play")
+                    print DEFAULT_TEXT
+                    model = new ButtonModel()
+                    print button, model
+                end sub
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.cannotFindRuntimeSymbolFromTypeOnlyImport('Buttons.create', 'pkg:/components/Button.bs'),
+                DiagnosticMessages.cannotFindRuntimeSymbolFromTypeOnlyImport('DEFAULT_TEXT', 'pkg:/components/Button.bs'),
+                DiagnosticMessages.cannotFindRuntimeSymbolFromTypeOnlyImport('ButtonModel', 'pkg:/components/Button.bs')
+            ]);
+        });
+
+        it('excludes type-only files from the scope callables', () => {
+            setupComponents(`
+                import type "pkg:/components/Button.bs"
+
+                sub init()
+                end sub
+            `);
+            program.validate();
+            const scope = program.getComponentScope('MainMenu');
+            const buttonFile = program.getFile<BrsFile>('components/Button.bs');
+            expect(scope.isTypeOnlyFile(buttonFile)).to.be.true;
+            expect(scope.getCallableByName('createButton')).to.be.undefined;
+            //the interface is still known to the scope
+            expect(scope.getInterface('ButtonBase')).to.exist;
+            expect(scope.getEnum('ButtonStyle')).to.exist;
+            //the scope where Button.bs is imported normally still has the callable
+            expect(program.getComponentScope('Button').getCallableByName('createButton')).to.exist;
+        });
+
+        it('treats the imports of a type-only file as type-only too', () => {
+            program.setFile('source/shapes.bs', `
+                interface Shape
+                    width as integer
+                end interface
+
+                function createShape() as Shape
+                    return { width: 1 }
+                end function
+            `);
+            setupComponents(`
+                import type "pkg:/components/Button.bs"
+
+                sub render(button as ButtonBase)
+                    print button.width
+                    print button.text
+                    shape = createShape()
+                    print shape
+                end sub
+            `, `
+                import "pkg:/source/shapes.bs"
+
+                interface ButtonBase extends Shape
+                    text as string
+                end interface
+
+                sub init()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindRuntimeSymbolFromTypeOnlyImport('createShape', 'pkg:/source/shapes.bs')
+            ]);
+            const scope = program.getComponentScope('MainMenu');
+            expect(scope.isTypeOnlyFile(program.getFile('source/shapes.bs'))).to.be.true;
+        });
+
+        it('treats a file as a regular import when it is also imported normally somewhere in the scope', () => {
+            program.setFile('components/helpers.bs', `
+                import "pkg:/components/Button.bs"
+            `);
+            setupComponents(`
+                import type "pkg:/components/Button.bs"
+                import "pkg:/components/helpers.bs"
+
+                sub main()
+                    button = createButton("Play")
+                    print button
+                end sub
+            `);
+            program.validate();
+            //Button.bs is in scope for real, so `createButton` is available
+            expectZeroDiagnostics(program);
+            const scope = program.getComponentScope('MainMenu');
+            expect(scope.isTypeOnlyFile(program.getFile('components/Button.bs'))).to.be.false;
+            expect(scope.getCallableByName('createButton')).to.exist;
+        });
+
+        it('inherits type-only classification from the parent component', () => {
+            setupComponents(`
+                import type "pkg:/components/Button.bs"
+
+                sub init()
+                end sub
+            `);
+            program.setFile('components/ChildMenu.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="ChildMenu" extends="MainMenu">
+                    <script type="text/brighterscript" uri="ChildMenu.bs" />
+                </component>
+            `);
+            program.setFile('components/ChildMenu.bs', `
+                sub render(button as ButtonBase)
+                    print button.text
+                    button2 = createButton("Play")
+                    print button2
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindRuntimeSymbolFromTypeOnlyImport('createButton', 'pkg:/components/Button.bs')
+            ]);
+            const scope = program.getComponentScope('ChildMenu');
+            expect(scope.isTypeOnlyFile(program.getFile('components/Button.bs'))).to.be.true;
+        });
+
+        it('works from the source scope', () => {
+            setupComponents(`
+                sub init()
+                end sub
+            `);
+            program.setFile('source/main.bs', `
+                import type "pkg:/components/Button.bs"
+
+                sub main()
+                    button = { text: "Play", enabled: true } as ButtonBase
+                    print button.text
+                    print ButtonStyle.secondary
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const scope = program.getScopeByName('source');
+            expect(scope.isTypeOnlyFile(program.getFile('components/Button.bs'))).to.be.true;
+        });
+
+        it('does not validate a type-only file in the importing scope', () => {
+            //Button.bs calls a function from its own regular import, which is NOT available in MainMenu
+            program.setFile('source/lib.bs', `
+                sub libFunc()
+                end sub
+            `);
+            setupComponents(`
+                import type "pkg:/components/Button.bs"
+
+                sub init()
+                end sub
+            `, `
+                import "pkg:/source/lib.bs"
+
+                interface ButtonBase
+                    text as string
+                end interface
+
+                sub init()
+                    libFunc()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('still validates that the imported file exists', () => {
+            setupComponents(`
+                import type "pkg:/components/Missing.bs"
+
+                sub init()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.referencedFileDoesNotExist()
+            ]);
+        });
+
+        it('does not flag a file that is only referenced through type-only imports as unreferenced', () => {
+            program.setFile('source/types.bs', `
+                interface Options
+                    name as string
+                end interface
+            `);
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script type="text/brighterscript" uri="Widget.bs" />
+                </component>
+            `);
+            program.setFile('components/Widget.bs', `
+                import type "pkg:/source/types.bs"
+
+                sub init()
+                    options = { name: "a" } as Options
+                    print options.name
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     it('getEnumMemberFileLink does not crash on undefined name', () => {

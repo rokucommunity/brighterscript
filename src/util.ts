@@ -26,7 +26,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike, isGroupingExpression, isInlineInterfaceExpression, isTypedFunctionTypeExpression } from './astUtils/reflection';
+import { isEnumMemberStatement, isEnumStatement, isInterfaceStatement, isTypeStatement, isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike, isGroupingExpression, isInlineInterfaceExpression, isTypedFunctionTypeExpression } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode, SourceMapConsumer } from 'source-map';
 import type { RawSourceMap, SourceMapGenerator } from 'source-map';
@@ -36,7 +36,7 @@ import type { XmlFile } from './files/XmlFile';
 import type { AstNode, Expression, Statement } from './parser/AstNode';
 import { AstNodeKind } from './parser/AstNode';
 import type { UnresolvedSymbol } from './AstValidationSegmenter';
-import type { GetSymbolTypeOptions, SymbolTable } from './SymbolTable';
+import type { BscSymbol, GetSymbolTypeOptions, SymbolTable } from './SymbolTable';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { createIdentifier, createToken } from './astUtils/creators';
 import { MAX_RELATED_INFOS_COUNT } from './diagnosticUtils';
@@ -2687,6 +2687,23 @@ export class Util {
             });
             return generator.toString();
         });
+    }
+
+    /**
+     * Convert a destPath (i.e. `components/Button.bs`) into its `pkg:/` form (i.e. `pkg:/components/Button.bs`) for display in messages
+     */
+    public getPkgPathFromDestPath(destPath: string) {
+        return 'pkg:/' + (destPath ?? '').replace(/\\/g, '/').replace(/^\/+/, '');
+    }
+
+    /**
+     * Is this symbol one that a type-only import (`import type "pkg:/source/lib.bs"`) makes available to the importing scope?
+     * Only interfaces, enums (and their members) and type aliases qualify, because none of them produce any runtime code.
+     * Functions, classes, consts, etc. are runtime constructs and are NOT available through a type-only import.
+     */
+    public isTypeOnlyImportableSymbol(symbol: { data?: BscSymbol['data'] }) {
+        const definingNode = symbol?.data?.definingNode;
+        return isInterfaceStatement(definingNode) || isEnumStatement(definingNode) || isEnumMemberStatement(definingNode) || isTypeStatement(definingNode);
     }
 
     public isBuiltInType(typeName: string) {

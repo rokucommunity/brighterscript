@@ -5407,6 +5407,15 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('includes type-only import statements', () => {
+            program.setFile('source/lib.bs', ``);
+            testTypedef(`
+               import type "pkg:/source/lib.bs"
+            `, trim`
+                import type "pkg:/source/lib.brs"
+            `);
+        });
+
         it('includes namespace statements', () => {
             testTypedef(`
                 namespace Name

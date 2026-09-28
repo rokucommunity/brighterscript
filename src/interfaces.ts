@@ -177,6 +177,12 @@ export interface FileReference {
      * If the range is null, then this import is derived so skip any location-based logic
      */
     filePathRange?: Range;
+    /**
+     * Is this a type-only import (i.e. `import type "pkg:/source/lib.bs"`)?
+     * Type-only imports contribute interfaces, enums and type aliases to the importing scope,
+     * but do not bring along runtime code and are not added to the xml as `<script>` tags.
+     */
+    isTypeOnly?: boolean;
 }
 
 export interface VariableDeclaration {

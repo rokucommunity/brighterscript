@@ -510,15 +510,18 @@ export class SymbolTable implements SymbolTypeGetter {
      * Source symbols are shared by reference (not cloned) since BscSymbol is treated as immutable.
      * The destination still owns its own array per key, so subsequent addSymbol calls on either
      * table do not leak across.
+     * @param symbolTable the table whose symbols should be merged into this one
+     * @param filter optional predicate. When provided, only symbols for which it returns true are merged
      */
-    mergeSymbolTable(symbolTable: SymbolTable) {
+    mergeSymbolTable(symbolTable: SymbolTable, filter?: (symbol: BscSymbol) => boolean) {
         SymbolTable.mutationCount++;
         if (symbolTable.symbolMap) {
             for (const [key, sourceSymbols] of symbolTable.symbolMap) {
                 //skip symbols flagged `doNotMerge` (e.g. typecast/alias bindings) so they stay
                 //local to their declaring block instead of bleeding into sibling tables that
                 //share the same merge target (e.g. the per-namespace aggregate symbol table).
-                const symbolsToMerge = sourceSymbols.filter(symbol => !symbol.data?.doNotMerge);
+                //Also skip any symbols rejected by the optional `filter` (e.g. runtime symbols from a type-only import)
+                const symbolsToMerge = sourceSymbols.filter(symbol => !symbol.data?.doNotMerge && (!filter || filter(symbol)));
                 if (symbolsToMerge.length === 0) {
                     continue;
                 }
@@ -533,7 +536,7 @@ export class SymbolTable implements SymbolTypeGetter {
         }
 
         for (let pocketTable of symbolTable.pocketTables) {
-            this.mergeSymbolTable(pocketTable.table);
+            this.mergeSymbolTable(pocketTable.table, filter);
         }
     }
 

@@ -14,6 +14,7 @@ import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph'
 import { isBrsFile, isXmlFile, isEnumMemberStatement, isNamespaceStatement, isTypeStatement, isXmlScope } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SymbolTable } from './SymbolTable';
+import type { BscSymbol } from './SymbolTable';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscFile } from './files/BscFile';
 import { referenceTypeFactory } from './types/ReferenceType';
@@ -95,7 +96,7 @@ export class Scope {
                 for (const [lowerNamespaceName, _] of fileNamespaceLookup) {
                     lowerNamespaceNames.add(lowerNamespaceName);
                 }
-            });
+            }, true);
             return lowerNamespaceNames;
         });
     }
@@ -443,6 +444,7 @@ export class Scope {
     public getInterfaceMap(): Map<string, FileLink<InterfaceStatement>> {
         return this.cache.getOrAdd('interfaceMap', () => {
             const map = new Map<string, FileLink<InterfaceStatement>>();
+            //interfaces are available from type-only imports too
             this.enumerateBrsFiles((file) => {
                 if (isBrsFile(file)) {
                     for (let iface of file['_cachedLookups'].interfaceStatements) {
@@ -453,7 +455,7 @@ export class Scope {
                         }
                     }
                 }
-            });
+            }, true);
             return map;
         });
     }
@@ -465,6 +467,7 @@ export class Scope {
     public getEnumMap(): Map<string, FileLink<EnumStatement>> {
         return this.cache.getOrAdd('enumMap', () => {
             const map = new Map<string, FileLink<EnumStatement>>();
+            //enums are available from type-only imports too
             this.enumerateBrsFiles((file) => {
                 for (let enumStmt of file['_cachedLookups'].enumStatements) {
                     //only track enums with a defined name (i.e. exclude nameless malformed enums)
@@ -472,7 +475,7 @@ export class Scope {
                         map.set(enumStmt.fullName.toLowerCase(), { item: enumStmt, file: file });
                     }
                 }
-            });
+            }, true);
             return map;
         });
     }
@@ -503,6 +506,7 @@ export class Scope {
     public getTypeStatementMap(): Map<string, FileLink<TypeStatement>> {
         return this.cache.getOrAdd('typeStatementMap', () => {
             const map = new Map<string, FileLink<TypeStatement>>();
+            //type aliases are available from type-only imports too
             this.enumerateBrsFiles((file) => {
                 file.ast.walk((node) => {
                     if (isTypeStatement(node)) {
@@ -514,7 +518,7 @@ export class Scope {
                         }
                     }
                 }, { walkMode: WalkMode.visitAllRecursive });
-            });
+            }, true);
             return map;
         });
     }
@@ -725,26 +729,32 @@ export class Scope {
     }
 
     /**
-     * Iterate over Brs files not shadowed by typedefs
+     * Iterate over Brs files not shadowed by typedefs.
+     * Files that are only in this scope because of `import type` statements are skipped by default,
+     * since they contribute no runtime code and are not validated in the context of this scope.
+     * @param callback called once for each file
+     * @param includeTypeOnlyFiles when true, files brought in by `import type` statements are included as well
      */
-    public enumerateBrsFiles(callback: (file: BrsFile) => void) {
+    public enumerateBrsFiles(callback: (file: BrsFile) => void, includeTypeOnlyFiles = false) {
         const files = this.getAllFiles();
+        const typeOnlyFiles = includeTypeOnlyFiles ? undefined : this.getTypeOnlyFiles();
         for (const file of files) {
             //only brs files without a typedef
-            if (isBrsFile(file) && !file.hasTypedef) {
+            if (isBrsFile(file) && !file.hasTypedef && !typeOnlyFiles?.has(file)) {
                 callback(file);
             }
         }
     }
 
     /**
-     * Iterate over Brs files not shadowed by typedefs
+     * Iterate over Brs files not shadowed by typedefs (excluding files brought in by `import type` statements)
      */
     public enumerateBrsFilesWithBreak(callback: (file: BrsFile) => boolean) {
         const files = this.getAllFiles();
+        const typeOnlyFiles = this.getTypeOnlyFiles();
         for (const file of files) {
             //only brs files without a typedef
-            if (isBrsFile(file) && !file.hasTypedef) {
+            if (isBrsFile(file) && !file.hasTypedef && !typeOnlyFiles.has(file)) {
                 if (callback(file)) {
                     break;
                 }
@@ -754,15 +764,138 @@ export class Scope {
 
     /**
      * Call a function for each file directly included in this scope (excluding files found only in parent scopes).
+     * Files that are only in this scope because of `import type` statements are skipped by default.
+     * @param callback called once for each file
+     * @param includeTypeOnlyFiles when true, files brought in by `import type` statements are included as well
      */
-    public enumerateOwnFiles(callback: (file: BscFile) => void) {
+    public enumerateOwnFiles(callback: (file: BscFile) => void, includeTypeOnlyFiles = false) {
         const files = this.getOwnFiles();
+        const typeOnlyFiles = includeTypeOnlyFiles ? undefined : this.getTypeOnlyFiles();
         for (const file of files) {
             //either XML components or files without a typedef
-            if (isXmlFile(file) || (isBrsFile(file) && !file.hasTypedef)) {
+            if (isXmlFile(file) || (isBrsFile(file) && !file.hasTypedef && !typeOnlyFiles?.has(file))) {
                 callback(file);
             }
         }
+    }
+
+    /**
+     * The set of files that are in this scope ONLY because of `import type` statements (directly, or transitively
+     * through the imports of another type-only file).
+     *
+     * Type-only files contribute their interfaces, enums and type aliases to this scope, but none of their runtime code
+     * (functions, classes, consts). They are not validated in the context of this scope, are excluded from the scope's
+     * callables, and are not added to the component xml as `<script>` tags at transpile time.
+     *
+     * A file that is reachable through at least one regular (non-type) import path is never considered type-only.
+     */
+    public getTypeOnlyFiles(): Set<BscFile> {
+        return this.cache.getOrAdd('typeOnlyFiles', () => {
+            //fast path: nothing to do unless at least one file in this scope has an `import type` statement.
+            //(this also covers scopes that don't have a dependency graph, like the temporary scopes created during serialization)
+            const hasTypeOnlyImport = this.getAllFiles().some(file => isBrsFile(file) && file.ownScriptImports.some(x => x.isTypeOnly));
+            if (!hasTypeOnlyImport || !this.dependencyGraph) {
+                return new Set<BscFile>();
+            }
+
+            //files that are in this scope because of a regular (runtime) reference: xml script tags, codebehind files,
+            //source-folder membership, regular `import` statements, typedefs, etc.
+            const runtimeFiles = new Set<BscFile>();
+            //files that are (so far) only reachable through `import type` statements
+            const typeOnlyFiles = new Set<BscFile>();
+
+            const resolve = (reference: FileReference) => {
+                return reference.destPath ? this.program.getFile(reference.destPath, false) : undefined;
+            };
+
+            //walk the regular (runtime) import graph first, starting from the files directly referenced by this scope
+            //(and, for component scopes, by all ancestor components)
+            const runtimeQueue = [...this.getImmediateFiles()];
+            while (runtimeQueue.length > 0) {
+                const file = runtimeQueue.pop();
+                if (!file || runtimeFiles.has(file)) {
+                    continue;
+                }
+                runtimeFiles.add(file);
+                if (isBrsFile(file)) {
+                    //a `.brs` file's typedef is part of the runtime graph too
+                    if (file.typedefFile) {
+                        runtimeQueue.push(file.typedefFile);
+                    }
+                    for (const scriptImport of file.ownScriptImports) {
+                        if (scriptImport.isTypeOnly) {
+                            const target = resolve(scriptImport);
+                            if (target) {
+                                typeOnlyFiles.add(target);
+                            }
+                        } else {
+                            runtimeQueue.push(resolve(scriptImport));
+                        }
+                    }
+                } else if (isXmlFile(file)) {
+                    for (const scriptImport of file.scriptTagImports) {
+                        runtimeQueue.push(resolve(scriptImport));
+                    }
+                }
+            }
+
+            //now walk outward from the type-only files. Everything they import (type-only or not) is also type-only,
+            //unless it was already reached through the runtime graph
+            const typeOnlyQueue = [...typeOnlyFiles];
+            typeOnlyFiles.clear();
+            while (typeOnlyQueue.length > 0) {
+                const file = typeOnlyQueue.pop();
+                if (!file || runtimeFiles.has(file) || typeOnlyFiles.has(file)) {
+                    continue;
+                }
+                typeOnlyFiles.add(file);
+                if (isBrsFile(file)) {
+                    if (file.typedefFile) {
+                        typeOnlyQueue.push(file.typedefFile);
+                    }
+                    for (const scriptImport of file.ownScriptImports) {
+                        typeOnlyQueue.push(resolve(scriptImport));
+                    }
+                }
+            }
+            return typeOnlyFiles;
+        });
+    }
+
+    /**
+     * Is this file only in this scope because of `import type` statements?
+     * @see getTypeOnlyFiles
+     */
+    public isTypeOnlyFile(file: BscFile) {
+        return this.getTypeOnlyFiles().has(file);
+    }
+
+    /**
+     * Find the type-only file (see `getTypeOnlyFiles`) that declares a runtime symbol (function, class, const, etc.) with the given name, if any.
+     * Used to produce a more helpful diagnostic when code references runtime code from a file that was only imported with `import type`.
+     * @param fullName the full name of the symbol (including namespace, if any)
+     */
+    public getTypeOnlyFileProvidingRuntimeSymbol(fullName: string): BrsFile | undefined {
+        const typeOnlyFiles = this.getTypeOnlyFiles();
+        if (typeOnlyFiles.size === 0 || !fullName) {
+            return undefined;
+        }
+        const lowerName = fullName.toLowerCase();
+        //namespaced functions are also registered under their flattened runtime name (i.e. `alpha.beta` -> `alpha_beta`)
+        const flattenedName = lowerName.replace(/\./g, '_');
+        const isRuntimeOnlySymbol = (symbols: BscSymbol[]) => symbols?.some(symbol => !util.isTypeOnlyImportableSymbol(symbol));
+        for (const file of typeOnlyFiles) {
+            if (isBrsFile(file)) {
+                const symbolTable = file.parser?.symbolTable;
+                if (
+                    isRuntimeOnlySymbol(symbolTable?.getSymbol(lowerName, SymbolTypeFlag.runtime, { ignoreParentsAndSiblings: true })) ||
+                    isRuntimeOnlySymbol(symbolTable?.getSymbol(flattenedName, SymbolTypeFlag.runtime, { ignoreParentsAndSiblings: true }))
+                ) {
+                    return file;
+                }
+            }
+        }
+        return undefined;
     }
 
     /**
@@ -901,9 +1034,15 @@ export class Scope {
         return this.cache.getOrAdd('symbolTable', () => {
             const result = new SymbolTable(`Scope: '${this.name}'`, () => this.getParentScope()?.symbolTable);
             result.addSymbol('m', undefined, new AssociativeArrayType(), SymbolTypeFlag.runtime);
+            const typeOnlyFiles = this.getTypeOnlyFiles();
             for (let file of this.getOwnFiles()) {
                 if (isBrsFile(file)) {
-                    result.mergeSymbolTable(file.parser?.symbolTable);
+                    if (typeOnlyFiles.has(file)) {
+                        //files brought in by `import type` only contribute their interfaces, enums and type aliases
+                        result.mergeSymbolTable(file.parser?.symbolTable, util.isTypeOnlyImportableSymbol);
+                    } else {
+                        result.mergeSymbolTable(file.parser?.symbolTable);
+                    }
                 }
             }
             return result;
@@ -965,13 +1104,15 @@ export class Scope {
                 }
             }
         }
+        const typeOnlyFiles = this.getTypeOnlyFiles();
         this.enumerateBrsFiles((file) => {
-            const namespaceTypes = file.getNamespaceSymbolTable();
+            //files brought in by `import type` only contribute the interfaces, enums and type aliases of their namespaces
+            const namespaceTypes = file.getNamespaceSymbolTable(true, typeOnlyFiles.has(file));
 
             this.linkSymbolTableDisposables.push(
                 ...this._allNamespaceTypeTable.mergeNamespaceSymbolTables(namespaceTypes)
             );
-        });
+        }, true);
         this.linkSymbolTableDisposables.push(
             this.symbolTable.addSibling(this._allNamespaceTypeTable)
         );

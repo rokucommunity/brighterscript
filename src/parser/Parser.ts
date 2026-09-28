@@ -1669,8 +1669,13 @@ export class Parser {
 
     private importStatement() {
         this.warnIfNotBrighterScriptMode('import statements');
+        const importToken = this.advance();
+        //`import type "path"` is a type-only import. (a `type Foo = ...` statement on the following line is never
+        //mistaken for this, since the newline token sits between `import` and `type`)
+        const typeToken = this.check(TokenKind.Type) ? this.advance() : undefined;
         let importStatement = new ImportStatement({
-            import: this.advance(),
+            import: importToken,
+            type: typeToken,
             //grab the next token only if it's a string
             path: this.tryConsume(
                 DiagnosticMessages.expectedStringLiteralAfterKeyword('import'),

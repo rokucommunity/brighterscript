@@ -1201,6 +1201,19 @@ export let DiagnosticMessages = {
         message: `Class constructor 'new' cannot be declared inside a conditional compile ('#if') block`,
         severity: DiagnosticSeverity.Error,
         code: 'class-constructor-in-conditional-compile'
+    }),
+    /**
+     * @param name the name of the function, class, const, etc. that could not be found
+     * @param filePath the pkg path of the file that declares `name`, which was only imported with `import type`
+     */
+    cannotFindRuntimeSymbolFromTypeOnlyImport: (name: string, filePath: string) => ({
+        message: `Cannot find name '${name}'. It is declared in '${filePath}', which is only imported as a type (\`import type\`), so its functions, classes and consts are not available. Use \`import "${filePath}"\` instead if the runtime code is needed`,
+        data: {
+            name: name,
+            filePath: filePath
+        },
+        severity: DiagnosticSeverity.Error,
+        code: 'type-only-import-runtime-reference'
     })
 };
 export const defaultMaximumTruncationLength = 160;
