@@ -5407,6 +5407,22 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('includes type-only import statements', () => {
+            program.setFile('source/lib.bs', `
+                interface Alpha
+                    name as string
+                end interface
+                enum Gamma
+                    one = 1
+                end enum
+            `);
+            testTypedef(`
+               import type { Alpha as Beta, Gamma } from "pkg:/source/lib.bs"
+            `, trim`
+                import type { Alpha as Beta, Gamma } from "pkg:/source/lib.brs"
+            `);
+        });
+
         it('includes namespace statements', () => {
             testTypedef(`
                 namespace Name

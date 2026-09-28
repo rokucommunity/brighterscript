@@ -21,6 +21,17 @@ export class ProgramValidator {
      * Flag any files that are included in 0 scopes.
      */
     private flagScopelessBrsFiles() {
+        //files that are the target of a named type import (`import type { Name } from "..."`) are referenced, even though
+        //they are not part of the importing file's scope
+        const typeImportTargets = new Set<string>();
+        for (const key in this.event.program.files) {
+            const file = this.event.program.files[key];
+            if (isBrsFile(file)) {
+                for (const typeImport of file.typeImports.values()) {
+                    typeImportTargets.add(typeImport.destPath.toLowerCase());
+                }
+            }
+        }
         for (const key in this.event.program.files) {
             const file = this.event.program.files[key];
 
@@ -28,7 +39,9 @@ export class ProgramValidator {
                 //if this isn't a brs file, skip
                 !isBrsFile(file) ||
                 //if the file is included in at least one scope, skip
-                this.event.program.getFirstScopeForFile(file)
+                this.event.program.getFirstScopeForFile(file) ||
+                //if the file is referenced by a type-only import, skip
+                typeImportTargets.has(file.destPath.toLowerCase())
             ) {
                 continue;
             }

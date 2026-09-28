@@ -1431,6 +1431,13 @@ export class Program {
                 });
             })
             .once('track and update type-time and runtime symbol dependencies and changes', () => {
+                //files that `import type { ... } from` any of the files validated in this run must be revalidated too. The imported
+                //file is not part of their scope, so those changes are not tracked through the dependency graph or the changed symbols
+                if (!this.isFirstValidation && brsFilesValidated.length > 0) {
+                    for (const importer of this.getTypeImportersOfFiles(brsFilesValidated)) {
+                        filesToBeValidatedInScopeContext.add(importer);
+                    }
+                }
                 const changedSymbolsMapArr = [...brsFilesValidated, ...xmlFilesValidated]?.map(f => {
                     if (isBrsFile(f)) {
                         return f.providedSymbols.changes;
@@ -1797,6 +1804,25 @@ export class Program {
 
     private scopesPerFile: Map<BscFile, Scope[]> = new Map();
 
+
+    /**
+     * Get every file in the program that has a named type import (`import type { Name } from "..."`) pointing at one of the given files
+     */
+    public getTypeImportersOfFiles(files: BscFile[]): BrsFile[] {
+        const destPaths = new Set(files.map(x => x.destPath?.toLowerCase()));
+        const result = [] as BrsFile[];
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file) && !destPaths.has(file.destPath.toLowerCase())) {
+                for (const typeImport of file.typeImports.values()) {
+                    if (destPaths.has(typeImport.destPath.toLowerCase())) {
+                        result.push(file);
+                        break;
+                    }
+                }
+            }
+        }
+        return result;
+    }
 
     /**
      * Get a list of all scopes the file is loaded into

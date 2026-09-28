@@ -62,6 +62,7 @@ import {
     AugmentedAssignmentStatement,
     TypeStatement
 } from './Statement';
+import type { TypeImportSpecifier } from './Statement';
 import type { DiagnosticInfo } from '../DiagnosticMessages';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { util } from '../util';
@@ -1669,8 +1670,13 @@ export class Parser {
 
     private importStatement() {
         this.warnIfNotBrighterScriptMode('import statements');
+        const importToken = this.advance();
+        //`import type { Name } from "path"` is a type-only import
+        if (this.check(TokenKind.Type)) {
+            return this.typeImportStatement(importToken);
+        }
         let importStatement = new ImportStatement({
-            import: this.advance(),
+            import: importToken,
             //grab the next token only if it's a string
             path: this.tryConsume(
                 DiagnosticMessages.expectedStringLiteralAfterKeyword('import'),
@@ -1679,6 +1685,90 @@ export class Parser {
         });
 
         return importStatement;
+    }
+
+    /**
+     * Parse the remainder of a type-only import statement (i.e. `import type { Alpha, Beta.Charlie as Delta } from "pkg:/source/lib.bs"`).
+     * The `import` keyword has already been consumed
+     */
+    private typeImportStatement(importToken: Token) {
+        const typeToken = this.advance();
+        const leftCurlyBrace = this.tryConsume(DiagnosticMessages.expectedToken(TokenKind.LeftCurlyBrace), TokenKind.LeftCurlyBrace);
+        const typeImports = [] as TypeImportSpecifier[];
+        if (leftCurlyBrace) {
+            while (!this.isAtEnd() && !this.checkAny(TokenKind.RightCurlyBrace, TokenKind.Newline)) {
+                const nameParts = [] as Token[];
+                const firstPart = this.tryConsume(DiagnosticMessages.expectedIdentifier(), TokenKind.Identifier, ...this.allowedLocalIdentifiers);
+                if (!firstPart) {
+                    break;
+                }
+                nameParts.push(firstPart);
+                //names may be namespaced (i.e. `Alpha.Beta`)
+                while (this.check(TokenKind.Dot)) {
+                    this.advance();
+                    const part = this.tryConsume(DiagnosticMessages.expectedIdentifier('.'), TokenKind.Identifier, ...AllowedProperties);
+                    if (!part) {
+                        break;
+                    }
+                    nameParts.push(part);
+                }
+                let asToken: Token;
+                let alias: Identifier;
+                if (this.check(TokenKind.As)) {
+                    asToken = this.advance();
+                    alias = this.tryConsume(DiagnosticMessages.expectedIdentifier('as'), TokenKind.Identifier, ...this.allowedLocalIdentifiers) as Identifier;
+                    if (alias) {
+                        // force the name into an identifier so the AST makes some sense
+                        alias.kind = TokenKind.Identifier;
+                    }
+                }
+                const comma = this.check(TokenKind.Comma) ? this.advance() : undefined;
+                typeImports.push({
+                    tokens: {
+                        nameParts: nameParts,
+                        as: asToken,
+                        alias: alias,
+                        comma: comma
+                    },
+                    name: nameParts.map(x => x.text).join('.'),
+                    localName: alias?.text ?? nameParts[nameParts.length - 1].text,
+                    location: util.createBoundingLocation(...nameParts, asToken, alias)
+                });
+                if (!comma) {
+                    break;
+                }
+            }
+            if (typeImports.length === 0) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.expectedIdentifier('{'),
+                    location: this.peek()?.location
+                });
+            }
+        }
+        const rightCurlyBrace = this.tryConsume(DiagnosticMessages.expectedToken(TokenKind.RightCurlyBrace), TokenKind.RightCurlyBrace);
+        //`from` is not a keyword, so match it by text
+        let fromToken: Token;
+        if (this.check(TokenKind.Identifier) && this.peek().text.toLowerCase() === 'from') {
+            fromToken = this.advance();
+        } else {
+            this.diagnostics.push({
+                ...DiagnosticMessages.expectedToken('from'),
+                location: this.peek()?.location
+            });
+        }
+        return new ImportStatement({
+            import: importToken,
+            type: typeToken,
+            leftCurlyBrace: leftCurlyBrace,
+            typeImports: typeImports,
+            rightCurlyBrace: rightCurlyBrace,
+            from: fromToken,
+            //grab the next token only if it's a string
+            path: this.tryConsume(
+                DiagnosticMessages.expectedStringLiteralAfterKeyword('from'),
+                TokenKind.StringLiteral
+            )
+        });
     }
 
     private typecastStatement() {

@@ -51,6 +51,7 @@ BrighterScript adds several new features to the BrightScript language such as na
       - Declare import statements in scripts instead of xml script tags.
       - Automatically add script tags to XML components for all script import statements and their cascading dependencies
       - Missing imports are flagged at compile time.
+      - `import type { Name } from "..."` pulls in interfaces, enums and consts without adding the file as a script tag.
     - [Classes](https://github.com/rokucommunity/brighterscript/blob/master/docs/classes.md)
       - Support for class inheritance and method overrides
       - Class fields and can be marked as `public`, `protected`, and `private` and incorrect access will be enforced by compile-time checks.

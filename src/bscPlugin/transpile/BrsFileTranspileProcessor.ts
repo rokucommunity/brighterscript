@@ -1,6 +1,6 @@
 import { createAssignmentStatement, createBlock, createDottedSetStatement, createIfStatement, createIndexedSetStatement, createToken } from '../../astUtils/creators';
 import type { Editor } from '../../astUtils/Editor';
-import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression, isAliasStatement, isCallExpression, isCallfuncExpression, isEnumType, isAssignmentStatement, isBlock, isBody, isDottedSetStatement, isGroupingExpression, isIndexedSetStatement, isAugmentedAssignmentStatement, isNamespaceStatement } from '../../astUtils/reflection';
+import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression, isAliasStatement, isCallExpression, isCallfuncExpression, isEnumType, isAssignmentStatement, isBlock, isBody, isDottedSetStatement, isGroupingExpression, isIndexedSetStatement, isAugmentedAssignmentStatement, isNamespaceStatement, isBrsFile } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, OnPrepareFileEvent } from '../../interfaces';
@@ -354,6 +354,9 @@ export class BrsFilePreTranspileProcessor {
         const processedNames: string[] = [];
         let isAlias = false;
         let isCall = isCallExpression(expression) || isCallfuncExpression(expression);
+        if (this.processTypeImportExpression(parts, isCall, visitedConsts)) {
+            return;
+        }
         for (let part of parts) {
             let entityName: string;
 
@@ -506,6 +509,79 @@ export class BrsFilePreTranspileProcessor {
         }
     }
 
+
+    /**
+     * Handle an expression whose first part is a symbol from a named type import (`import type { Name as Alias } from "..."`).
+     * The imported file is not part of this scope, so enum members and consts are resolved directly from that file instead.
+     * @returns true when the expression referred to a type import (whether or not anything was inlined)
+     */
+    private processTypeImportExpression(parts: Expression[], isCall: boolean, visitedConsts: Set<ConstStatement>) {
+        const firstPart = parts[0];
+        if (!isVariableExpression(firstPart)) {
+            return false;
+        }
+        const typeImport = this.event.file.typeImports.get(firstPart.getName().toLowerCase());
+        if (!typeImport) {
+            return false;
+        }
+        if (util.isVariableShadowingSomething(firstPart.getName().toLowerCase(), firstPart)) {
+            //a local variable with the same name takes precedence
+            return false;
+        }
+        const targetFile = this.event.program.getFile<BrsFile>(typeImport.destPath);
+        if (!isBrsFile(targetFile)) {
+            return true;
+        }
+        //resolve nested references (i.e. a const whose value uses another const) in the context of the imported file
+        const targetScope = this.event.program.getFirstScopeForFile(targetFile);
+        const fullNameLower = typeImport.specifier.name.toLowerCase();
+
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        const constStatement = targetFile['_cachedLookups'].constStatements.find(x => x.fullName?.toLowerCase() === fullNameLower);
+        if (constStatement) {
+            const containingNamespace = constStatement.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+            const resolved = this.resolveConstValue(constStatement.value, targetScope, containingNamespace);
+            if (resolved.isCircular) {
+                return true;
+            }
+            const value = resolved.value;
+            if (!isLiteralExpression(value)) {
+                if (visitedConsts.has(constStatement)) {
+                    return true;
+                }
+                this.processInlinedConstValue(value, targetScope, constStatement, visitedConsts);
+            }
+            this.event.editor.setProperty(firstPart, 'transpile', (state) => {
+                if (isLiteralExpression(value) || isCall) {
+                    return value.transpile(state);
+                }
+                //wrap non-literals with parens to prevent on-device compile errors
+                return ['(', ...value.transpile(state), ')'];
+            });
+            return true;
+        }
+
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        const enumStatement = targetFile['_cachedLookups'].enumStatements.find(x => x.fullName?.toLowerCase() === fullNameLower);
+        const memberPart = parts[1];
+        if (enumStatement && isDottedGetExpression(memberPart)) {
+            const value = enumStatement.getMemberValue(memberPart.tokens.name?.text);
+            if (value !== undefined) {
+                const literal = new LiteralExpression({
+                    value: createToken(
+                        //just use float literal for now...it will transpile properly with any literal value
+                        value?.startsWith('"') ? TokenKind.StringLiteral : TokenKind.FloatLiteral,
+                        value
+                    )
+                });
+                this.event.editor.setProperty(memberPart, 'transpile', (state) => {
+                    return literal.transpile(state);
+                });
+            }
+        }
+        //interfaces and type aliases have no runtime representation, so there is nothing to inline
+        return true;
+    }
 
     private replaceAlias(expression: Expression) {
         let alias: AliasStatement;

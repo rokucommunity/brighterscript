@@ -16,11 +16,11 @@ import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers } from '../lexer/TokenKind';
 import { Parser, ParseMode } from '../parser/Parser';
 import type { FunctionExpression } from '../parser/Expression';
-import type { ClassStatement, NamespaceStatement, MethodStatement, FieldStatement } from '../parser/Statement';
+import type { ClassStatement, NamespaceStatement, MethodStatement, FieldStatement, TypeImportSpecifier, ImportStatement } from '../parser/Statement';
 import type { Program } from '../Program';
 import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
-import { isClassStatement, isDottedGetExpression, isFunctionExpression, isNamespaceStatement, isVariableExpression, isImportStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType, isFunctionStatement, isEnumStatement, isConstStatement } from '../astUtils/reflection';
+import { isClassStatement, isDottedGetExpression, isFunctionExpression, isNamespaceStatement, isVariableExpression, isImportStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType, isFunctionStatement, isEnumStatement, isConstStatement, isBrsFile } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyChangedEvent, DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -53,6 +53,18 @@ export type ChangedSymbolMap = Map<SymbolTypeFlag, Set<string>>;
 export interface ProvidedSymbolInfo {
     symbolMap: ProvidedSymbolMap;
     changes: ChangedSymbolMap;
+}
+
+/**
+ * Details about one named type import (i.e. the `Alpha as Beta` in `import type { Alpha as Beta } from "pkg:/source/lib.bs"`)
+ */
+export interface TypeImportInfo {
+    statement: ImportStatement;
+    specifier: TypeImportSpecifier;
+    /**
+     * The destPath of the imported file
+     */
+    destPath: string;
 }
 
 /**
@@ -267,13 +279,57 @@ export class BrsFile implements BscFile {
                         filePathRange: statement.tokens.path.location?.range,
                         destPath: util.getPkgPathFromTarget(this.destPath, statement.filePath),
                         sourceFile: this,
-                        text: statement.tokens.path.text
+                        text: statement.tokens.path.text,
+                        isTypeOnly: statement.isTypeOnly
                     });
                 }
             }
             return result;
         }) ?? [];
         return result;
+    }
+
+    /**
+     * The named type imports declared in this file (i.e. `import type { Alpha as Beta } from "pkg:/source/lib.bs"`),
+     * indexed by their lower-case local name (`beta` in the example above)
+     */
+    public get typeImports(): Map<string, TypeImportInfo> {
+        return this.cache?.getOrAdd('typeImports', () => {
+            const result = new Map<string, TypeImportInfo>();
+            for (const statement of this._cachedLookups?.importStatements ?? []) {
+                if (isImportStatement(statement) && statement.isTypeOnly && statement.tokens.path) {
+                    const destPath = util.getPkgPathFromTarget(this.destPath, statement.filePath);
+                    for (const specifier of statement.typeImports) {
+                        if (specifier.localName) {
+                            result.set(specifier.localName.toLowerCase(), {
+                                statement: statement,
+                                specifier: specifier,
+                                destPath: destPath
+                            });
+                        }
+                    }
+                }
+            }
+            return result;
+        }) ?? new Map<string, TypeImportInfo>();
+    }
+
+    /**
+     * Get the symbol table that a named type import should be resolved against: the root symbol table of the imported file,
+     * or the aggregate symbol table of the namespace when the imported name is namespaced (i.e. `Alpha.Beta`).
+     * Returns undefined when the imported file is not in the program (yet)
+     * @param destPath the destPath of the imported file
+     * @param namespaceName the namespace portion of the imported name (i.e. `Alpha` for `Alpha.Beta`), if any
+     */
+    public getTypeImportSymbolTable(destPath: string, namespaceName?: string): SymbolTable | undefined {
+        const targetFile = this.program?.getFile<BrsFile>(destPath);
+        if (!isBrsFile(targetFile) || targetFile === this) {
+            return undefined;
+        }
+        if (!namespaceName) {
+            return targetFile.parser?.symbolTable;
+        }
+        return targetFile.getNamespaceLookupObject().get(namespaceName.toLowerCase())?.symbolTable;
     }
 
     /**
@@ -409,7 +465,8 @@ export class BrsFile implements BscFile {
      * The list of files that this file depends on
      */
     public get dependencies() {
-        const result = this.ownScriptImports.filter(x => !!x.destPath).map(x => x.destPath.toLowerCase());
+        //type-only imports do not bring the imported file into the scope, so they are not dependencies
+        const result = this.ownScriptImports.filter(x => !!x.destPath && !x.isTypeOnly).map(x => x.destPath.toLowerCase());
 
         //if this is a .brs file, watch for typedef changes
         if (this.extension === '.brs') {
@@ -1228,7 +1285,8 @@ export class BrsFile implements BscFile {
                 const symbolNameLower = symbolTable.namePrefixLower
                     ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}`
                     : symbol.name.toLowerCase();
-                if (symbolNameLower === 'm') {
+                //symbols from named type imports are local to this file, so they are not provided to the scope
+                if (symbolNameLower === 'm' || symbol.data?.isTypeImport) {
                     continue;
                 }
                 const duplicates = getAnyDuplicates(symbolNameLower, runTimeSymbolMap, referenceRunTimeSymbolMap);
@@ -1244,7 +1302,8 @@ export class BrsFile implements BscFile {
                 const symbolNameLower = symbolTable.namePrefixLower
                     ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}`
                     : symbol.name.toLowerCase();
-                if (symbolNameLower === 'm') {
+                //symbols from named type imports are local to this file, so they are not provided to the scope
+                if (symbolNameLower === 'm' || symbol.data?.isTypeImport) {
                     continue;
                 }
 

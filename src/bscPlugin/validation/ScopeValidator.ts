@@ -103,6 +103,7 @@ export class ScopeValidator {
             }).durationText;
             metrics.scriptImportValidationTime = validationStopwatch.getDurationTextFor(() => {
                 this.validateScriptImportPaths();
+                this.validateTypeImports();
             }).durationText;
             metrics.classValidationTime = validationStopwatch.getDurationTextFor(() => {
                 this.validateClasses();
@@ -1483,7 +1484,10 @@ export class ScopeValidator {
         let scriptImports = this.event.scope.getOwnScriptImports();
         //verify every script import
         for (let scriptImport of scriptImports) {
-            let referencedFile = this.event.scope.getFileByRelativePath(scriptImport.destPath);
+            let referencedFile = scriptImport.isTypeOnly
+                //type-only imports do not bring the file into the scope, so look for it in the whole program
+                ? this.event.program.getFile(scriptImport.destPath)
+                : this.event.scope.getFileByRelativePath(scriptImport.destPath);
             //if we can't find the file
             if (!referencedFile) {
                 //skip the default bslib file, it will exist at transpile time but should not show up in the program during validation cycle
@@ -1517,6 +1521,43 @@ export class ScopeValidator {
                 }, ScopeValidatorDiagnosticTag.Imports);
             }
         }
+    }
+
+    /**
+     * Verify that every name in a type-only import (`import type { Name } from "pkg:/source/lib.bs"`) exists in the imported file
+     * and is something that can be imported this way (an interface, enum, const or type alias)
+     */
+    private validateTypeImports() {
+        this.event.scope.enumerateOwnFiles((file) => {
+            if (!isBrsFile(file)) {
+                return;
+            }
+            for (const typeImport of file.typeImports.values()) {
+                const targetFile = this.event.program.getFile<BrsFile>(typeImport.destPath);
+                if (!isBrsFile(targetFile)) {
+                    //a missing file is already reported by validateScriptImportPaths
+                    continue;
+                }
+                const nameParts = typeImport.specifier.name.split('.');
+                const memberName = nameParts.pop();
+                const namespaceName = nameParts.join('.');
+                const symbolTable = file.getTypeImportSymbolTable(typeImport.destPath, namespaceName);
+                // eslint-disable-next-line no-bitwise
+                const symbols = symbolTable?.getSymbol(memberName, SymbolTypeFlag.runtime | SymbolTypeFlag.typetime, { ignoreParentsAndSiblings: true }) ?? [];
+                if (symbols.length === 0) {
+                    this.addMultiScopeDiagnostic({
+                        ...DiagnosticMessages.cannotFindTypeImport(typeImport.specifier.name, typeImport.statement.filePath),
+                        location: util.createLocationFromFileRange(file, typeImport.specifier.location?.range)
+                    }, ScopeValidatorDiagnosticTag.Imports);
+                } else if (!symbols.some(symbol => util.isTypeImportableSymbol(symbol))) {
+                    const definingNode = symbols[0].data?.definingNode;
+                    this.addMultiScopeDiagnostic({
+                        ...DiagnosticMessages.typeImportIsNotAType(typeImport.specifier.name, (definingNode ? util.getAstNodeFriendlyName(definingNode) : undefined) ?? 'runtime symbol'),
+                        location: util.createLocationFromFileRange(file, typeImport.specifier.location?.range)
+                    }, ScopeValidatorDiagnosticTag.Imports);
+                }
+            }
+        });
     }
 
     /**

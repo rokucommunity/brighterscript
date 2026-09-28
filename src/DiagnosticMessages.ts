@@ -1201,6 +1201,43 @@ export let DiagnosticMessages = {
         message: `Class constructor 'new' cannot be declared inside a conditional compile ('#if') block`,
         severity: DiagnosticSeverity.Error,
         code: 'class-constructor-in-conditional-compile'
+    }),
+    /**
+     * @param name the imported name (i.e. `Alpha.Beta` in `import type { Alpha.Beta } from "pkg:/source/lib.bs"`)
+     * @param filePath the path of the imported file, as written in the import statement
+     */
+    cannotFindTypeImport: (name: string, filePath: string) => ({
+        message: `Cannot find '${name}' in '${filePath}'`,
+        data: {
+            name: name,
+            filePath: filePath
+        },
+        severity: DiagnosticSeverity.Error,
+        code: 'cannot-find-type-import'
+    }),
+    /**
+     * @param name the imported name
+     * @param kindName the friendly name of what `name` actually is (i.e. `Function`, `Class`)
+     */
+    typeImportIsNotAType: (name: string, kindName: string) => ({
+        message: `'${name}' is a ${kindName?.toLowerCase() ?? 'runtime symbol'} and cannot be imported with \`import type\`. Only interfaces, enums, consts and type aliases can be imported this way`,
+        data: {
+            name: name,
+            kindName: kindName
+        },
+        severity: DiagnosticSeverity.Error,
+        code: 'type-import-not-a-type'
+    }),
+    /**
+     * @param name the local name that was imported more than once (names are case insensitive, so `Base` and `BASE` collide)
+     */
+    duplicateTypeImportName: (name: string) => ({
+        message: `'${name}' is already imported. Names are case insensitive, so imported names and aliases must differ by more than case`,
+        data: {
+            name: name
+        },
+        severity: DiagnosticSeverity.Error,
+        code: 'duplicate-type-import-name'
     })
 };
 export const defaultMaximumTruncationLength = 160;

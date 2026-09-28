@@ -9,6 +9,7 @@ import { CallExpression, type FunctionExpression, type LiteralExpression } from 
 import { ParseMode } from '../../parser/Parser';
 import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
+import { ReferenceType } from '../../types/ReferenceType';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
@@ -251,6 +252,52 @@ export class BrsFileValidator {
 
                 //also add param symbol at block level, as it may be redefined, and if so, should show a union
                 funcExpr.body.getSymbolTable()?.addSymbol(paramName, extraSymbolData, nodeType, SymbolTypeFlag.runtime);
+            },
+            ImportStatement: (node) => {
+                if (!node.isTypeOnly || !node.tokens.path) {
+                    return;
+                }
+                //register each named type import as a file-local symbol that resolves against the imported file directly.
+                //The imported file is NOT part of this scope, so this is the only way code in this file can see those types
+                const file = this.event.file;
+                const destPath = util.getPkgPathFromTarget(file.destPath, node.filePath);
+                //local names declared by the type imports that precede this statement in the file (names are case insensitive)
+                const earlierLocalNames = new Set<string>();
+                // eslint-disable-next-line @typescript-eslint/dot-notation
+                for (const statement of file['_cachedLookups'].importStatements) {
+                    if (statement === node) {
+                        break;
+                    }
+                    for (const typeImport of statement.typeImports) {
+                        earlierLocalNames.add(typeImport.localName?.toLowerCase());
+                    }
+                }
+                for (const typeImport of node.typeImports) {
+                    if (!typeImport.localName) {
+                        continue;
+                    }
+                    const localNameLower = typeImport.localName.toLowerCase();
+                    if (earlierLocalNames.has(localNameLower)) {
+                        this.event.program.diagnostics.register({
+                            ...DiagnosticMessages.duplicateTypeImportName(typeImport.localName),
+                            location: util.createLocationFromFileRange(file, typeImport.location?.range)
+                        });
+                        continue;
+                    }
+                    earlierLocalNames.add(localNameLower);
+                    const nameParts = typeImport.name.split('.');
+                    const memberName = nameParts.pop();
+                    const namespaceName = nameParts.join('.');
+                    // eslint-disable-next-line no-bitwise
+                    const flags = SymbolTypeFlag.runtime | SymbolTypeFlag.typetime;
+                    const referenceType = new ReferenceType(memberName, typeImport.name, flags, () => file.getTypeImportSymbolTable(destPath, namespaceName));
+                    file.parser.ast.symbolTable.addSymbol(
+                        typeImport.localName,
+                        { definingNode: node, doNotMerge: true, isAlias: true, isTypeImport: true },
+                        referenceType,
+                        flags
+                    );
+                }
             },
             InterfaceStatement: (node) => {
                 if (!node.tokens.name) {
