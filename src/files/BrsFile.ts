@@ -164,6 +164,14 @@ export class BrsFile implements BscFile {
 
     public commentFlags = [] as CommentFlag[];
 
+    /**
+     * Line numbers that have a `bs:keep` comment. Used by the tree shaker to
+     * preserve functions that are annotated with this comment either on the
+     * same line as the `sub`/`function` keyword or anywhere between the end of
+     * the previous function and the start of this one.
+     */
+    public keepFlagLines = new Set<number>();
+
     private _functionScopes: FunctionScope[];
 
     public get functionScopes(): FunctionScope[] {
@@ -525,10 +533,14 @@ export class BrsFile implements BscFile {
         const processor = new CommentFlagProcessor(this, ['rem', `'`], diagnosticCodes);
 
         this.commentFlags = [];
+        this.keepFlagLines = new Set<number>();
         for (let lexerToken of tokens) {
             for (let triviaToken of lexerToken.leadingTrivia ?? []) {
                 if (triviaToken.kind === TokenKind.Comment) {
                     processor.tryAdd(triviaToken.text, triviaToken.location?.range);
+                    if (isBsKeepComment(triviaToken.text) && triviaToken.location?.range) {
+                        this.keepFlagLines.add(triviaToken.location.range.start.line);
+                    }
                 }
             }
         }
@@ -1396,4 +1408,14 @@ export class BrsFile implements BscFile {
         delete this._functionScopes;
         delete this.scopesByFunc;
     }
+}
+
+/**
+ * Returns true if the raw comment token text contains a `bs:keep` directive.
+ * Handles both `'` and `rem` starters, with optional leading whitespace.
+ */
+function isBsKeepComment(text: string): boolean {
+    // Strip optional leading whitespace and the comment starter (`'` or `rem`), then check for `bs:keep`
+    const lower = text.toLowerCase().trimLeft().replace(/^(?:rem|')/, '').trimLeft();
+    return lower.startsWith('bs:keep');
 }

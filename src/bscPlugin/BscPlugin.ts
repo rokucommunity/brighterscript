@@ -24,6 +24,7 @@ import { XmlFilePreTranspileProcessor } from './transpile/XmlFilePreTranspilePro
 import { BrsFileAfterValidator } from './validation/BrsFileAfterValidator';
 import { SelectionRangesProcessor } from './selectionRanges/SelectionRangesProcessor';
 import { InlayHintProcessor } from './inlayHints/InlayHintProcessor';
+import { TreeShaker } from './treeShaker/TreeShaker';
 
 export class BscPlugin implements Plugin {
     public name = 'BscPlugin';
@@ -106,8 +107,26 @@ export class BscPlugin implements Plugin {
 
     public beforeBuildProgram(event: BeforeBuildProgramEvent) {
         this.bslibManager.addBslibFileIfMissing(event);
+        this.shakeTree(event);
     }
     private bslibManager = new BslibManager();
+
+    private treeShaker = new TreeShaker();
+
+    /**
+     * Remove unused functions from the files being built (when `compilerOptions.treeShaking.enabled` is true)
+     */
+    private shakeTree(event: BeforeBuildProgramEvent) {
+        const treeShaking = event.program.options.treeShaking;
+        if (!treeShaking?.enabled) {
+            return;
+        }
+        this.treeShaker.analyze(event.program, treeShaking.keep);
+        for (const file of event.files) {
+            this.treeShaker.shake(file, event.editor);
+        }
+        this.treeShaker.logSummary();
+    }
 
     /**
      * Do transpiling-related work after all plugins had a chance to operate on the files
