@@ -32,10 +32,10 @@ export class CodeActionsProcessor {
     public process() {
         // First pass: individual fixes for each diagnostic at the cursor position
         for (const diagnostic of this.event.diagnostics) {
-            if (diagnostic.code === DiagnosticCodeMap.cannotFindName || diagnostic.code === DiagnosticCodeMap.cannotFindFunction) {
-                this.suggestCannotFindNameQuickFix(diagnostic as DiagnosticMessageType<'cannotFindName'>);
-            } else if (diagnostic.code === DiagnosticCodeMap.xmlComponentMissingExtendsAttribute) {
-                this.suggestMissingExtendsQuickFix(diagnostic as DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>);
+            if (isDiagnosticOfType(diagnostic, 'cannotFindName', 'cannotFindFunction')) {
+                this.suggestCannotFindNameQuickFix(diagnostic);
+            } else if (isDiagnosticOfType(diagnostic, 'xmlComponentMissingExtendsAttribute')) {
+                this.suggestMissingExtendsQuickFix(diagnostic);
             } else if (diagnostic.code === DiagnosticCodeMap.voidFunctionMayNotReturnValue) {
                 this.suggestVoidFunctionReturnQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.nonVoidFunctionMustReturnValue) {
@@ -421,9 +421,8 @@ export class CodeActionsProcessor {
         for (const diagnostic of allFileDiagnostics) {
             let files: BscFile[] = [];
 
-            if (diagnostic.code === DiagnosticCodeMap.cannotFindName || diagnostic.code === DiagnosticCodeMap.cannotFindFunction) {
-                const cannotFindNameDiagnostic = diagnostic as DiagnosticMessageType<'cannotFindName'>;
-                const lowerName = (cannotFindNameDiagnostic.data?.fullName ?? cannotFindNameDiagnostic.data?.name)?.toLowerCase();
+            if (isDiagnosticOfType(diagnostic, 'cannotFindName', 'cannotFindFunction')) {
+                const lowerName = (diagnostic.data?.fullName ?? diagnostic.data?.name)?.toLowerCase();
                 if (lowerName) {
                     files = [
                         ...this.event.program.findFilesForFunction(lowerName),
