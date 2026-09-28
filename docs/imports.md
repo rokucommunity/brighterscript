@@ -51,6 +51,7 @@ import type { ButtonBase, ButtonStyle as Style, Buttons.MAX as MaxButtons } from
 - namespaced names are written in full (`Buttons.MAX`). Without an alias, the local name is the last part (`MAX`)
 - like everything else in BrightScript, names are case insensitive: `import type { buttonbase }` imports `ButtonBase`, and `Style.primary`, `STYLE.PRIMARY` and `style.Primary` all refer to the same enum member. Because of this, two imported names (or aliases) in the same file cannot differ only by case; doing so produces a diagnostic
 - naming something that does not exist, or that is a function or class, produces a diagnostic on the import
+- if the file is already part of the scope through a regular import (directly or through another file), a hint points out that the `import type` is unnecessary, since everything in the file is available anyway
 
 **pkg:/components/Button.bs**
 ```BrighterScript

@@ -5408,7 +5408,8 @@ describe('BrsFile', () => {
         });
 
         it('includes type-only import statements', () => {
-            program.setFile('source/lib.bs', `
+            //declared in a components file so it is not already part of the source scope
+            program.setFile('components/lib.bs', `
                 interface Alpha
                     name as string
                 end interface
@@ -5417,9 +5418,9 @@ describe('BrsFile', () => {
                 end enum
             `);
             testTypedef(`
-               import type { Alpha as Beta, Gamma } from "pkg:/source/lib.bs"
+               import type { Alpha as Beta, Gamma } from "pkg:/components/lib.bs"
             `, trim`
-                import type { Alpha as Beta, Gamma } from "pkg:/source/lib.brs"
+                import type { Alpha as Beta, Gamma } from "pkg:/components/lib.brs"
             `);
         });
 

@@ -373,7 +373,7 @@ describe('Scope', () => {
             expect(program.getDiagnostics().filter(x => x.location?.uri?.endsWith('MainMenu.bs'))).to.be.empty;
         });
 
-        it('works alongside a regular import of the same file', () => {
+        it('works alongside a regular import of the same file, but hints that it is unnecessary', () => {
             setupComponents(`
                 import "pkg:/components/Button.bs"
                 import type { ButtonBase as Base } from "pkg:/components/Button.bs"
@@ -382,6 +382,41 @@ describe('Scope', () => {
                     print button.text
                     other = createButton("Other")
                     print other
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.unnecessaryTypeImport('pkg:/components/Button.bs'),
+                location: { range: Range.create(2, 57, 2, 82) }
+            }]);
+        });
+
+        it('hints when the imported file is in the scope through another file', () => {
+            program.setFile('components/helpers.bs', `
+                import "pkg:/components/Button.bs"
+            `);
+            setupComponents(`
+                import "pkg:/components/helpers.bs"
+                import type { ButtonBase } from "pkg:/components/Button.bs"
+
+                sub render(button as ButtonBase)
+                    print button.text
+                    print ButtonStyle.primary
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.unnecessaryTypeImport('pkg:/components/Button.bs')
+            ]);
+        });
+
+        it('does not hint when the file is only in scope elsewhere', () => {
+            //Button.bs is a regular member of the Button scope, but not of MainMenu
+            setupComponents(`
+                import type { ButtonBase } from "pkg:/components/Button.bs"
+
+                sub render(button as ButtonBase)
+                    print button.text
                 end sub
             `);
             program.validate();

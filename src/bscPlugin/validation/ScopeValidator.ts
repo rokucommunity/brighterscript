@@ -1532,6 +1532,21 @@ export class ScopeValidator {
             if (!isBrsFile(file)) {
                 return;
             }
+            //hint when the imported file is already in this scope through a regular import (directly or transitively),
+            //since everything in it is available anyway and the type import adds nothing
+            // eslint-disable-next-line @typescript-eslint/dot-notation
+            for (const statement of file['_cachedLookups'].importStatements) {
+                if (!statement.isTypeOnly || !statement.tokens.path) {
+                    continue;
+                }
+                const destPath = util.getPkgPathFromTarget(file.destPath, statement.filePath);
+                if (this.event.scope.getFileByRelativePath(destPath)) {
+                    this.addMultiScopeDiagnostic({
+                        ...DiagnosticMessages.unnecessaryTypeImport(statement.filePath),
+                        location: util.createLocationFromFileRange(file, statement.tokens.path.location?.range)
+                    }, ScopeValidatorDiagnosticTag.Imports);
+                }
+            }
             for (const typeImport of file.typeImports.values()) {
                 const targetFile = this.event.program.getFile<BrsFile>(typeImport.destPath);
                 if (!isBrsFile(targetFile)) {

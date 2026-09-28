@@ -1238,6 +1238,17 @@ export let DiagnosticMessages = {
         },
         severity: DiagnosticSeverity.Error,
         code: 'duplicate-type-import-name'
+    }),
+    /**
+     * @param filePath the path of the imported file, as written in the import statement
+     */
+    unnecessaryTypeImport: (filePath: string) => ({
+        message: `'${filePath}' is already part of this scope through a regular import, so this \`import type\` is unnecessary. Everything declared in that file is available here`,
+        data: {
+            filePath: filePath
+        },
+        severity: DiagnosticSeverity.Hint,
+        code: 'unnecessary-type-import'
     })
 };
 export const defaultMaximumTruncationLength = 160;
