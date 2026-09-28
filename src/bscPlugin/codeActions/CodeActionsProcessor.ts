@@ -32,25 +32,25 @@ export class CodeActionsProcessor {
     public process() {
         // First pass: individual fixes for each diagnostic at the cursor position
         for (const diagnostic of this.event.diagnostics) {
-            if (isDiagnosticOfType(diagnostic, 'cannotFindName', 'cannotFindFunction')) {
-                this.suggestCannotFindNameQuickFix(diagnostic);
-            } else if (isDiagnosticOfType(diagnostic, 'xmlComponentMissingExtendsAttribute')) {
-                this.suggestMissingExtendsQuickFix(diagnostic);
-            } else if (isDiagnosticOfType(diagnostic, 'voidFunctionMayNotReturnValue')) {
+            if (diagnostic.code === DiagnosticCodeMap.cannotFindName || diagnostic.code === DiagnosticCodeMap.cannotFindFunction) {
+                this.suggestCannotFindNameQuickFix(diagnostic as DiagnosticMessageType<'cannotFindName'>);
+            } else if (diagnostic.code === DiagnosticCodeMap.xmlComponentMissingExtendsAttribute) {
+                this.suggestMissingExtendsQuickFix(diagnostic as DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>);
+            } else if (diagnostic.code === DiagnosticCodeMap.voidFunctionMayNotReturnValue) {
                 this.suggestVoidFunctionReturnQuickFixes([diagnostic]);
-            } else if (isDiagnosticOfType(diagnostic, 'nonVoidFunctionMustReturnValue')) {
+            } else if (diagnostic.code === DiagnosticCodeMap.nonVoidFunctionMustReturnValue) {
                 this.suggestNonVoidFunctionReturnQuickFixes([diagnostic]);
-            } else if (isDiagnosticOfType(diagnostic, 'referencedFileDoesNotExist')) {
+            } else if (diagnostic.code === DiagnosticCodeMap.referencedFileDoesNotExist) {
                 this.suggestRemoveScriptImportQuickFixes([diagnostic]);
-            } else if (isDiagnosticOfType(diagnostic, 'unnecessaryScriptImportInChildFromParent')) {
+            } else if (diagnostic.code === DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent) {
                 this.suggestRemoveScriptImportQuickFixes([diagnostic]);
-            } else if (isDiagnosticOfType(diagnostic, 'unnecessaryCodebehindScriptImport')) {
+            } else if (diagnostic.code === DiagnosticCodeMap.unnecessaryCodebehindScriptImport) {
                 this.suggestRemoveScriptImportQuickFixes([diagnostic]);
-            } else if (isDiagnosticOfType(diagnostic, 'scriptImportCaseMismatch')) {
-                this.suggestScriptImportCasingQuickFixes([diagnostic]);
-            } else if (isDiagnosticOfType(diagnostic, 'missingOverrideKeyword')) {
+            } else if (diagnostic.code === DiagnosticCodeMap.scriptImportCaseMismatch) {
+                this.suggestScriptImportCasingQuickFixes([diagnostic as DiagnosticMessageType<'scriptImportCaseMismatch'>]);
+            } else if (diagnostic.code === DiagnosticCodeMap.missingOverrideKeyword) {
                 this.suggestMissingOverrideQuickFixes([diagnostic]);
-            } else if (isDiagnosticOfType(diagnostic, 'cannotUseOverrideKeywordOnConstructorFunction')) {
+            } else if (diagnostic.code === DiagnosticCodeMap.cannotUseOverrideKeywordOnConstructorFunction) {
                 this.suggestRemoveOverrideFromConstructorQuickFixes([diagnostic]);
             } else if (isDiagnosticOfType(diagnostic, 'mismatchedEndingToken')) {
                 this.suggestMismatchedEndingTokenQuickFixes([diagnostic]);
@@ -421,8 +421,9 @@ export class CodeActionsProcessor {
         for (const diagnostic of allFileDiagnostics) {
             let files: BscFile[] = [];
 
-            if (isDiagnosticOfType(diagnostic, 'cannotFindName', 'cannotFindFunction')) {
-                const lowerName = (diagnostic.data?.fullName ?? diagnostic.data?.name)?.toLowerCase();
+            if (diagnostic.code === DiagnosticCodeMap.cannotFindName || diagnostic.code === DiagnosticCodeMap.cannotFindFunction) {
+                const cannotFindNameDiagnostic = diagnostic as DiagnosticMessageType<'cannotFindName'>;
+                const lowerName = (cannotFindNameDiagnostic.data?.fullName ?? cannotFindNameDiagnostic.data?.name)?.toLowerCase();
                 if (lowerName) {
                     files = [
                         ...this.event.program.findFilesForFunction(lowerName),

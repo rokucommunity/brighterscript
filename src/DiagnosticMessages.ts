@@ -1324,11 +1324,6 @@ export interface DiagnosticInfo {
 }
 
 /**
- * The name of any message in `DiagnosticMessages` (i.e. a valid key of `DiagnosticCodeMap`)
- */
-export type DiagnosticMessageKey = keyof typeof DiagnosticMessages;
-
-/**
  * Provides easy type support for the return value of any DiagnosticMessage function.
  * The second type parameter is optional, but allows plugins to pass in their own
  * DiagnosticMessages-like object in order to get the same type support
@@ -1339,42 +1334,12 @@ export type DiagnosticMessageType<K extends keyof D, D extends Record<string, (.
     Pick<BsDiagnostic, 'code' | 'location' | 'relatedInformation' | 'tags'>;
 
 /**
- * Refines a diagnostic to its concrete `DiagnosticMessageType` shape (including the typed `data`
- * payload) when its code matches any of the supplied keys. Passing several keys narrows to the
- * union of their types, which is useful for messages that share a `data` shape:
- *
- * ```ts
- * if (isDiagnosticOfType(diagnostic, 'cannotFindName', 'cannotFindFunction')) {
- *     diagnostic.data.name; //typed, no cast needed
- * }
- * ```
+ * Refines a diagnostic to its concrete `DiagnosticMessageType<K>` shape (including the typed `data`
+ * payload) when its code matches `DiagnosticCodeMap[key]`.
  */
 export function isDiagnosticOfType<K extends keyof typeof DiagnosticMessages>(
     diagnostic: { code?: number | string },
     key: K
-): diagnostic is DiagnosticMessageType<K>;
-export function isDiagnosticOfType<K1 extends DiagnosticMessageKey, K2 extends DiagnosticMessageKey>(
-    diagnostic: { code?: number | string },
-    key1: K1,
-    key2: K2
-): diagnostic is DiagnosticMessageType<K1 | K2>;
-export function isDiagnosticOfType<K1 extends DiagnosticMessageKey, K2 extends DiagnosticMessageKey, K3 extends DiagnosticMessageKey>(
-    diagnostic: { code?: number | string },
-    key1: K1,
-    key2: K2,
-    key3: K3
-): diagnostic is DiagnosticMessageType<K1 | K2 | K3>;
-//implementation: fixed arity (rather than a rest param) so the common 1- and 2-key calls stay
-//monomorphic and allocation-free -- no array is built, and the body reduces to one or two
-//string comparisons that v8 can inline at the call site
-export function isDiagnosticOfType(
-    diagnostic: { code?: number | string },
-    key1: DiagnosticMessageKey,
-    key2?: DiagnosticMessageKey,
-    key3?: DiagnosticMessageKey
-): boolean {
-    const code = diagnostic.code;
-    return code === DiagnosticCodeMap[key1] ||
-        (key2 !== undefined && code === DiagnosticCodeMap[key2]) ||
-        (key3 !== undefined && code === DiagnosticCodeMap[key3]);
+): diagnostic is DiagnosticMessageType<K> {
+    return diagnostic.code === DiagnosticCodeMap[key];
 }
