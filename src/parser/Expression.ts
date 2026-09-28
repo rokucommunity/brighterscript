@@ -23,7 +23,9 @@ import { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
 import { StringType } from '../types/StringType';
 import { TypePropertyReferenceType } from '../types/ReferenceType';
-import { UnionType } from '../types/UnionType';
+import { UnionType, unionTypeFactory } from '../types/UnionType';
+import { getUniqueType } from '../types/helpers';
+import { isAnyReferenceType, isDynamicType, isUnionType } from '../astUtils/reflection';
 import { ArrayType } from '../types/ArrayType';
 import { AssociativeArrayType } from '../types/AssociativeArrayType';
 import { TypedFunctionType } from '../types/TypedFunctionType';
@@ -3258,3 +3260,512 @@ const nonReferenceableFunctions = [
     'tab',
     'pos'
 ];
+
+/**
+ * A destructuring pattern: either an object pattern (`{ a, b }`) or an array pattern (`[a, b]`)
+ */
+export type DestructuringPattern = ObjectPatternExpression | ArrayPatternExpression;
+
+/**
+ * A single variable that receives a value from a destructuring assignment
+ */
+export interface DestructuringTarget {
+    /**
+     * The identifier token of the variable that receives the value
+     */
+    name: Identifier;
+    /**
+     * The inferred type of the value this variable receives
+     */
+    type: BscType;
+    /**
+     * The pattern element/property/rest node that declared this target
+     */
+    node: ObjectPatternPropertyExpression | ArrayPatternElementExpression | RestElementExpression;
+}
+
+/**
+ * Combine the type of a destructured member with the type of its default value (if any)
+ */
+function applyDestructuringDefaultType(memberType: BscType, defaultValue: Expression | undefined, options: GetTypeOptions): BscType {
+    if (!defaultValue) {
+        return memberType ?? DynamicType.instance;
+    }
+    const defaultType = defaultValue.getType({ ...options, typeChain: undefined });
+    const defaultTypeIsUsable = defaultType &&
+        !isDynamicType(defaultType) &&
+        !isInvalidType(defaultType) &&
+        !isVoidType(defaultType) &&
+        //an unresolvable default (i.e. an unknown name) would make the whole variable unresolvable, so ignore it
+        !(isAnyReferenceType(defaultType) && !defaultType.isResolvable());
+
+    if (!memberType || isDynamicType(memberType) || isInvalidType(memberType) || isVoidType(memberType)) {
+        return defaultTypeIsUsable ? defaultType : DynamicType.instance;
+    }
+    //the default replaces `invalid`, so `invalid` can be dropped from the member's union before merging in the default's type
+    let memberTypes = [memberType];
+    if (isUnionType(memberType) && !isAnyReferenceType(memberType)) {
+        memberTypes = memberType.types.filter(x => !isInvalidType(x));
+    }
+    if (!defaultTypeIsUsable) {
+        return getUniqueType(memberTypes, unionTypeFactory) ?? memberType;
+    }
+    return getUniqueType([...memberTypes, defaultType], unionTypeFactory) ?? memberType;
+}
+
+/**
+ * Object destructuring pattern, i.e. `{ name, age: userAge, address: { city }, ...rest }`
+ */
+export class ObjectPatternExpression extends Expression {
+    constructor(options: {
+        open: Token;
+        properties?: ObjectPatternPropertyExpression[];
+        rest?: RestElementExpression;
+        close?: Token;
+    }) {
+        super();
+        this.tokens = {
+            open: options.open,
+            close: options.close
+        };
+        this.properties = options.properties ?? [];
+        this.rest = options.rest;
+        this.location = util.createBoundingLocation(
+            util.createBoundingLocationFromTokens(this.tokens),
+            ...this.properties,
+            this.rest
+        );
+    }
+
+    public readonly kind = AstNodeKind.ObjectPatternExpression;
+
+    public readonly location: Location | undefined;
+
+    public readonly tokens: {
+        readonly open: Token;
+        readonly close?: Token;
+    };
+
+    public readonly properties: ObjectPatternPropertyExpression[];
+
+    /**
+     * The `...rest` element, if present. Always the last item in the pattern
+     */
+    public readonly rest?: RestElementExpression;
+
+    /**
+     * Get every variable declared by this pattern (recursively), along with the type each receives
+     * when the pattern is applied to a value of type `sourceType`
+     */
+    public getTargets(sourceType: BscType | undefined, options: GetTypeOptions): DestructuringTarget[] {
+        const results: DestructuringTarget[] = [];
+        for (const property of this.properties) {
+            const keyName = property.getKeyName();
+            let memberType: BscType;
+            if (sourceType && keyName) {
+                memberType = sourceType.getMemberType(keyName, { ...options, typeChain: undefined });
+            }
+            memberType = applyDestructuringDefaultType(memberType, property.defaultValue, options);
+            if (property.pattern) {
+                results.push(...property.pattern.getTargets(memberType, options));
+            } else if (property.targetName) {
+                results.push({ name: property.targetName, type: memberType, node: property });
+            }
+        }
+        if (this.rest?.tokens.name) {
+            results.push({ name: this.rest.tokens.name, type: new AssociativeArrayType(), node: this.rest });
+        }
+        return results;
+    }
+
+    transpile(state: BrsTranspileState): TranspileResult {
+        //patterns are transpiled by their containing DestructuringAssignmentStatement
+        return [];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walkArray(this.properties, visitor, options, this);
+            walk(this, 'rest', visitor, options);
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.open?.leadingTrivia ?? [];
+    }
+
+    public clone(): ObjectPatternExpression {
+        return this.finalizeClone(
+            new ObjectPatternExpression({
+                open: util.cloneToken(this.tokens.open),
+                properties: this.properties?.map(x => x?.clone()),
+                rest: this.rest?.clone(),
+                close: util.cloneToken(this.tokens.close)
+            }),
+            ['properties', 'rest']
+        );
+    }
+}
+
+/**
+ * A single property inside an object destructuring pattern. Supports the following shapes:
+ *  - `name` (shorthand: the key and the target variable share a name)
+ *  - `name: target` (rename)
+ *  - `name: { nested }` or `name: [nested]` (nested pattern)
+ *  - any of the above followed by `= defaultValue`
+ */
+export class ObjectPatternPropertyExpression extends Expression {
+    constructor(options: {
+        /**
+         * The key to read from the source object. Either an identifier or a string literal token
+         */
+        key: Token;
+        colon?: Token;
+        /**
+         * The variable that receives the value when it differs from the key (i.e. `key: name`)
+         */
+        name?: Identifier;
+        /**
+         * Nested pattern applied to the value (i.e. `key: { a, b }`)
+         */
+        pattern?: DestructuringPattern;
+        equals?: Token;
+        defaultValue?: Expression;
+        comma?: Token;
+    }) {
+        super();
+        this.tokens = {
+            key: options.key,
+            colon: options.colon,
+            name: options.name,
+            equals: options.equals,
+            comma: options.comma
+        };
+        this.pattern = options.pattern;
+        this.defaultValue = options.defaultValue;
+        this.location = util.createBoundingLocation(
+            this.tokens.key,
+            this.tokens.colon,
+            this.tokens.name,
+            this.pattern,
+            this.tokens.equals,
+            this.defaultValue
+        );
+    }
+
+    public readonly kind = AstNodeKind.ObjectPatternPropertyExpression;
+
+    public readonly location: Location | undefined;
+
+    public readonly tokens: {
+        readonly key: Token;
+        readonly colon?: Token;
+        readonly name?: Identifier;
+        readonly equals?: Token;
+        readonly comma?: Token;
+    };
+
+    public readonly pattern?: DestructuringPattern;
+
+    public readonly defaultValue?: Expression;
+
+    /**
+     * The identifier that receives the value, or undefined when this property holds a nested pattern
+     */
+    public get targetName(): Identifier | undefined {
+        if (this.pattern) {
+            return undefined;
+        }
+        return this.tokens.name ?? (this.tokens.key?.kind === TokenKind.StringLiteral ? undefined : this.tokens.key as Identifier);
+    }
+
+    /**
+     * The name of the key to read from the source object (without quotes when the key is a string literal)
+     */
+    public getKeyName(): string | undefined {
+        const key = this.tokens.key;
+        if (!key) {
+            return undefined;
+        }
+        if (key.kind === TokenKind.StringLiteral) {
+            return key.text.substring(1, key.text.length - 1);
+        }
+        return key.text;
+    }
+
+    transpile(state: BrsTranspileState): TranspileResult {
+        //patterns are transpiled by their containing DestructuringAssignmentStatement
+        return [];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'pattern', visitor, options);
+            walk(this, 'defaultValue', visitor, options);
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.key?.leadingTrivia ?? [];
+    }
+
+    public clone(): ObjectPatternPropertyExpression {
+        return this.finalizeClone(
+            new ObjectPatternPropertyExpression({
+                key: util.cloneToken(this.tokens.key),
+                colon: util.cloneToken(this.tokens.colon),
+                name: util.cloneToken(this.tokens.name),
+                pattern: this.pattern?.clone(),
+                equals: util.cloneToken(this.tokens.equals),
+                defaultValue: this.defaultValue?.clone(),
+                comma: util.cloneToken(this.tokens.comma)
+            }),
+            ['pattern', 'defaultValue']
+        );
+    }
+}
+
+/**
+ * Array destructuring pattern, i.e. `[first, , third, ...rest]`
+ */
+export class ArrayPatternExpression extends Expression {
+    constructor(options: {
+        open: Token;
+        elements?: ArrayPatternElementExpression[];
+        rest?: RestElementExpression;
+        close?: Token;
+    }) {
+        super();
+        this.tokens = {
+            open: options.open,
+            close: options.close
+        };
+        this.elements = options.elements ?? [];
+        this.rest = options.rest;
+        this.location = util.createBoundingLocation(
+            util.createBoundingLocationFromTokens(this.tokens),
+            ...this.elements,
+            this.rest
+        );
+    }
+
+    public readonly kind = AstNodeKind.ArrayPatternExpression;
+
+    public readonly location: Location | undefined;
+
+    public readonly tokens: {
+        readonly open: Token;
+        readonly close?: Token;
+    };
+
+    /**
+     * The positional elements of this pattern. Holes (i.e. `[, b]`) are represented by an element with no name and no pattern
+     */
+    public readonly elements: ArrayPatternElementExpression[];
+
+    /**
+     * The `...rest` element, if present. Always the last item in the pattern
+     */
+    public readonly rest?: RestElementExpression;
+
+    /**
+     * Get every variable declared by this pattern (recursively), along with the type each receives
+     * when the pattern is applied to a value of type `sourceType`
+     */
+    public getTargets(sourceType: BscType | undefined, options: GetTypeOptions): DestructuringTarget[] {
+        const results: DestructuringTarget[] = [];
+        const itemType: BscType = isArrayType(sourceType) ? sourceType.defaultType : DynamicType.instance;
+        for (const element of this.elements) {
+            if (element.isHole) {
+                continue;
+            }
+            const elementType = applyDestructuringDefaultType(itemType, element.defaultValue, options);
+            if (element.pattern) {
+                results.push(...element.pattern.getTargets(elementType, options));
+            } else if (element.tokens.name) {
+                results.push({ name: element.tokens.name, type: elementType, node: element });
+            }
+        }
+        if (this.rest?.tokens.name) {
+            results.push({ name: this.rest.tokens.name, type: new ArrayType(itemType), node: this.rest });
+        }
+        return results;
+    }
+
+    transpile(state: BrsTranspileState): TranspileResult {
+        //patterns are transpiled by their containing DestructuringAssignmentStatement
+        return [];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walkArray(this.elements, visitor, options, this);
+            walk(this, 'rest', visitor, options);
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.open?.leadingTrivia ?? [];
+    }
+
+    public clone(): ArrayPatternExpression {
+        return this.finalizeClone(
+            new ArrayPatternExpression({
+                open: util.cloneToken(this.tokens.open),
+                elements: this.elements?.map(x => x?.clone()),
+                rest: this.rest?.clone(),
+                close: util.cloneToken(this.tokens.close)
+            }),
+            ['elements', 'rest']
+        );
+    }
+}
+
+/**
+ * A single positional element inside an array destructuring pattern. Supports the following shapes:
+ *  - `name`
+ *  - `{ nested }` or `[nested]`
+ *  - either of the above followed by `= defaultValue`
+ *  - nothing at all (a hole, i.e. the empty slot in `[a, , c]`)
+ */
+export class ArrayPatternElementExpression extends Expression {
+    constructor(options: {
+        name?: Identifier;
+        pattern?: DestructuringPattern;
+        equals?: Token;
+        defaultValue?: Expression;
+        comma?: Token;
+    }) {
+        super();
+        this.tokens = {
+            name: options.name,
+            equals: options.equals,
+            comma: options.comma
+        };
+        this.pattern = options.pattern;
+        this.defaultValue = options.defaultValue;
+        this.location = util.createBoundingLocation(
+            this.tokens.name,
+            this.pattern,
+            this.tokens.equals,
+            this.defaultValue
+        );
+    }
+
+    public readonly kind = AstNodeKind.ArrayPatternElementExpression;
+
+    public readonly location: Location | undefined;
+
+    public readonly tokens: {
+        readonly name?: Identifier;
+        readonly equals?: Token;
+        readonly comma?: Token;
+    };
+
+    public readonly pattern?: DestructuringPattern;
+
+    public readonly defaultValue?: Expression;
+
+    /**
+     * Is this element an empty slot (i.e. the empty slot in `[a, , c]`)?
+     */
+    public get isHole() {
+        return !this.tokens.name && !this.pattern;
+    }
+
+    /**
+     * The identifier that receives the value, or undefined when this element is a hole or holds a nested pattern
+     */
+    public get targetName(): Identifier | undefined {
+        return this.pattern ? undefined : this.tokens.name;
+    }
+
+    transpile(state: BrsTranspileState): TranspileResult {
+        //patterns are transpiled by their containing DestructuringAssignmentStatement
+        return [];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'pattern', visitor, options);
+            walk(this, 'defaultValue', visitor, options);
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.name?.leadingTrivia ?? this.pattern?.leadingTrivia ?? [];
+    }
+
+    public clone(): ArrayPatternElementExpression {
+        return this.finalizeClone(
+            new ArrayPatternElementExpression({
+                name: util.cloneToken(this.tokens.name),
+                pattern: this.pattern?.clone(),
+                equals: util.cloneToken(this.tokens.equals),
+                defaultValue: this.defaultValue?.clone(),
+                comma: util.cloneToken(this.tokens.comma)
+            }),
+            ['pattern', 'defaultValue']
+        );
+    }
+}
+
+/**
+ * A rest element inside a destructuring pattern, i.e. the `...rest` in `[a, ...rest]` or `{ a, ...rest }`.
+ * Shares the `...` token with the spread operator (see `SpreadExpression`)
+ */
+export class RestElementExpression extends Expression {
+    constructor(options: {
+        dotDotDot: Token;
+        name?: Identifier;
+        comma?: Token;
+    }) {
+        super();
+        this.tokens = {
+            dotDotDot: options.dotDotDot,
+            name: options.name,
+            comma: options.comma
+        };
+        this.location = util.createBoundingLocation(this.tokens.dotDotDot, this.tokens.name);
+    }
+
+    public readonly kind = AstNodeKind.RestElementExpression;
+
+    public readonly location: Location | undefined;
+
+    public readonly tokens: {
+        readonly dotDotDot: Token;
+        readonly name?: Identifier;
+        readonly comma?: Token;
+    };
+
+    /**
+     * The identifier that receives the remaining values
+     */
+    public get targetName(): Identifier | undefined {
+        return this.tokens.name;
+    }
+
+    transpile(state: BrsTranspileState): TranspileResult {
+        //patterns are transpiled by their containing DestructuringAssignmentStatement
+        return [];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.dotDotDot?.leadingTrivia ?? [];
+    }
+
+    public clone(): RestElementExpression {
+        return this.finalizeClone(
+            new RestElementExpression({
+                dotDotDot: util.cloneToken(this.tokens.dotDotDot),
+                name: util.cloneToken(this.tokens.name),
+                comma: util.cloneToken(this.tokens.comma)
+            })
+        );
+    }
+}

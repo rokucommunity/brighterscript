@@ -20,6 +20,7 @@ import type { ClassStatement, NamespaceStatement, MethodStatement, FieldStatemen
 import type { Program } from '../Program';
 import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
+import { DynamicType } from '../types/DynamicType';
 import { isClassStatement, isDottedGetExpression, isFunctionExpression, isNamespaceStatement, isVariableExpression, isImportStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType, isFunctionStatement, isEnumStatement, isConstStatement } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyChangedEvent, DependencyGraph } from '../DependencyGraph';
@@ -627,6 +628,25 @@ export class BrsFile implements BscFile {
                         return statement.getType({ flags: SymbolTypeFlag.runtime });
                     }
                 });
+            }
+        }
+
+        //find every destructuring assignment in the whole file
+        for (let statement of this._cachedLookups.destructuringAssignmentStatements) {
+            let scope = this.scopesByFunc.get(
+                statement.findAncestor<FunctionExpression>(isFunctionExpression)
+            );
+            if (scope) {
+                for (const target of statement.getTargets({ flags: SymbolTypeFlag.runtime })) {
+                    scope.variableDeclarations.push({
+                        nameRange: target.name.location?.range,
+                        lineIndex: target.name.location?.range?.start.line,
+                        name: target.name.text,
+                        getType: () => {
+                            return statement.getTargets({ flags: SymbolTypeFlag.runtime }).find(x => x.name === target.name)?.type ?? DynamicType.instance;
+                        }
+                    });
+                }
             }
         }
     }

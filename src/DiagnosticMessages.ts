@@ -586,6 +586,16 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'unexpected-token'
     }),
+    expectedDestructuringTarget: () => ({
+        message: `Expected an identifier or a nested destructuring pattern`,
+        severity: DiagnosticSeverity.Error,
+        code: 'expected-destructuring-target'
+    }),
+    restElementMustBeLast: () => ({
+        message: `A rest element must be the last element in a destructuring pattern`,
+        severity: DiagnosticSeverity.Error,
+        code: 'rest-element-must-be-last'
+    }),
     /**
      * Used in the lexer anytime we encounter an unsupported character
      */

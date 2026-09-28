@@ -60,14 +60,21 @@ import {
     ConditionalCompileConstStatement,
     ConditionalCompileErrorStatement,
     AugmentedAssignmentStatement,
-    TypeStatement
+    TypeStatement,
+    DestructuringAssignmentStatement
 } from './Statement';
+import type { DestructuringPattern } from './Expression';
 import type { DiagnosticInfo } from '../DiagnosticMessages';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { util } from '../util';
 import {
     AAIndexedMemberExpression,
     AALiteralExpression,
+    ObjectPatternExpression,
+    ObjectPatternPropertyExpression,
+    ArrayPatternExpression,
+    ArrayPatternElementExpression,
+    RestElementExpression,
     AAMemberExpression,
     AnnotationExpression,
     ArrayLiteralExpression,
@@ -1301,6 +1308,12 @@ export class Parser {
             }
         }
 
+        //destructuring assignment (i.e. `{ a, b } = obj` or `[a, b] = arr`). No BrightScript statement can start with `{` or `[`,
+        //so this only needs to make sure the pattern is followed by `=` to avoid stealing malformed code from the fallback path
+        if (this.checkAny(TokenKind.LeftCurlyBrace, TokenKind.LeftSquareBracket) && this.isDestructuringAssignmentAhead()) {
+            return this.destructuringAssignment();
+        }
+
         // BrightScript is like python, in that variables can be declared without a `var`,
         // `let`, (...) keyword. As such, we must check the token *after* an identifier to figure
         // out what to do with it.
@@ -1353,6 +1366,289 @@ export class Parser {
 
         // TODO: support multi-statements
         return this.setStatement();
+    }
+
+    /**
+     * Starting at the current token (which must be `{` or `[`), scan forward to the matching closing bracket
+     * and determine whether it is immediately followed by `=`
+     */
+    private isDestructuringAssignmentAhead(): boolean {
+        let depth = 0;
+        for (let i = this.current; i < this.tokens.length; i++) {
+            const kind = this.tokens[i].kind;
+            switch (kind) {
+                case TokenKind.LeftCurlyBrace:
+                case TokenKind.LeftSquareBracket:
+                case TokenKind.LeftParen:
+                case TokenKind.QuestionLeftSquare:
+                case TokenKind.QuestionLeftParen:
+                    depth++;
+                    break;
+                case TokenKind.RightCurlyBrace:
+                case TokenKind.RightSquareBracket:
+                case TokenKind.RightParen:
+                    depth--;
+                    if (depth === 0) {
+                        return this.tokens[i + 1]?.kind === TokenKind.Equal;
+                    }
+                    if (depth < 0) {
+                        return false;
+                    }
+                    break;
+                case TokenKind.Eof:
+                    return false;
+                default:
+                    break;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Parse a destructuring assignment, i.e. `{ name, age } = person` or `[first, ...rest] = items`
+     */
+    private destructuringAssignment(): DestructuringAssignmentStatement {
+        this.warnIfNotBrighterScriptMode('destructuring assignment');
+        const pattern = this.destructuringPattern();
+        const equals = this.consume(
+            DiagnosticMessages.expectedOperator([TokenKind.Equal], pattern.tokens.close?.text ?? pattern.tokens.open.text),
+            TokenKind.Equal
+        );
+        const value = this.expression();
+        return new DestructuringAssignmentStatement({
+            pattern: pattern,
+            equals: equals,
+            value: value
+        });
+    }
+
+    private destructuringPattern(): DestructuringPattern {
+        if (this.check(TokenKind.LeftCurlyBrace)) {
+            return this.objectPattern();
+        } else if (this.check(TokenKind.LeftSquareBracket)) {
+            return this.arrayPattern();
+        }
+        this.diagnostics.push({
+            ...DiagnosticMessages.expectedDestructuringTarget(),
+            location: this.peek().location
+        });
+        throw this.lastDiagnosticAsError();
+    }
+
+    /**
+     * Consume an identifier that will receive a destructured value, verifying it can be used as a local variable name
+     */
+    private destructuringTargetIdentifier(): Identifier {
+        const name = this.identifier(...this.allowedLocalIdentifiers);
+        if (DisallowedLocalIdentifiersText.has(name.text.toLowerCase())) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.cannotUseReservedWordAsIdentifier(name.text),
+                location: name.location
+            });
+        }
+        return name;
+    }
+
+    private objectPattern(): ObjectPatternExpression {
+        const open = this.advance();
+        const properties: ObjectPatternPropertyExpression[] = [];
+        let rest: RestElementExpression;
+        let restIsLast = true;
+        try {
+            this.skipNewlines();
+            while (!this.check(TokenKind.RightCurlyBrace) && !this.isAtEnd()) {
+                if (this.check(TokenKind.DotDotDot)) {
+                    rest = this.restElement();
+                } else {
+                    properties.push(this.objectPatternProperty());
+                }
+                if (!this.matchAny(TokenKind.Comma, TokenKind.Newline)) {
+                    break;
+                }
+                if (this.checkPrevious(TokenKind.Comma)) {
+                    const last = rest ?? properties[properties.length - 1];
+                    (last as DeepWriteable<ObjectPatternPropertyExpression | RestElementExpression>).tokens.comma = this.previous();
+                }
+                this.skipNewlines();
+                restIsLast = restIsLast && this.validateRestElementIsLast(rest, TokenKind.RightCurlyBrace);
+            }
+        } catch (error: any) {
+            this.rethrowNonDiagnosticError(error);
+        }
+        const close = this.tryConsume(
+            DiagnosticMessages.unmatchedLeftToken(open.text, 'destructuring pattern'),
+            TokenKind.RightCurlyBrace
+        );
+        return new ObjectPatternExpression({
+            open: open,
+            properties: properties,
+            rest: rest,
+            close: close
+        });
+    }
+
+    private objectPatternProperty(): ObjectPatternPropertyExpression {
+        let key: Token;
+        if (this.check(TokenKind.StringLiteral)) {
+            key = this.advance();
+        } else {
+            key = this.identifier(...AllowedProperties);
+        }
+        let colon: Token;
+        let name: Identifier;
+        let pattern: DestructuringPattern;
+        if (this.match(TokenKind.Colon)) {
+            colon = this.previous();
+            if (this.checkAny(TokenKind.LeftCurlyBrace, TokenKind.LeftSquareBracket)) {
+                pattern = this.destructuringPattern();
+            } else {
+                name = this.destructuringTargetIdentifier();
+            }
+        } else if (key.kind === TokenKind.StringLiteral) {
+            //a string literal key must be followed by `: target`
+            this.diagnostics.push({
+                ...DiagnosticMessages.expectedToken(TokenKind.Colon),
+                location: this.peek().location
+            });
+            throw this.lastDiagnosticAsError();
+        } else if (DisallowedLocalIdentifiersText.has(key.text.toLowerCase())) {
+            //shorthand property: the key is also the target variable name, so it must be a legal local identifier
+            this.diagnostics.push({
+                ...DiagnosticMessages.cannotUseReservedWordAsIdentifier(key.text),
+                location: key.location
+            });
+        }
+        let equals: Token;
+        let defaultValue: Expression;
+        if (this.match(TokenKind.Equal)) {
+            equals = this.previous();
+            defaultValue = this.expression();
+        }
+        return new ObjectPatternPropertyExpression({
+            key: key,
+            colon: colon,
+            name: name,
+            pattern: pattern,
+            equals: equals,
+            defaultValue: defaultValue
+        });
+    }
+
+    private arrayPattern(): ArrayPatternExpression {
+        const open = this.advance();
+        const elements: ArrayPatternElementExpression[] = [];
+        let rest: RestElementExpression;
+        let restIsLast = true;
+        try {
+            this.skipNewlines();
+            while (!this.check(TokenKind.RightSquareBracket) && !this.isAtEnd()) {
+                if (this.check(TokenKind.Comma)) {
+                    //a hole, i.e. the empty slot in `[a, , c]`
+                    elements.push(new ArrayPatternElementExpression({ comma: this.advance() }));
+                    this.skipNewlines();
+                    restIsLast = restIsLast && this.validateRestElementIsLast(rest, TokenKind.RightSquareBracket);
+                    continue;
+                }
+                if (this.check(TokenKind.DotDotDot)) {
+                    rest = this.restElement();
+                } else {
+                    elements.push(this.arrayPatternElement());
+                }
+                if (!this.matchAny(TokenKind.Comma, TokenKind.Newline)) {
+                    break;
+                }
+                if (this.checkPrevious(TokenKind.Comma)) {
+                    const last = rest ?? elements[elements.length - 1];
+                    (last as DeepWriteable<ArrayPatternElementExpression | RestElementExpression>).tokens.comma = this.previous();
+                }
+                this.skipNewlines();
+                restIsLast = restIsLast && this.validateRestElementIsLast(rest, TokenKind.RightSquareBracket);
+            }
+        } catch (error: any) {
+            this.rethrowNonDiagnosticError(error);
+        }
+        const close = this.tryConsume(
+            DiagnosticMessages.unmatchedLeftToken(open.text, 'destructuring pattern'),
+            TokenKind.RightSquareBracket
+        );
+        return new ArrayPatternExpression({
+            open: open,
+            elements: elements,
+            rest: rest,
+            close: close
+        });
+    }
+
+    private arrayPatternElement(): ArrayPatternElementExpression {
+        let name: Identifier;
+        let pattern: DestructuringPattern;
+        if (this.checkAny(TokenKind.LeftCurlyBrace, TokenKind.LeftSquareBracket)) {
+            pattern = this.destructuringPattern();
+        } else if (this.checkAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers)) {
+            name = this.destructuringTargetIdentifier();
+        } else {
+            this.diagnostics.push({
+                ...DiagnosticMessages.expectedDestructuringTarget(),
+                location: this.peek().location
+            });
+            throw this.lastDiagnosticAsError();
+        }
+        let equals: Token;
+        let defaultValue: Expression;
+        if (this.match(TokenKind.Equal)) {
+            equals = this.previous();
+            defaultValue = this.expression();
+        }
+        return new ArrayPatternElementExpression({
+            name: name,
+            pattern: pattern,
+            equals: equals,
+            defaultValue: defaultValue
+        });
+    }
+
+    /**
+     * Parse the `...rest` element of a destructuring pattern. The current token must be `...`.
+     * Like the spread operator, the target must immediately follow the `...` token
+     */
+    private restElement(): RestElementExpression {
+        const dotDotDot = this.advance();
+        const nameStart = this.peek();
+        const isAdjacent = nameStart.kind !== TokenKind.Newline &&
+            nameStart.kind !== TokenKind.Eof &&
+            util.comparePosition(dotDotDot.location?.range?.end, nameStart.location?.range?.start) === 0;
+        if (!isAdjacent) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.spreadOperatorMustBeAdjacent(),
+                location: util.createBoundingLocation(dotDotDot, nameStart)
+            });
+            //recover: the name may be on the next line
+            this.skipNewlines();
+        }
+        const name = this.destructuringTargetIdentifier();
+        return new RestElementExpression({
+            dotDotDot: dotDotDot,
+            name: name
+        });
+    }
+
+    /**
+     * Once a rest element has been parsed, nothing but the closing bracket may follow it.
+     * @returns false when a diagnostic was reported (so callers can avoid reporting it again)
+     */
+    private validateRestElementIsLast(rest: RestElementExpression | undefined, closingKind: TokenKind): boolean {
+        if (rest && !this.check(closingKind) && !this.isAtEnd()) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.restElementMustBeLast(),
+                location: rest.location
+            });
+            return false;
+        }
+        return true;
+    }
+
+    private skipNewlines() {
+        while (this.match(TokenKind.Newline)) { }
     }
 
     private whileStatement(): WhileStatement {
