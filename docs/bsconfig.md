@@ -44,6 +44,7 @@ While a minimal `bsconfig.json` file is sufficient for getting started, `bsc` su
   - [`strict`](#strict)
     - [`strictCallFunc`](#strictCallFunc)
     - [`strictNodeMembers`](#strictNodeMembers)
+  - [`treeShaking`](#treeshaking)
   - [`username`](#username)
   - [`watch`](#watch)
 
@@ -84,8 +85,9 @@ The following options live inside `compilerOptions`:
 - [`strict`](#strict)
 - [`strictCallFunc`](#strictCallFunc)
 - [`strictNodeMembers`](#strictNodeMembers)
+- [`treeShaking`](#treeshaking)
 
-Each of these options used to live at the top level of `bsconfig.json`. Those top-level locations still work for backwards compatibility, but are **deprecated** — using one emits a `deprecated-bsconfig-option` warning diagnostic pointing you at the `compilerOptions` equivalent. If an option is set in both places, the value in `compilerOptions` wins.
+Each of these options (except `treeShaking`, which is new in v1 and only exists inside `compilerOptions`) used to live at the top level of `bsconfig.json`. Those top-level locations still work for backwards compatibility, but are **deprecated** — using one emits a `deprecated-bsconfig-option` warning diagnostic pointing you at the `compilerOptions` equivalent. If an option is set in both places, the value in `compilerOptions` wins.
 
 `extends` deep-merges `compilerOptions` across the config chain (a child config that only sets one option under `compilerOptions` does not wipe out the other options set by a parent config it extends) — this is different from every other `bsconfig.json` option, where the child's value completely replaces the parent's.
 
@@ -729,6 +731,28 @@ sub example()
   print myPoster.data ' error because "Poster" does not have the "data" field
 end sub
 ```
+
+## `treeShaking`
+
+Type: `object`
+
+Lives inside [`compilerOptions`](#compileroptions). Removes unused functions from the transpiled output. Disabled by default; set `enabled: true` to opt in, and use `keep` rules or `' bs:keep` comments to protect functions the static analysis cannot see (dynamic callbacks, `callFunc` targets, etc.).
+
+```jsonc
+{
+    "compilerOptions": {
+        "treeShaking": {
+            "enabled": true,
+            "keep": [
+                "myDynamicCallback",
+                { "src": "source/vendor/**/*" }
+            ]
+        }
+    }
+}
+```
+
+See the [Tree Shaking](shaking.md) docs for the full set of options and behavior.
 
 ## `outDir`
 Type: `string`
