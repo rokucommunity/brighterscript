@@ -36,21 +36,21 @@ export class CodeActionsProcessor {
                 this.suggestCannotFindNameQuickFix(diagnostic);
             } else if (isDiagnosticOfType(diagnostic, 'xmlComponentMissingExtendsAttribute')) {
                 this.suggestMissingExtendsQuickFix(diagnostic);
-            } else if (diagnostic.code === DiagnosticCodeMap.voidFunctionMayNotReturnValue) {
+            } else if (isDiagnosticOfType(diagnostic, 'voidFunctionMayNotReturnValue')) {
                 this.suggestVoidFunctionReturnQuickFixes([diagnostic]);
-            } else if (diagnostic.code === DiagnosticCodeMap.nonVoidFunctionMustReturnValue) {
+            } else if (isDiagnosticOfType(diagnostic, 'nonVoidFunctionMustReturnValue')) {
                 this.suggestNonVoidFunctionReturnQuickFixes([diagnostic]);
-            } else if (diagnostic.code === DiagnosticCodeMap.referencedFileDoesNotExist) {
+            } else if (isDiagnosticOfType(diagnostic, 'referencedFileDoesNotExist')) {
                 this.suggestRemoveScriptImportQuickFixes([diagnostic]);
-            } else if (diagnostic.code === DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent) {
+            } else if (isDiagnosticOfType(diagnostic, 'unnecessaryScriptImportInChildFromParent')) {
                 this.suggestRemoveScriptImportQuickFixes([diagnostic]);
-            } else if (diagnostic.code === DiagnosticCodeMap.unnecessaryCodebehindScriptImport) {
+            } else if (isDiagnosticOfType(diagnostic, 'unnecessaryCodebehindScriptImport')) {
                 this.suggestRemoveScriptImportQuickFixes([diagnostic]);
-            } else if (diagnostic.code === DiagnosticCodeMap.scriptImportCaseMismatch) {
-                this.suggestScriptImportCasingQuickFixes([diagnostic as DiagnosticMessageType<'scriptImportCaseMismatch'>]);
-            } else if (diagnostic.code === DiagnosticCodeMap.missingOverrideKeyword) {
+            } else if (isDiagnosticOfType(diagnostic, 'scriptImportCaseMismatch')) {
+                this.suggestScriptImportCasingQuickFixes([diagnostic]);
+            } else if (isDiagnosticOfType(diagnostic, 'missingOverrideKeyword')) {
                 this.suggestMissingOverrideQuickFixes([diagnostic]);
-            } else if (diagnostic.code === DiagnosticCodeMap.cannotUseOverrideKeywordOnConstructorFunction) {
+            } else if (isDiagnosticOfType(diagnostic, 'cannotUseOverrideKeywordOnConstructorFunction')) {
                 this.suggestRemoveOverrideFromConstructorQuickFixes([diagnostic]);
             } else if (isDiagnosticOfType(diagnostic, 'mismatchedEndingToken')) {
                 this.suggestMismatchedEndingTokenQuickFixes([diagnostic]);
