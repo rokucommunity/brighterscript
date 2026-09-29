@@ -1203,9 +1203,17 @@ export class Program {
                     //the symbols this file provided are gone, so anything that required them needs to be revalidated
                     this.addRemovedFileSymbolsToChangedSymbols(file);
                     this.fileSymbolInformation.delete(file.pkgPath);
+                    //files that `import type { ... } from` this file are not linked to it through the dependency graph or the
+                    //changed symbols (the file was never in their scope), so queue them for revalidation explicitly
+                    for (const importer of this.getTypeImportersOfFiles([file])) {
+                        this.validationDetails.filesToBeValidatedInScopeContext.add(importer);
+                    }
                 }
                 this.crossScopeValidation.clearResolutionsForFile(file);
             }
+
+            //this file no longer exists, so it must not be revalidated by the next validation run
+            this.validationDetails.filesToBeValidatedInScopeContext.delete(file);
 
             this.diagnostics.clearForFile(file.srcPath);
 

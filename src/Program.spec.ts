@@ -1771,6 +1771,61 @@ describe('Program', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('revalidates files that `import type` from the removed file', () => {
+            //components/types.bs is not part of any scope, so main.bs only knows about it through the type import
+            program.setFile('components/types.bs', `
+                interface Thing
+                    name as string
+                end interface
+            `);
+            program.setFile('source/main.bs', `
+                import type { Thing } from "pkg:/components/types.bs"
+
+                sub render(thing as Thing)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            //the importer was not touched, but it should now flag the missing file (and the name it can no longer resolve)
+            program.removeFile(s`${rootDir}/components/types.bs`);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.referencedFileDoesNotExist(),
+                DiagnosticMessages.cannotFindName('Thing')
+            ]);
+
+            //restoring the file (i.e. undoing a rename) clears the diagnostics again
+            program.setFile('components/types.bs', `
+                interface Thing
+                    name as string
+                end interface
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not revalidate a removed `import type` importer alongside its removed target', () => {
+            program.setFile('components/types.bs', `
+                interface Thing
+                    name as string
+                end interface
+            `);
+            program.setFile('source/main.bs', `
+                import type { Thing } from "pkg:/components/types.bs"
+
+                sub render(thing as Thing)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            program.removeFile(s`${rootDir}/components/types.bs`);
+            program.removeFile(s`${rootDir}/source/main.bs`);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('getDiagnostics', () => {
