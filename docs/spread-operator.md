@@ -98,6 +98,5 @@ These choices were measured on device with the `SpreadTrailing*` suites in [bsbe
 
 ## Limitations
 - **The literal must be the direct right-hand side of an assignment.** Spread is supported when the array or AA literal is assigned to a variable (`x = [...a]`), a property (`m.x = [...a]`), or an index (`m["x"] = [...a]`). Using it anywhere else — a function argument, a `return` value, a nested literal, an augmented assignment such as `x += [...a]` — reports a diagnostic. This keeps the transpiled output to simple statements rather than wrapping the literal in a function.
-- **`...` must be directly attached to its operand.** Write `[...items]`, not `[... items]`. Whitespace or a newline between `...` and the expression it spreads reports a diagnostic.
 - **Function call spread is not supported.** You cannot use `...` to expand an array into function arguments (e.g., `someFunc(...args)`). BrightScript has no mechanism for dynamically invoking a function with a variable number of arguments.
 - **Only available in BrighterScript (`.bs`) files.** Using `...` in a `.brs` file produces a "spread operator is not supported in BrightScript files" diagnostic.

@@ -90,7 +90,7 @@ describe('SpreadExpression', () => {
         });
     });
 
-    describe('parser - adjacency', () => {
+    describe('parser - whitespace after ...', () => {
         it('allows spread when the operand is directly next to ...', () => {
             let { value, diagnostics } = parseFirstAssignmentValue(`
                 sub main()
@@ -101,70 +101,39 @@ describe('SpreadExpression', () => {
             expect((value as ArrayLiteralExpression).elements).to.have.lengthOf(3);
         });
 
-        it('flags whitespace between ... and its operand in an array literal', () => {
+        it('allows whitespace between ... and its operand in an array literal', () => {
             let { value, diagnostics } = parseFirstAssignmentValue(`
                 sub main()
-                    result = [... arr]
+                    result = [... arr, ...  m.list]
                 end sub
             `);
-            expectDiagnostics(diagnostics, [
-                DiagnosticMessages.spreadOperatorMustBeAdjacent()
-            ]);
-            //still parsed as a spread so downstream tooling keeps working
+            expectZeroDiagnostics(diagnostics);
             let arrayLit = value as ArrayLiteralExpression;
-            expect(arrayLit.elements).to.have.lengthOf(1);
+            expect(arrayLit.elements).to.have.lengthOf(2);
             expect(isSpreadExpression(arrayLit.elements[0])).to.be.true;
+            expect(isSpreadExpression(arrayLit.elements[1])).to.be.true;
         });
 
-        it('flags whitespace between ... and its operand in an AA literal', () => {
+        it('allows whitespace between ... and its operand in an AA literal', () => {
             let { value, diagnostics } = parseFirstAssignmentValue(`
                 sub main()
                     result = {... other}
                 end sub
             `);
-            expectDiagnostics(diagnostics, [
-                DiagnosticMessages.spreadOperatorMustBeAdjacent()
-            ]);
+            expectZeroDiagnostics(diagnostics);
             let aaLit = value as AALiteralExpression;
             expect(aaLit.elements).to.have.lengthOf(1);
             expect(isSpreadExpression(aaLit.elements[0])).to.be.true;
         });
 
-        it('flags a tab between ... and its operand', () => {
-            let { diagnostics } = parseFirstAssignmentValue(`
+        it('allows a tab between ... and its operand', () => {
+            let { value, diagnostics } = parseFirstAssignmentValue(`
                 sub main()
                     result = [...\tarr]
                 end sub
             `);
-            expectDiagnostics(diagnostics, [
-                DiagnosticMessages.spreadOperatorMustBeAdjacent()
-            ]);
-        });
-
-        it('flags a newline between ... and its operand', () => {
-            let { diagnostics } = parseFirstAssignmentValue(`
-                sub main()
-                    result = [
-                        ...
-                        arr
-                    ]
-                end sub
-            `);
-            expectDiagnosticsIncludes(diagnostics, [
-                DiagnosticMessages.spreadOperatorMustBeAdjacent()
-            ]);
-        });
-
-        it('reports the diagnostic spanning ... through the operand start', () => {
-            let { diagnostics } = parseFirstAssignmentValue(`
-                sub main()
-                    result = [...  arr]
-                end sub
-            `);
-            expect(diagnostics).to.have.lengthOf(1);
-            let range = diagnostics[0].location.range;
-            expect(range.start.character).to.equal(30);
-            expect(range.end.character).to.equal(38);
+            expectZeroDiagnostics(diagnostics);
+            expect(isSpreadExpression((value as ArrayLiteralExpression).elements[0])).to.be.true;
         });
     });
 
