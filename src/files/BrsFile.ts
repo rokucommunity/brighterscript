@@ -1202,6 +1202,11 @@ export class BrsFile implements BscFile {
                         // this catches namespaced things
                         continue;
                     }
+                    //names from a named type import (`import type { Name } from "..."`) are resolved from the imported file,
+                    //never from the scope, so the scope does not need to provide them
+                    if (this.typeImports.has(symbol.typeChain[0]?.name?.toLowerCase())) {
+                        continue;
+                    }
                     const existingSymbol = this.ast.getSymbolTable().getSymbol(fullSymbolKey, flag);
                     if (existingSymbol?.length > 0) {
                         if (symbol[0]?.data?.isAlias) {

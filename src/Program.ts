@@ -1822,7 +1822,8 @@ export class Program {
         for (const file of Object.values(this.files)) {
             if (isBrsFile(file) && !destPaths.has(file.destPath.toLowerCase())) {
                 for (const typeImport of file.typeImports.values()) {
-                    if (destPaths.has(typeImport.destPath.toLowerCase())) {
+                    //destPath is null when the import path is invalid (i.e. `"pkg:"`)
+                    if (typeImport.destPath && destPaths.has(typeImport.destPath.toLowerCase())) {
                         result.push(file);
                         break;
                     }

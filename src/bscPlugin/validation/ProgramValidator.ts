@@ -28,7 +28,10 @@ export class ProgramValidator {
             const file = this.event.program.files[key];
             if (isBrsFile(file)) {
                 for (const typeImport of file.typeImports.values()) {
-                    typeImportTargets.add(typeImport.destPath.toLowerCase());
+                    //destPath is null when the import path is invalid (i.e. `"pkg:"`)
+                    if (typeImport.destPath) {
+                        typeImportTargets.add(typeImport.destPath.toLowerCase());
+                    }
                 }
             }
         }

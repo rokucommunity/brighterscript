@@ -501,6 +501,155 @@ describe('Scope', () => {
                 DiagnosticMessages.cannotFindTypeImport('ButtonStyle', 'pkg:/components/Button.bs')
             ]);
         });
+
+        it('does not crash when a type import has an invalid path', () => {
+            setupComponents(`
+                import type { Options } from "pkg:"
+
+                sub init()
+                end sub
+            `);
+            program.validate();
+            //removing a file exercises the type-import lookups a second time
+            program.removeFile(s`${rootDir}/components/Button.bs`);
+            program.validate();
+            //the test passes if nothing above throws
+        });
+
+        it('inlines consts from a type-imported file that is not in any scope', async () => {
+            setupComponents(``);
+            program.setFile('components/lib/consts.bs', `
+                const GREETING = "hello"
+                const MESSAGE = GREETING
+
+                enum Kind
+                    alpha = 1
+                    beta = 2
+                end enum
+                const DEFAULT_KIND = Kind.beta
+
+                namespace Lib
+                    const INNER = "inner"
+                    const OUTER = INNER
+                    const SIZE = Kind.alpha
+                end namespace
+            `);
+            await testTranspile(`
+                import type { MESSAGE, DEFAULT_KIND, Lib.OUTER as Outer, Lib.SIZE } from "pkg:/components/lib/consts.bs"
+
+                sub init()
+                    print MESSAGE
+                    print DEFAULT_KIND
+                    print Outer
+                    print SIZE
+                end sub
+            `, `
+                'import type { MESSAGE, DEFAULT_KIND, Lib.OUTER as Outer, Lib.SIZE } from "pkg:/components/lib/consts.bs"
+
+                sub init()
+                    print "hello"
+                    print 2
+                    print "inner"
+                    print 1
+                end sub
+            `, 'trim', 'components/MainMenu.bs');
+        });
+
+        it('inlines a const chain that spans several type-imported files', async () => {
+            setupComponents(``);
+            //this file is never included in any scope
+            program.setFile('components/lib/fileC.bs', `
+                const ConstC = "hello"
+            `);
+            //neither is this one
+            program.setFile('components/lib/fileB.bs', `
+                import type { ConstC } from "./fileC.bs"
+
+                const ConstB = ConstC
+            `);
+            await testTranspile(`
+                import type { ConstB } from "pkg:/components/lib/fileB.bs"
+
+                const ConstA = ConstB
+
+                sub init()
+                    print ConstA
+                    print ConstB
+                end sub
+            `, `
+                'import type { ConstB } from "pkg:/components/lib/fileB.bs"
+
+
+                sub init()
+                    print "hello"
+                    print "hello"
+                end sub
+            `, 'trim', 'components/MainMenu.bs');
+        });
+
+        it('resolves a type-imported name inside a const against the file that declares the const', async () => {
+            setupComponents(`
+                sub init()
+                end sub
+            `);
+            //the type import only means something inside a.bs
+            program.setFile('source/a.bs', `
+                import type { ButtonStyle as Style, Buttons.MAX } from "pkg:/components/Button.bs"
+
+                const DEFAULT = Style.primary
+                const LIMITS = { max: MAX, style: Style.secondary }
+            `);
+            //b.bs is in the same scope as a.bs but has no type import of its own
+            await testTranspile(`
+                sub main()
+                    print DEFAULT
+                    print LIMITS
+                end sub
+            `, `
+                sub main()
+                    print "primary"
+                    print ({
+                        max: 10
+                        style: "secondary"
+                    })
+                end sub
+            `, 'trim', 'source/b.bs');
+        });
+
+        it('inlines type-imported references nested inside a const value', async () => {
+            setupComponents(``);
+            program.setFile('components/lib/fileB.bs', `
+                import type { ButtonStyle as Style, Buttons.MAX } from "pkg:/components/Button.bs"
+
+                const CONFIG = { style: Style.secondary, max: MAX }
+            `);
+            await testTranspile(`
+                import type { CONFIG } from "pkg:/components/lib/fileB.bs"
+                import type { ButtonStyle, DEFAULT_TEXT } from "pkg:/components/Button.bs"
+
+                const LOCAL = { style: ButtonStyle.primary, text: DEFAULT_TEXT }
+
+                sub init()
+                    print CONFIG
+                    print LOCAL
+                end sub
+            `, `
+                'import type { CONFIG } from "pkg:/components/lib/fileB.bs"
+                'import type { ButtonStyle, DEFAULT_TEXT } from "pkg:/components/Button.bs"
+
+
+                sub init()
+                    print ({
+                        style: "secondary"
+                        max: 10
+                    })
+                    print ({
+                        style: "primary"
+                        text: "Ok"
+                    })
+                end sub
+            `, 'trim', 'components/MainMenu.bs');
+        });
     });
 
     it('getEnumMemberFileLink does not crash on undefined name', () => {
