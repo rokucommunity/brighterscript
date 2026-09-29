@@ -475,9 +475,9 @@ describe('SpreadExpression', () => {
                     arr = [
                         1
                     ]
-                    __bsc_tmp = []
-                    __bsc_tmp.append(arr)
-                    m.list = __bsc_tmp
+                    __bsc_tmp_list = []
+                    __bsc_tmp_list.append(arr)
+                    m.list = __bsc_tmp_list
                 end sub
             `);
         });
@@ -493,9 +493,37 @@ describe('SpreadExpression', () => {
                     arr = [
                         1
                     ]
-                    __bsc_tmp = []
-                    __bsc_tmp.append(arr)
-                    m["list"] = __bsc_tmp
+                    __bsc_tmp_list = []
+                    __bsc_tmp_list.append(arr)
+                    m["list"] = __bsc_tmp_list
+                end sub
+            `);
+        });
+
+        it('names the temp after a variable or numeric index key', async () => {
+            await testTranspile(`
+                sub main()
+                    arr = [1]
+                    key = "list"
+                    m[key] = [...arr]
+                    m.rows[0] = [...arr]
+                    m["first name"] = {...arr}
+                end sub
+            `, `
+                sub main()
+                    arr = [
+                        1
+                    ]
+                    key = "list"
+                    __bsc_tmp_key = []
+                    __bsc_tmp_key.append(arr)
+                    m[key] = __bsc_tmp_key
+                    __bsc_tmp_0 = []
+                    __bsc_tmp_0.append(arr)
+                    m.rows[0] = __bsc_tmp_0
+                    __bsc_tmp_first_name = {}
+                    __bsc_tmp_first_name.append(arr)
+                    m["first name"] = __bsc_tmp_first_name
                 end sub
             `);
         });
@@ -511,10 +539,10 @@ describe('SpreadExpression', () => {
                     list = [
                         1
                     ]
-                    __bsc_tmp = []
-                    __bsc_tmp.append(list)
-                    __bsc_tmp.push(4)
-                    list = __bsc_tmp
+                    __bsc_tmp_list = []
+                    __bsc_tmp_list.append(list)
+                    __bsc_tmp_list.push(4)
+                    list = __bsc_tmp_list
                 end sub
             `);
         });
@@ -526,10 +554,10 @@ describe('SpreadExpression', () => {
                 end sub
             `, `
                 sub main()
-                    __bsc_tmp = []
-                    __bsc_tmp.append(m.list)
-                    __bsc_tmp.push(4)
-                    m.list = __bsc_tmp
+                    __bsc_tmp_list = []
+                    __bsc_tmp_list.append(m.list)
+                    __bsc_tmp_list.push(4)
+                    m.list = __bsc_tmp_list
                 end sub
             `);
         });
