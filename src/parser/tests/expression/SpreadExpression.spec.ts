@@ -251,6 +251,57 @@ describe('SpreadExpression', () => {
             ]);
         });
 
+        it('flags only the inner spread when nested inside a valid outer spread', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    alpha = []
+                    beta = []
+                    charlie = [...alpha, [1, ...beta]]
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.spreadOperatorNotAllowedHere()
+            ]);
+            //the diagnostic points at `...beta`, not the (valid) outer `...alpha`
+            const range = program.getDiagnostics()[0].location.range;
+            expect(range.start.line).to.equal(4);
+            expect(range.start.character).to.equal(45);
+        });
+
+        it('flags spread in a nested AA member', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    alpha = []
+                    result = { a: [...alpha] }
+                    other = { ...alpha, b: { ...alpha } }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.spreadOperatorNotAllowedHere(),
+                DiagnosticMessages.spreadOperatorNotAllowedHere()
+            ]);
+        });
+
+        it('flags spread in a function argument when the call is assigned to a variable', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    alpha = []
+                    charlie = callFunction([...alpha])
+                    m.delta = callFunction({...alpha})
+                end sub
+                function callFunction(value)
+                    return value
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.spreadOperatorNotAllowedHere(),
+                DiagnosticMessages.spreadOperatorNotAllowedHere()
+            ]);
+        });
+
         it('flags spread in an augmented assignment', () => {
             program.setFile('source/main.bs', `
                 sub main()
@@ -475,9 +526,9 @@ describe('SpreadExpression', () => {
                     arr = [
                         1
                     ]
-                    __bsc_tmp_list = []
-                    __bsc_tmp_list.append(arr)
-                    m.list = __bsc_tmp_list
+                    __bsc_tmp_spread = []
+                    __bsc_tmp_spread.append(arr)
+                    m.list = __bsc_tmp_spread
                 end sub
             `);
         });
@@ -493,37 +544,9 @@ describe('SpreadExpression', () => {
                     arr = [
                         1
                     ]
-                    __bsc_tmp_list = []
-                    __bsc_tmp_list.append(arr)
-                    m["list"] = __bsc_tmp_list
-                end sub
-            `);
-        });
-
-        it('names the temp after a variable or numeric index key', async () => {
-            await testTranspile(`
-                sub main()
-                    arr = [1]
-                    key = "list"
-                    m[key] = [...arr]
-                    m.rows[0] = [...arr]
-                    m["first name"] = {...arr}
-                end sub
-            `, `
-                sub main()
-                    arr = [
-                        1
-                    ]
-                    key = "list"
-                    __bsc_tmp_key = []
-                    __bsc_tmp_key.append(arr)
-                    m[key] = __bsc_tmp_key
-                    __bsc_tmp_0 = []
-                    __bsc_tmp_0.append(arr)
-                    m.rows[0] = __bsc_tmp_0
-                    __bsc_tmp_first_name = {}
-                    __bsc_tmp_first_name.append(arr)
-                    m["first name"] = __bsc_tmp_first_name
+                    __bsc_tmp_spread = []
+                    __bsc_tmp_spread.append(arr)
+                    m["list"] = __bsc_tmp_spread
                 end sub
             `);
         });
@@ -539,10 +562,10 @@ describe('SpreadExpression', () => {
                     list = [
                         1
                     ]
-                    __bsc_tmp_list = []
-                    __bsc_tmp_list.append(list)
-                    __bsc_tmp_list.push(4)
-                    list = __bsc_tmp_list
+                    __bsc_tmp_spread = []
+                    __bsc_tmp_spread.append(list)
+                    __bsc_tmp_spread.push(4)
+                    list = __bsc_tmp_spread
                 end sub
             `);
         });
@@ -554,10 +577,10 @@ describe('SpreadExpression', () => {
                 end sub
             `, `
                 sub main()
-                    __bsc_tmp_list = []
-                    __bsc_tmp_list.append(m.list)
-                    __bsc_tmp_list.push(4)
-                    m.list = __bsc_tmp_list
+                    __bsc_tmp_spread = []
+                    __bsc_tmp_spread.append(m.list)
+                    __bsc_tmp_spread.push(4)
+                    m.list = __bsc_tmp_spread
                 end sub
             `);
         });

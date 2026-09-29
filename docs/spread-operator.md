@@ -88,13 +88,13 @@ The literal is built in a temporary local variable and assigned to the target at
 - **The target is not a plain local variable** (`m.items = [...]`, `store["items"] = [...]`). Statements against a local are 10-40% faster than repeatedly re-evaluating `m.items`.
 - **An element after the spread reads the target itself** (`list = [...list, 4]`), so the read still sees the original value.
 
-The temporary is named `__bsc_tmp_` followed by the target's name (`m.items` becomes `__bsc_tmp_items`, `store[key]` becomes `__bsc_tmp_key`), so the transpiled code stays easy to follow.
+The temporary is always named `__bsc_tmp_spread`.
 
 ```brightscript
-__bsc_tmp_items = []
-__bsc_tmp_items.append(m.items)
-__bsc_tmp_items.push(item)
-m.items = __bsc_tmp_items
+__bsc_tmp_spread = []
+__bsc_tmp_spread.append(m.items)
+__bsc_tmp_spread.push(item)
+m.items = __bsc_tmp_spread
 ```
 
 These choices were measured on device with the `SpreadTrailing*` suites in [bsbench](https://github.com/rokucommunity/bsbench). Literals without a spread transpile exactly as they always have.

@@ -10,7 +10,7 @@ import type { Expression, Statement } from '../../parser/AstNode';
 import type { AALiteralExpression, TernaryExpression } from '../../parser/Expression';
 import { ArrayLiteralExpression, DottedGetExpression, LiteralExpression, VariableExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { AssignmentStatement, Block, Body, ConstStatement, DottedSetStatement, IndexedSetStatement, NamespaceStatement } from '../../parser/Statement';
+import type { Block, Body, ConstStatement, NamespaceStatement } from '../../parser/Statement';
 import { AugmentedAssignmentStatement, ExpressionStatement, type AliasStatement, type IfStatement } from '../../parser/Statement';
 import type { Location } from 'vscode-languageserver';
 import type { Scope } from '../../Scope';
@@ -80,28 +80,6 @@ export class BrsFilePreTranspileProcessor {
     }
 
     /**
-     * Name for the local temp a spread literal is built in, derived from the assignment target so the transpiled
-     * code stays readable: `list = [...]` -> `__bsc_tmp_list`, `m.items = [...]` -> `__bsc_tmp_items`,
-     * `store["items"] = [...]` -> `__bsc_tmp_items`, `store[key] = [...]` -> `__bsc_tmp_key`
-     */
-    private getSpreadTempName(statement: AssignmentStatement | DottedSetStatement | IndexedSetStatement) {
-        let name: string;
-        if (isAssignmentStatement(statement) || isDottedSetStatement(statement)) {
-            name = statement.tokens.name?.text;
-        } else if (isIndexedSetStatement(statement)) {
-            const lastIndex = statement.indexes[statement.indexes.length - 1];
-            if (isLiteralExpression(lastIndex)) {
-                name = lastIndex.tokens.value?.text?.replace(/^"|"$/g, '');
-            } else if (isVariableExpression(lastIndex) || isDottedGetExpression(lastIndex)) {
-                name = lastIndex.tokens.name?.text;
-            }
-        }
-        //keep only identifier-safe characters (eg. a string key like "first name")
-        name = (name ?? 'value').replace(/[^a-z0-9_]/gi, '_');
-        return `__bsc_tmp_${name}`;
-    }
-
-    /**
      * Lower `x = [a, ...b, c]` into `x = [a]` followed by `x.append(b)` and `x.push(c)` (and the AA equivalents).
      * The literal is built in a local temp first (then assigned to the real target) when the target is not a
      * plain local variable, or when the trailing elements read from the target itself.
@@ -135,7 +113,7 @@ export class BrsFilePreTranspileProcessor {
             //Build into a local temp and assign it to the real target at the end. Two reasons:
             // - `m.list = [...]`: every follow-up statement would re-evaluate `m.list`; a local is 10-40% faster (bsbench)
             // - `list = [...list, 4]`: assigning the trimmed literal first would clobber `list` before we read it
-            const tmpName = this.getSpreadTempName(statement);
+            const tmpName = '__bsc_tmp_spread';
             const createTarget = () => createVariableExpression(tmpName, literal.location);
             statements = [
                 createAssignmentStatement({ name: createIdentifier(tmpName, literal.location), value: literal }),
