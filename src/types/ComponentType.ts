@@ -5,7 +5,7 @@ import type { TypeCompatibilityData } from '../interfaces';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
-import { isUnionTypeCompatible } from './helpers';
+import { isUnionTypeCompatible, unwrapTypeParameterConstraint } from './helpers';
 import util from '../util';
 import { CallFuncableType } from './CallFuncableType';
 
@@ -25,6 +25,7 @@ export class ComponentType extends CallFuncableType {
         while (isTypeStatementType(targetType)) {
             targetType = targetType.wrappedType;
         }
+        targetType = unwrapTypeParameterConstraint(targetType);
         if (this.isEqual(targetType)) {
             return true;
         } else if (isInvalidType(targetType) ||

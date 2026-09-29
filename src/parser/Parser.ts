@@ -98,7 +98,9 @@ import {
     PrintSeparatorExpression,
     InlineInterfaceExpression,
     InlineInterfaceMemberExpression,
-    TypedFunctionTypeExpression
+    TypedFunctionTypeExpression,
+    TypeParameterExpression,
+    GenericTypeExpression
 } from './Expression';
 import type { Range } from 'vscode-languageserver';
 import type { Logger } from '../logging';
@@ -459,6 +461,8 @@ export class Parser {
     private interfaceMethodStatement(optionalKeyword?: Token) {
         const functionType = this.advance();
         const name = this.identifier(...AllowedProperties);
+        //generic type parameters, eg. `function first<T>(...)`
+        const typeParameterList = this.typeParameterList();
         const leftParen = this.consume(DiagnosticMessages.expectedToken(TokenKind.LeftParen), TokenKind.LeftParen);
 
         let params = [] as FunctionParameterExpression[];
@@ -491,7 +495,10 @@ export class Parser {
             rightParen: rightParen,
             as: asToken,
             returnTypeExpression: returnTypeExpression,
-            optional: optionalKeyword
+            optional: optionalKeyword,
+            typeParameters: typeParameterList?.typeParameters,
+            leftAngleBracket: typeParameterList?.leftAngleBracket,
+            rightAngleBracket: typeParameterList?.rightAngleBracket
         });
     }
 
@@ -505,6 +512,9 @@ export class Parser {
             TokenKind.Interface
         );
         const nameToken = this.identifier(...this.allowedLocalIdentifiers);
+
+        //generic type parameters, eg. `interface Box<T>`
+        const typeParameterList = this.typeParameterList();
 
         let extendsToken: Token;
         let parentInterfaceName: TypeExpression;
@@ -576,7 +586,10 @@ export class Parser {
             extends: extendsToken,
             parentInterfaceName: parentInterfaceName,
             body: body,
-            endInterface: endInterfaceToken
+            endInterface: endInterfaceToken,
+            typeParameters: typeParameterList?.typeParameters,
+            leftAngleBracket: typeParameterList?.leftAngleBracket,
+            rightAngleBracket: typeParameterList?.rightAngleBracket
         });
         this.exitAnnotationBlock(parentAnnotations);
         return statement;
@@ -663,6 +676,9 @@ export class Parser {
         //get the class name
         let className = this.tryConsume(DiagnosticMessages.expectedIdentifier('class'), TokenKind.Identifier, ...this.allowedLocalIdentifiers) as Identifier;
 
+        //generic type parameters, eg. `class Queue<T>`
+        const typeParameterList = this.typeParameterList();
+
         //see if the class inherits from parent
         if (this.peek().text.toLowerCase() === 'extends') {
             extendsKeyword = this.advance();
@@ -710,7 +726,10 @@ export class Parser {
             body: body,
             endClass: endingKeyword,
             extends: extendsKeyword,
-            parentClassName: parentClassName
+            parentClassName: parentClassName,
+            typeParameters: typeParameterList?.typeParameters,
+            leftAngleBracket: typeParameterList?.leftAngleBracket,
+            rightAngleBracket: typeParameterList?.rightAngleBracket
         });
 
         this.exitAnnotationBlock(parentAnnotations);
@@ -746,7 +765,7 @@ export class Parser {
             overrideKeyword = this.advance();
         }
         //methods (function/sub keyword OR identifier followed by opening paren)
-        if (this.checkAny(TokenKind.Function, TokenKind.Sub) || (this.checkAny(TokenKind.Identifier, ...AllowedProperties) && this.checkNext(TokenKind.LeftParen))) {
+        if (this.checkAny(TokenKind.Function, TokenKind.Sub) || (this.checkAny(TokenKind.Identifier, ...AllowedProperties) && this.checkAnyNext(TokenKind.LeftParen, TokenKind.Less))) {
             const funcDeclaration = this.functionDeclaration(false, false);
 
             //if we have an overrides keyword AND this method is called 'new', that's not allowed
@@ -929,6 +948,7 @@ export class Parser {
             let functionTypeText = isSub ? 'sub' : 'function';
             let name: Identifier;
             let leftParen: Token;
+            let typeParameterList: TypeParameterListResult;
 
             if (isAnonymous) {
                 leftParen = this.consume(
@@ -941,6 +961,8 @@ export class Parser {
                     TokenKind.Identifier,
                     ...AllowedProperties
                 ) as Identifier;
+                //generic type parameters, eg. `function first<T>(...)`
+                typeParameterList = this.typeParameterList();
                 leftParen = this.consume(
                     DiagnosticMessages.expectedToken('('),
                     TokenKind.LeftParen
@@ -1024,7 +1046,10 @@ export class Parser {
                 leftParen: leftParen,
                 rightParen: rightParen,
                 as: asToken,
-                returnTypeExpression: typeExpression
+                returnTypeExpression: typeExpression,
+                typeParameters: typeParameterList?.typeParameters,
+                leftAngleBracket: typeParameterList?.leftAngleBracket,
+                rightAngleBracket: typeParameterList?.rightAngleBracket
             });
 
             if (isAnonymous) {
@@ -3052,6 +3077,8 @@ export class Parser {
         let newToken = this.advance();
 
         let nameExpr = this.identifyingExpression();
+        //explicit type arguments, eg. `new Queue<integer>()`
+        const typeArgumentList = this.check(TokenKind.Less) ? this.typeArgumentList() : undefined;
         let leftParen = this.tryConsume(
             DiagnosticMessages.unexpectedToken(this.peek().text),
             TokenKind.LeftParen,
@@ -3069,7 +3096,13 @@ export class Parser {
         let call = this.finishCall(leftParen, nameExpr);
         //pop the call from the  callExpressions list because this is technically something else
         this.callExpressions.pop();
-        let result = new NewExpression({ new: newToken, call: call });
+        let result = new NewExpression({
+            new: newToken,
+            call: call,
+            typeArguments: typeArgumentList?.typeArguments,
+            leftAngleBracket: typeArgumentList?.leftAngleBracket,
+            rightAngleBracket: typeArgumentList?.rightAngleBracket
+        });
         return result;
     }
 
@@ -3287,7 +3320,7 @@ export class Parser {
      * @returns an expression that was successfully parsed
      */
     private getTypeExpressionPart(changedTokens: { token: Token; oldKind: TokenKind }[]) {
-        let expr: VariableExpression | DottedGetExpression | TypedArrayExpression | InlineInterfaceExpression | GroupingExpression | TypedFunctionTypeExpression;
+        let expr: VariableExpression | DottedGetExpression | TypedArrayExpression | InlineInterfaceExpression | GroupingExpression | TypedFunctionTypeExpression | GenericTypeExpression;
 
         if (this.checkAny(TokenKind.Sub, TokenKind.Function) && this.checkNext(TokenKind.LeftParen)) {
             // this is a tyyed function type expression, eg. "function(type1, type2) as type3"
@@ -3327,6 +3360,19 @@ export class Parser {
                     nextToken.kind = TokenKind.Identifier;
                 }
                 expr = this.identifyingExpression(AllowedTypeIdentifiers);
+
+                //generic type arguments, eg. `Queue<integer>`
+                if (expr && this.check(TokenKind.Less)) {
+                    const typeArgumentList = this.typeArgumentList();
+                    if (typeArgumentList) {
+                        expr = new GenericTypeExpression({
+                            baseType: expr,
+                            leftAngleBracket: typeArgumentList.leftAngleBracket,
+                            typeArguments: typeArgumentList.typeArguments,
+                            rightAngleBracket: typeArgumentList.rightAngleBracket
+                        });
+                    }
+                }
             }
         }
 
@@ -3351,6 +3397,127 @@ export class Parser {
         }
 
         return expr;
+    }
+
+    /**
+     * Parse an optional generic type parameter list, eg. `<T, U extends Node>`. Returns `undefined` when the next token isn't `<`
+     */
+    private typeParameterList(): TypeParameterListResult | undefined {
+        if (!this.check(TokenKind.Less)) {
+            return undefined;
+        }
+        this.warnIfNotBrighterScriptMode('generic type parameters');
+        const leftAngleBracket = this.advance();
+        const typeParameters: TypeParameterExpression[] = [];
+        const seenNames = new Set<string>();
+        do {
+            const name = this.tryIdentifier(...this.allowedLocalIdentifiers);
+            if (!name) {
+                break;
+            }
+            const lowerName = name.text.toLowerCase();
+            if (seenNames.has(lowerName)) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.duplicateTypeParameterName(name.text),
+                    location: name.location
+                });
+            }
+            seenNames.add(lowerName);
+            let extendsToken: Token;
+            let constraint: TypeExpression;
+            if (this.peek().text.toLowerCase() === 'extends') {
+                extendsToken = this.advance();
+                constraint = this.typeExpression();
+            }
+            typeParameters.push(new TypeParameterExpression({ name: name, extends: extendsToken, constraint: constraint }));
+        } while (this.match(TokenKind.Comma));
+        const rightAngleBracket = this.consumeClosingAngleBracket(leftAngleBracket, 'type parameter list');
+        return {
+            leftAngleBracket: leftAngleBracket,
+            typeParameters: typeParameters,
+            rightAngleBracket: rightAngleBracket
+        };
+    }
+
+    /**
+     * Parse a generic type argument list, eg. `<integer, string[]>`. The current token must be `<`.
+     * If the tokens don't form a valid type argument list (eg. `a as Foo < b` is a comparison), the parser is rewound and `undefined` is returned
+     */
+    private typeArgumentList(): TypeArgumentListResult | undefined {
+        const startIndex = this.current;
+        const diagnosticCount = this.diagnostics.length;
+        try {
+            this.warnIfNotBrighterScriptMode('generic type arguments');
+            const leftAngleBracket = this.advance();
+            const typeArguments: TypeExpression[] = [];
+            do {
+                const typeArgument = this.typeExpression();
+                if (!typeArgument) {
+                    throw new Error('Expected a type argument');
+                }
+                typeArguments.push(typeArgument);
+            } while (this.match(TokenKind.Comma));
+            const rightAngleBracket = this.consumeClosingAngleBracket(leftAngleBracket, 'type argument list');
+            if (!rightAngleBracket) {
+                throw new Error(`Expected '>'`);
+            }
+            return {
+                leftAngleBracket: leftAngleBracket,
+                typeArguments: typeArguments,
+                rightAngleBracket: rightAngleBracket
+            };
+        } catch (e) {
+            //not a type argument list. Rewind and pretend we never tried
+            this.current = startIndex;
+            this.diagnostics.splice(diagnosticCount);
+            return undefined;
+        }
+    }
+
+    /**
+     * Consume the `>` that closes a type parameter/argument list. The lexer greedily produces `>>`, `>=` and `>>=` tokens,
+     * so when one of those is next (eg. `List<Box<T>>`), it is split so that its first character closes this list.
+     */
+    private consumeClosingAngleBracket(leftAngleBracket: Token, listDescription: string): Token | undefined {
+        const token = this.peek();
+        let remainderKind: TokenKind;
+        switch (token.kind) {
+            case TokenKind.Greater:
+                return this.advance();
+            case TokenKind.RightShift:
+                remainderKind = TokenKind.Greater;
+                break;
+            case TokenKind.GreaterEqual:
+                remainderKind = TokenKind.Equal;
+                break;
+            case TokenKind.RightShiftEqual:
+                remainderKind = TokenKind.GreaterEqual;
+                break;
+            default:
+                this.diagnostics.push({
+                    ...DiagnosticMessages.unmatchedLeftToken(leftAngleBracket.text, listDescription),
+                    location: leftAngleBracket.location
+                });
+                return undefined;
+        }
+        const start = token.location?.range?.start;
+        const end = token.location?.range?.end;
+        const uri = token.location?.uri;
+        const greaterToken: Token = {
+            ...token,
+            kind: TokenKind.Greater,
+            text: '>',
+            location: start ? util.createLocation(start.line, start.character, start.line, start.character + 1, uri) : token.location
+        };
+        const remainderToken: Token = {
+            ...token,
+            kind: remainderKind,
+            text: token.text.substring(1),
+            leadingTrivia: [],
+            location: start && end ? util.createLocation(start.line, start.character + 1, end.line, end.character, uri) : token.location
+        };
+        this.tokens.splice(this.current, 1, greaterToken, remainderToken);
+        return this.advance();
     }
 
     private typedFunctionTypeExpression() {
@@ -3967,4 +4134,16 @@ class CancelStatementError extends Error {
     constructor() {
         super('CancelStatement');
     }
+}
+
+interface TypeParameterListResult {
+    leftAngleBracket: Token;
+    typeParameters: TypeParameterExpression[];
+    rightAngleBracket?: Token;
+}
+
+interface TypeArgumentListResult {
+    leftAngleBracket: Token;
+    typeArguments: TypeExpression[];
+    rightAngleBracket: Token;
 }

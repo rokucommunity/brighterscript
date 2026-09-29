@@ -432,5 +432,7 @@ export enum AstNodeKind {
     InlineInterfaceExpression = 'InlineInterfaceExpression',
     InlineInterfaceMemberExpression = 'InlineInterfaceMemberExpression',
     TypeStatement = 'TypeStatement',
-    TypedFunctionTypeExpression = 'TypedFunctionTypeExpression'
+    TypedFunctionTypeExpression = 'TypedFunctionTypeExpression',
+    TypeParameterExpression = 'TypeParameterExpression',
+    GenericTypeExpression = 'GenericTypeExpression'
 }

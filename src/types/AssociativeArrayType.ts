@@ -5,7 +5,7 @@ import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { DynamicType } from './DynamicType';
-import { isUnionTypeCompatible } from './helpers';
+import { isUnionTypeCompatible, unwrapTypeParameterConstraint } from './helpers';
 
 export class AssociativeArrayType extends BscType {
 
@@ -15,6 +15,7 @@ export class AssociativeArrayType extends BscType {
     public isBuiltIn = true;
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
+        targetType = unwrapTypeParameterConstraint(targetType);
         if (isDynamicType(targetType)) {
             return true;
         } else if (isObjectType(targetType)) {

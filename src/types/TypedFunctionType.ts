@@ -2,7 +2,9 @@ import { isDynamicType, isObjectType, isTypedFunctionType, isTypeStatementType }
 import { BaseFunctionType } from './BaseFunctionType';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
-import { isUnionTypeCompatible } from './helpers';
+import { isUnionTypeCompatible, unwrapTypeParameterConstraint } from './helpers';
+import type { TypeParameterType } from './TypeParameterType';
+import { getTypeParametersDisplayText } from './TypeParameterHelpers';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { TypeCompatibilityData } from '../interfaces';
 
@@ -32,6 +34,12 @@ export class TypedFunctionType extends BaseFunctionType {
 
     public params = [] as Array<{ name: string; type: BscType; isOptional: boolean }>;
 
+    /**
+     * The type parameters declared by this function (eg. the `T` in `function first<T>(items as T[]) as T`).
+     * `undefined` (or empty) for non-generic functions
+     */
+    public typeParameters?: TypeParameterType[];
+
     public setName(name: string) {
         this.name = name;
         return this;
@@ -59,6 +67,7 @@ export class TypedFunctionType extends BaseFunctionType {
         while (isTypeStatementType(targetType)) {
             targetType = targetType.wrappedType;
         }
+        targetType = unwrapTypeParameterConstraint(targetType);
         if (
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
@@ -87,7 +96,7 @@ export class TypedFunctionType extends BaseFunctionType {
             }
             variadicText += '...';
         }
-        return `${this.isSub ? 'sub' : 'function'} ${this.name ?? ''}(${paramTexts.join(', ')}${variadicText}) as ${this.returnType.toString()}`;
+        return `${this.isSub ? 'sub' : 'function'} ${this.name ?? ''}${getTypeParametersDisplayText(this.typeParameters)}(${paramTexts.join(', ')}${variadicText}) as ${this.returnType.toString()}`;
     }
 
     public toTypeString(): string {

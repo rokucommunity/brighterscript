@@ -22,6 +22,7 @@ export enum BscTypeKind {
     RoFunctionType = 'RoFunctionType',
     StringType = 'StringType',
     TypeStatementType = 'TypeStatementType',
+    TypeParameterType = 'TypeParameterType',
     UninitializedType = 'UninitializedType',
     UnionType = 'UnionType',
     VoidType = 'VoidType'

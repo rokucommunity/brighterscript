@@ -87,6 +87,19 @@ function useCallback(callback as function(input as string) as integer) as intege
 end function
 ```
 
+## [Generics](generics.md)
+
+```brighterscript
+function first<T>(items as T[]) as T
+    return items[0]
+end function
+
+class Queue<T>
+    sub push(item as T)
+    end sub
+end class
+```
+
 ## [Imports](imports.md)
 
 ```brighterscript

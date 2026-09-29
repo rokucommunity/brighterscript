@@ -1,4 +1,4 @@
-import { isAliasStatement, isBrsFile, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isTypedFunctionType, isTypeStatementType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isBrsFile, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isTypedFunctionType, isTypeStatementType, isXmlFile, isXmlScope, isTypeParameterType, isInterfaceStatement, isInterfaceMethodStatement } from '../../astUtils/reflection';
 import type { ExtraSymbolData, FileReference, ProvideCompletionsEvent } from '../../interfaces';
 import type { BscFile } from '../../files/BscFile';
 import { AllowedTriviaTokens, DeclarableTypes, Keywords, TokenKind } from '../../lexer/TokenKind';
@@ -319,6 +319,17 @@ export class CompletionsProcessor {
                     }
                     currentSymbols.push(...containingFunctionExpression.getSymbolTable().getOwnSymbols(symbolTableLookupFlag));
                 }
+                // eslint-disable-next-line no-bitwise
+                if (symbolTableLookupFlag & SymbolTypeFlag.typetime) {
+                    //generic type parameters declared on an enclosing class, interface or interface method (eg. the `T` in `class Queue<T>`)
+                    let genericOwner: AstNode = expression;
+                    while (genericOwner) {
+                        if ((isClassStatement(genericOwner) || isInterfaceStatement(genericOwner) || isInterfaceMethodStatement(genericOwner)) && genericOwner.typeParameters?.length > 0) {
+                            currentSymbols.push(...genericOwner.symbolTable.getOwnSymbols(SymbolTypeFlag.typetime));
+                        }
+                        genericOwner = genericOwner.parent;
+                    }
+                }
 
                 if (shouldLookInNamespace) {
                     const nsNameParts = shouldLookInNamespace.getNameParts();
@@ -444,6 +455,8 @@ export class CompletionsProcessor {
             if (nameMatchesType || isAlias) {
                 return areMembers ? CompletionItemKind.Method : CompletionItemKind.Function;
             }
+        } else if (isTypeParameterType(type)) {
+            return CompletionItemKind.TypeParameter;
         } else if (isInterfaceType(type) && !isInstance) {
             return CompletionItemKind.Interface;
         } else if (isEnumType(type) && !isInstance) {

@@ -4,6 +4,8 @@ import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { BscType } from './BscType';
 import type { ReferenceType } from './ReferenceType';
 import { DynamicType } from './DynamicType';
+import type { TypeParameterType } from './TypeParameterType';
+import { createTypeParameterBindings, getTypeArgumentsDisplayText, getTypeKey, getTypeParametersDisplayText, substituteTypeParameters } from './TypeParameterHelpers';
 
 export abstract class InheritableType extends BscType {
 
@@ -34,7 +36,78 @@ export abstract class InheritableType extends BscType {
         return resultType;
     }
 
+    /**
+     * The type parameters declared by this generic class/interface (eg. the `T` in `class Queue<T>`).
+     * Only set on the declaration's type - instances created with type arguments (eg. `Queue<integer>`) have `typeArguments` instead
+     */
+    public typeParameters?: TypeParameterType[];
+
+    /**
+     * The type arguments this type was instantiated with (eg. `[integer]` for `Queue<integer>`). Only set on instantiated types
+     */
+    public typeArguments?: BscType[];
+
+    /**
+     * For an instantiated generic type (eg. `Queue<integer>`), the type of the generic declaration (`Queue<T>`)
+     */
+    public genericDeclaration?: InheritableType;
+
+    private instantiationCache: Map<string, InheritableType>;
+
+    /**
+     * Is this a generic declaration that has not been given type arguments?
+     */
+    public get isGenericDeclaration() {
+        return !!this.typeParameters?.length && !this.typeArguments;
+    }
+
+    /**
+     * Create the type that results from supplying type arguments to this generic declaration
+     * (eg. `Queue<T>` + `[integer]` -> `Queue<integer>`). Every member type has the type parameters substituted.
+     * Results are cached per set of type arguments
+     */
+    public instantiate(typeArguments: BscType[]): this {
+        const declaration = this.genericDeclaration ?? this;
+        if (!declaration.typeParameters?.length) {
+            return this;
+        }
+        const bindings = createTypeParameterBindings(declaration.typeParameters, typeArguments);
+        const resolvedTypeArguments = declaration.typeParameters.map(typeParam => bindings.get(typeParam.id));
+        const cacheKey = resolvedTypeArguments.map(arg => getTypeKey(arg)).join(',');
+        declaration.instantiationCache ??= new Map();
+        const cached = declaration.instantiationCache.get(cacheKey);
+        if (cached) {
+            return cached as this;
+        }
+        const parentType = declaration.parentType ? substituteTypeParameters(declaration.parentType, bindings) : undefined;
+        const instance = declaration.createInstance(parentType as InheritableType | ReferenceType);
+        instance.typeArguments = resolvedTypeArguments;
+        instance.genericDeclaration = declaration;
+        instance.isBuiltIn = declaration.isBuiltIn;
+        //register before copying members so self-referential members (eg. `function clone() as Queue<T>`) reuse this instance
+        declaration.instantiationCache.set(cacheKey, instance);
+        // eslint-disable-next-line no-bitwise
+        for (const symbol of declaration.memberTable.getOwnSymbols(-1 as SymbolTypeFlag)) {
+            instance.memberTable.addSymbol(symbol.name, symbol.data, substituteTypeParameters(symbol.type, bindings), symbol.flags);
+        }
+        return instance as this;
+    }
+
+    /**
+     * Create a new, empty type of the same kind as this one (used by `instantiate()`)
+     */
+    protected createInstance(parentType?: InheritableType | ReferenceType): InheritableType {
+        const ctor = this.constructor as new (name: string, parentType?: InheritableType | ReferenceType) => InheritableType;
+        return new ctor(this.name, parentType);
+    }
+
     public toString() {
+        if (this.typeArguments?.length) {
+            return this.name + getTypeArgumentsDisplayText(this.typeArguments);
+        }
+        if (this.typeParameters?.length) {
+            return this.name + getTypeParametersDisplayText(this.typeParameters);
+        }
         return this.name;
     }
 

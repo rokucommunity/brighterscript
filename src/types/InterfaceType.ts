@@ -3,7 +3,7 @@ import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { isArrayTypeLike, isAssociativeArrayTypeLike, isCallFuncableTypeLike, isDynamicType, isInterfaceType, isInvalidType, isObjectType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
-import { isUnionTypeCompatible } from './helpers';
+import { isUnionTypeCompatible, unwrapTypeParameterConstraint } from './helpers';
 import type { ReferenceType } from './ReferenceType';
 import { CallFuncableType } from './CallFuncableType';
 
@@ -18,6 +18,7 @@ export class InterfaceType extends CallFuncableType {
     public readonly kind = BscTypeKind.InterfaceType;
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
+        targetType = unwrapTypeParameterConstraint(targetType);
         if (isInvalidType(targetType) ||
             isDynamicType(targetType) ||
             isObjectType(targetType) ||

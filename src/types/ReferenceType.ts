@@ -8,6 +8,7 @@ import { DynamicType } from './DynamicType';
 import { BscTypeKind } from './BscTypeKind';
 import type { Token } from '../lexer/Token';
 import { util } from '../util';
+import { applyTypeArguments, getTypeArgumentsDisplayText } from './TypeParameterHelpers';
 
 export type AnyReferenceType = ReferenceType | TypePropertyReferenceType | BinaryOperatorReferenceType | ArrayDefaultTypeReferenceType;
 
@@ -24,9 +25,12 @@ export class ReferenceType extends BscType {
      * @param fullName the full/display name for this type
      * @param flags is this type available at typetime, runtime, etc.
      * @param tableProvider function that returns a SymbolTable that we use for the lookup.
+     * @param typeArguments type arguments to apply once this reference resolves to a generic type (eg. `Queue<integer>`)
      */
-    constructor(public memberKey: string, public fullName: string, public flags: SymbolTypeFlag, public tableProvider: SymbolTypeGetterProvider) {
+    constructor(public memberKey: string, public fullName: string, public flags: SymbolTypeFlag, public tableProvider: SymbolTypeGetterProvider, typeArguments?: BscType[]) {
         super(memberKey);
+        //must be set before the proxy is created, since the proxy forwards property writes to the resolved type
+        this.typeArguments = typeArguments;
         // eslint-disable-next-line no-constructor-return
         return new Proxy(this, {
             get: (target, propName, receiver) => {
@@ -63,6 +67,12 @@ export class ReferenceType extends BscType {
                 }
                 if (propName === 'tableProvider') {
                     return this.tableProvider;
+                }
+                if (propName === 'typeArguments') {
+                    return this.typeArguments;
+                }
+                if (propName === 'withTypeArguments') {
+                    return (typeArguments: BscType[]) => this.withTypeArguments(typeArguments);
                 }
                 if (propName === 'isEqual') {
                     //Need to be able to check equality without resolution, because resolution need to check equality
@@ -166,7 +176,7 @@ export class ReferenceType extends BscType {
                     } else if (propName === 'toString') {
                         // This type was never found
                         // For diagnostics, we should return the expected name of of the type
-                        return () => this.fullName;
+                        return () => this.fullName + getTypeArgumentsDisplayText(this.typeArguments);
                     } else if (propName === 'toTypeString') {
                         // For transpilation, we should 'dynamic'
                         return () => 'dynamic';
@@ -223,6 +233,10 @@ export class ReferenceType extends BscType {
                 //There may be some need to specifically set members on ReferenceType in the future
                 // eg: if (Reflect.has(target, name)) {
                 //   return Reflect.set(target, name, value, receiver);
+                if (name === 'typeArguments') {
+                    this.typeArguments = value;
+                    return true;
+                }
 
                 let innerType = this.resolve();
 
@@ -246,6 +260,36 @@ export class ReferenceType extends BscType {
 
     public readonly kind = BscTypeKind.ReferenceType;
 
+    /**
+     * Type arguments to apply once this reference resolves to a generic type (eg. `Queue<integer>` where `Queue` is declared in another file)
+     */
+    public typeArguments?: BscType[];
+
+    /**
+     * Create a copy of this reference (same lookup) that applies the given type arguments once it resolves
+     */
+    public withTypeArguments(typeArguments: BscType[]): ReferenceType {
+        return new ReferenceType(this.memberKey, this.fullName, this.flags, this.tableProvider, typeArguments);
+    }
+
+    private lastResolvedBaseType: BscType;
+    private lastInstantiatedType: BscType;
+
+    /**
+     * Apply this reference's type arguments (if any) to the resolved type
+     */
+    private applyTypeArgumentsTo(resolvedType: BscType): BscType {
+        //note: an empty (but defined) list means "instantiate with default type arguments" (eg. `new Queue()`)
+        if (!this.typeArguments || !resolvedType || isAnyReferenceType(resolvedType)) {
+            return resolvedType;
+        }
+        if (this.lastResolvedBaseType !== resolvedType) {
+            this.lastResolvedBaseType = resolvedType;
+            this.lastInstantiatedType = applyTypeArguments(resolvedType, this.typeArguments);
+        }
+        return this.lastInstantiatedType;
+    }
+
     getTarget() {
         return this.resolve();
     }
@@ -264,7 +308,9 @@ export class ReferenceType extends BscType {
             return this.cachedResolvedType;
         }
         const symbolTable = this.tableProvider();
-        const resolvedType = symbolTable ? this.resolveFromTable(symbolTable) : undefined;
+        let resolvedType = symbolTable ? this.resolveFromTable(symbolTable) : undefined;
+        //generic types referenced with type arguments (eg. `Queue<integer>`) resolve to the instantiated type
+        resolvedType = this.applyTypeArgumentsTo(resolvedType);
         //cache misses too (they get looked up over and over while walking a file), but not when there's no table to look in yet
         if (cacheToken && symbolTable && !isAnyReferenceType(resolvedType)) {
             this.hasCachedResolvedType = true;
@@ -418,7 +464,13 @@ export class ReferenceType extends BscType {
  * This is really cool. It's like programming with time-travel.
  */
 export class TypePropertyReferenceType extends BscType {
-    constructor(public outerType: BscType, public propertyName: string) {
+    /**
+     * @param outerType the (possibly unresolved) type whose property we want
+     * @param propertyName the property to read from the resolved outer type
+     * @param transform optional: compute the target from the resolved outer type instead of reading `propertyName` directly
+     *                  (eg. a generic function's return type depends on the call's argument types)
+     */
+    constructor(public outerType: BscType, public propertyName: string, private transform?: (resolvedOuterType: BscType) => BscType) {
         super(propertyName);
         // eslint-disable-next-line no-constructor-return
         return new Proxy(this, {
@@ -455,13 +507,13 @@ export class TypePropertyReferenceType extends BscType {
                                 return {
                                     name: `TypePropertyReferenceType : '${fullMemberName}'`,
                                     getSymbolType: (innerName: string, innerOptions: GetTypeOptions) => {
-                                        return this.outerType?.[this.propertyName]?.getMemberType(innerName, innerOptions);
+                                        return this.getTarget()?.getMemberType(innerName, innerOptions);
                                     },
                                     setCachedType: (innerName: string, innerTypeCacheEntry: TypeChainEntry, innerOptions: GetTypeOptions) => {
-                                        return this.outerType?.[this.propertyName]?.memberTable.setCachedType(innerName, innerTypeCacheEntry, innerOptions);
+                                        return this.getTarget()?.memberTable.setCachedType(innerName, innerTypeCacheEntry, innerOptions);
                                     },
                                     addSibling: (symbolTable: SymbolTable) => {
-                                        return this.outerType?.[this.propertyName]?.memberTable?.addSibling?.(symbolTable);
+                                        return this.getTarget()?.memberTable?.addSibling?.(symbolTable);
                                     }
                                 };
                             });
@@ -487,7 +539,7 @@ export class TypePropertyReferenceType extends BscType {
                 // eg: if (Reflect.has(target, name)) {
                 //   return Reflect.set(target, name, value, receiver);
 
-                let inner = this.outerType[this.propertyName] as object;
+                let inner = this.getTarget() as object;
 
                 if (inner) {
                     const result = Reflect.set(inner, name, value, inner);
@@ -503,6 +555,9 @@ export class TypePropertyReferenceType extends BscType {
             if ((this.outerType as ReferenceType).isResolvable()) {
                 actualOuterType = (this.outerType as ReferenceType)?.getTarget();
             }
+        }
+        if (this.transform) {
+            return this.transform(actualOuterType);
         }
         return actualOuterType?.[this.propertyName];
     }

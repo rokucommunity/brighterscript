@@ -26,7 +26,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike, isGroupingExpression, isInlineInterfaceExpression, isTypedFunctionTypeExpression } from './astUtils/reflection';
+import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike, isGroupingExpression, isInlineInterfaceExpression, isTypedFunctionTypeExpression, isGenericTypeExpression, isTypeParameterExpression } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode, SourceMapConsumer } from 'source-map';
 import type { RawSourceMap, SourceMapGenerator } from 'source-map';
@@ -2286,6 +2286,22 @@ export class Util {
             const inner = this.getTypeExpressionName(node.innerType, parseMode);
             return inner === undefined ? undefined : `${inner}[]`;
         }
+        if (isGenericTypeExpression(node)) {
+            //generic type with type arguments, eg. `Queue<integer>`
+            const baseName = this.getAllDottedGetPartsAsString(node.baseType, parseMode) ?? this.getTypeExpressionName(node.baseType, parseMode);
+            if (baseName === undefined) {
+                return undefined;
+            }
+            const args = [];
+            for (const typeArg of node.typeArguments ?? []) {
+                const argName = this.getTypeExpressionName(typeArg, parseMode);
+                if (argName === undefined) {
+                    return undefined;
+                }
+                args.push(argName);
+            }
+            return `${baseName}<${args.join(', ')}>`;
+        }
         if (isInlineInterfaceExpression(node)) {
             const members = [];
             for (const member of node.members ?? []) {
@@ -2606,7 +2622,11 @@ export class Util {
         if (isTypeExpression(expression) ||
             isTypeExpression(expression?.parent) ||
             isTypedArrayExpression(expression) ||
-            isTypedArrayExpression(expression?.parent)) {
+            isTypedArrayExpression(expression?.parent) ||
+            isGenericTypeExpression(expression) ||
+            isGenericTypeExpression(expression?.parent) ||
+            isTypeParameterExpression(expression) ||
+            isTypeParameterExpression(expression?.parent)) {
             return true;
         }
         if (isBinaryExpression(expression?.parent)) {

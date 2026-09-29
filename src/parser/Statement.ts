@@ -1,8 +1,8 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import type { DottedGetExpression, LiteralExpression, TypecastExpression } from './Expression';
-import { FunctionExpression, FunctionParameterExpression, TypeExpression } from './Expression';
+import type { DottedGetExpression, LiteralExpression, TypecastExpression, TypeParameterExpression } from './Expression';
+import { FunctionExpression, FunctionParameterExpression, TypeExpression, registerTypeParameters, getTypeParametersTypedef } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import type { Location } from 'vscode-languageserver';
@@ -2140,16 +2140,25 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         parentInterfaceName?: TypeExpression;
         body: Statement[];
         endInterface?: Token;
+        typeParameters?: TypeParameterExpression[];
+        leftAngleBracket?: Token;
+        rightAngleBracket?: Token;
     }) {
         super();
         this.tokens = {
             interface: options.interface,
             name: options.name,
             extends: options.extends,
-            endInterface: options.endInterface
+            endInterface: options.endInterface,
+            leftAngleBracket: options.leftAngleBracket,
+            rightAngleBracket: options.rightAngleBracket
         };
         this.parentInterfaceName = options.parentInterfaceName;
         this.body = options.body;
+        this.typeParameters = options.typeParameters ?? [];
+        //interfaces get their own symbol table so generic type parameters (eg. `interface Box<T>`) resolve inside the body
+        this.symbolTable = new SymbolTable(`InterfaceStatement: '${this.tokens.name?.text}'`, () => this.parent?.getSymbolTable());
+        registerTypeParameters(this, this.typeParameters, this.symbolTable);
         this.location = util.createBoundingLocation(
             this.tokens.interface,
             this.tokens.name,
@@ -2161,6 +2170,10 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
     }
     public readonly parentInterfaceName?: TypeExpression;
     public readonly body: Statement[];
+    /**
+     * The generic type parameters declared on this interface (eg. `<T>` in `interface Box<T>`)
+     */
+    public readonly typeParameters: TypeParameterExpression[];
 
     public readonly kind = AstNodeKind.InterfaceStatement;
 
@@ -2169,6 +2182,8 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         readonly name: Identifier;
         readonly extends?: Token;
         readonly endInterface?: Token;
+        readonly leftAngleBracket?: Token;
+        readonly rightAngleBracket?: Token;
     };
 
     public readonly location: Location | undefined;
@@ -2261,7 +2276,8 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         result.push(
             this.tokens.interface.text,
             ' ',
-            this.tokens.name.text
+            this.tokens.name.text,
+            ...getTypeParametersTypedef(this.typeParameters, state)
         );
         const parentInterfaceName = this.parentInterfaceName?.getName();
         if (parentInterfaceName) {
@@ -2305,6 +2321,9 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         //visitor-less walk function to do parent linking
         walk(this, 'parentInterfaceName', null, options);
 
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walkArray(this.typeParameters, visitor, options, this);
+        }
         if (options.walkMode & InternalWalkMode.walkStatements) {
             walkArray(this.body, visitor, options, this);
         }
@@ -2314,6 +2333,9 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         const superIface = this.parentInterfaceName?.getType(options) as InterfaceType;
 
         const resultType = new InterfaceType(this.getName(ParseMode.BrighterScript), superIface);
+        if (this.typeParameters?.length > 0) {
+            resultType.typeParameters = this.typeParameters.map(typeParam => typeParam.getType({ ...options, typeChain: undefined }));
+        }
         for (const statement of this.methods) {
             const memberType = statement?.getType({ ...options, typeChain: undefined }); // no typechain info needed
             const flag = statement.isOptional ? SymbolTypeFlag.runtime | SymbolTypeFlag.optional : SymbolTypeFlag.runtime;
@@ -2341,9 +2363,12 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
                 extends: util.cloneToken(this.tokens.extends),
                 parentInterfaceName: this.parentInterfaceName?.clone(),
                 body: this.body?.map(x => x?.clone()),
-                endInterface: util.cloneToken(this.tokens.endInterface)
+                endInterface: util.cloneToken(this.tokens.endInterface),
+                typeParameters: this.typeParameters?.map(typeParam => typeParam?.clone()),
+                leftAngleBracket: util.cloneToken(this.tokens.leftAngleBracket),
+                rightAngleBracket: util.cloneToken(this.tokens.rightAngleBracket)
             }),
-            ['parentInterfaceName', 'body']
+            ['parentInterfaceName', 'body', 'typeParameters']
         );
     }
 }
@@ -2470,6 +2495,9 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         as?: Token;
         returnTypeExpression?: TypeExpression;
         optional?: Token;
+        typeParameters?: TypeParameterExpression[];
+        leftAngleBracket?: Token;
+        rightAngleBracket?: Token;
     }) {
         super();
         this.tokens = {
@@ -2478,13 +2506,26 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
             name: options.name,
             leftParen: options.leftParen,
             rightParen: options.rightParen,
-            as: options.as
+            as: options.as,
+            leftAngleBracket: options.leftAngleBracket,
+            rightAngleBracket: options.rightAngleBracket
         };
         this.params = options.params ?? [];
         this.returnTypeExpression = options.returnTypeExpression;
+        this.typeParameters = options.typeParameters ?? [];
+        if (this.typeParameters.length > 0) {
+            //generic method: its type parameters resolve within the method signature
+            this.symbolTable = new SymbolTable(`InterfaceMethodStatement: '${this.tokens.name?.text}'`, () => this.parent?.getSymbolTable());
+            registerTypeParameters(this, this.typeParameters, this.symbolTable);
+        }
     }
 
     public readonly kind = AstNodeKind.InterfaceMethodStatement;
+
+    /**
+     * The generic type parameters declared on this method (eg. `<T>` in `function first<T>(items as T[]) as T`)
+     */
+    public readonly typeParameters: TypeParameterExpression[];
 
     public get location() {
         return util.createBoundingLocation(
@@ -2512,6 +2553,8 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         readonly leftParen?: Token;
         readonly rightParen?: Token;
         readonly as?: Token;
+        readonly leftAngleBracket?: Token;
+        readonly rightAngleBracket?: Token;
     };
 
     public readonly params: FunctionParameterExpression[];
@@ -2527,6 +2570,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walkArray(this.typeParameters, visitor, options, this);
             walk(this, 'returnTypeExpression', visitor, options);
         }
     }
@@ -2557,6 +2601,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
             this.tokens.functionType?.text ?? 'function',
             ' ',
             this.tokens.name.text,
+            ...getTypeParametersTypedef(this.typeParameters, state),
             '('
         );
         const params = this.params ?? [];
@@ -2595,6 +2640,9 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         }
         const resultType = new TypedFunctionType(returnType);
         resultType.isSub = isSub;
+        if (this.typeParameters?.length > 0) {
+            resultType.typeParameters = this.typeParameters.map(typeParam => typeParam.getType({ ...options, typeChain: undefined }));
+        }
         for (let param of this.params) {
             resultType.addParameter(param.tokens.name.text, param.getType(options), !!param.defaultValue);
         }
@@ -2618,9 +2666,12 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
                 params: this.params?.map(p => p?.clone()),
                 rightParen: util.cloneToken(this.tokens.rightParen),
                 as: util.cloneToken(this.tokens.as),
-                returnTypeExpression: this.returnTypeExpression?.clone()
+                returnTypeExpression: this.returnTypeExpression?.clone(),
+                typeParameters: this.typeParameters?.map(typeParam => typeParam?.clone()),
+                leftAngleBracket: util.cloneToken(this.tokens.leftAngleBracket),
+                rightAngleBracket: util.cloneToken(this.tokens.rightAngleBracket)
             }),
-            ['params']
+            ['params', 'typeParameters']
         );
     }
 }
@@ -2659,6 +2710,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
         endClass?: Token;
         extends?: Token;
         parentClassName?: TypeExpression;
+        typeParameters?: TypeParameterExpression[];
+        leftAngleBracket?: Token;
+        rightAngleBracket?: Token;
     }) {
         super();
         this.body = options.body ?? [];
@@ -2666,10 +2720,14 @@ export class ClassStatement extends Statement implements TypedefProvider {
             name: options.name,
             class: options.class,
             endClass: options.endClass,
-            extends: options.extends
+            extends: options.extends,
+            leftAngleBracket: options.leftAngleBracket,
+            rightAngleBracket: options.rightAngleBracket
         };
         this.parentClassName = options.parentClassName;
+        this.typeParameters = options.typeParameters ?? [];
         this.symbolTable = new SymbolTable(`ClassStatement: '${this.tokens.name?.text}'`, () => this.parent?.getSymbolTable());
+        registerTypeParameters(this, this.typeParameters, this.symbolTable);
 
         this.registerMembers(this.body);
 
@@ -2691,9 +2749,15 @@ export class ClassStatement extends Statement implements TypedefProvider {
         readonly name: Identifier;
         readonly endClass?: Token;
         readonly extends?: Token;
+        readonly leftAngleBracket?: Token;
+        readonly rightAngleBracket?: Token;
     };
     public readonly body: Statement[];
     public readonly parentClassName: TypeExpression;
+    /**
+     * The generic type parameters declared on this class (eg. `<T>` in `class Queue<T>`)
+     */
+    public readonly typeParameters: TypeParameterExpression[];
 
 
     public getName(parseMode: ParseMode) {
@@ -2783,7 +2847,8 @@ export class ClassStatement extends Statement implements TypedefProvider {
         }
         result.push(
             'class ',
-            this.tokens.name.text
+            this.tokens.name.text,
+            ...getTypeParametersTypedef(this.typeParameters, state)
         );
         if (this.parentClassName) {
             const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
@@ -3268,6 +3333,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
         //visitor-less walk function to do parent linking
         walk(this, 'parentClassName', null, options);
 
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walkArray(this.typeParameters, visitor, options, this);
+        }
         if (options.walkMode & InternalWalkMode.walkStatements) {
             walkArray(this.body, visitor, options, this);
         }
@@ -3277,6 +3345,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
         const superClass = this.parentClassName?.getType(options) as ClassType;
 
         const resultType = new ClassType(this.getName(ParseMode.BrighterScript), superClass);
+        if (this.typeParameters?.length > 0) {
+            resultType.typeParameters = this.typeParameters.map(typeParam => typeParam.getType({ ...options, typeChain: undefined }));
+        }
 
         for (const statement of this.methods) {
             const funcType = statement?.func.getType({ ...options, typeChain: undefined }); //no typechain needed
@@ -3315,9 +3386,12 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 body: this.body?.map(x => x?.clone()),
                 endClass: util.cloneToken(this.tokens.endClass),
                 extends: util.cloneToken(this.tokens.extends),
-                parentClassName: this.parentClassName?.clone()
+                parentClassName: this.parentClassName?.clone(),
+                typeParameters: this.typeParameters?.map(typeParam => typeParam?.clone()),
+                leftAngleBracket: util.cloneToken(this.tokens.leftAngleBracket),
+                rightAngleBracket: util.cloneToken(this.tokens.rightAngleBracket)
             }),
-            ['body', 'parentClassName']
+            ['body', 'parentClassName', 'typeParameters']
         );
     }
 }

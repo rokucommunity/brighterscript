@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
-import { isAliasStatement, isArrayType, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallFuncableTypeLike, isCallableType, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isIterableType, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypeStatementType, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isArrayType, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallFuncableTypeLike, isCallableType, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isInheritableType, isIterableType, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypeStatementType, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -14,10 +14,11 @@ import type { Token } from '../../lexer/Token';
 import { AstNodeKind } from '../../parser/AstNode';
 import type { AstNode } from '../../parser/AstNode';
 import type { Expression } from '../../parser/AstNode';
-import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallfuncExpression, AAIndexedMemberExpression } from '../../parser/Expression';
+import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallfuncExpression, AAIndexedMemberExpression, GenericTypeExpression, TypeExpression } from '../../parser/Expression';
 import { CallExpression } from '../../parser/Expression';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BscType } from '../../types/BscType';
+import type { TypedFunctionType } from '../../types/TypedFunctionType';
 import type { BscFile } from '../../files/BscFile';
 import { InsideSegmentWalkMode } from '../../AstValidationSegmenter';
 import { TokenKind } from '../../lexer/TokenKind';
@@ -29,6 +30,9 @@ import type { XmlFile } from '../../files/XmlFile';
 import { SGFieldTypes } from '../../parser/SGTypes';
 import { DynamicType } from '../../types/DynamicType';
 import { getAllTypesFromCompoundType } from '../../types/helpers';
+import { findConstraintViolations, inferTypeArgumentsForCall, instantiateFunction, resolveIfPossible } from '../../types/TypeParameterHelpers';
+import type { TypeParameterBindings } from '../../types/TypeParameterHelpers';
+import type { TypeParameterType } from '../../types/TypeParameterType';
 import { BscTypeKind } from '../../types/BscTypeKind';
 import type { BrsDocWithType } from '../../parser/BrightScriptDocParser';
 import brsDocParser from '../../parser/BrightScriptDocParser';
@@ -258,6 +262,11 @@ export class ScopeValidator {
                     NewExpression: (newExpr) => {
                         this.addValidationKindMetric('NewExpression', () => {
                             this.validateNewExpression(file, newExpr);
+                        });
+                    },
+                    GenericTypeExpression: (genericTypeExpr) => {
+                        this.addValidationKindMetric('GenericTypeExpression', () => {
+                            this.validateGenericTypeExpression(file, genericTypeExpr);
                         });
                     },
                     ForEachStatement: (forEachStmt) => {
@@ -700,6 +709,14 @@ export class ScopeValidator {
     private validateCallExpression(file: BrsFile, expression: CallExpression) {
         const getTypeOptions = { flags: SymbolTypeFlag.runtime, data: {} };
         let funcType = this.getNodeTypeWrapper(file, expression?.callee, getTypeOptions);
+        if (isNewExpression(expression.parent) && isClassType(funcType) && funcType.isResolvable()) {
+            //constructing a generic class (eg. `new Queue<integer>()` or `new Box(1)`): check the constructor args against the
+            //instantiated class, whose `new` has the type parameters replaced with the explicit/inferred type arguments
+            const newExprType = this.getNodeTypeWrapper(file, expression.parent, getTypeOptions);
+            if (isClassType(newExprType) && newExprType.isResolvable()) {
+                funcType = newExprType;
+            }
+        }
         if (funcType?.isResolvable() && isClassType(funcType)) {
             // We're calling a class - get the constructor
             funcType = funcType.getMemberType('new', getTypeOptions);
@@ -808,11 +825,12 @@ export class ScopeValidator {
             // non typed function. nothing to check
             return;
         }
+        let typedFuncType: TypedFunctionType = funcType;
 
         //get min/max parameter count for callable
         let minParams = 0;
         let maxParams = 0;
-        for (let param of funcType.params) {
+        for (let param of typedFuncType.params) {
             maxParams++;
             //optional parameters must come last, so we can assume that minParams won't increase once we hit
             //the first isOptional
@@ -820,7 +838,7 @@ export class ScopeValidator {
                 minParams++;
             }
         }
-        if (funcType.isVariadic) {
+        if (typedFuncType.isVariadic) {
             // function accepts variable number of arguments
             maxParams = CallExpression.MaximumArguments;
         }
@@ -834,15 +852,28 @@ export class ScopeValidator {
                 location: callErrorLocation
             });
         }
+        //resolve every argument's type up front. Generic functions need all of them to infer their type arguments
+        const argInfos = argsForCall.map(arg => {
+            const data = {} as ExtraSymbolData;
+            const argType = this.getNodeTypeWrapper(file, arg, { flags: SymbolTypeFlag.runtime, data: data });
+            return { arg: arg, data: data, argType: argType };
+        });
+        if (typedFuncType.typeParameters?.length > 0) {
+            //generic function: bind `T` from the arguments (first use wins), then check every argument against the bound param types
+            const bindings = inferTypeArgumentsForCall(typedFuncType, argInfos.map(info => info.argType));
+            this.validateInferredTypeArguments(typedFuncType.typeParameters, bindings, callErrorLocation);
+            typedFuncType = instantiateFunction(typedFuncType, bindings);
+        }
         let paramIndex = 0;
-        for (let arg of argsForCall) {
-            const paramType = funcType.params[paramIndex]?.type;
+        for (let argInfo of argInfos) {
+            const arg = argInfo.arg;
+            const data = argInfo.data;
+            let argType = argInfo.argType;
+            const paramType = typedFuncType.params[paramIndex]?.type;
             if (!paramType) {
                 // unable to find a paramType -- maybe there are more args than params
                 break;
             }
-            const data = {} as ExtraSymbolData;
-            let argType = this.getNodeTypeWrapper(file, arg, { flags: SymbolTypeFlag.runtime, data: data });
             if (isCallableType(paramType) && isClassType(argType) && isClassStatement(data.definingNode)) {
                 argType = data.definingNode.getConstructorType();
             }
@@ -1359,6 +1390,20 @@ export class ScopeValidator {
     private validateNewExpression(file: BrsFile, newExpression: NewExpression) {
         const newExprType = this.getNodeTypeWrapper(file, newExpression, { flags: SymbolTypeFlag.typetime });
         if (isClassType(newExprType)) {
+            if (newExpression.typeArguments) {
+                //eg. `new Queue<integer>()` - check the type arguments against the class's type parameters
+                const classType = this.getNodeTypeWrapper(file, newExpression.className, { flags: SymbolTypeFlag.typetime });
+                this.validateTypeArguments(file, classType, newExpression.className.getName(ParseMode.BrighterScript), newExpression.typeArguments, newExpression.className.location);
+            } else if (newExprType.genericDeclaration?.typeParameters?.length > 0) {
+                //eg. `new Box(value)` - the type arguments were inferred from the constructor args. Make sure they satisfy the constraints
+                const declaration = newExprType.genericDeclaration;
+                const constructorType = declaration.getMemberType('new', { flags: SymbolTypeFlag.runtime });
+                if (isTypedFunctionType(constructorType)) {
+                    const argTypes = newExpression.call.args.map(arg => this.getNodeTypeWrapper(file, arg, { flags: SymbolTypeFlag.runtime }));
+                    const bindings = inferTypeArgumentsForCall({ ...constructorType, typeParameters: declaration.typeParameters } as TypedFunctionType, argTypes);
+                    this.validateInferredTypeArguments(declaration.typeParameters, bindings, newExpression.className.location);
+                }
+            }
             return;
         }
 
@@ -1375,6 +1420,71 @@ export class ScopeValidator {
                 location: newExpression.className.location
             });
 
+        }
+    }
+
+    /**
+     * Validate a generic type used with type arguments, eg. `Queue<integer>`:
+     * the type must be generic, the argument count must match, and each argument must satisfy its parameter's constraint
+     */
+    private validateGenericTypeExpression(file: BrsFile, expression: GenericTypeExpression) {
+        const baseType = this.getNodeTypeWrapper(file, expression.baseType, { flags: SymbolTypeFlag.typetime });
+        const typeName = expression.getName() ?? baseType?.toString();
+        this.validateTypeArguments(file, baseType, typeName, expression.typeArguments, expression.location);
+    }
+
+    /**
+     * Report inferred type arguments that don't satisfy their type parameter's constraint (eg. calling `function f<T extends Node>(x as T)` with a string)
+     */
+    private validateInferredTypeArguments(typeParameters: TypeParameterType[], bindings: TypeParameterBindings, location: Location) {
+        for (const violation of findConstraintViolations(typeParameters, bindings)) {
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.typeArgumentDoesNotSatisfyConstraint(violation.typeArgument.toString(), violation.typeParameter.name, violation.typeParameter.constraint.toString()),
+                location: location
+            });
+        }
+    }
+
+    private validateTypeArguments(file: BrsFile, baseType: BscType, typeName: string, typeArguments: TypeExpression[], location: Location) {
+        if (!baseType?.isResolvable()) {
+            //unknown type - `cannotFindName` is reported when the name itself is validated
+            return;
+        }
+        let declarationType = resolveIfPossible(baseType);
+        while (isTypeStatementType(declarationType)) {
+            declarationType = declarationType.wrappedType;
+        }
+        const typeParameters = isInheritableType(declarationType) ? (declarationType.genericDeclaration ?? declarationType).typeParameters : undefined;
+        if (!typeParameters?.length) {
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.typeIsNotGeneric(typeName),
+                location: location
+            });
+            return;
+        }
+        if (typeArguments.length !== typeParameters.length) {
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.typeArgumentCountMismatch(typeName, typeParameters.length, typeArguments.length),
+                location: location
+            });
+        }
+        const count = Math.min(typeArguments.length, typeParameters.length);
+        for (let i = 0; i < count; i++) {
+            const constraint = typeParameters[i].constraint;
+            if (!constraint?.isResolvable()) {
+                continue;
+            }
+            const typeArgument = typeArguments[i];
+            const argType = this.getNodeTypeWrapper(file, typeArgument, { flags: SymbolTypeFlag.typetime });
+            if (!argType?.isResolvable()) {
+                continue;
+            }
+            if (!constraint.isTypeCompatible(argType, {})) {
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.typeArgumentDoesNotSatisfyConstraint(argType.toString(), typeParameters[i].name, constraint.toString()),
+                    location: typeArgument.location
+                });
+            }
         }
     }
 

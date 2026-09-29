@@ -1,5 +1,5 @@
 import type { Body, AssignmentStatement, Block, EmptyStatement, ExpressionStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, InterfaceFieldStatement, InterfaceMethodStatement, InterfaceStatement, EnumStatement, EnumMemberStatement, TryCatchStatement, CatchStatement, ThrowStatement, MethodStatement, FieldStatement, ConstStatement, ContinueStatement, DimStatement, TypecastStatement, AliasStatement, AugmentedAssignmentStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ConditionalCompileStatement, ExitStatement, TypeStatement } from '../parser/Statement';
-import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, AAIndexedMemberExpression, TernaryExpression, NullCoalescingExpression, PrintSeparatorExpression, TypecastExpression, TypedArrayExpression, TypeExpression, InlineInterfaceMemberExpression, InlineInterfaceExpression, TypedFunctionTypeExpression } from '../parser/Expression';
+import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, AAIndexedMemberExpression, TernaryExpression, NullCoalescingExpression, PrintSeparatorExpression, TypecastExpression, TypedArrayExpression, TypeExpression, InlineInterfaceMemberExpression, InlineInterfaceExpression, TypedFunctionTypeExpression, TypeParameterExpression, GenericTypeExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
 import type { BsDiagnostic, TypedefProvider } from '../interfaces';
@@ -28,6 +28,7 @@ import type { EnumMemberType, EnumType } from '../types/EnumType';
 import type { UnionType } from '../types/UnionType';
 import type { UninitializedType } from '../types/UninitializedType';
 import type { ArrayType } from '../types/ArrayType';
+import type { TypeParameterType } from '../types/TypeParameterType';
 import type { InheritableType } from '../types/InheritableType';
 import type { CallFuncableType } from '../types/CallFuncableType';
 import { BscTypeKind } from '../types/BscTypeKind';
@@ -348,6 +349,12 @@ export function isInlineInterfaceMemberExpression(element: any): element is Inli
 export function isTypedFunctionTypeExpression(element: any): element is TypedFunctionTypeExpression {
     return element?.kind === AstNodeKind.TypedFunctionTypeExpression;
 }
+export function isTypeParameterExpression(element: any): element is TypeParameterExpression {
+    return element?.kind === AstNodeKind.TypeParameterExpression;
+}
+export function isGenericTypeExpression(element: any): element is GenericTypeExpression {
+    return element?.kind === AstNodeKind.GenericTypeExpression;
+}
 
 // BscType reflection
 export function isStringType(value: any): value is StringType {
@@ -501,6 +508,15 @@ export function isAssociativeArrayType(value: any): value is AssociativeArrayTyp
 export function isTypeStatementType(value: any): value is TypeStatementType {
     return value?.kind === BscTypeKind.TypeStatementType;
 }
+export function isTypeParameterType(value: any): value is TypeParameterType {
+    return value?.kind === BscTypeKind.TypeParameterType;
+}
+/**
+ * Is this a type parameter (eg. `T`) that declares a constraint (eg. `T extends SomeType`) and the constraint satisfies the guard?
+ */
+export function isConstrainedTypeParameterOf(value: any, typeGuard: (val: any) => boolean) {
+    return isTypeParameterType(value) && !!value.constraint && typeGuard(value.constraint);
+}
 
 export function isInheritableType(target): target is InheritableType {
     return isClassType(target) || isInterfaceType(target) || isComponentType(target);
@@ -514,6 +530,7 @@ export function isCallableType(target): target is BaseFunctionType {
     return isFunctionTypeLike(target) ||
         isTypedFunctionTypeLike(target) ||
         isTypeStatementTypeOf(target, isCallableType) ||
+        isConstrainedTypeParameterOf(target, isCallableType) ||
         isUnionTypeOf(target, isCallableType) ||
         isObjectType(target) ||
         (isDynamicType(target) && !isAnyReferenceType(target));
@@ -593,7 +610,8 @@ export function isIntersectionTypeOf(value: any, typeGuard: (val: any) => boolea
 export function isCompoundTypeOf(value: any, typeGuard: (val: any) => boolean) {
     return isTypeStatementTypeOf(value, typeGuard) ||
         isUnionTypeOf(value, typeGuard) ||
-        isIntersectionTypeOf(value, typeGuard);
+        isIntersectionTypeOf(value, typeGuard) ||
+        isConstrainedTypeParameterOf(value, typeGuard);
 }
 
 export function isCompoundType(value: any): value is UnionType | IntersectionType {

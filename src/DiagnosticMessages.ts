@@ -1201,6 +1201,26 @@ export let DiagnosticMessages = {
         message: `Class constructor 'new' cannot be declared inside a conditional compile ('#if') block`,
         severity: DiagnosticSeverity.Error,
         code: 'class-constructor-in-conditional-compile'
+    }),
+    typeIsNotGeneric: (typeName: string) => ({
+        message: `Type '${typeName}' is not generic and cannot be given type arguments`,
+        severity: DiagnosticSeverity.Error,
+        code: 'type-is-not-generic'
+    }),
+    typeArgumentCountMismatch: (typeName: string, expectedCount: number, actualCount: number) => ({
+        message: `Generic type '${typeName}' expects ${expectedCount} type argument${expectedCount === 1 ? '' : 's'}, but ${actualCount} ${actualCount === 1 ? 'was' : 'were'} provided`,
+        severity: DiagnosticSeverity.Error,
+        code: 'type-argument-count-mismatch'
+    }),
+    typeArgumentDoesNotSatisfyConstraint: (typeArgumentName: string, typeParameterName: string, constraintName: string) => ({
+        message: `Type '${typeArgumentName}' does not satisfy the constraint '${constraintName}' of type parameter '${typeParameterName}'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'type-argument-constraint-mismatch'
+    }),
+    duplicateTypeParameterName: (name: string) => ({
+        message: `Duplicate type parameter name '${name}'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'duplicate-type-parameter-name'
     })
 };
 export const defaultMaximumTruncationLength = 160;

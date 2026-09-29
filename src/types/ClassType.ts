@@ -6,7 +6,7 @@ import { BscTypeKind } from './BscTypeKind';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import { InheritableType } from './InheritableType';
 import type { ReferenceType } from './ReferenceType';
-import { isUnionTypeCompatible } from './helpers';
+import { isUnionTypeCompatible, unwrapTypeParameterConstraint } from './helpers';
 
 export class ClassType extends InheritableType {
 
@@ -20,6 +20,7 @@ export class ClassType extends InheritableType {
         while (isTypeStatementType(targetType)) {
             targetType = targetType.wrappedType;
         }
+        targetType = unwrapTypeParameterConstraint(targetType);
         if (this.isEqual(targetType, data)) {
             return true;
         } else if (

@@ -7,6 +7,8 @@ export * from './DynamicType';
 export * from './EnumType';
 export * from './FloatType';
 export * from './TypedFunctionType';
+export * from './TypeParameterType';
+export * from './TypeParameterHelpers';
 export * from './helpers';
 export * from './InheritableType';
 export * from './IntegerType';

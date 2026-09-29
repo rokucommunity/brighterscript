@@ -9,7 +9,7 @@ import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import { DynamicType } from './DynamicType';
 import { IntegerType } from './IntegerType';
 import { unionTypeFactory } from './UnionType';
-import { getUniqueType, isUnionTypeCompatible } from './helpers';
+import { getUniqueType, isUnionTypeCompatible, unwrapTypeParameterConstraint } from './helpers';
 import { util } from '../util';
 
 export class ArrayType extends BscType {
@@ -51,6 +51,7 @@ export class ArrayType extends BscType {
         while (isTypeStatementType(targetType)) {
             targetType = targetType.wrappedType;
         }
+        targetType = unwrapTypeParameterConstraint(targetType);
         if (isDynamicType(targetType)) {
             return true;
         } else if (isObjectType(targetType)) {

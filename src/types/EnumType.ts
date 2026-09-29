@@ -4,7 +4,7 @@ import type { TypeCompatibilityData } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { DynamicType } from './DynamicType';
-import { isUnionTypeCompatible } from './helpers';
+import { isUnionTypeCompatible, unwrapTypeParameterConstraint } from './helpers';
 
 export class EnumType extends BscType {
     constructor(
@@ -23,6 +23,7 @@ export class EnumType extends BscType {
         while (isTypeStatementType(targetType)) {
             targetType = targetType.wrappedType;
         }
+        targetType = unwrapTypeParameterConstraint(targetType);
         return (
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
@@ -90,7 +91,7 @@ export class EnumMemberType extends BscType {
     }
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
-
+        targetType = unwrapTypeParameterConstraint(targetType);
 
         if (isEnumMemberType(targetType)) {
             if (this.enumName.toLowerCase() === targetType.enumName.toLowerCase()) {

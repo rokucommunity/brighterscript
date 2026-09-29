@@ -1,5 +1,5 @@
 import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
-import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isAssociativeArrayTypeLike, isComponentType, isCompoundType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isIntersectionType, isObjectType, isReferenceType, isTypePropertyReferenceType, isTypeStatementType, isUnionType, isUnionTypeOf, isVoidType } from '../astUtils/reflection';
+import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isAssociativeArrayTypeLike, isComponentType, isCompoundType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isIntersectionType, isObjectType, isReferenceType, isTypePropertyReferenceType, isTypeStatementType, isTypeParameterType, isUnionType, isUnionTypeOf, isVoidType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import type { UnionType } from './UnionType';
 import type { SymbolTable } from '../SymbolTable';
@@ -251,6 +251,18 @@ export function getUniqueType(types: BscType[], unionTypeFactory: (types: BscTyp
     return unionTypeFactory(generalizedTypes);
 }
 
+
+/**
+ * Compatibility checks treat a *constrained* type parameter as its constraint (a `T extends Node` can be used anywhere a `Node` can).
+ * Unconstrained type parameters are left alone - nothing is known about them, so only another `T` (or dynamic) satisfies them.
+ */
+export function unwrapTypeParameterConstraint(type: BscType): BscType {
+    let depth = 0;
+    while (isTypeParameterType(type) && type.constraint && depth++ < 12) {
+        type = type.constraint;
+    }
+    return type;
+}
 
 export function isUnionTypeCompatible(thisType: BscType, maybeUnionType: BscType, data?: TypeCompatibilityData): boolean {
     if (isUnionType(maybeUnionType)) {

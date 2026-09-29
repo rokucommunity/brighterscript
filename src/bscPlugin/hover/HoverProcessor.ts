@@ -1,4 +1,4 @@
-import { isAssignmentStatement, isBrsFile, isCallfuncExpression, isClassStatement, isDottedGetExpression, isEnumMemberStatement, isEnumStatement, isEnumType, isForStatement, isInheritableType, isInterfaceStatement, isMemberField, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isTypeStatement, isTypeStatementType, isXmlFile } from '../../astUtils/reflection';
+import { isAssignmentStatement, isBrsFile, isCallfuncExpression, isClassStatement, isDottedGetExpression, isEnumMemberStatement, isEnumStatement, isEnumType, isForStatement, isInheritableType, isInterfaceStatement, isMemberField, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isTypeParameterType, isTypeStatement, isTypeStatementType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { ExtraSymbolData, Hover, ProvideHoverEvent, TypeChainEntry } from '../../interfaces';
@@ -188,6 +188,9 @@ export class HoverProcessor {
                 let descriptionNode;
                 if (useCustomTypeHover && (isInheritableType(exprType) || isTypeStatementType(exprType))) {
                     hoverContent = this.getCustomTypeHover(exprType, extraData);
+                } else if (isInTypeExpression && isTypeParameterType(exprType)) {
+                    //a generic type parameter, eg. `T` or `T extends Node`
+                    hoverContent = fence(`${exprType.name}${exprType.constraint ? ` extends ${exprType.constraint.toString()}` : ''}`);
                 } else if (isMemberField(expression)) {
                     hoverContent = this.getMemberHover(expression, exprType);
                     descriptionNode = expression;

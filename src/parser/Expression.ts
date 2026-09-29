@@ -10,7 +10,7 @@ import { ParseMode } from './Parser';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isInheritableType, isIntegerType, isInterfaceMethodStatement, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isTypedFunctionType, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -35,6 +35,8 @@ import type { BaseFunctionType } from '../types/BaseFunctionType';
 import { brsDocParser } from './BrightScriptDocParser';
 import { InlineInterfaceType } from '../types/InlineInterfaceType';
 import { IntersectionType } from '../types/IntersectionType';
+import { TypeParameterType } from '../types/TypeParameterType';
+import { applyTypeArguments, inferTypeArguments, instantiateFunctionForCall, resolveIfPossible } from '../types/TypeParameterHelpers';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -216,6 +218,11 @@ export class CallExpression extends Expression {
         if (specialCaseReturnType) {
             return specialCaseReturnType;
         }
+        if (isTypedFunctionType(calleeType) && calleeType.typeParameters?.length > 0) {
+            //generic function: bind its type parameters from the argument types so the return type is specific (eg. `first(ints)` returns `integer`)
+            const argTypes = this.args.map(arg => arg.getType({ ...options, flags: SymbolTypeFlag.runtime, typeChain: undefined, data: undefined, ignoreCall: false }));
+            calleeType = instantiateFunctionForCall(calleeType, argTypes);
+        }
         if (isCallableType(calleeType) && (!isReferenceType(calleeType.returnType) || calleeType.returnType?.isResolvable())) {
             if (isVoidType(calleeType.returnType)) {
                 if (options.data?.isBuiltIn) {
@@ -233,7 +240,14 @@ export class CallExpression extends Expression {
         if (!isReferenceType(calleeType) && (calleeType as BaseFunctionType)?.returnType?.isResolvable()) {
             return (calleeType as BaseFunctionType).returnType;
         }
-        return new TypePropertyReferenceType(calleeType, 'returnType');
+        //the callee isn't known yet. Defer: once it resolves, use its return type (inferring type arguments if it turns out to be generic)
+        return new TypePropertyReferenceType(calleeType, 'returnType', (resolvedCallee: BscType) => {
+            if (isTypedFunctionType(resolvedCallee) && resolvedCallee.typeParameters?.length > 0) {
+                const argTypes = this.args.map(arg => arg.getType({ flags: SymbolTypeFlag.runtime }));
+                return instantiateFunctionForCall(resolvedCallee, argTypes).returnType;
+            }
+            return (resolvedCallee as BaseFunctionType)?.returnType;
+        });
     }
 
     get leadingTrivia(): Token[] {
@@ -263,6 +277,9 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         returnTypeExpression?: TypeExpression;
         body: Block;
         endFunctionType?: Token;
+        typeParameters?: TypeParameterExpression[];
+        leftAngleBracket?: Token;
+        rightAngleBracket?: Token;
     }) {
         super();
         this.tokens = {
@@ -270,16 +287,20 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             leftParen: options.leftParen,
             rightParen: options.rightParen,
             as: options.as,
-            endFunctionType: options.endFunctionType
+            endFunctionType: options.endFunctionType,
+            leftAngleBracket: options.leftAngleBracket,
+            rightAngleBracket: options.rightAngleBracket
         };
         this.parameters = options.parameters ?? [];
         this.body = options.body;
         this.returnTypeExpression = options.returnTypeExpression;
+        this.typeParameters = options.typeParameters ?? [];
 
         if (this.body) {
             this.body.parent = this;
         }
         this.symbolTable = new SymbolTable('FunctionExpression', () => this.parent?.getSymbolTable());
+        registerTypeParameters(this, this.typeParameters, this.symbolTable);
     }
 
     public readonly kind = AstNodeKind.FunctionExpression;
@@ -287,6 +308,10 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     readonly parameters: FunctionParameterExpression[];
     public readonly body: Block;
     public readonly returnTypeExpression?: TypeExpression;
+    /**
+     * The generic type parameters declared on this function (eg. `<T, U extends Node>`)
+     */
+    public readonly typeParameters: TypeParameterExpression[];
 
     readonly tokens: {
         readonly functionType?: Token;
@@ -294,6 +319,8 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         readonly leftParen?: Token;
         readonly rightParen?: Token;
         readonly as?: Token;
+        readonly leftAngleBracket?: Token;
+        readonly rightAngleBracket?: Token;
     };
 
     public get leadingTrivia(): Token[] {
@@ -386,6 +413,8 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 this.tokens.functionType?.text ?? 'function',
                 //functionName?
                 ...(isFunctionStatement(this.parent) || isMethodStatement(this.parent) ? [' ', this.parent.tokens.name?.text ?? ''] : []),
+                //<T, U extends Node>
+                ...getTypeParametersTypedef(this.typeParameters, state),
                 //leftParen
                 '(',
                 //parameters
@@ -416,6 +445,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walkArray(this.typeParameters, visitor, options, this);
             walkArray(this.parameters, visitor, options, this);
             walk(this, 'returnTypeExpression', visitor, options);
             //This is the core of full-program walking...it allows us to step into sub functions
@@ -445,6 +475,9 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
         const resultType = new TypedFunctionType(returnType);
         resultType.isSub = isSub;
+        if (this.typeParameters?.length > 0) {
+            resultType.typeParameters = this.typeParameters.map(typeParam => typeParam.getType({ ...options, typeChain: undefined }));
+        }
         for (let param of this.parameters) {
             resultType.addParameter(param.tokens.name.text, param.getType({ ...options, typeChain: undefined }), !!param.defaultValue);
         }
@@ -512,9 +545,12 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 leftParen: util.cloneToken(this.tokens.leftParen),
                 rightParen: util.cloneToken(this.tokens.rightParen),
                 as: util.cloneToken(this.tokens.as),
-                returnTypeExpression: this.returnTypeExpression?.clone()
+                returnTypeExpression: this.returnTypeExpression?.clone(),
+                typeParameters: this.typeParameters?.map(typeParam => typeParam?.clone()),
+                leftAngleBracket: util.cloneToken(this.tokens.leftAngleBracket),
+                rightAngleBracket: util.cloneToken(this.tokens.rightAngleBracket)
             }),
-            ['body', 'returnTypeExpression']
+            ['body', 'returnTypeExpression', 'typeParameters']
         );
     }
 }
@@ -1817,12 +1853,21 @@ export class NewExpression extends Expression {
     constructor(options: {
         new?: Token;
         call: CallExpression;
+        /**
+         * Explicit type arguments for a generic class, eg. `new Queue<integer>()`
+         */
+        typeArguments?: TypeExpression[];
+        leftAngleBracket?: Token;
+        rightAngleBracket?: Token;
     }) {
         super();
         this.tokens = {
-            new: options.new
+            new: options.new,
+            leftAngleBracket: options.leftAngleBracket,
+            rightAngleBracket: options.rightAngleBracket
         };
         this.call = options.call;
+        this.typeArguments = options.typeArguments;
         this.location = util.createBoundingLocation(this.tokens.new, this.call);
     }
 
@@ -1832,8 +1877,14 @@ export class NewExpression extends Expression {
 
     public readonly tokens: {
         readonly new?: Token;
+        readonly leftAngleBracket?: Token;
+        readonly rightAngleBracket?: Token;
     };
     public readonly call: CallExpression;
+    /**
+     * Explicit type arguments for a generic class, eg. `new Queue<integer>()`. `undefined` when none were written
+     */
+    public readonly typeArguments?: TypeExpression[];
 
     /**
      * The name of the class to initialize (with optional namespace prefixed)
@@ -1864,17 +1915,38 @@ export class NewExpression extends Expression {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'call', visitor, options);
+            walkArray(this.typeArguments, visitor, options, this);
         }
     }
 
     getType(options: GetTypeOptions) {
-        const result = this.call.getType(options);
+        let result = this.call.getType(options);
         if (options.typeChain) {
             // modify last typechain entry to show it is a new ...()
             const lastEntry = options.typeChain[options.typeChain.length - 1];
             if (lastEntry) {
                 lastEntry.astNode = this;
             }
+        }
+        if (this.typeArguments?.length > 0) {
+            //explicit type arguments, eg. `new Queue<integer>()`
+            const typeArgs = this.typeArguments.map(typeArg => typeArg.getType({ ...options, typeChain: undefined, data: undefined }));
+            return applyTypeArguments(result, typeArgs);
+        }
+        const resolvedResult = resolveIfPossible(result);
+        if (isInheritableType(resolvedResult) && resolvedResult.isGenericDeclaration) {
+            //generic class without explicit type arguments - infer them from the constructor arguments (eg. `new Box(1)` is a `Box<integer>`)
+            const constructorType = resolvedResult.getMemberType('new', { flags: SymbolTypeFlag.runtime });
+            let typeArgs: BscType[] = [];
+            if (isTypedFunctionType(constructorType)) {
+                const argTypes = this.call.args.map(arg => arg.getType({ ...options, flags: SymbolTypeFlag.runtime, typeChain: undefined, data: undefined }));
+                const bindings = inferTypeArguments(resolvedResult.typeParameters, constructorType.params.map(param => param.type), argTypes);
+                typeArgs = resolvedResult.typeParameters.map(typeParam => bindings.get(typeParam.id));
+            }
+            return resolvedResult.instantiate(typeArgs);
+        } else if (isReferenceType(result) && !result.isResolvable()) {
+            //not resolvable yet - once it is, use default type arguments if it turns out to be generic
+            return result.withTypeArguments([]);
         }
         return result;
     }
@@ -1887,9 +1959,12 @@ export class NewExpression extends Expression {
         return this.finalizeClone(
             new NewExpression({
                 new: util.cloneToken(this.tokens.new),
-                call: this.call?.clone()
+                call: this.call?.clone(),
+                typeArguments: this.typeArguments?.map(typeArg => typeArg?.clone()),
+                leftAngleBracket: util.cloneToken(this.tokens.leftAngleBracket),
+                rightAngleBracket: util.cloneToken(this.tokens.rightAngleBracket)
             }),
-            ['call']
+            ['call', 'typeArguments']
         );
     }
 }
@@ -3195,3 +3270,229 @@ const nonReferenceableFunctions = [
     'tab',
     'pos'
 ];
+
+/**
+ * A type parameter declaration in a generic function/class/interface, eg. the `T` or `U extends Node` in `function foo<T, U extends Node>()`
+ */
+export class TypeParameterExpression extends Expression {
+    constructor(options: {
+        name: Identifier;
+        extends?: Token;
+        constraint?: TypeExpression;
+    }) {
+        super();
+        this.tokens = {
+            name: options.name,
+            extends: options.extends
+        };
+        this.constraint = options.constraint;
+        if (this.constraint) {
+            this.constraint.parent = this;
+        }
+        this.location = util.createBoundingLocation(
+            this.tokens.name,
+            this.tokens.extends,
+            this.constraint
+        );
+    }
+
+    public readonly kind = AstNodeKind.TypeParameterExpression;
+
+    public readonly tokens: {
+        readonly name: Identifier;
+        readonly extends?: Token;
+    };
+
+    /**
+     * The upper bound for this type parameter (eg. `Node` in `T extends Node`), if any
+     */
+    public readonly constraint?: TypeExpression;
+
+    public readonly location: Location;
+
+    /**
+     * The type is created once and reused, so the type parameter keeps a stable identity across every `getType()` call
+     */
+    private typeParameterType: TypeParameterType;
+
+    public get name() {
+        return this.tokens.name?.text;
+    }
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        //type parameters have no runtime representation
+        return [];
+    }
+
+    public getTypedef(state: TranspileState): TranspileResult {
+        const result: TranspileResult = [this.tokens.name?.text ?? ''];
+        if (this.constraint) {
+            result.push(
+                ' ',
+                this.tokens.extends?.text ?? 'extends',
+                ' ',
+                ...this.constraint.getTypedef(state)
+            );
+        }
+        return result;
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'constraint', visitor, options);
+        }
+    }
+
+    public getType(options: GetTypeOptions): TypeParameterType {
+        if (!this.typeParameterType) {
+            this.typeParameterType = new TypeParameterType(this.tokens.name?.text);
+        }
+        if (this.constraint && !this.typeParameterType.constraint) {
+            //the constraint can't be looked up until this node is attached to the AST, so keep trying until it resolves to something
+            this.typeParameterType.constraint = this.constraint.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined, data: undefined });
+        }
+        return this.typeParameterType;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new TypeParameterExpression({
+                name: util.cloneToken(this.tokens.name),
+                extends: util.cloneToken(this.tokens.extends),
+                constraint: this.constraint?.clone()
+            }),
+            ['constraint']
+        );
+    }
+}
+
+/**
+ * A reference to a generic type with type arguments supplied, eg. `Queue<integer>` or `Pair<string, Node>`.
+ * Only ever appears inside a `TypeExpression`
+ */
+export class GenericTypeExpression extends Expression {
+    constructor(options: {
+        /**
+         * The name of the generic type (a `VariableExpression` or `DottedGetExpression`)
+         */
+        baseType: Expression;
+        leftAngleBracket?: Token;
+        typeArguments?: TypeExpression[];
+        rightAngleBracket?: Token;
+    }) {
+        super();
+        this.tokens = {
+            leftAngleBracket: options.leftAngleBracket,
+            rightAngleBracket: options.rightAngleBracket
+        };
+        this.baseType = options.baseType;
+        this.typeArguments = options.typeArguments ?? [];
+        this.location = util.createBoundingLocation(
+            this.baseType,
+            this.tokens.leftAngleBracket,
+            ...this.typeArguments,
+            this.tokens.rightAngleBracket
+        );
+    }
+
+    public readonly kind = AstNodeKind.GenericTypeExpression;
+
+    public readonly tokens: {
+        readonly leftAngleBracket?: Token;
+        readonly rightAngleBracket?: Token;
+    };
+
+    public readonly baseType: Expression;
+
+    public readonly typeArguments: TypeExpression[];
+
+    public readonly location: Location;
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        //generic types are classes/interfaces, which have no first-class runtime type
+        return ['dynamic'];
+    }
+
+    public getTypedef(state: TranspileState): TranspileResult {
+        const result: TranspileResult = [];
+        const baseName = util.getAllDottedGetPartsAsString(this.baseType, ParseMode.BrighterScript);
+        if (baseName !== undefined) {
+            result.push(baseName);
+        } else {
+            result.push(...this.baseType.transpile(state as BrsTranspileState));
+        }
+        result.push('<');
+        for (let i = 0; i < this.typeArguments.length; i++) {
+            if (i > 0) {
+                result.push(', ');
+            }
+            result.push(...this.typeArguments[i].getTypedef(state));
+        }
+        result.push('>');
+        return result;
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'baseType', visitor, options);
+            walkArray(this.typeArguments, visitor, options, this);
+        }
+    }
+
+    public getType(options: GetTypeOptions): BscType {
+        const baseType = this.baseType.getType({ ...options, flags: SymbolTypeFlag.typetime });
+        const typeArgs = this.typeArguments.map(typeArg => typeArg.getType({ ...options, typeChain: undefined, data: undefined }));
+        return applyTypeArguments(baseType, typeArgs);
+    }
+
+    /**
+     * The written name of the generic type (without type arguments), eg. `Queue` or `Alpha.Queue`
+     */
+    public getName(parseMode = ParseMode.BrighterScript) {
+        return util.getAllDottedGetPartsAsString(this.baseType, parseMode);
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new GenericTypeExpression({
+                baseType: this.baseType?.clone(),
+                leftAngleBracket: util.cloneToken(this.tokens.leftAngleBracket),
+                typeArguments: this.typeArguments?.map(typeArg => typeArg?.clone()),
+                rightAngleBracket: util.cloneToken(this.tokens.rightAngleBracket)
+            }),
+            ['baseType', 'typeArguments']
+        );
+    }
+}
+
+/**
+ * Attach type parameter declarations to their owner and make them available (at typetime) in the owner's symbol table,
+ * so `T` resolves anywhere inside the generic declaration
+ */
+export function registerTypeParameters(owner: AstNode, typeParameters: TypeParameterExpression[], symbolTable: SymbolTable) {
+    for (const typeParam of typeParameters ?? []) {
+        typeParam.parent = owner;
+        const name = typeParam.tokens.name?.text;
+        if (name) {
+            symbolTable.addSymbol(name, { definingNode: typeParam }, typeParam.getType({ flags: SymbolTypeFlag.typetime }), SymbolTypeFlag.typetime);
+        }
+    }
+}
+
+/**
+ * Get the typedef text for a type parameter list, eg. `<T, U extends Node>` (empty when there are no type parameters)
+ */
+export function getTypeParametersTypedef(typeParameters: TypeParameterExpression[], state: TranspileState): TranspileResult {
+    if (!typeParameters?.length) {
+        return [];
+    }
+    const result: TranspileResult = ['<'];
+    for (let i = 0; i < typeParameters.length; i++) {
+        if (i > 0) {
+            result.push(', ');
+        }
+        result.push(...typeParameters[i].getTypedef(state));
+    }
+    result.push('>');
+    return result;
+}

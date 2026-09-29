@@ -1,6 +1,6 @@
 import { SemanticTokenModifiers } from 'vscode-languageserver-protocol';
 import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
-import { isCallableType, isClassType, isComponentType, isConstStatement, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionStatement, isInterfaceType, isNamespaceType, isPrimitiveType, isVariableExpression } from '../../astUtils/reflection';
+import { isCallableType, isClassType, isComponentType, isConstStatement, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionStatement, isInterfaceType, isNamespaceType, isPrimitiveType, isTypeParameterType, isVariableExpression } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, ProvideSemanticTokensEvent, SemanticToken, TypeChainEntry } from '../../interfaces';
 import type { Locatable, Token } from '../../lexer/Token';
@@ -57,6 +57,9 @@ export class BrsFileSemanticTokensProcessor {
             },
             TypeStatement: (node) => {
                 this.tryAddToken(node, node.tokens.name);
+            },
+            TypeParameterExpression: (node) => {
+                this.addToken(node.tokens.name, SemanticTokenTypes.typeParameter);
             }
         }), {
             walkMode: WalkMode.visitAllRecursive
@@ -81,8 +84,9 @@ export class BrsFileSemanticTokensProcessor {
     private tryAddToken(node: AstNode, token: Token) {
         const extraData = {} as ExtraSymbolData;
         const chain = [] as TypeChainEntry[];
-        // eslint-disable-next-line no-bitwise
-        const symbolType = node.getType({ flags: SymbolTypeFlag.runtime, data: extraData, typeChain: chain });
+        //names inside a type expression (eg. `as Queue<T>`) are types, so look them up at typetime. Everything else is a runtime value
+        const flags = util.isInTypeExpression(node) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;
+        const symbolType = node.getType({ flags: flags, data: extraData, typeChain: chain });
         if (symbolType?.isResolvable()) {
             let info = this.getSemanticTokenInfo(node, symbolType, extraData);
             if (info) {
@@ -110,6 +114,9 @@ export class BrsFileSemanticTokensProcessor {
 
         if (isConstStatement(extraData?.definingNode)) {
             return { type: SemanticTokenTypes.variable, modifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static] };
+            //generic type parameters (eg. the `T` in `as T[]`)
+        } else if (isInTypeExpression && isTypeParameterType(type)) {
+            return { type: SemanticTokenTypes.typeParameter };
             // non-instances of classes should be colored like classes
         } else if (isClassType(type) && extraData.isInstance !== true) {
             return { type: SemanticTokenTypes.class };
