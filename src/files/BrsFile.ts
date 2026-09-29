@@ -6,7 +6,7 @@ import { CompletionItemKind } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
 import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
-import type { NamespaceFileContribution } from '../Scope';
+import type { NamespaceFileContribution, Scope } from '../Scope';
 import { SymbolTable } from '../SymbolTable';
 import { FunctionScope } from '../FunctionScope';
 import type { Callable, CallableParam, CommentFlag, BsDiagnostic, FileReference, FileLink, SerializedCodeFile } from '../interfaces';
@@ -16,7 +16,7 @@ import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers } from '../lexer/TokenKind';
 import { Parser, ParseMode } from '../parser/Parser';
 import type { FunctionExpression } from '../parser/Expression';
-import type { ClassStatement, NamespaceStatement, MethodStatement, FieldStatement, TypeImportSpecifier, ImportStatement } from '../parser/Statement';
+import type { ClassStatement, NamespaceStatement, MethodStatement, FieldStatement, TypeImportSpecifier, ImportStatement, ConstStatement, EnumStatement } from '../parser/Statement';
 import type { Program } from '../Program';
 import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
@@ -330,6 +330,78 @@ export class BrsFile implements BscFile {
             return targetFile.parser?.symbolTable;
         }
         return targetFile.getNamespaceLookupObject().get(namespaceName.toLowerCase())?.symbolTable;
+    }
+
+    /**
+     * Get the symbols that a named type import points at in the imported file (i.e. the `Alpha.Beta` const in
+     * `import type { Alpha.Beta } from "pkg:/source/lib.bs"`). Empty when the imported file is not in the program or does not declare the name
+     */
+    public getTypeImportTargetSymbols(typeImport: TypeImportInfo): BscSymbol[] {
+        const nameParts = typeImport.specifier.name.split('.');
+        const memberName = nameParts.pop();
+        const namespaceName = nameParts.join('.');
+        const symbolTable = this.getTypeImportSymbolTable(typeImport.destPath, namespaceName);
+        // eslint-disable-next-line no-bitwise
+        return symbolTable?.getSymbol(memberName, SymbolTypeFlag.runtime | SymbolTypeFlag.typetime, { ignoreParentsAndSiblings: true }) ?? [];
+    }
+
+    /**
+     * Find the const that `entityName` refers to when it is written in this file. The lookup order mirrors how names resolve
+     * during validation: a member of the containing namespace first, then a named type import (`import type { Name } from "..."`),
+     * then the scope. A file that is not in any scope falls back to its own consts.
+     * @param entityName the name as written (i.e. `MAX` or `Buttons.MAX`)
+     * @param containingNamespace the namespace the name was written in, if any
+     * @param scope the scope the name is being resolved in, if this file has one
+     */
+    public findConstStatement(entityName: string, containingNamespace: string | undefined, scope: Scope | undefined): FileLink<ConstStatement> | undefined {
+        return this.findStatement('constStatementMap', entityName, containingNamespace, scope);
+    }
+
+    /**
+     * Find the enum that `entityName` refers to when it is written in this file (see `findConstStatement` for the lookup order)
+     */
+    public findEnumStatement(entityName: string, containingNamespace: string | undefined, scope: Scope | undefined): FileLink<EnumStatement> | undefined {
+        return this.findStatement('enumStatementMap', entityName, containingNamespace, scope);
+    }
+
+    private findStatement<T extends ConstStatement | EnumStatement>(mapName: 'constStatementMap' | 'enumStatementMap', entityName: string, containingNamespace: string | undefined, scope: Scope | undefined): FileLink<T> | undefined {
+        const lowerName = entityName?.toLowerCase();
+        if (!lowerName) {
+            return undefined;
+        }
+        const lookup = (name: string): FileLink<T> | undefined => {
+            if (scope) {
+                return mapName === 'constStatementMap'
+                    ? scope.getConstFileLink(name) as FileLink<T>
+                    : scope.getEnumFileLink(name) as FileLink<T>;
+            }
+            const statement = this._cachedLookups?.[mapName].get(name) as T;
+            return statement ? { item: statement, file: this } : undefined;
+        };
+
+        //a member of the containing namespace shadows everything else with the same name
+        const fullNameLower = util.getFullyQualifiedClassName(lowerName, containingNamespace)?.toLowerCase();
+        if (fullNameLower !== lowerName) {
+            const result = lookup(fullNameLower);
+            if (result) {
+                return result;
+            }
+        }
+
+        //a named type import shadows anything in the scope with the same name, so don't look any further when the name is one
+        const parts = lowerName.split('.');
+        const typeImport = this.typeImports.get(parts[0]);
+        if (typeImport) {
+            const targetFile = this.program?.getFile<BrsFile>(typeImport.destPath);
+            if (!isBrsFile(targetFile) || targetFile === this) {
+                return undefined;
+            }
+            parts[0] = typeImport.specifier.name.toLowerCase();
+            const statement = targetFile._cachedLookups?.[mapName].get(parts.join('.')) as T;
+            return statement ? { item: statement, file: targetFile } : undefined;
+        }
+
+        return lookup(lowerName);
     }
 
     /**

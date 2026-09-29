@@ -3041,6 +3041,31 @@ describe('BrsFile', () => {
 
         describe('shadowing', () => {
 
+            it('inlines a namespaced const that has the same name as a file-level const', async () => {
+                await testTranspile(`
+                    const LIMIT = "one"
+
+                    namespace Foo
+                        const LIMIT = 2
+                        sub main()
+                            print LIMIT
+                        end sub
+                    end namespace
+
+                    sub outer()
+                        print LIMIT
+                    end sub
+                `, `
+                    sub Foo_main()
+                        print 2
+                    end sub
+
+                    sub outer()
+                        print "one"
+                    end sub
+                `);
+            });
+
             it('does not add underscores when variable shadows namespace', async () => {
                 await testTranspile(`
                     namespace alpha

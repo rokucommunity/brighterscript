@@ -20,7 +20,7 @@ import { FloatType } from './types/FloatType';
 import { NamespaceType } from './types/NamespaceType';
 import { DoubleType } from './types/DoubleType';
 import { UnionType } from './types/UnionType';
-import { isBlock, isCallExpression, isForEachStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isNamespaceStatement, isPrintStatement, isTypeStatement } from './astUtils/reflection';
+import { isBlock, isCallExpression, isForEachStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isNamespaceStatement, isPrintStatement, isTypeImportScope, isTypeStatement } from './astUtils/reflection';
 import { ArrayType } from './types/ArrayType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { InterfaceType } from './types/InterfaceType';
@@ -649,6 +649,240 @@ describe('Scope', () => {
                     })
                 end sub
             `, 'trim', 'components/MainMenu.bs');
+        });
+
+        it('reports diagnostics in a file that is only ever `import type`d', () => {
+            //fileB is not in any scope, it is only referenced through a type import
+            program.setFile('components/lib/fileB.bs', `
+                import type { Nope } from "./missing.bs"
+
+                const ConstB = Nope
+            `);
+            program.setFile('source/main.bs', `
+                import type { ConstB } from "pkg:/components/lib/fileB.bs"
+
+                sub foo()
+                    print ConstB
+                end sub
+            `);
+            program.validate();
+            //the problem is reported where it is (fileB), not as `Cannot find name 'ConstB'` in main.bs (ConstB does exist)
+            expectDiagnostics(program, [
+                DiagnosticMessages.referencedFileDoesNotExist(),
+                DiagnosticMessages.cannotFindName('Nope')
+            ]);
+        });
+
+        it('reports type errors in a file that is only ever `import type`d', () => {
+            program.setFile('components/lib/fileB.bs', `
+                const ConstB = 1
+
+                sub bar()
+                    x as integer = "str"
+                end sub
+            `);
+            program.setFile('source/main.bs', `
+                import type { ConstB } from "pkg:/components/lib/fileB.bs"
+
+                sub foo()
+                    print ConstB
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+            ]);
+        });
+
+        it('gives a file that is only ever `import type`d a scope of its own, for as long as it needs one', () => {
+            program.setFile('components/types.bs', `
+                interface Options
+                    name as string
+                end interface
+            `);
+            const typesFile = program.getFile<BrsFile>('components/types.bs');
+            setupComponents(`
+                import type { Options } from "pkg:/components/types.bs"
+
+                sub init()
+                    options = { name: "a" } as Options
+                    print options.name
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(program.getScopesForFile(typesFile).map(x => isTypeImportScope(x))).to.eql([true]);
+
+            //the file joins a regular scope, so it no longer needs its own
+            program.setFile('components/Button.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Button" extends="Group">
+                    <script type="text/brighterscript" uri="Button.bs" />
+                    <script type="text/brighterscript" uri="types.bs" />
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(program.getScopesForFile(typesFile).map(x => x.name)).to.eql([s`components/Button.xml`]);
+
+            //back to being type-imported only
+            program.setFile('components/Button.xml', buttonXml);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(program.getScopesForFile(typesFile).map(x => isTypeImportScope(x))).to.eql([true]);
+
+            //nobody imports it anymore, so it is an unreferenced file like any other
+            program.setFile('components/MainMenu.bs', `
+                sub init()
+                end sub
+            `);
+            program.validate();
+            expect(program.getScopesForFile(typesFile)).to.eql([]);
+            expectDiagnostics(program, [
+                DiagnosticMessages.fileNotReferencedByAnyOtherFile()
+            ]);
+        });
+
+        it('revalidates files that use a const whose value comes from a type import when that target changes', () => {
+            program.setFile('components/lib/fileC.bs', `
+                const ConstC = "hello"
+            `);
+            program.setFile('source/fileB.bs', `
+                import type { ConstC } from "pkg:/components/lib/fileC.bs"
+
+                const ConstB = ConstC
+            `);
+            program.setFile('source/main.bs', `
+                sub foo()
+                    x as integer = ConstB
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+            ]);
+
+            program.removeFile(s`${rootDir}/components/lib/fileC.bs`);
+            program.setFile('components/lib/fileC.bs', `
+                const ConstC = 1
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            //and back again
+            program.setFile('components/lib/fileC.bs', `
+                const ConstC = "hello"
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+            ]);
+        });
+
+        it('reports something when the end of a scopeless type import chain is removed', () => {
+            program.setFile('components/lib/fileC.bs', `
+                const ConstC = "hello"
+            `);
+            //not in any scope
+            program.setFile('components/lib/fileB.bs', `
+                import type { ConstC } from "./fileC.bs"
+
+                const ConstB = ConstC
+            `);
+            program.setFile('source/main.bs', `
+                import type { ConstB } from "pkg:/components/lib/fileB.bs"
+
+                sub foo()
+                    print ConstB
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            program.removeFile(s`${rootDir}/components/lib/fileC.bs`);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.referencedFileDoesNotExist()
+            ]);
+        });
+
+        it('inlines the namespaced const when a type import has the same name', async () => {
+            program.setFile('components/lib/c.bs', `
+                const LIMIT = "one"
+            `);
+            //inside the namespace, `LIMIT` is the namespace's own const (as it is for the validator). Outside, it is the type import
+            await testTranspile(`
+                import type { LIMIT } from "pkg:/components/lib/c.bs"
+
+                namespace Foo
+                    const LIMIT = 2
+                    sub main()
+                        print LIMIT
+                    end sub
+                end namespace
+
+                sub outer()
+                    print LIMIT
+                end sub
+            `, `
+                'import type { LIMIT } from "pkg:/components/lib/c.bs"
+
+
+                sub Foo_main()
+                    print 2
+                end sub
+
+                sub outer()
+                    print "one"
+                end sub
+            `);
+        });
+
+        it('flags a type import whose local name collides with a declaration in the same file', () => {
+            program.setFile('components/lib/c.bs', `
+                const LIMIT = "one"
+                enum Kind
+                    a
+                end enum
+            `);
+            program.setFile('source/main.bs', `
+                import type { LIMIT, Kind as Shape } from "pkg:/components/lib/c.bs"
+
+                const LIMIT = 2
+
+                sub Shape()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.typeImportCollidesWithDeclaration('LIMIT', 'Const'),
+                DiagnosticMessages.typeImportCollidesWithDeclaration('Shape', 'Function')
+            ]);
+        });
+
+        it('reports a circular reference for consts that cycle through type imports', () => {
+            program.setFile('components/lib/x.bs', `
+                import type { B } from "./y.bs"
+
+                const A = B
+            `);
+            program.setFile('components/lib/y.bs', `
+                import type { A } from "./x.bs"
+
+                const B = A
+            `);
+            program.setFile('source/main.bs', `
+                import type { A } from "pkg:/components/lib/x.bs"
+
+                sub main()
+                    print A
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.circularReferenceDetected(['A', 'B', 'A']),
+                DiagnosticMessages.circularReferenceDetected(['B', 'A', 'B'])
+            ]);
         });
     });
 
@@ -3165,6 +3399,31 @@ describe('Scope', () => {
         });
 
         describe('revalidations', () => {
+            it('revalidates files that use a const whose value comes from a const in a changed file', () => {
+                program.setFile('source/fileC.bs', `
+                    const ConstC = "hello"
+                `);
+                program.setFile('source/fileB.bs', `
+                    const ConstB = ConstC
+                `);
+                program.setFile('source/main.bs', `
+                    sub foo()
+                        x as integer = ConstB
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
+
+                //main.bs does not use ConstC directly, but ConstB takes its type from it
+                program.setFile('source/fileC.bs', `
+                    const ConstC = 1
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
             it('revalidates dependent files when a file is changed', () => {
                 program.setFile('source/common.bs', `
                     function doThing() as string

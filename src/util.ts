@@ -3091,9 +3091,11 @@ export class Util {
 
         if (isNamespaceStatement(namespace)) {
             let namespaceHasSymbol = namespace.getSymbolTable().hasSymbol(symbolName, SymbolTypeFlag.runtime);
-            // check if the namespace has a symbol with the same name, but different definiton
-            if (namespaceHasSymbol && !this.symbolComesFromSameNode(symbolName, varData.definingNode, namespace.getSymbolTable())) {
-                return true;
+            if (namespaceHasSymbol) {
+                //the name resolves to a member of the namespace (a local variable or parameter would be a different node). A namespace
+                //member legitimately shadows a file-level declaration with the same name (i.e. a global const or a type import),
+                //so it is not "shadowed" in the sense that matters here: it can still be inlined
+                return !this.symbolComesFromSameNode(symbolName, varData.definingNode, namespace.getSymbolTable());
             }
         }
         const bodyTable = nodeWhereUsed.getRoot().getSymbolTable();

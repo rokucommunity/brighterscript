@@ -1,6 +1,6 @@
 import { createAssignmentStatement, createBlock, createDottedSetStatement, createIfStatement, createIndexedSetStatement, createToken } from '../../astUtils/creators';
 import type { Editor } from '../../astUtils/Editor';
-import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression, isAliasStatement, isCallExpression, isCallfuncExpression, isEnumType, isAssignmentStatement, isBlock, isBody, isDottedSetStatement, isGroupingExpression, isIndexedSetStatement, isAugmentedAssignmentStatement, isNamespaceStatement, isBrsFile } from '../../astUtils/reflection';
+import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression, isAliasStatement, isCallExpression, isCallfuncExpression, isEnumType, isAssignmentStatement, isBlock, isBody, isDottedSetStatement, isGroupingExpression, isIndexedSetStatement, isAugmentedAssignmentStatement, isNamespaceStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, OnPrepareFileEvent } from '../../interfaces';
@@ -271,80 +271,35 @@ export class BrsFilePreTranspileProcessor {
     }
 
     /**
-     * If the first part of `entityName` is a named type import in the context's file (`import type { Alpha as Beta } from "..."`),
-     * find the file it points at and the name to look for in that file (i.e. `beta.member` becomes `alpha.member`).
-     * @returns undefined when the name is not a type import. `file` is undefined when the imported file is not in the program
-     */
-    private getTypeImportTarget(entityName: string, context: ResolveContext): { file: BrsFile | undefined; fullNameLower: string } | undefined {
-        const parts = entityName.toLowerCase().split('.');
-        const typeImport = context.file.typeImports.get(parts[0]);
-        if (!typeImport) {
-            return undefined;
-        }
-        const targetFile = this.event.program.getFile<BrsFile>(typeImport.destPath);
-        parts[0] = typeImport.specifier.name.toLowerCase();
-        return {
-            file: isBrsFile(targetFile) && targetFile !== context.file ? targetFile : undefined,
-            fullNameLower: parts.join('.')
-        };
-    }
-
-    /**
-     * Look up a name in one file's cached statement map, first as a member of `containingNamespace` and then as a global name
-     */
-    private getFromFileMap<T>(map: Map<string, T>, entityName: string, containingNamespace: string | undefined): T | undefined {
-        const lowerName = entityName.toLowerCase();
-        const fullNameLower = util.getFullyQualifiedClassName(lowerName, containingNamespace)?.toLowerCase();
-        let result = map.get(fullNameLower);
-        if (!result && lowerName !== fullNameLower) {
-            result = map.get(lowerName);
-        }
-        return result;
-    }
-
-    /**
-     * Find the const with the given name, as seen from `context`. Named type imports in the context's file take precedence,
-     * then the context's scope. A file that is not in any scope (i.e. it is only ever `import type`d) falls back to its own consts.
+     * Find the const with the given name, as seen from `context` (see `BrsFile.findConstStatement` for the lookup order).
      * @returns the const and the context its value should be resolved in
      */
     private findConst(entityName: string, containingNamespace: string | undefined, context: ResolveContext): { statement: ConstStatement; context: ResolveContext } | undefined {
-        const typeImportTarget = this.getTypeImportTarget(entityName, context);
-        if (typeImportTarget) {
-            // eslint-disable-next-line @typescript-eslint/dot-notation
-            const statement = typeImportTarget.file?.['_cachedLookups'].constStatementMap.get(typeImportTarget.fullNameLower);
-            //a type import shadows anything else with the same name, so don't look any further
-            return statement ? { statement: statement, context: this.getContextForFile(typeImportTarget.file) } : undefined;
-        }
-        const link = context.scope?.getConstFileLink(entityName, containingNamespace);
+        const link = context.file.findConstStatement(entityName, containingNamespace, context.scope);
         if (link) {
-            return { statement: link.item, context: { file: link.file, scope: context.scope } };
-        }
-        if (!context.scope) {
-            // eslint-disable-next-line @typescript-eslint/dot-notation
-            const statement = this.getFromFileMap(context.file['_cachedLookups'].constStatementMap, entityName, containingNamespace);
-            if (statement) {
-                return { statement: statement, context: context };
-            }
+            return { statement: link.item, context: this.getContextForLinkedFile(link.file, context) };
         }
     }
 
     /**
-     * Find the enum with the given name, as seen from `context` (see `findConst` for the lookup order)
+     * Find the enum with the given name, as seen from `context` (see `BrsFile.findEnumStatement` for the lookup order)
      */
     private findEnum(entityName: string, containingNamespace: string | undefined, context: ResolveContext): EnumStatement | undefined {
-        const typeImportTarget = this.getTypeImportTarget(entityName, context);
-        if (typeImportTarget) {
-            // eslint-disable-next-line @typescript-eslint/dot-notation
-            return typeImportTarget.file?.['_cachedLookups'].enumStatementMap.get(typeImportTarget.fullNameLower);
+        return context.file.findEnumStatement(entityName, containingNamespace, context.scope)?.item;
+    }
+
+    /**
+     * Build the context for a const found in `file` while resolving names in `context`: the same scope when `file` is part of it,
+     * otherwise (the const came through a type import) the file's own first scope
+     */
+    private getContextForLinkedFile(file: BrsFile, context: ResolveContext): ResolveContext {
+        if (file === context.file) {
+            return context;
         }
-        const link = context.scope?.getEnumFileLink(entityName, containingNamespace);
-        if (link) {
-            return link.item;
+        if (context.scope?.hasFile(file)) {
+            return { file: file, scope: context.scope };
         }
-        if (!context.scope) {
-            // eslint-disable-next-line @typescript-eslint/dot-notation
-            return this.getFromFileMap(context.file['_cachedLookups'].enumStatementMap, entityName, containingNamespace);
-        }
+        return this.getContextForFile(file);
     }
 
     /**

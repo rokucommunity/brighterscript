@@ -1240,6 +1240,19 @@ export let DiagnosticMessages = {
         code: 'duplicate-type-import-name'
     }),
     /**
+     * @param name the local name of the type import
+     * @param kindName the friendly name of what else in the file has that name (i.e. `Const`, `Function`)
+     */
+    typeImportCollidesWithDeclaration: (name: string, kindName: string) => ({
+        message: `'${name}' is already declared in this file as a ${kindName?.toLowerCase() ?? 'symbol'}, so it cannot also be imported with \`import type\`. Rename one of them, or import it with \`as\``,
+        data: {
+            name: name,
+            kindName: kindName
+        },
+        severity: DiagnosticSeverity.Error,
+        code: 'type-import-collides-with-declaration'
+    }),
+    /**
      * @param filePath the path of the imported file, as written in the import statement
      */
     unnecessaryTypeImport: (filePath: string) => ({

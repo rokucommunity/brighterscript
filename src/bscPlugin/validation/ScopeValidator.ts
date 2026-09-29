@@ -481,6 +481,17 @@ export class ScopeValidator {
 
 
     /**
+     * Does this type chain start with a named type import (`import type { Name } from "..."`) whose name exists in the imported file?
+     * When it does, an unresolvable type here means the *value* of the imported symbol cannot be resolved (i.e. a const that points at
+     * something that does not exist). That problem is reported in the imported file itself, which is always validated (see
+     * `TypeImportScope`). Reporting `Cannot find name` here too would be misleading, because the name does exist
+     */
+    private isExistingTypeImport(file: BrsFile, typeChain: TypeChainEntry[]) {
+        const typeImport = file.typeImports.get(typeChain[0]?.name?.toLowerCase());
+        return typeImport ? file.getTypeImportTargetSymbols(typeImport).length > 0 : false;
+    }
+
+    /**
      * If this is the lhs of an assignment, we don't need to flag it as unresolved
      */
     private hasValidDeclaration(expression: Expression, exprType: BscType, definingNode?: AstNode) {
@@ -517,8 +528,12 @@ export class ScopeValidator {
         const followConstRef = (
             expression: Expression,
             namespace: string | undefined,
+            file: BrsFile,
             chain: ConstStatement[]
         ) => {
+            //a const reached through a type import lives in a file that is not part of this scope, so resolve the names
+            //in its value against that file's own scope instead
+            const fileScope = scope.hasFile(file) ? scope : this.event.program.getFirstScopeForFile(file);
             const parts = util.splitExpression(expression);
             const processedNames: string[] = [];
             for (const part of parts) {
@@ -526,7 +541,8 @@ export class ScopeValidator {
                     return;
                 }
                 processedNames.push(part.tokens.name?.text?.toLowerCase());
-                const link = scope.getConstFileLink(processedNames.join('.'), namespace);
+                //this follows named type imports too (`import type { Name } from "..."`), so cycles that span files are found
+                const link = file.findConstStatement(processedNames.join('.'), namespace, fileScope);
                 if (link) {
                     walkConst(link.item, link.file, chain);
                     return;
@@ -553,20 +569,20 @@ export class ScopeValidator {
             const value = constStatement.value;
             if (value) {
                 if (isVariableExpression(value) || isDottedGetExpression(value)) {
-                    followConstRef(value, innerNamespace, chain);
+                    followConstRef(value, innerNamespace, file, chain);
                 } else {
                     value.walk(createVisitor({
                         VariableExpression: (varExpr) => {
                             if (isDottedGetExpression(varExpr.parent)) {
                                 return;
                             }
-                            followConstRef(varExpr, innerNamespace, chain);
+                            followConstRef(varExpr, innerNamespace, file, chain);
                         },
                         DottedGetExpression: (dottedExpr) => {
                             if (isDottedGetExpression(dottedExpr.parent)) {
                                 return;
                             }
-                            followConstRef(dottedExpr, innerNamespace, chain);
+                            followConstRef(dottedExpr, innerNamespace, file, chain);
                         }
                     }), { walkMode: WalkMode.visitExpressionsRecursive });
                 }
@@ -1159,7 +1175,7 @@ export class ScopeValidator {
             });
         }
 
-        if (!this.isTypeKnown(exprType) && !hasValidDeclaration) {
+        if (!this.isTypeKnown(exprType) && !hasValidDeclaration && !this.isExistingTypeImport(file, typeChain)) {
             if (this.getNodeTypeWrapper(file, expression, { flags: oppositeSymbolType, isExistenceTest: true })?.isResolvable()) {
                 const oppoSiteTypeChain: TypeChainEntry[] = [];
                 const invalidlyUsedResolvedType = this.getNodeTypeWrapper(file, expression, { flags: oppositeSymbolType, typeChain: oppoSiteTypeChain, isExistenceTest: true });
@@ -1549,17 +1565,24 @@ export class ScopeValidator {
                 }
             }
             for (const typeImport of file.typeImports.values()) {
+                //the local name must not collide with something declared at the root of this file: the two would be indistinguishable
+                // eslint-disable-next-line no-bitwise
+                const localSymbols = file.parser.symbolTable.getSymbol(typeImport.specifier.localName, SymbolTypeFlag.runtime | SymbolTypeFlag.typetime, { ignoreParentsAndSiblings: true }) ?? [];
+                const collidingSymbol = localSymbols.find(symbol => !symbol.data?.isTypeImport);
+                if (collidingSymbol) {
+                    const definingNode = collidingSymbol.data?.definingNode;
+                    this.addMultiScopeDiagnostic({
+                        ...DiagnosticMessages.typeImportCollidesWithDeclaration(typeImport.specifier.localName, definingNode ? util.getAstNodeFriendlyName(definingNode) : undefined),
+                        location: util.createLocationFromFileRange(file, typeImport.specifier.location?.range)
+                    }, ScopeValidatorDiagnosticTag.Imports);
+                }
+
                 const targetFile = this.event.program.getFile<BrsFile>(typeImport.destPath);
                 if (!isBrsFile(targetFile)) {
                     //a missing file is already reported by validateScriptImportPaths
                     continue;
                 }
-                const nameParts = typeImport.specifier.name.split('.');
-                const memberName = nameParts.pop();
-                const namespaceName = nameParts.join('.');
-                const symbolTable = file.getTypeImportSymbolTable(typeImport.destPath, namespaceName);
-                // eslint-disable-next-line no-bitwise
-                const symbols = symbolTable?.getSymbol(memberName, SymbolTypeFlag.runtime | SymbolTypeFlag.typetime, { ignoreParentsAndSiblings: true }) ?? [];
+                const symbols = file.getTypeImportTargetSymbols(typeImport);
                 if (symbols.length === 0) {
                     this.addMultiScopeDiagnostic({
                         ...DiagnosticMessages.cannotFindTypeImport(typeImport.specifier.name, typeImport.statement.filePath),
