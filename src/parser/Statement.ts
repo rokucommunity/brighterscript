@@ -17,7 +17,7 @@ import { createDottedIdentifier, createIdentifier, createInvalidLiteral, createM
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { SymbolTable } from '../SymbolTable';
-import type { Expression } from './AstNode';
+import type { AstNode, Expression } from './AstNode';
 import { AstNodeKind, Statement } from './AstNode';
 import { ClassType } from '../types/ClassType';
 import { EnumMemberType, EnumType } from '../types/EnumType';
@@ -426,7 +426,7 @@ export class Block extends Statement {
     }
     private _location: Location;
 
-    transpile(state: BrsTranspileState) {
+    transpile(state: BrsTranspileState): TranspileResult {
         state.blockDepth++;
         let results = [] as TranspileResult;
         for (let i = 0; i < this.statements.length; i++) {
@@ -979,7 +979,7 @@ export class PrintStatement extends Statement {
                 print: util.cloneToken(this.tokens.print),
                 expressions: this.expressions?.map(e => e?.clone())
             }),
-            ['expressions' as any]
+            ['expressions']
         );
     }
 }
@@ -3028,7 +3028,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
     public getConditionalCompileConstructors(): MethodStatement[] {
         return this.methods.filter((method) => {
             return method.tokens.name?.text?.toLowerCase() === 'new' &&
-                !!method.findAncestor((node, cancellationToken) => {
+                !!method.findAncestor((node: AstNode, cancellationToken) => {
                     if (node === this) {
                         cancellationToken.cancel();
                         return false;
