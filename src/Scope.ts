@@ -812,6 +812,8 @@ export class Scope {
     }
 
     protected logDebug(...args: any[]) {
+        //variadic passthrough to the logger; `args` is intentionally `any[]`
+        //eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         this.program.logger.debug(this._debugLogComponentName, ...args);
     }
     private _debugLogComponentName: string;
