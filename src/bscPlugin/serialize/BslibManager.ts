@@ -8,7 +8,7 @@ import type { Editor } from '../../astUtils/Editor';
 const bslibSrcPath = s`${require.resolve('@rokucommunity/bslib')}/dist/source/bslib.brs`;
 export class BslibManager {
 
-    private cache = new Cache();
+    private cache = new Cache<string, BrsFile>();
 
     public addBslibFileIfMissing(event: BeforeBuildProgramEvent) {
         //is bslib present in the program? If not, add it now just for this build cycle
