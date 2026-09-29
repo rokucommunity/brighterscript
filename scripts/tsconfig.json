@@ -2,6 +2,13 @@
     "compilerOptions": {
         "module": "CommonJS",
         "target": "ES2017",
-        "resolveJsonModule": true
+        "resolveJsonModule": true,
+        "lib": [
+            "es2017",
+            "es2019.array",
+            "es2021.promise",
+            "es2022.error",
+            "dom"
+        ]
     }
 }

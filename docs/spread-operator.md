@@ -26,6 +26,7 @@ sub main()
     ]
     result.append(defaults)
     result.push(4)
+    ' result is [0, 1, 2, 3, 4]
 end sub
 ```
 
