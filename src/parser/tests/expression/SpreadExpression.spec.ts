@@ -275,8 +275,9 @@ describe('SpreadExpression', () => {
             program.setFile('source/main.bs', `
                 sub main()
                     alpha = []
+                    alphaAA = {}
                     result = { a: [...alpha] }
-                    other = { ...alpha, b: { ...alpha } }
+                    other = { ...alphaAA, b: { ...alphaAA } }
                 end sub
             `);
             program.validate();
@@ -316,6 +317,150 @@ describe('SpreadExpression', () => {
                 DiagnosticMessages.spreadOperatorNotAllowedHere()
             ]);
         });
+        describe('spread value type', () => {
+            it('flags spreading an integer into an AA literal', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        a = { ...5 }
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.spreadValueTypeMismatch('integer', 'associative array')
+                ]);
+            });
+
+            it('flags spreading an AA into an array literal', () => {
+                program.setFile('source/main.bs', `
+                    sub main(someAA as roAssociativeArray)
+                        b = [ ...someAA ]
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.spreadValueTypeMismatch('roAssociativeArray', 'array')
+                ]);
+            });
+
+            it('flags spreading invalid', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        c = { ...invalid }
+                        d = [ ...invalid ]
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.spreadValueTypeMismatch('invalid', 'associative array'),
+                    DiagnosticMessages.spreadValueTypeMismatch('invalid', 'array')
+                ]);
+            });
+
+            it('flags spreading a node into an AA literal', () => {
+                program.setFile('source/main.bs', `
+                    sub main(node as roSGNode)
+                        d = { ...node }
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.spreadValueTypeMismatch('roSGNodeNode', 'associative array')
+                ]);
+            });
+
+            it('flags spreading an array into an AA literal', () => {
+                program.setFile('source/main.bs', `
+                    sub main(someArray as integer[])
+                        e = { ...someArray }
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.spreadValueTypeMismatch('Array<integer>', 'associative array')
+                ]);
+            });
+
+            it('flags spreading primitives and interfaces into an array literal', () => {
+                program.setFile('source/main.bs', `
+                    interface Thing
+                        color as string
+                    end interface
+                    sub main(name as string, thing as Thing)
+                        f = [ ...name ]
+                        g = [ ...thing ]
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.spreadValueTypeMismatch('string', 'array'),
+                    DiagnosticMessages.spreadValueTypeMismatch('Thing', 'array')
+                ]);
+            });
+
+            it('allows dynamic, object, and unresolvable values', () => {
+                program.setFile('source/main.bs', `
+                    sub main(dyn as dynamic, obj as object)
+                        a = { ...dyn }
+                        b = [ ...dyn ]
+                        c = { ...obj }
+                        d = [ ...obj ]
+                        e = { ...m.config }
+                        f = [ ...m.list ]
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows correctly typed array and AA values', () => {
+                program.setFile('source/main.bs', `
+                    interface Thing
+                        color as string
+                    end interface
+                    class Widget
+                        size = 1
+                    end class
+                    sub main(someAA as roAssociativeArray, someArray as integer[], thing as Thing, widgetInstance as Widget, roListValue as roList, arr as roArray)
+                        a = { ...someAA }
+                        b = [ ...someArray ]
+                        c = { ...thing }
+                        d = { ...widgetInstance }
+                        e = [ ...roListValue ]
+                        f = [ ...arr ]
+                        g = [ ...[1, 2] ]
+                        h = { ...{ a: 1 } }
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows a union that could hold an allowed value', () => {
+                program.setFile('source/main.bs', `
+                    sub main(flag as boolean)
+                        x = [1]
+                        if flag then x = {}
+                        y = { ...x }
+                        z = [ ...x ]
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('does not flag AA members that share a name with a built-in method', () => {
+                program.setFile('components/Comp.xml', `<?xml version="1.0" encoding="utf-8" ?><component name="Comp" extends="Group"><script uri="Comp.bs"/></component>`);
+                program.setFile('components/Comp.bs', `
+                    sub init()
+                        m.items = [ ...m.items, 1 ]
+                        m.count = { ...m.count }
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+        });
+
         it('includes the members of a spread AA literal in the inferred type', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
                 interface Thing

@@ -88,7 +88,7 @@ The literal is built in a temporary local variable and assigned to the target at
 - **The target is not a plain local variable** (`m.items = [...]`, `store["items"] = [...]`). Statements against a local are 10-40% faster than repeatedly re-evaluating `m.items`.
 - **An element after the spread reads the target itself** (`list = [...list, 4]`), so the read still sees the original value.
 
-The temporary is always named `__bsc_tmp_spread`.
+The temporary is always named `__bsc_tmp_spread`. Because the literal is built before the final assignment, any expression in the target itself (`store[nextKey()] = [...a, f()]`) is evaluated after the trailing elements.
 
 ```brightscript
 __bsc_tmp_spread = []
@@ -98,6 +98,21 @@ m.items = __bsc_tmp_spread
 ```
 
 These choices were measured on device with the `SpreadTrailing*` suites in [bsbench](https://github.com/rokucommunity/bsbench). Literals without a spread transpile exactly as they always have.
+
+## Type checking
+When the compiler knows the type of the value being spread, it checks that `.append()` can take it: an array literal needs an array-like value and an associative array literal needs an AA-like value (an AA, a user-defined interface, or a class instance). Anything else reports a `spread-value-type-mismatch` diagnostic:
+
+```brighterscript
+sub main(node as roSGNode, items as integer[], config as roAssociativeArray)
+    a = { ...5 }        ' Cannot spread 'integer' into an associative array literal
+    b = [ ...config ]   ' Cannot spread 'roAssociativeArray' into an array literal
+    c = { ...invalid }  ' Cannot spread 'invalid' into an associative array literal
+    d = { ...node }     ' Cannot spread 'roSGNode' into an associative array literal
+    e = { ...items }    ' Cannot spread 'Array<integer>' into an associative array literal
+end sub
+```
+
+Values typed `dynamic` or `object`, and values whose type cannot be resolved, are not checked. Note that unlike JavaScript, spreading `invalid` is not a no-op: it becomes `.append(invalid)` at runtime, so the compiler flags it.
 
 ## Limitations
 - **The literal must be the direct right-hand side of an assignment.** Spread is supported when the array or AA literal is assigned to a variable (`x = [...a]`), a property (`m.x = [...a]`), or an index (`m["x"] = [...a]`). Using it anywhere else — a function argument, a `return` value, a nested literal, an augmented assignment such as `x += [...a]` — reports a diagnostic. This keeps the transpiled output to simple statements rather than wrapping the literal in a function.
