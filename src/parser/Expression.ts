@@ -10,14 +10,15 @@ import { ParseMode } from './Parser';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
-import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import type { GetTypeOptions, TranspileResult, TypedefProvider, ExtraSymbolData } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import type { AstNode } from './AstNode';
 import { AstNodeKind, Expression } from './AstNode';
+import type { BscSymbol } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
 import { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
@@ -1486,6 +1487,14 @@ export class AALiteralExpression extends Expression {
     getType(options: GetTypeOptions): BscType {
         const resultType = new AssociativeArrayType();
         resultType.addBuiltInInterfaces();
+        //once a spread is involved, a later key replaces an earlier one (as it does at runtime) instead of widening it
+        let sawSpread = false;
+        const setMember = (name: string, data: ExtraSymbolData, type: BscType) => {
+            if (sawSpread) {
+                resultType.getMemberTable().removeSymbol(name);
+            }
+            resultType.addMember(name, data, type, SymbolTypeFlag.runtime);
+        };
         for (const element of this.elements) {
             if (isAAMemberExpression(element)) {
                 let memberName = element.tokens?.key?.text ?? '';
@@ -1493,7 +1502,21 @@ export class AALiteralExpression extends Expression {
                     memberName = memberName.replace(/"/g, ''); // remove quotes if it was a stringLiteral
                 }
                 if (memberName) {
-                    resultType.addMember(memberName, { definingNode: element }, element.getType(options), SymbolTypeFlag.runtime);
+                    setMember(memberName, { definingNode: element }, element.getType(options));
+                }
+            } else if (isSpreadExpression(element)) {
+                //a spread contributes the known members of the AA or interface being spread
+                sawSpread = true;
+                const spreadType = element.getType(options);
+                let members: BscSymbol[] = [];
+                if (isAssociativeArrayType(spreadType)) {
+                    //own members only: the built-in roAssociativeArray methods already come from addBuiltInInterfaces
+                    members = spreadType.getMemberTable().getOwnSymbols(SymbolTypeFlag.runtime);
+                } else if (isInterfaceType(spreadType)) {
+                    members = spreadType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
+                }
+                for (const member of members) {
+                    setMember(member.name, member.data, member.type);
                 }
             }
         }

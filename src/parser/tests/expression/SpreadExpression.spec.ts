@@ -5,9 +5,11 @@ import { Parser, ParseMode } from '../../Parser';
 import { Program } from '../../../Program';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
-import { isArrayLiteralExpression, isSpreadExpression, isAALiteralExpression } from '../../../astUtils/reflection';
+import { isArrayLiteralExpression, isSpreadExpression, isAALiteralExpression, isAssignmentStatement } from '../../../astUtils/reflection';
 import type { AssignmentStatement } from '../../Statement';
 import type { AALiteralExpression, ArrayLiteralExpression } from '../../Expression';
+import type { BrsFile } from '../../../files/BrsFile';
+import { SymbolTypeFlag } from '../../../SymbolTypeFlag';
 
 describe('SpreadExpression', () => {
     function parseFirstAssignmentValue(source: string, mode = ParseMode.BrighterScript) {
@@ -313,6 +315,75 @@ describe('SpreadExpression', () => {
             expectDiagnosticsIncludes(program, [
                 DiagnosticMessages.spreadOperatorNotAllowedHere()
             ]);
+        });
+        it('includes the members of a spread AA literal in the inferred type', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                interface Thing
+                    color as string
+                    size as integer
+                end interface
+                sub take(t as Thing)
+                end sub
+                sub main()
+                    defaults = { color: "red", size: 1 }
+                    d = { ...defaults, size: 2 }
+                    take(d)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const dAssignment = file.ast.findChildren<AssignmentStatement>(isAssignmentStatement).find(x => x.tokens.name.text === 'd');
+            const dType = dAssignment.value.getType({ flags: SymbolTypeFlag.runtime });
+            expect(dType.getMemberTable().getOwnSymbols(SymbolTypeFlag.runtime).map(x => x.name).sort()).to.eql(['color', 'size']);
+            expect(dType.getMemberType('color', { flags: SymbolTypeFlag.runtime }).toString()).to.equal('string');
+            expect(dType.getMemberType('size', { flags: SymbolTypeFlag.runtime }).toString()).to.equal('integer');
+        });
+
+        it('includes the members of a spread interface-typed value in the inferred type', () => {
+            program.setFile('source/main.bs', `
+                interface Thing
+                    color as string
+                    size as integer
+                end interface
+                sub take(t as Thing)
+                end sub
+                sub main(defaults as Thing)
+                    d = { ...defaults, size: 2 }
+                    take(d)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('lets a member after a spread replace the spread member type', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    defaults = { size: 1 }
+                    d = { ...defaults, size: "large" }
+                    e = { size: "large", ...defaults }
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const assignments = file.ast.findChildren<AssignmentStatement>(isAssignmentStatement);
+            const dType = assignments.find(x => x.tokens.name.text === 'd').value.getType({ flags: SymbolTypeFlag.runtime });
+            expect(dType.getMemberType('size', { flags: SymbolTypeFlag.runtime }).toString()).to.equal('string');
+            const eType = assignments.find(x => x.tokens.name.text === 'e').value.getType({ flags: SymbolTypeFlag.runtime });
+            expect(eType.getMemberType('size', { flags: SymbolTypeFlag.runtime }).toString()).to.equal('integer');
+        });
+
+        it('does not add members when the spread value type is unknown', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main(other as dynamic)
+                    d = { ...other, size: 2 }
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const dAssignment = file.ast.findChildren<AssignmentStatement>(isAssignmentStatement).find(x => x.tokens.name.text === 'd');
+            const dType = dAssignment.value.getType({ flags: SymbolTypeFlag.runtime });
+            expect(dType.getMemberTable().getOwnSymbols(SymbolTypeFlag.runtime).map(x => x.name)).to.eql(['size']);
         });
     });
 
@@ -620,6 +691,175 @@ describe('SpreadExpression', () => {
                     else
                         result.b = 2
                     end if
+                end sub
+            `);
+        });
+
+        it('moves a comment before a trailing array element above its push statement', async () => {
+            await testTranspile(`
+                sub main()
+                    a = [1]
+                    q = [ ...a
+                        ' note
+                        1
+                    ]
+                end sub
+            `, `
+                sub main()
+                    a = [
+                        1
+                    ]
+                    q = []
+                    q.append(a)
+                    ' note
+                    q.push(1)
+                end sub
+            `);
+        });
+
+        it('moves a comment before a trailing AA member above its set statement', async () => {
+            await testTranspile(`
+                sub main()
+                    a = {}
+                    q = {
+                        ...a
+                        ' first
+                        foo: 1
+                        ' second
+                        "bar": 2
+                    }
+                end sub
+            `, `
+                sub main()
+                    a = {}
+                    q = {}
+                    q.append(a)
+                    ' first
+                    q.foo = 1
+                    ' second
+                    q["bar"] = 2
+                end sub
+            `);
+        });
+
+        it('keeps a same-line comment after a spread out of the next statement', async () => {
+            await testTranspile(`
+                sub main()
+                    a = {}
+                    q = { ...a ' c
+                        foo: 1 }
+                end sub
+            `, `
+                sub main()
+                    a = {}
+                    q = {}
+                    q.append(a) ' c
+                    q.foo = 1
+                end sub
+            `);
+        });
+
+        it('moves a comment before a spread above its append statement', async () => {
+            await testTranspile(`
+                sub main()
+                    a = [1]
+                    b = [2]
+                    q = [
+                        ...a
+                        ' merge b too
+                        ...b
+                    ]
+                end sub
+            `, `
+                sub main()
+                    a = [
+                        1
+                    ]
+                    b = [
+                        2
+                    ]
+                    q = []
+                    q.append(a)
+                    ' merge b too
+                    q.append(b)
+                end sub
+            `);
+        });
+
+        it('preserves the case of quoted keys after a spread', async () => {
+            await testTranspile(`
+                sub main()
+                    x = {}
+                    r = { ...x, "userId": 1, userName: 2 }
+                end sub
+            `, `
+                sub main()
+                    x = {}
+                    r = {}
+                    r.append(x)
+                    r["userId"] = 1
+                    r.userName = 2
+                end sub
+            `);
+        });
+
+        it('builds in a temp when a spread of the target follows a leading array element', async () => {
+            await testTranspile(`
+                sub main()
+                    list = [1]
+                    list = [0, ...list]
+                end sub
+            `, `
+                sub main()
+                    list = [
+                        1
+                    ]
+                    __bsc_tmp_spread = [
+                        0
+                    ]
+                    __bsc_tmp_spread.append(list)
+                    list = __bsc_tmp_spread
+                end sub
+            `);
+        });
+
+        it('builds in a temp when a spread of the target follows a leading AA member', async () => {
+            await testTranspile(`
+                sub main()
+                    aa = { b: 2 }
+                    aa = { a: 1, ...aa }
+                end sub
+            `, `
+                sub main()
+                    aa = {
+                        b: 2
+                    }
+                    __bsc_tmp_spread = {
+                        a: 1
+                    }
+                    __bsc_tmp_spread.append(aa)
+                    aa = __bsc_tmp_spread
+                end sub
+            `);
+        });
+
+        it('builds in a temp when a spread reads a property of the target', async () => {
+            await testTranspile(`
+                sub main()
+                    aa = { inner: { b: 2 } }
+                    aa = { ...aa.inner, x: 1 }
+                end sub
+            `, `
+                sub main()
+                    aa = {
+                        inner: {
+                            b: 2
+                        }
+                    }
+                    __bsc_tmp_spread = {}
+                    __bsc_tmp_spread.append(aa.inner)
+                    __bsc_tmp_spread.x = 1
+                    aa = __bsc_tmp_spread
                 end sub
             `);
         });
