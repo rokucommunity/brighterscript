@@ -1417,23 +1417,29 @@ export class AALiteralExpression extends Expression {
     public readonly location: Location | undefined;
 
     transpile(state: BrsTranspileState) {
-        //spread members are lowered to statements before transpile; any left over were already flagged by validation
-        const members = this.elements.filter(e => !isSpreadExpression(e)) as Array<AAMemberExpression | AAIndexedMemberExpression>;
         let result: TranspileResult = [];
         //open curly
         result.push(
             state.transpileToken(this.tokens.open, '{')
         );
-        let hasChildren = members.length > 0;
-        //add newline if the object has children and the first child isn't a comment starting on the same line as opening curly
-        if (hasChildren && !util.isLeadingCommentOnSameLine(this.tokens.open, members[0])) {
-            result.push('\n');
-        }
         state.blockDepth++;
-        for (let i = 0; i < members.length; i++) {
-            let element = members[i];
-            let previousElement = members[i - 1];
-            let nextElement = members[i + 1];
+        //the most recently transpiled member (spread members are skipped, so this is not necessarily `elements[i - 1]`)
+        let previousElement: AAMemberExpression | AAIndexedMemberExpression | undefined;
+        for (const element of this.elements) {
+            //spread members are lowered to statements before transpile; any left over were already flagged by validation
+            if (isSpreadExpression(element)) {
+                continue;
+            }
+
+            if (!previousElement) {
+                //add newline if the first child isn't a comment starting on the same line as opening curly
+                if (!util.isLeadingCommentOnSameLine(this.tokens.open, element)) {
+                    result.push('\n');
+                }
+            } else if (!util.isLeadingCommentOnSameLine(previousElement, element)) {
+                //add a newline between members (skipped when this member is a same-line comment)
+                result.push('\n');
+            }
 
             //don't indent if comment is same-line
             if (util.isLeadingCommentOnSameLine(this.tokens.open, element) ||
@@ -1461,16 +1467,12 @@ export class AALiteralExpression extends Expression {
             //value
             result.push(...element.value.transpile(state));
 
-            //if next element is a same-line comment, skip the newline
-            if (nextElement && !util.isLeadingCommentOnSameLine(element, nextElement)) {
-                //add a newline between statements
-                result.push('\n');
-            }
+            previousElement = element;
         }
         state.blockDepth--;
 
-        const lastElement = members[members.length - 1] ?? this.tokens.open;
-        result.push(...state.transpileEndBlockToken(lastElement, this.tokens.close, '}', hasChildren));
+        const hasChildren = !!previousElement;
+        result.push(...state.transpileEndBlockToken(previousElement ?? this.tokens.open, this.tokens.close, '}', hasChildren));
 
         return result;
     }
