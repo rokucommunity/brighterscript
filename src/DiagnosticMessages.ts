@@ -1216,11 +1216,6 @@ export let DiagnosticMessages = {
         message: `Spread operator is only supported in array and associative array literals assigned directly to a variable, property, or index`,
         severity: DiagnosticSeverity.Error,
         code: 'spread-operator-not-allowed-here'
-    }),
-    spreadOperatorMustBeAdjacent: () => ({
-        message: `Spread operator '...' must be immediately followed by its operand, with no whitespace in between`,
-        severity: DiagnosticSeverity.Error,
-        code: 'spread-operator-must-be-adjacent'
     })
 };
 export const defaultMaximumTruncationLength = 160;

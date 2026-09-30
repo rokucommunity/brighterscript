@@ -113,7 +113,7 @@ export class BrsFilePreTranspileProcessor {
             //Build into a local temp and assign it to the real target at the end. Two reasons:
             // - `m.list = [...]`: every follow-up statement would re-evaluate `m.list`; a local is 10-40% faster (bsbench)
             // - `list = [...list, 4]`: assigning the trimmed literal first would clobber `list` before we read it
-            const tmpName = '__bsc_tmp';
+            const tmpName = '__bsc_tmp_spread';
             const createTarget = () => createVariableExpression(tmpName, literal.location);
             statements = [
                 createAssignmentStatement({ name: createIdentifier(tmpName, literal.location), value: literal }),

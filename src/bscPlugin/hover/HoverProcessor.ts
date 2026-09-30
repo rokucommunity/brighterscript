@@ -189,7 +189,7 @@ export class HoverProcessor {
                 }
                 const useCustomTypeHover = isInTypeExpression || expression?.findAncestor(isNewExpression);
                 let hoverContent = '';
-                let descriptionNode;
+                let descriptionNode: AstNode | undefined;
                 if (useCustomTypeHover && (isInheritableType(exprType) || isTypeStatementType(exprType))) {
                     hoverContent = this.getCustomTypeHover(exprType, extraData);
                 } else if (isMemberField(expression)) {

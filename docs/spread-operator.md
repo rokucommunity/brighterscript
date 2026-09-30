@@ -26,6 +26,7 @@ sub main()
     ]
     result.append(defaults)
     result.push(4)
+    ' result is [0, 1, 2, 3, 4]
 end sub
 ```
 
@@ -87,17 +88,18 @@ The literal is built in a temporary local variable and assigned to the target at
 - **The target is not a plain local variable** (`m.items = [...]`, `store["items"] = [...]`). Statements against a local are 10-40% faster than repeatedly re-evaluating `m.items`.
 - **An element after the spread reads the target itself** (`list = [...list, 4]`), so the read still sees the original value.
 
+The temporary is always named `__bsc_tmp_spread`.
+
 ```brightscript
-__bsc_tmp = []
-__bsc_tmp.append(m.items)
-__bsc_tmp.push(item)
-m.items = __bsc_tmp
+__bsc_tmp_spread = []
+__bsc_tmp_spread.append(m.items)
+__bsc_tmp_spread.push(item)
+m.items = __bsc_tmp_spread
 ```
 
 These choices were measured on device with the `SpreadTrailing*` suites in [bsbench](https://github.com/rokucommunity/bsbench). Literals without a spread transpile exactly as they always have.
 
 ## Limitations
 - **The literal must be the direct right-hand side of an assignment.** Spread is supported when the array or AA literal is assigned to a variable (`x = [...a]`), a property (`m.x = [...a]`), or an index (`m["x"] = [...a]`). Using it anywhere else — a function argument, a `return` value, a nested literal, an augmented assignment such as `x += [...a]` — reports a diagnostic. This keeps the transpiled output to simple statements rather than wrapping the literal in a function.
-- **`...` must be directly attached to its operand.** Write `[...items]`, not `[... items]`. Whitespace or a newline between `...` and the expression it spreads reports a diagnostic.
 - **Function call spread is not supported.** You cannot use `...` to expand an array into function arguments (e.g., `someFunc(...args)`). BrightScript has no mechanism for dynamically invoking a function with a variable number of arguments.
 - **Only available in BrighterScript (`.bs`) files.** Using `...` in a `.brs` file produces a "spread operator is not supported in BrightScript files" diagnostic.

@@ -381,7 +381,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         return results;
     }
 
-    getTypedef(state: BrsTranspileState) {
+    getTypedef(state: BrsTranspileState): TranspileResult {
         let results = [
             new SourceNode(1, 0, null, [
                 //'function'|'sub'

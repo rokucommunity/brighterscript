@@ -509,7 +509,7 @@ export class BrsFileValidator {
      */
     private validateDeclarationLocations(statement: Statement, keyword: string, rangeFactory?: () => (Range | undefined)) {
         //if nested inside a namespace, or defined at the root of the AST (i.e. in a body that has no parent)
-        const isOkDeclarationLocation = (parentNode) => {
+        const isOkDeclarationLocation = (parentNode: AstNode | undefined) => {
             return isNamespaceStatement(parentNode?.parent) || (isBody(parentNode) && !parentNode?.parent);
         };
         if (isOkDeclarationLocation(statement.parent)) {

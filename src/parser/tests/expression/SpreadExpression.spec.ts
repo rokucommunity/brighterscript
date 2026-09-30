@@ -90,7 +90,7 @@ describe('SpreadExpression', () => {
         });
     });
 
-    describe('parser - adjacency', () => {
+    describe('parser - whitespace after ...', () => {
         it('allows spread when the operand is directly next to ...', () => {
             let { value, diagnostics } = parseFirstAssignmentValue(`
                 sub main()
@@ -101,70 +101,39 @@ describe('SpreadExpression', () => {
             expect((value as ArrayLiteralExpression).elements).to.have.lengthOf(3);
         });
 
-        it('flags whitespace between ... and its operand in an array literal', () => {
+        it('allows whitespace between ... and its operand in an array literal', () => {
             let { value, diagnostics } = parseFirstAssignmentValue(`
                 sub main()
-                    result = [... arr]
+                    result = [... arr, ...  m.list]
                 end sub
             `);
-            expectDiagnostics(diagnostics, [
-                DiagnosticMessages.spreadOperatorMustBeAdjacent()
-            ]);
-            //still parsed as a spread so downstream tooling keeps working
+            expectZeroDiagnostics(diagnostics);
             let arrayLit = value as ArrayLiteralExpression;
-            expect(arrayLit.elements).to.have.lengthOf(1);
+            expect(arrayLit.elements).to.have.lengthOf(2);
             expect(isSpreadExpression(arrayLit.elements[0])).to.be.true;
+            expect(isSpreadExpression(arrayLit.elements[1])).to.be.true;
         });
 
-        it('flags whitespace between ... and its operand in an AA literal', () => {
+        it('allows whitespace between ... and its operand in an AA literal', () => {
             let { value, diagnostics } = parseFirstAssignmentValue(`
                 sub main()
                     result = {... other}
                 end sub
             `);
-            expectDiagnostics(diagnostics, [
-                DiagnosticMessages.spreadOperatorMustBeAdjacent()
-            ]);
+            expectZeroDiagnostics(diagnostics);
             let aaLit = value as AALiteralExpression;
             expect(aaLit.elements).to.have.lengthOf(1);
             expect(isSpreadExpression(aaLit.elements[0])).to.be.true;
         });
 
-        it('flags a tab between ... and its operand', () => {
-            let { diagnostics } = parseFirstAssignmentValue(`
+        it('allows a tab between ... and its operand', () => {
+            let { value, diagnostics } = parseFirstAssignmentValue(`
                 sub main()
                     result = [...\tarr]
                 end sub
             `);
-            expectDiagnostics(diagnostics, [
-                DiagnosticMessages.spreadOperatorMustBeAdjacent()
-            ]);
-        });
-
-        it('flags a newline between ... and its operand', () => {
-            let { diagnostics } = parseFirstAssignmentValue(`
-                sub main()
-                    result = [
-                        ...
-                        arr
-                    ]
-                end sub
-            `);
-            expectDiagnosticsIncludes(diagnostics, [
-                DiagnosticMessages.spreadOperatorMustBeAdjacent()
-            ]);
-        });
-
-        it('reports the diagnostic spanning ... through the operand start', () => {
-            let { diagnostics } = parseFirstAssignmentValue(`
-                sub main()
-                    result = [...  arr]
-                end sub
-            `);
-            expect(diagnostics).to.have.lengthOf(1);
-            let range = diagnostics[0].location.range;
-            expect(range.start.character).to.equal(30);
-            expect(range.end.character).to.equal(38);
+            expectZeroDiagnostics(diagnostics);
+            expect(isSpreadExpression((value as ArrayLiteralExpression).elements[0])).to.be.true;
         });
     });
 
@@ -278,6 +247,57 @@ describe('SpreadExpression', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
+                DiagnosticMessages.spreadOperatorNotAllowedHere()
+            ]);
+        });
+
+        it('flags only the inner spread when nested inside a valid outer spread', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    alpha = []
+                    beta = []
+                    charlie = [...alpha, [1, ...beta]]
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.spreadOperatorNotAllowedHere()
+            ]);
+            //the diagnostic points at `...beta`, not the (valid) outer `...alpha`
+            const range = program.getDiagnostics()[0].location.range;
+            expect(range.start.line).to.equal(4);
+            expect(range.start.character).to.equal(45);
+        });
+
+        it('flags spread in a nested AA member', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    alpha = []
+                    result = { a: [...alpha] }
+                    other = { ...alpha, b: { ...alpha } }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.spreadOperatorNotAllowedHere(),
+                DiagnosticMessages.spreadOperatorNotAllowedHere()
+            ]);
+        });
+
+        it('flags spread in a function argument when the call is assigned to a variable', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    alpha = []
+                    charlie = callFunction([...alpha])
+                    m.delta = callFunction({...alpha})
+                end sub
+                function callFunction(value)
+                    return value
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.spreadOperatorNotAllowedHere(),
                 DiagnosticMessages.spreadOperatorNotAllowedHere()
             ]);
         });
@@ -506,9 +526,9 @@ describe('SpreadExpression', () => {
                     arr = [
                         1
                     ]
-                    __bsc_tmp = []
-                    __bsc_tmp.append(arr)
-                    m.list = __bsc_tmp
+                    __bsc_tmp_spread = []
+                    __bsc_tmp_spread.append(arr)
+                    m.list = __bsc_tmp_spread
                 end sub
             `);
         });
@@ -524,9 +544,9 @@ describe('SpreadExpression', () => {
                     arr = [
                         1
                     ]
-                    __bsc_tmp = []
-                    __bsc_tmp.append(arr)
-                    m["list"] = __bsc_tmp
+                    __bsc_tmp_spread = []
+                    __bsc_tmp_spread.append(arr)
+                    m["list"] = __bsc_tmp_spread
                 end sub
             `);
         });
@@ -542,10 +562,10 @@ describe('SpreadExpression', () => {
                     list = [
                         1
                     ]
-                    __bsc_tmp = []
-                    __bsc_tmp.append(list)
-                    __bsc_tmp.push(4)
-                    list = __bsc_tmp
+                    __bsc_tmp_spread = []
+                    __bsc_tmp_spread.append(list)
+                    __bsc_tmp_spread.push(4)
+                    list = __bsc_tmp_spread
                 end sub
             `);
         });
@@ -557,10 +577,10 @@ describe('SpreadExpression', () => {
                 end sub
             `, `
                 sub main()
-                    __bsc_tmp = []
-                    __bsc_tmp.append(m.list)
-                    __bsc_tmp.push(4)
-                    m.list = __bsc_tmp
+                    __bsc_tmp_spread = []
+                    __bsc_tmp_spread.append(m.list)
+                    __bsc_tmp_spread.push(4)
+                    m.list = __bsc_tmp_spread
                 end sub
             `);
         });
