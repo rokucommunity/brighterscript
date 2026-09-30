@@ -88,7 +88,7 @@ The literal is built in a temporary local variable and assigned to the target at
 - **The target is not a plain local variable** (`m.items = [...]`, `store["items"] = [...]`). Statements against a local are 10-40% faster than repeatedly re-evaluating `m.items`.
 - **An element after the spread reads the target itself** (`list = [...list, 4]`), so the read still sees the original value.
 
-The temporary is always named `__bsc_tmp_spread`. Because the literal is built before the final assignment, any expression in the target itself (`store[nextKey()] = [...a, f()]`) is evaluated after the trailing elements.
+The temporary is always named `__bsc_tmp_spread`. Building the literal first and assigning it last matches native evaluation order: BrightScript evaluates the right-hand side before any expression in the assignment target, so `store[nextKey()] = [...a, f()]` still calls `f()` before `nextKey()`.
 
 ```brightscript
 __bsc_tmp_spread = []

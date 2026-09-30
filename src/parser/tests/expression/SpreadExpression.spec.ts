@@ -767,6 +767,74 @@ describe('SpreadExpression', () => {
             `);
         });
 
+        it('evaluates trailing elements before a call in the index target, matching native order', async () => {
+            await testTranspile(`
+                sub main()
+                    a = [1]
+                    store = {}
+                    store[nextKey()] = [...a, f()]
+                end sub
+                function nextKey()
+                    return "k"
+                end function
+                function f()
+                    return 1
+                end function
+            `, `
+                sub main()
+                    a = [
+                        1
+                    ]
+                    store = {}
+                    __bsc_tmp_spread = []
+                    __bsc_tmp_spread.append(a)
+                    __bsc_tmp_spread.push(f())
+                    store[nextKey()] = __bsc_tmp_spread
+                end sub
+
+                function nextKey()
+                    return "k"
+                end function
+
+                function f()
+                    return 1
+                end function
+            `);
+        });
+
+        it('evaluates trailing elements before a call in the object of a property target, matching native order', async () => {
+            await testTranspile(`
+                sub main()
+                    a = [1]
+                    getObj().list = [...a, f()]
+                end sub
+                function getObj()
+                    return {}
+                end function
+                function f()
+                    return 1
+                end function
+            `, `
+                sub main()
+                    a = [
+                        1
+                    ]
+                    __bsc_tmp_spread = []
+                    __bsc_tmp_spread.append(a)
+                    __bsc_tmp_spread.push(f())
+                    getObj().list = __bsc_tmp_spread
+                end sub
+
+                function getObj()
+                    return {}
+                end function
+
+                function f()
+                    return 1
+                end function
+            `);
+        });
+
         it('builds in a temp when a trailing element reads the target variable', async () => {
             await testTranspile(`
                 sub main()
