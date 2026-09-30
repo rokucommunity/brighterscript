@@ -14,6 +14,7 @@ import type { SourceFixAllCodeAction } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
 import { standardizePath as s, util } from './util';
 import { XmlScope } from './XmlScope';
+import { TypeImportScope } from './TypeImportScope';
 import { DependencyGraph } from './DependencyGraph';
 import type { Logger } from './logging';
 import { LogLevel, createLogger } from './logging';
@@ -25,7 +26,7 @@ import type { FirmwareCapabilities } from './RokuConstants';
 import { DEFAULT_MIN_FIRMWARE_VERSION, getFirmwareCapabilities, RSG_VERSIONS } from './RokuConstants';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement, isReferenceType } from './astUtils/reflection';
+import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement, isReferenceType, isTypeImportScope } from './astUtils/reflection';
 import type { FunctionStatement, MethodStatement, NamespaceStatement } from './parser/Statement';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { Editor } from './astUtils/Editor';
@@ -1203,8 +1204,21 @@ export class Program {
                     //the symbols this file provided are gone, so anything that required them needs to be revalidated
                     this.addRemovedFileSymbolsToChangedSymbols(file);
                     this.fileSymbolInformation.delete(file.pkgPath);
+                    //files that `import type { ... } from` this file are not linked to it through the dependency graph or the
+                    //changed symbols (the file was never in their scope), so queue them for revalidation explicitly
+                    for (const importer of this.getTypeImportersOfFiles([file])) {
+                        this.validationDetails.filesToBeValidatedInScopeContext.add(importer);
+                    }
                 }
                 this.crossScopeValidation.clearResolutionsForFile(file);
+            }
+
+            //this file no longer exists, so it must not be revalidated by the next validation run
+            this.validationDetails.filesToBeValidatedInScopeContext.delete(file);
+
+            //if this file had a scope because it was only ever `import type`d, that scope goes away with it
+            if (isBrsFile(file)) {
+                this.removeTypeImportScope(file);
             }
 
             this.diagnostics.clearForFile(file.srcPath);
@@ -1353,6 +1367,11 @@ export class Program {
             .once('before and on programValidate', () => {
                 logValidateEnd = this.logger.timeStart(LogLevel.log, `Validating project${(this.logger.logLevel as LogLevel) > LogLevel.log ? ` (run ${validationRunId})` : ''}`);
                 this.diagnostics.clearForTag(ProgramValidatorDiagnosticsTag);
+                //give every file that is only ever `import type`d a scope of its own (and drop the scopes of files that no longer need one).
+                //A file that just got such a scope has never been validated in it, so make sure it is
+                for (const scope of this.syncTypeImportScopes()) {
+                    filesToBeValidatedInScopeContext.add(scope.file);
+                }
                 this.plugins.emit('beforeValidateProgram', {
                     program: this
                 });
@@ -1431,6 +1450,20 @@ export class Program {
                 });
             })
             .once('track and update type-time and runtime symbol dependencies and changes', () => {
+                //files that `import type { ... } from` any of the files validated in this run must be revalidated too. The imported
+                //file is not part of their scope, so those changes are not tracked through the dependency graph or the changed symbols
+                const typeImporters = new Set<BrsFile>();
+                if (!this.isFirstValidation && brsFilesValidated.length > 0) {
+                    for (const importer of this.getTypeImportersOfFiles(brsFilesValidated)) {
+                        typeImporters.add(importer);
+                        filesToBeValidatedInScopeContext.add(importer);
+                        //the importer's scopes are not linked to the imported file either, so invalidate them now: this is what
+                        //makes the cross scope validation below look at the files in them
+                        for (const scope of this.getScopesForFile(importer)) {
+                            scope.invalidate();
+                        }
+                    }
+                }
                 const changedSymbolsMapArr = [...brsFilesValidated, ...xmlFilesValidated]?.map(f => {
                     if (isBrsFile(f)) {
                         return f.providedSymbols.changes;
@@ -1500,6 +1533,10 @@ export class Program {
                 } while (foundDependentTypes);
 
                 changedSymbols.set(SymbolTypeFlag.typetime, new Set([...changedSymbols.get(SymbolTypeFlag.typetime), ...changedTypeSymbols, ...dependentTypesChanged]));
+
+                if (!this.isFirstValidation) {
+                    this.addReferencingSymbolsToChangedSymbols(changedSymbols, typeImporters);
+                }
 
                 this.lastValidationInfo.brsFilesSrcPath = new Set<string>(this.validationDetails.brsFilesValidated.map(f => f.srcPath?.toLowerCase() ?? ''));
                 this.lastValidationInfo.xmlFilesSrcPath = new Set<string>(this.validationDetails.xmlFilesValidated.map(f => f.srcPath?.toLowerCase() ?? ''));
@@ -1797,6 +1834,154 @@ export class Program {
 
     private scopesPerFile: Map<BscFile, Scope[]> = new Map();
 
+
+    /**
+     * Get every file in the program that has a named type import (`import type { Name } from "..."`) pointing at one of the given files
+     */
+    public getTypeImportersOfFiles(files: BscFile[]): BrsFile[] {
+        const destPaths = new Set(files.map(x => x.destPath?.toLowerCase()));
+        const result = [] as BrsFile[];
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file) && !destPaths.has(file.destPath.toLowerCase())) {
+                for (const typeImport of file.typeImports.values()) {
+                    //destPath is null when the import path is invalid (i.e. `"pkg:"`)
+                    if (typeImport.destPath && destPaths.has(typeImport.destPath.toLowerCase())) {
+                        result.push(file);
+                        break;
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * A symbol whose type comes from another symbol (i.e. `const ConstB = ConstC`) is provided as a reference type, which never
+     * shows up in a file's `providedSymbols.changes`: the reference itself does not change, only what it points at does. So when the
+     * symbol it points at changes, treat the referencing symbol as changed too, so that the files using it are revalidated.
+     * A file's referencing symbols are considered changed when the file requires a changed symbol, or when it `import type`s from a
+     * file that changed (`typeImporters`). Repeats until nothing new is found so that chains (`A -> B -> C`) propagate all the way
+     */
+    private addReferencingSymbolsToChangedSymbols(changedSymbols: Map<SymbolTypeFlag, Set<string>>, typeImporters: Set<BrsFile>) {
+        const flags = [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime];
+        if (typeImporters.size === 0 && flags.every(flag => (changedSymbols.get(flag)?.size ?? 0) === 0)) {
+            //nothing changed, so there is nothing to propagate
+            return;
+        }
+        const filesDone = new Set<BrsFile>();
+        let foundMore: boolean;
+        do {
+            foundMore = false;
+            for (const file of Object.values(this.files)) {
+                if (!isBrsFile(file) || filesDone.has(file)) {
+                    continue;
+                }
+                if (!typeImporters.has(file) && !util.hasAnyRequiredSymbolChanged(file.requiredSymbols, changedSymbols)) {
+                    continue;
+                }
+                filesDone.add(file);
+                for (const flag of flags) {
+                    const changedSymbolsForFlag = changedSymbols.get(flag);
+                    for (const symbolName of file.providedSymbols.referenceSymbolMap.get(flag)?.keys() ?? []) {
+                        if (!changedSymbolsForFlag.has(symbolName)) {
+                            changedSymbolsForFlag.add(symbolName);
+                            foundMore = true;
+                        }
+                    }
+                }
+            }
+        } while (foundMore);
+    }
+
+    /**
+     * Make sure every file that is the target of a named type import (`import type { Name } from "..."`) but is not part of any
+     * other scope has a `TypeImportScope`, so that it gets validated. Scopes for files that no longer qualify (the file was removed,
+     * is no longer type-imported, or joined a regular scope) are removed
+     * @returns the scopes that were created
+     */
+    private syncTypeImportScopes(): TypeImportScope[] {
+        //every brs file that is the target of a type import, indexed by lower-case destPath
+        const targets = new Map<string, BrsFile>();
+        for (const file of Object.values(this.files)) {
+            if (isBrsFile(file)) {
+                for (const typeImport of file.typeImports.values()) {
+                    //destPath is null when the import path is invalid (i.e. `"pkg:"`)
+                    const target = typeImport.destPath ? this.getFile<BrsFile>(typeImport.destPath) : undefined;
+                    if (isBrsFile(target) && target !== file) {
+                        targets.set(target.destPath.toLowerCase(), target);
+                    }
+                }
+            }
+        }
+
+        //remove the scopes that are no longer needed
+        for (const scope of this.getAllUserScopes()) {
+            if (isTypeImportScope(scope)) {
+                const target = targets.get(scope.file.destPath.toLowerCase());
+                if (target !== scope.file || this.hasRegularScope(scope.file)) {
+                    this.removeTypeImportScope(scope.file);
+                }
+            }
+        }
+
+        //create the scopes that are missing
+        const result = [] as TypeImportScope[];
+        for (const target of targets.values()) {
+            if (this.scopes[TypeImportScope.getScopeName(target)] || this.hasRegularScope(target)) {
+                continue;
+            }
+            this.plugins.emit('beforeProvideScope', {
+                program: this,
+                scope: undefined
+            });
+            const scope = new TypeImportScope(target, this);
+            this.dependencyGraph.addDependency(scope.dependencyGraphKey, target.dependencyGraphKey);
+            scope.attachDependencyGraph(this.dependencyGraph);
+            this.addScope(scope);
+            this.scopesPerFile.clear();
+            this.plugins.emit('provideScope', {
+                program: this,
+                scope: scope
+            });
+            this.plugins.emit('afterProvideScope', {
+                program: this,
+                scope: scope
+            });
+            result.push(scope);
+        }
+        return result;
+    }
+
+    /**
+     * Is this file part of at least one scope other than its own `TypeImportScope`?
+     */
+    private hasRegularScope(file: BrsFile) {
+        return this.getScopesForFile(file).some(scope => !isTypeImportScope(scope));
+    }
+
+    /**
+     * Remove the `TypeImportScope` of this file, if it has one
+     */
+    private removeTypeImportScope(file: BrsFile) {
+        const scope = this.scopes[TypeImportScope.getScopeName(file)];
+        if (!isTypeImportScope(scope) || scope.file !== file) {
+            return;
+        }
+        this.logger.debug('Removing type import scope', scope.name);
+        const scopeRemoveEvent = {
+            program: this,
+            scope: scope
+        };
+        this.plugins.emit('beforeRemoveScope', scopeRemoveEvent);
+        this.plugins.emit('removeScope', scopeRemoveEvent);
+        //the diagnostics found while validating the file in this scope are no longer valid
+        this.diagnostics.clearByFilter({ scope: scope });
+        scope.dispose();
+        this.dependencyGraph.remove(scope.dependencyGraphKey);
+        this.removeScope(scope);
+        this.scopesPerFile.clear();
+        this.plugins.emit('afterRemoveScope', scopeRemoveEvent);
+    }
 
     /**
      * Get a list of all scopes the file is loaded into

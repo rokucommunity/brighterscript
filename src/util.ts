@@ -26,7 +26,7 @@ import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionP
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike, isGroupingExpression, isInlineInterfaceExpression, isTypedFunctionTypeExpression } from './astUtils/reflection';
+import { isConstStatement, isEnumStatement, isInterfaceStatement, isTypeStatement, isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike, isGroupingExpression, isInlineInterfaceExpression, isTypedFunctionTypeExpression } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode, SourceMapConsumer } from 'source-map';
 import type { RawSourceMap, SourceMapGenerator } from 'source-map';
@@ -36,7 +36,7 @@ import type { XmlFile } from './files/XmlFile';
 import type { AstNode, Expression, Statement } from './parser/AstNode';
 import { AstNodeKind } from './parser/AstNode';
 import type { UnresolvedSymbol } from './AstValidationSegmenter';
-import type { GetSymbolTypeOptions, SymbolTable } from './SymbolTable';
+import type { BscSymbol, GetSymbolTypeOptions, SymbolTable } from './SymbolTable';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { createIdentifier, createToken } from './astUtils/creators';
 import { MAX_RELATED_INFOS_COUNT } from './diagnosticUtils';
@@ -2689,6 +2689,16 @@ export class Util {
         });
     }
 
+    /**
+     * Can this symbol be imported with a named type import (`import type { Name } from "pkg:/source/lib.bs"`)?
+     * Only interfaces, enums, consts and type aliases qualify, because none of them produce runtime code
+     * (enums and consts are inlined as literals at transpile time).
+     */
+    public isTypeImportableSymbol(symbol: { data?: BscSymbol['data'] }) {
+        const definingNode = symbol?.data?.definingNode;
+        return isInterfaceStatement(definingNode) || isEnumStatement(definingNode) || isConstStatement(definingNode) || isTypeStatement(definingNode);
+    }
+
     public isBuiltInType(typeName: string) {
         const typeNameLower = typeName.toLowerCase();
         if (typeNameLower.startsWith('rosgnode')) {
@@ -3081,9 +3091,11 @@ export class Util {
 
         if (isNamespaceStatement(namespace)) {
             let namespaceHasSymbol = namespace.getSymbolTable().hasSymbol(symbolName, SymbolTypeFlag.runtime);
-            // check if the namespace has a symbol with the same name, but different definiton
-            if (namespaceHasSymbol && !this.symbolComesFromSameNode(symbolName, varData.definingNode, namespace.getSymbolTable())) {
-                return true;
+            if (namespaceHasSymbol) {
+                //the name resolves to a member of the namespace (a local variable or parameter would be a different node). A namespace
+                //member legitimately shadows a file-level declaration with the same name (i.e. a global const or a type import),
+                //so it is not "shadowed" in the sense that matters here: it can still be inlined
+                return !this.symbolComesFromSameNode(symbolName, varData.definingNode, namespace.getSymbolTable());
             }
         }
         const bodyTable = nodeWhereUsed.getRoot().getSymbolTable();

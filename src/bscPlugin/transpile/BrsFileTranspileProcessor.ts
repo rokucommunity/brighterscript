@@ -9,12 +9,34 @@ import type { Expression, Statement } from '../../parser/AstNode';
 import type { TernaryExpression } from '../../parser/Expression';
 import { LiteralExpression, VariableExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { ConstStatement, NamespaceStatement } from '../../parser/Statement';
+import type { ConstStatement, EnumStatement, NamespaceStatement } from '../../parser/Statement';
 import { AugmentedAssignmentStatement, type AliasStatement, type IfStatement } from '../../parser/Statement';
 import type { Scope } from '../../Scope';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import util from '../../util';
 import { BslibManager } from '../serialize/BslibManager';
+
+/**
+ * The context a const or enum reference is resolved in: the file the reference was authored in (whose named type imports apply)
+ * and that file's scope, if it has one
+ */
+interface ResolveContext {
+    file: BrsFile;
+    scope: Scope | undefined;
+}
+
+interface ResolvedValue {
+    value: Expression;
+    /**
+     * The context `value` was authored in
+     */
+    context: ResolveContext;
+    /**
+     * The const that owns `value`, if it came from a const
+     */
+    constStatement?: ConstStatement;
+    isCircular: boolean;
+}
 
 export class BrsFilePreTranspileProcessor {
     public constructor(
@@ -41,15 +63,15 @@ export class BrsFilePreTranspileProcessor {
     }
 
     private iterateExpressions() {
-        const scope = this.event.program.getFirstScopeForFile(this.event.file);
+        const context = this.getContextForFile(this.event.file);
         //TODO move away from this loop and use a visitor instead
         // eslint-disable-next-line @typescript-eslint/dot-notation
         for (let expression of this.event.file['_cachedLookups'].expressions) {
             if (expression) {
                 if (isUnaryExpression(expression)) {
-                    this.processExpression(expression.right, scope);
+                    this.processExpression(expression.right, context);
                 } else {
-                    this.processExpression(expression, scope);
+                    this.processExpression(expression, context);
                 }
             }
         }
@@ -207,25 +229,26 @@ export class BrsFilePreTranspileProcessor {
     /**
      * Given a string optionally separated by dots, find an enum related to it.
      * For example, all of these would return the enum: `SomeNamespace.SomeEnum.SomeMember`, SomeEnum.SomeMember, `SomeEnum`
+     * (as seen from `context`)
      */
-    private getEnumInfo(name: string, containingNamespace: string, scope: Scope) {
+    private getEnumInfo(name: string, containingNamespace: string, context: ResolveContext) {
         //look for the enum directly
-        let result = scope?.getEnumFileLink(name, containingNamespace);
+        let enumStatement = this.findEnum(name, containingNamespace, context);
 
-        if (result) {
+        if (enumStatement) {
             return {
-                enum: result.item
+                enum: enumStatement
             };
         }
         //assume we've been given the enum.member syntax, so pop the member and try again
         const parts = name.toLowerCase().split('.');
         const memberName = parts.pop();
 
-        result = scope?.getEnumFileLink(parts.join('.'), containingNamespace);
-        if (result) {
-            const value = result.item.getMemberValue(memberName);
+        enumStatement = this.findEnum(parts.join('.'), containingNamespace, context);
+        if (enumStatement) {
+            const value = enumStatement.getMemberValue(memberName);
             return {
-                enum: result.item,
+                enum: enumStatement,
                 value: new LiteralExpression({
                     value: createToken(
                         //just use float literal for now...it will transpile properly with any literal value
@@ -235,6 +258,48 @@ export class BrsFilePreTranspileProcessor {
                 })
             };
         }
+    }
+
+    /**
+     * Build the context that references authored in `file` are resolved in
+     */
+    private getContextForFile(file: BrsFile): ResolveContext {
+        return {
+            file: file,
+            scope: this.event.program.getFirstScopeForFile(file)
+        };
+    }
+
+    /**
+     * Find the const with the given name, as seen from `context` (see `BrsFile.findConstStatement` for the lookup order).
+     * @returns the const and the context its value should be resolved in
+     */
+    private findConst(entityName: string, containingNamespace: string | undefined, context: ResolveContext): { statement: ConstStatement; context: ResolveContext } | undefined {
+        const link = context.file.findConstStatement(entityName, containingNamespace, context.scope);
+        if (link) {
+            return { statement: link.item, context: this.getContextForLinkedFile(link.file, context) };
+        }
+    }
+
+    /**
+     * Find the enum with the given name, as seen from `context` (see `BrsFile.findEnumStatement` for the lookup order)
+     */
+    private findEnum(entityName: string, containingNamespace: string | undefined, context: ResolveContext): EnumStatement | undefined {
+        return context.file.findEnumStatement(entityName, containingNamespace, context.scope)?.item;
+    }
+
+    /**
+     * Build the context for a const found in `file` while resolving names in `context`: the same scope when `file` is part of it,
+     * otherwise (the const came through a type import) the file's own first scope
+     */
+    private getContextForLinkedFile(file: BrsFile, context: ResolveContext): ResolveContext {
+        if (file === context.file) {
+            return context;
+        }
+        if (context.scope?.hasFile(file)) {
+            return { file: file, scope: context.scope };
+        }
+        return this.getContextForFile(file);
     }
 
     /**
@@ -268,81 +333,72 @@ export class BrsFilePreTranspileProcessor {
     }
 
     /**
-     * Recursively resolve a const or enum value until we get to the final resolved expression
-     * Returns an object with the resolved value and a flag indicating if a circular reference was detected
+     * Recursively resolve a const or enum value until we get to the final resolved expression.
+     * @param value the expression to resolve
+     * @param context the context the expression was authored in (the file of the const it belongs to, and that file's scope)
+     * @param containingNamespace the namespace the expression was authored in
+     * @returns the resolved value, the context it was authored in, the const that owns it (if any) and whether a circular reference was detected
      */
-    private resolveConstValue(value: Expression, scope: Scope | undefined, containingNamespace: string | undefined, visited = new Set<string>()): { value: Expression; isCircular: boolean } {
+    private resolveConstValue(value: Expression, context: ResolveContext, containingNamespace: string | undefined, visited = new Set<ConstStatement>()): ResolvedValue {
         // If it's already a literal, return it as-is
         if (isLiteralExpression(value)) {
-            return { value: value, isCircular: false };
+            return { value: value, context: context, isCircular: false };
         }
 
-        // If it's a variable expression, try to resolve it as a const or enum
+        let entityName: string;
         if (isVariableExpression(value)) {
-            const entityName = value.tokens.name.text.toLowerCase();
-
-            // Prevent infinite recursion by tracking visited constants
-            if (visited.has(entityName)) {
-                return { value: value, isCircular: true }; // Return the original value to avoid infinite loop
-            }
-            visited.add(entityName);
-
-            // Try to resolve as const first
-            const constStatement = scope?.getConstFileLink(entityName, containingNamespace)?.item;
-            if (constStatement) {
-                // Recursively resolve the const value
-                return this.resolveConstValue(constStatement.value, scope, containingNamespace, visited);
-            }
-
-            // Try to resolve as enum member
-            const enumInfo = this.getEnumInfo(entityName, containingNamespace, scope);
-            if (enumInfo?.value) {
-                // Enum values are already resolved to literals by getEnumInfo
-                return { value: enumInfo.value, isCircular: false };
-            }
-        }
-
-        // If it's a dotted get expression (e.g., namespace.const or namespace.enum.member), try to resolve it
-        if (isDottedGetExpression(value)) {
+            entityName = value.tokens.name.text.toLowerCase();
+        } else if (isDottedGetExpression(value)) {
+            //(e.g., namespace.const or namespace.enum.member)
             const parts = util.splitExpression(value);
             const processedNames: string[] = [];
-
             for (let part of parts) {
                 if (isVariableExpression(part) || isDottedGetExpression(part)) {
                     processedNames.push(part?.tokens.name?.text?.toLowerCase());
                 } else {
-                    return { value: value, isCircular: false }; // Can't resolve further
+                    // Can't resolve further
+                    return { value: value, context: context, isCircular: false };
                 }
             }
+            entityName = processedNames.join('.');
+        } else {
+            // Return the value as-is if we can't resolve it further
+            return { value: value, context: context, isCircular: false };
+        }
 
-            const entityName = processedNames.join('.');
-
-            // Prevent infinite recursion
-            if (visited.has(entityName)) {
-                return { value: value, isCircular: true };
+        // Try to resolve as const first
+        const found = this.findConst(entityName, containingNamespace, context);
+        if (found) {
+            // Prevent infinite recursion by tracking visited constants
+            if (visited.has(found.statement)) {
+                return { value: value, context: context, isCircular: true }; // Return the original value to avoid infinite loop
             }
-            visited.add(entityName);
+            return this.resolveFoundConst(found, visited);
+        }
 
-            // Try to resolve as const first
-            const constStatement = scope?.getConstFileLink(entityName, containingNamespace)?.item;
-            if (constStatement) {
-                // Recursively resolve the const value
-                return this.resolveConstValue(constStatement.value, scope, containingNamespace, visited);
-            }
-
-            // Try to resolve as enum member
-            const enumInfo = this.getEnumInfo(entityName, containingNamespace, scope);
-            if (enumInfo?.value) {
-                // Enum values are already resolved to literals by getEnumInfo
-                return { value: enumInfo.value, isCircular: false };
-            }
+        // Try to resolve as enum member
+        const enumInfo = this.getEnumInfo(entityName, containingNamespace, context);
+        if (enumInfo?.value) {
+            // Enum values are already resolved to literals by getEnumInfo
+            return { value: enumInfo.value, context: context, isCircular: false };
         }
 
         // Return the value as-is if we can't resolve it further
-        return { value: value, isCircular: false };
+        return { value: value, context: context, isCircular: false };
     }
 
-    private processExpression(expression: Expression, scope: Scope | undefined, visitedConsts: Set<ConstStatement> = new Set()) {
+    /**
+     * Resolve the value of a const found by `findConst` to its final form, in the namespace and file it was authored in
+     */
+    private resolveFoundConst(found: { statement: ConstStatement; context: ResolveContext }, visited = new Set<ConstStatement>()): ResolvedValue {
+        visited.add(found.statement);
+        const innerNamespace = found.statement.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+        const resolved = this.resolveConstValue(found.statement.value, found.context, innerNamespace, visited);
+        //report the const that owns the final value (the deepest const in the chain)
+        return { ...resolved, constStatement: resolved.constStatement ?? found.statement };
+    }
+
+    private processExpression(expression: Expression, context: ResolveContext, visitedConsts: Set<ConstStatement> = new Set()) {
         if (expression.findAncestor(isAliasStatement)) {
             // skip any changes in an Alias Statement
             return;
@@ -378,17 +434,16 @@ export class BrsFilePreTranspileProcessor {
                 return;
             }
 
+            let resolved: ResolvedValue;
             let value: Expression;
-            let isCircular = false;
 
-            let constStatement = scope?.getConstFileLink(entityName, containingNamespace)?.item;
-            let enumInfo = this.getEnumInfo(entityName, containingNamespace, scope);
-            let namespaceInfo = isAlias && this.getNamespaceInfo(entityName, scope);
-            if (constStatement) {
+            let foundConst = this.findConst(entityName, containingNamespace, context);
+            let enumInfo = this.getEnumInfo(entityName, containingNamespace, context);
+            let namespaceInfo = isAlias && this.getNamespaceInfo(entityName, context.scope);
+            if (foundConst) {
                 // Recursively resolve the const value to its final form
-                const resolved = this.resolveConstValue(constStatement.value, scope, containingNamespace);
+                resolved = this.resolveFoundConst(foundConst);
                 value = resolved.value;
-                isCircular = resolved.isCircular;
             } else if (enumInfo?.value) {
                 //did we find an enum member? transpile that
                 value = enumInfo.value;
@@ -402,17 +457,17 @@ export class BrsFilePreTranspileProcessor {
                 value = actualNameExpression;
             }
 
-            if (value && !isCircular) {
+            if (value && !resolved?.isCircular) {
                 //If the const's value is a complex expression (e.g. an aa literal containing
                 //enum refs), recursively process inner refs so they're inlined too. Without
                 //this step, cross-file const usage leaves nested enum/const refs unresolved
                 //because the consumer file's pre-transpile pass never visits the inlined
                 //value's children (they live in the const's defining file).
-                if (constStatement && !isLiteralExpression(value)) {
-                    if (visitedConsts.has(constStatement)) {
+                if (resolved?.constStatement && !isLiteralExpression(value)) {
+                    if (visitedConsts.has(resolved.constStatement)) {
                         return;
                     }
-                    this.processInlinedConstValue(value, scope, constStatement, visitedConsts);
+                    this.processInlinedConstValue(value, resolved.context, resolved.constStatement, visitedConsts);
                 }
 
                 //override the transpile for this item.
@@ -431,7 +486,13 @@ export class BrsFilePreTranspileProcessor {
         }
     }
 
-    private processInlinedConstValue(value: Expression, scope: Scope | undefined, constStatement: ConstStatement, visitedConsts: Set<ConstStatement>) {
+    /**
+     * Inline the const and enum references found inside an inlined const value
+     * @param value the (non-literal) value being inlined
+     * @param context the context `value` was authored in
+     * @param constStatement the const that owns `value`
+     */
+    private processInlinedConstValue(value: Expression, context: ResolveContext, constStatement: ConstStatement, visitedConsts: Set<ConstStatement>) {
         //skip if we've already walked this const's value during the current outer
         //inline. Guards against unbounded recursion for circular aggregate references
         //(const A = { x: B }; const B = { y: A }) and avoids redundant work for
@@ -446,23 +507,23 @@ export class BrsFilePreTranspileProcessor {
                 if (isDottedGetExpression(varExpr.parent)) {
                     return;
                 }
-                this.processExpressionForInlinedValue(varExpr, scope, innerNamespace, visitedConsts);
+                this.processExpressionForInlinedValue(varExpr, context, innerNamespace, visitedConsts);
             },
             DottedGetExpression: (dottedExpr) => {
                 if (isDottedGetExpression(dottedExpr.parent)) {
                     return;
                 }
-                this.processExpressionForInlinedValue(dottedExpr, scope, innerNamespace, visitedConsts);
+                this.processExpressionForInlinedValue(dottedExpr, context, innerNamespace, visitedConsts);
             }
         }), { walkMode: WalkMode.visitExpressionsRecursive });
     }
 
     /**
-     * Mirrors processExpression but treats `containingNamespace` as the namespace of the
-     * const that produced this inlined value (not the consumer file's namespace), since
+     * Mirrors processExpression but treats `context` and `containingNamespace` as those of the
+     * const that produced this inlined value (not the consumer file's), since
      * the expression we're rewriting was authored in the const's file.
      */
-    private processExpressionForInlinedValue(expression: Expression, scope: Scope | undefined, containingNamespace: string | undefined, visitedConsts: Set<ConstStatement>) {
+    private processExpressionForInlinedValue(expression: Expression, context: ResolveContext, containingNamespace: string | undefined, visitedConsts: Set<ConstStatement>) {
         const parts = util.splitExpression(expression);
         const processedNames: string[] = [];
         for (let part of parts) {
@@ -474,26 +535,25 @@ export class BrsFilePreTranspileProcessor {
                 return;
             }
 
+            let resolved: ResolvedValue;
             let value: Expression;
-            let isCircular = false;
-            const constStatement = scope?.getConstFileLink(entityName, containingNamespace)?.item;
-            if (constStatement) {
-                const resolved = this.resolveConstValue(constStatement.value, scope, containingNamespace);
+            const foundConst = this.findConst(entityName, containingNamespace, context);
+            if (foundConst) {
+                resolved = this.resolveFoundConst(foundConst);
                 value = resolved.value;
-                isCircular = resolved.isCircular;
             } else {
-                const enumInfo = this.getEnumInfo(entityName, containingNamespace, scope);
+                const enumInfo = this.getEnumInfo(entityName, containingNamespace, context);
                 if (enumInfo?.value) {
                     value = enumInfo.value;
                 }
             }
 
-            if (value && !isCircular) {
-                if (constStatement && !isLiteralExpression(value)) {
-                    if (visitedConsts.has(constStatement)) {
+            if (value && !resolved?.isCircular) {
+                if (resolved?.constStatement && !isLiteralExpression(value)) {
+                    if (visitedConsts.has(resolved.constStatement)) {
                         return;
                     }
-                    this.processInlinedConstValue(value, scope, constStatement, visitedConsts);
+                    this.processInlinedConstValue(value, resolved.context, resolved.constStatement, visitedConsts);
                 }
                 this.event.editor.setProperty(part, 'transpile', (state) => {
                     if (isLiteralExpression(value)) {
@@ -505,7 +565,6 @@ export class BrsFilePreTranspileProcessor {
             }
         }
     }
-
 
     private replaceAlias(expression: Expression) {
         let alias: AliasStatement;

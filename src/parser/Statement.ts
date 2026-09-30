@@ -2051,18 +2051,62 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
     }
 }
 
+/**
+ * One named symbol in a type-only import statement (i.e. the `Alpha.Beta as Charlie` in `import type { Alpha.Beta as Charlie } from "pkg:/source/lib.bs"`)
+ */
+export interface TypeImportSpecifier {
+    tokens: {
+        /**
+         * The (possibly dotted) name of the symbol as declared in the imported file. Only the identifier parts are stored, the dots are implied
+         */
+        nameParts: Token[];
+        as?: Token;
+        alias?: Identifier;
+        comma?: Token;
+    };
+    /**
+     * The full name of the symbol as declared in the imported file (i.e. `Alpha.Beta`)
+     */
+    name: string;
+    /**
+     * The name this symbol is known by in the importing file: the alias when one was provided, otherwise the last part of `name`
+     */
+    localName: string;
+    location: Location;
+}
+
 export class ImportStatement extends Statement implements TypedefProvider {
     constructor(options: {
         import?: Token;
+        /**
+         * The `type` keyword of a type-only import (i.e. `import type { Name } from "pkg:/source/lib.bs"`).
+         * A type-only import makes the named interfaces, enums, consts and type aliases from the imported file available to this file,
+         * without bringing the imported file (and its runtime code) into the scope, and without adding it to the component xml as a `<script>` tag
+         */
+        type?: Token;
+        leftCurlyBrace?: Token;
+        typeImports?: TypeImportSpecifier[];
+        rightCurlyBrace?: Token;
+        from?: Token;
         path?: Token;
     }) {
         super();
         this.tokens = {
             import: options.import,
+            type: options.type,
+            leftCurlyBrace: options.leftCurlyBrace,
+            rightCurlyBrace: options.rightCurlyBrace,
+            from: options.from,
             path: options.path
         };
+        this.typeImports = options.typeImports ?? [];
         this.location = util.createBoundingLocation(
             this.tokens.import,
+            this.tokens.type,
+            this.tokens.leftCurlyBrace,
+            ...this.typeImports,
+            this.tokens.rightCurlyBrace,
+            this.tokens.from,
             this.tokens.path
         );
         if (this.tokens.path) {
@@ -2083,8 +2127,17 @@ export class ImportStatement extends Statement implements TypedefProvider {
 
     public readonly tokens: {
         readonly import?: Token;
+        readonly type?: Token;
+        readonly leftCurlyBrace?: Token;
+        readonly rightCurlyBrace?: Token;
+        readonly from?: Token;
         readonly path: Token;
     };
+
+    /**
+     * The named symbols of a type-only import (empty for a regular import)
+     */
+    public readonly typeImports: TypeImportSpecifier[];
 
     public readonly kind = AstNodeKind.ImportStatement;
 
@@ -2092,9 +2145,44 @@ export class ImportStatement extends Statement implements TypedefProvider {
 
     public readonly filePath: string;
 
+    /**
+     * Is this a type-only import (i.e. `import type { Name } from "pkg:/source/lib.bs"`)?
+     * Type-only imports make the named interfaces, enums, consts and type aliases available to this file, but do not bring
+     * the imported file (or its runtime code) into the scope, and do not add it to the component xml as a `<script>` tag.
+     */
+    public get isTypeOnly() {
+        return !!this.tokens.type;
+    }
+
+    /**
+     * The text of the `{ Name as Alias, ... }` portion of a type-only import
+     */
+    private getTypeImportsText() {
+        return this.typeImports.map(x => {
+            return x.name + (x.tokens.alias ? ` ${x.tokens.as?.text ?? 'as'} ${x.tokens.alias.text}` : '');
+        }).join(', ');
+    }
+
     transpile(state: BrsTranspileState) {
         //The xml files are responsible for adding the additional script imports, but
         //add the import statement as a comment just for debugging purposes
+        if (this.isTypeOnly) {
+            return [
+                state.transpileToken(this.tokens.import, 'import', true),
+                ' ',
+                state.transpileToken(this.tokens.type, 'type'),
+                ' ',
+                state.transpileToken(this.tokens.leftCurlyBrace, '{'),
+                ' ',
+                this.getTypeImportsText(),
+                ' ',
+                state.transpileToken(this.tokens.rightCurlyBrace, '}'),
+                ' ',
+                state.transpileToken(this.tokens.from, 'from'),
+                ' ',
+                state.transpileToken(this.tokens.path)
+            ];
+        }
         return [
             state.transpileToken(this.tokens.import, 'import', true),
             ' ',
@@ -2106,11 +2194,25 @@ export class ImportStatement extends Statement implements TypedefProvider {
      * Get the typedef for this statement
      */
     public getTypedef(state: BrsTranspileState) {
+        //replace any `.bs` extension with `.brs`
+        const path = this.tokens.path.text.replace(/\.bs"?$/i, '.brs"');
+        if (this.isTypeOnly) {
+            return [
+                this.tokens.import?.text ?? 'import',
+                ' ',
+                this.tokens.type.text,
+                ' { ',
+                this.getTypeImportsText(),
+                ' } ',
+                this.tokens.from?.text ?? 'from',
+                ' ',
+                path
+            ];
+        }
         return [
             this.tokens.import?.text ?? 'import',
             ' ',
-            //replace any `.bs` extension with `.brs`
-            this.tokens.path.text.replace(/\.bs"?$/i, '.brs"')
+            path
         ];
     }
 
@@ -2126,6 +2228,21 @@ export class ImportStatement extends Statement implements TypedefProvider {
         return this.finalizeClone(
             new ImportStatement({
                 import: util.cloneToken(this.tokens.import),
+                type: util.cloneToken(this.tokens.type),
+                leftCurlyBrace: util.cloneToken(this.tokens.leftCurlyBrace),
+                typeImports: this.typeImports.map(x => ({
+                    tokens: {
+                        nameParts: x.tokens.nameParts.map(token => util.cloneToken(token)),
+                        as: util.cloneToken(x.tokens.as),
+                        alias: util.cloneToken(x.tokens.alias) as Identifier,
+                        comma: util.cloneToken(x.tokens.comma)
+                    },
+                    name: x.name,
+                    localName: x.localName,
+                    location: util.cloneLocation(x.location)
+                })),
+                rightCurlyBrace: util.cloneToken(this.tokens.rightCurlyBrace),
+                from: util.cloneToken(this.tokens.from),
                 path: util.cloneToken(this.tokens.path)
             })
         );

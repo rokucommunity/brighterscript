@@ -27,7 +27,8 @@ export class ProgramValidator {
             if (
                 //if this isn't a brs file, skip
                 !isBrsFile(file) ||
-                //if the file is included in at least one scope, skip
+                //if the file is included in at least one scope, skip. (a file that is only ever `import type`d gets its own scope,
+                //see `TypeImportScope`)
                 this.event.program.getFirstScopeForFile(file)
             ) {
                 continue;

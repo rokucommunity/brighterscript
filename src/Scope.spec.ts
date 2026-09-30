@@ -5,7 +5,7 @@ import util, { standardizePath as s } from './util';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { Program } from './Program';
 import PluginInterface from './PluginInterface';
-import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim } from './testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, getTestTranspile, trim } from './testHelpers.spec';
 import type { BrsFile } from './files/BrsFile';
 import type { AssignmentStatement, ForEachStatement, IfStatement, NamespaceStatement, PrintStatement, TypeStatement } from './parser/Statement';
 import type { CompilerPlugin, ValidateScopeEvent } from './interfaces';
@@ -20,7 +20,7 @@ import { FloatType } from './types/FloatType';
 import { NamespaceType } from './types/NamespaceType';
 import { DoubleType } from './types/DoubleType';
 import { UnionType } from './types/UnionType';
-import { isBlock, isCallExpression, isForEachStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isNamespaceStatement, isPrintStatement, isTypeStatement } from './astUtils/reflection';
+import { isBlock, isCallExpression, isForEachStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isNamespaceStatement, isPrintStatement, isTypeImportScope, isTypeStatement } from './astUtils/reflection';
 import { ArrayType } from './types/ArrayType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { InterfaceType } from './types/InterfaceType';
@@ -46,6 +46,844 @@ describe('Scope', () => {
     afterEach(() => {
         sinon.restore();
         program.dispose();
+    });
+
+    describe('import type', () => {
+        let testTranspile = getTestTranspile(() => [program, rootDir]);
+
+        const buttonXml = trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="Button" extends="Group">
+                <script type="text/brighterscript" uri="Button.bs" />
+            </component>
+        `;
+        const mainMenuXml = trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="MainMenu" extends="Group">
+                <script type="text/brighterscript" uri="MainMenu.bs" />
+            </component>
+        `;
+        const buttonBs = `
+            interface ButtonBase
+                text as string
+                enabled as boolean
+            end interface
+
+            enum ButtonStyle
+                primary = "primary"
+                secondary = "secondary"
+            end enum
+
+            const DEFAULT_TEXT = "Ok"
+
+            namespace Buttons
+                interface Themed
+                    theme as string
+                end interface
+
+                enum Size
+                    small = 1
+                    large = 2
+                end enum
+
+                const MAX = 10
+
+                function create(text as string) as ButtonBase
+                    return { text: text, enabled: true }
+                end function
+            end namespace
+
+            class ButtonModel
+                text as string
+            end class
+
+            sub init()
+                m.top.observeField("buttonSelected", "onSelected")
+            end sub
+
+            sub onSelected()
+            end sub
+
+            function createButton(text as string) as ButtonBase
+                return { text: text, enabled: true }
+            end function
+        `;
+
+        /**
+         * Set up a `Button` component (interface, enum, const, namespace, class and runtime functions) and a `MainMenu` component
+         * whose codebehind is `mainMenuSource`
+         */
+        function setupComponents(mainMenuSource: string, buttonSource = buttonBs) {
+            program.setFile('components/Button.xml', buttonXml);
+            program.setFile('components/Button.bs', buttonSource);
+            program.setFile('components/MainMenu.xml', mainMenuXml);
+            program.setFile('components/MainMenu.bs', mainMenuSource);
+        }
+
+        it('does not flag duplicate functions and validates interface members', () => {
+            setupComponents(`
+                import type { ButtonBase } from "pkg:/components/Button.bs"
+
+                sub init()
+                end sub
+
+                sub render(button as ButtonBase)
+                    print button.text
+                    print button.enabled
+                    print button.txt
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('txt', 'ButtonBase.txt', 'ButtonBase')
+            ]);
+        });
+
+        it('supports aliasing an imported name', () => {
+            setupComponents(`
+                import type { ButtonBase as Base } from "pkg:/components/Button.bs"
+
+                sub render(button as Base)
+                    print button.text
+                    print button.nope
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('nope', 'ButtonBase.nope', 'ButtonBase')
+            ]);
+        });
+
+        it('inlines imported enum members and consts at transpile time', async () => {
+            setupComponents(``);
+            await testTranspile(`
+                import type { ButtonStyle as Style, DEFAULT_TEXT } from "pkg:/components/Button.bs"
+
+                sub init()
+                    buttonStyle = Style.primary
+                    print buttonStyle
+                    print DEFAULT_TEXT
+                end sub
+            `, `
+                'import type { ButtonStyle as Style, DEFAULT_TEXT } from "pkg:/components/Button.bs"
+
+                sub init()
+                    buttonStyle = "primary"
+                    print buttonStyle
+                    print "Ok"
+                end sub
+            `, 'trim', 'components/MainMenu.bs');
+        });
+
+        it('is case insensitive for imported names, aliases and members', async () => {
+            setupComponents(``);
+            await testTranspile(`
+                import type { buttonbase AS base, BUTTONSTYLE as style, default_text, buttons.size } from "pkg:/components/Button.bs"
+
+                sub render(button as BASE)
+                    print button.TEXT
+                    print STYLE.PRIMARY
+                    print Style.secondary
+                    print DEFAULT_TEXT
+                    print SIZE.Large
+                end sub
+            `, `
+                'import type { buttonbase AS base, BUTTONSTYLE as style, default_text, buttons.size } from "pkg:/components/Button.bs"
+
+                sub render(button as dynamic)
+                    print button.TEXT
+                    print "primary"
+                    print "secondary"
+                    print "Ok"
+                    print 2
+                end sub
+            `, 'trim', 'components/MainMenu.bs');
+            const file = program.getFile<BrsFile>('components/MainMenu.bs');
+            expect([...file.typeImports.keys()]).to.eql(['base', 'style', 'default_text', 'size']);
+        });
+
+        it('flags imported names that differ only by case', () => {
+            setupComponents(`
+                import type { ButtonBase as Base, Buttons.Themed as BASE } from "pkg:/components/Button.bs"
+                import type { buttonstyle as base, ButtonStyle } from "pkg:/components/Button.bs"
+
+                sub render(button as Base)
+                    print button.text
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.duplicateTypeImportName('BASE'),
+                DiagnosticMessages.duplicateTypeImportName('base')
+            ]);
+        });
+
+        it('validates interface members case insensitively through an alias', () => {
+            setupComponents(`
+                import type { BUTTONBASE as base } from "pkg:/components/Button.bs"
+
+                sub render(button as Base)
+                    print button.Text
+                    print button.ENABLED
+                    print button.txt
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('txt', 'ButtonBase.txt', 'ButtonBase')
+            ]);
+        });
+
+        it('supports namespaced names', async () => {
+            setupComponents(``);
+            await testTranspile(`
+                import type { Buttons.Themed as Themed, Buttons.Size, Buttons.MAX as Max } from "pkg:/components/Button.bs"
+
+                sub render(button as Themed)
+                    print button.theme
+                    print Size.large
+                    print Max
+                end sub
+            `, `
+                'import type { Buttons.Themed as Themed, Buttons.Size, Buttons.MAX as Max } from "pkg:/components/Button.bs"
+
+                sub render(button as dynamic)
+                    print button.theme
+                    print 2
+                    print 10
+                end sub
+            `, 'trim', 'components/MainMenu.bs');
+        });
+
+        it('validates members of namespaced interfaces', () => {
+            setupComponents(`
+                import type { Buttons.Themed } from "pkg:/components/Button.bs"
+
+                sub render(button as Themed)
+                    print button.theme
+                    print button.color
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('color', 'Buttons.Themed.color', 'Buttons.Themed')
+            ]);
+        });
+
+        it('does not add the imported file to the scope', () => {
+            setupComponents(`
+                import type { ButtonBase } from "pkg:/components/Button.bs"
+
+                sub init()
+                    button = createButton("Play")
+                    print button
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindFunction('createButton')
+            ]);
+            const scope = program.getComponentScope('MainMenu');
+            expect(scope.getAllFiles().map(x => x.destPath)).not.to.include(s`components/Button.bs`);
+            expect(scope.getCallableByName('createButton')).to.be.undefined;
+        });
+
+        it('does not add a script tag for the imported file', async () => {
+            setupComponents(`
+                import type { ButtonBase } from "pkg:/components/Button.bs"
+
+                sub init()
+                    button = { text: "Play", enabled: true } as ButtonBase
+                    print button.text
+                end sub
+            `);
+            await testTranspile(mainMenuXml, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="MainMenu" extends="Group">
+                    <script type="text/brightscript" uri="MainMenu.brs" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                </component>
+            `, 'none', 'components/MainMenu.xml');
+        });
+
+        it('flags names that do not exist in the imported file', () => {
+            setupComponents(`
+                import type { ButtonBase, Nope, Buttons.Missing } from "pkg:/components/Button.bs"
+
+                sub init()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindTypeImport('Nope', 'pkg:/components/Button.bs'),
+                DiagnosticMessages.cannotFindTypeImport('Buttons.Missing', 'pkg:/components/Button.bs')
+            ]);
+        });
+
+        it('flags functions and classes, which cannot be imported as types', () => {
+            setupComponents(`
+                import type { createButton, ButtonModel, Buttons.create } from "pkg:/components/Button.bs"
+
+                sub init()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.typeImportIsNotAType('createButton', 'Function'),
+                DiagnosticMessages.typeImportIsNotAType('ButtonModel', 'Class'),
+                DiagnosticMessages.typeImportIsNotAType('Buttons.create', 'Function')
+            ]);
+        });
+
+        it('flags a missing file without also flagging the names', () => {
+            setupComponents(`
+                import type { ButtonBase } from "pkg:/components/Missing.bs"
+
+                sub init()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.referencedFileDoesNotExist()
+            ]);
+        });
+
+        it('keeps imported names local to the importing file', () => {
+            program.setFile('components/helpers.bs', `
+                sub render(button as ButtonBase)
+                end sub
+            `);
+            setupComponents(`
+                import type { ButtonBase } from "pkg:/components/Button.bs"
+                import "pkg:/components/helpers.bs"
+
+                sub init()
+                    button = { text: "Play", enabled: true } as ButtonBase
+                    render(button)
+                end sub
+            `);
+            program.validate();
+            //helpers.bs is in the same scope but did not import the type itself
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.cannotFindName('ButtonBase')
+            ]);
+            const helpersDiagnostics = program.getDiagnostics().filter(x => x.location?.uri?.endsWith('helpers.bs'));
+            expect(helpersDiagnostics.map(x => x.code)).to.eql(['cannot-find-name']);
+            //MainMenu.bs itself is fine
+            expect(program.getDiagnostics().filter(x => x.location?.uri?.endsWith('MainMenu.bs'))).to.be.empty;
+        });
+
+        it('works alongside a regular import of the same file, but hints that it is unnecessary', () => {
+            setupComponents(`
+                import "pkg:/components/Button.bs"
+                import type { ButtonBase as Base } from "pkg:/components/Button.bs"
+
+                sub render(button as Base)
+                    print button.text
+                    other = createButton("Other")
+                    print other
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.unnecessaryTypeImport('pkg:/components/Button.bs'),
+                location: { range: Range.create(2, 57, 2, 82) }
+            }]);
+        });
+
+        it('hints when the imported file is in the scope through another file', () => {
+            program.setFile('components/helpers.bs', `
+                import "pkg:/components/Button.bs"
+            `);
+            setupComponents(`
+                import "pkg:/components/helpers.bs"
+                import type { ButtonBase } from "pkg:/components/Button.bs"
+
+                sub render(button as ButtonBase)
+                    print button.text
+                    print ButtonStyle.primary
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.unnecessaryTypeImport('pkg:/components/Button.bs')
+            ]);
+        });
+
+        it('does not hint when the file is only in scope elsewhere', () => {
+            //Button.bs is a regular member of the Button scope, but not of MainMenu
+            setupComponents(`
+                import type { ButtonBase } from "pkg:/components/Button.bs"
+
+                sub render(button as ButtonBase)
+                    print button.text
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('works from the source scope', () => {
+            setupComponents(`
+                sub init()
+                end sub
+            `);
+            program.setFile('source/main.bs', `
+                import type { ButtonBase, ButtonStyle } from "pkg:/components/Button.bs"
+
+                sub main()
+                    button = { text: "Play", enabled: true } as ButtonBase
+                    print button.text
+                    print ButtonStyle.secondary
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(program.getScopeByName('source').getAllFiles().map(x => x.destPath)).not.to.include(s`components/Button.bs`);
+        });
+
+        it('does not flag a file that is only referenced through type imports as unreferenced', () => {
+            program.setFile('components/types.bs', `
+                interface Options
+                    name as string
+                end interface
+            `);
+            setupComponents(`
+                import type { Options } from "pkg:/components/types.bs"
+
+                sub init()
+                    options = { name: "a" } as Options
+                    print options.name
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('revalidates the importing file when the imported file changes', () => {
+            setupComponents(`
+                import type { ButtonBase } from "pkg:/components/Button.bs"
+
+                sub render(button as ButtonBase)
+                    print button.text
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            //remove the `text` member from the interface
+            program.setFile('components/Button.bs', buttonBs.replace('text as string\n                enabled', 'enabled'));
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('text', 'ButtonBase.text', 'ButtonBase')
+            ]);
+
+            //put it back
+            program.setFile('components/Button.bs', buttonBs);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags an imported name that stops existing after the imported file changes', () => {
+            setupComponents(`
+                import type { ButtonStyle } from "pkg:/components/Button.bs"
+
+                sub init()
+                    print ButtonStyle.primary
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            program.setFile('components/Button.bs', buttonBs.replace('enum ButtonStyle', 'enum ButtonKind'));
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.cannotFindTypeImport('ButtonStyle', 'pkg:/components/Button.bs')
+            ]);
+        });
+
+        it('does not crash when a type import has an invalid path', () => {
+            setupComponents(`
+                import type { Options } from "pkg:"
+
+                sub init()
+                end sub
+            `);
+            program.validate();
+            //removing a file exercises the type-import lookups a second time
+            program.removeFile(s`${rootDir}/components/Button.bs`);
+            program.validate();
+            //the test passes if nothing above throws
+        });
+
+        it('inlines consts from a type-imported file that is not in any scope', async () => {
+            setupComponents(``);
+            program.setFile('components/lib/consts.bs', `
+                const GREETING = "hello"
+                const MESSAGE = GREETING
+
+                enum Kind
+                    alpha = 1
+                    beta = 2
+                end enum
+                const DEFAULT_KIND = Kind.beta
+
+                namespace Lib
+                    const INNER = "inner"
+                    const OUTER = INNER
+                    const SIZE = Kind.alpha
+                end namespace
+            `);
+            await testTranspile(`
+                import type { MESSAGE, DEFAULT_KIND, Lib.OUTER as Outer, Lib.SIZE } from "pkg:/components/lib/consts.bs"
+
+                sub init()
+                    print MESSAGE
+                    print DEFAULT_KIND
+                    print Outer
+                    print SIZE
+                end sub
+            `, `
+                'import type { MESSAGE, DEFAULT_KIND, Lib.OUTER as Outer, Lib.SIZE } from "pkg:/components/lib/consts.bs"
+
+                sub init()
+                    print "hello"
+                    print 2
+                    print "inner"
+                    print 1
+                end sub
+            `, 'trim', 'components/MainMenu.bs');
+        });
+
+        it('inlines a const chain that spans several type-imported files', async () => {
+            setupComponents(``);
+            //this file is never included in any scope
+            program.setFile('components/lib/fileC.bs', `
+                const ConstC = "hello"
+            `);
+            //neither is this one
+            program.setFile('components/lib/fileB.bs', `
+                import type { ConstC } from "./fileC.bs"
+
+                const ConstB = ConstC
+            `);
+            await testTranspile(`
+                import type { ConstB } from "pkg:/components/lib/fileB.bs"
+
+                const ConstA = ConstB
+
+                sub init()
+                    print ConstA
+                    print ConstB
+                end sub
+            `, `
+                'import type { ConstB } from "pkg:/components/lib/fileB.bs"
+
+
+                sub init()
+                    print "hello"
+                    print "hello"
+                end sub
+            `, 'trim', 'components/MainMenu.bs');
+        });
+
+        it('resolves a type-imported name inside a const against the file that declares the const', async () => {
+            setupComponents(`
+                sub init()
+                end sub
+            `);
+            //the type import only means something inside a.bs
+            program.setFile('source/a.bs', `
+                import type { ButtonStyle as Style, Buttons.MAX } from "pkg:/components/Button.bs"
+
+                const DEFAULT = Style.primary
+                const LIMITS = { max: MAX, style: Style.secondary }
+            `);
+            //b.bs is in the same scope as a.bs but has no type import of its own
+            await testTranspile(`
+                sub main()
+                    print DEFAULT
+                    print LIMITS
+                end sub
+            `, `
+                sub main()
+                    print "primary"
+                    print ({
+                        max: 10
+                        style: "secondary"
+                    })
+                end sub
+            `, 'trim', 'source/b.bs');
+        });
+
+        it('inlines type-imported references nested inside a const value', async () => {
+            setupComponents(``);
+            program.setFile('components/lib/fileB.bs', `
+                import type { ButtonStyle as Style, Buttons.MAX } from "pkg:/components/Button.bs"
+
+                const CONFIG = { style: Style.secondary, max: MAX }
+            `);
+            await testTranspile(`
+                import type { CONFIG } from "pkg:/components/lib/fileB.bs"
+                import type { ButtonStyle, DEFAULT_TEXT } from "pkg:/components/Button.bs"
+
+                const LOCAL = { style: ButtonStyle.primary, text: DEFAULT_TEXT }
+
+                sub init()
+                    print CONFIG
+                    print LOCAL
+                end sub
+            `, `
+                'import type { CONFIG } from "pkg:/components/lib/fileB.bs"
+                'import type { ButtonStyle, DEFAULT_TEXT } from "pkg:/components/Button.bs"
+
+
+                sub init()
+                    print ({
+                        style: "secondary"
+                        max: 10
+                    })
+                    print ({
+                        style: "primary"
+                        text: "Ok"
+                    })
+                end sub
+            `, 'trim', 'components/MainMenu.bs');
+        });
+
+        it('reports diagnostics in a file that is only ever `import type`d', () => {
+            //fileB is not in any scope, it is only referenced through a type import
+            program.setFile('components/lib/fileB.bs', `
+                import type { Nope } from "./missing.bs"
+
+                const ConstB = Nope
+            `);
+            program.setFile('source/main.bs', `
+                import type { ConstB } from "pkg:/components/lib/fileB.bs"
+
+                sub foo()
+                    print ConstB
+                end sub
+            `);
+            program.validate();
+            //the problem is reported where it is (fileB), not as `Cannot find name 'ConstB'` in main.bs (ConstB does exist)
+            expectDiagnostics(program, [
+                DiagnosticMessages.referencedFileDoesNotExist(),
+                DiagnosticMessages.cannotFindName('Nope')
+            ]);
+        });
+
+        it('reports type errors in a file that is only ever `import type`d', () => {
+            program.setFile('components/lib/fileB.bs', `
+                const ConstB = 1
+
+                sub bar()
+                    x as integer = "str"
+                end sub
+            `);
+            program.setFile('source/main.bs', `
+                import type { ConstB } from "pkg:/components/lib/fileB.bs"
+
+                sub foo()
+                    print ConstB
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+            ]);
+        });
+
+        it('gives a file that is only ever `import type`d a scope of its own, for as long as it needs one', () => {
+            program.setFile('components/types.bs', `
+                interface Options
+                    name as string
+                end interface
+            `);
+            const typesFile = program.getFile<BrsFile>('components/types.bs');
+            setupComponents(`
+                import type { Options } from "pkg:/components/types.bs"
+
+                sub init()
+                    options = { name: "a" } as Options
+                    print options.name
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(program.getScopesForFile(typesFile).map(x => isTypeImportScope(x))).to.eql([true]);
+
+            //the file joins a regular scope, so it no longer needs its own
+            program.setFile('components/Button.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Button" extends="Group">
+                    <script type="text/brighterscript" uri="Button.bs" />
+                    <script type="text/brighterscript" uri="types.bs" />
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(program.getScopesForFile(typesFile).map(x => x.name)).to.eql([s`components/Button.xml`]);
+
+            //back to being type-imported only
+            program.setFile('components/Button.xml', buttonXml);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(program.getScopesForFile(typesFile).map(x => isTypeImportScope(x))).to.eql([true]);
+
+            //nobody imports it anymore, so it is an unreferenced file like any other
+            program.setFile('components/MainMenu.bs', `
+                sub init()
+                end sub
+            `);
+            program.validate();
+            expect(program.getScopesForFile(typesFile)).to.eql([]);
+            expectDiagnostics(program, [
+                DiagnosticMessages.fileNotReferencedByAnyOtherFile()
+            ]);
+        });
+
+        it('revalidates files that use a const whose value comes from a type import when that target changes', () => {
+            program.setFile('components/lib/fileC.bs', `
+                const ConstC = "hello"
+            `);
+            program.setFile('source/fileB.bs', `
+                import type { ConstC } from "pkg:/components/lib/fileC.bs"
+
+                const ConstB = ConstC
+            `);
+            program.setFile('source/main.bs', `
+                sub foo()
+                    x as integer = ConstB
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+            ]);
+
+            program.removeFile(s`${rootDir}/components/lib/fileC.bs`);
+            program.setFile('components/lib/fileC.bs', `
+                const ConstC = 1
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            //and back again
+            program.setFile('components/lib/fileC.bs', `
+                const ConstC = "hello"
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+            ]);
+        });
+
+        it('reports something when the end of a scopeless type import chain is removed', () => {
+            program.setFile('components/lib/fileC.bs', `
+                const ConstC = "hello"
+            `);
+            //not in any scope
+            program.setFile('components/lib/fileB.bs', `
+                import type { ConstC } from "./fileC.bs"
+
+                const ConstB = ConstC
+            `);
+            program.setFile('source/main.bs', `
+                import type { ConstB } from "pkg:/components/lib/fileB.bs"
+
+                sub foo()
+                    print ConstB
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            program.removeFile(s`${rootDir}/components/lib/fileC.bs`);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.referencedFileDoesNotExist()
+            ]);
+        });
+
+        it('inlines the namespaced const when a type import has the same name', async () => {
+            program.setFile('components/lib/c.bs', `
+                const LIMIT = "one"
+            `);
+            //inside the namespace, `LIMIT` is the namespace's own const (as it is for the validator). Outside, it is the type import
+            await testTranspile(`
+                import type { LIMIT } from "pkg:/components/lib/c.bs"
+
+                namespace Foo
+                    const LIMIT = 2
+                    sub main()
+                        print LIMIT
+                    end sub
+                end namespace
+
+                sub outer()
+                    print LIMIT
+                end sub
+            `, `
+                'import type { LIMIT } from "pkg:/components/lib/c.bs"
+
+
+                sub Foo_main()
+                    print 2
+                end sub
+
+                sub outer()
+                    print "one"
+                end sub
+            `);
+        });
+
+        it('flags a type import whose local name collides with a declaration in the same file', () => {
+            program.setFile('components/lib/c.bs', `
+                const LIMIT = "one"
+                enum Kind
+                    a
+                end enum
+            `);
+            program.setFile('source/main.bs', `
+                import type { LIMIT, Kind as Shape } from "pkg:/components/lib/c.bs"
+
+                const LIMIT = 2
+
+                sub Shape()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.typeImportCollidesWithDeclaration('LIMIT', 'Const'),
+                DiagnosticMessages.typeImportCollidesWithDeclaration('Shape', 'Function')
+            ]);
+        });
+
+        it('reports a circular reference for consts that cycle through type imports', () => {
+            program.setFile('components/lib/x.bs', `
+                import type { B } from "./y.bs"
+
+                const A = B
+            `);
+            program.setFile('components/lib/y.bs', `
+                import type { A } from "./x.bs"
+
+                const B = A
+            `);
+            program.setFile('source/main.bs', `
+                import type { A } from "pkg:/components/lib/x.bs"
+
+                sub main()
+                    print A
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.circularReferenceDetected(['A', 'B', 'A']),
+                DiagnosticMessages.circularReferenceDetected(['B', 'A', 'B'])
+            ]);
+        });
     });
 
     it('getEnumMemberFileLink does not crash on undefined name', () => {
@@ -2561,6 +3399,31 @@ describe('Scope', () => {
         });
 
         describe('revalidations', () => {
+            it('revalidates files that use a const whose value comes from a const in a changed file', () => {
+                program.setFile('source/fileC.bs', `
+                    const ConstC = "hello"
+                `);
+                program.setFile('source/fileB.bs', `
+                    const ConstB = ConstC
+                `);
+                program.setFile('source/main.bs', `
+                    sub foo()
+                        x as integer = ConstB
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
+
+                //main.bs does not use ConstC directly, but ConstB takes its type from it
+                program.setFile('source/fileC.bs', `
+                    const ConstC = 1
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
             it('revalidates dependent files when a file is changed', () => {
                 program.setFile('source/common.bs', `
                     function doThing() as string

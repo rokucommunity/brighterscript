@@ -6,7 +6,7 @@ import { CompletionItemKind } from 'vscode-languageserver';
 import chalk from 'chalk';
 import * as path from 'path';
 import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
-import type { NamespaceFileContribution } from '../Scope';
+import type { NamespaceFileContribution, Scope } from '../Scope';
 import { SymbolTable } from '../SymbolTable';
 import { FunctionScope } from '../FunctionScope';
 import type { Callable, CallableParam, CommentFlag, BsDiagnostic, FileReference, FileLink, SerializedCodeFile } from '../interfaces';
@@ -16,11 +16,11 @@ import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers } from '../lexer/TokenKind';
 import { Parser, ParseMode } from '../parser/Parser';
 import type { FunctionExpression } from '../parser/Expression';
-import type { ClassStatement, NamespaceStatement, MethodStatement, FieldStatement } from '../parser/Statement';
+import type { ClassStatement, NamespaceStatement, MethodStatement, FieldStatement, TypeImportSpecifier, ImportStatement, ConstStatement, EnumStatement } from '../parser/Statement';
 import type { Program } from '../Program';
 import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
-import { isClassStatement, isDottedGetExpression, isFunctionExpression, isNamespaceStatement, isVariableExpression, isImportStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType, isFunctionStatement, isEnumStatement, isConstStatement } from '../astUtils/reflection';
+import { isClassStatement, isDottedGetExpression, isFunctionExpression, isNamespaceStatement, isVariableExpression, isImportStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType, isFunctionStatement, isEnumStatement, isConstStatement, isBrsFile } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyChangedEvent, DependencyGraph } from '../DependencyGraph';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
@@ -53,6 +53,18 @@ export type ChangedSymbolMap = Map<SymbolTypeFlag, Set<string>>;
 export interface ProvidedSymbolInfo {
     symbolMap: ProvidedSymbolMap;
     changes: ChangedSymbolMap;
+}
+
+/**
+ * Details about one named type import (i.e. the `Alpha as Beta` in `import type { Alpha as Beta } from "pkg:/source/lib.bs"`)
+ */
+export interface TypeImportInfo {
+    statement: ImportStatement;
+    specifier: TypeImportSpecifier;
+    /**
+     * The destPath of the imported file
+     */
+    destPath: string;
 }
 
 /**
@@ -267,13 +279,129 @@ export class BrsFile implements BscFile {
                         filePathRange: statement.tokens.path.location?.range,
                         destPath: util.getPkgPathFromTarget(this.destPath, statement.filePath),
                         sourceFile: this,
-                        text: statement.tokens.path.text
+                        text: statement.tokens.path.text,
+                        isTypeOnly: statement.isTypeOnly
                     });
                 }
             }
             return result;
         }) ?? [];
         return result;
+    }
+
+    /**
+     * The named type imports declared in this file (i.e. `import type { Alpha as Beta } from "pkg:/source/lib.bs"`),
+     * indexed by their lower-case local name (`beta` in the example above)
+     */
+    public get typeImports(): Map<string, TypeImportInfo> {
+        return this.cache?.getOrAdd('typeImports', () => {
+            const result = new Map<string, TypeImportInfo>();
+            for (const statement of this._cachedLookups?.importStatements ?? []) {
+                if (isImportStatement(statement) && statement.isTypeOnly && statement.tokens.path) {
+                    const destPath = util.getPkgPathFromTarget(this.destPath, statement.filePath);
+                    for (const specifier of statement.typeImports) {
+                        if (specifier.localName) {
+                            result.set(specifier.localName.toLowerCase(), {
+                                statement: statement,
+                                specifier: specifier,
+                                destPath: destPath
+                            });
+                        }
+                    }
+                }
+            }
+            return result;
+        }) ?? new Map<string, TypeImportInfo>();
+    }
+
+    /**
+     * Get the symbol table that a named type import should be resolved against: the root symbol table of the imported file,
+     * or the aggregate symbol table of the namespace when the imported name is namespaced (i.e. `Alpha.Beta`).
+     * Returns undefined when the imported file is not in the program (yet)
+     * @param destPath the destPath of the imported file
+     * @param namespaceName the namespace portion of the imported name (i.e. `Alpha` for `Alpha.Beta`), if any
+     */
+    public getTypeImportSymbolTable(destPath: string, namespaceName?: string): SymbolTable | undefined {
+        const targetFile = this.program?.getFile<BrsFile>(destPath);
+        if (!isBrsFile(targetFile) || targetFile === this) {
+            return undefined;
+        }
+        if (!namespaceName) {
+            return targetFile.parser?.symbolTable;
+        }
+        return targetFile.getNamespaceLookupObject().get(namespaceName.toLowerCase())?.symbolTable;
+    }
+
+    /**
+     * Get the symbols that a named type import points at in the imported file (i.e. the `Alpha.Beta` const in
+     * `import type { Alpha.Beta } from "pkg:/source/lib.bs"`). Empty when the imported file is not in the program or does not declare the name
+     */
+    public getTypeImportTargetSymbols(typeImport: TypeImportInfo): BscSymbol[] {
+        const nameParts = typeImport.specifier.name.split('.');
+        const memberName = nameParts.pop();
+        const namespaceName = nameParts.join('.');
+        const symbolTable = this.getTypeImportSymbolTable(typeImport.destPath, namespaceName);
+        // eslint-disable-next-line no-bitwise
+        return symbolTable?.getSymbol(memberName, SymbolTypeFlag.runtime | SymbolTypeFlag.typetime, { ignoreParentsAndSiblings: true }) ?? [];
+    }
+
+    /**
+     * Find the const that `entityName` refers to when it is written in this file. The lookup order mirrors how names resolve
+     * during validation: a member of the containing namespace first, then a named type import (`import type { Name } from "..."`),
+     * then the scope. A file that is not in any scope falls back to its own consts.
+     * @param entityName the name as written (i.e. `MAX` or `Buttons.MAX`)
+     * @param containingNamespace the namespace the name was written in, if any
+     * @param scope the scope the name is being resolved in, if this file has one
+     */
+    public findConstStatement(entityName: string, containingNamespace: string | undefined, scope: Scope | undefined): FileLink<ConstStatement> | undefined {
+        return this.findStatement('constStatementMap', entityName, containingNamespace, scope);
+    }
+
+    /**
+     * Find the enum that `entityName` refers to when it is written in this file (see `findConstStatement` for the lookup order)
+     */
+    public findEnumStatement(entityName: string, containingNamespace: string | undefined, scope: Scope | undefined): FileLink<EnumStatement> | undefined {
+        return this.findStatement('enumStatementMap', entityName, containingNamespace, scope);
+    }
+
+    private findStatement<T extends ConstStatement | EnumStatement>(mapName: 'constStatementMap' | 'enumStatementMap', entityName: string, containingNamespace: string | undefined, scope: Scope | undefined): FileLink<T> | undefined {
+        const lowerName = entityName?.toLowerCase();
+        if (!lowerName) {
+            return undefined;
+        }
+        const lookup = (name: string): FileLink<T> | undefined => {
+            if (scope) {
+                return mapName === 'constStatementMap'
+                    ? scope.getConstFileLink(name) as FileLink<T>
+                    : scope.getEnumFileLink(name) as FileLink<T>;
+            }
+            const statement = this._cachedLookups?.[mapName].get(name) as T;
+            return statement ? { item: statement, file: this } : undefined;
+        };
+
+        //a member of the containing namespace shadows everything else with the same name
+        const fullNameLower = util.getFullyQualifiedClassName(lowerName, containingNamespace)?.toLowerCase();
+        if (fullNameLower !== lowerName) {
+            const result = lookup(fullNameLower);
+            if (result) {
+                return result;
+            }
+        }
+
+        //a named type import shadows anything in the scope with the same name, so don't look any further when the name is one
+        const parts = lowerName.split('.');
+        const typeImport = this.typeImports.get(parts[0]);
+        if (typeImport) {
+            const targetFile = this.program?.getFile<BrsFile>(typeImport.destPath);
+            if (!isBrsFile(targetFile) || targetFile === this) {
+                return undefined;
+            }
+            parts[0] = typeImport.specifier.name.toLowerCase();
+            const statement = targetFile._cachedLookups?.[mapName].get(parts.join('.')) as T;
+            return statement ? { item: statement, file: targetFile } : undefined;
+        }
+
+        return lookup(lowerName);
     }
 
     /**
@@ -409,7 +537,8 @@ export class BrsFile implements BscFile {
      * The list of files that this file depends on
      */
     public get dependencies() {
-        const result = this.ownScriptImports.filter(x => !!x.destPath).map(x => x.destPath.toLowerCase());
+        //type-only imports do not bring the imported file into the scope, so they are not dependencies
+        const result = this.ownScriptImports.filter(x => !!x.destPath && !x.isTypeOnly).map(x => x.destPath.toLowerCase());
 
         //if this is a .brs file, watch for typedef changes
         if (this.extension === '.brs') {
@@ -1145,6 +1274,11 @@ export class BrsFile implements BscFile {
                         // this catches namespaced things
                         continue;
                     }
+                    //names from a named type import (`import type { Name } from "..."`) are resolved from the imported file,
+                    //never from the scope, so the scope does not need to provide them
+                    if (this.typeImports.has(symbol.typeChain[0]?.name?.toLowerCase())) {
+                        continue;
+                    }
                     const existingSymbol = this.ast.getSymbolTable().getSymbol(fullSymbolKey, flag);
                     if (existingSymbol?.length > 0) {
                         if (symbol[0]?.data?.isAlias) {
@@ -1228,7 +1362,8 @@ export class BrsFile implements BscFile {
                 const symbolNameLower = symbolTable.namePrefixLower
                     ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}`
                     : symbol.name.toLowerCase();
-                if (symbolNameLower === 'm') {
+                //symbols from named type imports are local to this file, so they are not provided to the scope
+                if (symbolNameLower === 'm' || symbol.data?.isTypeImport) {
                     continue;
                 }
                 const duplicates = getAnyDuplicates(symbolNameLower, runTimeSymbolMap, referenceRunTimeSymbolMap);
@@ -1244,7 +1379,8 @@ export class BrsFile implements BscFile {
                 const symbolNameLower = symbolTable.namePrefixLower
                     ? `${symbolTable.namePrefixLower}.${symbol.name.toLowerCase()}`
                     : symbol.name.toLowerCase();
-                if (symbolNameLower === 'm') {
+                //symbols from named type imports are local to this file, so they are not provided to the scope
+                if (symbolNameLower === 'm' || symbol.data?.isTypeImport) {
                     continue;
                 }
 

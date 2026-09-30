@@ -91,8 +91,9 @@ end function
 
 ```brighterscript
 import "pkg:/source/util.bs"
-sub main()
-    print util_toUpper("hello world")
+import type { Options } from "pkg:/source/types.bs"
+sub main(options as Options)
+    print util_toUpper(options.name)
 end sub
 ```
 

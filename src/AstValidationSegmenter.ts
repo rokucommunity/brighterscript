@@ -97,6 +97,11 @@ export class AstValidationSegmenter {
         if (isArrayType(nodeType)) {
             nodeType = nodeType.defaultType;
         }
+        if (extraData.isTypeImport) {
+            //symbols from named type imports resolve against the imported file directly (which is not part of this scope),
+            //so they are never required from the scope. Problems with them are reported on the import statement itself
+            return false;
+        }
         if (!nodeType?.isResolvable()) {
             let symbolsSet: Set<UnresolvedSymbol>;
             if (!assignedSymbolsNames?.has(typeChain[0].name.toLowerCase())) {
