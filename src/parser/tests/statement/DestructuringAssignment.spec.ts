@@ -545,6 +545,66 @@ describe('DestructuringAssignmentStatement', () => {
             ]);
         });
 
+        it('flags a key that does not exist on a typed source', () => {
+            program.setFile('source/main.bs', `
+                interface Person
+                    name as string
+                end interface
+                sub main(p as Person)
+                    { nmae } = p
+                    { nmae: q } = p
+                    print nmae; q
+                end sub
+            `);
+            program.validate();
+            //same as `x = p.nmae`: reported at the key, and the targets don't error again where they're used
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.cannotFindName('nmae', 'p.nmae', 'Person'),
+                location: { range: util.createRange(5, 22, 5, 26) }
+            }, {
+                ...DiagnosticMessages.cannotFindName('nmae', 'p.nmae', 'Person'),
+                location: { range: util.createRange(6, 22, 6, 26) }
+            }]);
+        });
+
+        it('flags a missing key in a nested pattern and inside an array pattern', () => {
+            program.setFile('source/main.bs', `
+                interface Address
+                    city as string
+                end interface
+                interface Person
+                    address as Address
+                    friends as Person[]
+                end interface
+                sub main(p as Person)
+                    { address: { ctiy } } = p
+                    [{ adress }] = p.friends
+                    print ctiy; adress
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.cannotFindName('ctiy', 'p.address.ctiy', 'Address'),
+                location: { range: util.createRange(9, 33, 9, 37) }
+            }, {
+                ...DiagnosticMessages.cannotFindName('adress', 'p.friends[0].adress', 'Person'),
+                location: { range: util.createRange(10, 23, 10, 29) }
+            }]);
+        });
+
+        it('does not flag keys on dynamic or associative array sources', () => {
+            program.setFile('source/main.bs', `
+                sub main(data, aa as object)
+                    { anything, nested: { deep } } = data
+                    { whatever } = aa
+                    { missing } = { name: "bob" }
+                    print anything; deep; whatever; missing
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         it('registers the targets as variables with inferred types', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
                 sub main()

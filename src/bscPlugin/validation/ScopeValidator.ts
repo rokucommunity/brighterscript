@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
-import { isAALiteralExpression, isAliasStatement, isArrayLiteralExpression, isArrayType, isArrayTypeLike, isAssignmentStatement, isAssociativeArrayType, isAssociativeArrayTypeLike, isBinaryExpression, isBooleanTypeLike, isBrsFile, isBuiltInType, isCallableType, isCallExpression, isCallFuncableTypeLike, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isInterfaceType, isIterableType, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isTypeStatementType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
+import { isAALiteralExpression, isAliasStatement, isDestructuringAssignmentStatement, isObjectPatternExpression, isArrayLiteralExpression, isArrayType, isArrayTypeLike, isAssignmentStatement, isAssociativeArrayType, isAssociativeArrayTypeLike, isBinaryExpression, isBooleanTypeLike, isBrsFile, isBuiltInType, isCallableType, isCallExpression, isCallFuncableTypeLike, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isInterfaceType, isIterableType, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isTypeStatementType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -14,7 +14,7 @@ import type { Token } from '../../lexer/Token';
 import { AstNodeKind } from '../../parser/AstNode';
 import type { AstNode } from '../../parser/AstNode';
 import type { Expression } from '../../parser/AstNode';
-import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallfuncExpression, AAIndexedMemberExpression, SpreadExpression } from '../../parser/Expression';
+import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallfuncExpression, AAIndexedMemberExpression, SpreadExpression, DestructuringPattern } from '../../parser/Expression';
 import { CallExpression } from '../../parser/Expression';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BscType } from '../../types/BscType';
@@ -504,6 +504,10 @@ export class ScopeValidator {
         } else if (isFunctionParameterExpression(definingNode)) {
             // this symbol was defined in a function param
             return true;
+        } else if (isDestructuringAssignmentStatement(definingNode)) {
+            // this symbol is one of the targets of a destructuring assignment (an unknown key is flagged at the key itself)
+            const lowerName = expression.tokens.name?.text.toLowerCase();
+            return definingNode.getTargetNames().some(x => x.text?.toLowerCase() === lowerName);
         } else {
             assignmentAncestor = expression?.findAncestor(isAssignmentStatement);
         }
@@ -962,6 +966,12 @@ export class ScopeValidator {
      * Detect when declared type does not match rhs type
      */
     private validateDestructuringAssignmentStatement(file: BrsFile, destructuringStmt: DestructuringAssignmentStatement) {
+        const sourceType = this.getNodeTypeWrapper(file, destructuringStmt.value, { flags: SymbolTypeFlag.runtime });
+        const sourceName = isVariableExpression(destructuringStmt.value) || isDottedGetExpression(destructuringStmt.value)
+            ? util.getAllDottedGetPartsAsString(destructuringStmt.value)
+            : undefined;
+        this.validateDestructuringPatternKeys(file, destructuringStmt.pattern, sourceType, sourceName);
+
         for (const target of destructuringStmt.getTargets({ flags: SymbolTypeFlag.runtime })) {
             //each target is a local variable declaration, same as `name = source.key`
             this.detectShadowedLocalVar(file, {
@@ -970,6 +980,45 @@ export class ScopeValidator {
                 type: target.type,
                 nameRange: target.name.location?.range
             });
+        }
+    }
+
+    /**
+     * Flag object pattern keys that do not exist on a known source type, the same way `source.key` would be flagged
+     */
+    private validateDestructuringPatternKeys(file: BrsFile, pattern: DestructuringPattern, sourceType: BscType, sourceName: string | undefined) {
+        if (!this.isTypeKnown(sourceType) || isDynamicType(sourceType)) {
+            return;
+        }
+        if (isObjectPatternExpression(pattern)) {
+            for (const property of pattern.properties) {
+                const keyName = property.getKeyName();
+                if (!keyName) {
+                    continue;
+                }
+                const fullName = sourceName ? `${sourceName}.${keyName}` : keyName;
+                const memberType = sourceType.getMemberType(keyName, {
+                    flags: SymbolTypeFlag.runtime,
+                    changeUnknownNodeMemberToDynamic: file.parseMode === ParseMode.BrightScript || !this.event.program.options.strictNodeMembers
+                });
+                if (!this.isTypeKnown(memberType)) {
+                    this.addMultiScopeDiagnostic({
+                        ...DiagnosticMessages.cannotFindName(keyName, fullName, sourceType.toString(), isNamespaceType(sourceType) ? 'namespace' : 'type'),
+                        location: property.tokens.key.location
+                    });
+                } else if (property.pattern) {
+                    this.validateDestructuringPatternKeys(file, property.pattern, memberType, fullName);
+                }
+            }
+        } else {
+            const itemType = isArrayType(sourceType) ? sourceType.defaultType : DynamicType.instance;
+            let index = 0;
+            for (const element of pattern.elements) {
+                if (element.pattern) {
+                    this.validateDestructuringPatternKeys(file, element.pattern, itemType, sourceName ? `${sourceName}[${index}]` : undefined);
+                }
+                index++;
+            }
         }
     }
 
