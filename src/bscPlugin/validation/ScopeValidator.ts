@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
-import { isAliasStatement, isArrayType, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallFuncableTypeLike, isCallableType, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isIterableType, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypeStatementType, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
+import { isAALiteralExpression, isAliasStatement, isArrayLiteralExpression, isArrayType, isArrayTypeLike, isAssignmentStatement, isAssociativeArrayType, isAssociativeArrayTypeLike, isBinaryExpression, isBooleanTypeLike, isBrsFile, isBuiltInType, isCallableType, isCallExpression, isCallFuncableTypeLike, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isInterfaceType, isIterableType, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isTypeStatementType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -14,7 +14,7 @@ import type { Token } from '../../lexer/Token';
 import { AstNodeKind } from '../../parser/AstNode';
 import type { AstNode } from '../../parser/AstNode';
 import type { Expression } from '../../parser/AstNode';
-import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallfuncExpression, AAIndexedMemberExpression } from '../../parser/Expression';
+import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallfuncExpression, AAIndexedMemberExpression, SpreadExpression } from '../../parser/Expression';
 import { CallExpression } from '../../parser/Expression';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BscType } from '../../types/BscType';
@@ -232,6 +232,11 @@ export class ScopeValidator {
                     UnaryExpression: (unaryExpr) => {
                         this.addValidationKindMetric('UnaryExpression', () => {
                             this.validateUnaryExpression(file, unaryExpr);
+                        });
+                    },
+                    SpreadExpression: (spreadExpr) => {
+                        this.addValidationKindMetric('SpreadExpression', () => {
+                            this.validateSpreadExpression(file, spreadExpr);
                         });
                     },
                     AssignmentStatement: (assignStmt) => {
@@ -1043,6 +1048,64 @@ export class ScopeValidator {
     /**
      * Detect invalid use of a Unary operator
      */
+    /**
+     * Flag a spread whose value is known to be something `.append()` cannot take: an array literal needs an
+     * array-like value and an AA literal needs an AA-like value. Unknown, unresolvable, `dynamic` and `object`
+     * values are left alone.
+     */
+    private validateSpreadExpression(file: BrsFile, spreadExpr: SpreadExpression) {
+        const literal = spreadExpr.parent;
+        const isArray = isArrayLiteralExpression(literal);
+        if (!isArray && !isAALiteralExpression(literal)) {
+            return;
+        }
+        if (!util.getSpreadLiteralOwnerStatement(literal)) {
+            //the spread is in an unsupported position, which is already reported; don't stack a type error on it
+            return;
+        }
+        const valueType = this.getNodeTypeWrapper(file, spreadExpr.expression, { flags: SymbolTypeFlag.runtime });
+        if (!valueType?.isResolvable()) {
+            return;
+        }
+        const isAllowed = isArray ? this.canSpreadIntoArray(valueType) : this.canSpreadIntoAA(valueType);
+        if (!isAllowed) {
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.spreadValueTypeMismatch(valueType.toString(), isArray ? 'array' : 'associative array'),
+                location: spreadExpr.location
+            });
+        }
+    }
+
+    private canSpreadIntoArray(type: BscType): boolean {
+        return this.isSpreadTypeAllowed(type, t => isArrayTypeLike(t) || isBuiltInType(t, 'roList'));
+    }
+
+    private canSpreadIntoAA(type: BscType): boolean {
+        return this.isSpreadTypeAllowed(type, t => {
+            //user-defined interfaces and classes are AAs at runtime; built-in interfaces (roSGNode, roArray, ...) are not
+            return isAssociativeArrayTypeLike(t) || (isInterfaceType(t) && !t.isBuiltIn) || isClassType(t);
+        });
+    }
+
+    private isSpreadTypeAllowed(type: BscType, isAllowedConcreteType: (t: BscType) => boolean): boolean {
+        while (isTypeStatementType(type)) {
+            type = type.wrappedType;
+        }
+        if (!type || !type.isResolvable() || isDynamicType(type) || isObjectType(type)) {
+            return true;
+        }
+        if (isCallableType(type)) {
+            //an AA member that shares a name with a built-in method (`m.items`, `m.count`) resolves to that method's
+            //type even though it is almost certainly a field, so a function type is not evidence of a bad spread
+            return true;
+        }
+        if (isUnionType(type)) {
+            //a union is fine as long as it could hold an allowed value
+            return type.types.some(t => this.isSpreadTypeAllowed(t, isAllowedConcreteType));
+        }
+        return isAllowedConcreteType(type);
+    }
+
     private validateUnaryExpression(file: BrsFile, unaryExpr: UnaryExpression) {
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
 

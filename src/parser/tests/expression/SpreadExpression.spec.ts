@@ -5,9 +5,11 @@ import { Parser, ParseMode } from '../../Parser';
 import { Program } from '../../../Program';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
-import { isArrayLiteralExpression, isSpreadExpression, isAALiteralExpression } from '../../../astUtils/reflection';
+import { isArrayLiteralExpression, isSpreadExpression, isAALiteralExpression, isAssignmentStatement } from '../../../astUtils/reflection';
 import type { AssignmentStatement } from '../../Statement';
 import type { AALiteralExpression, ArrayLiteralExpression } from '../../Expression';
+import type { BrsFile } from '../../../files/BrsFile';
+import { SymbolTypeFlag } from '../../../SymbolTypeFlag';
 
 describe('SpreadExpression', () => {
     function parseFirstAssignmentValue(source: string, mode = ParseMode.BrighterScript) {
@@ -273,8 +275,9 @@ describe('SpreadExpression', () => {
             program.setFile('source/main.bs', `
                 sub main()
                     alpha = []
+                    alphaAA = {}
                     result = { a: [...alpha] }
-                    other = { ...alpha, b: { ...alpha } }
+                    other = { ...alphaAA, b: { ...alphaAA } }
                 end sub
             `);
             program.validate();
@@ -313,6 +316,219 @@ describe('SpreadExpression', () => {
             expectDiagnosticsIncludes(program, [
                 DiagnosticMessages.spreadOperatorNotAllowedHere()
             ]);
+        });
+        describe('spread value type', () => {
+            it('flags spreading an integer into an AA literal', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        a = { ...5 }
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.spreadValueTypeMismatch('integer', 'associative array')
+                ]);
+            });
+
+            it('flags spreading an AA into an array literal', () => {
+                program.setFile('source/main.bs', `
+                    sub main(someAA as roAssociativeArray)
+                        b = [ ...someAA ]
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.spreadValueTypeMismatch('roAssociativeArray', 'array')
+                ]);
+            });
+
+            it('flags spreading invalid', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        c = { ...invalid }
+                        d = [ ...invalid ]
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.spreadValueTypeMismatch('invalid', 'associative array'),
+                    DiagnosticMessages.spreadValueTypeMismatch('invalid', 'array')
+                ]);
+            });
+
+            it('flags spreading a node into an AA literal', () => {
+                program.setFile('source/main.bs', `
+                    sub main(node as roSGNode)
+                        d = { ...node }
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.spreadValueTypeMismatch('roSGNodeNode', 'associative array')
+                ]);
+            });
+
+            it('flags spreading an array into an AA literal', () => {
+                program.setFile('source/main.bs', `
+                    sub main(someArray as integer[])
+                        e = { ...someArray }
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.spreadValueTypeMismatch('Array<integer>', 'associative array')
+                ]);
+            });
+
+            it('flags spreading primitives and interfaces into an array literal', () => {
+                program.setFile('source/main.bs', `
+                    interface Thing
+                        color as string
+                    end interface
+                    sub main(name as string, thing as Thing)
+                        f = [ ...name ]
+                        g = [ ...thing ]
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.spreadValueTypeMismatch('string', 'array'),
+                    DiagnosticMessages.spreadValueTypeMismatch('Thing', 'array')
+                ]);
+            });
+
+            it('allows dynamic, object, and unresolvable values', () => {
+                program.setFile('source/main.bs', `
+                    sub main(dyn as dynamic, obj as object)
+                        a = { ...dyn }
+                        b = [ ...dyn ]
+                        c = { ...obj }
+                        d = [ ...obj ]
+                        e = { ...m.config }
+                        f = [ ...m.list ]
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows correctly typed array and AA values', () => {
+                program.setFile('source/main.bs', `
+                    interface Thing
+                        color as string
+                    end interface
+                    class Widget
+                        size = 1
+                    end class
+                    sub main(someAA as roAssociativeArray, someArray as integer[], thing as Thing, widgetInstance as Widget, roListValue as roList, arr as roArray)
+                        a = { ...someAA }
+                        b = [ ...someArray ]
+                        c = { ...thing }
+                        d = { ...widgetInstance }
+                        e = [ ...roListValue ]
+                        f = [ ...arr ]
+                        g = [ ...[1, 2] ]
+                        h = { ...{ a: 1 } }
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows a union that could hold an allowed value', () => {
+                program.setFile('source/main.bs', `
+                    sub main(flag as boolean)
+                        x = [1]
+                        if flag then x = {}
+                        y = { ...x }
+                        z = [ ...x ]
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('does not flag AA members that share a name with a built-in method', () => {
+                program.setFile('components/Comp.xml', `<?xml version="1.0" encoding="utf-8" ?><component name="Comp" extends="Group"><script uri="Comp.bs"/></component>`);
+                program.setFile('components/Comp.bs', `
+                    sub init()
+                        m.items = [ ...m.items, 1 ]
+                        m.count = { ...m.count }
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+        });
+
+        it('includes the members of a spread AA literal in the inferred type', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                interface Thing
+                    color as string
+                    size as integer
+                end interface
+                sub take(t as Thing)
+                end sub
+                sub main()
+                    defaults = { color: "red", size: 1 }
+                    d = { ...defaults, size: 2 }
+                    take(d)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const dAssignment = file.ast.findChildren<AssignmentStatement>(isAssignmentStatement).find(x => x.tokens.name.text === 'd');
+            const dType = dAssignment.value.getType({ flags: SymbolTypeFlag.runtime });
+            expect(dType.getMemberTable().getOwnSymbols(SymbolTypeFlag.runtime).map(x => x.name).sort()).to.eql(['color', 'size']);
+            expect(dType.getMemberType('color', { flags: SymbolTypeFlag.runtime }).toString()).to.equal('string');
+            expect(dType.getMemberType('size', { flags: SymbolTypeFlag.runtime }).toString()).to.equal('integer');
+        });
+
+        it('includes the members of a spread interface-typed value in the inferred type', () => {
+            program.setFile('source/main.bs', `
+                interface Thing
+                    color as string
+                    size as integer
+                end interface
+                sub take(t as Thing)
+                end sub
+                sub main(defaults as Thing)
+                    d = { ...defaults, size: 2 }
+                    take(d)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('lets a member after a spread replace the spread member type', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    defaults = { size: 1 }
+                    d = { ...defaults, size: "large" }
+                    e = { size: "large", ...defaults }
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const assignments = file.ast.findChildren<AssignmentStatement>(isAssignmentStatement);
+            const dType = assignments.find(x => x.tokens.name.text === 'd').value.getType({ flags: SymbolTypeFlag.runtime });
+            expect(dType.getMemberType('size', { flags: SymbolTypeFlag.runtime }).toString()).to.equal('string');
+            const eType = assignments.find(x => x.tokens.name.text === 'e').value.getType({ flags: SymbolTypeFlag.runtime });
+            expect(eType.getMemberType('size', { flags: SymbolTypeFlag.runtime }).toString()).to.equal('integer');
+        });
+
+        it('does not add members when the spread value type is unknown', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main(other as dynamic)
+                    d = { ...other, size: 2 }
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const dAssignment = file.ast.findChildren<AssignmentStatement>(isAssignmentStatement).find(x => x.tokens.name.text === 'd');
+            const dType = dAssignment.value.getType({ flags: SymbolTypeFlag.runtime });
+            expect(dType.getMemberTable().getOwnSymbols(SymbolTypeFlag.runtime).map(x => x.name)).to.eql(['size']);
         });
     });
 
@@ -551,6 +767,74 @@ describe('SpreadExpression', () => {
             `);
         });
 
+        it('evaluates trailing elements before a call in the index target, matching native order', async () => {
+            await testTranspile(`
+                sub main()
+                    a = [1]
+                    store = {}
+                    store[nextKey()] = [...a, f()]
+                end sub
+                function nextKey()
+                    return "k"
+                end function
+                function f()
+                    return 1
+                end function
+            `, `
+                sub main()
+                    a = [
+                        1
+                    ]
+                    store = {}
+                    __bsc_tmp_spread = []
+                    __bsc_tmp_spread.append(a)
+                    __bsc_tmp_spread.push(f())
+                    store[nextKey()] = __bsc_tmp_spread
+                end sub
+
+                function nextKey()
+                    return "k"
+                end function
+
+                function f()
+                    return 1
+                end function
+            `);
+        });
+
+        it('evaluates trailing elements before a call in the object of a property target, matching native order', async () => {
+            await testTranspile(`
+                sub main()
+                    a = [1]
+                    getObj().list = [...a, f()]
+                end sub
+                function getObj()
+                    return {}
+                end function
+                function f()
+                    return 1
+                end function
+            `, `
+                sub main()
+                    a = [
+                        1
+                    ]
+                    __bsc_tmp_spread = []
+                    __bsc_tmp_spread.append(a)
+                    __bsc_tmp_spread.push(f())
+                    getObj().list = __bsc_tmp_spread
+                end sub
+
+                function getObj()
+                    return {}
+                end function
+
+                function f()
+                    return 1
+                end function
+            `);
+        });
+
         it('builds in a temp when a trailing element reads the target variable', async () => {
             await testTranspile(`
                 sub main()
@@ -620,6 +904,175 @@ describe('SpreadExpression', () => {
                     else
                         result.b = 2
                     end if
+                end sub
+            `);
+        });
+
+        it('moves a comment before a trailing array element above its push statement', async () => {
+            await testTranspile(`
+                sub main()
+                    a = [1]
+                    q = [ ...a
+                        ' note
+                        1
+                    ]
+                end sub
+            `, `
+                sub main()
+                    a = [
+                        1
+                    ]
+                    q = []
+                    q.append(a)
+                    ' note
+                    q.push(1)
+                end sub
+            `);
+        });
+
+        it('moves a comment before a trailing AA member above its set statement', async () => {
+            await testTranspile(`
+                sub main()
+                    a = {}
+                    q = {
+                        ...a
+                        ' first
+                        foo: 1
+                        ' second
+                        "bar": 2
+                    }
+                end sub
+            `, `
+                sub main()
+                    a = {}
+                    q = {}
+                    q.append(a)
+                    ' first
+                    q.foo = 1
+                    ' second
+                    q["bar"] = 2
+                end sub
+            `);
+        });
+
+        it('keeps a same-line comment after a spread out of the next statement', async () => {
+            await testTranspile(`
+                sub main()
+                    a = {}
+                    q = { ...a ' c
+                        foo: 1 }
+                end sub
+            `, `
+                sub main()
+                    a = {}
+                    q = {}
+                    q.append(a) ' c
+                    q.foo = 1
+                end sub
+            `);
+        });
+
+        it('moves a comment before a spread above its append statement', async () => {
+            await testTranspile(`
+                sub main()
+                    a = [1]
+                    b = [2]
+                    q = [
+                        ...a
+                        ' merge b too
+                        ...b
+                    ]
+                end sub
+            `, `
+                sub main()
+                    a = [
+                        1
+                    ]
+                    b = [
+                        2
+                    ]
+                    q = []
+                    q.append(a)
+                    ' merge b too
+                    q.append(b)
+                end sub
+            `);
+        });
+
+        it('preserves the case of quoted keys after a spread', async () => {
+            await testTranspile(`
+                sub main()
+                    x = {}
+                    r = { ...x, "userId": 1, userName: 2 }
+                end sub
+            `, `
+                sub main()
+                    x = {}
+                    r = {}
+                    r.append(x)
+                    r["userId"] = 1
+                    r.userName = 2
+                end sub
+            `);
+        });
+
+        it('builds in a temp when a spread of the target follows a leading array element', async () => {
+            await testTranspile(`
+                sub main()
+                    list = [1]
+                    list = [0, ...list]
+                end sub
+            `, `
+                sub main()
+                    list = [
+                        1
+                    ]
+                    __bsc_tmp_spread = [
+                        0
+                    ]
+                    __bsc_tmp_spread.append(list)
+                    list = __bsc_tmp_spread
+                end sub
+            `);
+        });
+
+        it('builds in a temp when a spread of the target follows a leading AA member', async () => {
+            await testTranspile(`
+                sub main()
+                    aa = { b: 2 }
+                    aa = { a: 1, ...aa }
+                end sub
+            `, `
+                sub main()
+                    aa = {
+                        b: 2
+                    }
+                    __bsc_tmp_spread = {
+                        a: 1
+                    }
+                    __bsc_tmp_spread.append(aa)
+                    aa = __bsc_tmp_spread
+                end sub
+            `);
+        });
+
+        it('builds in a temp when a spread reads a property of the target', async () => {
+            await testTranspile(`
+                sub main()
+                    aa = { inner: { b: 2 } }
+                    aa = { ...aa.inner, x: 1 }
+                end sub
+            `, `
+                sub main()
+                    aa = {
+                        inner: {
+                            b: 2
+                        }
+                    }
+                    __bsc_tmp_spread = {}
+                    __bsc_tmp_spread.append(aa.inner)
+                    __bsc_tmp_spread.x = 1
+                    aa = __bsc_tmp_spread
                 end sub
             `);
         });

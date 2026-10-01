@@ -4,7 +4,7 @@ import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUna
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, OnPrepareFileEvent } from '../../interfaces';
-import type { Identifier } from '../../lexer/Token';
+import type { Identifier, Token } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { Expression, Statement } from '../../parser/AstNode';
 import type { AALiteralExpression, TernaryExpression } from '../../parser/Expression';
@@ -114,7 +114,7 @@ export class BrsFilePreTranspileProcessor {
             // - `m.list = [...]`: every follow-up statement would re-evaluate `m.list`; a local is 10-40% faster (bsbench)
             // - `list = [...list, 4]`: assigning the trimmed literal first would clobber `list` before we read it
             const tmpName = '__bsc_tmp_spread';
-            const createTarget = () => createVariableExpression(tmpName, literal.location);
+            const createTarget = (leadingTrivia?: Token[]) => this.createTargetExpression(tmpName, literal.location, leadingTrivia);
             statements = [
                 createAssignmentStatement({ name: createIdentifier(tmpName, literal.location), value: literal }),
                 ...this.createSpreadStatements(createTarget, trailing, isArray)
@@ -123,7 +123,7 @@ export class BrsFilePreTranspileProcessor {
             editor.arraySplice(block.statements, index, 0, ...statements);
         } else {
             //local variable target: assign the trimmed literal, then append/push/set the rest directly on it
-            const createTarget = () => createVariableExpression(statement.tokens.name.text, statement.tokens.name.location);
+            const createTarget = (leadingTrivia?: Token[]) => this.createTargetExpression(statement.tokens.name.text, statement.tokens.name.location, leadingTrivia);
             statements = this.createSpreadStatements(createTarget, trailing, isArray);
             editor.arraySplice(block.statements, index + 1, 0, ...statements);
         }
@@ -139,18 +139,21 @@ export class BrsFilePreTranspileProcessor {
      * Turn the elements that followed the first spread into statements against the target, in order.
      * Spreads become `target.append(source)`. Plain elements become one statement each, except a long run of
      * array elements, which is cheaper as a single `target.append([...])` (see ARRAY_SPREAD_APPEND_THRESHOLD).
-     * `createTarget` is called once per statement because each needs its own copy of the target node.
+     * `createTarget` is called once per statement because each needs its own copy of the target node. It receives the
+     * comments that preceded the element so they land on their own line above the statement instead of inside it.
      */
-    private createSpreadStatements(createTarget: () => Expression, trailing: Expression[], isArray: boolean): Statement[] {
+    private createSpreadStatements(createTarget: (leadingTrivia?: Token[]) => Expression, trailing: Expression[], isArray: boolean): Statement[] {
         const statements: Statement[] = [];
         let run: Expression[] = [];
         const flushRun = () => {
             if (isArray && run.length >= ARRAY_SPREAD_APPEND_THRESHOLD) {
+                //elements keep their own comments here: inside an array literal they transpile fine on their own lines
                 const literal = new ArrayLiteralExpression({ elements: run });
                 statements.push(this.createMethodCallStatement(createTarget(), 'append', literal, run[0].location));
             } else {
                 for (const element of run) {
-                    statements.push(this.createElementStatement(createTarget(), element, isArray));
+                    const target = createTarget(this.takeLeadingTrivia(element));
+                    statements.push(this.createElementStatement(target, element, isArray));
                 }
             }
             run = [];
@@ -158,13 +161,42 @@ export class BrsFilePreTranspileProcessor {
         for (const element of trailing) {
             if (isSpreadExpression(element)) {
                 flushRun();
-                statements.push(this.createMethodCallStatement(createTarget(), 'append', element.expression, element.location));
+                const target = createTarget(this.takeLeadingTrivia(element));
+                statements.push(this.createMethodCallStatement(target, 'append', element.expression, element.location));
             } else {
                 run.push(element);
             }
         }
         flushRun();
         return statements;
+    }
+
+    /**
+     * A fresh reference to the variable the follow-up statements operate on, optionally carrying the comments
+     * that should be emitted above the statement
+     */
+    private createTargetExpression(name: string, location: Location, leadingTrivia?: Token[]) {
+        const target = createVariableExpression(name, location);
+        if (leadingTrivia?.length > 0) {
+            target.tokens.name.leadingTrivia = leadingTrivia;
+        }
+        return target;
+    }
+
+    /**
+     * Detach the trivia (comments, newlines) that precede an element so it can be re-emitted ahead of the statement
+     * that replaces it. Left on the element, a comment would transpile inside the generated `push(...)`, dotted set,
+     * or indexed set and produce output that does not compile. The removal goes through the editor so the AST is
+     * restored after transpile.
+     */
+    private takeLeadingTrivia(element: Expression): Token[] {
+        const trivia = element.leadingTrivia;
+        if (!trivia || trivia.length === 0) {
+            return [];
+        }
+        const result = [...trivia];
+        this.event.editor.arraySplice(trivia, 0, trivia.length);
+        return result;
     }
 
     /**
