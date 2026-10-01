@@ -573,7 +573,7 @@ export class BrsFileValidator {
         for (const parameter of func.parameters) {
             addVariable(parameter.tokens.name, parameter.location);
         }
-        
+
         // count all the variables in the function body
         func.body?.walk(createVisitor({
             AssignmentStatement: (statement) => {
