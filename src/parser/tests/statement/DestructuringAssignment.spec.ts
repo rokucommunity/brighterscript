@@ -504,6 +504,47 @@ describe('DestructuringAssignmentStatement', () => {
             return func.func.body.getSymbolTable();
         }
 
+        it('flags a destructured target that shadows a scoped function', () => {
+            program.setFile('source/main.bs', `
+                sub helper()
+                end sub
+                sub main(obj)
+                    { helper } = obj
+                    print helper
+                end sub
+            `);
+            program.validate();
+            //same as `helper = obj.helper`, which already warns
+            expectDiagnostics(program, [
+                DiagnosticMessages.localVarShadowedByScopedFunction().message
+            ]);
+        });
+
+        it('flags shadowing for renamed, nested, array, and rest targets', () => {
+            program.setFile('source/main.bs', `
+                sub one()
+                end sub
+                sub two()
+                end sub
+                sub three()
+                end sub
+                sub four()
+                end sub
+                sub main(obj, items)
+                    { a: one, b: { two } } = obj
+                    [three, ...four] = items
+                    print one; two; three; four
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                { ...DiagnosticMessages.localVarShadowedByScopedFunction(), location: { range: util.createRange(10, 25, 10, 28) } },
+                { ...DiagnosticMessages.localVarShadowedByScopedFunction(), location: { range: util.createRange(10, 35, 10, 38) } },
+                { ...DiagnosticMessages.localVarShadowedByScopedFunction(), location: { range: util.createRange(11, 21, 11, 26) } },
+                { ...DiagnosticMessages.localVarShadowedByScopedFunction(), location: { range: util.createRange(11, 31, 11, 35) } }
+            ]);
+        });
+
         it('registers the targets as variables with inferred types', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
                 sub main()

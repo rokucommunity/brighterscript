@@ -6,7 +6,7 @@ import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BsDiagnostic, CallableContainer, ExtraSymbolData, FileReference, GetTypeOptions, ValidateScopeEvent, TypeChainEntry, TypeChainProcessResult, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
-import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConstStatement, DottedSetStatement, ForEachStatement, ForStatement, IncrementStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
+import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConstStatement, DestructuringAssignmentStatement, DottedSetStatement, ForEachStatement, ForStatement, IncrementStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
 import { util } from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
@@ -249,6 +249,11 @@ export class ScopeValidator {
                                 type: this.getNodeTypeWrapper(file, assignStmt, { flags: SymbolTypeFlag.runtime }),
                                 nameRange: assignStmt.tokens.name.location?.range
                             });
+                        });
+                    },
+                    DestructuringAssignmentStatement: (destructuringStmt) => {
+                        this.addValidationKindMetric('DestructuringAssignmentStatement', () => {
+                            this.validateDestructuringAssignmentStatement(file, destructuringStmt);
                         });
                     },
                     AugmentedAssignmentStatement: (binaryExpr) => {
@@ -956,6 +961,18 @@ export class ScopeValidator {
     /**
      * Detect when declared type does not match rhs type
      */
+    private validateDestructuringAssignmentStatement(file: BrsFile, destructuringStmt: DestructuringAssignmentStatement) {
+        for (const target of destructuringStmt.getTargets({ flags: SymbolTypeFlag.runtime })) {
+            //each target is a local variable declaration, same as `name = source.key`
+            this.detectShadowedLocalVar(file, {
+                expr: destructuringStmt,
+                name: target.name.text,
+                type: target.type,
+                nameRange: target.name.location?.range
+            });
+        }
+    }
+
     private validateAssignmentStatement(file: BrsFile, assignStmt: AssignmentStatement) {
         if (!assignStmt?.typeExpression) {
             // nothing to check
