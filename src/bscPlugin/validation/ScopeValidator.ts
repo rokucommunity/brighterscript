@@ -973,6 +973,19 @@ export class ScopeValidator {
         this.validateDestructuringPatternKeys(file, destructuringStmt.pattern, sourceType, sourceName);
 
         for (const target of destructuringStmt.getTargets({ flags: SymbolTypeFlag.runtime })) {
+            //a typed target (`{ name as string }`) is checked the same as `name as string = source.name`
+            if (target.typeExpression) {
+                const declaredType = this.getNodeTypeWrapper(file, target.typeExpression, { flags: SymbolTypeFlag.runtime, data: {} });
+                const compatibilityData: TypeCompatibilityData = {};
+                if (!declaredType?.isResolvable()) {
+                    // the declared type is not resolvable... handled elsewhere
+                } else if (!declaredType.isTypeCompatible(target.valueType, compatibilityData)) {
+                    this.addMultiScopeDiagnostic({
+                        ...DiagnosticMessages.assignmentTypeMismatch(target.valueType.toString(), declaredType.toString(), compatibilityData),
+                        location: target.node.location
+                    });
+                }
+            }
             //each target is a local variable declaration, same as `name = source.key`
             this.detectShadowedLocalVar(file, {
                 expr: destructuringStmt,

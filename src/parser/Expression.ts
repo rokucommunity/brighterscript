@@ -3300,13 +3300,35 @@ export interface DestructuringTarget {
      */
     name: Identifier;
     /**
-     * The inferred type of the value this variable receives
+     * The type of this variable: the declared type when there is an `as <type>` annotation, otherwise the inferred type of the value it receives
      */
     type: BscType;
+    /**
+     * The inferred type of the value this variable receives (including its default value, if any)
+     */
+    valueType: BscType;
+    /**
+     * The `as <type>` annotation on this target, if present
+     */
+    typeExpression?: TypeExpression;
     /**
      * The pattern element/property/rest node that declared this target
      */
     node: ObjectPatternPropertyExpression | ArrayPatternElementExpression | RestElementExpression;
+}
+
+/**
+ * Build the target for a destructured variable, using the declared `as <type>` (if any) as the variable's type
+ */
+function createDestructuringTarget(name: Identifier, valueType: BscType, typeExpression: TypeExpression | undefined, node: DestructuringTarget['node'], options: GetTypeOptions): DestructuringTarget {
+    const declaredType = typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined });
+    return {
+        name: name,
+        type: declaredType ?? valueType,
+        valueType: valueType,
+        typeExpression: typeExpression,
+        node: node
+    };
 }
 
 /**
@@ -3394,11 +3416,12 @@ export class ObjectPatternExpression extends Expression {
             if (property.pattern) {
                 results.push(...property.pattern.getTargets(memberType, options));
             } else if (property.targetName) {
-                results.push({ name: property.targetName, type: memberType, node: property });
+                results.push(createDestructuringTarget(property.targetName, memberType, property.typeExpression, property, options));
             }
         }
         if (this.rest?.tokens.name) {
-            results.push({ name: this.rest.tokens.name, type: new AssociativeArrayType(), node: this.rest });
+            const restType = new AssociativeArrayType();
+            results.push({ name: this.rest.tokens.name, type: restType, valueType: restType, node: this.rest });
         }
         return results;
     }
@@ -3438,6 +3461,7 @@ export class ObjectPatternExpression extends Expression {
  *  - `name: target` (rename)
  *  - `name: { nested }` or `name: [nested]` (nested pattern)
  *  - any of the above followed by `= defaultValue`
+ *  - `key` or `key: name` (with or without a default) followed by `as <type>`
  */
 export class ObjectPatternPropertyExpression extends Expression {
     constructor(options: {
@@ -3456,6 +3480,8 @@ export class ObjectPatternPropertyExpression extends Expression {
         pattern?: DestructuringPattern;
         equals?: Token;
         defaultValue?: Expression;
+        as?: Token;
+        typeExpression?: TypeExpression;
         comma?: Token;
     }) {
         super();
@@ -3464,17 +3490,21 @@ export class ObjectPatternPropertyExpression extends Expression {
             colon: options.colon,
             name: options.name,
             equals: options.equals,
+            as: options.as,
             comma: options.comma
         };
         this.pattern = options.pattern;
         this.defaultValue = options.defaultValue;
+        this.typeExpression = options.typeExpression;
         this.location = util.createBoundingLocation(
             this.tokens.key,
             this.tokens.colon,
             this.tokens.name,
             this.pattern,
             this.tokens.equals,
-            this.defaultValue
+            this.defaultValue,
+            this.tokens.as,
+            this.typeExpression
         );
     }
 
@@ -3487,12 +3517,18 @@ export class ObjectPatternPropertyExpression extends Expression {
         readonly colon?: Token;
         readonly name?: Identifier;
         readonly equals?: Token;
+        readonly as?: Token;
         readonly comma?: Token;
     };
 
     public readonly pattern?: DestructuringPattern;
 
     public readonly defaultValue?: Expression;
+
+    /**
+     * The declared type of the target (i.e. the `string` in `{ name as string }`)
+     */
+    public readonly typeExpression?: TypeExpression;
 
     /**
      * The identifier that receives the value, or undefined when this property holds a nested pattern
@@ -3527,6 +3563,7 @@ export class ObjectPatternPropertyExpression extends Expression {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'pattern', visitor, options);
             walk(this, 'defaultValue', visitor, options);
+            walk(this, 'typeExpression', visitor, options);
         }
     }
 
@@ -3543,9 +3580,11 @@ export class ObjectPatternPropertyExpression extends Expression {
                 pattern: this.pattern?.clone(),
                 equals: util.cloneToken(this.tokens.equals),
                 defaultValue: this.defaultValue?.clone(),
+                as: util.cloneToken(this.tokens.as),
+                typeExpression: this.typeExpression?.clone(),
                 comma: util.cloneToken(this.tokens.comma)
             }),
-            ['pattern', 'defaultValue']
+            ['pattern', 'defaultValue', 'typeExpression']
         );
     }
 }
@@ -3608,11 +3647,12 @@ export class ArrayPatternExpression extends Expression {
             if (element.pattern) {
                 results.push(...element.pattern.getTargets(elementType, options));
             } else if (element.tokens.name) {
-                results.push({ name: element.tokens.name, type: elementType, node: element });
+                results.push(createDestructuringTarget(element.tokens.name, elementType, element.typeExpression, element, options));
             }
         }
         if (this.rest?.tokens.name) {
-            results.push({ name: this.rest.tokens.name, type: new ArrayType(itemType), node: this.rest });
+            const restType = new ArrayType(itemType);
+            results.push({ name: this.rest.tokens.name, type: restType, valueType: restType, node: this.rest });
         }
         return results;
     }
@@ -3651,6 +3691,7 @@ export class ArrayPatternExpression extends Expression {
  *  - `name`
  *  - `{ nested }` or `[nested]`
  *  - either of the above followed by `= defaultValue`
+ *  - `name` (with or without a default) followed by `as <type>`
  *  - nothing at all (a hole, i.e. the empty slot in `[a, , c]`)
  */
 export class ArrayPatternElementExpression extends Expression {
@@ -3659,21 +3700,27 @@ export class ArrayPatternElementExpression extends Expression {
         pattern?: DestructuringPattern;
         equals?: Token;
         defaultValue?: Expression;
+        as?: Token;
+        typeExpression?: TypeExpression;
         comma?: Token;
     }) {
         super();
         this.tokens = {
             name: options.name,
             equals: options.equals,
+            as: options.as,
             comma: options.comma
         };
         this.pattern = options.pattern;
         this.defaultValue = options.defaultValue;
+        this.typeExpression = options.typeExpression;
         this.location = util.createBoundingLocation(
             this.tokens.name,
             this.pattern,
             this.tokens.equals,
-            this.defaultValue
+            this.defaultValue,
+            this.tokens.as,
+            this.typeExpression
         );
     }
 
@@ -3684,12 +3731,18 @@ export class ArrayPatternElementExpression extends Expression {
     public readonly tokens: {
         readonly name?: Identifier;
         readonly equals?: Token;
+        readonly as?: Token;
         readonly comma?: Token;
     };
 
     public readonly pattern?: DestructuringPattern;
 
     public readonly defaultValue?: Expression;
+
+    /**
+     * The declared type of the target (i.e. the `string` in `[first as string]`)
+     */
+    public readonly typeExpression?: TypeExpression;
 
     /**
      * Is this element an empty slot (i.e. the empty slot in `[a, , c]`)?
@@ -3714,6 +3767,7 @@ export class ArrayPatternElementExpression extends Expression {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'pattern', visitor, options);
             walk(this, 'defaultValue', visitor, options);
+            walk(this, 'typeExpression', visitor, options);
         }
     }
 
@@ -3728,9 +3782,11 @@ export class ArrayPatternElementExpression extends Expression {
                 pattern: this.pattern?.clone(),
                 equals: util.cloneToken(this.tokens.equals),
                 defaultValue: this.defaultValue?.clone(),
+                as: util.cloneToken(this.tokens.as),
+                typeExpression: this.typeExpression?.clone(),
                 comma: util.cloneToken(this.tokens.comma)
             }),
-            ['pattern', 'defaultValue']
+            ['pattern', 'defaultValue', 'typeExpression']
         );
     }
 }

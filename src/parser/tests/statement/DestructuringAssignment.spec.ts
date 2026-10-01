@@ -5,7 +5,7 @@ import { Program } from '../../../Program';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile, rootDir } from '../../../testHelpers.spec';
 import type { DestructuringAssignmentStatement } from '../../Statement';
 import type { ArrayPatternExpression, ObjectPatternExpression } from '../../Expression';
-import { isArrayPatternExpression, isDestructuringAssignmentStatement, isObjectPatternExpression, isVariableExpression } from '../../../astUtils/reflection';
+import { isArrayPatternExpression, isDestructuringAssignmentStatement, isLiteralExpression, isObjectPatternExpression, isVariableExpression } from '../../../astUtils/reflection';
 import { SymbolTypeFlag } from '../../../SymbolTypeFlag';
 import type { BrsFile } from '../../../files/BrsFile';
 import { util } from '../../../util';
@@ -189,6 +189,43 @@ describe('DestructuringAssignmentStatement', () => {
             const arrayStatement = parseStatement(`[first, , third = 3, ...rest] = items`);
             const arrayClone = arrayStatement.clone();
             expect(arrayClone.getTargetNames().map(x => x.text)).to.eql(['first', 'third', 'rest']);
+        });
+
+        it('parses `as <type>` on shorthand, renamed, defaulted, and array targets', () => {
+            const statement = parseStatement(`{ name as string, age = 0 as integer, id: userId as string } = data`);
+            const pattern = statement.pattern as ObjectPatternExpression;
+            expect(pattern.properties.map(x => x.typeExpression?.getName())).to.eql(['string', 'integer', 'string']);
+            expect(pattern.properties.map(x => x.tokens.as?.text)).to.eql(['as', 'as', 'as']);
+            //the `as` belongs to the target, not to a cast on the default value
+            expect(isLiteralExpression(pattern.properties[1].defaultValue)).to.be.true;
+            expect(pattern.properties[2].targetName.text).to.eql('userId');
+
+            const arrayStatement = parseStatement(`[first as string, second = 1 as integer, ...rest] = items`);
+            const arrayPattern = arrayStatement.pattern as ArrayPatternExpression;
+            expect(arrayPattern.elements.map(x => x.typeExpression?.getName())).to.eql(['string', 'integer']);
+            expect(isLiteralExpression(arrayPattern.elements[1].defaultValue)).to.be.true;
+        });
+
+        it('allows a cast in a default value when it is wrapped in parens', () => {
+            const statement = parseStatement(`{ age = (value as integer) as integer } = data`);
+            const property = (statement.pattern as ObjectPatternExpression).properties[0];
+            expect(property.typeExpression.getName()).to.eql('integer');
+            expect(property.defaultValue.kind).to.eql('GroupingExpression');
+        });
+
+        it('flags `as <type>` on a nested pattern or a rest element', () => {
+            expectDiagnostics(parse(`{ address: { city } as Address } = person`), [
+                DiagnosticMessages.destructuringTypeNotAllowed('nested pattern').message
+            ]);
+            expectDiagnostics(parse(`[[a, b] as integer[]] = items`), [
+                DiagnosticMessages.destructuringTypeNotAllowed('nested pattern').message
+            ]);
+            expectDiagnostics(parse(`{ name, ...others as object } = person`), [
+                DiagnosticMessages.destructuringTypeNotAllowed('rest element').message
+            ]);
+            expectDiagnostics(parse(`[first, ...rest as string[]] = items`), [
+                DiagnosticMessages.destructuringTypeNotAllowed('rest element').message
+            ]);
         });
     });
 
@@ -496,6 +533,26 @@ describe('DestructuringAssignmentStatement', () => {
                 end sub
             `);
         });
+
+        it('removes `as <type>` from targets', async () => {
+            await testTranspile(`
+                sub main(data)
+                    { name as string, age = 0 as integer, id: userId as string } = data
+                    [first as string] = data.items
+                    print name; age; userId; first
+                end sub
+            `, `
+                sub main(data)
+                    name = data.name
+                    age = data.age
+                    if age = invalid then age = 0
+                    userId = data.id
+                    __bsDestructure0 = data.items
+                    first = __bsDestructure0[0]
+                    print name; age; userId; first
+                end sub
+            `);
+        });
     });
 
     describe('validation', () => {
@@ -603,6 +660,81 @@ describe('DestructuringAssignmentStatement', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
+        });
+
+        it('supports `as type` on targets', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main(data)
+                    { name as string, age = 0 as integer } = data
+                    [first as string] = data.items
+                    print name; age; first
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const table = getMainBodyTable(file);
+            const typeOf = (name: string) => table.getSymbolType(name, { flags: SymbolTypeFlag.runtime }).toString();
+            expect(typeOf('name')).to.eql('string');
+            expect(typeOf('age')).to.eql('integer');
+            expect(typeOf('first')).to.eql('string');
+        });
+
+        it('uses the declared type over the inferred one', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                interface Person
+                    name as string
+                    age as integer
+                end interface
+                sub main(data)
+                    { id: personId as string, person as Person } = data
+                    print personId; person
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const table = getMainBodyTable(file);
+            expect(table.getSymbolType('personId', { flags: SymbolTypeFlag.runtime }).toString()).to.eql('string');
+            expect(table.getSymbolType('person', { flags: SymbolTypeFlag.runtime }).toString()).to.eql('Person');
+        });
+
+        it('flags a typed target whose value does not match the declared type', () => {
+            program.setFile('source/main.bs', `
+                interface Person
+                    name as string
+                    tags as string[]
+                end interface
+                sub main(p as Person, data)
+                    { name as integer } = p
+                    [firstTag as integer] = p.tags
+                    { age = "old" as integer } = data
+                    print name; firstTag; age
+                end sub
+            `);
+            program.validate();
+            //same as \`name as integer = p.name\`
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.assignmentTypeMismatch('string', 'integer', {}),
+                location: { range: util.createRange(6, 22, 6, 37) }
+            }, {
+                ...DiagnosticMessages.assignmentTypeMismatch('string', 'integer', {}),
+                location: { range: util.createRange(7, 21, 7, 40) }
+            }, {
+                ...DiagnosticMessages.assignmentTypeMismatch('string', 'integer', {}),
+                location: { range: util.createRange(8, 22, 8, 44) }
+            }]);
+        });
+
+        it('flags an unknown type on a target', () => {
+            program.setFile('source/main.bs', `
+                sub main(data)
+                    { name as Unknown } = data
+                    print name
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('Unknown').message
+            ]);
         });
 
         it('registers the targets as variables with inferred types', () => {

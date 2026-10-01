@@ -1506,19 +1506,12 @@ export class Parser {
                 location: key.location
             });
         }
-        let equals: Token;
-        let defaultValue: Expression;
-        if (this.match(TokenKind.Equal)) {
-            equals = this.previous();
-            defaultValue = this.expression();
-        }
         return new ObjectPatternPropertyExpression({
             key: key,
             colon: colon,
             name: name,
             pattern: pattern,
-            equals: equals,
-            defaultValue: defaultValue
+            ...this.destructuringTargetSuffix(!!pattern)
         });
     }
 
@@ -1581,18 +1574,44 @@ export class Parser {
             });
             throw this.lastDiagnosticAsError();
         }
+        return new ArrayPatternElementExpression({
+            name: name,
+            pattern: pattern,
+            ...this.destructuringTargetSuffix(!!pattern)
+        });
+    }
+
+    /**
+     * Parse the optional `= defaultValue` and `as <type>` that may follow a destructuring target (same order as function parameters).
+     * The default is parsed without typecasts so the `as` in `age = 0 as integer` is read as the target's type
+     * @param isNestedPattern the target is a nested pattern, which cannot have a type annotation
+     */
+    private destructuringTargetSuffix(isNestedPattern: boolean) {
         let equals: Token;
         let defaultValue: Expression;
         if (this.match(TokenKind.Equal)) {
             equals = this.previous();
-            defaultValue = this.expression();
+            defaultValue = this.expression(false);
         }
-        return new ArrayPatternElementExpression({
-            name: name,
-            pattern: pattern,
+        let asToken: Token;
+        let typeExpression: TypeExpression;
+        if (this.check(TokenKind.As)) {
+            [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
+            if (isNestedPattern) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.destructuringTypeNotAllowed('nested pattern'),
+                    location: util.createBoundingLocation(asToken, typeExpression)
+                });
+                asToken = undefined;
+                typeExpression = undefined;
+            }
+        }
+        return {
             equals: equals,
-            defaultValue: defaultValue
-        });
+            defaultValue: defaultValue,
+            as: asToken,
+            typeExpression: typeExpression
+        };
     }
 
     /**
@@ -1602,6 +1621,14 @@ export class Parser {
     private restElement(): RestElementExpression {
         const dotDotDot = this.advance();
         const name = this.destructuringTargetIdentifier();
+        if (this.check(TokenKind.As)) {
+            //the rest target is always an array or associative array, so it cannot be typed
+            const [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
+            this.diagnostics.push({
+                ...DiagnosticMessages.destructuringTypeNotAllowed('rest element'),
+                location: util.createBoundingLocation(asToken, typeExpression)
+            });
+        }
         return new RestElementExpression({
             dotDotDot: dotDotDot,
             name: name

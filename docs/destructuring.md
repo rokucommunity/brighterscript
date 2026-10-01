@@ -210,7 +210,7 @@ others.delete("name")
 
 ## Evaluation of the right-hand side
 
-When the right-hand side is a plain variable, its members are read directly from that variable. Any other expression (a function call, a property access, a literal, etc.) is evaluated exactly once into a temporary variable named `__bsDestructure<n>`, so functions with side effects are never called more than once. A temporary variable is also used when the source variable is itself one of the targets (i.e. `[items, other] = items`).
+When the right-hand side is a plain local variable or parameter, its members are read directly from that variable. Any other expression (a function call, a property access, a literal, a const, etc.) is evaluated exactly once into a temporary variable named `__bsDestructure<n>`, so functions with side effects are never called more than once. A temporary variable is also used when the source variable is itself one of the targets (i.e. `[items, other] = items`).
 
 ## Type inference
 
@@ -234,8 +234,24 @@ sub greet(person as Person)
 end sub
 ```
 
+A key that does not exist on a known source type is reported at the key, the same as `person.nmae` would be.
+
+## Type annotations
+
+Any variable in a pattern can be given a type with `as <type>`, which is useful when the source is untyped (i.e. the result of `parseJson()`). The syntax matches function parameters: the default value (if any) comes first, then the type.
+
+```brighterscript
+sub main(data)
+    { name as string, age = 0 as integer, id: userId as string } = data
+    [first as string] = data.items
+end sub
+```
+
+The declared type is used in place of the inferred one, and is checked the same way as a typed assignment (`name as string = data.name`), so a value or default value that does not match the declared type is an error. The annotations are removed when transpiling.
+
+A cast in a default value must be wrapped in parentheses (`{ age = (value as integer) as integer }`), since `as` after the default is read as the variable's type. Nested patterns and rest elements cannot be typed.
+
 ## Limitations
 
 - Targets must be plain variable names. Assigning into properties (`{ name: m.name } = person`) or indexes (`[arr[0]] = items`) is not supported.
 - Destructuring is only available as a statement. It cannot be used in function parameters or `for each` loops.
-- Type annotations (`as string`) are not supported on destructured variables.
