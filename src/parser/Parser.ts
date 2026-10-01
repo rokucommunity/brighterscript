@@ -2682,15 +2682,7 @@ export class Parser {
             // TODO: error, expected value
         }
 
-        const printStatement = new PrintStatement({ print: printKeyword, expressions: values });
-        const { valueCount, commaCount } = printStatement.getPrintCounts();
-        if (valueCount + commaCount > PrintStatement.MaximumPrintCount) {
-            this.diagnostics.push({
-                ...DiagnosticMessages.tooManyPrintItems(valueCount, commaCount, PrintStatement.MaximumPrintCount),
-                location: printStatement.location
-            });
-        }
-        return printStatement;
+        return new PrintStatement({ print: printKeyword, expressions: values });
     }
 
     /**

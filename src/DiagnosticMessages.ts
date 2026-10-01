@@ -1202,10 +1202,8 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'class-constructor-in-conditional-compile'
     }),
-    tooManyPrintItems: (valueCount: number, commaCount: number, max: number) => ({
-        message: commaCount === 0
-            ? `Print statement is too long: ${valueCount} values exceeds the Roku limit of ${max}. Split it into multiple print statements.`
-            : `Print statement is too long: ${valueCount} values and ${commaCount} ${commaCount === 1 ? 'comma' : 'commas'} count as ${valueCount + commaCount} toward the Roku limit of ${max}. Split it into multiple print statements.`,
+    tooManyPrintItems: (count: number, max: number) => ({
+        message: `Print statement has ${count} expressions (commas count too), max is ${max}.`,
         severity: DiagnosticSeverity.Error,
         code: 'exceeds-max-print-items'
     })

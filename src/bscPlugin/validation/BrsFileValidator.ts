@@ -7,6 +7,7 @@ import { TokenKind, UnreferencableBuiltins } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import { CallExpression, type FunctionExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
+import { PrintStatement } from '../../parser/Statement';
 import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
@@ -342,6 +343,9 @@ export class BrsFileValidator {
                     node.parent.getSymbolTable().addSymbol(obj.tokens.name.text, { definingNode: node, doNotMerge: true, isInstance: true }, node.getType({ flags: SymbolTypeFlag.typetime }), SymbolTypeFlag.runtime);
                 }
             },
+            PrintStatement: (node) => {
+                this.validatePrintStatementItemCount(node);
+            },
             ConditionalCompileConstStatement: (node) => {
                 const assign = node.assignment;
                 const constNameLower = assign.tokens.name?.text.toLowerCase();
@@ -553,6 +557,17 @@ export class BrsFileValidator {
                     location: func.parameters[i]?.tokens.name?.location ?? func.parameters[i]?.location ?? func.location
                 });
             }
+        }
+    }
+
+    private validatePrintStatementItemCount(statement: PrintStatement) {
+        const { valueCount, commaCount } = statement.getPrintCounts();
+        const count = valueCount + commaCount;
+        if (count > PrintStatement.MaximumPrintCount) {
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.tooManyPrintItems(count, PrintStatement.MaximumPrintCount),
+                location: statement.location
+            });
         }
     }
 
