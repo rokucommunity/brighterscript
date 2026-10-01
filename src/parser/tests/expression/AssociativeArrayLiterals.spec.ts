@@ -196,7 +196,7 @@ describe('parser associative array literals', () => {
             }
         `);
         const commas = ((ast.statements[0] as AssignmentStatement).value as AALiteralExpression).elements
-            .map(s => !!s.tokens.comma);
+            .map(s => 'comma' in s.tokens && !!s.tokens.comma);
         expect(commas).to.deep.equal([
             true, // p1
             true, // p2

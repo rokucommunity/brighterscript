@@ -65,6 +65,9 @@ BrighterScript adds several new features to the BrightScript language such as na
       - ```print `Hello ${firstNameVar}` ```.
     - [null-coalescing operator](https://github.com/rokucommunity/brighterscript/blob/master/docs/null-coalescing-operator.md)
       - `user = m.user ?? getDefaultUser()`
+    - [Spread operator](https://github.com/rokucommunity/brighterscript/blob/master/docs/spread-operator.md)
+      - `merged = [...arr1, ...arr2]`
+      - `combined = {...defaults, ...overrides}`
     - Additional Language features coming soon
       - null-conditional operator: `userSettings = m.user?.account?.profile?.settings`
     - and [more](https://github.com/rokucommunity/BrighterScript/blob/master/docs/readme.md)...

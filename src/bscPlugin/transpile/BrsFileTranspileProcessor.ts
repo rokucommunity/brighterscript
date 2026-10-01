@@ -1,20 +1,31 @@
-import { createAssignmentStatement, createBlock, createDottedSetStatement, createIfStatement, createIndexedSetStatement, createToken } from '../../astUtils/creators';
+import { createAssignmentStatement, createBlock, createCall, createDottedSetStatement, createIdentifier, createIfStatement, createIndexedSetStatement, createToken, createVariableExpression } from '../../astUtils/creators';
 import type { Editor } from '../../astUtils/Editor';
-import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression, isAliasStatement, isCallExpression, isCallfuncExpression, isEnumType, isAssignmentStatement, isBlock, isBody, isDottedSetStatement, isGroupingExpression, isIndexedSetStatement, isAugmentedAssignmentStatement, isNamespaceStatement } from '../../astUtils/reflection';
+import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression, isAliasStatement, isCallExpression, isCallfuncExpression, isEnumType, isAssignmentStatement, isBlock, isBody, isDottedSetStatement, isGroupingExpression, isIndexedSetStatement, isAugmentedAssignmentStatement, isNamespaceStatement, isSpreadExpression, isArrayLiteralExpression, isAAIndexedMemberExpression, isAAMemberExpression } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, OnPrepareFileEvent } from '../../interfaces';
+import type { Identifier, Token } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { Expression, Statement } from '../../parser/AstNode';
-import type { TernaryExpression } from '../../parser/Expression';
-import { LiteralExpression, VariableExpression } from '../../parser/Expression';
+import type { AALiteralExpression, TernaryExpression } from '../../parser/Expression';
+import { ArrayLiteralExpression, DottedGetExpression, LiteralExpression, VariableExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { ConstStatement, NamespaceStatement } from '../../parser/Statement';
-import { AugmentedAssignmentStatement, type AliasStatement, type IfStatement } from '../../parser/Statement';
+import type { Block, Body, ConstStatement, NamespaceStatement } from '../../parser/Statement';
+import { AugmentedAssignmentStatement, ExpressionStatement, type AliasStatement, type IfStatement } from '../../parser/Statement';
+import type { Location } from 'vscode-languageserver';
 import type { Scope } from '../../Scope';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import util from '../../util';
 import { BslibManager } from '../serialize/BslibManager';
+
+/**
+ * When at least this many plain array elements follow a spread, they are appended as one literal
+ * (`x.append([1, 2, 3])`) instead of one `x.push(n)` each. Measured with bsbench (`SpreadTrailing*` suites,
+ * Roku Express 4K): `push` wins up to 6 elements, the two tie at 8, and `append` pulls ahead from 12 (+6%)
+ * to 32 (+44%). AA members are never grouped: `x.a = 1` statements beat `x.append({a: 1, ...})` by 35-70%
+ * at every size, target, key kind and value kind tested.
+ */
+const ARRAY_SPREAD_APPEND_THRESHOLD = 8;
 
 export class BrsFilePreTranspileProcessor {
     public constructor(
@@ -57,9 +68,187 @@ export class BrsFilePreTranspileProcessor {
         const visitor = createVisitor({
             TernaryExpression: (ternaryExpression) => {
                 this.processTernaryExpression(ternaryExpression, visitor, walkMode);
+            },
+            ArrayLiteralExpression: (literal) => {
+                this.processSpreadLiteral(literal, visitor, walkMode);
+            },
+            AALiteralExpression: (literal) => {
+                this.processSpreadLiteral(literal, visitor, walkMode);
             }
         });
         this.event.file.ast.walk(visitor, { walkMode: walkMode });
+    }
+
+    /**
+     * Lower `x = [a, ...b, c]` into `x = [a]` followed by `x.append(b)` and `x.push(c)` (and the AA equivalents).
+     * The literal is built in a local temp first (then assigned to the real target) when the target is not a
+     * plain local variable, or when the trailing elements read from the target itself.
+     */
+    private processSpreadLiteral(literal: ArrayLiteralExpression | AALiteralExpression, visitor: ReturnType<typeof createVisitor>, walkMode: WalkMode) {
+        const elements = literal.elements as Expression[];
+        const firstSpreadIndex = elements.findIndex(e => isSpreadExpression(e));
+        if (firstSpreadIndex < 0) {
+            return;
+        }
+        const statement = util.getSpreadLiteralOwnerStatement(literal);
+        if (!statement) {
+            //validation already flagged this spread as unsupported
+            return;
+        }
+        //the statement must live in a statement list so we have somewhere to insert the follow-up statements
+        const block = statement.parent as Block | Body;
+        const index = block.statements.indexOf(statement);
+        if (index < 0) {
+            return;
+        }
+        const editor = this.event.editor;
+        const isArray = isArrayLiteralExpression(literal);
+
+        //everything from the first spread onward leaves the literal and becomes statements
+        const trailing = elements.slice(firstSpreadIndex);
+        editor.arraySplice(elements, firstSpreadIndex, trailing.length);
+
+        let statements: Statement[];
+        if (!isAssignmentStatement(statement) || this.spreadReferencesLocal(statement.tokens.name.text, trailing)) {
+            //Build into a local temp and assign it to the real target at the end. Two reasons:
+            // - `m.list = [...]`: every follow-up statement would re-evaluate `m.list`; a local is 10-40% faster (bsbench)
+            // - `list = [...list, 4]`: assigning the trimmed literal first would clobber `list` before we read it
+            const tmpName = '__bsc_tmp_spread';
+            const createTarget = (leadingTrivia?: Token[]) => this.createTargetExpression(tmpName, literal.location, leadingTrivia);
+            statements = [
+                createAssignmentStatement({ name: createIdentifier(tmpName, literal.location), value: literal }),
+                ...this.createSpreadStatements(createTarget, trailing, isArray)
+            ];
+            editor.setProperty(statement, 'value', createTarget());
+            editor.arraySplice(block.statements, index, 0, ...statements);
+        } else {
+            //local variable target: assign the trimmed literal, then append/push/set the rest directly on it
+            const createTarget = (leadingTrivia?: Token[]) => this.createTargetExpression(statement.tokens.name.text, statement.tokens.name.location, leadingTrivia);
+            statements = this.createSpreadStatements(createTarget, trailing, isArray);
+            editor.arraySplice(block.statements, index + 1, 0, ...statements);
+        }
+
+        //new statements were built outside the walk, so link them into the tree and walk them for nested rewrites (e.g. ternaries)
+        for (const newStatement of statements) {
+            newStatement.parent = block;
+            newStatement.walk(visitor, { walkMode: walkMode });
+        }
+    }
+
+    /**
+     * Turn the elements that followed the first spread into statements against the target, in order.
+     * Spreads become `target.append(source)`. Plain elements become one statement each, except a long run of
+     * array elements, which is cheaper as a single `target.append([...])` (see ARRAY_SPREAD_APPEND_THRESHOLD).
+     * `createTarget` is called once per statement because each needs its own copy of the target node. It receives the
+     * comments that preceded the element so they land on their own line above the statement instead of inside it.
+     */
+    private createSpreadStatements(createTarget: (leadingTrivia?: Token[]) => Expression, trailing: Expression[], isArray: boolean): Statement[] {
+        const statements: Statement[] = [];
+        let run: Expression[] = [];
+        const flushRun = () => {
+            if (isArray && run.length >= ARRAY_SPREAD_APPEND_THRESHOLD) {
+                //elements keep their own comments here: inside an array literal they transpile fine on their own lines
+                const literal = new ArrayLiteralExpression({ elements: run });
+                statements.push(this.createMethodCallStatement(createTarget(), 'append', literal, run[0].location));
+            } else {
+                for (const element of run) {
+                    const target = createTarget(this.takeLeadingTrivia(element));
+                    statements.push(this.createElementStatement(target, element, isArray));
+                }
+            }
+            run = [];
+        };
+        for (const element of trailing) {
+            if (isSpreadExpression(element)) {
+                flushRun();
+                const target = createTarget(this.takeLeadingTrivia(element));
+                statements.push(this.createMethodCallStatement(target, 'append', element.expression, element.location));
+            } else {
+                run.push(element);
+            }
+        }
+        flushRun();
+        return statements;
+    }
+
+    /**
+     * A fresh reference to the variable the follow-up statements operate on, optionally carrying the comments
+     * that should be emitted above the statement
+     */
+    private createTargetExpression(name: string, location: Location, leadingTrivia?: Token[]) {
+        const target = createVariableExpression(name, location);
+        if (leadingTrivia?.length > 0) {
+            target.tokens.name.leadingTrivia = leadingTrivia;
+        }
+        return target;
+    }
+
+    /**
+     * Detach the trivia (comments, newlines) that precede an element so it can be re-emitted ahead of the statement
+     * that replaces it. Left on the element, a comment would transpile inside the generated `push(...)`, dotted set,
+     * or indexed set and produce output that does not compile. The removal goes through the editor so the AST is
+     * restored after transpile.
+     */
+    private takeLeadingTrivia(element: Expression): Token[] {
+        const trivia = element.leadingTrivia;
+        if (!trivia || trivia.length === 0) {
+            return [];
+        }
+        const result = [...trivia];
+        this.event.editor.arraySplice(trivia, 0, trivia.length);
+        return result;
+    }
+
+    /**
+     * Statement that adds a single plain (non-spread) element to the target
+     */
+    private createElementStatement(target: Expression, element: Expression, isArray: boolean): Statement {
+        if (isArray) {
+            //`target.push(value)`
+            return this.createMethodCallStatement(target, 'push', element, element.location);
+        }
+        if (isAAIndexedMemberExpression(element)) {
+            //`[key]: value` -> `target[key] = value`
+            return createIndexedSetStatement({ obj: target, indexes: [element.key], value: element.value });
+        }
+        if (isAAMemberExpression(element)) {
+            if (element.tokens.key.kind === TokenKind.StringLiteral) {
+                //`"my-key": value` -> `target["my-key"] = value` (the key may not be a valid identifier)
+                return createIndexedSetStatement({
+                    obj: target,
+                    indexes: [new LiteralExpression({ value: element.tokens.key })],
+                    value: element.value
+                });
+            }
+            //`key: value` -> `target.key = value`
+            return createDottedSetStatement({ obj: target, name: element.tokens.key as Identifier, value: element.value });
+        }
+    }
+
+    /**
+     * `obj.methodName(arg)` as a standalone statement
+     */
+    private createMethodCallStatement(obj: Expression, methodName: string, arg: Expression, location: Location) {
+        return new ExpressionStatement({
+            expression: createCall(
+                new DottedGetExpression({
+                    obj: obj,
+                    name: createIdentifier(methodName, location),
+                    dot: createToken(TokenKind.Dot, '.', location)
+                }),
+                [arg]
+            )
+        });
+    }
+
+    /**
+     * Does any trailing element read the local variable being assigned (e.g. `list = [...list, 1]`)?
+     */
+    private spreadReferencesLocal(name: string, trailing: Expression[]) {
+        const lowerName = name.toLowerCase();
+        return trailing.some(element => {
+            return util.getExpressionInfo(element, this.event.file).uniqueVarNames.some(varName => varName.toLowerCase() === lowerName);
+        });
     }
 
 

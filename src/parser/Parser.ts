@@ -92,6 +92,7 @@ import {
     TypecastExpression,
     TypeExpression,
     TypedArrayExpression,
+    SpreadExpression,
     UnaryExpression,
     VariableExpression,
     XmlAttributeGetExpression,
@@ -304,6 +305,16 @@ export class Parser {
             };
             this.diagnostics.push(diagnostic);
         }
+    }
+
+    /**
+     * Parse a spread expression (`...operand`) inside an array or AA literal.
+     * The current token must be `...`. Whitespace between `...` and its operand is allowed (`[... items]`)
+     */
+    private spreadExpression() {
+        this.warnIfNotBrighterScriptMode('spread operator');
+        let dotDotDot = this.advance();
+        return new SpreadExpression({ dotDotDot: dotDotDot, expression: this.expression() });
     }
 
     /**
@@ -3549,13 +3560,20 @@ export class Parser {
         let elements: Array<Expression> = [];
         let openingSquare = this.previous();
 
+        let parseArrayElement = () => {
+            if (this.check(TokenKind.DotDotDot)) {
+                return this.spreadExpression();
+            }
+            return this.expression();
+        };
+
         while (this.match(TokenKind.Newline)) {
         }
         let closingSquare: Token;
 
         if (!this.match(TokenKind.RightSquareBracket)) {
             try {
-                elements.push(this.expression());
+                elements.push(parseArrayElement());
 
                 while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Comment)) {
 
@@ -3567,7 +3585,7 @@ export class Parser {
                         break;
                     }
 
-                    elements.push(this.expression());
+                    elements.push(parseArrayElement());
                 }
             } catch (error: any) {
                 this.rethrowNonDiagnosticError(error);
@@ -3587,7 +3605,7 @@ export class Parser {
 
     private aaLiteral() {
         let openingBrace = this.previous();
-        let members: Array<AAMemberExpression | AAIndexedMemberExpression> = [];
+        let members: Array<AAMemberExpression | AAIndexedMemberExpression | SpreadExpression> = [];
 
         let key = () => {
             let result = {
@@ -3623,21 +3641,30 @@ export class Parser {
             return result;
         };
 
+        let parseAAMember = () => {
+            if (this.check(TokenKind.DotDotDot)) {
+                members.push(this.spreadExpression());
+                return null;
+            }
+            let k = key();
+            let expr = this.expression();
+            let member = k.key
+                ? new AAIndexedMemberExpression({ leftBracket: k.leftBracket, key: k.key, rightBracket: k.rightBracket, colon: k.colon, value: expr })
+                : new AAMemberExpression({
+                    key: k.keyToken,
+                    colon: k.colon,
+                    value: expr
+                });
+            members.push(member);
+            return member;
+        };
+
         while (this.match(TokenKind.Newline)) { }
         let closingBrace: Token;
         if (!this.match(TokenKind.RightCurlyBrace)) {
             let lastAAMember: AAMemberExpression | AAIndexedMemberExpression;
             try {
-                let k = key();
-                let expr = this.expression();
-                lastAAMember = k.key
-                    ? new AAIndexedMemberExpression({ leftBracket: k.leftBracket, key: k.key, rightBracket: k.rightBracket, colon: k.colon, value: expr })
-                    : new AAMemberExpression({
-                        key: k.keyToken,
-                        colon: k.colon,
-                        value: expr
-                    });
-                members.push(lastAAMember);
+                lastAAMember = parseAAMember();
 
                 while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
                     // collect comma at end of expression
@@ -3650,17 +3677,7 @@ export class Parser {
                     if (this.check(TokenKind.RightCurlyBrace)) {
                         break;
                     }
-                    let k = key();
-                    let expr = this.expression();
-                    lastAAMember = k.key
-                        ? new AAIndexedMemberExpression({ leftBracket: k.leftBracket, key: k.key, rightBracket: k.rightBracket, colon: k.colon, value: expr })
-                        : new AAMemberExpression({
-                            key: k.keyToken,
-                            colon: k.colon,
-                            value: expr
-                        });
-                    members.push(lastAAMember);
-
+                    lastAAMember = parseAAMember();
                 }
             } catch (error: any) {
                 this.rethrowNonDiagnosticError(error);
