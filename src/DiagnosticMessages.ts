@@ -1201,6 +1201,13 @@ export let DiagnosticMessages = {
         message: `Class constructor 'new' cannot be declared inside a conditional compile ('#if') block`,
         severity: DiagnosticSeverity.Error,
         code: 'class-constructor-in-conditional-compile'
+    }),
+    tooManyPrintItems: (valueCount: number, commaCount: number, max: number) => ({
+        message: commaCount === 0
+            ? `Print statement is too long: ${valueCount} values exceeds the Roku limit of ${max}. Split it into multiple print statements.`
+            : `Print statement is too long: ${valueCount} values and ${commaCount} ${commaCount === 1 ? 'comma' : 'commas'} count as ${valueCount + commaCount} toward the Roku limit of ${max}. Split it into multiple print statements.`,
+        severity: DiagnosticSeverity.Error,
+        code: 'exceeds-max-print-items'
     })
 };
 export const defaultMaximumTruncationLength = 160;
