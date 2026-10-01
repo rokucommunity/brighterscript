@@ -1597,22 +1597,10 @@ export class Parser {
 
     /**
      * Parse the `...rest` element of a destructuring pattern. The current token must be `...`.
-     * Like the spread operator, the target must immediately follow the `...` token
+     * Like the spread operator, whitespace is allowed between the `...` and the target (`[... rest]`), but a newline is not
      */
     private restElement(): RestElementExpression {
         const dotDotDot = this.advance();
-        const nameStart = this.peek();
-        const isAdjacent = nameStart.kind !== TokenKind.Newline &&
-            nameStart.kind !== TokenKind.Eof &&
-            util.comparePosition(dotDotDot.location?.range?.end, nameStart.location?.range?.start) === 0;
-        if (!isAdjacent) {
-            this.diagnostics.push({
-                ...DiagnosticMessages.spreadOperatorMustBeAdjacent(),
-                location: util.createBoundingLocation(dotDotDot, nameStart)
-            });
-            //recover: the name may be on the next line
-            this.skipNewlines();
-        }
         const name = this.destructuringTargetIdentifier();
         return new RestElementExpression({
             dotDotDot: dotDotDot,

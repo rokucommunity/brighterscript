@@ -107,7 +107,7 @@ others.append(person)
 others.delete("name")
 ```
 
-The rest element must be the last item in the pattern, and (like the [spread operator](spread-operator.md)) the `...` must be immediately followed by the variable name.
+The rest element must be the last item in the pattern. Like the [spread operator](spread-operator.md), whitespace is allowed between the `...` and the variable name (`[... rest]`), but a newline is not.
 
 ## Array destructuring
 

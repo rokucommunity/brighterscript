@@ -140,15 +140,12 @@ describe('DestructuringAssignmentStatement', () => {
             ]);
         });
 
-        it('requires the rest element name to be adjacent to the `...`', () => {
-            expectDiagnostics(parse(`[... rest] = items`), [
-                DiagnosticMessages.spreadOperatorMustBeAdjacent().message
-            ]);
-            expectDiagnostics(parse(`{ ...
-                rest } = person`), [
-                DiagnosticMessages.spreadOperatorMustBeAdjacent().message
-            ]);
+        it('allows whitespace but not a newline between the `...` and the rest element name', () => {
+            expectZeroDiagnostics(parse(`[... rest] = items`));
+            expectZeroDiagnostics(parse(`{ name, ... rest } = person`));
             expectZeroDiagnostics(parse(`[...rest] = items`));
+            expect(parse(`{ ...
+                rest } = person`).diagnostics).not.to.be.empty;
         });
 
         it('flags a string literal key without a target', () => {
@@ -353,20 +350,20 @@ describe('DestructuringAssignmentStatement', () => {
                 end sub
             `, `
                 sub main(defaults, items)
-                    __bsc_tmp = {}
-                    __bsc_tmp.append(defaults)
-                    __bsc_tmp.name = "bob"
-                    name = __bsc_tmp.name
+                    __bsc_tmp_spread = {}
+                    __bsc_tmp_spread.append(defaults)
+                    __bsc_tmp_spread.name = "bob"
+                    name = __bsc_tmp_spread.name
                     others = {}
-                    others.append(__bsc_tmp)
+                    others.append(__bsc_tmp_spread)
                     others.delete("name")
-                    __bsc_tmp = []
-                    __bsc_tmp.append(items)
-                    __bsc_tmp.push(9)
-                    first = __bsc_tmp[0]
+                    __bsc_tmp_spread = []
+                    __bsc_tmp_spread.append(items)
+                    __bsc_tmp_spread.push(9)
+                    first = __bsc_tmp_spread[0]
                     rest = []
-                    for __bsDestructure0 = 1 to __bsc_tmp.count() - 1
-                        rest.push(__bsc_tmp[__bsDestructure0])
+                    for __bsDestructure0 = 1 to __bsc_tmp_spread.count() - 1
+                        rest.push(__bsc_tmp_spread[__bsDestructure0])
                     end for
                     print name; others; first; rest
                 end sub
