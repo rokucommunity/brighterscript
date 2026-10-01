@@ -1,6 +1,7 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
+import { SourceNode } from 'source-map';
 import type { DottedGetExpression, LiteralExpression, TypecastExpression, DestructuringPattern, DestructuringTarget, ObjectPatternExpression, ArrayPatternExpression } from './Expression';
 import { FunctionExpression, FunctionParameterExpression, TypeExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
@@ -302,10 +303,16 @@ export class DestructuringAssignmentStatement extends Statement {
             }
         };
 
-        //when the right-hand side is a plain variable that is not reassigned by this pattern, read from it directly.
-        //Otherwise evaluate it exactly once into a temp variable
+        //when the right-hand side is a plain local variable that is not reassigned by this pattern, read from it directly.
+        //Otherwise evaluate it exactly once into a temp variable. Names that transpile to something else
+        //(consts, namespace-relative references, etc.) are not plain locals, so they also go through the temp
+        const valueResult = this.value.transpile(state);
         let sourceName: string;
-        if (isVariableExpression(this.value) && !this.assignsVariable(this.value.tokens.name.text)) {
+        if (
+            isVariableExpression(this.value) &&
+            new SourceNode(null, null, null, valueResult as Array<string | SourceNode>).toString() === this.value.tokens.name.text &&
+            !this.assignsVariable(this.value.tokens.name.text)
+        ) {
             sourceName = this.value.tokens.name.text;
         } else {
             sourceName = context.nextTempName();
@@ -315,7 +322,7 @@ export class DestructuringAssignmentStatement extends Statement {
                 ' ',
                 state.transpileToken(this.tokens.equals ?? createToken(TokenKind.Equal), '='),
                 ' ',
-                ...this.value.transpile(state)
+                ...valueResult
             );
         }
         this.transpilePattern(this.pattern, sourceName, context);

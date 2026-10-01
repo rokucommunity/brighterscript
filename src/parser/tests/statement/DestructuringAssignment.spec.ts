@@ -370,6 +370,44 @@ describe('DestructuringAssignmentStatement', () => {
             `);
         });
 
+        it('transpiles a const source instead of reading it by name', async () => {
+            await testTranspile(`
+                const DEFAULTS = { a: 1 }
+                sub main()
+                    { a } = DEFAULTS
+                    print a
+                end sub
+            `, `
+                sub main()
+                    __bsDestructure0 = ({
+                        a: 1
+                    })
+                    a = __bsDestructure0.a
+                    print a
+                end sub
+            `);
+        });
+
+        it('transpiles a namespace-relative const source instead of reading it by name', async () => {
+            await testTranspile(`
+                namespace alpha
+                    const CFG = { a: 1 }
+                    sub main()
+                        { a } = CFG
+                        print a
+                    end sub
+                end namespace
+            `, `
+                sub alpha_main()
+                    __bsDestructure0 = ({
+                        a: 1
+                    })
+                    a = __bsDestructure0.a
+                    print a
+                end sub
+            `);
+        });
+
         it('swaps variables through a temp', async () => {
             await testTranspile(`
                 sub main()
