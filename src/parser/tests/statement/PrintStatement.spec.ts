@@ -51,6 +51,50 @@ describe('parser print statements', () => {
             ]);
         }
 
+        function setFileWithDeclarations(printSource: string) {
+            const assignments = Array.from({ length: 21 }, (_, index) => `v${index + 1} = ${index + 1}`).join('\n');
+            program.setFile('source/main.brs', `
+                sub main()
+                    ${assignments}
+                    ${printSource}
+                end sub
+                function f(a, b, c, d, e)
+                    return a
+                end function
+            `);
+            program.validate();
+        }
+
+        function getDiagnosticCodesWithDeclarations(printSource: string) {
+            setFileWithDeclarations(printSource);
+            return program.getDiagnostics().map(diagnostic => diagnostic.code);
+        }
+
+        function expectTooManyPrintItemsWithDeclarations(printSource: string, count: number) {
+            setFileWithDeclarations(printSource);
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyPrintItems(count, 20)
+            ]);
+        }
+
+        function variables(count: number) {
+            return Array.from({ length: count }, (_, index) => `v${index + 1}`).join('; ');
+        }
+
+        function strings(count: number) {
+            const values = ['"a, b"', '"c; d"', '"e"', '"f, g; h"'];
+            return Array.from({ length: count }, (_, index) => values[index % values.length]).join('; ');
+        }
+
+        function calls(count: number) {
+            const values = ['Left("abcd", 2)', 'f(1, 2, 3, 4, 5)'];
+            return Array.from({ length: count }, (_, index) => values[index % values.length]).join('; ');
+        }
+
+        function associativeArrayWithEntries(count: number) {
+            return `{ ${Array.from({ length: count }, (_, index) => `k${index + 1}: ${index + 1}`).join(', ')} }`;
+        }
+
         it('builds the message from the diagnostic factory', () => {
             expect(DiagnosticMessages.tooManyPrintItems(21, 20)).to.include({
                 message: 'Print statement has 21 expressions (commas count too), max is 20.',
@@ -248,6 +292,60 @@ describe('parser print statements', () => {
             `);
             program.validate();
             expect(program.getDiagnostics().map(diagnostic => diagnostic.code)).to.eql([DiagnosticCodeMap.tooManyPrintItems]);
+        });
+
+        it('allows 20 variables', () => {
+            expect(getDiagnosticCodesWithDeclarations(`print ${variables(20)}`)).to.eql([]);
+        });
+
+        it('flags 21 variables', () => {
+            expectTooManyPrintItemsWithDeclarations(`print ${variables(21)}`, 21);
+        });
+
+        it('allows 20 calls with several arguments', () => {
+            expect(getDiagnosticCodesWithDeclarations(`print ${calls(20)}`)).to.eql([]);
+        });
+
+        it('flags 21 calls with several arguments', () => {
+            expectTooManyPrintItemsWithDeclarations(`print ${calls(21)}`, 21);
+        });
+
+        it('allows 20 strings containing commas and semicolons', () => {
+            expect(getPrintDiagnosticCodes(`print ${strings(20)}`)).to.eql([]);
+        });
+
+        it('flags 21 strings containing commas and semicolons', () => {
+            expectTooManyPrintItems(`print ${strings(21)}`, 21);
+        });
+
+        it('allows 20 values when one is a nested literal', () => {
+            expect(getPrintDiagnosticCodes(`print ${numbers(19, '; ')}; [{ a: [1, 2] }, 3]`)).to.eql([]);
+        });
+
+        it('flags 21 values when one is a nested literal', () => {
+            expectTooManyPrintItems(`print ${numbers(20, '; ')}; [{ a: [1, 2] }, 3]`, 21);
+        });
+
+        it('does not count the entries of a large associative array literal', () => {
+            expectTooManyPrintItems(`print ${numbers(20, '; ')}; ${associativeArrayWithEntries(30)}`, 21);
+        });
+
+        it('does not count the arguments of a call', () => {
+            expectTooManyPrintItemsWithDeclarations(`print ${numbers(20, '; ')}; f(1, 2, 3, 4, 5)`, 21);
+        });
+
+        it('reports the actual total for 24 values separated by semicolons', () => {
+            expectTooManyPrintItems(`print ${numbers(24, '; ')}`, 24);
+        });
+
+        it('reports the actual total for 13 values separated by commas', () => {
+            //13 values + 12 commas
+            expectTooManyPrintItems(`print ${numbers(13, ', ')}`, 25);
+        });
+
+        it('reports the actual total with several leading commas', () => {
+            //5 commas + 20 values
+            expectTooManyPrintItems(`print ,,,,, ${numbers(20, '; ')}`, 25);
         });
     });
 
