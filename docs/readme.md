@@ -149,6 +149,18 @@ Plugins can be used to manipulate code at any point during the program lifecycle
 print /hello world/ig
 ```
 
+## [Select Case Statement](select-case.md)
+```brighterscript
+select case numericValue
+    case 1
+        print "one"
+    case 6, 7, 8
+        print "between 6 and 8, inclusive"
+    case else
+        print "no matching case"
+end select
+```
+
 ## [Source Literals](source-literals.md)
 
 ```brighterscript

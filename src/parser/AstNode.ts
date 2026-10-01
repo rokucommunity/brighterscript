@@ -292,7 +292,7 @@ export abstract class AstNode {
             const children = (Array.isArray(clone?.[key]) ? clone[key] : [clone?.[key]]) as any[];
             for (let child of children ?? []) {
                 if (child) {
-                    (clone[key as any] as AstNode).parent = clone;
+                    (child as AstNode).parent = clone;
                 }
             }
         }
@@ -413,6 +413,8 @@ export enum AstNodeKind {
     ClassFieldStatement = 'ClassFieldStatement',
     TryCatchStatement = 'TryCatchStatement',
     CatchStatement = 'CatchStatement',
+    SelectCaseStatement = 'SelectCaseStatement',
+    CaseStatement = 'CaseStatement',
     ThrowStatement = 'ThrowStatement',
     EnumStatement = 'EnumStatement',
     EnumMemberStatement = 'EnumMemberStatement',
