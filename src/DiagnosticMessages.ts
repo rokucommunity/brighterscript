@@ -1202,6 +1202,11 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'class-constructor-in-conditional-compile'
     }),
+    tooManyPrintItems: (count: number, max: number) => ({
+        message: `Print statement has ${count} expressions (commas count too), max is ${max}.`,
+        severity: DiagnosticSeverity.Error,
+        code: 'exceeds-max-print-items'
+    }),
     /**
      * @param actual the number of variables found in the function
      * @param max the maximum number of variables Roku allows in a single function
