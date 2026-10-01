@@ -5,7 +5,7 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, ValidateFileEvent } from '../../interfaces';
 import { TokenKind, UnreferencableBuiltins } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
-import { CallExpression, type FunctionExpression, type LiteralExpression } from '../../parser/Expression';
+import { CallExpression, FunctionExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import { PrintStatement } from '../../parser/Statement';
 import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement } from '../../parser/Statement';
@@ -13,7 +13,7 @@ import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
-import type { Range } from 'vscode-languageserver';
+import type { Location, Range } from 'vscode-languageserver';
 import type { Token } from '../../lexer/Token';
 import type { BrightScriptDoc } from '../../parser/BrightScriptDocParser';
 import brsDocParser from '../../parser/BrightScriptDocParser';
@@ -228,6 +228,7 @@ export class BrsFileValidator {
                     }
                 }
                 this.validateFunctionParameterCount(node);
+                this.validateFunctionVariableCount(node);
             },
             FunctionParameterExpression: (node) => {
                 if (isTypedFunctionTypeExpression(node.parent)) {
@@ -567,6 +568,61 @@ export class BrsFileValidator {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.tooManyPrintItems(count, PrintStatement.MaximumPrintCount),
                 location: statement.location
+            });
+        }
+    }
+
+    /**
+     * Flag functions whose own variables (parameters, assigned names, loop variables, catch variables) exceed the device limit.
+     * Nested functions have their own limit and are not included. Names that are only read are not counted, so the count is a lower bound.
+     */
+    private validateFunctionVariableCount(func: FunctionExpression) {
+        const variableLocations = new Map<string, Location>();
+        const addVariable = (nameToken: Token | undefined, fallbackLocation: Location) => {
+            const name = nameToken?.text?.toLowerCase();
+            if (name && !variableLocations.has(name)) {
+                variableLocations.set(name, nameToken.location ?? fallbackLocation);
+            }
+        };
+        // count all the parameters as they count as variables
+        for (const parameter of func.parameters) {
+            addVariable(parameter.tokens.name, parameter.location);
+        }
+
+        // count all the variables in the function body
+        func.body?.walk(createVisitor({
+            AssignmentStatement: (statement) => {
+                addVariable(statement.tokens.name, statement.location);
+            },
+            AugmentedAssignmentStatement: (statement) => {
+                if (isVariableExpression(statement.item)) {
+                    addVariable(statement.item.tokens.name, statement.location);
+                }
+            },
+            DimStatement: (statement) => {
+                addVariable(statement.tokens.name, statement.location);
+            },
+            IncrementStatement: (statement) => {
+                if (isVariableExpression(statement.value)) {
+                    addVariable(statement.value.tokens.name, statement.location);
+                }
+            },
+            ForEachStatement: (statement) => {
+                addVariable(statement.tokens.item, statement.location);
+            },
+            CatchStatement: (statement) => {
+                const exceptionVariable = isTypecastExpression(statement.exceptionVariableExpression) ? statement.exceptionVariableExpression.obj : statement.exceptionVariableExpression;
+                if (isVariableExpression(exceptionVariable)) {
+                    addVariable(exceptionVariable.tokens.name, statement.location);
+                }
+            }
+        }), { walkMode: WalkMode.visitAll });
+
+        if (variableLocations.size > FunctionExpression.MaximumVariables) {
+            const firstOverLimitLocation = [...variableLocations.values()][FunctionExpression.MaximumVariables];
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.tooManyFunctionVariables(variableLocations.size, FunctionExpression.MaximumVariables),
+                location: firstOverLimitLocation ?? func.tokens.functionType?.location ?? func.location
             });
         }
     }
