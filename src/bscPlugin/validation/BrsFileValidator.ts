@@ -569,9 +569,12 @@ export class BrsFileValidator {
                 variableLocations.set(name, nameToken.location ?? fallbackLocation);
             }
         };
+        // count all the parameters as they count as variables
         for (const parameter of func.parameters) {
             addVariable(parameter.tokens.name, parameter.location);
         }
+        
+        // count all the variables in the function body
         func.body?.walk(createVisitor({
             AssignmentStatement: (statement) => {
                 addVariable(statement.tokens.name, statement.location);

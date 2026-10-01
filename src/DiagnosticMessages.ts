@@ -1207,7 +1207,7 @@ export let DiagnosticMessages = {
      * @param max the maximum number of variables Roku allows in a single function
      */
     tooManyFunctionVariables: (actual: number, max: number) => ({
-        message: `Function has too many variables: ${actual} found, but Roku allows at most ${max} per function (parameters count toward this limit). Split it into smaller functions.`,
+        message: `Function has too many variables: ${actual} found, but Roku allows at most ${max} per function (parameters count toward this limit).`,
         severity: DiagnosticSeverity.Error,
         code: 'exceeds-max-variable-count'
     })
