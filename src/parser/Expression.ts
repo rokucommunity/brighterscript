@@ -254,6 +254,12 @@ export class CallExpression extends Expression {
 }
 
 export class FunctionExpression extends Expression implements TypedefProvider {
+    /**
+     * The maximum number of distinct variables a single function can hold. Parameters count toward this limit.
+     * Each function, including anonymous functions, has its own limit.
+     */
+    static readonly MaximumVariables = 253;
+
     constructor(options: {
         functionType?: Token;
         leftParen?: Token;
