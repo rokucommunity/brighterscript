@@ -52,6 +52,13 @@ export class ReferencesProvider {
                             this.event.references.push(util.createLocationFromRange(util.pathToUri(file.srcPath), s.tokens.name.location?.range));
                         }
                     },
+                    DestructuringAssignmentStatement: (s) => {
+                        for (const name of s.getTargetNames()) {
+                            if (name.text?.toLowerCase() === searchFor) {
+                                this.event.references.push(util.createLocationFromRange(util.pathToUri(file.srcPath), name.location?.range));
+                            }
+                        }
+                    },
                     VariableExpression: (e) => {
                         if (e.tokens.name.text.toLowerCase() === searchFor) {
                             this.event.references.push(util.createLocationFromRange(util.pathToUri(file.srcPath), e.location?.range));
