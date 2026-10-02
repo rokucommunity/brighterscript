@@ -7767,6 +7767,220 @@ describe('BrsFile', () => {
             expectZeroDiagnostics(program);
         });
 
+        describe('brighterscript source literals', () => {
+            const tooManyIntegers = () => [DiagnosticMessages.tooManyLiterals(65536, 'integer', limit)];
+            const tooManyStrings = (distinctCount = 65536) => [DiagnosticMessages.tooManyLiterals(distinctCount, 'string', limit)];
+
+            it('counts SOURCE_LINE_NUM as a new integer', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `${index}`),
+                    'v = SOURCE_LINE_NUM'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('does not count SOURCE_LINE_NUM when its line number is already in the pool', () => {
+                validateSource(wrapInFunction([
+                    'v = SOURCE_LINE_NUM',
+                    ...buildAssignments(limit, index => `${index}`)
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts two SOURCE_LINE_NUM on the same line once', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit - 1, index => `${index}`),
+                    'v = [SOURCE_LINE_NUM, SOURCE_LINE_NUM]'
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts SOURCE_LINE_NUM on different lines separately', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit - 1, index => `${index}`),
+                    'v = SOURCE_LINE_NUM',
+                    'v = SOURCE_LINE_NUM'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('counts SOURCE_FILE_PATH as new strings', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `"s${index}"`),
+                    'v = SOURCE_FILE_PATH'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyStrings(65537));
+            });
+
+            it('counts PKG_PATH as a new string', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `"s${index}"`),
+                    'v = PKG_PATH'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyStrings());
+            });
+
+            it('does not count PKG_PATH when its value is already in the pool', () => {
+                validateSource(wrapInFunction([
+                    'v = "pkg:/source/main.brs"',
+                    ...buildAssignments(limit - 1, index => `"s${index}"`),
+                    'v = PKG_PATH'
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts the string part of PKG_LOCATION', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `"s${index}"`),
+                    'v = PKG_LOCATION'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyStrings());
+            });
+
+            it('counts SOURCE_LOCATION as new strings', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `"s${index}"`),
+                    'v = SOURCE_LOCATION'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyStrings(65537));
+            });
+
+            it('counts FUNCTION_NAME and SOURCE_FUNCTION_NAME as strings', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `"s${index}"`),
+                    'v = FUNCTION_NAME'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyStrings());
+
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `"s${index}"`),
+                    'v = SOURCE_FUNCTION_NAME'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyStrings());
+            });
+
+            it('does not count FUNCTION_NAME when the function name is already in the pool', () => {
+                validateSource(wrapInFunction([
+                    'v = "main"',
+                    ...buildAssignments(limit - 1, index => `"s${index}"`),
+                    'v = FUNCTION_NAME'
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            it('does not count source literals in a false conditional compile branch', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `${index}`),
+                    '#if false',
+                    'v = SOURCE_LINE_NUM',
+                    '#end if'
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts a source literal in an anonymous function once, in the shared pool', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `${index}`),
+                    'f = function()',
+                    'v = SOURCE_LINE_NUM',
+                    'end function'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('counts LINE_NUM as a new integer in a .bs file', () => {
+                validateSource(wrapInFunction([
+                    'v = LINE_NUM',
+                    ...buildAssignments(limit, index => `${index}`, 1000)
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('counts the line number of PKG_LOCATION as an integer', () => {
+                validateSource(wrapInFunction([
+                    'v = PKG_LOCATION',
+                    ...buildAssignments(limit, index => `${index}`, 1000)
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('does not count PKG_LOCATION again when its line number is already in the pool', () => {
+                validateSource(wrapInFunction([
+                    'v = PKG_LOCATION',
+                    ...buildAssignments(limit, index => `${index}`, 2)
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            describe('LINE_NUM in a .brs file', () => {
+                it('counts LINE_NUM as a new integer', () => {
+                    validateSource(wrapInFunction([
+                        'x = LINE_NUM',
+                        ...buildAssignments(limit, index => `${index}`, 1000)
+                    ]));
+                    expectDiagnostics(program, tooManyIntegers());
+                });
+
+                it('counts two LINE_NUM on the same line once', () => {
+                    validateSource(wrapInFunction([
+                        'x = [LINE_NUM, LINE_NUM]',
+                        ...buildAssignments(limit - 1, index => `${index}`, 1000)
+                    ]));
+                    expectZeroDiagnostics(program);
+                });
+
+                it('counts LINE_NUM on different lines separately', () => {
+                    validateSource(wrapInFunction([
+                        'x = LINE_NUM',
+                        'x = LINE_NUM',
+                        ...buildAssignments(limit - 1, index => `${index}`, 1000)
+                    ]));
+                    expectDiagnostics(program, tooManyIntegers());
+                });
+
+                it('does not count LINE_NUM when its line number is already in the pool', () => {
+                    validateSource(wrapInFunction([
+                        'x = LINE_NUM',
+                        ...buildAssignments(limit, index => `${index}`, 2)
+                    ]));
+                    expectZeroDiagnostics(program);
+                });
+
+                it('stores the line number modulo 65536', () => {
+                    //the last fill value sits on line 65536, so LINE_NUM on line 65537 stores 1, which is already in the pool
+                    validateSource(wrapInFunction([
+                        ...buildAssignments(limit, index => `${index}`, 1),
+                        'x = LINE_NUM'
+                    ]));
+                    expectZeroDiagnostics(program);
+                });
+
+                it('stores 0 for LINE_NUM on line 65536', () => {
+                    validateSource(wrapInFunction([
+                        ...buildAssignments(limit - 1, index => `${index}`, 1),
+                        'x = LINE_NUM'
+                    ]));
+                    expectZeroDiagnostics(program);
+
+                    validateSource(wrapInFunction([
+                        ...buildAssignments(limit - 1, index => `${index}`, 1),
+                        'x = LINE_NUM : y = 70000'
+                    ]));
+                    expectDiagnostics(program, tooManyIntegers());
+                });
+            });
+
+            it('does not count source literals in a .brs file, where they are not replaced', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `${index}`),
+                    'v = SOURCE_LINE_NUM'
+                ]), 'source/main.brs');
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindName('SOURCE_LINE_NUM')
+                ]);
+            });
+        });
+
         describe('string keys and indexes', () => {
             function fillStringPool() {
                 return buildAssignments(limit, index => `"s${index}"`);

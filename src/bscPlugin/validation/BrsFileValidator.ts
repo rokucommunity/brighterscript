@@ -636,6 +636,9 @@ export class BrsFileValidator {
      * Add the literals directly inside the function body to the file's literal pools.
      * Nested functions are collected when they are visited themselves, so every function in the file shares the same pools.
      * Literals outside functions and default parameter values are not counted.
+     * Brighterscript source literals (like `SOURCE_LINE_NUM` or `PKG_PATH`) count as the literals they transpile to, in .bs files only.
+     * `LINE_NUM` (and the `str(LINE_NUM)` that `PKG_LOCATION` transpiles to) counts as the integer `line % 65536`; for .bs files this is the source line, which can differ from the transpiled line.
+     * Enum and const values that get inlined are not counted.
      * Quoted associative array keys count as strings; unquoted keys and dotted property names do not.
      * Values are deduplicated by normalized value: integers by numeric value (`1` and `&h1` match), doubles by numeric value, floats by single-precision numeric value, strings by their content.
      */
@@ -683,6 +686,19 @@ export class BrsFileValidator {
                         break;
                     default:
                         break;
+                }
+            },
+            SourceLiteralExpression: (sourceLiteral) => {
+                if (sourceLiteral.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
+                    return;
+                }
+                for (const part of sourceLiteral.getReplacementLiterals(this.event.file) ?? []) {
+                    addToPool(part.type, part.value, sourceLiteral.location);
+                }
+                const literalKind = sourceLiteral.tokens.value.kind;
+                const lineRange = sourceLiteral.location?.range;
+                if (lineRange && (literalKind === TokenKind.LineNumLiteral || literalKind === TokenKind.PkgLocationLiteral)) {
+                    addToPool('integer', (lineRange.start.line + 1) % 65536, sourceLiteral.location);
                 }
             },
             AAMemberExpression: (member) => {
