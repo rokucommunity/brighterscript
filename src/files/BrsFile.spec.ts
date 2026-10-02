@@ -7572,6 +7572,221 @@ describe('BrsFile', () => {
         });
     });
 
+    describe('function goto label limit', () => {
+        function buildLabels(count: number, prefix = 'label') {
+            const lines = [] as string[];
+            for (let index = 0; index < count; index++) {
+                lines.push(`${prefix}${index}:`);
+            }
+            return lines;
+        }
+
+        function buildGotos(count: number, prefix = 'label') {
+            const lines = [] as string[];
+            for (let index = 0; index < count; index++) {
+                lines.push(`goto ${prefix}${index}`);
+            }
+            return lines;
+        }
+
+        function buildFunction(options: { labelCount: number; targetedCount: number; name?: string; extraLines?: string[] }) {
+            return [
+                `function ${options.name ?? 'main'}()`,
+                ...buildGotos(options.targetedCount),
+                ...buildLabels(options.labelCount),
+                ...options.extraLines ?? [],
+                'end function'
+            ].join('\n');
+        }
+
+        function validateSource(source: string, fileName = 'source/main.brs') {
+            program.setFile(fileName, source);
+            program.validate();
+        }
+
+        it('allows 256 targeted labels', () => {
+            validateSource(buildFunction({ labelCount: 256, targetedCount: 256 }));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags 257 targeted labels', () => {
+            validateSource(buildFunction({ labelCount: 257, targetedCount: 257 }));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyGotoLabels(257, FunctionExpression.MaximumGotoLabels)
+            ]);
+        });
+
+        it('does not count labels that are never targeted', () => {
+            validateSource([
+                'function main()',
+                'goto label0',
+                'goto label1',
+                ...buildLabels(1000),
+                'end function'
+            ].join('\n'));
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows many gotos to the same label', () => {
+            const gotoLines = [] as string[];
+            for (let index = 0; index < 2000; index++) {
+                gotoLines.push('goto target');
+            }
+            validateSource([
+                'function main()',
+                ...gotoLines,
+                'target:',
+                'end function'
+            ].join('\n'));
+            expectZeroDiagnostics(program);
+        });
+
+        it('counts label name case variants once', () => {
+            validateSource([
+                'function main()',
+                ...buildGotos(255),
+                'goto Label255',
+                'goto LABEL255',
+                'goto label255',
+                ...buildLabels(256),
+                'end function'
+            ].join('\n'));
+            expectZeroDiagnostics(program);
+        });
+
+        it('counts the goto in an inline if', () => {
+            validateSource([
+                'function main()',
+                'x = true',
+                ...buildGotos(256),
+                'if x then goto label256',
+                ...buildLabels(257),
+                'end function'
+            ].join('\n'));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyGotoLabels(257, FunctionExpression.MaximumGotoLabels)
+            ]);
+        });
+
+        it('counts a label for each loop whose continue is transpiled into a goto', () => {
+            program.options.minFirmwareVersion = '11.0.0';
+            validateSource([
+                'function main()',
+                ...buildGotos(255),
+                'for i = 0 to 1',
+                'continue for',
+                'end for',
+                'for j = 0 to 1',
+                'continue for',
+                'end for',
+                ...buildLabels(255),
+                'end function'
+            ].join('\n'), 'source/main.bs');
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyGotoLabels(257, FunctionExpression.MaximumGotoLabels)
+            ]);
+        });
+
+        it('counts one label for a loop with several continues', () => {
+            program.options.minFirmwareVersion = '11.0.0';
+            validateSource([
+                'function main()',
+                ...buildGotos(255),
+                'for i = 0 to 1',
+                'continue for',
+                'continue for',
+                'end for',
+                ...buildLabels(255),
+                'end function'
+            ].join('\n'), 'source/main.bs');
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not count continue when the firmware supports it natively', () => {
+            program.options.minFirmwareVersion = '12.0.0';
+            validateSource([
+                'function main()',
+                ...buildGotos(256),
+                'for i = 0 to 1',
+                'continue for',
+                'end for',
+                ...buildLabels(256),
+                'end function'
+            ].join('\n'), 'source/main.bs');
+            expectZeroDiagnostics(program);
+        });
+
+        it('counts nested anonymous functions separately', () => {
+            validateSource([
+                'function main()',
+                ...buildGotos(256),
+                ...buildLabels(256),
+                'inner = function()',
+                ...buildGotos(256, 'inner'),
+                ...buildLabels(256, 'inner'),
+                'end function',
+                'end function'
+            ].join('\n'));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags only the anonymous function that is over the limit', () => {
+            validateSource([
+                'function main()',
+                'goto outerLabel',
+                'outerLabel:',
+                'inner = function()',
+                ...buildGotos(257, 'inner'),
+                ...buildLabels(257, 'inner'),
+                'end function',
+                'end function'
+            ].join('\n'));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyGotoLabels(257, FunctionExpression.MaximumGotoLabels)
+            ]);
+        });
+
+        it('does not count gotos in a false conditional compile block', () => {
+            validateSource(buildFunction({
+                labelCount: 257,
+                targetedCount: 256,
+                extraLines: ['#if false', 'goto label256', '#end if']
+            }), 'source/main.bs');
+            expectZeroDiagnostics(program);
+        });
+
+        it('reports the limit for a .bs file', () => {
+            validateSource(buildFunction({ labelCount: 257, targetedCount: 257 }), 'source/main.bs');
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyGotoLabels(257, FunctionExpression.MaximumGotoLabels)
+            ]);
+        });
+
+        it('reports the label token of the first goto to the 257th distinct label', () => {
+            validateSource([
+                'function main()',
+                ...buildGotos(256),
+                'goto label5',
+                'goto label256',
+                'goto label256',
+                ...buildLabels(257),
+                'end function'
+            ].join('\n'));
+            // line 0 is the function, gotos 0-255 are lines 1-256, label5 is line 257, first label256 is line 258
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.tooManyGotoLabels(257, FunctionExpression.MaximumGotoLabels),
+                location: { range: util.createRange(258, 5, 258, 13) }
+            }]);
+        });
+
+        it('reports a total other than 257', () => {
+            validateSource(buildFunction({ labelCount: 300, targetedCount: 300 }));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyGotoLabels(300, FunctionExpression.MaximumGotoLabels)
+            ]);
+        });
+    });
+
     it('handles deprecated .setPort() on rourltransfer', () => {
         program.setFile('source/main.bs', `
             function main()

@@ -260,6 +260,12 @@ export class FunctionExpression extends Expression implements TypedefProvider {
      */
     static readonly MaximumVariables = 253;
 
+    /**
+     * The maximum number of distinct labels a single function can target with `goto`. Only labels that are the target of a goto count,
+     * labels that are never jumped to are unlimited. Each function, including anonymous functions, has its own limit.
+     */
+    static readonly MaximumGotoLabels = 256;
+
     constructor(options: {
         functionType?: Token;
         leftParen?: Token;

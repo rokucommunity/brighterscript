@@ -1215,6 +1215,11 @@ export let DiagnosticMessages = {
         message: `Function has too many variables: ${actual} found, but Roku allows at most ${max} per function (parameters count toward this limit).`,
         severity: DiagnosticSeverity.Error,
         code: 'exceeds-max-variable-count'
+    }),
+    tooManyGotoLabels: (count: number, max: number) => ({
+        message: `Function has ${count} labels used by goto, max is ${max}.`,
+        severity: DiagnosticSeverity.Error,
+        code: 'exceeds-max-goto-label-count'
     })
 };
 export const defaultMaximumTruncationLength = 160;
