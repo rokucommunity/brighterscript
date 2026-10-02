@@ -202,18 +202,24 @@ export class BsClassValidator {
                             });
                         }
 
+                        //NOTE: only MethodStatement exposes a top-level `accessModifier`; FieldStatement keeps
+                        //it at `tokens.accessModifier`. This reads the method-shaped property only, which means an
+                        //ancestor *field* always resolves to undefined here and is treated as public. That is
+                        //pre-existing behavior, preserved deliberately -- see #1848.
+                        const ancestorMember = ancestorAndMember.member as MethodStatement;
+
                         //child member has different visiblity
                         if (
                             //is a method
                             isMethodStatement(member) &&
-                            (member.accessModifier?.kind ?? TokenKind.Public) !== (ancestorAndMember.member.accessModifier?.kind ?? TokenKind.Public)
+                            (member.accessModifier?.kind ?? TokenKind.Public) !== (ancestorMember.accessModifier?.kind ?? TokenKind.Public)
                         ) {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.mismatchedOverriddenMemberVisibility(
                                     classStatement.tokens.name.text,
                                     ancestorAndMember.member.tokens.name?.text,
                                     member.accessModifier?.text ?? 'public',
-                                    ancestorAndMember.member.accessModifier?.text || 'public',
+                                    ancestorMember.accessModifier?.text || 'public',
                                     ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
                                 location: util.getLocation(member)
@@ -235,7 +241,7 @@ export class BsClassValidator {
     /**
      * Get the closest member with the specified name (case-insensitive)
      */
-    getAncestorMember(classStatement, memberName) {
+    getAncestorMember(classStatement: AugmentedClassStatement, memberName: string) {
         let lowerMemberName = memberName.toLowerCase();
         let ancestor = classStatement.parentClass;
         while (ancestor) {
