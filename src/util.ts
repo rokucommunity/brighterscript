@@ -24,7 +24,7 @@ import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
 import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionParameterExpression, IndexedGetExpression, LiteralExpression, TypeExpression, VariableExpression } from './parser/Expression';
 import { LogLevel, createLogger } from './logging';
-import { isToken, type Identifier, type Token } from './lexer/Token';
+import { isToken, type Identifier, type Locatable, type SourceInfo, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
 import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike, isGroupingExpression, isInlineInterfaceExpression, isTypedFunctionTypeExpression } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
@@ -1069,6 +1069,8 @@ export class Util {
     public extractRange(rangeIsh: RangeLike): Range | undefined {
         if (!rangeIsh) {
             return undefined;
+        } else if ('source' in rangeIsh) {
+            return this.getLocation(rangeIsh)?.range;
         } else if ('location' in rangeIsh) {
             return rangeIsh.location?.range;
         } else if ('range' in rangeIsh) {
@@ -1265,7 +1267,9 @@ export class Util {
                 kind: token.kind,
                 text: token.text,
                 isReserved: token.isReserved,
-                location: this.cloneLocation(token.location),
+                pos: token.pos,
+                end: token.end,
+                source: token.source,
                 leadingTrivia: token.leadingTrivia ? token.leadingTrivia.map(x => this.cloneToken(x)) : undefined
             } as Token;
             //handle those tokens that have charCode
@@ -1282,7 +1286,7 @@ export class Util {
      *  Gets the bounding range of a bunch of ranges or objects that have ranges
      *  TODO: this does a full iteration of the args. If the args were guaranteed to be in range order, we could optimize this
      */
-    public createBoundingLocation(...locatables: Array<{ location?: Location } | Location | { range?: Range } | Range | undefined>): Location | undefined {
+    public createBoundingLocation(...locatables: Array<RangeLike>): Location | undefined {
         let uri: string | undefined;
         let startPosition: Position | undefined;
         let endPosition: Position | undefined;
@@ -1291,6 +1295,12 @@ export class Util {
             let range: Range;
             if (!locatable) {
                 continue;
+            } else if ('source' in locatable) {
+                const location = this.getLocation(locatable);
+                range = location?.range;
+                if (!uri) {
+                    uri = location?.uri;
+                }
             } else if ('location' in locatable) {
                 range = locatable.location?.range;
                 if (!uri) {
@@ -1343,40 +1353,163 @@ export class Util {
     }
 
     /**
-     * Gets the bounding range of an object that contains a bunch of tokens
-     * @param tokens Object with tokens in it
-     * @returns Range containing all the tokens
+     * Set the `pos`, `end`, and `source` of `target` to the bounds of all the locatables.
+     * Offsets from different sources can't be compared, so only locatables from the same source as the first one are included.
+     * A trailing newline is not included in the bounds, so the target never ends at the start of the next line
      */
-    public createBoundingLocationFromTokens(tokens: Record<string, { location?: Location }>): Location | undefined {
-        let uri: string;
-        let startPosition: Position | undefined;
-        let endPosition: Position | undefined;
-        for (let key in tokens) {
-            let token = tokens?.[key];
-            let locatableRange = token?.location?.range;
-            if (!locatableRange) {
+    public setBounds<T extends Locatable>(target: T, ...locatables: Array<Locatable | undefined>): T {
+        let pos: number;
+        let end: number;
+        let source: SourceInfo;
+        for (const locatable of locatables) {
+            if (!locatable?.source) {
                 continue;
-            }
-
-            if (!startPosition) {
-                startPosition = locatableRange.start;
-            } else if (this.comparePosition(locatableRange.start, startPosition) < 0) {
-                startPosition = locatableRange.start;
-            }
-            if (!endPosition) {
-                endPosition = locatableRange.end;
-            } else if (this.comparePosition(locatableRange.end, endPosition) > 0) {
-                endPosition = locatableRange.end;
-            }
-            if (!uri) {
-                uri = token.location.uri;
+            } else if (!source) {
+                source = locatable.source;
+                pos = locatable.pos;
+                end = this.getContentEnd(locatable);
+            } else if (locatable.source === source) {
+                pos = Math.min(pos, locatable.pos);
+                end = Math.max(end, this.getContentEnd(locatable));
             }
         }
-        if (startPosition && endPosition) {
-            return this.createLocation(startPosition.line, startPosition.character, endPosition.line, endPosition.character, uri);
-        } else {
+        target.pos = pos;
+        target.end = end;
+        target.source = source;
+        return target;
+    }
+
+    /**
+     * Give a locatable (such as a synthetic token or node created by a plugin) a position from a line/character `Location`.
+     *
+     * Prefer `util.setBounds(target, someRealToken)` when a token or node from the same file is available, since that shares the
+     * file's real `source` and so combines correctly with the rest of that file's AST. This is for when only a `Location` is
+     * available (i.e. one from an xml file or another program). Passing `undefined` clears the position.
+     *
+     * The position is stored against a synthetic `source` (one per uri) whose lines are spaced far enough apart that the offsets
+     * encode the line and character exactly, so `util.getLocation()` returns the same `Location`
+     */
+    public setLocation<T extends Locatable>(target: T, location: Location | undefined): T {
+        const range = location?.range;
+        if (!range) {
+            target.source = undefined;
+            target.pos = undefined;
+            target.end = undefined;
+            return target;
+        }
+        const source = this.getSyntheticSource(location.uri, Math.max(range.start.line, range.end.line));
+        target.source = source;
+        target.pos = (range.start.line * Util.syntheticLineLength) + range.start.character;
+        target.end = (range.end.line * Util.syntheticLineLength) + range.end.character;
+        return target;
+    }
+
+    /**
+     * The spacing between the lines of a synthetic source. Characters must be smaller than this to round-trip through `getLocation()`
+     */
+    private static readonly syntheticLineLength = 2 ** 20;
+
+    private syntheticSources = new Map<string, SourceInfo>();
+
+    /**
+     * Get the synthetic source for the given uri, making sure it has at least enough lines to contain `line`
+     */
+    private getSyntheticSource(uri: string, line: number): SourceInfo {
+        let source = this.syntheticSources.get(uri);
+        if (!source) {
+            source = { uri: uri, lineStarts: [0] };
+            this.syntheticSources.set(uri, source);
+        }
+        const lineStarts = source.lineStarts;
+        //include the line after, so the end of a range that runs to the end of its line still resolves to that line
+        for (let i = lineStarts.length; i <= line + 1; i++) {
+            lineStarts.push(i * Util.syntheticLineLength);
+        }
+        return source;
+    }
+
+    /**
+     * Get the end offset of a locatable, excluding any trailing newline (i.e. a `Newline` token, or an escaped newline in a template string)
+     */
+    public getContentEnd(locatable: Locatable): number {
+        const text = (locatable as Token).text;
+        if (typeof text === 'string' && text.length > 0) {
+            const lastCharCode = text.charCodeAt(text.length - 1);
+            // \n (and \r\n)
+            if (lastCharCode === 10) {
+                return locatable.end - (text.length > 1 && text.charCodeAt(text.length - 2) === 13 ? 2 : 1);
+                // \r
+            } else if (lastCharCode === 13) {
+                return locatable.end - 1;
+            }
+        }
+        return locatable.end;
+    }
+
+    /**
+     * Build a line/character `Location` for the locatable. Returns `undefined` for synthetic items (those without a `source`)
+     */
+    public getLocation(locatable: Locatable): Location | undefined {
+        const source = locatable?.source;
+        if (!source) {
             return undefined;
         }
+        const lineStarts = source.lineStarts;
+        const startLine = this.getLineIndex(lineStarts, locatable.pos, 0);
+        let endLine = this.getLineIndex(lineStarts, locatable.end, startLine);
+        //a token that ends with a newline ends on its own line rather than at the start of the next one
+        if (endLine > startLine && lineStarts[endLine] === locatable.end && this.getContentEnd(locatable) !== locatable.end) {
+            endLine--;
+        }
+        return {
+            uri: source.uri,
+            range: this.createRange(startLine, locatable.pos - lineStarts[startLine], endLine, locatable.end - lineStarts[endLine])
+        };
+    }
+
+    /**
+     * Get just the start `Position` of a locatable. Cheaper than `getLocation()` when the end isn't needed.
+     * Returns `undefined` for synthetic items (those without a `source`)
+     */
+    public getStartPosition(locatable: Locatable): Position | undefined {
+        const lineStarts = locatable?.source?.lineStarts;
+        if (!lineStarts) {
+            return undefined;
+        }
+        const line = this.getLineIndex(lineStarts, locatable.pos, 0);
+        return this.createPosition(line, locatable.pos - lineStarts[line]);
+    }
+
+    /**
+     * Convert a line/character `Position` into an absolute offset within the given source.
+     * A character past the end of its line is clamped to that line, so it never lands on the next line.
+     * Returns `undefined` if the source or the position's line is missing
+     */
+    public getOffset(source: SourceInfo | undefined, position: Position | undefined): number | undefined {
+        const lineStarts = source?.lineStarts;
+        const lineStart = lineStarts?.[position?.line];
+        if (lineStart === undefined) {
+            return undefined;
+        }
+        const offset = lineStart + position.character;
+        const nextLineStart = lineStarts[position.line + 1];
+        return nextLineStart !== undefined && offset >= nextLineStart ? nextLineStart - 1 : offset;
+    }
+
+    /**
+     * Binary search `lineStarts` (beginning at line index `low`) for the index of the line that contains `offset`
+     */
+    private getLineIndex(lineStarts: number[], offset: number, low: number) {
+        let high = lineStarts.length - 1;
+        while (low < high) {
+            const mid = Math.floor((low + high + 1) / 2);
+            if (lineStarts[mid] <= offset) {
+                low = mid;
+            } else {
+                high = mid - 1;
+            }
+        }
+        return low;
     }
 
     /**
@@ -2226,7 +2359,7 @@ export class Util {
                 case AstNodeKind.FunctionParameterExpression:
                     return [(nextPart as FunctionParameterExpression).tokens.name];
                 case AstNodeKind.GroupingExpression:
-                    parts.push(createIdentifier('()', nextPart.location));
+                    parts.push(createIdentifier('()', nextPart));
                     break loop;
                 default:
                     //we found a non-DottedGet expression, so return because this whole operation is invalid.
@@ -2832,7 +2965,7 @@ export class Util {
     public isLeadingCommentOnSameLine(line: RangeLike, input: Token | AstNode) {
         const leadingCommentRange = this.getLeadingComments(input)?.[0];
         if (leadingCommentRange) {
-            return this.linesTouch(line, leadingCommentRange?.location);
+            return this.linesTouch(line, util.getLocation(leadingCommentRange));
         }
         return false;
     }
@@ -2919,7 +3052,7 @@ export class Util {
                 name: methodName,
                 type: funcType,
                 data: options.data,
-                location: methodNameToken.location,
+                locatable: methodNameToken,
                 separatorToken: createToken(TokenKind.Callfunc),
                 astNode: callExpr
             }));
@@ -3210,7 +3343,7 @@ export function standardizePath(stringParts: TemplateStringsArray | string, ...e
 /**
  * An item that can be coerced into a `Range`
  */
-export type RangeLike = { location?: Location } | Location | { range?: Range } | Range | undefined;
+export type RangeLike = Locatable | { location?: Location } | Location | { range?: Range } | Range | undefined;
 
 export let util = new Util();
 export default util;

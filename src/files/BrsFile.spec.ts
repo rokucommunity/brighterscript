@@ -3970,7 +3970,7 @@ describe('BrsFile', () => {
                 //remove newlines and EOF
                 //set each token to a different file
                 for (const token of file.parser.tokens) {
-                    token.location.uri = util.pathToUri(s`${rootDir}/source/file${i++}.bs`);
+                    util.getLocation(token).uri = util.pathToUri(s`${rootDir}/source/file${i++}.bs`);
                 }
 
                 const result = await program.getTranspiledFileContents(file.srcPath);
@@ -3981,8 +3981,8 @@ describe('BrsFile', () => {
                     let sourcemapResult = tokens.map(token => {
                         let originalPosition = consumer.originalPositionFor({
                             //convert token 0-based line to source-map 1-based line for the lookup
-                            line: token.location?.range.start.line + 1,
-                            column: token.location?.range.start.character
+                            line: util.getLocation(token)?.range.start.line + 1,
+                            column: util.getLocation(token)?.range.start.character
                         });
                         return {
                             kind: token.kind,
@@ -3997,8 +3997,8 @@ describe('BrsFile', () => {
                     expect(sourcemapResult).to.eql(
                         tokens.map(token => ({
                             kind: token.kind,
-                            start: token.location?.range.start,
-                            source: util.uriToPath(token.location.uri)
+                            start: util.getLocation(token)?.range.start,
+                            source: util.uriToPath(util.getLocation(token).uri)
                         }))
                     );
                 });
@@ -4066,6 +4066,312 @@ describe('BrsFile', () => {
             });
 
         });
+
+        /* eslint-disable no-template-curly-in-string */
+        describe('location boundaries', () => {
+            interface OriginalPosition {
+                line: number;
+                column: number;
+                source: string;
+            }
+
+            /**
+             * Transpile the file and look up the original position for each of the given generated positions.
+             * NOTE: all lines (generated and original) are 1-based, all columns are 0-based (source-map convention)
+             */
+            async function getOriginalPositions(pkgPath: string, generatedPositions: Array<[line: number, column: number]>) {
+                const result = await program.getTranspiledFileContents(s`${rootDir}/${pkgPath}`);
+                const positions = await SourceMapConsumer.with(result.map.toString(), null, (consumer) => {
+                    return generatedPositions.map(([line, column]) => {
+                        const position = consumer.originalPositionFor({ line: line, column: column });
+                        return {
+                            line: position.line,
+                            column: position.column,
+                            source: position.source
+                        } as OriginalPosition;
+                    });
+                });
+                return {
+                    code: result.code,
+                    positions: positions
+                };
+            }
+
+            it('maps tokens in a .bs file with CRLF, multi-line template strings, ternaries, emojis, and exitwhile', async () => {
+                program.options.sourceMap = true;
+                program.setFile('source/main.bs', [
+                    'sub main(cond)',
+                    '    msg = `line1',
+                    'line2 ${cond}',
+                    'end`',
+                    '    print msg',
+                    '    result = cond ? "yes" : "no"',
+                    '    print "😀" : print result',
+                    '    while true',
+                    '        exitwhile',
+                    '    end while',
+                    'end sub'
+                ].join('\r\n'));
+                const srcPath = s`${rootDir}/source/main.bs`;
+
+                const { code, positions } = await getOriginalPositions('source/main.bs', [
+                    //sub
+                    [1, 0],
+                    //cond
+                    [1, 9],
+                    //msg
+                    [2, 4],
+                    //"line1"
+                    [2, 11],
+                    //first chr(13) (the \r in the template string)
+                    [2, 21],
+                    //first chr(10) (the \n in the template string)
+                    [2, 31],
+                    //"line2 "
+                    [2, 41],
+                    //cond (inside the template expression)
+                    [2, 67],
+                    //second chr(13)
+                    [2, 75],
+                    //second chr(10)
+                    [2, 85],
+                    //"end"
+                    [2, 95],
+                    //print (after the multi-line template string)
+                    [3, 4],
+                    //msg
+                    [3, 10],
+                    //if (generated from the ternary)
+                    [4, 4],
+                    //cond
+                    [4, 7],
+                    //then (generated from the ternary)
+                    [4, 12],
+                    //result
+                    [5, 8],
+                    //=
+                    [5, 15],
+                    //"yes"
+                    [5, 17],
+                    //else (generated from the ternary)
+                    [6, 4],
+                    //result
+                    [7, 8],
+                    //"no"
+                    [7, 17],
+                    //end if (generated from the ternary)
+                    [8, 4],
+                    //print
+                    [9, 4],
+                    //"😀"
+                    [9, 10],
+                    //print (after the emoji)
+                    [10, 4],
+                    //result (after the emoji)
+                    [10, 10],
+                    //while
+                    [11, 4],
+                    //exit (first half of exitwhile)
+                    [12, 8],
+                    //while (second half of exitwhile)
+                    [12, 12],
+                    //end while
+                    [13, 4],
+                    //end sub
+                    [14, 0]
+                ]);
+
+                expect(code).to.eql([
+                    'sub main(cond)',
+                    '    msg = ("line1" + chr(13) + chr(10) + "line2 " + bslib_toString(cond) + chr(13) + chr(10) + "end")',
+                    '    print msg',
+                    '    if cond then',
+                    '        result = "yes"',
+                    '    else',
+                    '        result = "no"',
+                    '    end if',
+                    '    print "😀"',
+                    '    print result',
+                    '    while true',
+                    '        exitwhile',
+                    '    end while',
+                    'end sub',
+                    `'//# sourceMappingURL=./main.brs.map`
+                ].join('\n'));
+
+                expect(positions).to.eql([
+                    { line: 1, column: 0, source: srcPath },
+                    { line: 1, column: 9, source: srcPath },
+                    { line: 2, column: 4, source: srcPath },
+                    { line: 2, column: 11, source: srcPath },
+                    { line: 2, column: 16, source: srcPath },
+                    { line: 2, column: 17, source: srcPath },
+                    { line: 3, column: 0, source: srcPath },
+                    { line: 3, column: 8, source: srcPath },
+                    { line: 3, column: 13, source: srcPath },
+                    { line: 3, column: 14, source: srcPath },
+                    { line: 4, column: 0, source: srcPath },
+                    { line: 5, column: 4, source: srcPath },
+                    { line: 5, column: 10, source: srcPath },
+                    //if, cond, then
+                    { line: 6, column: 18, source: srcPath },
+                    { line: 6, column: 13, source: srcPath },
+                    { line: 6, column: 18, source: srcPath },
+                    //result = "yes"
+                    { line: 6, column: 4, source: srcPath },
+                    { line: 6, column: 11, source: srcPath },
+                    { line: 6, column: 20, source: srcPath },
+                    //else
+                    { line: 6, column: 18, source: srcPath },
+                    //result = "no"
+                    { line: 6, column: 4, source: srcPath },
+                    { line: 6, column: 28, source: srcPath },
+                    //end if
+                    { line: 6, column: 18, source: srcPath },
+                    //print "😀"
+                    { line: 7, column: 4, source: srcPath },
+                    { line: 7, column: 10, source: srcPath },
+                    //print result
+                    { line: 7, column: 17, source: srcPath },
+                    { line: 7, column: 23, source: srcPath },
+                    //while
+                    { line: 8, column: 4, source: srcPath },
+                    //exitwhile
+                    { line: 9, column: 8, source: srcPath },
+                    { line: 9, column: 12, source: srcPath },
+                    //end while
+                    { line: 10, column: 4, source: srcPath },
+                    //end sub
+                    { line: 11, column: 0, source: srcPath }
+                ]);
+            });
+
+            it('maps tokens in a .brs file mixing LF and CRLF with an emoji', async () => {
+                program.options.sourceMap = true;
+                program.options.allowBrighterScriptInBrightScript = true;
+                program.setFile('source/main.brs',
+                    'sub main()\r\n' +
+                    '    a = 1\n' +
+                    '    print a\r\n' +
+                    '    b = "😀" : print b\n' +
+                    '    while true\r\n' +
+                    '        exitwhile\r\n' +
+                    '    end while\n' +
+                    'end sub'
+                );
+                const srcPath = s`${rootDir}/source/main.brs`;
+
+                const { code, positions } = await getOriginalPositions('source/main.brs', [
+                    //a
+                    [2, 4],
+                    //1
+                    [2, 8],
+                    //a
+                    [3, 10],
+                    //b
+                    [4, 4],
+                    //"😀"
+                    [4, 8],
+                    //print (after the emoji)
+                    [5, 4],
+                    //b (after the emoji)
+                    [5, 10],
+                    //while
+                    [6, 4],
+                    //exit (first half of exitwhile)
+                    [7, 8],
+                    //while (second half of exitwhile)
+                    [7, 12],
+                    //end while
+                    [8, 4],
+                    //end sub (last token in the file, no trailing newline)
+                    [9, 0]
+                ]);
+
+                expect(code).to.eql([
+                    'sub main()',
+                    '    a = 1',
+                    '    print a',
+                    '    b = "😀"',
+                    '    print b',
+                    '    while true',
+                    '        exitwhile',
+                    '    end while',
+                    'end sub',
+                    `'//# sourceMappingURL=./main.brs.map`
+                ].join('\n'));
+
+                expect(positions).to.eql([
+                    { line: 2, column: 4, source: srcPath },
+                    { line: 2, column: 8, source: srcPath },
+                    { line: 3, column: 10, source: srcPath },
+                    { line: 4, column: 4, source: srcPath },
+                    { line: 4, column: 8, source: srcPath },
+                    { line: 4, column: 15, source: srcPath },
+                    { line: 4, column: 21, source: srcPath },
+                    { line: 5, column: 4, source: srcPath },
+                    { line: 6, column: 8, source: srcPath },
+                    { line: 6, column: 12, source: srcPath },
+                    { line: 7, column: 4, source: srcPath },
+                    { line: 8, column: 0, source: srcPath }
+                ]);
+            });
+
+            it('maps lines in an untranspiled .brs file mixing LF and CRLF', async () => {
+                program.options.sourceMap = true;
+                program.setFile('source/main.brs',
+                    'sub main()\r\n' +
+                    '    a = 1\n' +
+                    '    print a\r\n' +
+                    '    b = "😀" : print b\n' +
+                    'end sub'
+                );
+                const srcPath = s`${rootDir}/source/main.brs`;
+
+                const { positions } = await getOriginalPositions('source/main.brs', [
+                    [1, 0],
+                    [2, 0],
+                    [3, 0],
+                    [4, 0],
+                    [5, 0]
+                ]);
+
+                expect(positions).to.eql([
+                    { line: 1, column: 0, source: srcPath },
+                    { line: 2, column: 0, source: srcPath },
+                    { line: 3, column: 0, source: srcPath },
+                    { line: 4, column: 0, source: srcPath },
+                    { line: 5, column: 0, source: srcPath }
+                ]);
+            });
+
+            it('maps tokens to the correct source file when transpiling multiple files', async () => {
+                program.options.sourceMap = true;
+                program.setFile('source/alpha.bs', 'sub alpha()\r\n    print `a\r\nb`: print "alpha"\r\nend sub');
+                program.setFile('source/beta.bs', 'sub beta()\n    print "😀": print "beta"\nend sub');
+
+                const alpha = await getOriginalPositions('source/alpha.bs', [
+                    //print "alpha"
+                    [3, 4],
+                    [3, 10]
+                ]);
+                expect(alpha.positions).to.eql([
+                    { line: 3, column: 4, source: s`${rootDir}/source/alpha.bs` },
+                    { line: 3, column: 10, source: s`${rootDir}/source/alpha.bs` }
+                ]);
+
+                const beta = await getOriginalPositions('source/beta.bs', [
+                    //print "beta"
+                    [3, 4],
+                    [3, 10]
+                ]);
+                expect(beta.positions).to.eql([
+                    { line: 2, column: 16, source: s`${rootDir}/source/beta.bs` },
+                    { line: 2, column: 22, source: s`${rootDir}/source/beta.bs` }
+                ]);
+            });
+        });
+        /* eslint-enable no-template-curly-in-string */
 
         it('handles empty if block', async () => {
             await testTranspile(`
@@ -7611,6 +7917,51 @@ describe('BrsFile', () => {
             `);
             expect(file.getClosestExpression({ line: 3, character: 34 })).to.be.instanceOf(LiteralExpression);
         });
+    });
+
+    describe('token lookups', () => {
+        function getFile(newline: string) {
+            return program.setFile<BrsFile>('source/main.brs', [
+                'sub main()',
+                '    abc = 1',
+                '',
+                '    xyz = 2',
+                'end sub'
+            ].join(newline));
+        }
+
+        for (const [name, newline] of [['LF', '\n'], ['CRLF', '\r\n']]) {
+            describe(name, () => {
+                it('getTokenAt finds the token at, or touching, the position', () => {
+                    const file = getFile(newline);
+                    expect(file.getTokenAt(util.createPosition(1, 4)).text).to.eql('abc');
+                    //the end of a token is inclusive
+                    expect(file.getTokenAt(util.createPosition(1, 7)).text).to.eql('abc');
+                    //the first token on a line, not the previous line's newline
+                    expect(file.getTokenAt(util.createPosition(3, 4)).text).to.eql('xyz');
+                    expect(file.getTokenAt(util.createPosition(4, 0)).kind).to.eql(TokenKind.EndSub);
+                    //an empty line has only its newline
+                    expect(file.getTokenAt(util.createPosition(2, 0)).kind).to.eql(TokenKind.Newline);
+                    //past the end of the file
+                    expect(file.getTokenAt(util.createPosition(99, 0))).to.be.undefined;
+                });
+
+                it('getCurrentOrNextTokenAt finds the next token after the position', () => {
+                    const file = getFile(newline);
+                    expect(file.getCurrentOrNextTokenAt(util.createPosition(1, 0)).text).to.eql('abc');
+                    expect(file.getCurrentOrNextTokenAt(util.createPosition(1, 4)).text).to.eql('=');
+                });
+
+                it('getClosestToken finds the token at the position, or the one before it', () => {
+                    const file = getFile(newline);
+                    expect(file.getClosestToken(util.createPosition(1, 5)).text).to.eql('abc');
+                    //in the leading whitespace of a line, so the previous token is the newline before it
+                    expect(file.getClosestToken(util.createPosition(3, 1)).kind).to.eql(TokenKind.Newline);
+                    //past the end of the file
+                    expect(file.getClosestToken(util.createPosition(99, 0)).kind).to.eql(TokenKind.Eof);
+                });
+            });
+        }
     });
 
 });

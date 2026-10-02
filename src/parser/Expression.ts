@@ -1,9 +1,8 @@
 /* eslint-disable no-bitwise */
-import type { Token, Identifier } from '../lexer/Token';
+import type { Token, Identifier, Locatable, SourceInfo } from '../lexer/Token';
 import type { PrintSeparatorToken } from '../lexer/TokenKind';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Block, NamespaceStatement } from './Statement';
-import type { Location } from 'vscode-languageserver';
 import util from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
@@ -50,7 +49,7 @@ export class BinaryExpression extends Expression {
         };
         this.left = options.left;
         this.right = options.right;
-        this.location = util.createBoundingLocation(this.left, this.tokens.operator, this.right);
+        util.setBounds(this, this.left, this.tokens.operator, this.right);
     }
     readonly tokens: {
         readonly operator: Token;
@@ -61,7 +60,9 @@ export class BinaryExpression extends Expression {
 
     public readonly kind = AstNodeKind.BinaryExpression;
 
-    public readonly location: Location | undefined;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState): TranspileResult {
         return [
@@ -140,7 +141,7 @@ export class CallExpression extends Expression {
         };
         this.callee = options.callee;
         this.args = options.args ?? [];
-        this.location = util.createBoundingLocation(this.callee, this.tokens.openingParen, ...this.args ?? [], this.tokens.closingParen);
+        util.setBounds(this, this.callee, this.tokens.openingParen, ...this.args ?? [], this.tokens.closingParen);
     }
 
     readonly callee: Expression;
@@ -155,7 +156,9 @@ export class CallExpression extends Expression {
 
     public readonly kind = AstNodeKind.CallExpression;
 
-    public readonly location: Location | undefined;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     /** `a.b()` -> `a.b` (not the args) */
     public get previousInChain() {
@@ -286,6 +289,15 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             this.body.parent = this;
         }
         this.symbolTable = new SymbolTable('FunctionExpression', () => this.parent?.getSymbolTable());
+        util.setBounds(this,
+            this.tokens.functionType,
+            this.tokens.leftParen,
+            ...this.parameters ?? [],
+            this.tokens.rightParen,
+            this.tokens.as,
+            this.returnTypeExpression,
+            this.tokens.endFunctionType
+        );
     }
 
     public readonly kind = AstNodeKind.FunctionExpression;
@@ -310,21 +322,9 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         return this.tokens.endFunctionType?.leadingTrivia;
     }
 
-    /**
-     * The range of the function, starting at the 'f' in function or 's' in sub (or the open paren if the keyword is missing),
-     * and ending with the last n' in 'end function' or 'b' in 'end sub'
-     */
-    public get location(): Location {
-        return util.createBoundingLocation(
-            this.tokens.functionType,
-            this.tokens.leftParen,
-            ...this.parameters ?? [],
-            this.tokens.rightParen,
-            this.tokens.as,
-            this.returnTypeExpression,
-            this.tokens.endFunctionType
-        );
-    }
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState, name?: Identifier, includeBody = true) {
         let results = [] as TranspileResult;
@@ -541,6 +541,13 @@ export class FunctionParameterExpression extends Expression {
         };
         this.defaultValue = options.defaultValue;
         this.typeExpression = options.typeExpression;
+        util.setBounds(this,
+            this.tokens.name,
+            this.tokens.as,
+            this.typeExpression,
+            this.tokens.equals,
+            this.defaultValue
+        );
     }
 
     public readonly kind = AstNodeKind.FunctionParameterExpression;
@@ -575,15 +582,9 @@ export class FunctionParameterExpression extends Expression {
         return paramType;
     }
 
-    public get location(): Location | undefined {
-        return util.createBoundingLocation(
-            this.tokens.name,
-            this.tokens.as,
-            this.typeExpression,
-            this.tokens.equals,
-            this.defaultValue
-        );
-    }
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState) {
         let result: TranspileResult = [
@@ -670,7 +671,7 @@ export class DottedGetExpression extends Expression {
         };
         this.obj = options.obj;
 
-        this.location = util.createBoundingLocation(this.obj, this.tokens.dot, this.tokens.name);
+        util.setBounds(this, this.obj, this.tokens.dot, this.tokens.name);
     }
 
     readonly tokens: {
@@ -695,7 +696,9 @@ export class DottedGetExpression extends Expression {
 
     public readonly kind = AstNodeKind.DottedGetExpression;
 
-    public readonly location: Location | undefined;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     /** `a.b` -> `a` */
     public get previousInChain() {
@@ -745,7 +748,7 @@ export class DottedGetExpression extends Expression {
             name: this.tokens.name?.text,
             type: result,
             data: options.data,
-            location: this.tokens.name?.location ?? this.location,
+            locatable: this.tokens.name,
             astNode: this
         }));
         if (result ||
@@ -791,7 +794,7 @@ export class XmlAttributeGetExpression extends Expression {
         super();
         this.obj = options.obj;
         this.tokens = { at: options.at, name: options.name };
-        this.location = util.createBoundingLocation(this.obj, this.tokens.at, this.tokens.name);
+        util.setBounds(this, this.obj, this.tokens.at, this.tokens.name);
     }
 
     public readonly kind = AstNodeKind.XmlAttributeGetExpression;
@@ -803,7 +806,9 @@ export class XmlAttributeGetExpression extends Expression {
 
     public readonly obj: Expression;
 
-    public readonly location: Location | undefined;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     /** `a@b` -> `a` */
     public get previousInChain() {
@@ -859,7 +864,7 @@ export class IndexedGetExpression extends Expression {
         };
         this.obj = options.obj;
         this.indexes = options.indexes;
-        this.location = util.createBoundingLocation(
+        util.setBounds(this,
             this.obj,
             this.tokens.openingSquare,
             this.tokens.questionDot,
@@ -904,7 +909,9 @@ export class IndexedGetExpression extends Expression {
         return this.indexes?.[0];
     }
 
-    public readonly location: Location | undefined;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     /** `a[i]` -> `a` (not the index) */
     public get previousInChain() {
@@ -980,7 +987,7 @@ export class GroupingExpression extends Expression {
             leftParen: options.leftParen
         };
         this.expression = options.expression;
-        this.location = util.createBoundingLocation(this.tokens.leftParen, this.expression, this.tokens.rightParen);
+        util.setBounds(this, this.tokens.leftParen, this.expression, this.tokens.rightParen);
     }
 
     public readonly tokens: {
@@ -991,7 +998,9 @@ export class GroupingExpression extends Expression {
 
     public readonly kind = AstNodeKind.GroupingExpression;
 
-    public readonly location: Location | undefined;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         if (isTypecastExpression(this.expression)) {
@@ -1046,8 +1055,14 @@ export class LiteralExpression extends Expression {
 
     public readonly kind = AstNodeKind.LiteralExpression;
 
-    public get location() {
-        return this.tokens.value.location;
+    public get pos() {
+        return this.tokens.value.pos;
+    }
+    public get end() {
+        return this.tokens.value.end;
+    }
+    public get source() {
+        return this.tokens.value.source;
     }
 
     public getType(options?: GetTypeOptions) {
@@ -1104,7 +1119,7 @@ export class PrintSeparatorExpression extends Expression {
         this.tokens = {
             separator: options.separator
         };
-        this.location = this.tokens.separator.location;
+        util.setBounds(this, this.tokens.separator);
     }
 
     public readonly tokens: {
@@ -1113,7 +1128,9 @@ export class PrintSeparatorExpression extends Expression {
 
     public readonly kind = AstNodeKind.PrintSeparatorExpression;
 
-    public location: Location;
+    public pos: number;
+    public end: number;
+    public source: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -1148,7 +1165,7 @@ export class EscapedCharCodeLiteralExpression extends Expression {
     }) {
         super();
         this.tokens = { value: options.value };
-        this.location = util.cloneLocation(this.tokens.value.location);
+        util.setBounds(this, this.tokens.value);
     }
 
     public readonly kind = AstNodeKind.EscapedCharCodeLiteralExpression;
@@ -1157,7 +1174,9 @@ export class EscapedCharCodeLiteralExpression extends Expression {
         readonly value: Token & { charCode: number };
     };
 
-    public readonly location: Location;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -1190,7 +1209,7 @@ export class ArrayLiteralExpression extends Expression {
             close: options.close
         };
         this.elements = options.elements;
-        this.location = util.createBoundingLocation(this.tokens.open, ...this.elements ?? [], this.tokens.close);
+        util.setBounds(this, this.tokens.open, ...this.elements ?? [], this.tokens.close);
     }
 
     public readonly elements: Array<Expression>;
@@ -1202,7 +1221,9 @@ export class ArrayLiteralExpression extends Expression {
 
     public readonly kind = AstNodeKind.ArrayLiteralExpression;
 
-    public readonly location: Location | undefined;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let result: TranspileResult = [];
@@ -1281,12 +1302,14 @@ export class AAMemberExpression extends Expression {
             comma: options.comma
         };
         this.value = options.value;
-        this.location = util.createBoundingLocation(this.tokens.key, this.tokens.colon, this.value);
+        util.setBounds(this, this.tokens.key, this.tokens.colon, this.value);
     }
 
     public readonly kind = AstNodeKind.AAMemberExpression;
 
-    public readonly location: Location | undefined;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     public readonly tokens: {
         readonly key: Token;
@@ -1344,7 +1367,7 @@ export class AAIndexedMemberExpression extends Expression {
             comma: options.comma
         };
         this.value = options.value;
-        this.location = util.createBoundingLocation(this.tokens.leftBracket, this.key, this.tokens.rightBracket, this.tokens.colon, this.value, this.tokens.comma);
+        util.setBounds(this, this.tokens.leftBracket, this.key, this.tokens.rightBracket, this.tokens.colon, this.value, this.tokens.comma);
     }
 
     public readonly tokens: {
@@ -1361,7 +1384,9 @@ export class AAIndexedMemberExpression extends Expression {
 
     public readonly kind = AstNodeKind.AAIndexedMemberExpression;
 
-    public readonly location: Location | undefined;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [];
@@ -1400,7 +1425,7 @@ export class AALiteralExpression extends Expression {
             close: options.close
         };
         this.elements = options.elements;
-        this.location = util.createBoundingLocation(this.tokens.open, ...this.elements ?? [], this.tokens.close);
+        util.setBounds(this, this.tokens.open, ...this.elements ?? [], this.tokens.close);
     }
 
     public readonly elements: Array<AAMemberExpression | AAIndexedMemberExpression>;
@@ -1411,7 +1436,9 @@ export class AALiteralExpression extends Expression {
 
     public readonly kind = AstNodeKind.AALiteralExpression;
 
-    public readonly location: Location | undefined;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let result: TranspileResult = [];
@@ -1523,12 +1550,14 @@ export class UnaryExpression extends Expression {
             operator: options.operator
         };
         this.right = options.right;
-        this.location = util.createBoundingLocation(this.tokens.operator, this.right);
+        util.setBounds(this, this.tokens.operator, this.right);
     }
 
     public readonly kind = AstNodeKind.UnaryExpression;
 
-    public readonly location: Location | undefined;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     public readonly tokens: {
         readonly operator: Token;
@@ -1585,7 +1614,7 @@ export class VariableExpression extends Expression {
         this.tokens = {
             name: options.name
         };
-        this.location = util.cloneLocation(this.tokens.name?.location);
+        util.setBounds(this, this.tokens.name);
     }
 
     public readonly tokens: {
@@ -1594,7 +1623,9 @@ export class VariableExpression extends Expression {
 
     public readonly kind = AstNodeKind.VariableExpression;
 
-    public readonly location: Location;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     /**
      * @deprecated use `tokens.name` instead
@@ -1683,10 +1714,12 @@ export class SourceLiteralExpression extends Expression {
         this.tokens = {
             value: options.value
         };
-        this.location = util.cloneLocation(this.tokens.value?.location);
+        util.setBounds(this, this.tokens.value);
     }
 
-    public readonly location: Location;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     public readonly kind = AstNodeKind.SourceLiteralExpression;
 
@@ -1736,8 +1769,8 @@ export class SourceLiteralExpression extends Expression {
     private getClosestLineNumber() {
         let node: AstNode = this;
         while (node) {
-            if (node.location?.range) {
-                return node.location.range.start.line + 1;
+            if (util.getLocation(node)?.range) {
+                return util.getLocation(node).range.start.line + 1;
             }
             node = node.parent;
         }
@@ -1829,12 +1862,14 @@ export class NewExpression extends Expression {
             new: options.new
         };
         this.call = options.call;
-        this.location = util.createBoundingLocation(this.tokens.new, this.call);
+        util.setBounds(this, this.tokens.new, this.call);
     }
 
     public readonly kind = AstNodeKind.NewExpression;
 
-    public readonly location: Location | undefined;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     public readonly tokens: {
         readonly new?: Token;
@@ -1919,7 +1954,7 @@ export class CallfuncExpression extends Expression {
         this.callee = options.callee;
         this.args = options.args ?? [];
 
-        this.location = util.createBoundingLocation(
+        util.setBounds(this,
             this.callee,
             this.tokens.operator,
             this.tokens.methodName,
@@ -1941,7 +1976,9 @@ export class CallfuncExpression extends Expression {
 
     public readonly kind = AstNodeKind.CallfuncExpression;
 
-    public readonly location: Location | undefined;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     /** `a@.b()` -> `a` (not the args) */
     public get previousInChain() {
@@ -2019,7 +2056,7 @@ export class TemplateStringQuasiExpression extends Expression {
     }) {
         super();
         this.expressions = options.expressions;
-        this.location = util.createBoundingLocation(
+        util.setBounds(this,
             ...this.expressions ?? []
         );
     }
@@ -2027,7 +2064,9 @@ export class TemplateStringQuasiExpression extends Expression {
     public readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteralExpression>;
     public readonly kind = AstNodeKind.TemplateStringQuasiExpression;
 
-    readonly location: Location | undefined;
+    readonly pos: number;
+    readonly end: number;
+    readonly source: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState, skipEmptyStrings = true) {
         let result = [] as TranspileResult;
@@ -2077,7 +2116,7 @@ export class TemplateStringExpression extends Expression {
         };
         this.quasis = options.quasis;
         this.expressions = options.expressions;
-        this.location = util.createBoundingLocation(
+        util.setBounds(this,
             this.tokens.openingBacktick,
             this.quasis?.[0],
             this.quasis?.[this.quasis?.length - 1],
@@ -2094,7 +2133,9 @@ export class TemplateStringExpression extends Expression {
     public readonly quasis: TemplateStringQuasiExpression[];
     public readonly expressions: Expression[];
 
-    public readonly location: Location | undefined;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     public getType(options: GetTypeOptions) {
         return StringType.instance;
@@ -2198,7 +2239,7 @@ export class TaggedTemplateStringExpression extends Expression {
         this.quasis = options.quasis;
         this.expressions = options.expressions;
 
-        this.location = util.createBoundingLocation(
+        util.setBounds(this,
             this.tokens.tagName,
             this.tokens.openingBacktick,
             this.quasis?.[0],
@@ -2218,7 +2259,9 @@ export class TaggedTemplateStringExpression extends Expression {
     public readonly quasis: TemplateStringQuasiExpression[];
     public readonly expressions: Expression[];
 
-    public readonly location: Location | undefined;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -2312,12 +2355,18 @@ export class AnnotationExpression extends Expression {
         readonly name: Token;
     };
 
-    public get location(): Location | undefined {
-        return util.createBoundingLocation(
-            this.tokens.at,
-            this.tokens.name,
-            this.call
-        );
+    public get pos() {
+        return this.getBounds().pos;
+    }
+    public get end() {
+        return this.getBounds().end;
+    }
+    public get source() {
+        return this.getBounds().source;
+    }
+    private getBounds() {
+        //this needs to be computed on demand because `call` is assigned after construction
+        return util.setBounds({} as Locatable, this.tokens.at, this.tokens.name, this.call);
     }
 
     public readonly name: string;
@@ -2382,7 +2431,7 @@ export class TernaryExpression extends Expression {
         this.test = options.test;
         this.consequent = options.consequent;
         this.alternate = options.alternate;
-        this.location = util.createBoundingLocation(
+        util.setBounds(this,
             this.test,
             this.tokens.questionMark,
             this.consequent,
@@ -2393,7 +2442,9 @@ export class TernaryExpression extends Expression {
 
     public readonly kind = AstNodeKind.TernaryExpression;
 
-    public readonly location: Location | undefined;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     public readonly tokens: {
         readonly questionMark?: Token;
@@ -2507,7 +2558,7 @@ export class NullCoalescingExpression extends Expression {
         };
         this.consequent = options.consequent;
         this.alternate = options.alternate;
-        this.location = util.createBoundingLocation(
+        util.setBounds(this,
             this.consequent,
             this.tokens.questionQuestion,
             this.alternate
@@ -2516,7 +2567,9 @@ export class NullCoalescingExpression extends Expression {
 
     public readonly kind = AstNodeKind.NullCoalescingExpression;
 
-    public readonly location: Location | undefined;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     public readonly tokens: {
         readonly questionQuestion?: Token;
@@ -2628,8 +2681,14 @@ export class RegexLiteralExpression extends Expression {
         readonly regexLiteral: Token;
     };
 
-    public get location(): Location {
-        return this.tokens?.regexLiteral?.location;
+    public get pos() {
+        return this.tokens?.regexLiteral?.pos;
+    }
+    public get end() {
+        return this.tokens?.regexLiteral?.end;
+    }
+    public get source() {
+        return this.tokens?.regexLiteral?.source;
     }
 
     public transpile(state: BrsTranspileState): TranspileResult {
@@ -2740,7 +2799,7 @@ export class TypeExpression extends Expression implements TypedefProvider {
         super();
         this.expression = options.expression;
         this.resolvedType = options.resolvedType;
-        this.location = util.cloneLocation(this.expression?.location);
+        util.setBounds(this, this.expression);
     }
 
     public readonly kind = AstNodeKind.TypeExpression;
@@ -2756,7 +2815,9 @@ export class TypeExpression extends Expression implements TypedefProvider {
      */
     public readonly resolvedType?: BscType;
 
-    public readonly location: Location;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         //roku built-in names (rosgnode*, etc.) collapse to `dynamic` at transpile.
@@ -2835,7 +2896,7 @@ export class TypecastExpression extends Expression {
         };
         this.obj = options.obj;
         this.typeExpression = options.typeExpression;
-        this.location = util.createBoundingLocation(
+        util.setBounds(this,
             this.obj,
             this.tokens.as,
             this.typeExpression
@@ -2852,7 +2913,9 @@ export class TypecastExpression extends Expression {
 
     public typeExpression?: TypeExpression;
 
-    public readonly location: Location;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return this.obj.transpile(state);
@@ -2900,7 +2963,7 @@ export class TypedArrayExpression extends Expression {
             rightBracket: options.rightBracket
         };
         this.innerType = options.innerType;
-        this.location = util.createBoundingLocation(
+        util.setBounds(this,
             this.innerType,
             this.tokens.leftBracket,
             this.tokens.rightBracket
@@ -2916,7 +2979,9 @@ export class TypedArrayExpression extends Expression {
 
     public readonly kind = AstNodeKind.TypedArrayExpression;
 
-    public readonly location: Location;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         //typed arrays (e.g. `float[]`, `float[][][]`) collapse to `dynamic` since
@@ -2958,7 +3023,7 @@ export class InlineInterfaceExpression extends Expression {
             close: options.close
         };
         this.members = options.members;
-        this.location = util.createBoundingLocation(
+        util.setBounds(this,
             this.tokens.open,
             ...this.members,
             this.tokens.close
@@ -2974,7 +3039,9 @@ export class InlineInterfaceExpression extends Expression {
 
     public readonly kind = AstNodeKind.InlineInterfaceExpression;
 
-    public readonly location: Location;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     get leadingTrivia(): Token[] {
         return this.tokens.open?.leadingTrivia;
@@ -3035,7 +3102,7 @@ export class InlineInterfaceMemberExpression extends Expression {
             optional: options.optional
         };
         this.typeExpression = options.typeExpression;
-        this.location = util.createBoundingLocation(
+        util.setBounds(this,
             this.tokens.optional,
             this.tokens.name,
             this.tokens.as,
@@ -3053,7 +3120,9 @@ export class InlineInterfaceMemberExpression extends Expression {
 
     public readonly typeExpression?: TypeExpression;
 
-    public readonly location: Location;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     get leadingTrivia(): Token[] {
         return this.tokens.optional?.leadingTrivia ?? this.tokens.name.leadingTrivia;
@@ -3109,7 +3178,7 @@ export class TypedFunctionTypeExpression extends Expression {
         };
         this.params = options.params;
         this.returnType = options.returnType;
-        this.location = util.createBoundingLocation(
+        util.setBounds(this,
             this.tokens.functionType,
             this.tokens.leftParen,
             ...this.params,
@@ -3131,7 +3200,9 @@ export class TypedFunctionTypeExpression extends Expression {
     public readonly params: FunctionParameterExpression[];
     public readonly returnType?: TypeExpression;
 
-    public readonly location: Location;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [this.getType({ flags: SymbolTypeFlag.typetime }).toTypeString()];

@@ -1,3 +1,4 @@
+import { testLocatable } from '../../../testHelpers.spec';
 import { expect } from '../../../chai-config.spec';
 
 import { ParseMode, Parser } from '../../Parser';
@@ -70,35 +71,35 @@ describe('parser foreach loops', () => {
                 kind: TokenKind.ForEach,
                 text: 'for each',
                 isReserved: true,
-                location: util.createLocation(0, 0, 0, 8),
+                ...testLocatable(0, 0, 0, 8),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'a',
                 isReserved: false,
-                location: util.createLocation(0, 9, 0, 10),
+                ...testLocatable(0, 9, 0, 10),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'in',
                 isReserved: true,
-                location: util.createLocation(0, 11, 0, 13),
+                ...testLocatable(0, 11, 0, 13),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'b',
                 isReserved: false,
-                location: util.createLocation(0, 14, 0, 15),
+                ...testLocatable(0, 14, 0, 15),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
-                location: util.createLocation(0, 15, 0, 16),
+                ...testLocatable(0, 15, 0, 16),
                 leadingTrivia: []
             },
             // loop body isn't significant for location tracking, so helper functions are safe
@@ -111,7 +112,7 @@ describe('parser foreach loops', () => {
                 kind: TokenKind.EndFor,
                 text: 'end for',
                 isReserved: false,
-                location: util.createLocation(2, 0, 2, 7),
+                ...testLocatable(2, 0, 2, 7),
                 leadingTrivia: []
             },
             EOF
@@ -119,7 +120,7 @@ describe('parser foreach loops', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(ast.statements).to.be.lengthOf(1);
-        expect(ast.statements[0].location.range).deep.include(
+        expect(util.getLocation(ast.statements[0]).range).deep.include(
             Range.create(0, 0, 2, 7)
         );
     });

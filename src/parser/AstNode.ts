@@ -1,34 +1,35 @@
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
-import type { Location, Position, Range } from 'vscode-languageserver';
+import type { Position } from 'vscode-languageserver';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { InternalWalkMode } from '../astUtils/visitors';
 import type { SymbolTable } from '../SymbolTable';
 import type { BrsTranspileState } from './BrsTranspileState';
 import type { GetTypeOptions, TranspileResult } from '../interfaces';
 import type { AnnotationExpression } from './Expression';
-import util from '../util';
 import { DynamicType } from '../types/DynamicType';
+import util from '../util';
 import type { BscType } from '../types/BscType';
-import type { Token } from '../lexer/Token';
+import type { Locatable, SourceInfo, Token } from '../lexer/Token';
 import { isBlock, isBody, isFunctionParameterExpression } from '../astUtils/reflection';
 
 /**
  * A BrightScript AST node
  */
-export abstract class AstNode {
+export abstract class AstNode implements Locatable {
     public abstract kind: AstNodeKind;
     /**
-     *  The starting and ending location of the node.
+     * Absolute offset where this node starts in its source. Use `util.getLocation()` to get the line/character `Location`
      */
-    public abstract location?: Location | undefined;
-
+    public abstract pos: number;
     /**
-     * @deprecated use `location.range` instead
+     * Absolute offset where this node ends in its source (exclusive)
      */
-    public get range(): Range | undefined {
-        return this.location?.range;
-    }
+    public abstract end: number;
+    /**
+     * Info about the source this node was parsed from. `undefined` for synthetic nodes
+     */
+    public abstract source: SourceInfo | undefined;
 
     public abstract transpile(state: BrsTranspileState): TranspileResult;
 
@@ -152,8 +153,12 @@ export abstract class AstNode {
      */
     public findChildAtPosition<TNodeType extends AstNode = AstNode>(position: Position, options?: WalkOptions): TNodeType | undefined {
         return this.findChild<TNodeType>((node) => {
-            //if the current node includes this range, keep that node
-            if (util.rangeContains(node?.location.range, position)) {
+            //if the current node includes this position, keep that node (nodes without a source include every position)
+            if (!node?.source) {
+                return node.findChildAtPosition(position, options) ?? node;
+            }
+            const offset = util.getOffset(node.source, position);
+            if (offset !== undefined && node.pos <= offset && offset <= node.end) {
                 return node.findChildAtPosition(position, options) ?? node;
             }
         }, options);
@@ -295,11 +300,6 @@ export abstract class AstNode {
                     (clone[key as any] as AstNode).parent = clone;
                 }
             }
-        }
-
-        //reapply the location if we have one but the clone doesn't
-        if (!clone.location && this.location) {
-            clone.location = util.cloneLocation(this.location);
         }
         return clone;
     }

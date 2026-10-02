@@ -593,4 +593,176 @@ describe('BrsFileSemanticTokensProcessor', () => {
             [SemanticTokenTypes.function, 2, 16, 2, 20]
         ]);
     });
+
+    describe('location boundaries', () => {
+        it('computes exact token ranges for nested multi-line constructs in a .bs file with no trailing newline', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', [
+                'namespace alpha',
+                '    namespace beta.charlie',
+                '        class Person',
+                '            name as string',
+                '            sub speak()',
+                '            end sub',
+                '        end class',
+                '    end namespace',
+                '    enum Direction',
+                '        up = "up"',
+                '        down = "down"',
+                '    end enum',
+                '    interface Shape',
+                '        width as integer',
+                '        function area() as float',
+                '    end interface',
+                '    const PI = 3.14',
+                'end namespace',
+                'function empty()',
+                'end function',
+                'const LAST_ONE = true'
+            ].join('\n'));
+            expectSemanticTokens(file, [
+                // namespace |alpha|
+                [SemanticTokenTypes.namespace, 0, 10, 0, 15],
+                // class |Person|
+                [SemanticTokenTypes.class, 2, 14, 2, 20],
+                // enum |Direction|
+                [SemanticTokenTypes.enum, 8, 9, 8, 18],
+                // interface |Shape|
+                [SemanticTokenTypes.interface, 12, 14, 12, 19],
+                // const |PI| = 3.14
+                [SemanticTokenTypes.variable, 16, 10, 16, 12, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]],
+                // function |empty|()
+                [SemanticTokenTypes.function, 18, 9, 18, 14],
+                // const |LAST_ONE| = true
+                [SemanticTokenTypes.variable, 20, 6, 20, 14, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]]
+            ]);
+        });
+
+        it('computes exact token ranges in a .brs file with CRLF line endings, emoji, and elseif', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', [
+                '\' 😀 header comment',
+                'function alpha(a, b)',
+                '    if a then',
+                '        print "😀"',
+                '    elseif b then',
+                '        print 2',
+                '    else',
+                '        print 3',
+                '    end if',
+                'end function',
+                'sub beta() : print "😀😀" : end sub : sub charlie() : end sub',
+                'sub empty()',
+                'end sub',
+                ''
+            ].join('\r\n'));
+            expectSemanticTokens(file, [
+                // function |alpha|(a, b)
+                [SemanticTokenTypes.function, 1, 9, 1, 14],
+                // function alpha(|a|, b)
+                [SemanticTokenTypes.parameter, 1, 15, 1, 16],
+                // function alpha(a, |b|)
+                [SemanticTokenTypes.parameter, 1, 18, 1, 19],
+                // sub |beta|() : print "😀😀" : end sub : sub charlie() : end sub
+                [SemanticTokenTypes.function, 10, 4, 10, 8],
+                // sub beta() : print "😀😀" : end sub : sub |charlie|() : end sub
+                [SemanticTokenTypes.function, 10, 42, 10, 49],
+                // sub |empty|()
+                [SemanticTokenTypes.function, 11, 4, 11, 9]
+            ]);
+        });
+
+        it('uses utf-16 code units for tokens that follow an emoji on the same line', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', [
+                'const A = "😀" : const B = 2',
+                'enum E',
+                '    x = "😀😀" : y = "b"',
+                'end enum'
+            ].join('\n'));
+            expectSemanticTokens(file, [
+                // const |A| = "😀" : const B = 2
+                [SemanticTokenTypes.variable, 0, 6, 0, 7, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]],
+                // const A = "😀" : const |B| = 2
+                [SemanticTokenTypes.variable, 0, 23, 0, 24, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]],
+                // enum |E|
+                [SemanticTokenTypes.enum, 1, 5, 1, 6]
+            ]);
+        });
+
+        it('computes exact token ranges inside and after a multi-line template string', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', [
+                'sub main(who as string)',
+                '    count = 1',
+                '    text = `line one 😀',
+                // eslint-disable-next-line no-template-curly-in-string
+                'two ${who} and ${count}',
+                // eslint-disable-next-line no-template-curly-in-string
+                'three ${ lcase(who) }`',
+                '    print text',
+                'end sub',
+                'function after()',
+                'end function',
+                ''
+            ].join('\n'));
+            expectSemanticTokens(file, [
+                // sub |main|(who as string)
+                [SemanticTokenTypes.function, 0, 4, 0, 8],
+                // sub main(|who| as string)
+                [SemanticTokenTypes.parameter, 0, 9, 0, 12],
+                // |count| = 1
+                [SemanticTokenTypes.variable, 1, 4, 1, 9],
+                // |text| = `line one 😀
+                [SemanticTokenTypes.variable, 2, 4, 2, 8],
+                // two ${|who|} and ${count}
+                [SemanticTokenTypes.variable, 3, 6, 3, 9],
+                // two ${who} and ${|count|}
+                [SemanticTokenTypes.variable, 3, 17, 3, 22],
+                // three ${ |lcase|(who) }`
+                [SemanticTokenTypes.function, 4, 9, 4, 14],
+                // three ${ lcase(|who|) }`
+                [SemanticTokenTypes.variable, 4, 15, 4, 18],
+                // print |text|
+                [SemanticTokenTypes.variable, 5, 10, 5, 14],
+                // function |after|()
+                [SemanticTokenTypes.function, 7, 9, 7, 14]
+            ]);
+        });
+
+        it('computes exact token ranges in loops, exitwhile, and an empty function at the end of a .brs file', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', [
+                'sub main()',
+                '    value = 1',
+                '    while value < 10',
+                '        value = value + 1',
+                '        if value = 5',
+                '            exitwhile',
+                '        end if',
+                '    end while',
+                '    for i = 0 to 3',
+                '        print i',
+                '    end for',
+                'end sub',
+                'sub empty()',
+                'end sub'
+            ].join('\n'));
+            expectSemanticTokens(file, [
+                // sub |main|()
+                [SemanticTokenTypes.function, 0, 4, 0, 8],
+                // |value| = 1
+                [SemanticTokenTypes.variable, 1, 4, 1, 9],
+                // while |value| < 10
+                [SemanticTokenTypes.variable, 2, 10, 2, 15],
+                // |value| = value + 1
+                [SemanticTokenTypes.variable, 3, 8, 3, 13],
+                // value = |value| + 1
+                [SemanticTokenTypes.variable, 3, 16, 3, 21],
+                // if |value| = 5
+                [SemanticTokenTypes.variable, 4, 11, 4, 16],
+                // for |i| = 0 to 3
+                [SemanticTokenTypes.variable, 8, 8, 8, 9],
+                // print |i|
+                [SemanticTokenTypes.variable, 9, 14, 9, 15],
+                // sub |empty|()
+                [SemanticTokenTypes.function, 12, 4, 12, 9]
+            ]);
+        });
+    });
 });

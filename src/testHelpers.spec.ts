@@ -18,6 +18,7 @@ import type { LspDiagnostic } from './lsp/LspProject';
 import { Project } from './lsp/Project';
 import { isProgram, isProject } from './astUtils/reflection';
 import type { WorkspaceConfig } from './lsp/ProjectManager';
+import type { Locatable, SourceInfo } from './lexer/Token';
 
 export const cwd = s`${__dirname}/../`;
 export const tempDir = s`${__dirname}/../.tmp`;
@@ -32,6 +33,18 @@ export const workspaceSettings: WorkspaceConfig = {
 };
 
 export const trim = undent;
+
+/**
+ * A shared source for hand-built test tokens, where every line is 1000 characters long
+ */
+const testSource: SourceInfo = { uri: undefined, lineStarts: Array.from({ length: 1000 }, (x, i) => i * 1000) };
+
+/**
+ * Create a `Locatable` for a hand-built test token from line/character positions
+ */
+export function testLocatable(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Locatable {
+    return { pos: (startLine * 1000) + startCharacter, end: (endLine * 1000) + endCharacter, source: testSource };
+}
 const sinon = createSandbox();
 
 beforeEach(() => {

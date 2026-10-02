@@ -758,15 +758,15 @@ describe('parser if statements', () => {
         expect(diagnostics).to.be.lengthOf(0);
 
         const then1 = (ast.statements[0] as IfStatement).thenBranch;
-        expect(then1.location).to.eql(util.createBoundingLocation(...then1.statements));
+        expect(util.getLocation(then1)).to.eql(util.createBoundingLocation(...then1.statements));
 
         const then2 = (ast.statements[1] as IfStatement).thenBranch;
-        expect(then2.location).to.eql(util.createBoundingLocation(...then2.statements));
+        expect(util.getLocation(then2)).to.eql(util.createBoundingLocation(...then2.statements));
 
         const else1 = (ast.statements[2] as IfStatement).elseBranch as Block;
-        expect(else1.location).to.eql(util.createBoundingLocation(...else1.statements));
+        expect(util.getLocation(else1)).to.eql(util.createBoundingLocation(...else1.statements));
 
         const else2 = (ast.statements[3] as IfStatement).elseBranch as Block;
-        expect(else2.location).to.eql(util.createBoundingLocation(...else2.statements));
+        expect(util.getLocation(else2)).to.eql(util.createBoundingLocation(...else2.statements));
     });
 });

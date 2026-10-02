@@ -2724,4 +2724,292 @@ describe('CompletionsProcessor', () => {
             }]);
         });
     });
+
+    describe('location boundaries', () => {
+        //every test in this block builds its source from an explicit list of lines (no indentation stripping)
+        //so that the line/character values below can be counted by hand
+        const personClassLines = [
+            'class Person', //0
+            '    name as string', //1
+            '    sub speak()', //2
+            '    end sub', //3
+            'end class' //4
+        ];
+
+        function getLabels(srcPath: string, line: number, character: number) {
+            return program.getCompletions(srcPath, util.createPosition(line, character)).map(x => x.label);
+        }
+
+        it('finds members directly after a dot', () => {
+            program.setFile('source/main.bs', [
+                ...personClassLines,
+                'sub main()', //5
+                '    p = new Person()', //6
+                '    p.', //7
+                'end sub' //8
+            ].join('\n'));
+            program.validate();
+            //    p.|
+            const labels = getLabels('source/main.bs', 7, 6);
+            expect(labels).to.include.members(['name', 'speak']);
+            expect(labels).not.to.include('main');
+        });
+
+        it('finds members when the cursor is in the middle of an identifier after a dot', () => {
+            program.setFile('source/main.bs', [
+                ...personClassLines,
+                'sub main()', //5
+                '    p = new Person()', //6
+                '    p.spe', //7
+                'end sub' //8
+            ].join('\n'));
+            program.validate();
+            //    p.s|pe
+            const labels = getLabels('source/main.bs', 7, 7);
+            expect(labels).to.include.members(['name', 'speak']);
+            expect(labels).not.to.include('main');
+        });
+
+        it('finds locals when the cursor is in the middle of an identifier', () => {
+            program.setFile('source/main.brs', [
+                'sub main()', //0
+                '    person = 1', //1
+                '    pers', //2
+                'end sub' //3
+            ].join('\n'));
+            program.validate();
+            //    pe|rs
+            expect(getLabels('source/main.brs', 2, 6)).to.include.members(['person', 'main']);
+        });
+
+        it('finds locals for an identifier at column 0 of a line', () => {
+            program.setFile('source/main.brs', [
+                'sub main()', //0
+                '    person = 1', //1
+                'pe', //2
+                'end sub' //3
+            ].join('\n'));
+            program.validate();
+            //|pe
+            expect(getLabels('source/main.brs', 2, 0)).to.include.members(['person', 'main']);
+            //pe|
+            expect(getLabels('source/main.brs', 2, 2)).to.include.members(['person', 'main']);
+        });
+
+        it('finds locals at column 0 of an empty line', () => {
+            program.setFile('source/main.brs', [
+                'sub main()', //0
+                '    person = 1', //1
+                '', //2
+                '    print person', //3
+                'end sub' //4
+            ].join('\n'));
+            program.validate();
+            expect(getLabels('source/main.brs', 2, 0)).to.include.members(['person', 'main']);
+        });
+
+        it('finds parameters inside an empty function body', () => {
+            program.setFile('source/main.bs', [
+                'sub main(person as string)', //0
+                '', //1
+                'end sub' //2
+            ].join('\n'));
+            program.validate();
+            expect(getLabels('source/main.bs', 1, 0)).to.include.members(['person', 'main']);
+        });
+
+        it('finds parameters inside an empty, whitespace-only function body', () => {
+            program.setFile('source/main.bs', [
+                'sub main(person as string)', //0
+                '    ', //1
+                'end sub' //2
+            ].join('\n'));
+            program.validate();
+            //    |
+            expect(getLabels('source/main.bs', 1, 4)).to.include.members(['person', 'main']);
+            //  |
+            expect(getLabels('source/main.bs', 1, 2)).to.include.members(['person', 'main']);
+        });
+
+        it('finds parameters inside a function body with no lines between the signature and `end sub`', () => {
+            program.setFile('source/main.bs', [
+                'sub main(person as string)', //0
+                'end sub' //1
+            ].join('\n'));
+            program.validate();
+            //sub main(person as string)|
+            expect(getLabels('source/main.bs', 0, 26)).to.include.members(['person', 'main']);
+        });
+
+        it('finds members after a dot when a surrogate-pair emoji precedes the target on the same line', () => {
+            program.setFile('source/main.bs', [
+                ...personClassLines,
+                'sub main()', //5
+                '    p = new Person()', //6
+                //each emoji is 2 UTF-16 code units, so the dot is at character 17
+                '    x = "😀😀": p.', //7
+                'end sub' //8
+            ].join('\n'));
+            program.validate();
+            //    x = "😀😀": p.|
+            const labels = getLabels('source/main.bs', 7, 18);
+            expect(labels).to.include.members(['name', 'speak']);
+            expect(labels).not.to.include('main');
+        });
+
+        it('finds members after a dot in a file with CRLF line endings', () => {
+            program.setFile('source/main.bs', [
+                ...personClassLines,
+                'sub main()', //5
+                '    p = new Person()', //6
+                '    p.', //7
+                'end sub' //8
+            ].join('\r\n'));
+            program.validate();
+            //    p.|
+            const labels = getLabels('source/main.bs', 7, 6);
+            expect(labels).to.include.members(['name', 'speak']);
+            expect(labels).not.to.include('main');
+        });
+
+        it('finds locals mid-identifier in a file with CRLF line endings', () => {
+            program.setFile('source/main.brs', [
+                'sub main()', //0
+                '    person = 1', //1
+                '    pers', //2
+                'end sub' //3
+            ].join('\r\n'));
+            program.validate();
+            //    pe|rs
+            expect(getLabels('source/main.brs', 2, 6)).to.include.members(['person', 'main']);
+        });
+
+        it('finds completions inside `${}` on a later line of a multi-line template string, and after the template string', () => {
+            program.setFile('source/main.bs', [
+                ...personClassLines,
+                'sub main()', //5
+                '    name = "bob"', //6
+                '    p = new Person()', //7
+                // eslint-disable-next-line no-template-curly-in-string
+                '    msg = `hello ${name}', //8
+                // eslint-disable-next-line no-template-curly-in-string
+                'and ${na} again`', //9
+                '    p.', //10
+                'end sub' //11
+            ].join('\n'));
+            program.validate();
+            //and ${n|a} again`
+            expect(getLabels('source/main.bs', 9, 7)).to.include.members(['name', 'p', 'main']);
+            //    p.|
+            const labels = getLabels('source/main.bs', 10, 6);
+            expect(labels).to.include.members(['name', 'speak']);
+            expect(labels).not.to.include('main');
+        });
+
+        it('finds members on the last line of a file with no trailing newline', () => {
+            program.setFile('source/main.bs', [
+                ...personClassLines,
+                'sub main(p as Person) : p.speak() : end sub' //5
+            ].join('\n'));
+            program.validate();
+            //sub main(p as Person) : p.|speak() : end sub
+            const labels = getLabels('source/main.bs', 5, 26);
+            expect(labels).to.include.members(['name', 'speak']);
+            expect(labels).not.to.include('main');
+        });
+
+        it('returns exact pkg path textEdit ranges for a string literal', () => {
+            program.setFile('source/main.brs', [
+                'sub main()', //0
+                '    print "pkg:"', //1
+                'end sub' //2
+            ].join('\n'));
+            program.validate();
+            //    print "pk|g:"
+            const completions = program.getCompletions('source/main.brs', util.createPosition(1, 13));
+            expect(completions.map(x => x.label)).to.eql(['pkg:/source/main.brs']);
+            //replaces the text between the quotes
+            expect(completions[0].textEdit).to.eql({
+                newText: 'pkg:/source/main.brs',
+                range: util.createRange(1, 11, 1, 15)
+            });
+        });
+
+        it('returns exact pkg path textEdit ranges when a surrogate-pair emoji precedes the string on the same line', () => {
+            program.setFile('source/main.brs', [
+                'sub main()', //0
+                //each emoji is 2 UTF-16 code units
+                '    x = "😀" + "pkg:"', //1
+                'end sub' //2
+            ].join('\n'));
+            program.validate();
+            //    x = "😀" + "pk|g:"
+            const completions = program.getCompletions('source/main.brs', util.createPosition(1, 18));
+            expect(completions.map(x => x.label)).to.eql(['pkg:/source/main.brs']);
+            expect(completions[0].textEdit).to.eql({
+                newText: 'pkg:/source/main.brs',
+                range: util.createRange(1, 16, 1, 20)
+            });
+        });
+
+        it('returns exact pkg path textEdit ranges in a file with CRLF line endings', () => {
+            program.setFile('source/main.brs', [
+                'sub main()', //0
+                `    ' 😀 comment`, //1
+                '    print "pkg:"', //2
+                'end sub' //3
+            ].join('\r\n'));
+            program.validate();
+            //    print "pk|g:"
+            const completions = program.getCompletions('source/main.brs', util.createPosition(2, 13));
+            expect(completions.map(x => x.label)).to.eql(['pkg:/source/main.brs']);
+            expect(completions[0].textEdit).to.eql({
+                newText: 'pkg:/source/main.brs',
+                range: util.createRange(2, 11, 2, 15)
+            });
+        });
+
+        it('returns exact pkg path textEdit ranges on a later line of a multi-line template string', () => {
+            program.setFile('source/main.bs', [
+                'sub main()', //0
+                // eslint-disable-next-line no-template-curly-in-string
+                '    x = `line one ${1}', //1
+                'pkg:`', //2
+                'end sub' //3
+            ].join('\n'));
+            program.validate();
+            //pk|g:`
+            const completions = program.getCompletions('source/main.bs', util.createPosition(2, 2));
+            //the pkg path is the transpiled destination, so `.bs` becomes `.brs`
+            expect(completions.map(x => x.label)).to.eql(['pkg:/source/main.brs']);
+            expect(completions[0].textEdit).to.eql({
+                newText: 'pkg:/source/main.brs',
+                range: util.createRange(2, 0, 2, 4)
+            });
+        });
+
+        it('returns exact import path textEdit ranges in a file with CRLF line endings', () => {
+            program.setFile('source/lib.bs', [
+                'sub libFunc()',
+                'end sub'
+            ].join('\n'));
+            program.setFile('source/main.bs', [
+                `' 😀 header`, //0
+                'import "lib.bs"', //1
+                'sub main()', //2
+                'end sub' //3
+            ].join('\r\n'));
+            program.validate();
+            //import "li|b.bs"
+            const completions = program.getCompletions('source/main.bs', util.createPosition(1, 10));
+            expect(completions.map(x => x.label).sort()).to.eql(['lib.bs', 'pkg:/source/lib.bs']);
+            //the range covers the path without its quotes (the import statement trims them from the token)
+            for (const completion of completions) {
+                expect(completion.textEdit).to.eql({
+                    newText: completion.label,
+                    range: util.createRange(1, 8, 1, 14)
+                });
+            }
+        });
+    });
 });

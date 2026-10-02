@@ -861,8 +861,8 @@ export class CrossScopeValidator {
                                 type AstNodeWithName = VariableExpression | DottedGetExpression | EnumStatement | ClassStatement | ConstStatement | EnumMemberStatement | InterfaceStatement;
 
                                 const thatNodeKindName = otherIsGlobal ? 'Global Function' : util.getAstNodeFriendlyName(otherDupeNode) ?? 'Item';
-                                let thisNameRange = (dupeNode as AstNodeWithName)?.tokens?.name?.location?.range ?? dupeNode.location?.range;
-                                let thatNameRange = (otherDupeNode as AstNodeWithName)?.tokens?.name?.location?.range ?? otherDupeNode?.location?.range;
+                                let thisNameRange = util.getLocation((dupeNode as AstNodeWithName)?.tokens?.name)?.range ?? util.getLocation(dupeNode)?.range;
+                                let thatNameRange = util.getLocation((otherDupeNode as AstNodeWithName)?.tokens?.name)?.range ?? util.getLocation(otherDupeNode)?.range;
 
                                 const relatedInformation = thatNameRange ? [{
                                     message: `${thatNodeKindName} declared here`,

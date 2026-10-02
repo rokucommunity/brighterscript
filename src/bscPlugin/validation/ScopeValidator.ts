@@ -242,7 +242,7 @@ export class ScopeValidator {
                                 expr: assignStmt,
                                 name: assignStmt.tokens.name.text,
                                 type: this.getNodeTypeWrapper(file, assignStmt, { flags: SymbolTypeFlag.runtime }),
-                                nameRange: assignStmt.tokens.name.location?.range
+                                nameRange: util.getLocation(assignStmt.tokens.name)?.range
                             });
                         });
                     },
@@ -267,7 +267,7 @@ export class ScopeValidator {
                                 expr: forEachStmt,
                                 name: forEachStmt.tokens.item.text,
                                 type: this.getNodeTypeWrapper(file, forEachStmt, { flags: SymbolTypeFlag.runtime }),
-                                nameRange: forEachStmt.tokens.item.location?.range
+                                nameRange: util.getLocation(forEachStmt.tokens.item)?.range
                             });
                             this.validateForEachStatement(file, forEachStmt);
                         });
@@ -278,7 +278,7 @@ export class ScopeValidator {
                                 expr: funcParam,
                                 name: funcParam.tokens.name.text,
                                 type: this.getNodeTypeWrapper(file, funcParam, { flags: SymbolTypeFlag.runtime }),
-                                nameRange: funcParam.tokens.name.location?.range
+                                nameRange: util.getLocation(funcParam.tokens.name)?.range
                             });
                         });
                     },
@@ -364,7 +364,7 @@ export class ScopeValidator {
             if (member.key.tokens.value.kind !== TokenKind.StringLiteral) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.computedAAKeyMustBeStringExpression(),
-                    location: member.key.location
+                    location: util.getLocation(member.key)
                 });
             }
             return;
@@ -376,7 +376,7 @@ export class ScopeValidator {
         if (!parts || parts.length === 0) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.computedPropertyKeyMustBeConstantExpression(),
-                location: member.key.location
+                location: util.getLocation(member.key)
             });
             return;
         }
@@ -389,7 +389,7 @@ export class ScopeValidator {
             if (!value?.startsWith('"')) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.computedAAKeyMustBeStringExpression(),
-                    location: member.key.location
+                    location: util.getLocation(member.key)
                 });
             }
             return;
@@ -400,14 +400,14 @@ export class ScopeValidator {
             if (!this.constResolvesToString(constLink.item.value, enclosingNamespace, scope)) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.computedAAKeyMustBeStringExpression(),
-                    location: member.key.location
+                    location: util.getLocation(member.key)
                 });
             }
             return;
         }
         this.addMultiScopeDiagnostic({
             ...DiagnosticMessages.computedPropertyKeyMustBeConstantExpression(),
-            location: member.key.location
+            location: util.getLocation(member.key)
         });
     }
 
@@ -543,7 +543,7 @@ export class ScopeValidator {
                 const items = chain.slice(cycleStart).map(c => c.fullName).concat(constStatement.fullName);
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.circularReferenceDetected(items),
-                    location: constStatement.tokens.name.location
+                    location: util.getLocation(constStatement.tokens.name)
                 });
                 return;
             }
@@ -609,13 +609,13 @@ export class ScopeValidator {
                 // roSgNode should only ever have 2 args in `createObject`
                 this.addDiagnostic({
                     ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, [2], call?.args.length),
-                    location: call.location
+                    location: util.getLocation(call)
                 });
             }
         } else if (!platformComponentNames.has(firstParamStringValueLower)) {
             this.addDiagnostic({
                 ...DiagnosticMessages.unknownBrightScriptComponent(firstParamStringValue),
-                location: firstParamToken.location
+                location: util.getLocation(firstParamToken)
             });
         } else {
             // This is valid brightscript component
@@ -631,7 +631,7 @@ export class ScopeValidator {
                 // Incorrect number of arguments included in `createObject()`
                 this.addDiagnostic({
                     ...DiagnosticMessages.mismatchCreateObjectArgumentCount(firstParamStringValue, validArgCounts, call?.args.length),
-                    location: call.location
+                    location: util.getLocation(call)
                 });
             }
 
@@ -639,7 +639,7 @@ export class ScopeValidator {
             if (brightScriptComponent?.isDeprecated) {
                 this.addDiagnostic({
                     ...DiagnosticMessages.itemIsDeprecated(firstParamStringValue, brightScriptComponent.deprecatedDescription),
-                    location: call.location
+                    location: util.getLocation(call)
                 });
             }
         }
@@ -656,7 +656,7 @@ export class ScopeValidator {
         if (unquotedComponentName && !platformNodeNames.has(unquotedComponentName.toLowerCase()) && !this.event.program.getComponent(unquotedComponentName)) {
             this.addDiagnostic({
                 ...DiagnosticMessages.unknownRoSGNode(unquotedComponentName),
-                location: componentName.location
+                location: util.getLocation(componentName)
             });
         }
     }
@@ -689,10 +689,10 @@ export class ScopeValidator {
                 const functionFullname = `${callerType.toString()}@.${functionName}`;
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.cannotFindCallFuncFunction(functionName, functionFullname, callerType.toString()),
-                    location: firstArgToken?.location
+                    location: util.getLocation(firstArgToken)
                 });
             } else {
-                this.validateFunctionCall(file, call, funcType, firstArgToken.location, call.args, 1);
+                this.validateFunctionCall(file, call, funcType, util.getLocation(firstArgToken), call.args, 1);
             }
         }
     }
@@ -705,7 +705,7 @@ export class ScopeValidator {
             // We're calling a class - get the constructor
             funcType = funcType.getMemberType('new', getTypeOptions);
         }
-        const callErrorLocation = expression?.callee?.location;
+        const callErrorLocation = util.getLocation(expression?.callee);
         return this.validateFunctionCall(file, expression.callee, funcType, callErrorLocation, expression.args);
 
     }
@@ -721,7 +721,7 @@ export class ScopeValidator {
             return;
         }
         const functionFullname = `${callerType.toString()}@.${methodName}`;
-        const callErrorLocation = expression.location;
+        const callErrorLocation = util.getLocation(expression);
         if ((util.isGenericNodeType(callerType, true) && !this.event.program.options.strictCallFunc) || isObjectType(callerType) || isDynamicType(callerType)) {
             // ignore "general" node
             return;
@@ -853,7 +853,7 @@ export class ScopeValidator {
             if (!isAllowedArgConversion && !paramType?.isTypeCompatible(argType, compatibilityData)) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.argumentTypeMismatch(argType?.toString() ?? 'unknown', paramType?.toString() ?? 'unknown', compatibilityData),
-                    location: arg.location
+                    location: util.getLocation(arg)
                 });
             }
             paramIndex++;
@@ -897,7 +897,7 @@ export class ScopeValidator {
                 } else if (!funcType.returnType.isTypeCompatible(valueReturnType, compatibilityData)) {
                     this.addMultiScopeDiagnostic({
                         ...DiagnosticMessages.returnTypeMismatch(actualReturnType.toString(), funcType.returnType.toString(), compatibilityData),
-                        location: returnStmt.value?.location ?? returnStmt.location
+                        location: util.getLocation(returnStmt.value) ?? util.getLocation(returnStmt)
                     });
                 }
             }
@@ -943,7 +943,7 @@ export class ScopeValidator {
         if (accessibilityIsOk && !expectedLHSType?.isTypeCompatible(actualRHSType, compatibilityData)) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.assignmentTypeMismatch(actualRHSType?.toString() ?? 'unknown', expectedLHSType?.toString() ?? 'unknown', compatibilityData),
-                location: dottedSetStmt.location
+                location: util.getLocation(dottedSetStmt)
             });
         }
     }
@@ -967,7 +967,7 @@ export class ScopeValidator {
         } else if (!expectedLHSType?.isTypeCompatible(actualRHSType, compatibilityData)) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.assignmentTypeMismatch(actualRHSType.toString(), expectedLHSType.toString(), compatibilityData),
-                location: assignStmt.location
+                location: util.getLocation(assignStmt)
             });
         }
     }
@@ -1021,7 +1021,7 @@ export class ScopeValidator {
                     if (!util.binaryOperatorResultType(leftInnerType, binaryExpr.tokens.operator, rightInnerType)) {
                         this.addMultiScopeDiagnostic({
                             ...DiagnosticMessages.operatorTypeMismatch(binaryExpr.tokens.operator.text, leftType.toString(), rightType.toString()),
-                            location: binaryExpr.location
+                            location: util.getLocation(binaryExpr)
                         });
                         return;
                     }
@@ -1035,7 +1035,7 @@ export class ScopeValidator {
             // if the result was dynamic or void, that means there wasn't a valid operation
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.operatorTypeMismatch(binaryExpr.tokens.operator.text, leftType.toString(), rightType.toString()),
-                location: binaryExpr.location
+                location: util.getLocation(binaryExpr)
             });
         }
     }
@@ -1069,14 +1069,14 @@ export class ScopeValidator {
             if (!opResult) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.operatorTypeMismatch(unaryExpr.tokens.operator.text, rightType.toString()),
-                    location: unaryExpr.location
+                    location: util.getLocation(unaryExpr)
                 });
             }
         } else {
             // rhs is not a primitive, so no binary operator is allowed
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.operatorTypeMismatch(unaryExpr.tokens.operator.text, rightType.toString()),
-                location: unaryExpr.location
+                location: util.getLocation(unaryExpr)
             });
         }
     }
@@ -1102,7 +1102,7 @@ export class ScopeValidator {
             // rhs is not a number, so no increment operator is not allowed
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.operatorTypeMismatch(incStmt.tokens.operator.text, rightType.toString()),
-                location: incStmt.location
+                location: util.getLocation(incStmt)
             });
         }
     }
@@ -1153,7 +1153,7 @@ export class ScopeValidator {
         if (typeData.flags & SymbolTypeFlag.deprecated) { // eslint-disable-line no-bitwise
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.itemIsDeprecated(),
-                location: expression.tokens.name.location,
+                location: util.getLocation(expression.tokens.name),
                 tags: [DiagnosticTag.Deprecated]
             });
         }
@@ -1166,14 +1166,14 @@ export class ScopeValidator {
                 if (isUsedAsType) {
                     this.addMultiScopeDiagnostic({
                         ...DiagnosticMessages.itemCannotBeUsedAsType(typeChainScan.fullChainName),
-                        location: expression.location
+                        location: util.getLocation(expression)
                     });
                 } else if (invalidlyUsedResolvedType && !isReferenceType(invalidlyUsedResolvedType)) {
                     if (!isAliasStatement(expression.parent)) {
                         // alias rhs CAN be a type!
                         this.addMultiScopeDiagnostic({
                             ...DiagnosticMessages.itemCannotBeUsedAsVariable(invalidlyUsedResolvedType.toString()),
-                            location: expression.location
+                            location: util.getLocation(expression)
                         });
                     }
                 } else {
@@ -1230,7 +1230,7 @@ export class ScopeValidator {
 
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.itemCannotBeUsedAsVariable(classUsedAsVarEntry.toString()),
-                    location: expression.location
+                    location: util.getLocation(expression)
                 });
                 return;
             }
@@ -1244,7 +1244,7 @@ export class ScopeValidator {
         if (isNamespaceType(exprType) && !isAliasStatement(expression.parent)) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.itemCannotBeUsedAsVariable('namespace'),
-                location: expression.location
+                location: util.getLocation(expression)
             });
         } else if (isEnumType(exprType) && !isAliasStatement(expression.parent)) {
             const enumStatement = this.event.scope.getEnum(util.getAllDottedGetPartsAsString(expression));
@@ -1252,7 +1252,7 @@ export class ScopeValidator {
                 // there's an enum with this name
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.itemCannotBeUsedAsVariable('enum'),
-                    location: expression.location
+                    location: util.getLocation(expression)
                 });
             }
         } else if (isDynamicType(exprType) && isEnumType(parentTypeInfo?.type) && isDottedGetExpression(expression)) {
@@ -1267,7 +1267,7 @@ export class ScopeValidator {
                         message: 'Enum declared here',
                         location: util.createLocationFromRange(
                             util.pathToUri(enumFileLink?.file.srcPath),
-                            enumFileLink?.item?.tokens.name.location?.range
+                            util.getLocation(enumFileLink?.item?.tokens.name)?.range
                         )
                     }]
                 });
@@ -1323,7 +1323,7 @@ export class ScopeValidator {
                         if (!inMatchingClassStmt || childChainItem.data.memberOfAncestor) {
                             this.addMultiScopeDiagnostic({
                                 ...DiagnosticMessages.memberAccessibilityMismatch(childChainItem.name, childChainItem.data.flags, definingClassName),
-                                location: expression.location
+                                location: util.getLocation(expression)
                             });
                             // there's an error... don't worry about the rest of the chain
                             return false;
@@ -1340,7 +1340,7 @@ export class ScopeValidator {
                         if (!isSubClassOfDefiningClass) {
                             this.addMultiScopeDiagnostic({
                                 ...DiagnosticMessages.memberAccessibilityMismatch(childChainItem.name, childChainItem.data.flags, definingClassName),
-                                location: expression.location
+                                location: util.getLocation(expression)
                             });
                             // there's an error... don't worry about the rest of the chain
                             return false;
@@ -1373,7 +1373,7 @@ export class ScopeValidator {
 
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.expressionIsNotConstructable(fullName),
-                location: newExpression.className.location
+                location: util.getLocation(newExpression.className)
             });
 
         }
@@ -1389,7 +1389,7 @@ export class ScopeValidator {
         if (!returns && isStringTypeLike(returnType)) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.returnTypeCoercionMismatch(returnType.toString()),
-                location: func.location
+                location: util.getLocation(func)
             });
         }
     }
@@ -1620,7 +1620,7 @@ export class ScopeValidator {
                         message: 'Class declared here',
                         location: util.createLocationFromRange(
                             util.pathToUri(classStmtLink.file.srcPath),
-                            classStmtLink?.item.tokens.name.location?.range
+                            util.getLocation(classStmtLink?.item.tokens.name)?.range
                         )
                     }]
                 });
@@ -1634,7 +1634,7 @@ export class ScopeValidator {
         if (!IntegerType.instance.isTypeCompatible(assignValueType)) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.assignmentTypeMismatch(assignValueType.toString(), 'integer'),
-                location: assignStmt.location
+                location: util.getLocation(assignStmt)
             });
         }
         if (forStmt.increment) {
@@ -1642,7 +1642,7 @@ export class ScopeValidator {
             if (!IntegerType.instance.isTypeCompatible(incrementValueType)) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.assignmentTypeMismatch(incrementValueType.toString(), 'integer'),
-                    location: forStmt.increment.location
+                    location: util.getLocation(forStmt.increment)
                 });
             }
         }
@@ -1650,7 +1650,7 @@ export class ScopeValidator {
         if (!IntegerType.instance.isTypeCompatible(finalValueType)) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.assignmentTypeMismatch(finalValueType.toString(), 'integer'),
-                location: forStmt.finalValue.location
+                location: util.getLocation(forStmt.finalValue)
             });
         }
     }
@@ -1672,7 +1672,7 @@ export class ScopeValidator {
                 // target is not an array nor enumerable
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.notIterable(targetType.toString()),
-                    location: forEachStmt.target.location
+                    location: util.getLocation(forEachStmt.target)
                 });
                 return;
             }
@@ -1687,7 +1687,7 @@ export class ScopeValidator {
             if (!loopType.isTypeCompatible(targetItemType, data)) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.assignmentTypeMismatch(targetItemType.toString(), loopType.toString(), data),
-                    location: forEachStmt.typeExpression.location
+                    location: util.getLocation(forEachStmt.typeExpression)
                 });
             }
         }
