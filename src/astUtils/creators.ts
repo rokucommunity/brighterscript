@@ -8,6 +8,7 @@ import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpress
 import { AssignmentStatement, Block, DottedSetStatement, IfStatement, IndexedSetStatement, MethodStatement } from '../parser/Statement';
 
 const tokenDefaults = {
+    [TokenKind.At]: '@',
     [TokenKind.BackTick]: '`',
     [TokenKind.Backslash]: '\\',
     [TokenKind.BackslashEqual]: '\\=',
@@ -28,6 +29,8 @@ const tokenDefaults = {
     [TokenKind.EndSub]: 'end sub',
     [TokenKind.EndTry]: 'end try',
     [TokenKind.EndWhile]: 'end while',
+    [TokenKind.ExitWhile]: 'exit while',
+    [TokenKind.ForEach]: 'for each',
     [TokenKind.Equal]: '=',
     [TokenKind.Greater]: '>',
     [TokenKind.GreaterEqual]: '>=',

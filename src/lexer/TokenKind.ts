@@ -186,6 +186,11 @@ export enum TokenKind {
     // structural
     Whitespace = 'Whitespace',
     Newline = 'Newline',
+    /**
+     * A character the lexer does not recognize. These are only ever included in leading trivia (never in the token list),
+     * so the parser ignores them, but they are kept so the source code can be rebuilt from the AST
+     */
+    UnexpectedCharacter = 'UnexpectedCharacter',
     Eof = 'Eof'
 }
 
@@ -746,7 +751,8 @@ export const AllowedTriviaTokens: ReadonlyArray<TokenKind> = [
     TokenKind.Newline,
     TokenKind.Whitespace,
     TokenKind.Comment,
-    TokenKind.Colon
+    TokenKind.Colon,
+    TokenKind.UnexpectedCharacter
 ];
 
 

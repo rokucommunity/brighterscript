@@ -5,6 +5,9 @@ import type { FirmwareCapabilities } from '../RokuConstants';
 import type { ClassStatement, ConditionalCompileStatement } from './Statement';
 import { TranspileState } from './TranspileState';
 import type { Statement } from './AstNode';
+import type { Token } from '../lexer/Token';
+import { TokenKind } from '../lexer/TokenKind';
+import type { TranspileResult } from '../interfaces';
 
 export class BrsTranspileState extends TranspileState {
     public constructor(
@@ -116,4 +119,30 @@ export class BrsTranspileState extends TranspileState {
         loopLabel.wasAccessed = true;
         return loopLabel.label;
     }
+
+    /**
+     * Get the typedef for the leading comments and annotations of a statement, in the order they appear in the source code.
+     * Comments above an annotation are part of that annotation's leading trivia (not the statement's), so they are written with the annotation.
+     * @param statement the statement to get the leading comments and annotations for
+     * @param includeAnnotations should the annotations themselves be written (comments above them are always written)
+     */
+    public getTypedefLeadingCommentsAndAnnotations(statement: Statement, includeAnnotations = true): TranspileResult {
+        const result: TranspileResult = [];
+        const writeComments = (trivia: Token[]) => {
+            for (const comment of trivia ?? []) {
+                if (comment?.kind === TokenKind.Comment) {
+                    result.push(comment.text, this.newline, this.indent());
+                }
+            }
+        };
+        for (const annotation of statement.annotations ?? []) {
+            writeComments(annotation.leadingTrivia);
+            if (includeAnnotations) {
+                result.push(...annotation.getTypedef(this), this.newline, this.indent());
+            }
+        }
+        writeComments(statement.leadingTrivia);
+        return result;
+    }
 }
+
