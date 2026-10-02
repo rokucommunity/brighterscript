@@ -229,6 +229,7 @@ export class BrsFileValidator {
                 }
                 this.validateFunctionParameterCount(node);
                 this.validateFunctionVariableCount(node);
+                this.validateFunctionLoopCount(node);
             },
             FunctionParameterExpression: (node) => {
                 if (isTypedFunctionTypeExpression(node.parent)) {
@@ -623,6 +624,31 @@ export class BrsFileValidator {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.tooManyFunctionVariables(variableLocations.size, FunctionExpression.MaximumVariables),
                 location: firstOverLimitLocation ?? func.tokens.functionType?.location ?? func.location
+            });
+        }
+    }
+
+    /**
+     * Flag functions that contain more loops than the device allows. Nested functions have their own limit and are not included.
+     */
+    private validateFunctionLoopCount(func: FunctionExpression) {
+        const loopLocations = [] as Location[];
+        func.body?.walk(createVisitor({
+            ForStatement: (statement) => {
+                loopLocations.push(statement.tokens.for?.location ?? statement.location);
+            },
+            ForEachStatement: (statement) => {
+                loopLocations.push(statement.tokens.forEach?.location ?? statement.location);
+            },
+            WhileStatement: (statement) => {
+                loopLocations.push(statement.tokens.while?.location ?? statement.location);
+            }
+        }), { walkMode: WalkMode.visitStatements });
+
+        if (loopLocations.length > FunctionExpression.MaximumLoops) {
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.tooManyLoops(loopLocations.length, FunctionExpression.MaximumLoops),
+                location: loopLocations[FunctionExpression.MaximumLoops]
             });
         }
     }
