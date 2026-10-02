@@ -4,7 +4,7 @@ import { util } from '../../util';
 import { createSandbox } from 'sinon';
 import { expectZeroDiagnostics, rootDir, trim } from '../../testHelpers.spec';
 import { HoverProcessor } from './HoverProcessor';
-import { createIdentifier, createIntegerLiteral } from '../../astUtils/creators';
+import { bscFactory } from '../../factory/BscFactory';
 import type { BrsFile } from '../../files/BrsFile';
 let sinon = createSandbox();
 
@@ -44,9 +44,9 @@ describe('HoverProcessor', () => {
             const file = program.setFile<BrsFile>('source/main.bs', ``);
 
             const processor = new HoverProcessor({} as any);
-            const expression = createIntegerLiteral('1');
+            const expression = bscFactory.ast.brs.createIntegerLiteral('1');
             expect(
-                processor['getConstHover'](createIdentifier('hello'), file, program.getScopeByName('source'), expression)
+                processor['getConstHover'](bscFactory.ast.brs.createIdentifier('hello'), file, program.getScopeByName('source'), expression)
             ).to.eql(undefined);
         });
 
