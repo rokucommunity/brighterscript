@@ -10,7 +10,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isBlock, isCallExpression, isCatchStatement, isClassType, isConditionalCompileStatement, isEnumMemberStatement, isEnumType, isEnumStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isUninitializedType, isVoidType, isWhileStatement } from '../astUtils/reflection';
+import { isBlock, isCallExpression, isClassType, isConditionalCompileStatement, isEnumMemberStatement, isEnumType, isEnumStatement, isExpressionStatement, isFieldStatement, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTypedefProvider, isUnaryExpression, isUninitializedType, isVoidType } from '../astUtils/reflection';
 import type { GetTypeOptions } from '../interfaces';
 import { TypeChainEntry, type TranspileResult, type TypedefProvider } from '../interfaces';
 import { createDottedIdentifier, createIdentifier, createInvalidLiteral, createMethodStatement, createToken, createVariableExpression } from '../astUtils/creators';
@@ -67,6 +67,7 @@ export class Body extends Statement implements TypedefProvider {
     }) {
         super();
         this.statements = options?.statements ?? [];
+        util.setBounds(this, ...this.statements);
     }
 
     public readonly statements: Statement[] = [];
@@ -74,23 +75,9 @@ export class Body extends Statement implements TypedefProvider {
 
     public readonly symbolTable = new SymbolTable('Body', () => this.parent?.getSymbolTable());
 
-    public get pos() {
-        return this.getBounds().pos;
-    }
-    public get end() {
-        return this.getBounds().end;
-    }
-    public get source() {
-        return this.getBounds().source;
-    }
-    private getBounds() {
-        //this needs to be lazy because the body has its statements pushed to it after being constructed
-        if (!this._bounds?.source) {
-            this._bounds = util.setBounds(this._bounds ?? {} as Locatable, ...(this.statements ?? []));
-        }
-        return this._bounds;
-    }
-    private _bounds: Locatable;
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let result: TranspileResult = state.transpileAnnotations(this);
@@ -318,121 +305,35 @@ export class Block extends Statement {
         super();
         this.statements = options.statements;
         this.symbolTable = new SymbolTable('Block', () => this.parent.getSymbolTable());
+        util.setBounds(this, ...this.statements ?? []);
     }
 
     public readonly statements: Statement[];
 
     public readonly kind = AstNodeKind.Block;
 
-    private buildBounds(): Locatable {
+    public readonly pos: number;
+    public readonly end: number;
+    public readonly source: SourceInfo | undefined;
+
+    /**
+     * An empty block has no statements to get its bounds from, so its parent calls this (from the parent's constructor)
+     * to set the bounds to the gap between the parent's code on either side of the block. Does nothing if the block has statements.
+     * @param before the parent's code just before this block (i.e. a function's signature)
+     * @param after the parent's code just after this block (i.e. `end function`)
+     */
+    public setBoundsBetween(before: Locatable | undefined, after: Locatable | undefined) {
         if (this.statements?.length > 0) {
-            return util.setBounds({} as Locatable, ...this.statements ?? []);
+            return;
         }
-        let lastBitBefore: Locatable;
-        let firstBitAfter: Locatable;
-
-        if (isFunctionExpression(this.parent)) {
-            lastBitBefore = util.setBounds({} as Locatable,
-                this.parent.tokens.functionType,
-                this.parent.tokens.leftParen,
-                ...(this.parent.parameters ?? []),
-                this.parent.tokens.rightParen,
-                this.parent.tokens.as,
-                this.parent.returnTypeExpression
-            );
-            firstBitAfter = this.parent.tokens.endFunctionType;
-        } else if (isIfStatement(this.parent)) {
-            if (this.parent.thenBranch === this) {
-                lastBitBefore = util.setBounds({} as Locatable,
-                    this.parent.tokens.then,
-                    this.parent.condition
-                );
-                firstBitAfter = util.setBounds({} as Locatable,
-                    this.parent.tokens.else,
-                    this.parent.elseBranch,
-                    this.parent.tokens.endIf
-                );
-            } else if (this.parent.elseBranch === this) {
-                lastBitBefore = this.parent.tokens.else;
-                firstBitAfter = this.parent.tokens.endIf;
-            }
-        } else if (isConditionalCompileStatement(this.parent)) {
-            if (this.parent.thenBranch === this) {
-                lastBitBefore = util.setBounds({} as Locatable,
-                    this.parent.tokens.condition,
-                    this.parent.tokens.not,
-                    this.parent.tokens.hashIf
-                );
-                firstBitAfter = util.setBounds({} as Locatable,
-                    this.parent.tokens.hashElse,
-                    this.parent.elseBranch,
-                    this.parent.tokens.hashEndIf
-                );
-            } else if (this.parent.elseBranch === this) {
-                lastBitBefore = this.parent.tokens.hashElse;
-                firstBitAfter = this.parent.tokens.hashEndIf;
-            }
-        } else if (isForStatement(this.parent)) {
-            lastBitBefore = util.setBounds({} as Locatable,
-                this.parent.increment,
-                this.parent.tokens.step,
-                this.parent.finalValue,
-                this.parent.tokens.to,
-                this.parent.counterDeclaration,
-                this.parent.tokens.for
-            );
-            firstBitAfter = this.parent.tokens.endFor;
-        } else if (isForEachStatement(this.parent)) {
-            lastBitBefore = util.setBounds({} as Locatable,
-                this.parent.target,
-                this.parent.tokens.in,
-                this.parent.tokens.item,
-                this.parent.tokens.forEach
-            );
-            firstBitAfter = this.parent.tokens.endFor;
-        } else if (isWhileStatement(this.parent)) {
-            lastBitBefore = util.setBounds({} as Locatable,
-                this.parent.condition,
-                this.parent.tokens.while
-            );
-            firstBitAfter = this.parent.tokens.endWhile;
-        } else if (isTryCatchStatement(this.parent)) {
-            lastBitBefore = util.setBounds({} as Locatable,
-                this.parent.tokens.try
-            );
-            firstBitAfter = util.setBounds({} as Locatable,
-                this.parent.tokens.endTry,
-                this.parent.catchStatement
-            );
-        } else if (isCatchStatement(this.parent) && isTryCatchStatement(this.parent?.parent)) {
-            lastBitBefore = util.setBounds({} as Locatable,
-                this.parent.tokens.catch,
-                this.parent.exceptionVariableExpression
-            );
-            firstBitAfter = this.parent.parent.tokens.endTry;
-        }
-        if (lastBitBefore?.source && firstBitAfter?.source) {
-            return { pos: lastBitBefore.end, end: firstBitAfter.pos, source: lastBitBefore.source };
+        //offsets from different sources can't be compared, so both sides must come from the same source
+        if (before?.source && before.source === after?.source) {
+            const self = this as Locatable;
+            self.pos = util.getContentEnd(before);
+            self.end = after.pos;
+            self.source = before.source;
         }
     }
-
-    public get pos() {
-        return this.getBounds()?.pos;
-    }
-    public get end() {
-        return this.getBounds()?.end;
-    }
-    public get source() {
-        return this.getBounds()?.source;
-    }
-    private getBounds() {
-        //this needs to be lazy because the body has its statements pushed to it after being constructed
-        if (!this._bounds?.source) {
-            this._bounds = this.buildBounds();
-        }
-        return this._bounds;
-    }
-    private _bounds: Locatable;
 
     transpile(state: BrsTranspileState): TranspileResult {
         state.blockDepth++;
@@ -728,6 +629,15 @@ export class IfStatement extends Statement {
             else: options.else,
             endIf: options.endIf
         };
+
+        //give empty branches the bounds of the gap they occupy (the else branch first, since the then branch ends where it starts)
+        if (isBlock(this.elseBranch)) {
+            this.elseBranch.setBoundsBetween(this.tokens.else, this.tokens.endIf);
+        }
+        this.thenBranch?.setBoundsBetween(
+            util.setBounds({} as Locatable, this.tokens.then, this.condition),
+            util.setBounds({} as Locatable, this.tokens.else, this.elseBranch, this.tokens.endIf)
+        );
 
         util.setBounds(this,
             ...Object.values(this.tokens),
@@ -1388,6 +1298,10 @@ export class ForStatement extends Statement {
         this.body = options.body;
         this.increment = options.increment;
 
+        this.body?.setBoundsBetween(
+            util.setBounds({} as Locatable, this.increment, this.tokens.step, this.finalValue, this.tokens.to, this.counterDeclaration, this.tokens.for),
+            this.tokens.endFor
+        );
         util.setBounds(this,
             this.tokens.for,
             this.counterDeclaration,
@@ -1520,6 +1434,10 @@ export class ForEachStatement extends Statement {
         this.target = options.target;
         this.typeExpression = options.typeExpression;
 
+        this.body?.setBoundsBetween(
+            util.setBounds({} as Locatable, this.target, this.tokens.in, this.typeExpression, this.tokens.as, this.tokens.item, this.tokens.forEach),
+            this.tokens.endFor
+        );
         util.setBounds(this,
             this.tokens.forEach,
             this.tokens.item,
@@ -1645,6 +1563,10 @@ export class WhileStatement extends Statement {
         };
         this.body = options.body;
         this.condition = options.condition;
+        this.body?.setBoundsBetween(
+            util.setBounds({} as Locatable, this.condition, this.tokens.while),
+            this.tokens.endWhile
+        );
         util.setBounds(this,
             this.tokens.while,
             this.condition,
@@ -3831,6 +3753,15 @@ export class TryCatchStatement extends Statement {
         };
         this.tryBranch = options.tryBranch;
         this.catchStatement = options.catchStatement;
+        this.tryBranch?.setBoundsBetween(
+            this.tokens.try,
+            util.setBounds({} as Locatable, this.tokens.endTry, this.catchStatement)
+        );
+        //the catch statement doesn't know where the `end try` is, so the try/catch sets the bounds of its (empty) branch
+        this.catchStatement?.catchBranch?.setBoundsBetween(
+            util.setBounds({} as Locatable, this.catchStatement.tokens.catch, this.catchStatement.exceptionVariableExpression),
+            this.tokens.endTry
+        );
         util.setBounds(this,
             this.tokens.try,
             this.tryBranch,
@@ -4738,6 +4669,15 @@ export class ConditionalCompileStatement extends Statement {
             hashElse: options.hashElse,
             hashEndIf: options.hashEndIf
         };
+
+        //give empty branches the bounds of the gap they occupy (the else branch first, since the then branch ends where it starts)
+        if (isBlock(this.elseBranch)) {
+            this.elseBranch.setBoundsBetween(this.tokens.hashElse, this.tokens.hashEndIf);
+        }
+        this.thenBranch?.setBoundsBetween(
+            util.setBounds({} as Locatable, this.tokens.condition, this.tokens.not, this.tokens.hashIf),
+            util.setBounds({} as Locatable, this.tokens.hashElse, this.elseBranch, this.tokens.hashEndIf)
+        );
 
         util.setBounds(this,
             ...Object.values(this.tokens),
