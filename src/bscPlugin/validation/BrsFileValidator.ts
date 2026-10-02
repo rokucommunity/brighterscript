@@ -635,7 +635,7 @@ export class BrsFileValidator {
     /**
      * Add the literals directly inside the function body to the file's literal pools.
      * Nested functions are collected when they are visited themselves, so every function in the file shares the same pools.
-     * Literals outside functions and default parameter values are not counted.
+     * Literals outside functions are not counted. A function's default parameter values count with that function.
      * Brighterscript source literals (like `SOURCE_LINE_NUM` or `PKG_PATH`) count as the literals they transpile to, in .bs files only.
      * `LINE_NUM` (and the `str(LINE_NUM)` that `PKG_LOCATION` transpiles to) counts as the integer `line % 65536`; for .bs files this is the source line, which can differ from the transpiled line.
      * Enum and const values that get inlined are not counted.
@@ -656,7 +656,7 @@ export class BrsFileValidator {
             }
         };
 
-        func.body?.walk(createVisitor({
+        const literalVisitor = createVisitor({
             LiteralExpression: (literal) => {
                 if (literal.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
                     return;
@@ -708,7 +708,12 @@ export class BrsFileValidator {
                 }
                 addToPool('string', getStringLiteralKey(keyToken.text), keyToken.location ?? member.location);
             }
-        }), { walkMode: WalkMode.visitAll });
+        });
+
+        func.body?.walk(literalVisitor, { walkMode: WalkMode.visitAll });
+        for (const param of func.parameters ?? []) {
+            param.walk(literalVisitor, { walkMode: WalkMode.visitAll });
+        }
     }
 
     /**

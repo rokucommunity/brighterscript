@@ -7738,13 +7738,63 @@ describe('BrsFile', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('does not count default parameter values of a nested function', () => {
-            validateSource(wrapInFunction([
-                ...buildAssignments(limit, index => `${index}`),
-                'f = function(a = 70000)',
-                'end function'
-            ]));
-            expectZeroDiagnostics(program);
+        describe('default parameter values', () => {
+            const tooManyIntegers = () => [DiagnosticMessages.tooManyLiterals(65536, 'integer', limit)];
+            const tooManyStrings = () => [DiagnosticMessages.tooManyLiterals(65536, 'string', limit)];
+
+            it('counts a new integer default', () => {
+                validateSource([
+                    wrapInFunction(buildAssignments(limit, index => `${index}`, 1000)),
+                    'function b(p = 70000)',
+                    'end function'
+                ].join('\n'));
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('does not count an integer default already in the pool', () => {
+                validateSource([
+                    wrapInFunction(buildAssignments(limit, index => `${index}`, 1000)),
+                    'function b(p = 1000)',
+                    'end function'
+                ].join('\n'));
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts a new string default', () => {
+                validateSource([
+                    wrapInFunction(buildAssignments(limit, index => `"s${index}"`)),
+                    'function c(s = "brandNewDefault")',
+                    'end function'
+                ].join('\n'));
+                expectDiagnostics(program, tooManyStrings());
+            });
+
+            it('counts the default of an anonymous function', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `${index}`),
+                    'f = function(p = 70001)',
+                    'end function'
+                ]));
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('counts the literals of an expression default', () => {
+                validateSource([
+                    wrapInFunction(buildAssignments(limit - 1, index => `${index}`, 1000)),
+                    'function d(p = 70002 + 1)',
+                    'end function'
+                ].join('\n'));
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('counts a nested function default once', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit - 1, index => `${index}`),
+                    'f = function(a = 70000)',
+                    'end function'
+                ]));
+                expectZeroDiagnostics(program);
+            });
         });
 
         it('counts equal float values written differently once', () => {
