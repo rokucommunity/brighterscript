@@ -213,7 +213,7 @@ export abstract class AstNode implements Locatable {
         return [];
     }
 
-    public getBsConsts() {
+    public getBsConsts(): Map<string, boolean> | undefined {
         return this.bsConsts ?? this.parent?.getBsConsts?.();
     }
 

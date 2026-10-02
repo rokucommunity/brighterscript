@@ -5,15 +5,16 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, ValidateFileEvent } from '../../interfaces';
 import { TokenKind, UnreferencableBuiltins } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
-import { CallExpression, type FunctionExpression, type LiteralExpression } from '../../parser/Expression';
+import { CallExpression, FunctionExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
+import { PrintStatement } from '../../parser/Statement';
 import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
 import type { Range } from 'vscode-languageserver';
-import type { Token } from '../../lexer/Token';
+import type { Locatable, Token } from '../../lexer/Token';
 import type { BrightScriptDoc } from '../../parser/BrightScriptDocParser';
 import brsDocParser from '../../parser/BrightScriptDocParser';
 import { TypeStatementType } from '../../types/TypeStatementType';
@@ -227,6 +228,7 @@ export class BrsFileValidator {
                     }
                 }
                 this.validateFunctionParameterCount(node);
+                this.validateFunctionVariableCount(node);
             },
             FunctionParameterExpression: (node) => {
                 if (isTypedFunctionTypeExpression(node.parent)) {
@@ -341,6 +343,9 @@ export class BrsFileValidator {
                 if (isVariableExpression(obj)) {
                     node.parent.getSymbolTable().addSymbol(obj.tokens.name.text, { definingNode: node, doNotMerge: true, isInstance: true }, node.getType({ flags: SymbolTypeFlag.typetime }), SymbolTypeFlag.runtime);
                 }
+            },
+            PrintStatement: (node) => {
+                this.validatePrintStatementItemCount(node);
             },
             ConditionalCompileConstStatement: (node) => {
                 const assign = node.assignment;
@@ -489,7 +494,7 @@ export class BrsFileValidator {
      */
     private validateDeclarationLocations(statement: Statement, keyword: string, rangeFactory?: () => (Range | undefined)) {
         //if nested inside a namespace, or defined at the root of the AST (i.e. in a body that has no parent)
-        const isOkDeclarationLocation = (parentNode) => {
+        const isOkDeclarationLocation = (parentNode: AstNode | undefined) => {
             return isNamespaceStatement(parentNode?.parent) || (isBody(parentNode) && !parentNode?.parent);
         };
         if (isOkDeclarationLocation(statement.parent)) {
@@ -553,6 +558,73 @@ export class BrsFileValidator {
                     location: util.getLocation(func.parameters[i]?.tokens.name) ?? util.getLocation(func.parameters[i]) ?? util.getLocation(func)
                 });
             }
+        }
+    }
+
+    private validatePrintStatementItemCount(statement: PrintStatement) {
+        const { valueCount, commaCount } = statement.getPrintCounts();
+        const count = valueCount + commaCount;
+        if (count > PrintStatement.MaximumPrintCount) {
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.tooManyPrintItems(count, PrintStatement.MaximumPrintCount),
+                location: util.getLocation(statement)
+            });
+        }
+    }
+
+    /**
+     * Flag functions whose own variables (parameters, assigned names, loop variables, catch variables) exceed the device limit.
+     * Nested functions have their own limit and are not included. Names that are only read are not counted, so the count is a lower bound.
+     */
+    private validateFunctionVariableCount(func: FunctionExpression) {
+        //keep the locatable for each variable, and only build a `Location` for the one we report
+        const variableLocatables = new Map<string, Locatable>();
+        const addVariable = (nameToken: Token | undefined, fallback: Locatable) => {
+            const name = nameToken?.text?.toLowerCase();
+            if (name && !variableLocatables.has(name)) {
+                variableLocatables.set(name, nameToken.source ? nameToken : fallback);
+            }
+        };
+        // count all the parameters as they count as variables
+        for (const parameter of func.parameters) {
+            addVariable(parameter.tokens.name, parameter);
+        }
+
+        // count all the variables in the function body
+        func.body?.walk(createVisitor({
+            AssignmentStatement: (statement) => {
+                addVariable(statement.tokens.name, statement);
+            },
+            AugmentedAssignmentStatement: (statement) => {
+                if (isVariableExpression(statement.item)) {
+                    addVariable(statement.item.tokens.name, statement);
+                }
+            },
+            DimStatement: (statement) => {
+                addVariable(statement.tokens.name, statement);
+            },
+            IncrementStatement: (statement) => {
+                if (isVariableExpression(statement.value)) {
+                    addVariable(statement.value.tokens.name, statement);
+                }
+            },
+            ForEachStatement: (statement) => {
+                addVariable(statement.tokens.item, statement);
+            },
+            CatchStatement: (statement) => {
+                const exceptionVariable = isTypecastExpression(statement.exceptionVariableExpression) ? statement.exceptionVariableExpression.obj : statement.exceptionVariableExpression;
+                if (isVariableExpression(exceptionVariable)) {
+                    addVariable(exceptionVariable.tokens.name, statement);
+                }
+            }
+        }), { walkMode: WalkMode.visitAll });
+
+        if (variableLocatables.size > FunctionExpression.MaximumVariables) {
+            const firstOverLimit = [...variableLocatables.values()][FunctionExpression.MaximumVariables];
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.tooManyFunctionVariables(variableLocatables.size, FunctionExpression.MaximumVariables),
+                location: util.getLocation(firstOverLimit) ?? util.getLocation(func.tokens.functionType) ?? util.getLocation(func)
+            });
         }
     }
 
