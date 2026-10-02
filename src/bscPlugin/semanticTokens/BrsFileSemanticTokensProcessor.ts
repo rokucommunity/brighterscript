@@ -98,9 +98,8 @@ export class BrsFileSemanticTokensProcessor {
 
     private addToken(locatable: Locatable, type: SemanticTokenTypes, modifiers: SemanticTokenModifiers[] = []) {
         //only keep a single token per range. Last-in wins
-        const range = util.getLocation(locatable).range;
-        this.result.set(util.rangeToString(range), {
-            range: range,
+        this.result.set(util.rangeToString(util.getLocation(locatable).range), {
+            range: util.getLocation(locatable).range,
             tokenType: type,
             tokenModifiers: modifiers
         });

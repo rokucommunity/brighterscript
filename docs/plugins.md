@@ -588,8 +588,6 @@ To keep memory down, tokens and AST nodes don't store a `Location`. Instead, eac
 const location = util.getLocation(funcStmt.tokens.name); // { uri, range }
 ```
 
-A node's bounds are computed once, when it's constructed, from the children and tokens it's given. They describe where the node came from in the original source, so they don't change if a plugin edits the AST afterwards (i.e. adding statements to a block doesn't move the block).
-
 `util.getLocation()` returns `undefined` for synthetic tokens and nodes (ones that were created in code rather than parsed from a file), since they have no position. A synthetic node won't get a source map entry, and diagnostics can't point at it.
 
 To give a synthetic token or node a position:

@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { DiagnosticTag } from 'vscode-languageserver';
+import { DiagnosticTag, type Range } from 'vscode-languageserver';
 import { isAliasStatement, isArrayType, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallFuncableTypeLike, isCallableType, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isIterableType, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypeStatementType, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
@@ -10,7 +10,7 @@ import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement,
 import { util } from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
-import type { Locatable, Token } from '../../lexer/Token';
+import type { Token } from '../../lexer/Token';
 import { AstNodeKind } from '../../parser/AstNode';
 import type { AstNode } from '../../parser/AstNode';
 import type { Expression } from '../../parser/AstNode';
@@ -241,7 +241,7 @@ export class ScopeValidator {
                                 expr: assignStmt,
                                 name: assignStmt.tokens.name.text,
                                 type: this.getNodeTypeWrapper(file, assignStmt, { flags: SymbolTypeFlag.runtime }),
-                                nameToken: assignStmt.tokens.name
+                                nameRange: util.getLocation(assignStmt.tokens.name)?.range
                             });
                         });
                     },
@@ -266,7 +266,7 @@ export class ScopeValidator {
                                 expr: forEachStmt,
                                 name: forEachStmt.tokens.item.text,
                                 type: this.getNodeTypeWrapper(file, forEachStmt, { flags: SymbolTypeFlag.runtime }),
-                                nameToken: forEachStmt.tokens.item
+                                nameRange: util.getLocation(forEachStmt.tokens.item)?.range
                             });
                             this.validateForEachStatement(file, forEachStmt);
                         });
@@ -277,7 +277,7 @@ export class ScopeValidator {
                                 expr: funcParam,
                                 name: funcParam.tokens.name.text,
                                 type: this.getNodeTypeWrapper(file, funcParam, { flags: SymbolTypeFlag.runtime }),
-                                nameToken: funcParam.tokens.name
+                                nameRange: util.getLocation(funcParam.tokens.name)?.range
                             });
                         });
                     },
@@ -1453,7 +1453,7 @@ export class ScopeValidator {
                     const related = [];
                     for (const ownCallable of ownCallables) {
                         const thatNameRange = ownCallable.callable.nameRange;
-                        if (ownCallable.callable !== callable) {
+                        if (ownCallable.callable.nameRange !== callable.nameRange) {
                             related.push({
                                 message: `Function declared here`,
                                 location: util.createLocationFromRange(
@@ -1558,10 +1558,7 @@ export class ScopeValidator {
         }
     }
 
-    /**
-     * Detect a local variable that shadows a function or class. `varDeclaration.nameToken` is only resolved into a range when a diagnostic is actually added
-     */
-    public detectShadowedLocalVar(file: BrsFile, varDeclaration: { expr: AstNode; name: string; type: BscType; nameToken: Locatable }) {
+    public detectShadowedLocalVar(file: BrsFile, varDeclaration: { expr: AstNode; name: string; type: BscType; nameRange: Range }) {
         const varName = varDeclaration.name;
         const lowerVarName = varName.toLowerCase();
         const callableContainerMap = this.event.scope.getCallableContainerMap();
@@ -1580,7 +1577,7 @@ export class ScopeValidator {
             if (varIsFunction()) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib'),
-                    location: util.createLocationFromFileRange(file, util.getLocation(varDeclaration.nameToken)?.range)
+                    location: util.createLocationFromFileRange(file, varDeclaration.nameRange)
                 });
             }
         } else if (callableContainerMap.has(lowerVarName) && !localVarIsInNamespace) {
@@ -1589,7 +1586,7 @@ export class ScopeValidator {
             if (varIsFunction()) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.localVarFunctionShadowsParentFunction('scope'),
-                    location: util.createLocationFromFileRange(file, util.getLocation(varDeclaration.nameToken)?.range),
+                    location: util.createLocationFromFileRange(file, varDeclaration.nameRange),
                     relatedInformation: [{
                         message: 'Function declared here',
                         location: util.createLocationFromFileRange(
@@ -1601,7 +1598,7 @@ export class ScopeValidator {
             } else {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.localVarShadowedByScopedFunction(),
-                    location: util.createLocationFromFileRange(file, util.getLocation(varDeclaration.nameToken)?.range),
+                    location: util.createLocationFromFileRange(file, varDeclaration.nameRange),
                     relatedInformation: [{
                         message: 'Function declared here',
                         location: util.createLocationFromRange(
@@ -1617,7 +1614,7 @@ export class ScopeValidator {
             if (classStmtLink) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.localVarShadowedByScopedFunction(),
-                    location: util.createLocationFromFileRange(file, util.getLocation(varDeclaration.nameToken)?.range),
+                    location: util.createLocationFromFileRange(file, varDeclaration.nameRange),
                     relatedInformation: [{
                         message: 'Class declared here',
                         location: util.createLocationFromRange(

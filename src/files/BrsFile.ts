@@ -597,10 +597,9 @@ export class BrsFile implements BscFile {
 
             //add every parameter
             for (let param of func.parameters) {
-                const nameRange = util.getLocation(param.tokens.name)?.range;
                 scope.variableDeclarations.push({
-                    nameRange: nameRange,
-                    lineIndex: nameRange?.start.line,
+                    nameRange: util.getLocation(param.tokens.name)?.range,
+                    lineIndex: util.getLocation(param.tokens.name)?.range?.start.line,
                     name: param.tokens.name.text,
                     getType: () => {
                         return param.getType({ flags: SymbolTypeFlag.typetime });
@@ -611,20 +610,18 @@ export class BrsFile implements BscFile {
             //add all of ForEachStatement loop varibales
             func.body?.walk(createVisitor({
                 ForEachStatement: (stmt) => {
-                    const nameRange = util.getLocation(stmt.tokens.item)?.range;
                     scope.variableDeclarations.push({
-                        nameRange: nameRange,
-                        lineIndex: nameRange?.start.line,
+                        nameRange: util.getLocation(stmt.tokens.item)?.range,
+                        lineIndex: util.getLocation(stmt.tokens.item)?.range?.start.line,
                         name: stmt.tokens.item.text,
                         getType: () => stmt.getType({ flags: SymbolTypeFlag.runtime })
                     });
                 },
                 LabelStatement: (stmt) => {
                     const { name: identifier } = stmt.tokens;
-                    const nameRange = util.getLocation(identifier)?.range;
                     scope.labelStatements.push({
-                        nameRange: nameRange,
-                        lineIndex: nameRange?.start.line,
+                        nameRange: util.getLocation(identifier)?.range,
+                        lineIndex: util.getLocation(identifier)?.range?.start.line,
                         name: identifier.text
                     });
                 }
@@ -651,10 +648,9 @@ export class BrsFile implements BscFile {
             //skip variable declarations that are outside of any scope
             if (scope) {
                 const variableName = statement.tokens.name;
-                const nameRange = util.getLocation(variableName)?.range;
                 scope.variableDeclarations.push({
-                    nameRange: nameRange,
-                    lineIndex: nameRange?.start.line,
+                    nameRange: util.getLocation(variableName)?.range,
+                    lineIndex: util.getLocation(variableName)?.range?.start.line,
                     name: variableName.text,
                     getType: () => {
                         return statement.getType({ flags: SymbolTypeFlag.runtime });
