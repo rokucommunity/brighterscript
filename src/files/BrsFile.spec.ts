@@ -7767,6 +7767,63 @@ describe('BrsFile', () => {
             expectZeroDiagnostics(program);
         });
 
+        describe('string keys and indexes', () => {
+            function fillStringPool() {
+                return buildAssignments(limit, index => `"s${index}"`);
+            }
+
+            it('counts a quoted associative array key with a new string', () => {
+                validateSource(wrapInFunction([...fillStringPool(), 'v = { "newQuotedKey": 1 }']));
+                expectDiagnostics(program, [
+                    DiagnosticMessages.tooManyLiterals(65536, 'string', limit)
+                ]);
+            });
+
+            it('does not count an unquoted associative array key', () => {
+                validateSource(wrapInFunction([...fillStringPool(), 'v = { newKeyName: 1 }']));
+                expectZeroDiagnostics(program);
+            });
+
+            it('does not count a quoted associative array key that reuses an existing string', () => {
+                validateSource(wrapInFunction([...fillStringPool(), 'v = { "s5": 1 }']));
+                expectZeroDiagnostics(program);
+            });
+
+            it('dedupes a quoted key against a string literal', () => {
+                validateSource(wrapInFunction([...fillStringPool(), 'v = { "s5": "s6" }', 'v = "s7"']));
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts a string used as an index in a get', () => {
+                validateSource(wrapInFunction([...fillStringPool(), 'v = m["brandNewKey"]']));
+                expectDiagnostics(program, [
+                    DiagnosticMessages.tooManyLiterals(65536, 'string', limit)
+                ]);
+            });
+
+            it('counts a string used as an index in a set', () => {
+                validateSource(wrapInFunction([...fillStringPool(), 'm["brandNewKey2"] = true']));
+                expectDiagnostics(program, [
+                    DiagnosticMessages.tooManyLiterals(65536, 'string', limit)
+                ]);
+            });
+
+            it('does not count a dotted property name', () => {
+                validateSource(wrapInFunction([...fillStringPool(), 'o = {}', 'o.someNewProp = 1']));
+                expectZeroDiagnostics(program);
+            });
+
+            it('does not count quoted keys in a false conditional compile branch', () => {
+                validateSource(wrapInFunction([
+                    ...fillStringPool(),
+                    '#if false',
+                    'v = { "newQuotedKey": 1 }',
+                    '#end if'
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+        });
+
         it('counts template string text parts in a .bs file', () => {
             validateSource(wrapInFunction([
                 ...buildAssignments(limit, index => `"s${index}"`),

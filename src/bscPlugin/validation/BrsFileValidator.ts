@@ -636,6 +636,7 @@ export class BrsFileValidator {
      * Add the literals directly inside the function body to the file's literal pools.
      * Nested functions are collected when they are visited themselves, so every function in the file shares the same pools.
      * Literals outside functions and default parameter values are not counted.
+     * Quoted associative array keys count as strings; unquoted keys and dotted property names do not.
      * Values are deduplicated by normalized value: integers by numeric value (`1` and `&h1` match), doubles by numeric value, floats by single-precision numeric value, strings by their content.
      */
     private collectFunctionLiterals(func: FunctionExpression) {
@@ -673,7 +674,7 @@ export class BrsFileValidator {
                         addToPool('double', getFloatingPointValue(text), literal.location);
                         break;
                     case TokenKind.StringLiteral:
-                        addToPool('string', text.endsWith('"') && text.length > 1 ? text.slice(1, -1) : text.slice(1), literal.location);
+                        addToPool('string', getStringLiteralKey(text), literal.location);
                         break;
                     case TokenKind.TemplateStringQuasi:
                         if (text !== '') {
@@ -683,6 +684,13 @@ export class BrsFileValidator {
                     default:
                         break;
                 }
+            },
+            AAMemberExpression: (member) => {
+                const keyToken = member.tokens.key;
+                if (keyToken?.kind !== TokenKind.StringLiteral || member.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
+                    return;
+                }
+                addToPool('string', getStringLiteralKey(keyToken.text), keyToken.location ?? member.location);
             }
         }), { walkMode: WalkMode.visitAll });
     }
@@ -1122,6 +1130,10 @@ export class BrsFileValidator {
 export const maximumLiteralsPerType = 65535;
 
 const literalPoolNames: LiteralPoolName[] = ['integer', 'string', 'float', 'double', 'longinteger'];
+
+function getStringLiteralKey(text: string) {
+    return text.endsWith('"') && text.length > 1 ? text.slice(1, -1) : text.slice(1);
+}
 
 function getLongIntegerKey(text: string) {
     const digits = text.replace(/&$/, '');
