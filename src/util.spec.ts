@@ -16,7 +16,7 @@ import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, Interface
 import { TokenKind } from './lexer/TokenKind';
 import { createToken } from './astUtils/creators';
 import { createDottedIdentifier, createVariableExpression } from './astUtils/creators';
-import { Parser } from './parser/Parser';
+import { Parser, ParseMode } from './parser/Parser';
 import type { ExitStatement, FunctionStatement } from './parser/Statement';
 import { Lexer } from './lexer/Lexer';
 import type { Locatable } from './lexer/Token';
@@ -1101,6 +1101,18 @@ describe('util', () => {
             const { ast } = Parser.parse('sub main()\r\n    print 1\r\nend sub');
             expect(util.getLocation(ast.statements[0]).range).to.eql(util.createRange(0, 0, 2, 7));
         });
+
+        it('ends an empty print statement on its own line', () => {
+            const { ast } = Parser.parse('sub main()\n    print\n    x = 1\nend sub');
+            const print = (ast.statements[0] as FunctionStatement).func.body.statements[0];
+            expect(util.getLocation(print).range).to.eql(util.createRange(1, 4, 1, 9));
+        });
+
+        it('ends a `new` without a class name on its own line', () => {
+            const { ast } = Parser.parse('sub main()\n    new\n    x = 1\nend sub', { mode: ParseMode.BrighterScript });
+            const statement = (ast.statements[0] as FunctionStatement).func.body.statements[0];
+            expect(util.getLocation(statement).range.end.line).to.eql(1);
+        });
     });
 
     describe('setBounds', () => {
@@ -1117,6 +1129,94 @@ describe('util', () => {
 
         it('clears the bounds when nothing has a source', () => {
             const result = util.setBounds({ pos: 1, end: 2, source: testLocatable(0, 0, 0, 0).source }, createToken(TokenKind.Identifier, 'a'));
+            expect(result).to.eql({ pos: undefined, end: undefined, source: undefined });
+        });
+
+        it('does not end at the start of the next line when the last locatable is a LF newline', () => {
+            const tokens = Lexer.scan('print\nx').tokens;
+            const result = util.setBounds({} as Locatable, tokens[0], tokens[1]);
+            expect(util.getLocation(result).range).to.eql(util.createRange(0, 0, 0, 5));
+        });
+
+        it('does not end at the start of the next line when the last locatable is a CRLF newline', () => {
+            const tokens = Lexer.scan('print\r\nx').tokens;
+            const result = util.setBounds({} as Locatable, tokens[0], tokens[1]);
+            expect(util.getLocation(result).range).to.eql(util.createRange(0, 0, 0, 5));
+        });
+    });
+
+    describe('getContentEnd', () => {
+        it('excludes trailing newlines', () => {
+            const tokens = Lexer.scan('a\nb\r\nc').tokens;
+            expect(tokens.map(x => [x.text, util.getContentEnd(x)])).to.eql([
+                ['a', 1],
+                ['\n', 1],
+                ['b', 3],
+                ['\r\n', 3],
+                ['c', 6],
+                ['', 7]
+            ]);
+        });
+
+        it('uses the end for nodes', () => {
+            expect(util.getContentEnd(testLocatable(0, 2, 0, 4))).to.eql(4);
+        });
+    });
+
+    describe('getStartPosition', () => {
+        it('matches the start of getLocation', () => {
+            const tokens = Lexer.scan('a\n  bb\r\n    ccc').tokens;
+            for (const token of tokens) {
+                expect(util.getStartPosition(token)).to.eql(util.getLocation(token).range.start);
+            }
+        });
+
+        it('returns undefined for synthetic items', () => {
+            expect(util.getStartPosition(createToken(TokenKind.Identifier, 'a'))).to.be.undefined;
+            expect(util.getStartPosition(undefined)).to.be.undefined;
+        });
+    });
+
+    describe('getOffset', () => {
+        const source = Lexer.scan('ab\ncd\nef').tokens[0].source;
+
+        it('converts positions to offsets', () => {
+            expect(util.getOffset(source, util.createPosition(0, 0))).to.eql(0);
+            expect(util.getOffset(source, util.createPosition(1, 1))).to.eql(4);
+            expect(util.getOffset(source, util.createPosition(2, 2))).to.eql(8);
+        });
+
+        it('clamps characters past the end of the line to that line', () => {
+            expect(util.getOffset(source, util.createPosition(0, 99))).to.eql(2);
+        });
+
+        it('returns undefined for a missing source or line', () => {
+            expect(util.getOffset(undefined, util.createPosition(0, 0))).to.be.undefined;
+            expect(util.getOffset(source, util.createPosition(99, 0))).to.be.undefined;
+            expect(util.getOffset(source, undefined)).to.be.undefined;
+        });
+    });
+
+    describe('setLocation', () => {
+        it('round-trips through getLocation', () => {
+            const location = util.createLocation(3, 4, 5, 6, 'file:///a.brs');
+            expect(util.getLocation(util.setLocation({} as Locatable, location))).to.eql(location);
+        });
+
+        it('round-trips a range that ends at the end of the last line it has seen', () => {
+            const location = util.createLocation(7, 0, 7, 50, 'file:///b.brs');
+            expect(util.getLocation(util.setLocation({} as Locatable, location))).to.eql(location);
+        });
+
+        it('shares one source per uri, so the results can be combined with setBounds', () => {
+            const first = util.setLocation({} as Locatable, util.createLocation(1, 2, 1, 4, 'file:///c.brs'));
+            const second = util.setLocation({} as Locatable, util.createLocation(3, 0, 3, 8, 'file:///c.brs'));
+            expect(first.source).to.equal(second.source);
+            expect(util.getLocation(util.setBounds({} as Locatable, first, second)).range).to.eql(util.createRange(1, 2, 3, 8));
+        });
+
+        it('clears the position when given undefined', () => {
+            const result = util.setLocation(testLocatable(0, 0, 0, 1), undefined);
             expect(result).to.eql({ pos: undefined, end: undefined, source: undefined });
         });
     });

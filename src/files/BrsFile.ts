@@ -299,11 +299,31 @@ export class BrsFile implements BscFile {
     }
 
     /**
+     * Info about the source of this file's tokens (shared by every token from the same parse)
+     */
+    private get sourceInfo() {
+        const tokens = this.parser.tokens;
+        //every token from the same parse shares the same source, and the last token (`Eof`) always exists
+        return tokens[tokens.length - 1]?.source;
+    }
+
+    /**
+     * Does the token contain the given offset (inclusive on both ends, excluding any trailing newline)
+     */
+    private tokenContainsOffset(token: Token, offset: number) {
+        return token.pos <= offset && offset <= util.getContentEnd(token);
+    }
+
+    /**
      * Get the token at the specified position
      */
     public getTokenAt(position: Position) {
+        const offset = util.getOffset(this.sourceInfo, position);
+        if (offset === undefined) {
+            return undefined;
+        }
         for (let token of this.parser.tokens) {
-            if (util.rangeContains(util.getLocation(token)?.range, position)) {
+            if (this.tokenContainsOffset(token, offset)) {
                 return token;
             }
         }
@@ -313,8 +333,12 @@ export class BrsFile implements BscFile {
      * Get the token at the specified position, or the next token
      */
     public getCurrentOrNextTokenAt(position: Position) {
+        const offset = util.getOffset(this.sourceInfo, position);
+        if (offset === undefined) {
+            return undefined;
+        }
         for (let token of this.parser.tokens) {
-            if (util.comparePositionToRange(position, util.getLocation(token)?.range) < 0) {
+            if (offset < token.pos) {
                 return token;
             }
         }
@@ -327,12 +351,17 @@ export class BrsFile implements BscFile {
         if (typeof position?.line !== 'number') {
             return undefined;
         }
+        const source = this.sourceInfo;
+        const offset = util.getOffset(source, position);
+        if (offset === undefined) {
+            return undefined;
+        }
         const handle = new CancellationTokenSource();
         let containingNode: AstNode;
         this.ast.walk((node) => {
             const latestContainer = containingNode;
             //bsc walks depth-first
-            if (util.getLocation(node)?.range && util.rangeContains(util.getLocation(node)?.range, position)) {
+            if (node.source === source && node.pos <= offset && offset <= node.end) {
                 containingNode = node;
             }
             //we had a match before, and don't now. this means we've finished walking down the whole way, and found our match
@@ -568,9 +597,10 @@ export class BrsFile implements BscFile {
 
             //add every parameter
             for (let param of func.parameters) {
+                const nameRange = util.getLocation(param.tokens.name)?.range;
                 scope.variableDeclarations.push({
-                    nameRange: util.getLocation(param.tokens.name)?.range,
-                    lineIndex: util.getLocation(param.tokens.name)?.range?.start.line,
+                    nameRange: nameRange,
+                    lineIndex: nameRange?.start.line,
                     name: param.tokens.name.text,
                     getType: () => {
                         return param.getType({ flags: SymbolTypeFlag.typetime });
@@ -581,18 +611,20 @@ export class BrsFile implements BscFile {
             //add all of ForEachStatement loop varibales
             func.body?.walk(createVisitor({
                 ForEachStatement: (stmt) => {
+                    const nameRange = util.getLocation(stmt.tokens.item)?.range;
                     scope.variableDeclarations.push({
-                        nameRange: util.getLocation(stmt.tokens.item)?.range,
-                        lineIndex: util.getLocation(stmt.tokens.item)?.range?.start.line,
+                        nameRange: nameRange,
+                        lineIndex: nameRange?.start.line,
                         name: stmt.tokens.item.text,
                         getType: () => stmt.getType({ flags: SymbolTypeFlag.runtime })
                     });
                 },
                 LabelStatement: (stmt) => {
                     const { name: identifier } = stmt.tokens;
+                    const nameRange = util.getLocation(identifier)?.range;
                     scope.labelStatements.push({
-                        nameRange: util.getLocation(identifier)?.range,
-                        lineIndex: util.getLocation(identifier)?.range?.start.line,
+                        nameRange: nameRange,
+                        lineIndex: nameRange?.start.line,
                         name: identifier.text
                     });
                 }
@@ -619,9 +651,10 @@ export class BrsFile implements BscFile {
             //skip variable declarations that are outside of any scope
             if (scope) {
                 const variableName = statement.tokens.name;
+                const nameRange = util.getLocation(variableName)?.range;
                 scope.variableDeclarations.push({
-                    nameRange: util.getLocation(variableName)?.range,
-                    lineIndex: util.getLocation(variableName)?.range?.start.line,
+                    nameRange: nameRange,
+                    lineIndex: nameRange?.start.line,
                     name: variableName.text,
                     getType: () => {
                         return statement.getType({ flags: SymbolTypeFlag.runtime });
@@ -857,13 +890,17 @@ export class BrsFile implements BscFile {
      */
     public getClosestToken(position: Position) {
         let tokens = this.parser.tokens;
+        const offset = util.getOffset(this.sourceInfo, position);
+        if (offset === undefined) {
+            return tokens[tokens.length - 1];
+        }
         for (let i = 0; i < tokens.length; i++) {
             let token = tokens[i];
-            if (util.rangeContains(util.getLocation(token)?.range, position)) {
+            if (this.tokenContainsOffset(token, offset)) {
                 return token;
             }
             //if the position less than this token range, then this position touches no token,
-            if (util.positionIsGreaterThanRange(position, util.getLocation(token)?.range) === false) {
+            if (offset < token.pos) {
                 let t = tokens[i - 1];
                 //return the token or the first token
                 return t ? t : tokens[0];

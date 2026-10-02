@@ -135,6 +135,29 @@ describe('parser print statements', () => {
             `);
         });
 
+        it('keeps a comment on the line after an empty print on its own line', async () => {
+            await testTranspile(`
+                sub main()
+                    print
+                    ' comment
+                    x = 1
+                end sub
+            `, `
+                sub main()
+                    print ""
+                    ' comment
+                    x = 1
+                end sub
+            `);
+        });
+
+        it('keeps a comment on the line after an empty print on its own line with CRLF line endings', async () => {
+            await testTranspile(
+                'sub main()\r\n    print\r\n    \' comment\r\n    x = 1\r\nend sub',
+                'sub main()\n    print ""\n    \' comment\n    x = 1\nend sub'
+            );
+        });
+
         it('supports print in loop', async () => {
             await testTranspile(`
                 sub main()

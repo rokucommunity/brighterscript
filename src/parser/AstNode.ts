@@ -8,6 +8,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import type { GetTypeOptions, TranspileResult } from '../interfaces';
 import type { AnnotationExpression } from './Expression';
 import { DynamicType } from '../types/DynamicType';
+import util from '../util';
 import type { BscType } from '../types/BscType';
 import type { Locatable, SourceInfo, Token } from '../lexer/Token';
 import { isBlock, isBody, isFunctionParameterExpression } from '../astUtils/reflection';
@@ -153,8 +154,11 @@ export abstract class AstNode implements Locatable {
     public findChildAtPosition<TNodeType extends AstNode = AstNode>(position: Position, options?: WalkOptions): TNodeType | undefined {
         return this.findChild<TNodeType>((node) => {
             //if the current node includes this position, keep that node (nodes without a source include every position)
-            const offset = node?.source?.lineStarts[position.line] + position.character;
-            if (!node?.source || (node.pos <= offset && offset <= node.end)) {
+            if (!node?.source) {
+                return node.findChildAtPosition(position, options) ?? node;
+            }
+            const offset = util.getOffset(node.source, position);
+            if (offset !== undefined && node.pos <= offset && offset <= node.end) {
                 return node.findChildAtPosition(position, options) ?? node;
             }
         }, options);

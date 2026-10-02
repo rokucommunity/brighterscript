@@ -7667,4 +7667,49 @@ describe('BrsFile', () => {
         });
     });
 
+    describe('token lookups', () => {
+        function getFile(newline: string) {
+            return program.setFile<BrsFile>('source/main.brs', [
+                'sub main()',
+                '    abc = 1',
+                '',
+                '    xyz = 2',
+                'end sub'
+            ].join(newline));
+        }
+
+        for (const [name, newline] of [['LF', '\n'], ['CRLF', '\r\n']]) {
+            describe(name, () => {
+                it('getTokenAt finds the token at, or touching, the position', () => {
+                    const file = getFile(newline);
+                    expect(file.getTokenAt(util.createPosition(1, 4)).text).to.eql('abc');
+                    //the end of a token is inclusive
+                    expect(file.getTokenAt(util.createPosition(1, 7)).text).to.eql('abc');
+                    //the first token on a line, not the previous line's newline
+                    expect(file.getTokenAt(util.createPosition(3, 4)).text).to.eql('xyz');
+                    expect(file.getTokenAt(util.createPosition(4, 0)).kind).to.eql(TokenKind.EndSub);
+                    //an empty line has only its newline
+                    expect(file.getTokenAt(util.createPosition(2, 0)).kind).to.eql(TokenKind.Newline);
+                    //past the end of the file
+                    expect(file.getTokenAt(util.createPosition(99, 0))).to.be.undefined;
+                });
+
+                it('getCurrentOrNextTokenAt finds the next token after the position', () => {
+                    const file = getFile(newline);
+                    expect(file.getCurrentOrNextTokenAt(util.createPosition(1, 0)).text).to.eql('abc');
+                    expect(file.getCurrentOrNextTokenAt(util.createPosition(1, 4)).text).to.eql('=');
+                });
+
+                it('getClosestToken finds the token at the position, or the one before it', () => {
+                    const file = getFile(newline);
+                    expect(file.getClosestToken(util.createPosition(1, 5)).text).to.eql('abc');
+                    //in the leading whitespace of a line, so the previous token is the newline before it
+                    expect(file.getClosestToken(util.createPosition(3, 1)).kind).to.eql(TokenKind.Newline);
+                    //past the end of the file
+                    expect(file.getClosestToken(util.createPosition(99, 0)).kind).to.eql(TokenKind.Eof);
+                });
+            });
+        }
+    });
+
 });
