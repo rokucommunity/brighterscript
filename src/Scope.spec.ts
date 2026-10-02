@@ -1045,6 +1045,27 @@ describe('Scope', () => {
             ]);
         });
 
+        it('points each duplicate callable at the other declarations, but not itself', () => {
+            program.setFile('source/file.brs', `
+                function DoA()
+                end function
+
+                 function DoA()
+                 end function
+            `);
+            program.validate();
+            const diagnostics = program.getDiagnostics()
+                .filter(x => x.code === DiagnosticMessages.duplicateFunctionImplementation('DoA').code)
+                .sort((a, b) => a.location.range.start.line - b.location.range.start.line);
+            //only look at the "declared here" entries (the diagnostic manager also adds an "In scope" entry)
+            expect(diagnostics.map(x => x.relatedInformation.filter(r => r.message === 'Function declared here').map(r => r.location.range))).to.eql([
+                //the first declaration points at the second one
+                [util.createRange(4, 26, 4, 29)],
+                //the second declaration points at the first one
+                [util.createRange(1, 25, 1, 28)]
+            ]);
+        });
+
         it('detects calls to unknown callables', () => {
             program.setFile('source/file.brs', `
                 function DoA()

@@ -1454,7 +1454,8 @@ export class ScopeValidator {
                     const related = [];
                     for (const ownCallable of ownCallables) {
                         const thatNameRange = ownCallable.callable.nameRange;
-                        if (ownCallable.callable.nameRange !== callable.nameRange) {
+                        //skip the callable itself. Compare the callables rather than their ranges, which aren't guaranteed to be the same object
+                        if (ownCallable.callable !== callable) {
                             related.push({
                                 message: `Function declared here`,
                                 location: util.createLocationFromRange(
