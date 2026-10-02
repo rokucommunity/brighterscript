@@ -1203,7 +1203,7 @@ export class BrsFile implements BscFile {
 
     public get assignedSymbols() {
         return this.cache.getOrAdd(`assignedSymbols`, () => {
-            const allAssignedSymbolsEntries = this.validationSegmenter.assignedTokensInSegment.entries() ?? [];
+            const allAssignedSymbolsEntries = this.validationSegmenter.assignedTokensInSegment.entries() ?? ([] as Array<[AstNode, Set<AssignedSymbol>]>);
 
             let allAssignedSymbolsSet: AssignedSymbol[] = [];
 

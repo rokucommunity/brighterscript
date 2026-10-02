@@ -74,7 +74,7 @@ export class BscPlugin implements Plugin {
 
     public provideSemanticTokens(event: ProvideSemanticTokensEvent) {
         if (isBrsFile(event.file)) {
-            return new BrsFileSemanticTokensProcessor(event as any).process();
+            return new BrsFileSemanticTokensProcessor(event as ProvideSemanticTokensEvent<BrsFile>).process();
         }
     }
 
