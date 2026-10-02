@@ -30,6 +30,8 @@ export class BrsFileValidator {
     }
 
 
+    private literalPools: Partial<Record<LiteralPoolName, LiteralPool>> = {};
+
     public process() {
         const unlinkGlobalSymbolTable = this.event.file.parser.symbolTable.pushParentProvider(() => this.event.program.globalScope.symbolTable);
 
@@ -43,7 +45,9 @@ export class BrsFileValidator {
         // make a copy of the bsConsts, because they might be added to
         const bsConstsBackup = new Map<string, boolean>(this.event.file.ast.getBsConsts());
 
+        this.literalPools = {};
         this.walk();
+        this.validateFileLiteralCount();
         this.flagTopLevelStatements();
         //only validate the file if it was actually parsed (skip files containing typedefs)
         if (!this.event.file.hasTypedef) {
@@ -229,6 +233,7 @@ export class BrsFileValidator {
                 }
                 this.validateFunctionParameterCount(node);
                 this.validateFunctionVariableCount(node);
+                this.collectFunctionLiterals(node);
             },
             FunctionParameterExpression: (node) => {
                 if (isTypedFunctionTypeExpression(node.parent)) {
@@ -624,6 +629,105 @@ export class BrsFileValidator {
                 ...DiagnosticMessages.tooManyFunctionVariables(variableLocations.size, FunctionExpression.MaximumVariables),
                 location: firstOverLimitLocation ?? func.tokens.functionType?.location ?? func.location
             });
+        }
+    }
+
+    /**
+     * Add the literals directly inside the function body to the file's literal pools.
+     * Nested functions are collected when they are visited themselves, so every function in the file shares the same pools.
+     * Literals outside functions are not counted. A function's default parameter values count with that function.
+     * Brighterscript source literals (like `SOURCE_LINE_NUM` or `PKG_PATH`) count as the literals they transpile to, in .bs files only.
+     * `LINE_NUM` (and the `str(LINE_NUM)` that `PKG_LOCATION` transpiles to) counts as the integer `line % 65536`; for .bs files this is the source line, which can differ from the transpiled line.
+     * Enum and const values that get inlined are not counted.
+     * Quoted associative array keys count as strings; unquoted keys and dotted property names do not.
+     * Values are deduplicated by normalized value: integers by numeric value (`1` and `&h1` match), doubles by numeric value, floats by single-precision numeric value, strings by their content.
+     */
+    private collectFunctionLiterals(func: FunctionExpression) {
+        const pools = this.literalPools;
+        const addToPool = (poolName: LiteralPoolName, key: string | number, location: Location) => {
+            let pool = pools[poolName];
+            if (!pool) {
+                pool = { values: new Set<string | number>(), firstOverLimitLocation: undefined };
+                pools[poolName] = pool;
+            }
+            pool.values.add(key);
+            if (pool.firstOverLimitLocation === undefined && pool.values.size > maximumLiteralsPerType) {
+                pool.firstOverLimitLocation = location;
+            }
+        };
+
+        const literalVisitor = createVisitor({
+            LiteralExpression: (literal) => {
+                if (literal.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
+                    return;
+                }
+                const token = literal.tokens.value;
+                const text = token.text;
+                switch (token.kind) {
+                    case TokenKind.IntegerLiteral:
+                        addToPool('integer', /^&h/i.test(text) ? parseInt(text.slice(2), 16) : Number(text.replace('%', '')), literal.location);
+                        break;
+                    case TokenKind.LongIntegerLiteral:
+                        addToPool('longinteger', getLongIntegerKey(text), literal.location);
+                        break;
+                    case TokenKind.FloatLiteral:
+                        addToPool('float', Math.fround(getFloatingPointValue(text)), literal.location);
+                        break;
+                    case TokenKind.DoubleLiteral:
+                        addToPool('double', getFloatingPointValue(text), literal.location);
+                        break;
+                    case TokenKind.StringLiteral:
+                        addToPool('string', getStringLiteralKey(text), literal.location);
+                        break;
+                    case TokenKind.TemplateStringQuasi:
+                        if (text !== '') {
+                            addToPool('string', text, literal.location);
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            },
+            SourceLiteralExpression: (sourceLiteral) => {
+                if (sourceLiteral.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
+                    return;
+                }
+                for (const part of sourceLiteral.getReplacementLiterals(this.event.file) ?? []) {
+                    addToPool(part.type, part.value, sourceLiteral.location);
+                }
+                const literalKind = sourceLiteral.tokens.value.kind;
+                const lineRange = sourceLiteral.location?.range;
+                if (lineRange && (literalKind === TokenKind.LineNumLiteral || literalKind === TokenKind.PkgLocationLiteral)) {
+                    addToPool('integer', (lineRange.start.line + 1) % 65536, sourceLiteral.location);
+                }
+            },
+            AAMemberExpression: (member) => {
+                const keyToken = member.tokens.key;
+                if (keyToken?.kind !== TokenKind.StringLiteral || member.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
+                    return;
+                }
+                addToPool('string', getStringLiteralKey(keyToken.text), keyToken.location ?? member.location);
+            }
+        });
+
+        func.body?.walk(literalVisitor, { walkMode: WalkMode.visitAll });
+        for (const param of func.parameters ?? []) {
+            param.walk(literalVisitor, { walkMode: WalkMode.visitAll });
+        }
+    }
+
+    /**
+     * Flag the file if any literal pool holds more distinct values than the device allows.
+     */
+    private validateFileLiteralCount() {
+        for (const poolName of literalPoolNames) {
+            const pool = this.literalPools[poolName];
+            if (pool && pool.values.size > maximumLiteralsPerType) {
+                this.event.program.diagnostics.register({
+                    ...DiagnosticMessages.tooManyLiterals(pool.values.size, poolName, maximumLiteralsPerType),
+                    location: pool.firstOverLimitLocation
+                });
+            }
         }
     }
 
@@ -1038,4 +1142,36 @@ export class BrsFileValidator {
         }
         return undefined;
     }
+}
+
+/**
+ * The maximum number of distinct literal values of a single type (integer, string, float, double, longinteger) a file can hold.
+ * Repeated identical values count once, and every function in the file, including anonymous functions, shares the same pools.
+ */
+export const maximumLiteralsPerType = 65535;
+
+const literalPoolNames: LiteralPoolName[] = ['integer', 'string', 'float', 'double', 'longinteger'];
+
+function getStringLiteralKey(text: string) {
+    return text.endsWith('"') && text.length > 1 ? text.slice(1, -1) : text.slice(1);
+}
+
+function getLongIntegerKey(text: string) {
+    const digits = text.replace(/&$/, '');
+    try {
+        return BigInt(/^&h/i.test(digits) ? '0x' + digits.slice(2) : digits).toString();
+    } catch {
+        return digits;
+    }
+}
+
+function getFloatingPointValue(text: string) {
+    return Number(text.toLowerCase().replace(/[!#%&]$/, '').replace('d', 'e'));
+}
+
+type LiteralPoolName = 'integer' | 'string' | 'float' | 'double' | 'longinteger';
+
+interface LiteralPool {
+    values: Set<string | number>;
+    firstOverLimitLocation: Location | undefined;
 }
