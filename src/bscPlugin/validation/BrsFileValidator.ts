@@ -229,6 +229,7 @@ export class BrsFileValidator {
                 }
                 this.validateFunctionParameterCount(node);
                 this.validateFunctionVariableCount(node);
+                this.validateFunctionGotoLabelCount(node);
             },
             FunctionParameterExpression: (node) => {
                 if (isTypedFunctionTypeExpression(node.parent)) {
@@ -622,6 +623,46 @@ export class BrsFileValidator {
             const firstOverLimitLocation = [...variableLocations.values()][FunctionExpression.MaximumVariables];
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.tooManyFunctionVariables(variableLocations.size, FunctionExpression.MaximumVariables),
+                location: firstOverLimitLocation ?? func.tokens.functionType?.location ?? func.location
+            });
+        }
+    }
+
+    /**
+     * Flag functions that goto more distinct labels than the device allows. Only labels targeted by a goto count, whether or not the label exists.
+     * When `continue` will be transpiled into a goto, each loop containing a continue directly adds one more label.
+     * Nested functions have their own limit and are not included.
+     */
+    private validateFunctionGotoLabelCount(func: FunctionExpression) {
+        const labelLocations = new Map<string, Location>();
+        const continueLoops = new Set<AstNode>();
+        const continueIsTranspiled = this.event.file.needsTranspiled && !this.event.program.firmwareCapabilities.continueStatement;
+        func.body?.walk(createVisitor({
+            GotoStatement: (statement) => {
+                const labelName = statement.tokens.label?.text?.toLowerCase();
+                if (labelName && !labelLocations.has(labelName)) {
+                    labelLocations.set(labelName, statement.tokens.label.location ?? statement.location);
+                }
+            },
+            ContinueStatement: (statement) => {
+                if (!continueIsTranspiled) {
+                    return;
+                }
+                let enclosingLoop = statement.parent;
+                while (enclosingLoop && enclosingLoop !== func && !isForStatement(enclosingLoop) && !isForEachStatement(enclosingLoop) && !isWhileStatement(enclosingLoop)) {
+                    enclosingLoop = enclosingLoop.parent;
+                }
+                if (enclosingLoop && enclosingLoop !== func && !continueLoops.has(enclosingLoop)) {
+                    continueLoops.add(enclosingLoop);
+                    labelLocations.set(`continue-loop:${continueLoops.size}`, statement.location);
+                }
+            }
+        }), { walkMode: WalkMode.visitAll });
+
+        if (labelLocations.size > FunctionExpression.MaximumGotoLabels) {
+            const firstOverLimitLocation = [...labelLocations.values()][FunctionExpression.MaximumGotoLabels];
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.tooManyGotoLabels(labelLocations.size, FunctionExpression.MaximumGotoLabels),
                 location: firstOverLimitLocation ?? func.tokens.functionType?.location ?? func.location
             });
         }
