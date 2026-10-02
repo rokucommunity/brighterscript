@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.56](https://github.com/rokucommunity/brighterscript/compare/1.0.0-alpha.55...v1.0.0-alpha.56) - 2026-09-27
+### Added
+ - Add jellyrock to scenario benchmarks ([#1832](https://github.com/rokucommunity/brighterscript/pull/1832))
+ - Add scenario benchmarks and fix ops/sec benchmarks on v1 ([#1830](https://github.com/rokucommunity/brighterscript/pull/1830))
+### Changed
+ - Revalidate dependents of a removed file ([#1846](https://github.com/rokucommunity/brighterscript/pull/1846))
+ - (Performance) Cache isFileCompletelyFiltered per file ([#1840](https://github.com/rokucommunity/brighterscript/pull/1840))
+ - (Performance) Cache unresolved ReferenceType lookups ([#1837](https://github.com/rokucommunity/brighterscript/pull/1837))
+ - (Performance) Drop Token.leadingWhitespace and share token positions ([#1836](https://github.com/rokucommunity/brighterscript/pull/1836))
+ - (Performance) Back CrossScopeValidator provided symbols with a program-wide index ([#1833](https://github.com/rokucommunity/brighterscript/pull/1833))
+ - (Performance) Cache ReferenceType resolution and skip allocations in getSymbol ([#1831](https://github.com/rokucommunity/brighterscript/pull/1831))
+
+
+
 ## [1.0.0-alpha.55](https://github.com/rokucommunity/brighterscript/compare/1.0.0-alpha.54...v1.0.0-alpha.55) - 2026-09-18
 ### Changed
  - Support conditional compilation (`#if`) inside class bodies ([#1744](https://github.com/rokucommunity/brighterscript/pull/1744))

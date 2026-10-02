@@ -1201,6 +1201,20 @@ export let DiagnosticMessages = {
         message: `Class constructor 'new' cannot be declared inside a conditional compile ('#if') block`,
         severity: DiagnosticSeverity.Error,
         code: 'class-constructor-in-conditional-compile'
+    }),
+    tooManyPrintItems: (count: number, max: number) => ({
+        message: `Print statement has ${count} expressions (commas count too), max is ${max}.`,
+        severity: DiagnosticSeverity.Error,
+        code: 'exceeds-max-print-items'
+    }),
+    /**
+     * @param actual the number of variables found in the function
+     * @param max the maximum number of variables Roku allows in a single function
+     */
+    tooManyFunctionVariables: (actual: number, max: number) => ({
+        message: `Function has too many variables: ${actual} found, but Roku allows at most ${max} per function (parameters count toward this limit).`,
+        severity: DiagnosticSeverity.Error,
+        code: 'exceeds-max-variable-count'
     })
 };
 export const defaultMaximumTruncationLength = 160;

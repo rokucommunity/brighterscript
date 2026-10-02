@@ -33,9 +33,9 @@ export class CodeActionsProcessor {
         // First pass: individual fixes for each diagnostic at the cursor position
         for (const diagnostic of this.event.diagnostics) {
             if (diagnostic.code === DiagnosticCodeMap.cannotFindName || diagnostic.code === DiagnosticCodeMap.cannotFindFunction) {
-                this.suggestCannotFindNameQuickFix(diagnostic as any);
+                this.suggestCannotFindNameQuickFix(diagnostic as DiagnosticMessageType<'cannotFindName'>);
             } else if (diagnostic.code === DiagnosticCodeMap.xmlComponentMissingExtendsAttribute) {
-                this.suggestMissingExtendsQuickFix(diagnostic as any);
+                this.suggestMissingExtendsQuickFix(diagnostic as DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>);
             } else if (diagnostic.code === DiagnosticCodeMap.voidFunctionMayNotReturnValue) {
                 this.suggestVoidFunctionReturnQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.nonVoidFunctionMustReturnValue) {
@@ -260,6 +260,8 @@ export class CodeActionsProcessor {
             const commentTokens = isXml ? [token] : token.leadingTrivia.filter(t => t.kind === TokenKind.Comment);
 
             for (const commentToken of commentTokens) {
+                //`tokens` is an `any[]` union of brs/xml token shapes (see declaration above)
+                //eslint-disable-next-line @typescript-eslint/no-unsafe-argument
                 const tokenRange: Range = isXml ? rangeFromTokenValue(commentToken) : util.getLocation(commentToken).range;
                 const tokenText: string = isXml ? commentToken.image : commentToken.text;
                 const parsed = parseDisableComment(tokenText);
@@ -290,8 +292,9 @@ export class CodeActionsProcessor {
             //insert after the `<?xml ?>` declaration if present, otherwise at the very top
             const declCloseToken = file.parser.tokens?.find(t => (t as any).tokenType?.name === 'SPECIAL_CLOSE');
             if (declCloseToken) {
-                const endLine = (declCloseToken as any).endLine - 1;
-                const endColumn = (declCloseToken as any).endColumn;
+                //xml declaration tokens carry chevrotain's positional fields, which aren't on the brs Token type
+                const endLine: number = (declCloseToken as any).endLine - 1;
+                const endColumn: number = (declCloseToken as any).endColumn;
                 return {
                     position: util.createPosition(endLine, endColumn),
                     prefix: '\n',

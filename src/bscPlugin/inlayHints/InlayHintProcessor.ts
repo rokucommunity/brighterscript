@@ -13,7 +13,7 @@ import {
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ProvideInlayHintsEvent } from '../../interfaces';
-import type { CallExpression, CallfuncExpression, FunctionParameterExpression } from '../../parser/Expression';
+import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionParameterExpression } from '../../parser/Expression';
 import type { Expression } from '../../parser/AstNode';
 import type { ClassStatement, FunctionStatement, MethodStatement, NamespaceStatement } from '../../parser/Statement';
 import { ParseMode } from '../../parser/Parser';
@@ -149,7 +149,7 @@ export class InlayHintProcessor {
      * If the receiver is `m`, prefer the enclosing class. Otherwise fall back to a name search
      * across all classes (only used when there's exactly one match).
      */
-    private lookupClassMethodParameters(file: BrsFile, callee: { obj?: any }, name: string): FunctionParameterExpression[] | undefined {
+    private lookupClassMethodParameters(file: BrsFile, callee: DottedGetExpression, name: string): FunctionParameterExpression[] | undefined {
         if (isVariableExpression(callee.obj) && callee.obj.tokens.name.text === 'm') {
             const enclosingClass = callee.obj.findAncestor<ClassStatement>(isClassStatement);
             if (enclosingClass) {
