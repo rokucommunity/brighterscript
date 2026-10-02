@@ -437,9 +437,12 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
         const docs = brsDocParser.parseNode(this.findAncestor(isFunctionStatement));
 
+        // resolve return and param types with their own typeChain and data, so they don't leak into this function's (eg. hover name and description)
+        const innerOptions = (): GetTypeOptions => ({ ...options, typeChain: undefined, data: {} });
+
         returnType = util.chooseTypeFromCodeOrDocComment(
-            this.returnTypeExpression?.getType({ ...options, typeChain: undefined }),
-            docs.getReturnBscType({ ...options, tableProvider: () => this.getSymbolTable() }),
+            this.returnTypeExpression?.getType(innerOptions()),
+            docs.getReturnBscType({ ...innerOptions(), tableProvider: () => this.getSymbolTable() }),
             options
         );
 
@@ -452,7 +455,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         const resultType = new TypedFunctionType(returnType);
         resultType.isSub = isSub;
         for (let param of this.parameters) {
-            resultType.addParameter(param.tokens.name.text, param.getType({ ...options, typeChain: undefined }), !!param.defaultValue);
+            resultType.addParameter(param.tokens.name.text, param.getType(innerOptions()), !!param.defaultValue);
         }
         // Figure out this function's name if we can
         let funcName = '';
