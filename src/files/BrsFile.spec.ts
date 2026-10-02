@@ -26,6 +26,7 @@ import { ClassType, EnumType, FloatType, InterfaceType } from '../types';
 import type { StandardizedFileEntry } from 'roku-deploy';
 import type { AALiteralExpression } from '../parser/Expression';
 import { CallExpression, FunctionExpression, LiteralExpression } from '../parser/Expression';
+import { maximumLiteralsPerType } from '../bscPlugin/validation/BrsFileValidator';
 import { Logger } from '@rokucommunity/logger';
 import { isFunctionExpression, isAALiteralExpression, isBlock, isBrsFile } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
@@ -7568,6 +7569,238 @@ describe('BrsFile', () => {
             validateSource(buildFunction({ localCount: 254 }), 'source/main.bs');
             expectDiagnostics(program, [
                 DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)
+            ]);
+        });
+    });
+
+    describe('file literal limit', function() {
+        this.timeout(10000);
+        const limit = maximumLiteralsPerType;
+
+        function buildAssignments(count: number, buildValue: (index: number) => string, startIndex = 0) {
+            const lines = [] as string[];
+            for (let index = startIndex; index < startIndex + count; index++) {
+                lines.push(`v = ${buildValue(index)}`);
+            }
+            return lines;
+        }
+
+        function wrapInFunction(lines: string[], functionName = 'main') {
+            return [`function ${functionName}()`, ...lines, 'end function'].join('\n');
+        }
+
+        function validateSource(source: string, fileName = 'source/main.brs') {
+            program.setFile(fileName, source);
+            program.validate();
+        }
+
+        it('allows 65535 distinct integers', () => {
+            validateSource(wrapInFunction(buildAssignments(limit, index => `${index}`)));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags 65536 distinct integers', () => {
+            validateSource(wrapInFunction(buildAssignments(limit + 1, index => `${index}`)));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'integer', limit)
+            ]);
+        });
+
+        it('counts repeated values once', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit, index => `${index}`),
+                ...buildAssignments(100, index => `${index}`)
+            ]));
+            expectZeroDiagnostics(program);
+        });
+
+        it('treats decimal and hex spellings of the same integer as one value', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit, index => `${index}`),
+                'v = &h1',
+                'v = &hFFFE',
+                'v = 1%'
+            ]));
+            expectZeroDiagnostics(program);
+        });
+
+        it('keeps the pools for different types separate', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit, index => `${index}`),
+                'v = "text"',
+                'v = 1.5',
+                'v = 1.5#',
+                'v = 1&'
+            ]));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags the string pool over its limit', () => {
+            validateSource(wrapInFunction(buildAssignments(limit + 1, index => `"s${index}"`)));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'string', limit)
+            ]);
+        });
+
+        it('allows the string pool at its limit', () => {
+            validateSource(wrapInFunction(buildAssignments(limit, index => `"s${index}"`)));
+            expectZeroDiagnostics(program);
+        });
+
+        it('treats strings that differ only by case as distinct', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit - 1, index => `"s${index}"`),
+                'v = "a"',
+                'v = "A"'
+            ]));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'string', limit)
+            ]);
+        });
+
+        it('allows the float pool at its limit and flags one more', () => {
+            validateSource(wrapInFunction(buildAssignments(limit, index => `${index}.5`)));
+            expectZeroDiagnostics(program);
+
+            program.setFile('source/main.brs', wrapInFunction(buildAssignments(limit + 1, index => `${index}.5`)));
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'float', limit)
+            ]);
+        });
+
+        it('flags the double pool over its limit', () => {
+            validateSource(wrapInFunction(buildAssignments(limit + 1, index => `${index}.5#`)));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'double', limit)
+            ]);
+        });
+
+        it('flags the longinteger pool over its limit', () => {
+            validateSource(wrapInFunction(buildAssignments(limit + 1, index => `${index}&`)));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'longinteger', limit)
+            ]);
+        });
+
+        it('does not count true, false, or invalid', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit, index => `${index}`),
+                'v = true',
+                'v = false',
+                'v = invalid'
+            ]));
+            expectZeroDiagnostics(program);
+        });
+
+        it('shares the pool between functions in a file', () => {
+            validateSource([
+                wrapInFunction(buildAssignments(32767, index => `${index}`), 'first'),
+                wrapInFunction(buildAssignments(32768, index => `${index}`, 32767), 'second')
+            ].join('\n'));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags functions whose distinct values sum past the limit', () => {
+            validateSource([
+                wrapInFunction(buildAssignments(32768, index => `${index}`), 'first'),
+                wrapInFunction(buildAssignments(32768, index => `${index}`, 32768), 'second')
+            ].join('\n'));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'integer', limit)
+            ]);
+        });
+
+        it('counts the same values in two functions once', () => {
+            validateSource([
+                wrapInFunction(buildAssignments(limit, index => `${index}`), 'first'),
+                wrapInFunction(buildAssignments(limit, index => `${index}`), 'second')
+            ].join('\n'));
+            expectZeroDiagnostics(program);
+        });
+
+        it('shares the pool with anonymous functions', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit, index => `${index}`),
+                'f = function()',
+                'v = 70000',
+                'end function'
+            ]));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'integer', limit)
+            ]);
+        });
+
+        it('keeps separate files independent', () => {
+            program.setFile('source/first.brs', wrapInFunction(buildAssignments(limit, index => `${index}`), 'first'));
+            program.setFile('source/second.brs', wrapInFunction(buildAssignments(limit, index => `${index}`), 'second'));
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not count default parameter values of a nested function', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit, index => `${index}`),
+                'f = function(a = 70000)',
+                'end function'
+            ]));
+            expectZeroDiagnostics(program);
+        });
+
+        it('counts equal float values written differently once', () => {
+            validateSource(wrapInFunction([
+                'v = 1.5',
+                'v = 1.50',
+                'v = 15e-1',
+                ...buildAssignments(limit - 1, index => `${index + 2}.5`)
+            ]));
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not count literals in a false conditional compile branch', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit, index => `${index}`),
+                '#if false',
+                'v = 70000',
+                '#end if'
+            ]), 'source/main.bs');
+            expectZeroDiagnostics(program);
+        });
+
+        it('counts template string text parts in a .bs file', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit, index => `"s${index}"`),
+                'v = `template`'
+            ]), 'source/main.bs');
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'string', limit)
+            ]);
+        });
+
+        it('reports the limit for a .bs file', () => {
+            validateSource(wrapInFunction(buildAssignments(limit + 1, index => `${index}`)), 'source/main.bs');
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'integer', limit)
+            ]);
+        });
+
+        it('reports the range of the first literal over the limit', () => {
+            validateSource(wrapInFunction(buildAssignments(limit + 2, index => `${index}`)));
+            //line 0 is the function line, so the 65536th distinct value (index 65535) sits on line 65536
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.tooManyLiterals(65537, 'integer', limit),
+                location: { range: util.createRange(limit + 1, 4, limit + 1, 4 + `${limit}`.length) }
+            }]);
+        });
+
+        it('reports one diagnostic per type that is over', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit + 1, index => `${index}`),
+                ...buildAssignments(limit + 1, index => `"s${index}"`)
+            ]));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'integer', limit),
+                DiagnosticMessages.tooManyLiterals(65536, 'string', limit)
             ]);
         });
     });

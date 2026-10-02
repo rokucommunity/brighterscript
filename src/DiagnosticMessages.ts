@@ -1215,6 +1215,16 @@ export let DiagnosticMessages = {
         message: `Function has too many variables: ${actual} found, but Roku allows at most ${max} per function (parameters count toward this limit).`,
         severity: DiagnosticSeverity.Error,
         code: 'exceeds-max-variable-count'
+    }),
+    /**
+     * @param count the number of distinct literals of this type found in the file
+     * @param typeName the literal type, one of `integer`, `string`, `float`, `double`, or `longinteger`
+     * @param max the maximum number of distinct literals of one type Roku allows in a single file
+     */
+    tooManyLiterals: (count: number, typeName: string, max: number) => ({
+        message: `File has ${count} distinct ${typeName} literals, max is ${max}.`,
+        severity: DiagnosticSeverity.Error,
+        code: 'exceeds-max-literal-count'
     })
 };
 export const defaultMaximumTruncationLength = 160;
