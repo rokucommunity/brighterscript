@@ -7572,6 +7572,140 @@ describe('BrsFile', () => {
         });
     });
 
+    describe('if nesting depth limit', () => {
+        function nestIfs(depth: number, innerLines: string[], useElse = false) {
+            let body = innerLines;
+            for (let level = 0; level < depth; level++) {
+                body = useElse
+                    ? ['if false then', 'y = 1', 'else', ...body, 'end if']
+                    : ['if true then', ...body, 'end if'];
+            }
+            return body;
+        }
+
+        function buildFunction(bodyLines: string[]) {
+            return ['function main()', ...bodyLines, 'end function'].join('\n');
+        }
+
+        function validateSource(source: string, fileName = 'source/main.brs') {
+            program.setFile(fileName, source);
+            program.validate();
+        }
+
+        it('allows 305 nested ifs', () => {
+            validateSource(buildFunction(nestIfs(305, ['x = 1'])));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags 306 nested ifs and reports 306', () => {
+            validateSource(buildFunction(nestIfs(306, ['x = 1'])));
+            expectDiagnostics(program, [
+                DiagnosticMessages.ifNestedTooDeep(306, FunctionExpression.MaximumIfDepth)
+            ]);
+        });
+
+        it('reports the deepest level found', () => {
+            validateSource(buildFunction(nestIfs(310, ['x = 1'])));
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.ifNestedTooDeep(310, FunctionExpression.MaximumIfDepth),
+                location: { range: util.createRange(310, 0, 310, 2) }
+            }]);
+        });
+
+        it('does not count an else if chain as nesting', () => {
+            const lines = ['if x = 0 then', 'y = 0'];
+            for (let index = 1; index < 400; index++) {
+                lines.push(`else if x = ${index} then`, `y = ${index}`);
+            }
+            lines.push('else', 'y = -1', 'end if');
+            validateSource(['function main(x as integer)', ...lines, 'end function'].join('\n'));
+            expectZeroDiagnostics(program);
+        });
+
+        it('counts ifs nested inside an else if branch', () => {
+            validateSource(['function main(a as boolean, b as boolean)', 'if a then', 'x = 1', 'else if b then', ...nestIfs(305, ['x = 2']), 'end if', 'end function'].join('\n'));
+            expectDiagnostics(program, [
+                DiagnosticMessages.ifNestedTooDeep(306, FunctionExpression.MaximumIfDepth)
+            ]);
+        });
+
+        it('allows 305 levels nested through else branches', () => {
+            validateSource(buildFunction(nestIfs(305, ['x = 1'], true)));
+            expectZeroDiagnostics(program);
+        });
+
+        it('counts nesting inside else branches', () => {
+            validateSource(buildFunction(nestIfs(306, ['x = 1'], true)));
+            expectDiagnostics(program, [
+                DiagnosticMessages.ifNestedTooDeep(306, FunctionExpression.MaximumIfDepth)
+            ]);
+        });
+
+        it('starts again at depth 1 inside an anonymous function', () => {
+            validateSource(buildFunction([
+                ...nestIfs(200, [
+                    'callback = function()',
+                    ...nestIfs(200, ['x = 1']),
+                    'end function'
+                ])
+            ]));
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not count ifs in a false conditional compile branch', () => {
+            validateSource(buildFunction(nestIfs(300, [
+                '#if false',
+                ...nestIfs(10, ['y = 1']),
+                '#end if'
+            ])), 'source/main.bs');
+            expectZeroDiagnostics(program);
+        });
+
+        it('counts ifs in an active conditional compile branch without adding a level for the #if', () => {
+            validateSource(['#const enabled = true', buildFunction(nestIfs(300, [
+                '#if enabled',
+                ...nestIfs(6, ['y = 1']),
+                '#end if'
+            ]))].join('\n'), 'source/main.bs');
+            expectDiagnostics(program, [
+                DiagnosticMessages.ifNestedTooDeep(306, FunctionExpression.MaximumIfDepth)
+            ]);
+        });
+
+        it('counts a single-line if as a level', () => {
+            validateSource(buildFunction(nestIfs(305, ['if true then x = 1'])));
+            expectDiagnostics(program, [
+                DiagnosticMessages.ifNestedTooDeep(306, FunctionExpression.MaximumIfDepth)
+            ]);
+        });
+
+        it('allows 304 block ifs with a single-line if innermost', () => {
+            validateSource(buildFunction(nestIfs(304, ['if true then x = 1'])));
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not count an inline else if as nesting', () => {
+            validateSource(buildFunction(nestIfs(304, ['if a then x = 1 else if b then x = 2'])).replace('function main()', 'function main(a as boolean, b as boolean)'));
+            expectZeroDiagnostics(program);
+        });
+
+        it('reports the limit for a .bs file', () => {
+            validateSource(buildFunction(nestIfs(306, ['x = 1'])), 'source/main.bs');
+            expectDiagnostics(program, [
+                DiagnosticMessages.ifNestedTooDeep(306, FunctionExpression.MaximumIfDepth)
+            ]);
+        });
+
+        it('reports the range of the if keyword of the deepest if', () => {
+            validateSource(buildFunction(nestIfs(306, ['x = 1'])));
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.ifNestedTooDeep(306, FunctionExpression.MaximumIfDepth),
+                // line 0 is the function, so the deepest if is on line 306
+                location: { range: util.createRange(306, 0, 306, 2) }
+            }]);
+        });
+    });
+
     it('handles deprecated .setPort() on rourltransfer', () => {
         program.setFile('source/main.bs', `
             function main()

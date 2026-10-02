@@ -229,6 +229,7 @@ export class BrsFileValidator {
                 }
                 this.validateFunctionParameterCount(node);
                 this.validateFunctionVariableCount(node);
+                this.validateIfNestingDepth(node);
             },
             FunctionParameterExpression: (node) => {
                 if (isTypedFunctionTypeExpression(node.parent)) {
@@ -623,6 +624,47 @@ export class BrsFileValidator {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.tooManyFunctionVariables(variableLocations.size, FunctionExpression.MaximumVariables),
                 location: firstOverLimitLocation ?? func.tokens.functionType?.location ?? func.location
+            });
+        }
+    }
+
+    /**
+     * Flag functions with block `if` statements nested deeper than the device allows.
+     * An `else if` chain counts as one level, single-line `if` statements count like block ones, and nested functions are measured on their own.
+     */
+    private validateIfNestingDepth(func: FunctionExpression) {
+        const isElseIfLink = (statement: IfStatement) => isIfStatement(statement.parent) && statement.parent.elseBranch === statement;
+        const getDepth = (ifStatement: IfStatement) => {
+            let depth = 0;
+            let current: AstNode = ifStatement;
+            while (current && !isFunctionExpression(current)) {
+                if (isIfStatement(current) && !isElseIfLink(current)) {
+                    depth++;
+                }
+                current = current.parent;
+            }
+            return depth;
+        };
+
+        let deepestLevel = 0;
+        let deepestIf: IfStatement | undefined;
+        func.body?.walk(createVisitor({
+            IfStatement: (statement) => {
+                if (isElseIfLink(statement)) {
+                    return;
+                }
+                const depth = getDepth(statement);
+                if (depth > deepestLevel) {
+                    deepestLevel = depth;
+                    deepestIf = statement;
+                }
+            }
+        }), { walkMode: WalkMode.visitAll });
+
+        if (deepestLevel > FunctionExpression.MaximumIfDepth) {
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.ifNestedTooDeep(deepestLevel, FunctionExpression.MaximumIfDepth),
+                location: deepestIf.tokens.if?.location ?? deepestIf.location
             });
         }
     }
