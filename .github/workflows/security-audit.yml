@@ -1,12 +1,14 @@
 name: Security Audit
 on:
+  workflow_dispatch:
   push:
     branches:
       - master
   pull_request:
   schedule:
-    #nightly at 06:00 UTC (1am EST / 2am EDT)
-    - cron: '0 6 * * *'
+    #nightly at 1:17am Eastern (DST-aware). Off the top of the hour because GitHub delays those schedules the most
+    - cron: '17 1 * * *'
+      timezone: 'America/New_York'
 
 jobs:
   audit:
