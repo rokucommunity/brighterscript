@@ -1,8 +1,8 @@
 import * as debounce from 'debounce-promise';
 import * as path from 'path';
 import { rokuDeploy } from 'roku-deploy';
-import type { BsConfig, FinalizedBsConfig } from './BsConfig';
-import type { BsDiagnostic, FileObj, FileResolver } from './interfaces';
+import type { BsConfig, FinalizedBsConfig, ResolvedFilesArrayEntry } from './BsConfig';
+import type { BsDiagnostic, FileResolver } from './interfaces';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import { Watcher } from './Watcher';
@@ -473,7 +473,7 @@ export class ProgramBuilder {
             });
 
             //remove files currently loaded in the program, we will transpile those instead (even if just for source maps)
-            let filteredFileMap = [] as FileObj[];
+            let filteredFileMap = [] as ResolvedFilesArrayEntry[];
 
             for (let fileEntry of fileMap) {
                 if (this.program!.hasFile(fileEntry.src) === false) {
@@ -506,9 +506,9 @@ export class ProgramBuilder {
             });
             this.logger.trace('ProgramBuilder.loadFiles() files:', files);
 
-            const typedefFiles = [] as FileObj[];
-            const allOtherFiles = [] as FileObj[];
-            let manifestFile: FileObj | null = null;
+            const typedefFiles = [] as ResolvedFilesArrayEntry[];
+            const allOtherFiles = [] as ResolvedFilesArrayEntry[];
+            let manifestFile: ResolvedFilesArrayEntry | null = null;
 
             for (const file of files) {
                 // typedef files

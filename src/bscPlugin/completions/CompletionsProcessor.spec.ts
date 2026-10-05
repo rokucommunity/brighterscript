@@ -9,7 +9,7 @@ import { Keywords } from '../../lexer/TokenKind';
 import { CompletionsProcessor } from './CompletionsProcessor';
 import * as pick from 'object.pick';
 import { BrsFile } from '../../files/BrsFile';
-import type { FileObj } from '../../interfaces';
+import type { ResolvedFilesArrayEntry } from '../../BsConfig';
 import * as fsExtra from 'fs-extra';
 import { isAssignmentStatement, isFunctionExpression } from '../../astUtils/reflection';
 import type { AssignmentStatement } from '../../parser/Statement';
@@ -1292,7 +1292,7 @@ describe('CompletionsProcessor', () => {
         let entry = {
             src: `${rootDir}/source/lib.brs`,
             dest: `source/lib.brs`
-        } as FileObj;
+        } as ResolvedFilesArrayEntry;
 
         it('creates proper tokens', () => {
             const file = program.setFile<BrsFile>(entry, `call(ModuleA.ModuleB.ModuleC.`);
