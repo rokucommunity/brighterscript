@@ -89,9 +89,29 @@ export interface DiagnosticContext {
 }
 
 export interface DiagnosticContextPair {
-    diagnostic: BsDiagnostic;
+    diagnostic: BsDiagnosticInput;
     context?: DiagnosticContext;
 }
+
+/**
+ * A location as accepted by the `DiagnosticManager`: either an already-resolved `Location`, or a `Locatable` that is resolved
+ * into a `Location` only when diagnostics are retrieved
+ */
+export type DiagnosticLocationInput = Location | Locatable;
+
+export interface BsDiagnosticRelatedInformationInput {
+    message: string;
+    location: DiagnosticLocationInput;
+}
+
+/**
+ * A diagnostic as accepted by `DiagnosticManager.register()`. Locations may be `Locatable`s (such as a node or token),
+ * which are not retained: only their position details are kept until `getDiagnostics()` resolves them
+ */
+export type BsDiagnosticInput = Omit<BsDiagnostic, 'location' | 'relatedInformation'> & {
+    location: DiagnosticLocationInput;
+    relatedInformation?: BsDiagnosticRelatedInformationInput[];
+};
 
 export interface Callable {
     file: BscFile;

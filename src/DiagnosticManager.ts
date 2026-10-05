@@ -1,10 +1,11 @@
-import type { DiagnosticContext, BsDiagnostic, DiagnosticContextPair } from './interfaces';
+import type { DiagnosticContext, BsDiagnostic, DiagnosticContextPair, BsDiagnosticInput, DiagnosticLocationInput } from './interfaces';
+import type { Locatable } from './lexer/Token';
 import type { AstNode } from './parser/AstNode';
 import type { Scope } from './Scope';
 import { util } from './util';
 import { Cache } from './Cache';
 import { isBsDiagnostic, isXmlScope } from './astUtils/reflection';
-import type { DiagnosticRelatedInformation, Location } from 'vscode-languageserver-protocol';
+import type { Location, Position } from 'vscode-languageserver-protocol';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
 import type { FinalizedBsConfig } from './BsConfig';
@@ -17,20 +18,40 @@ import { DiagnosticCodeMap, DiagnosticMessages } from './DiagnosticMessages';
 import * as path from 'path';
 
 interface DiagnosticWithContexts {
-    diagnostic: BsDiagnosticWithKey;
+    diagnostic: StoredDiagnostic;
     contexts: Set<DiagnosticContext>;
 }
 
-interface BsDiagnosticWithKey extends BsDiagnostic {
+/**
+ * The position details of a `Locatable`, detached from the locatable itself so the node/token (and its AST) is not retained.
+ * `text` is only set (to a newline constant) when the locatable ended in a newline, so `util.getLocation()` resolves it the same way
+ */
+interface DetachedLocatable extends Locatable {
+    text?: string;
+}
+
+/**
+ * Either an already-resolved `Location`, or a detached locatable that is only resolved in `getDiagnostics()`
+ */
+export type StoredLocation = Location | DetachedLocatable;
+
+export interface StoredRelatedInformation {
+    message: string;
+    location: StoredLocation;
+}
+
+export interface StoredDiagnostic extends Omit<BsDiagnostic, 'location' | 'relatedInformation'> {
     key: string;
+    location: StoredLocation;
+    relatedInformation: StoredRelatedInformation[];
 }
 
 export interface LocationResolverArgs {
-    diagnostic: BsDiagnosticWithKey;
+    diagnostic: StoredDiagnostic;
     contexts: Set<DiagnosticContext>;
 }
 
-type LocationResolver = (options: LocationResolverArgs) => Location | undefined;
+type LocationResolver = (options: LocationResolverArgs) => DiagnosticLocationInput | undefined;
 
 /**
  * Manages all diagnostics for a program.
@@ -67,30 +88,36 @@ export class DiagnosticManager {
 
     /**
      * Registers a diagnostic (or multiple diagnostics) for a program.
-     * Diagnostics can optionally be associated with a context
+     * Diagnostics can optionally be associated with a context.
+     * Locations (including in `relatedInformation`) may be `Locatable`s. Only their position details are kept,
+     * and they are not resolved into a `Location` until `getDiagnostics()`
      */
-    public register(diagnostic: BsDiagnostic, context?: DiagnosticContext);
-    public register(diagnostics: Array<BsDiagnostic>, context?: DiagnosticContext);
+    public register(diagnostic: BsDiagnosticInput, context?: DiagnosticContext);
+    public register(diagnostics: Array<BsDiagnosticInput>, context?: DiagnosticContext);
     public register(diagnostics: Array<DiagnosticContextPair>);
-    public register(diagnosticArg: BsDiagnostic | Array<BsDiagnostic | DiagnosticContextPair>, context?: DiagnosticContext) {
+    public register(diagnosticArg: BsDiagnosticInput | Array<BsDiagnosticInput | DiagnosticContextPair>, context?: DiagnosticContext) {
         const diagnostics = Array.isArray(diagnosticArg) ? diagnosticArg : [{ diagnostic: diagnosticArg, context: context }];
         for (const diagnosticData of diagnostics) {
-            const diagnostic = isBsDiagnostic(diagnosticData) ? diagnosticData : diagnosticData.diagnostic;
+            const diagnostic = isBsDiagnostic(diagnosticData) ? diagnosticData as BsDiagnosticInput : (diagnosticData as DiagnosticContextPair).diagnostic;
             const diagContext = (diagnosticData as DiagnosticContextPair)?.context ?? context;
-            const key = this.getDiagnosticKey(diagnostic);
+            const location = this.storeLocation(diagnostic.location);
+            const relatedInformation = (diagnostic.relatedInformation ?? []).map(x => ({
+                message: x.message,
+                location: this.storeLocation(x.location)
+            }));
+            const key = this.getDiagnosticKey(diagnostic, location);
             let fromCache = true;
             const cacheData = this.diagnosticsCache.getOrAdd(key, () => {
-
-                if (!diagnostic.relatedInformation) {
-                    diagnostic.relatedInformation = [];
-                }
                 fromCache = false;
-                return { diagnostic: { key: key, ...diagnostic }, contexts: new Set<DiagnosticContext>() };
+                return {
+                    diagnostic: { ...diagnostic, key: key, location: location, relatedInformation: relatedInformation },
+                    contexts: new Set<DiagnosticContext>()
+                };
             });
 
             const cachedDiagnostic = cacheData.diagnostic;
-            if (!fromCache && diagnostic.relatedInformation) {
-                this.mergeRelatedInformation(cachedDiagnostic.relatedInformation, diagnostic.relatedInformation);
+            if (fromCache) {
+                this.mergeRelatedInformation(cachedDiagnostic.relatedInformation, relatedInformation);
             }
             const contexts = cacheData.contexts;
             if (diagContext) {
@@ -100,8 +127,8 @@ export class DiagnosticManager {
         }
     }
 
-    private addToMaps(diagnostic: BsDiagnosticWithKey, context?: DiagnosticContext) {
-        const uriLower = util.pathToUri(diagnostic.location?.uri?.toLowerCase());
+    private addToMaps(diagnostic: StoredDiagnostic, context?: DiagnosticContext) {
+        const uriLower = util.pathToUri(this.getUri(diagnostic.location)?.toLowerCase());
         if (uriLower) {
             if (!this.fileUriMap.has(uriLower)) {
                 this.fileUriMap.set(uriLower, new Set());
@@ -160,8 +187,26 @@ export class DiagnosticManager {
     private getNonSuppressedDiagnostics() {
         const results = [] as Array<BsDiagnostic>;
         for (const cachedDiagnostic of this.diagnosticsCache.values()) {
-            const diagnostic = { ...cachedDiagnostic.diagnostic };
-            const relatedInformation = [...cachedDiagnostic.diagnostic.relatedInformation];
+            const storedDiagnostic = cachedDiagnostic.diagnostic;
+            let location = storedDiagnostic.location;
+            let message = storedDiagnostic.message;
+            if (!this.getUri(location)) {
+                location = this.storeLocation(this.locationResolver?.(cachedDiagnostic));
+                if (location) {
+                    //if we found a location, tweak the message a bit to let devs know this was not the original location
+                    message = `${message} (location unknown, added here for visibility)`;
+                }
+            }
+            //check suppression before resolving any locations, so suppressed diagnostics never pay for it
+            if (this.isSuppressed(storedDiagnostic.code, storedDiagnostic.legacyCode, location)) {
+                continue;
+            }
+
+            const originalLocation = this.resolveLocation(storedDiagnostic.location);
+            const relatedInformation = storedDiagnostic.relatedInformation.map(x => ({
+                message: x.message,
+                location: this.resolveLocation(x.location)
+            }));
             const affectedScopes = new Set<Scope>();
             for (const context of cachedDiagnostic.contexts.values()) {
                 if (context.scope) {
@@ -180,42 +225,46 @@ export class DiagnosticManager {
                 } else {
                     relatedInformation.push({
                         message: `In scope '${scope.name}'`,
-                        location: diagnostic.location
+                        location: originalLocation
                     });
                 }
 
             }
-            diagnostic.relatedInformation = relatedInformation;
-            if (!diagnostic.location?.uri) {
-                diagnostic.location = this.locationResolver?.(cachedDiagnostic);
-                if (diagnostic.location) {
-                    //if we found a location, tweak the message a bit to let devs know this was not the original location
-                    diagnostic.message = `${diagnostic.message} (location unknown, added here for visibility)`;
-                }
-            }
-            results.push(diagnostic);
+            results.push({
+                ...storedDiagnostic,
+                message: message,
+                location: location === storedDiagnostic.location ? originalLocation : this.resolveLocation(location),
+                relatedInformation: relatedInformation
+            });
         }
-        const filteredResults = results.filter((x) => {
-            return !this.isDiagnosticSuppressed(x);
-        });
-        return filteredResults;
+        return results;
     }
 
     /**
      * Determine whether this diagnostic should be supressed or not, based on brs comment-flags
      */
     public isDiagnosticSuppressed(diagnostic: BsDiagnostic) {
-        const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code?.toString() ?? undefined;
-        const diagnosticLegacyCode = typeof diagnostic.legacyCode === 'string' ? diagnostic.legacyCode.toLowerCase() : diagnostic.legacyCode;
-        const file = this.program?.getFile(diagnostic.location?.uri);
+        return this.isSuppressed(diagnostic.code, diagnostic.legacyCode, diagnostic.location);
+    }
+
+    private isSuppressed(code: number | string | undefined, legacyCode: number | string | undefined, location: StoredLocation) {
+        const diagnosticCode = typeof code === 'string' ? code.toLowerCase() : code?.toString() ?? undefined;
+        const diagnosticLegacyCode = typeof legacyCode === 'string' ? legacyCode.toLowerCase() : legacyCode;
+        const file = this.program?.getFile(this.getUri(location));
 
         if (diagnosticCode === DiagnosticCodeMap.unknownDiagnosticCode) {
             return false;
         }
 
+        //only computed if the file actually has comment flags
+        let start: Position | undefined;
+        let isStartComputed = false;
         for (let flag of file?.commentFlags ?? []) {
-
-            if (!diagnostic.location?.range || !util.rangeContains(flag.affectedRange, diagnostic.location.range.start)) {
+            if (!isStartComputed) {
+                start = this.isDetachedLocatable(location) ? util.getStartPosition(location) : location?.range?.start;
+                isStartComputed = true;
+            }
+            if (!start || !util.rangeContains(flag.affectedRange, start)) {
                 continue;
             }
             //if this flag explicitly re-enables the code, it's not suppressed here, keep looking
@@ -404,7 +453,7 @@ export class DiagnosticManager {
                     isMatch = context.scope?.name === filter.scope.name;
                 }
                 if (isMatch && needToMatch.fileUri) {
-                    isMatch = diagnostic.location?.uri === filter.fileUri;
+                    isMatch = this.getUri(diagnostic.location) === filter.fileUri;
                 }
                 if (isMatch && needToMatch.segment) {
                     isMatch = context.segment === filter.segment;
@@ -422,7 +471,7 @@ export class DiagnosticManager {
         }
     }
 
-    private deleteContextsFromDiagnostic(diagnostic: BsDiagnosticWithKey, contexts: DiagnosticContext[]) {
+    private deleteContextsFromDiagnostic(diagnostic: StoredDiagnostic, contexts: DiagnosticContext[]) {
         const key = diagnostic.key;
         const cachedData = this.diagnosticsCache.get(key);
         for (const context of contexts) {
@@ -468,24 +517,24 @@ export class DiagnosticManager {
         }
     }
 
-    private removeDiagnosticIfNoContexts(diagnostic: BsDiagnosticWithKey) {
+    private removeDiagnosticIfNoContexts(diagnostic: StoredDiagnostic) {
         const key = diagnostic.key;
         const cachedData = this.diagnosticsCache.get(key);
         if (cachedData.contexts.size === 0) {
             this.diagnosticsCache.delete(key);
-            this.fileUriMap.get(diagnostic.location?.uri?.toLowerCase())?.delete(key);
+            this.fileUriMap.get(this.getUri(diagnostic.location)?.toLowerCase())?.delete(key);
         }
     }
 
 
-    private getDiagnosticKey(diagnostic: BsDiagnostic) {
-        return `${diagnostic.location?.uri ?? 'No uri'} ${util.rangeToString(diagnostic.location?.range)} - ${diagnostic.code} - ${diagnostic.message}`;
+    private getDiagnosticKey(diagnostic: BsDiagnosticInput, location: StoredLocation) {
+        return `${this.getLocationKey(location)} - ${diagnostic.code} - ${diagnostic.message}`;
     }
 
-    private mergeRelatedInformation(target: DiagnosticRelatedInformation[], source: DiagnosticRelatedInformation[]) {
-        function getRiKey(relatedInfo: DiagnosticRelatedInformation) {
-            return `${relatedInfo.message} - ${relatedInfo.location?.uri} - ${util.rangeToString(relatedInfo.location?.range)}`.toLowerCase();
-        }
+    private mergeRelatedInformation(target: StoredRelatedInformation[], source: StoredRelatedInformation[]) {
+        const getRiKey = (relatedInfo: StoredRelatedInformation) => {
+            return `${relatedInfo.message} - ${this.getLocationKey(relatedInfo.location)}`.toLowerCase();
+        };
 
         const existingKeys = target.map(ri => getRiKey(ri));
 
@@ -495,6 +544,42 @@ export class DiagnosticManager {
                 target.push(ri);
             }
         }
+    }
+
+    private isDetachedLocatable(location: StoredLocation | DiagnosticLocationInput): location is DetachedLocatable {
+        return typeof (location as Locatable)?.pos === 'number';
+    }
+
+    /**
+     * Convert an incoming location into the form we keep in the cache. Locatables are copied down to just their position details
+     * so the node/token they came from (and its whole AST) is not retained by the diagnostic
+     */
+    private storeLocation(location: DiagnosticLocationInput | undefined): StoredLocation | undefined {
+        if (!this.isDetachedLocatable(location)) {
+            return location;
+        }
+        const detached: DetachedLocatable = { pos: location.pos, end: location.end, source: location.source };
+        //`util.getLocation()` keeps a newline-terminated token on its own line by looking at its text, so keep just enough text for that
+        const newlineLength = location.end - util.getContentEnd(location);
+        if (newlineLength > 0) {
+            detached.text = newlineLength === 2 ? '\r\n' : '\n';
+        }
+        return detached;
+    }
+
+    private getUri(location: StoredLocation | undefined): string | undefined {
+        return this.isDetachedLocatable(location) ? location.source?.uri : location?.uri;
+    }
+
+    private getLocationKey(location: StoredLocation | undefined) {
+        if (this.isDetachedLocatable(location)) {
+            return `${location.source?.uri ?? 'No uri'} @${location.pos}-${location.end}`;
+        }
+        return `${location?.uri ?? 'No uri'} ${util.rangeToString(location?.range)}`;
+    }
+
+    private resolveLocation(location: StoredLocation | undefined): Location | undefined {
+        return this.isDetachedLocatable(location) ? util.getLocation(location) : location;
     }
 
     /**
