@@ -2174,4 +2174,41 @@ describe('AstNode', () => {
             });
         });
     });
+
+    describe('toString', () => {
+        it('retains full fidelity', () => {
+            const text = `
+                thing = true
+
+                if true
+                    thing = true
+                end if
+
+                if true
+                    thing = true
+                else
+                    thing = true
+                end if
+
+                if true
+                    thing = true
+                else if true
+                    thing = true
+                else
+                    thing = true
+                end if
+
+                for i = 0 to 10 step 1
+                    print true,false;3
+                end for
+
+                for each item in thing
+                    print 1
+                end for
+            `;
+            expect(
+                Parser.parse(text).ast.toString()
+            ).to.eql(text);
+        });
+    });
 });

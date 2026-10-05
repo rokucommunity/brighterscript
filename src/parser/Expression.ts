@@ -106,6 +106,14 @@ export class BinaryExpression extends Expression {
         return this.left.leadingTrivia;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.nodeToSourceNode(this.left),
+            state.tokenToSourceNodeWithTrivia(this.tokens.operator, ' '),
+            state.nodeToSourceNode(this.right, ' ')
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new BinaryExpression({
@@ -133,11 +141,16 @@ export class CallExpression extends Expression {
         openingParen?: Token;
         args?: Expression[];
         closingParen?: Token;
+        /**
+         * The commas between the arguments, where `commas[i]` is the comma after `args[i]`
+         */
+        commas?: Token[];
     }) {
         super();
         this.tokens = {
             openingParen: options.openingParen,
-            closingParen: options.closingParen
+            closingParen: options.closingParen,
+            commas: options.commas
         };
         this.callee = options.callee;
         this.args = options.args ?? [];
@@ -152,6 +165,10 @@ export class CallExpression extends Expression {
          */
         readonly openingParen?: Token;
         readonly closingParen?: Token;
+        /**
+         * The commas between the arguments, where `commas[i]` is the comma after `args[i]`
+         */
+        readonly commas?: Token[];
     };
 
     public readonly kind = AstNodeKind.CallExpression;
@@ -241,9 +258,28 @@ export class CallExpression extends Expression {
         return this.callee.leadingTrivia;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.nodeToSourceNode(this.callee),
+            this.argumentsToSourceNode(state)
+        );
+    }
+
+    /**
+     * Get the SourceNode for just the arguments portion of this call (i.e. `(a, b)`), excluding the callee
+     */
+    public argumentsToSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.openingParen),
+            state.nodesToSourceNode(this.args, this.tokens.commas, ', '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.closingParen)
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new CallExpression({
+                commas: this.tokens.commas?.map(x => util.cloneToken(x)),
                 callee: this.callee?.clone(),
                 openingParen: util.cloneToken(this.tokens.openingParen),
                 closingParen: util.cloneToken(this.tokens.closingParen),
@@ -270,6 +306,10 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         returnTypeExpression?: TypeExpression;
         body: Block;
         endFunctionType?: Token;
+        /**
+         * The commas between the parameters, where `commas[i]` is the comma after `parameters[i]`
+         */
+        commas?: Token[];
     }) {
         super();
         this.tokens = {
@@ -277,7 +317,8 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             leftParen: options.leftParen,
             rightParen: options.rightParen,
             as: options.as,
-            endFunctionType: options.endFunctionType
+            endFunctionType: options.endFunctionType,
+            commas: options.commas
         };
         this.parameters = options.parameters ?? [];
         this.body = options.body;
@@ -301,6 +342,10 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         readonly leftParen?: Token;
         readonly rightParen?: Token;
         readonly as?: Token;
+        /**
+         * The commas between the parameters, where `commas[i]` is the comma after `parameters[i]`
+         */
+        readonly commas?: Token[];
     };
 
     public get leadingTrivia(): Token[] {
@@ -381,7 +426,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
         const lastLocatable = hasBody ? this.body : this.returnTypeExpression ?? this.tokens.leftParen ?? this.tokens.functionType;
         results.push(
-            ...state.transpileEndBlockToken(lastLocatable, this.tokens.endFunctionType, `end ${this.tokens.functionType ?? 'function'}`)
+            ...state.transpileEndBlockToken(lastLocatable, this.tokens.endFunctionType, `end ${this.tokens.functionType?.text ?? 'function'}`)
         );
         return results;
     }
@@ -415,7 +460,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 '\n',
                 state.indent(),
                 //'end sub'|'end function'
-                this.tokens.endFunctionType?.text ?? `end ${this.tokens.functionType ?? 'function'}`
+                this.tokens.endFunctionType?.text ?? `end ${this.tokens.functionType?.text ?? 'function'}`
             ])
         ];
         return results;
@@ -512,9 +557,34 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         return false;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return this.toSourceNodeWithName(state);
+    }
+
+    /**
+     * Get the SourceNode for this function, optionally including the name of the function (used by `FunctionStatement` and `MethodStatement`)
+     */
+    public toSourceNodeWithName(state: TranspileState, name?: Identifier, defaultLeadingTrivia = ''): SourceNode {
+        const functionType = this.tokens.functionType;
+        //the parser adds a `function` keyword with a zero-width location when the keyword is missing. It's not in the source code, so skip it
+        const isFunctionTypeDerived = functionType?.location?.range && util.comparePosition(functionType.location.range.start, functionType.location.range.end) === 0;
+        return state.toSourceNode(
+            isFunctionTypeDerived ? undefined : state.tokenToSourceNodeWithTrivia(functionType, defaultLeadingTrivia),
+            state.tokenToSourceNodeWithTrivia(name, functionType && !isFunctionTypeDerived ? ' ' : ''),
+            state.tokenToSourceNodeWithTrivia(this.tokens.leftParen),
+            state.nodesToSourceNode(this.parameters, this.tokens.commas, ', '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.rightParen),
+            state.tokenToSourceNodeWithTrivia(this.tokens.as, ' '),
+            state.nodeToSourceNode(this.returnTypeExpression, ' '),
+            state.nodeToSourceNode(this.body),
+            state.tokenToSourceNodeWithTrivia(this.tokens.endFunctionType, state.newline)
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new FunctionExpression({
+                commas: this.tokens.commas?.map(x => util.cloneToken(x)),
                 parameters: this.parameters?.map(e => e?.clone()),
                 body: this.body?.clone(),
                 functionType: util.cloneToken(this.tokens.functionType),
@@ -644,6 +714,16 @@ export class FunctionParameterExpression extends Expression {
         return this.tokens.name.leadingTrivia;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.name),
+            state.tokenToSourceNodeWithTrivia(this.tokens.equals, ' '),
+            state.nodeToSourceNode(this.defaultValue, ' '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.as, ' '),
+            state.nodeToSourceNode(this.typeExpression, ' ')
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new FunctionParameterExpression({
@@ -771,6 +851,14 @@ export class DottedGetExpression extends Expression {
         return this.obj.leadingTrivia;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.nodeToSourceNode(this.obj),
+            state.tokenToSourceNodeWithTrivia(this.tokens.dot),
+            state.tokenToSourceNodeWithTrivia(this.tokens.name)
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new DottedGetExpression({
@@ -832,6 +920,14 @@ export class XmlAttributeGetExpression extends Expression {
         return this.obj.leadingTrivia;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.nodeToSourceNode(this.obj),
+            state.tokenToSourceNodeWithTrivia(this.tokens.at),
+            state.tokenToSourceNodeWithTrivia(this.tokens.name)
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new XmlAttributeGetExpression({
@@ -854,12 +950,22 @@ export class IndexedGetExpression extends Expression {
         openingSquare?: Token;
         closingSquare?: Token;
         questionDot?: Token;//  ? or ?.
+        /**
+         * The `.` in `obj.[index]` (an alternate syntax for `obj[index]`)
+         */
+        dot?: Token;
+        /**
+         * The commas between the indexes, where `commas[i]` is the comma after `indexes[i]`
+         */
+        commas?: Token[];
     }) {
         super();
         this.tokens = {
             openingSquare: options.openingSquare,
             closingSquare: options.closingSquare,
-            questionDot: options.questionDot
+            questionDot: options.questionDot,
+            dot: options.dot,
+            commas: options.commas
         };
         this.obj = options.obj;
         this.indexes = options.indexes;
@@ -885,6 +991,14 @@ export class IndexedGetExpression extends Expression {
         readonly openingSquare?: Token;
         readonly closingSquare?: Token;
         readonly questionDot?: Token; //  ? or ?.
+        /**
+         * The `.` in `obj.[index]` (an alternate syntax for `obj[index]`)
+         */
+        readonly dot?: Token;
+        /**
+         * The commas between the indexes, where `commas[i]` is the comma after `indexes[i]`
+         */
+        readonly commas?: Token[];
     };
 
     /**
@@ -958,11 +1072,24 @@ export class IndexedGetExpression extends Expression {
         return this.obj.leadingTrivia;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.nodeToSourceNode(this.obj),
+            state.tokenToSourceNodeWithTrivia(this.tokens.questionDot),
+            state.tokenToSourceNodeWithTrivia(this.tokens.dot),
+            state.tokenToSourceNodeWithTrivia(this.tokens.openingSquare),
+            state.nodesToSourceNode(this.indexes, this.tokens.commas, ', '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.closingSquare)
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new IndexedGetExpression({
+                commas: this.tokens.commas?.map(x => util.cloneToken(x)),
                 obj: this.obj?.clone(),
                 questionDot: util.cloneToken(this.tokens.questionDot),
+                dot: util.cloneToken(this.tokens.dot),
                 openingSquare: util.cloneToken(this.tokens.openingSquare),
                 indexes: this.indexes?.map(x => x?.clone()),
                 closingSquare: util.cloneToken(this.tokens.closingSquare)
@@ -1020,6 +1147,14 @@ export class GroupingExpression extends Expression {
 
     get leadingTrivia(): Token[] {
         return this.tokens.leftParen?.leadingTrivia;
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.leftParen),
+            state.nodeToSourceNode(this.expression),
+            state.tokenToSourceNodeWithTrivia(this.tokens.rightParen)
+        );
     }
 
     public clone() {
@@ -1087,6 +1222,10 @@ export class LiteralExpression extends Expression {
         return this.tokens.value.leadingTrivia;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.tokenToSourceNodeWithTrivia(this.tokens.value);
+    }
+
     public clone() {
         return this.finalizeClone(
             new LiteralExpression({
@@ -1134,6 +1273,10 @@ export class PrintSeparatorExpression extends Expression {
         return this.tokens.separator.leadingTrivia;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.tokenToSourceNodeWithTrivia(this.tokens.separator);
+    }
+
     public clone() {
         return new PrintSeparatorExpression({
             separator: util.cloneToken(this.tokens?.separator)
@@ -1173,6 +1316,10 @@ export class EscapedCharCodeLiteralExpression extends Expression {
         //nothing to walk
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.tokenToSourceNodeWithTrivia(this.tokens.value);
+    }
+
     public clone() {
         return this.finalizeClone(
             new EscapedCharCodeLiteralExpression({
@@ -1187,11 +1334,16 @@ export class ArrayLiteralExpression extends Expression {
         elements: Array<Expression>;
         open?: Token;
         close?: Token;
+        /**
+         * The commas between the elements, where `commas[i]` is the comma after `elements[i]` (elements separated by newlines have no comma)
+         */
+        commas?: Token[];
     }) {
         super();
         this.tokens = {
             open: options.open,
-            close: options.close
+            close: options.close,
+            commas: options.commas
         };
         this.elements = options.elements;
         this.location = util.createBoundingLocation(this.tokens.open, ...this.elements ?? [], this.tokens.close);
@@ -1202,6 +1354,10 @@ export class ArrayLiteralExpression extends Expression {
     public readonly tokens: {
         readonly open?: Token;
         readonly close?: Token;
+        /**
+         * The commas between the elements, where `commas[i]` is the comma after `elements[i]` (elements separated by newlines have no comma)
+         */
+        readonly commas?: Token[];
     };
 
     public readonly kind = AstNodeKind.ArrayLiteralExpression;
@@ -1258,9 +1414,18 @@ export class ArrayLiteralExpression extends Expression {
         return this.tokens.close?.leadingTrivia;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.open),
+            state.nodesToSourceNode(this.elements, this.tokens.commas, ', '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.close)
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new ArrayLiteralExpression({
+                commas: this.tokens.commas?.map(x => util.cloneToken(x)),
                 elements: this.elements?.map(e => e?.clone()),
                 open: util.cloneToken(this.tokens.open),
                 close: util.cloneToken(this.tokens.close)
@@ -1317,12 +1482,22 @@ export class AAMemberExpression extends Expression {
         return this.tokens.key.leadingTrivia;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.key),
+            state.tokenToSourceNodeWithTrivia(this.tokens.colon),
+            state.nodeToSourceNode(this.value, ' '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.comma)
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new AAMemberExpression({
                 key: util.cloneToken(this.tokens.key),
                 colon: util.cloneToken(this.tokens.colon),
-                value: this.value?.clone()
+                value: this.value?.clone(),
+                comma: util.cloneToken(this.tokens.comma)
             }),
             ['value']
         );
@@ -1374,6 +1549,17 @@ export class AAIndexedMemberExpression extends Expression {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         walk(this, 'key', visitor, options);
         walk(this, 'value', visitor, options);
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.leftBracket),
+            state.nodeToSourceNode(this.key),
+            state.tokenToSourceNodeWithTrivia(this.tokens.rightBracket),
+            state.tokenToSourceNodeWithTrivia(this.tokens.colon),
+            state.nodeToSourceNode(this.value, ' '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.comma)
+        );
     }
 
     public clone() {
@@ -1505,6 +1691,14 @@ export class AALiteralExpression extends Expression {
         return this.tokens.close?.leadingTrivia;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.open),
+            state.statementsToSourceNode(this.elements),
+            state.tokenToSourceNodeWithTrivia(this.tokens.close, state.newline)
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new AALiteralExpression({
@@ -1568,6 +1762,14 @@ export class UnaryExpression extends Expression {
 
     public get leadingTrivia(): Token[] {
         return this.tokens.operator.leadingTrivia;
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.operator),
+            //`not` is a word, so it must be separated from its operand
+            state.nodeToSourceNode(this.right, this.tokens.operator?.kind === TokenKind.Not ? ' ' : '')
+        );
     }
 
     public clone() {
@@ -1668,6 +1870,10 @@ export class VariableExpression extends Expression {
 
     get leadingTrivia(): Token[] {
         return this.tokens.name.leadingTrivia;
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.tokenToSourceNodeWithTrivia(this.tokens.name);
     }
 
     public clone() {
@@ -1809,6 +2015,10 @@ export class SourceLiteralExpression extends Expression {
         return this.tokens.value.leadingTrivia;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.tokenToSourceNodeWithTrivia(this.tokens.value);
+    }
+
     public clone() {
         return this.finalizeClone(
             new SourceLiteralExpression({
@@ -1893,6 +2103,13 @@ export class NewExpression extends Expression {
         return this.tokens.new.leadingTrivia;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.new),
+            state.nodeToSourceNode(this.call, ' ')
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new NewExpression({
@@ -1912,13 +2129,18 @@ export class CallfuncExpression extends Expression {
         openingParen?: Token;
         args?: Expression[];
         closingParen?: Token;
+        /**
+         * The commas between the arguments, where `commas[i]` is the comma after `args[i]`
+         */
+        commas?: Token[];
     }) {
         super();
         this.tokens = {
             operator: options.operator,
             methodName: options.methodName,
             openingParen: options.openingParen,
-            closingParen: options.closingParen
+            closingParen: options.closingParen,
+            commas: options.commas
         };
         this.callee = options.callee;
         this.args = options.args ?? [];
@@ -1941,6 +2163,10 @@ export class CallfuncExpression extends Expression {
         readonly methodName: Identifier;
         readonly openingParen?: Token;
         readonly closingParen?: Token;
+        /**
+         * The commas between the arguments, where `commas[i]` is the comma after `args[i]`
+         */
+        readonly commas?: Token[];
     };
 
     public readonly kind = AstNodeKind.CallfuncExpression;
@@ -1998,9 +2224,21 @@ export class CallfuncExpression extends Expression {
         return this.callee.leadingTrivia;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.nodeToSourceNode(this.callee),
+            state.tokenToSourceNodeWithTrivia(this.tokens.operator),
+            state.tokenToSourceNodeWithTrivia(this.tokens.methodName),
+            state.tokenToSourceNodeWithTrivia(this.tokens.openingParen),
+            state.nodesToSourceNode(this.args, this.tokens.commas, ', '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.closingParen)
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new CallfuncExpression({
+                commas: this.tokens.commas?.map(x => util.cloneToken(x)),
                 callee: this.callee?.clone(),
                 operator: util.cloneToken(this.tokens.operator),
                 methodName: util.cloneToken(this.tokens.methodName),
@@ -2057,6 +2295,10 @@ export class TemplateStringQuasiExpression extends Expression {
         }
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.nodesToSourceNode(this.expressions);
+    }
+
     public clone() {
         return this.finalizeClone(
             new TemplateStringQuasiExpression({
@@ -2067,17 +2309,46 @@ export class TemplateStringQuasiExpression extends Expression {
     }
 }
 
+/**
+ * Get the SourceNode for the quasis and expressions of a template string, interleaving the quasis with the expressions
+ * (i.e. `quasi0 ${expression0} quasi1 ${expression1} quasi2`)
+ */
+function templateStringPartsToSourceNode(state: TranspileState, quasis: TemplateStringQuasiExpression[], expressions: Expression[], expressionBegins: Token[], expressionEnds: Token[]) {
+    const chunks: SourceNode[] = [];
+    for (let i = 0; i < (quasis?.length ?? 0); i++) {
+        chunks.push(state.nodeToSourceNode(quasis[i]));
+        if (expressions?.[i]) {
+            chunks.push(
+                state.tokenToSourceNodeWithTrivia(expressionBegins?.[i] ?? { text: '${' }),
+                state.nodeToSourceNode(expressions[i]),
+                state.tokenToSourceNodeWithTrivia(expressionEnds?.[i] ?? { text: '}' })
+            );
+        }
+    }
+    return state.toSourceNode(...chunks);
+}
+
 export class TemplateStringExpression extends Expression {
     constructor(options: {
         openingBacktick?: Token;
         quasis: TemplateStringQuasiExpression[];
         expressions: Expression[];
         closingBacktick?: Token;
+        /**
+         * The `${` tokens, where `expressionBegins[i]` is the token before `expressions[i]`
+         */
+        expressionBegins?: Token[];
+        /**
+         * The `}` tokens, where `expressionEnds[i]` is the token after `expressions[i]`
+         */
+        expressionEnds?: Token[];
     }) {
         super();
         this.tokens = {
             openingBacktick: options.openingBacktick,
-            closingBacktick: options.closingBacktick
+            closingBacktick: options.closingBacktick,
+            expressionBegins: options.expressionBegins,
+            expressionEnds: options.expressionEnds
         };
         this.quasis = options.quasis;
         this.expressions = options.expressions;
@@ -2094,6 +2365,14 @@ export class TemplateStringExpression extends Expression {
     public readonly tokens: {
         readonly openingBacktick?: Token;
         readonly closingBacktick?: Token;
+        /**
+         * The `${` tokens, where `expressionBegins[i]` is the token before `expressions[i]`
+         */
+        readonly expressionBegins?: Token[];
+        /**
+         * The `}` tokens, where `expressionEnds[i]` is the token after `expressions[i]`
+         */
+        readonly expressionEnds?: Token[];
     };
     public readonly quasis: TemplateStringQuasiExpression[];
     public readonly expressions: Expression[];
@@ -2172,9 +2451,19 @@ export class TemplateStringExpression extends Expression {
         }
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.openingBacktick),
+            templateStringPartsToSourceNode(state, this.quasis, this.expressions, this.tokens.expressionBegins, this.tokens.expressionEnds),
+            state.tokenToSourceNodeWithTrivia(this.tokens.closingBacktick)
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new TemplateStringExpression({
+                expressionEnds: this.tokens.expressionEnds?.map(x => util.cloneToken(x)),
+                expressionBegins: this.tokens.expressionBegins?.map(x => util.cloneToken(x)),
                 openingBacktick: util.cloneToken(this.tokens.openingBacktick),
                 quasis: this.quasis?.map(e => e?.clone()),
                 expressions: this.expressions?.map(e => e?.clone()),
@@ -2192,12 +2481,22 @@ export class TaggedTemplateStringExpression extends Expression {
         quasis: TemplateStringQuasiExpression[];
         expressions: Expression[];
         closingBacktick?: Token;
+        /**
+         * The `${` tokens, where `expressionBegins[i]` is the token before `expressions[i]`
+         */
+        expressionBegins?: Token[];
+        /**
+         * The `}` tokens, where `expressionEnds[i]` is the token after `expressions[i]`
+         */
+        expressionEnds?: Token[];
     }) {
         super();
         this.tokens = {
             tagName: options.tagName,
             openingBacktick: options.openingBacktick,
-            closingBacktick: options.closingBacktick
+            closingBacktick: options.closingBacktick,
+            expressionBegins: options.expressionBegins,
+            expressionEnds: options.expressionEnds
         };
         this.quasis = options.quasis;
         this.expressions = options.expressions;
@@ -2217,6 +2516,14 @@ export class TaggedTemplateStringExpression extends Expression {
         readonly tagName: Identifier;
         readonly openingBacktick?: Token;
         readonly closingBacktick?: Token;
+        /**
+         * The `${` tokens, where `expressionBegins[i]` is the token before `expressions[i]`
+         */
+        readonly expressionBegins?: Token[];
+        /**
+         * The `}` tokens, where `expressionEnds[i]` is the token after `expressions[i]`
+         */
+        readonly expressionEnds?: Token[];
     };
 
     public readonly quasis: TemplateStringQuasiExpression[];
@@ -2280,9 +2587,20 @@ export class TaggedTemplateStringExpression extends Expression {
         }
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.tagName),
+            state.tokenToSourceNodeWithTrivia(this.tokens.openingBacktick),
+            templateStringPartsToSourceNode(state, this.quasis, this.expressions, this.tokens.expressionBegins, this.tokens.expressionEnds),
+            state.tokenToSourceNodeWithTrivia(this.tokens.closingBacktick)
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new TaggedTemplateStringExpression({
+                expressionEnds: this.tokens.expressionEnds?.map(x => util.cloneToken(x)),
+                expressionBegins: this.tokens.expressionBegins?.map(x => util.cloneToken(x)),
                 tagName: util.cloneToken(this.tokens.tagName),
                 openingBacktick: util.cloneToken(this.tokens.openingBacktick),
                 quasis: this.quasis?.map(e => e?.clone()),
@@ -2359,6 +2677,15 @@ export class AnnotationExpression extends Expression {
         ];
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.at),
+            state.tokenToSourceNodeWithTrivia(this.tokens.name),
+            //the call's callee is this annotation, so only write the arguments
+            this.call?.argumentsToSourceNode(state)
+        );
+    }
+
     public clone() {
         const clone = this.finalizeClone(
             new AnnotationExpression({
@@ -2366,6 +2693,16 @@ export class AnnotationExpression extends Expression {
                 name: util.cloneToken(this.tokens.name)
             })
         );
+        //the call's callee is the annotation itself, so it can't be cloned directly (that would recurse forever)
+        if (this.call) {
+            clone.call = new CallExpression({
+                callee: clone,
+                openingParen: util.cloneToken(this.call.tokens.openingParen),
+                args: this.call.args?.map(x => x?.clone()),
+                commas: this.call.tokens.commas?.map(x => util.cloneToken(x)),
+                closingParen: util.cloneToken(this.call.tokens.closingParen)
+            });
+        }
         return clone;
     }
 }
@@ -2483,6 +2820,16 @@ export class TernaryExpression extends Expression {
 
     get leadingTrivia(): Token[] {
         return this.test.leadingTrivia;
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.nodeToSourceNode(this.test),
+            state.tokenToSourceNodeWithTrivia(this.tokens.questionMark, ' '),
+            state.nodeToSourceNode(this.consequent, ' '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.colon, ' '),
+            state.nodeToSourceNode(this.alternate, ' ')
+        );
     }
 
     public clone() {
@@ -2605,6 +2952,14 @@ export class NullCoalescingExpression extends Expression {
         return this.consequent.leadingTrivia;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.nodeToSourceNode(this.consequent),
+            state.tokenToSourceNodeWithTrivia(this.tokens.questionQuestion, ' '),
+            state.nodeToSourceNode(this.alternate, ' ')
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new NullCoalescingExpression({
@@ -2663,6 +3018,10 @@ export class RegexLiteralExpression extends Expression {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         //nothing to walk
+    }
+
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.tokenToSourceNodeWithTrivia(this.tokens.regexLiteral);
     }
 
     public clone() {
@@ -2826,6 +3185,10 @@ export class TypeExpression extends Expression implements TypedefProvider {
         return util.getAllDottedGetParts(this.expression).map(x => x.text);
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.nodeToSourceNode(this.expression);
+    }
+
     public clone() {
         return this.finalizeClone(
             new TypeExpression({
@@ -2890,6 +3253,14 @@ export class TypecastExpression extends Expression {
         return result;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.nodeToSourceNode(this.obj),
+            state.tokenToSourceNodeWithTrivia(this.tokens.as, ' '),
+            state.nodeToSourceNode(this.typeExpression, ' ')
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new TypecastExpression({
@@ -2948,6 +3319,14 @@ export class TypedArrayExpression extends Expression {
         return new ArrayType(this.innerType.getType(options));
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.nodeToSourceNode(this.innerType),
+            state.tokenToSourceNodeWithTrivia(this.tokens.leftBracket),
+            state.tokenToSourceNodeWithTrivia(this.tokens.rightBracket)
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new TypedArrayExpression({
@@ -2965,11 +3344,16 @@ export class InlineInterfaceExpression extends Expression {
         open?: Token;
         members: InlineInterfaceMemberExpression[];
         close?: Token;
+        /**
+         * The commas between the members, where `commas[i]` is the comma after `members[i]` (members separated by newlines have no comma)
+         */
+        commas?: Token[];
     }) {
         super();
         this.tokens = {
             open: options.open,
-            close: options.close
+            close: options.close,
+            commas: options.commas
         };
         this.members = options.members;
         this.location = util.createBoundingLocation(
@@ -2982,6 +3366,10 @@ export class InlineInterfaceExpression extends Expression {
     public readonly tokens: {
         readonly open?: Token;
         readonly close?: Token;
+        /**
+         * The commas between the members, where `commas[i]` is the comma after `members[i]` (members separated by newlines have no comma)
+         */
+        readonly commas?: Token[];
     };
 
     public readonly members: InlineInterfaceMemberExpression[];
@@ -3023,9 +3411,18 @@ export class InlineInterfaceExpression extends Expression {
         return resultType;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.open),
+            state.nodesToSourceNode(this.members, this.tokens.commas, ', '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.close)
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new InlineInterfaceExpression({
+                commas: this.tokens.commas?.map(x => util.cloneToken(x)),
                 open: util.cloneToken(this.tokens.open),
                 members: this.members?.map(x => x?.clone()),
                 close: util.cloneToken(this.tokens.close)
@@ -3091,6 +3488,15 @@ export class InlineInterfaceMemberExpression extends Expression {
         return !!this.tokens.optional;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.optional),
+            state.tokenToSourceNodeWithTrivia(this.tokens.name, this.tokens.optional ? ' ' : ''),
+            state.tokenToSourceNodeWithTrivia(this.tokens.as, ' '),
+            state.nodeToSourceNode(this.typeExpression, ' ')
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new InlineInterfaceMemberExpression({
@@ -3113,13 +3519,18 @@ export class TypedFunctionTypeExpression extends Expression {
         as?: Token;
         returnType?: TypeExpression;
 
+        /**
+         * The commas between the parameters, where `commas[i]` is the comma after `params[i]`
+         */
+        commas?: Token[];
     }) {
         super();
         this.tokens = {
             functionType: options.functionType,
             leftParen: options.leftParen,
             rightParen: options.rightParen,
-            as: options.as
+            as: options.as,
+            commas: options.commas
         };
         this.params = options.params;
         this.returnType = options.returnType;
@@ -3140,6 +3551,10 @@ export class TypedFunctionTypeExpression extends Expression {
         readonly leftParen?: Token;
         readonly rightParen?: Token;
         readonly as?: Token;
+        /**
+         * The commas between the parameters, where `commas[i]` is the comma after `params[i]`
+         */
+        readonly commas?: Token[];
     };
 
     public readonly params: FunctionParameterExpression[];
@@ -3182,9 +3597,21 @@ export class TypedFunctionTypeExpression extends Expression {
         return functionType;
     }
 
+    public toSourceNode(state: TranspileState): SourceNode {
+        return state.toSourceNode(
+            state.tokenToSourceNodeWithTrivia(this.tokens.functionType),
+            state.tokenToSourceNodeWithTrivia(this.tokens.leftParen),
+            state.nodesToSourceNode(this.params, this.tokens.commas, ', '),
+            state.tokenToSourceNodeWithTrivia(this.tokens.rightParen),
+            state.tokenToSourceNodeWithTrivia(this.tokens.as, ' '),
+            state.nodeToSourceNode(this.returnType, ' ')
+        );
+    }
+
     public clone() {
         return this.finalizeClone(
             new TypedFunctionTypeExpression({
+                commas: this.tokens.commas?.map(x => util.cloneToken(x)),
                 functionType: util.cloneToken(this.tokens.functionType),
                 leftParen: util.cloneToken(this.tokens.leftParen),
                 params: this.params?.map(x => x?.clone()),
