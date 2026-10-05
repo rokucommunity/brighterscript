@@ -622,6 +622,11 @@ export class BrsFileValidator {
             DimStatement: (statement) => {
                 addVariable(statement.tokens.name, statement.location);
             },
+            DestructuringAssignmentStatement: (statement) => {
+                for (const name of statement.getTargetNames()) {
+                    addVariable(name, statement.location);
+                }
+            },
             IncrementStatement: (statement) => {
                 if (isVariableExpression(statement.value)) {
                     addVariable(statement.value.tokens.name, statement.location);
