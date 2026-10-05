@@ -107,7 +107,7 @@ others.append(person)
 others.delete("name")
 ```
 
-The rest element must be the last item in the pattern, and (like the [spread operator](spread-operator.md)) the `...` must be immediately followed by the variable name.
+The rest element must be the last item in the pattern. Like the [spread operator](spread-operator.md), whitespace is allowed between `...` and the variable name.
 
 ## Array destructuring
 
@@ -199,12 +199,12 @@ The right-hand side may use the [spread operator](spread-operator.md). The sprea
 transpiles to
 
 ```brightscript
-__bsc_tmp = {}
-__bsc_tmp.append(defaults)
-__bsc_tmp.name = "bob"
-name = __bsc_tmp.name
+__bsc_tmp_spread = {}
+__bsc_tmp_spread.append(defaults)
+__bsc_tmp_spread.name = "bob"
+name = __bsc_tmp_spread.name
 others = {}
-others.append(__bsc_tmp)
+others.append(__bsc_tmp_spread)
 others.delete("name")
 ```
 
