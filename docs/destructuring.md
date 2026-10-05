@@ -199,12 +199,12 @@ The right-hand side may use the [spread operator](spread-operator.md). The sprea
 transpiles to
 
 ```brightscript
-__bsc_tmp = {}
-__bsc_tmp.append(defaults)
-__bsc_tmp.name = "bob"
-name = __bsc_tmp.name
+__bsc_tmp_spread = {}
+__bsc_tmp_spread.append(defaults)
+__bsc_tmp_spread.name = "bob"
+name = __bsc_tmp_spread.name
 others = {}
-others.append(__bsc_tmp)
+others.append(__bsc_tmp_spread)
 others.delete("name")
 ```
 

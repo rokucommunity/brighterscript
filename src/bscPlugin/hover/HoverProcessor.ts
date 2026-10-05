@@ -1,4 +1,4 @@
-import { isAssignmentStatement, isArrayPatternElementExpression, isDestructuringAssignmentStatement, isObjectPatternPropertyExpression, isRestElementExpression, isBrsFile, isCallfuncExpression, isClassStatement, isDottedGetExpression, isEnumMemberStatement, isEnumStatement, isEnumType, isForStatement, isInheritableType, isInterfaceStatement, isMemberField, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isTypeStatement, isTypeStatementType, isXmlFile } from '../../astUtils/reflection';
+import { isAssignmentStatement, isArrayPatternElementExpression, isDestructuringAssignmentStatement, isObjectPatternPropertyExpression, isRestElementExpression, isBrsFile, isCallfuncExpression, isClassStatement, isDottedGetExpression, isEnumMemberStatement, isEnumStatement, isEnumType, isForStatement, isFunctionStatement, isInheritableType, isInterfaceStatement, isMemberField, isMethodStatement, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isTypeStatement, isTypeStatementType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { ExtraSymbolData, Hover, ProvideHoverEvent, TypeChainEntry } from '../../interfaces';
@@ -213,6 +213,10 @@ export class HoverProcessor {
                         }
                     }
                     hoverContent = fence(`${variableName}${exprTypeString}`);
+                    // hovering a function's own declaration: use its doc comment
+                    if (isFunctionStatement(expression.parent) || isMethodStatement(expression.parent)) {
+                        descriptionNode = expression.parent;
+                    }
                 }
                 const modifiers = [];
                 // eslint-disable-next-line no-bitwise
