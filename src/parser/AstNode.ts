@@ -1,6 +1,6 @@
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
-import type { Position } from 'vscode-languageserver';
+import type { Location, Position, Range } from 'vscode-languageserver';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { InternalWalkMode } from '../astUtils/visitors';
 import type { SymbolTable } from '../SymbolTable';
@@ -30,6 +30,23 @@ export abstract class AstNode implements Locatable {
      * Info about the source this node was parsed from. `undefined` for synthetic nodes
      */
     public abstract source: SourceInfo | undefined;
+
+    /**
+     * @deprecated use `util.getLocation(node)`. This is computed on every read
+     */
+    public get location(): Location | undefined {
+        return util.getLocation(this);
+    }
+    public set location(value: Location | undefined) {
+        util.setLocation(this, value);
+    }
+
+    /**
+     * @deprecated use `util.getLocation(node)?.range`. This is computed on every read
+     */
+    public get range(): Range | undefined {
+        return util.getLocation(this)?.range;
+    }
 
     public abstract transpile(state: BrsTranspileState): TranspileResult;
 

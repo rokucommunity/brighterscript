@@ -594,7 +594,7 @@ To give a synthetic token or node a position:
 - **Borrow it from a real token or node in the same file** (preferred): `util.setBounds(node, someToken)`. This shares the file's real `source`, so the node combines correctly with the rest of that file's AST. The `create*` functions do the same when given a token or node: `createToken(TokenKind.Identifier, 'name', someToken)`.
 - **From a `Location`** (i.e. one from an xml file): `util.setLocation(node, location)`. To pass one to a `create*` function, convert it first: `createToken(TokenKind.Identifier, 'name', util.setLocation({} as Locatable, location))`.
 
-Tokens and nodes don't have `location` or `range` properties. `Location` is only used for language server output (diagnostics, hovers, etc.), so use `util.getLocation()` when you need one.
+`Location` is only used for language server output (diagnostics, hovers, etc.), so use `util.getLocation()` when you need one. Tokens and nodes still have `location` and `range` properties to help existing plugins migrate, but they're deprecated and will be removed in a future release. They build a new `Location` on every read (so don't compare them with `===`), and setting `location` is the same as calling `util.setLocation()`. Tokens created by hand (i.e. `{ kind: ..., text: ... }` or `{ ...token }`) don't have them.
 
 ## Modifying code
 Sometimes plugins will want to modify code before the project is transpiled. While you can technically edit the AST directly at any point in the file's lifecycle, this is not recommended as those changes will remain changed as long as that file exists in memory and could cause issues with file validation if the plugin is used in a language-server context (i.e. inside vscode).

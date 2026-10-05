@@ -13,6 +13,8 @@ import { ParseMode, Parser } from './Parser';
 import type { AstNode } from './AstNode';
 import { WalkMode } from '../astUtils/visitors';
 import { isStatement } from '../astUtils/reflection';
+import { createToken, createVariableExpression } from '../astUtils/creators';
+import { TokenKind } from '../lexer/TokenKind';
 
 type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };
 
@@ -397,6 +399,44 @@ describe('AstNode', () => {
                 cancel.cancel();
             });
             expect(count).to.eql(1);
+        });
+    });
+
+    describe('deprecated location and range', () => {
+        it('reads a node location on demand', () => {
+            const { ast } = Parser.parse('sub main()\n    a = 1\nend sub');
+            const assignment = ast.findChild<AssignmentStatement>(isAssignmentStatement);
+            expect((assignment as any).location).to.eql(util.getLocation(assignment));
+            expect((assignment as any).range).to.eql(util.createRange(1, 4, 1, 9));
+        });
+
+        it('reads a token location on demand', () => {
+            const { ast } = Parser.parse('sub main()\n    a = 1\nend sub');
+            const name = ast.findChild<AssignmentStatement>(isAssignmentStatement).tokens.name;
+            expect((name as any).location).to.eql(util.getLocation(name));
+            expect((name as any).range).to.eql(util.createRange(1, 4, 1, 5));
+        });
+
+        it('keeps the getters on cloned and created tokens', () => {
+            const { ast } = Parser.parse('sub main()\n    a = 1\nend sub');
+            const name = ast.findChild<AssignmentStatement>(isAssignmentStatement).tokens.name;
+            expect((util.cloneToken(name) as any).range).to.eql(util.createRange(1, 4, 1, 5));
+            expect((createToken(TokenKind.Identifier, 'b', name) as any).range).to.eql(util.createRange(1, 4, 1, 5));
+            expect((createToken(TokenKind.Identifier, 'b') as any).location).to.be.undefined;
+        });
+
+        it('sets the location of a synthetic node and token', () => {
+            const location = util.createLocation(2, 3, 2, 7, 'file:///a.brs');
+            const node = createVariableExpression('x');
+            (node as any).location = location;
+            expect(util.getLocation(node)).to.eql(location);
+
+            const token = createToken(TokenKind.Identifier, 'x');
+            (token as any).location = location;
+            expect(util.getLocation(token)).to.eql(location);
+
+            (token as any).location = undefined;
+            expect(util.getLocation(token)).to.be.undefined;
         });
     });
 

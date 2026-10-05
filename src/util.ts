@@ -53,6 +53,7 @@ import { getUniqueType } from './types/helpers';
 import { InvalidType } from './types/InvalidType';
 import { TypedFunctionType } from './types';
 import { IntersectionType } from './types/IntersectionType';
+import { TokenObject } from './lexer/TokenObject';
 
 export class Util {
     public clearConsole() {
@@ -1263,15 +1264,15 @@ export class Util {
         if (token) {
             //keep this field order identical to `Lexer.addToken` so cloned tokens
             //share the same V8 hidden class as lexer-produced tokens
-            const result = {
-                kind: token.kind,
-                text: token.text,
-                isReserved: token.isReserved,
-                pos: token.pos,
-                end: token.end,
-                source: token.source,
-                leadingTrivia: token.leadingTrivia ? token.leadingTrivia.map(x => this.cloneToken(x)) : undefined
-            } as Token;
+            const result = new TokenObject(
+                token.kind,
+                token.text,
+                token.isReserved,
+                token.pos,
+                token.end,
+                token.source,
+                token.leadingTrivia ? token.leadingTrivia.map(x => this.cloneToken(x)) : undefined
+            ) as Token;
             //handle those tokens that have charCode
             if ('charCode' in token) {
                 (result as any).charCode = (token as any).charCode;

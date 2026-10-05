@@ -108,6 +108,7 @@ import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { Expression, Statement } from './AstNode';
 import type { BsDiagnostic, DeepWriteable } from '../interfaces';
 import { getFirmwareCapabilities } from '../RokuConstants';
+import { TokenObject } from '../lexer/TokenObject';
 
 const declarableTypesLower = DeclarableTypes.map(tokenKind => tokenKind.toLowerCase());
 
@@ -916,16 +917,15 @@ export class Parser {
                     location: util.getLocation(this.peek())
                 });
                 //TODO we should probably eliminate this entirely, since it's not present in the source code
-                functionType = {
-                    kind: TokenKind.Function,
-                    text: 'function',
-                    isReserved: true,
-                    //zero-length location means derived
-                    pos: this.peek().pos,
-                    end: this.peek().end,
-                    source: this.peek().source,
-                    leadingTrivia: []
-                };
+                functionType = new TokenObject(
+                    TokenKind.Function,
+                    'function',
+                    true,
+                    this.peek().pos,
+                    this.peek().end,
+                    this.peek().source,
+                    []
+                );
             }
             let isSub = functionType?.kind === TokenKind.Sub;
             let functionTypeText = isSub ? 'sub' : 'function';

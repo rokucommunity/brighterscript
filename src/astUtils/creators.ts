@@ -6,6 +6,7 @@ import { TokenKind } from '../lexer/TokenKind';
 import type { Expression, Statement } from '../parser/AstNode';
 import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpression, FunctionExpression } from '../parser/Expression';
 import { AssignmentStatement, Block, DottedSetStatement, IfStatement, IndexedSetStatement, MethodStatement } from '../parser/Statement';
+import { TokenObject } from '../lexer/TokenObject';
 
 const tokenDefaults = {
     [TokenKind.BackTick]: '`',
@@ -78,27 +79,27 @@ const tokenDefaults = {
 };
 
 export function createToken<T extends TokenKind>(kind: T, text?: string, locatable?: Locatable): Token & { kind: T } {
-    return {
-        kind: kind,
-        text: text ?? tokenDefaults[kind as string] ?? kind.toString().toLowerCase(),
-        isReserved: !text || text === kind.toString(),
-        pos: locatable?.pos,
-        end: locatable?.end,
-        source: locatable?.source,
-        leadingTrivia: []
-    };
+    return new TokenObject(
+        kind,
+        text ?? (tokenDefaults[kind as string] as string) ?? kind.toString().toLowerCase(),
+        !text || text === kind.toString(),
+        locatable?.pos,
+        locatable?.end,
+        locatable?.source,
+        []
+    ) as Token as Token & { kind: T };
 }
 
 export function createIdentifier(name: string, locatable?: Locatable): Identifier {
-    return {
-        kind: TokenKind.Identifier,
-        text: name,
-        isReserved: false,
-        pos: locatable?.pos,
-        end: locatable?.end,
-        source: locatable?.source,
-        leadingTrivia: []
-    };
+    return new TokenObject(
+        TokenKind.Identifier,
+        name,
+        false,
+        locatable?.pos,
+        locatable?.end,
+        locatable?.source,
+        []
+    ) as Identifier;
 }
 
 export function createVariableExpression(ident: string, locatable?: Locatable): VariableExpression {
