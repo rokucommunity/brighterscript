@@ -1168,6 +1168,119 @@ describe('HoverProcessor', () => {
             let hover = program.getHover(file.srcPath, util.createPosition(2, 33))[0];
             expect(hover?.contents).eql([`${fence('data as string')}${commentSep}A cool JSON string of data`]);
         });
+
+        it('uses the function doc comment when hovering a function declaration with doc comment types', () => {
+            const file = program.setFile('source/test.bs', `
+                namespace gif
+                    ' Skips sub-blocks.
+                    ' @param {roByteArray} bytes the bytes
+                    ' @param {integer} index the start index
+                    ' @return {integer} the index past the terminator
+                    function skipSubBlocks(bytes, index)
+                        return index
+                    end function
+                end namespace
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            // function skipSub|Blocks(bytes, index)
+            let hover = program.getHover(file.srcPath, util.createPosition(6, 37))[0];
+            expect(hover?.contents).eql([
+                fence('function gif.skipSubBlocks(bytes as roByteArray, index as integer) as integer') +
+                commentSep +
+                [
+                    'Skips sub-blocks.',
+                    '',
+                    '_@param_ {roByteArray} bytes the bytes',
+                    '',
+                    '_@param_ {integer} index the start index',
+                    '',
+                    '_@return_ {integer} the index past the terminator'
+                ].join('\n')
+            ]);
+        });
+
+        it('does not use a param description when hovering a function declaration', () => {
+            const file = program.setFile('source/test.bs', `
+                ' Prints the name.
+                ' @param name the name to print
+                sub printName(name as string)
+                    print name
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            // sub printN|ame(name as string)
+            let hover = program.getHover(file.srcPath, util.createPosition(3, 26))[0];
+            expect(hover?.contents).eql([`${fence('sub printName(name as string) as void')}${commentSep}Prints the name.\n\n_@param_ name the name to print`]);
+        });
+
+        it('uses the doc comment types and description when hovering a method declaration', () => {
+            const file = program.setFile('source/test.bs', `
+                class Reader
+                    ' Skips sub-blocks.
+                    ' @param {roByteArray} bytes the bytes
+                    ' @return {integer} the index past the terminator
+                    function skipSubBlocks(bytes)
+                        return 0
+                    end function
+                end class
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            // function skipSub|Blocks(bytes)
+            let hover = program.getHover(file.srcPath, util.createPosition(5, 37))[0];
+            expect(hover?.contents).eql([
+                fence('function Reader.skipSubBlocks(bytes as roByteArray) as integer') +
+                commentSep +
+                [
+                    'Skips sub-blocks.',
+                    '',
+                    '_@param_ {roByteArray} bytes the bytes',
+                    '',
+                    '_@return_ {integer} the index past the terminator'
+                ].join('\n')
+            ]);
+        });
+
+        it('does not apply an enclosing function doc comment to an anonymous function', () => {
+            const file = program.setFile('source/test.bs', `
+                ' @param {roByteArray} bytes the bytes
+                ' @return {integer} the result
+                function outer(bytes)
+                    inner = function(bytes)
+                        return bytes
+                    end function
+                    print inner
+                    return 0
+                end function
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            // print in|ner
+            let hover = program.getHover(file.srcPath, util.createPosition(7, 30))[0];
+            expect(hover?.contents).eql([fence('function inner(bytes as dynamic) as dynamic')]);
+        });
+
+        it('does not use a param type description when hovering an anonymous function', () => {
+            const file = program.setFile('source/test.bs', `
+                sub main()
+                    read = function(bytes as roByteArray) as integer
+                        return 0
+                    end function
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            // read = func|tion(bytes as roByteArray) as integer
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 32))[0];
+            expect(hover?.contents).eql([fence('function (bytes as roByteArray) as integer')]);
+        });
     });
 
     describe('location boundaries', () => {
