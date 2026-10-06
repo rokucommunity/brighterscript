@@ -7,6 +7,7 @@ import util, { standardizePath as s } from './util';
 import { expect } from './chai-config.spec';
 import { createSandbox } from 'sinon';
 import { TokenKind } from './lexer/TokenKind';
+import { createToken } from './astUtils/creators';
 
 
 describe('DiagnosticManager', () => {
@@ -478,6 +479,20 @@ describe('DiagnosticManager', () => {
             const printToken = tokens.find(x => x.kind === TokenKind.Print);
             program.diagnostics.register({ message: 'test', code: 1234, location: printToken });
             expectZeroDiagnostics(program.getDiagnostics());
+        });
+
+        it('does not return or retain a synthetic token that has no position', () => {
+            const { file } = getTokens('sub main()\nend sub\n');
+            program.diagnostics.locationResolver = () => util.createLocation(0, 0, 0, 100, file.srcPath);
+            const token = createToken(TokenKind.Identifier, 'synthetic');
+            program.diagnostics.register({ message: 'test', location: token });
+
+            const cached = [...program.diagnostics['diagnosticsCache'].values()][0].diagnostic;
+            expect(cached.location).not.to.equal(token);
+            expectDiagnostics(program.getDiagnostics(), [{
+                message: 'test (location unknown, added here for visibility)',
+                location: util.createLocation(0, 0, 0, 100, file.srcPath)
+            }]);
         });
 
         it('uses the locationResolver for synthetic locatables', () => {
