@@ -547,7 +547,9 @@ export class DiagnosticManager {
     }
 
     private isDetachedLocatable(location: StoredLocation | DiagnosticLocationInput): location is DetachedLocatable {
-        return typeof (location as Locatable)?.pos === 'number';
+        //a `Location` always has a `uri` and never a `pos`. Tokens and nodes always have a `pos` key (even synthetic ones, where it's undefined),
+        //and may also have deprecated `range`/`location` getters, so those can't be used to tell them apart
+        return !!location && ('pos' in location || !('uri' in location));
     }
 
     /**
@@ -560,7 +562,7 @@ export class DiagnosticManager {
         }
         const detached: DetachedLocatable = { pos: location.pos, end: location.end, source: location.source };
         //`util.getLocation()` keeps a newline-terminated token on its own line by looking at its text, so keep just enough text for that
-        const newlineLength = location.end - util.getContentEnd(location);
+        const newlineLength = location.source ? location.end - util.getContentEnd(location) : 0;
         if (newlineLength > 0) {
             detached.text = newlineLength === 2 ? '\r\n' : '\n';
         }
