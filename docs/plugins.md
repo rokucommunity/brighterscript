@@ -582,7 +582,11 @@ export default function () {
 ```
 
 ## Locations
-To keep memory down, tokens and AST nodes don't store a `Location`. Instead, each one stores its absolute offsets into the source text (`pos` and `end`) and a reference to info about the source it was parsed from (`source`), which is shared by everything from the same parse. Build the line/character `Location` on demand with `util.getLocation()`:
+To keep memory down, tokens and AST nodes don't store a `Location`. Instead, each one stores where it starts and ends, counted from the start of the file (`pos` and `end`), plus a reference to info about the file it was parsed from (`source`), which is shared by everything from the same parse.
+
+Positions are the gaps between characters, like an editor cursor (and like an LSP `Position`). For a file that starts with `print`, the `print` token's `pos` is `0` (before the `p`) and its `end` is `5` (after the `t`), so `end - pos` is its length.
+
+Build the line/character `Location` on demand with `util.getLocation()`:
 
 ```typescript
 const location = util.getLocation(funcStmt.tokens.name); // { uri, range }

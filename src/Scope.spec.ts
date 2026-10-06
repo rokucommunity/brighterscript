@@ -1045,6 +1045,27 @@ describe('Scope', () => {
             ]);
         });
 
+        it('points each duplicate callable at the other declarations, but not itself', () => {
+            program.setFile('source/file.brs', `
+                function DoA()
+                end function
+
+                 function DoA()
+                 end function
+            `);
+            program.validate();
+            const diagnostics = program.getDiagnostics()
+                .filter(x => x.code === DiagnosticMessages.duplicateFunctionImplementation('DoA').code)
+                .sort((a, b) => a.location.range.start.line - b.location.range.start.line);
+            //only look at the "declared here" entries (the diagnostic manager also adds an "In scope" entry)
+            expect(diagnostics.map(x => x.relatedInformation.filter(r => r.message === 'Function declared here').map(r => r.location.range))).to.eql([
+                //the first declaration points at the second one
+                [util.createRange(4, 26, 4, 29)],
+                //the second declaration points at the first one
+                [util.createRange(1, 25, 1, 28)]
+            ]);
+        });
+
         it('detects calls to unknown callables', () => {
             program.setFile('source/file.brs', `
                 function DoA()
@@ -3358,6 +3379,59 @@ describe('Scope', () => {
                 expect(lonely.namespaces).to.be.instanceOf(Map);
                 expect(lonely.namespaces.size).to.equal(0);
             });
+        });
+    });
+
+    describe('linkSymbolTable', () => {
+        it('builds the namespace lookup once per link, even when the scope has unvalidated files', () => {
+            program.setFile('source/a.bs', `
+                namespace Alpha
+                    function one() as integer
+                        return 1
+                    end function
+                end namespace
+            `);
+            program.setFile('source/b.bs', `
+                namespace Alpha
+                    function two() as integer
+                        return 2
+                    end function
+                end namespace
+                namespace Beta.Inner
+                    function three() as integer
+                        return 3
+                    end function
+                end namespace
+            `);
+            program.setFile('source/c.bs', `
+                namespace Beta
+                    function four() as integer
+                        return 4
+                    end function
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            //a file added after validation (like plugins do during build) leaves the scope with an unvalidated file
+            program.setFile('source/d.bs', `
+                namespace Alpha
+                    function five() as integer
+                        return 5
+                    end function
+                end namespace
+            `);
+            const scope = program.getScopeByName('source');
+            const buildSpy = sinon.spy(scope, 'buildNamespaceLookup');
+
+            scope.linkSymbolTable();
+            try {
+                expect(buildSpy.callCount).to.eql(1);
+                //a namespace statement in one file can see symbols declared in the same namespace in other files
+                const alphaSymbolTable = (program.getFile<BrsFile>('source/a.bs').ast.statements[0] as NamespaceStatement).body.getSymbolTable();
+                expect(alphaSymbolTable.hasSymbol('two', SymbolTypeFlag.runtime)).to.be.true;
+            } finally {
+                scope.unlinkSymbolTable();
+            }
         });
     });
 
