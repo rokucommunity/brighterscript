@@ -19,6 +19,7 @@ import { ParseMode } from './parser/Parser';
 import { globalFile } from './globalCallables';
 import type { DottedGetExpression, VariableExpression } from './parser/Expression';
 import type { InheritableType } from './types';
+import type { Locatable } from './lexer/Token';
 
 
 interface FileSymbolPair {
@@ -861,16 +862,17 @@ export class CrossScopeValidator {
                                 type AstNodeWithName = VariableExpression | DottedGetExpression | EnumStatement | ClassStatement | ConstStatement | EnumMemberStatement | InterfaceStatement;
 
                                 const thatNodeKindName = otherIsGlobal ? 'Global Function' : util.getAstNodeFriendlyName(otherDupeNode) ?? 'Item';
-                                let thisNameRange = util.getLocation((dupeNode as AstNodeWithName)?.tokens?.name)?.range ?? util.getLocation(dupeNode)?.range;
-                                let thatNameRange = util.getLocation((otherDupeNode as AstNodeWithName)?.tokens?.name)?.range ?? util.getLocation(otherDupeNode)?.range;
+                                let thisNameLocatable = util.firstLocatable<Locatable>((dupeNode as AstNodeWithName)?.tokens?.name, dupeNode);
+                                let thatNameLocatable = util.firstLocatable<Locatable>((otherDupeNode as AstNodeWithName)?.tokens?.name, otherDupeNode);
 
-                                const relatedInformation = thatNameRange ? [{
+                                const relatedInformation = thatNameLocatable ? [{
                                     message: `${thatNodeKindName} declared here`,
-                                    location: util.createLocationFromFileRange(otherDupe.file, thatNameRange)
+                                    location: thatNameLocatable
                                 }] : undefined;
                                 this.program.diagnostics.register({
                                     ...DiagnosticMessages.nameCollision(thisNodeKindName, thatNodeKindName, thatName),
-                                    location: util.createLocationFromFileRange(dupe.file, thisNameRange),
+                                    //keep the file's uri even if the node has no location
+                                    location: thisNameLocatable ?? util.createLocationFromFileRange(dupe.file, undefined),
                                     relatedInformation: relatedInformation
                                 }, {
                                     scope: scope,

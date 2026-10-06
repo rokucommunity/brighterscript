@@ -557,7 +557,7 @@ export class BrsFile implements BscFile {
         for (let lexerToken of tokens) {
             for (let triviaToken of lexerToken.leadingTrivia ?? []) {
                 if (triviaToken.kind === TokenKind.Comment) {
-                    processor.tryAdd(triviaToken.text, util.getLocation(triviaToken)?.range);
+                    processor.tryAdd(triviaToken.text, util.getLocation(triviaToken)?.range, triviaToken);
                 }
             }
         }
