@@ -5,7 +5,7 @@ import { ParseMode } from '../parser/Parser';
 import type { ClassStatement, MethodStatement, NamespaceStatement } from '../parser/Statement';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { isCallExpression, isFieldStatement, isMethodStatement, isNamespaceStatement } from '../astUtils/reflection';
-import type { BsDiagnostic } from '../interfaces';
+import type { BsDiagnosticInput } from '../interfaces';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { BrsFile } from '../files/BrsFile';
 import { TokenKind } from '../lexer/TokenKind';
@@ -13,11 +13,10 @@ import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import type { BscFile } from '../files/BscFile';
-import { util } from '../util';
 
 export class BsClassValidator {
     private scope: Scope;
-    public diagnostics: BsDiagnostic[];
+    public diagnostics: BsDiagnosticInput[];
     /**
      * The key is the namespace-prefixed class name. (i.e. `NameA.NameB.SomeClass` or `CoolClass`)
      */
@@ -57,7 +56,7 @@ export class BsClassValidator {
                         if (expressionNameLower === 'm') {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall(),
-                                location: util.getLocation(expression)
+                                location: expression
                             });
                         }
                         if (isCallExpression(parent) && expressionNameLower === 'super') {
@@ -75,7 +74,7 @@ export class BsClassValidator {
                 if (!superCall && !(classStatement.file as BrsFile).isTypedef) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.classConstructorMissingSuperCall(),
-                        location: util.getLocation(newMethod)
+                        location: newMethod
                     });
                 }
             }
@@ -96,7 +95,7 @@ export class BsClassValidator {
                     this.diagnostics.push({
                         ...DiagnosticMessages.circularReferenceDetected(
                             Array.from(names.values()).concat(className)),
-                        location: util.getLocation(cls.tokens.name)
+                        location: cls.tokens.name
                     });
                     break;
                 }
@@ -131,7 +130,7 @@ export class BsClassValidator {
                     if (methods[lowerMemberName] || fields[lowerMemberName]) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.duplicateIdentifier(memberName.text),
-                            location: util.getLocation(memberName)
+                            location: memberName
                         });
                     }
 
@@ -157,7 +156,7 @@ export class BsClassValidator {
                                     childFieldType.toString(),
                                     ancestorMemberType.toString()
                                 ),
-                                location: util.getLocation(member)
+                                location: member
                             });
                         }
 
@@ -180,7 +179,7 @@ export class BsClassValidator {
                                         childFieldType.toString(),
                                         ancestorMemberType.toString()
                                     ),
-                                    location: util.getLocation(member)
+                                    location: member
                                 });
                             }
                         }
@@ -198,7 +197,7 @@ export class BsClassValidator {
                                 ...DiagnosticMessages.missingOverrideKeyword(
                                     ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
-                                location: util.getLocation(member)
+                                location: member
                             });
                         }
 
@@ -222,7 +221,7 @@ export class BsClassValidator {
                                     ancestorMember.accessModifier?.text || 'public',
                                     ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
-                                location: util.getLocation(member)
+                                location: member
                             });
                         }
                     }
