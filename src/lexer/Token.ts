@@ -28,11 +28,14 @@ export interface Token extends Locatable {
  */
 export interface Locatable {
     /**
-     * Absolute UTF-16 offset into the source text where this item starts
+     * Where this item starts, counted from the start of the source.
+     *
+     * Positions are the gaps between characters, like an editor cursor. For the source `print`, `pos` is `0` (before the `p`) and `end` is `5` (after the `t`).
+     * Counted in UTF-16 code units, the same as an LSP `Position.character`
      */
     pos: number;
     /**
-     * Absolute UTF-16 offset into the source text where this item ends (exclusive)
+     * Where this item ends: the gap just after its last character (see `pos`). `end - pos` is the item's length
      */
     end: number;
     /**
@@ -50,7 +53,7 @@ export interface SourceInfo {
      */
     uri: string;
     /**
-     * The offset of the start of each line
+     * Where each line starts (the gap before its first character), counted the same way as `Locatable.pos`
      */
     lineStarts: number[];
 }

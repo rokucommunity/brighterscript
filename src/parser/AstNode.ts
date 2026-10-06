@@ -19,11 +19,12 @@ import { isBlock, isBody, isFunctionParameterExpression } from '../astUtils/refl
 export abstract class AstNode implements Locatable {
     public abstract kind: AstNodeKind;
     /**
-     * Absolute offset where this node starts in its source. Use `util.getLocation()` to get the line/character `Location`
+     * Where this node starts, counted from the start of its source (see `Locatable.pos`).
+     * Use `util.getLocation()` to get the line/character `Location`
      */
     public abstract pos: number;
     /**
-     * Absolute offset where this node ends in its source (exclusive)
+     * Where this node ends: the gap just after its last character (see `Locatable.end`)
      */
     public abstract end: number;
     /**
