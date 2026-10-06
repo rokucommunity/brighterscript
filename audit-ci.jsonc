@@ -3,5 +3,13 @@
     // why each allowlisted entry is safe to defer.
     "$schema": "https://github.com/IBM/audit-ci/raw/main/docs/schema.json",
     "high": true,
-    "allowlist": []
+    "allowlist": [
+        {
+            "GHSA-vfj7-8cjw-p6xm": {
+                // Added: 2026-10-03
+                "active": true,
+                "notes": "`braces` <=3.0.3 (prod, via `chokidar`/`micromatch`/`fast-glob`/`roku-deploy`): stack exhaustion on deeply nested brace patterns. No patched version is published, so it cannot be upgraded or overridden. The only patterns reaching it are globs from the caller's own project config (bsconfig `files`, watch paths); no untrusted party supplies them, and a crash only affects the caller's own local process."
+            }
+        }
+    ]
 }
