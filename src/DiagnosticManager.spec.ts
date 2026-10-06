@@ -3,8 +3,11 @@ import type { BrsFile } from './files/BrsFile';
 import type { BsDiagnostic } from './interfaces';
 import { Program } from './Program';
 import { expectDiagnostics, expectZeroDiagnostics } from './testHelpers.spec';
-import util from './util';
-import { expect } from 'chai';
+import util, { standardizePath as s } from './util';
+import { expect } from './chai-config.spec';
+import { createSandbox } from 'sinon';
+import { TokenKind } from './lexer/TokenKind';
+import { createToken } from './astUtils/creators';
 
 
 describe('DiagnosticManager', () => {
@@ -321,6 +324,206 @@ describe('DiagnosticManager', () => {
 
             program.diagnostics.clearByFilter({});
             expectZeroDiagnostics(program.getDiagnostics());
+        });
+    });
+
+    describe('register', () => {
+        it('merges relatedInformation when the same diagnostic is registered more than once', () => {
+            const location = { uri: 'source/main.brs', range: util.createRange(1, 2, 3, 4) };
+            const related1 = { message: 'related1', location: { uri: 'source/a.brs', range: util.createRange(1, 1, 1, 1) } };
+            const related2 = { message: 'related2', location: { uri: 'source/b.brs', range: util.createRange(2, 2, 2, 2) } };
+            program.diagnostics.register({ message: 'test', location: location, relatedInformation: [related1] });
+            program.diagnostics.register({ message: 'test', location: location, relatedInformation: [related1, related2] });
+
+            const diagnostics = program.getDiagnostics();
+            expect(diagnostics).to.be.lengthOf(1);
+            expect(diagnostics[0].relatedInformation).to.eql([related1, related2]);
+        });
+    });
+
+    describe('locatables', () => {
+        const sinon = createSandbox();
+        afterEach(() => {
+            sinon.restore();
+        });
+
+        function getTokens(code: string) {
+            const file = program.setFile('source/main.brs', code) as BrsFile;
+            return { file: file, tokens: file.parser.tokens };
+        }
+
+        it('resolves a locatable location in getDiagnostics', () => {
+            const { tokens } = getTokens('sub main()\n    print "hello"\nend sub\n');
+            const printToken = tokens.find(x => x.kind === TokenKind.Print);
+            program.diagnostics.register({ message: 'test', location: printToken });
+            expectDiagnostics(program.getDiagnostics(), [
+                { message: 'test', location: util.getLocation(printToken) }
+            ]);
+        });
+
+        it('resolves locatable related information in getDiagnostics', () => {
+            const { tokens } = getTokens('sub main()\n    print "hello"\nend sub\n');
+            const printToken = tokens.find(x => x.kind === TokenKind.Print);
+            const subToken = tokens.find(x => x.kind === TokenKind.Sub);
+            program.diagnostics.register({
+                message: 'test',
+                location: printToken,
+                relatedInformation: [{ message: 'related', location: subToken }]
+            });
+            const diagnostics = program.getDiagnostics();
+            expect(diagnostics[0].relatedInformation).to.eql([
+                { message: 'related', location: util.getLocation(subToken) }
+            ]);
+        });
+
+        it('resolves a token ending in a newline to the same location as util.getLocation', () => {
+            const { tokens } = getTokens('sub main()\r\n    print "hello"\nend sub\n');
+            const newlineTokens = tokens.filter(x => x.kind === TokenKind.Newline);
+            program.diagnostics.register(newlineTokens.map((token, i) => ({ message: `test${i}`, location: token })));
+            expectDiagnostics(program.getDiagnostics(), newlineTokens.map((token, i) => ({
+                message: `test${i}`,
+                location: util.getLocation(token)
+            })));
+        });
+
+        it('does not retain the locatable itself', () => {
+            const { tokens } = getTokens('sub main()\n    print "hello"\nend sub\n');
+            const printToken = tokens.find(x => x.kind === TokenKind.Print);
+            const subToken = tokens.find(x => x.kind === TokenKind.Sub);
+            program.diagnostics.register({
+                message: 'test',
+                location: printToken,
+                relatedInformation: [{ message: 'related', location: subToken }]
+            });
+            const cached = [...program.diagnostics['diagnosticsCache'].values()][0].diagnostic;
+            expect(cached.location).not.to.equal(printToken);
+            expect(cached.location).to.eql({ pos: printToken.pos, end: printToken.end, source: printToken.source });
+            expect(cached.relatedInformation[0].location).not.to.equal(subToken);
+            expect(cached.relatedInformation[0].location).to.eql({ pos: subToken.pos, end: subToken.end, source: subToken.source });
+        });
+
+        it('only computes Locations during getDiagnostics', () => {
+            const { file, tokens } = getTokens('sub main()\n    print "hello"\nend sub\n');
+            const printToken = tokens.find(x => x.kind === TokenKind.Print);
+            const subToken = tokens.find(x => x.kind === TokenKind.Sub);
+            const scope = new Scope('scope1', program);
+            const getLocationSpy = sinon.spy(util, 'getLocation');
+
+            program.diagnostics.register({
+                message: 'test',
+                location: printToken,
+                relatedInformation: [{ message: 'related', location: subToken }]
+            }, { scope: scope, tags: ['tag1'] });
+            program.diagnostics.register({ message: 'test2', location: subToken }, { tags: ['tag1'] });
+            program.diagnostics.clearByFilter({ tag: 'tag2' });
+            program.diagnostics.clearForFile('source/other.brs');
+            expect(getLocationSpy.called).to.be.false;
+
+            expectDiagnostics(program.getDiagnostics(), [{ message: 'test' }, { message: 'test2' }]);
+            expect(getLocationSpy.called).to.be.true;
+
+            program.diagnostics.clearForFile(file.srcPath);
+            expectZeroDiagnostics(program.getDiagnostics());
+        });
+
+        it('clears by file for both locatable and Location diagnostics', () => {
+            const { file, tokens } = getTokens('sub main()\n    print "hello"\nend sub\n');
+            const printToken = tokens.find(x => x.kind === TokenKind.Print);
+            const otherUri = util.pathToUri(s`${file.srcPath}/../other.brs`);
+            program.diagnostics.register([
+                { message: 'locatable', location: printToken },
+                { message: 'location', location: util.getLocation(printToken) },
+                { message: 'other', location: { uri: otherUri, range: util.createRange(1, 2, 3, 4) } }
+            ]);
+
+            program.diagnostics.clearForFile(file.srcPath);
+            expectDiagnostics(program.getDiagnostics(), [{ message: 'other' }]);
+        });
+
+        it('clears by fileUri filter for locatable diagnostics', () => {
+            const { file, tokens } = getTokens('sub main()\n    print "hello"\nend sub\n');
+            const printToken = tokens.find(x => x.kind === TokenKind.Print);
+            program.diagnostics.register({ message: 'test', location: printToken }, { tags: ['tag1'] });
+
+            program.diagnostics.clearByFilter({ fileUri: util.pathToUri(file.srcPath), tag: 'tag1' });
+            expectZeroDiagnostics(program.getDiagnostics());
+        });
+
+        it('dedupes the same locatable diagnostic from multiple scopes', () => {
+            const { tokens } = getTokens('sub main()\n    print "hello"\nend sub\n');
+            const printToken = tokens.find(x => x.kind === TokenKind.Print);
+            const subToken = tokens.find(x => x.kind === TokenKind.Sub);
+            const scope1 = new Scope('scope1', program);
+            const scope2 = new Scope('scope2', program);
+            const getDiagnostic = () => ({
+                message: 'test',
+                location: printToken,
+                relatedInformation: [{ message: 'related', location: subToken }]
+            });
+            program.diagnostics.register([
+                { diagnostic: getDiagnostic(), context: { scope: scope1 } },
+                { diagnostic: getDiagnostic(), context: { scope: scope2 } }
+            ]);
+
+            const diagnostics = program.getDiagnostics();
+            expect(diagnostics).to.be.lengthOf(1);
+            expect(diagnostics[0].relatedInformation).to.eql([
+                { message: 'related', location: util.getLocation(subToken) },
+                { message: `In scope 'scope1'`, location: util.getLocation(printToken) },
+                { message: `In scope 'scope2'`, location: util.getLocation(printToken) }
+            ]);
+        });
+
+        it('suppresses locatable diagnostics with comment flags', () => {
+            const { tokens } = getTokens('sub main()\n    \'bs:disable-next-line\n    print "hello"\nend sub\n');
+            const printToken = tokens.find(x => x.kind === TokenKind.Print);
+            program.diagnostics.register({ message: 'test', code: 1234, location: printToken });
+            expectZeroDiagnostics(program.getDiagnostics());
+        });
+
+        it('treats tokens and nodes with deprecated range/location getters as locatables', () => {
+            const { tokens } = getTokens('sub main()\n    print "hello"\nend sub\n');
+            const printToken = tokens.find(x => x.kind === TokenKind.Print);
+            //mimic the deprecated `range`/`location` getters that tokens and nodes can have
+            const tokenWithGetters = Object.create({
+                get range() {
+                    return util.getLocation(printToken).range;
+                },
+                get location() {
+                    return util.getLocation(printToken);
+                }
+            }, Object.getOwnPropertyDescriptors(printToken));
+            program.diagnostics.register({ message: 'test', location: tokenWithGetters });
+
+            const cached = [...program.diagnostics['diagnosticsCache'].values()][0].diagnostic;
+            expect(cached.location).to.eql({ pos: printToken.pos, end: printToken.end, source: printToken.source });
+            expectDiagnostics(program.getDiagnostics(), [
+                { message: 'test', location: util.getLocation(printToken) }
+            ]);
+        });
+
+        it('does not return or retain a synthetic token that has no position', () => {
+            const { file } = getTokens('sub main()\nend sub\n');
+            program.diagnostics.locationResolver = () => util.createLocation(0, 0, 0, 100, file.srcPath);
+            const token = createToken(TokenKind.Identifier, 'synthetic');
+            program.diagnostics.register({ message: 'test', location: token });
+
+            const cached = [...program.diagnostics['diagnosticsCache'].values()][0].diagnostic;
+            expect(cached.location).not.to.equal(token);
+            expectDiagnostics(program.getDiagnostics(), [{
+                message: 'test (location unknown, added here for visibility)',
+                location: util.createLocation(0, 0, 0, 100, file.srcPath)
+            }]);
+        });
+
+        it('uses the locationResolver for synthetic locatables', () => {
+            const { file } = getTokens('sub main()\nend sub\n');
+            program.diagnostics.locationResolver = () => util.createLocation(0, 0, 0, 100, file.srcPath);
+            program.diagnostics.register({ message: 'test', location: { pos: 0, end: 0, source: undefined } });
+            expectDiagnostics(program.getDiagnostics(), [{
+                message: 'test (location unknown, added here for visibility)',
+                location: util.createLocation(0, 0, 0, 100, file.srcPath)
+            }]);
         });
     });
 
