@@ -547,8 +547,9 @@ export class DiagnosticManager {
     }
 
     private isDetachedLocatable(location: StoredLocation | DiagnosticLocationInput): location is DetachedLocatable {
-        //a `Location` always has `uri` and `range`, tokens and nodes never do (and synthetic ones don't even have a `pos`)
-        return !!location && !('range' in location) && !('uri' in location);
+        //a `Location` always has a `uri` and never a `pos`. Tokens and nodes always have a `pos` key (even synthetic ones, where it's undefined),
+        //and may also have deprecated `range`/`location` getters, so those can't be used to tell them apart
+        return !!location && ('pos' in location || !('uri' in location));
     }
 
     /**

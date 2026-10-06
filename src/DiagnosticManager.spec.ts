@@ -481,6 +481,27 @@ describe('DiagnosticManager', () => {
             expectZeroDiagnostics(program.getDiagnostics());
         });
 
+        it('treats tokens and nodes with deprecated range/location getters as locatables', () => {
+            const { tokens } = getTokens('sub main()\n    print "hello"\nend sub\n');
+            const printToken = tokens.find(x => x.kind === TokenKind.Print);
+            //mimic the deprecated `range`/`location` getters that tokens and nodes can have
+            const tokenWithGetters = Object.create({
+                get range() {
+                    return util.getLocation(printToken).range;
+                },
+                get location() {
+                    return util.getLocation(printToken);
+                }
+            }, Object.getOwnPropertyDescriptors(printToken));
+            program.diagnostics.register({ message: 'test', location: tokenWithGetters });
+
+            const cached = [...program.diagnostics['diagnosticsCache'].values()][0].diagnostic;
+            expect(cached.location).to.eql({ pos: printToken.pos, end: printToken.end, source: printToken.source });
+            expectDiagnostics(program.getDiagnostics(), [
+                { message: 'test', location: util.getLocation(printToken) }
+            ]);
+        });
+
         it('does not return or retain a synthetic token that has no position', () => {
             const { file } = getTokens('sub main()\nend sub\n');
             program.diagnostics.locationResolver = () => util.createLocation(0, 0, 0, 100, file.srcPath);
