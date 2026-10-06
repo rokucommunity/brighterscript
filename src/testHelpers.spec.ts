@@ -61,7 +61,8 @@ type DiagnosticCollectionAsync = DiagnosticCollection | { getDiagnostics(): Prom
  * Is this location a `Locatable` (i.e. from `lexer.diagnostics` or `parser.diagnostics`) rather than a `Location`?
  */
 function isLocatableLocation(location: DiagnosticLocationInput) {
-    return !!location && !('range' in location) && !('uri' in location);
+    //same check as `DiagnosticManager`: tokens and nodes always have a `pos` key, and may have deprecated `range`/`location` getters
+    return !!location && ('pos' in location || !('uri' in location));
 }
 
 /**
