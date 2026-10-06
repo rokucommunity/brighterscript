@@ -9,7 +9,7 @@ import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import type { NamespaceFileContribution } from '../Scope';
 import { SymbolTable } from '../SymbolTable';
 import { FunctionScope } from '../FunctionScope';
-import type { Callable, CallableParam, CommentFlag, BsDiagnostic, FileReference, FileLink, SerializedCodeFile } from '../interfaces';
+import type { Callable, CallableParam, CommentFlag, BsDiagnosticInput, FileReference, FileLink, SerializedCodeFile } from '../interfaces';
 import type { NamespaceContainer } from '../Scope';
 import type { Token } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
@@ -454,7 +454,7 @@ export class BrsFile implements BscFile {
      * @param fileContents the raw source code to parse
      */
     public parse(fileContents: string) {
-        const diagnostics = [] as Array<BsDiagnostic>;
+        const diagnostics = [] as Array<BsDiagnosticInput>;
 
         try {
             this.fileContents = fileContents;
@@ -488,8 +488,8 @@ export class BrsFile implements BscFile {
 
             //absorb all lexing/preprocessing/parsing diagnostics
             diagnostics.push(
-                ...lexer.diagnostics as BsDiagnostic[],
-                ...this._parser.diagnostics as BsDiagnostic[]
+                ...lexer.diagnostics,
+                ...this._parser.diagnostics
             );
 
 
@@ -557,7 +557,7 @@ export class BrsFile implements BscFile {
         for (let lexerToken of tokens) {
             for (let triviaToken of lexerToken.leadingTrivia ?? []) {
                 if (triviaToken.kind === TokenKind.Comment) {
-                    processor.tryAdd(triviaToken.text, util.getLocation(triviaToken)?.range);
+                    processor.tryAdd(triviaToken.text, util.getLocation(triviaToken)?.range, triviaToken);
                 }
             }
         }

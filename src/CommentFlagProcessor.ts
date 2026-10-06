@@ -1,7 +1,8 @@
 import type { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BscFile } from './files/BscFile';
-import type { BsDiagnostic, CommentFlag, DiagnosticCode } from './interfaces';
+import type { BsDiagnosticInput, CommentFlag, DiagnosticCode } from './interfaces';
+import type { Locatable } from './lexer/Token';
 import { util } from './util';
 
 export class CommentFlagProcessor {
@@ -29,7 +30,7 @@ export class CommentFlagProcessor {
     /**
      * List of diagnostics generated during processing
      */
-    public diagnostics = [] as BsDiagnostic[];
+    public diagnostics = [] as BsDiagnosticInput[];
 
     /**
      * Block-level `bs:disable` / `bs:enable` directives, recorded in source order
@@ -37,8 +38,13 @@ export class CommentFlagProcessor {
      */
     private blockDirectives = [] as BlockDirective[];
 
-    public tryAdd(text: string, range: Range) {
-        const tokenized = this.tokenize(text, range);
+    /**
+     * @param text the text of the comment
+     * @param range the range of the comment
+     * @param locatable the comment token, if available. Used for the location of any diagnostics instead of `range`
+     */
+    public tryAdd(text: string, range: Range, locatable?: Locatable) {
+        const tokenized = this.tokenize(text, range, locatable);
         if (!tokenized) {
             return;
         }
@@ -157,7 +163,7 @@ export class CommentFlagProcessor {
      * Pushes diagnostics for any unknown numeric codes. Returns `null` when no codes were specified
      * (i.e. a bare `bs:disable` / `bs:enable`), and an array otherwise.
      */
-    private collectCodes(rawCodes: Array<{ code: string; range: Range }>): DiagnosticCode[] | null {
+    private collectCodes(rawCodes: RawCode[]): DiagnosticCode[] | null {
         if (rawCodes.length === 0) {
             return null;
         }
@@ -172,7 +178,7 @@ export class CommentFlagProcessor {
             } else {
                 this.diagnostics.push({
                     ...DiagnosticMessages.unknownDiagnosticCode(codeInt),
-                    location: util.createLocationFromFileRange(this.file, codeToken.range)
+                    location: codeToken.locatable ?? util.createLocationFromFileRange(this.file, codeToken.range)
                 });
             }
         }
@@ -182,7 +188,7 @@ export class CommentFlagProcessor {
     /**
      * Small tokenizer for `bs:` directive comments.
      */
-    private tokenize(text: string, range: Range): DisableToken | null {
+    private tokenize(text: string, range: Range, locatable?: Locatable): DisableToken | null {
         let lowerText = text.toLowerCase();
         let offset = 0;
         let commentTokenText: string | null = null;
@@ -230,17 +236,26 @@ export class CommentFlagProcessor {
         }
 
         const items = this.tokenizeByWhitespace(lowerText);
-        const codes = [] as Array<{ code: string; range: Range }>;
+        const codes = [] as RawCode[];
         for (const item of items) {
-            codes.push({
+            const codeOffset = offset + item.startIndex;
+            const code: RawCode = {
                 code: item.text,
                 range: util.createRange(
                     range.start.line,
-                    range.start.character + offset + item.startIndex,
+                    range.start.character + codeOffset,
                     range.start.line,
-                    range.start.character + offset + item.startIndex + item.text.length
+                    range.start.character + codeOffset + item.text.length
                 )
-            });
+            };
+            if (locatable?.source) {
+                code.locatable = {
+                    pos: locatable.pos + codeOffset,
+                    end: locatable.pos + codeOffset + item.text.length,
+                    source: locatable.source
+                };
+            }
+            codes.push(code);
         }
 
         return {
@@ -293,10 +308,19 @@ interface Token {
 interface DisableToken {
     commentTokenText: string | null;
     directive: 'line' | 'next-line' | 'disable' | 'enable';
-    codes: {
-        code: string;
-        range: Range;
-    }[];
+    codes: RawCode[];
+}
+
+/**
+ * A code from a directive comment
+ */
+interface RawCode {
+    code: string;
+    range: Range;
+    /**
+     * The position of the code, when the comment was given as a locatable
+     */
+    locatable?: Locatable;
 }
 
 interface BlockDirective {
@@ -305,6 +329,6 @@ interface BlockDirective {
      * The raw code tokens parsed from the directive comment. `finalize()` runs `collectCodes` over
      * these to validate them and emit any unknown-code diagnostics. An empty array means a bare directive.
      */
-    rawCodes: Array<{ code: string; range: Range }>;
+    rawCodes: RawCode[];
     range: Range;
 }
