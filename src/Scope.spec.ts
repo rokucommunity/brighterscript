@@ -3382,6 +3382,59 @@ describe('Scope', () => {
         });
     });
 
+    describe('linkSymbolTable', () => {
+        it('builds the namespace lookup once per link, even when the scope has unvalidated files', () => {
+            program.setFile('source/a.bs', `
+                namespace Alpha
+                    function one() as integer
+                        return 1
+                    end function
+                end namespace
+            `);
+            program.setFile('source/b.bs', `
+                namespace Alpha
+                    function two() as integer
+                        return 2
+                    end function
+                end namespace
+                namespace Beta.Inner
+                    function three() as integer
+                        return 3
+                    end function
+                end namespace
+            `);
+            program.setFile('source/c.bs', `
+                namespace Beta
+                    function four() as integer
+                        return 4
+                    end function
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            //a file added after validation (like plugins do during build) leaves the scope with an unvalidated file
+            program.setFile('source/d.bs', `
+                namespace Alpha
+                    function five() as integer
+                        return 5
+                    end function
+                end namespace
+            `);
+            const scope = program.getScopeByName('source');
+            const buildSpy = sinon.spy(scope, 'buildNamespaceLookup');
+
+            scope.linkSymbolTable();
+            try {
+                expect(buildSpy.callCount).to.eql(1);
+                //a namespace statement in one file can see symbols declared in the same namespace in other files
+                const alphaSymbolTable = (program.getFile<BrsFile>('source/a.bs').ast.statements[0] as NamespaceStatement).body.getSymbolTable();
+                expect(alphaSymbolTable.hasSymbol('two', SymbolTypeFlag.runtime)).to.be.true;
+            } finally {
+                scope.unlinkSymbolTable();
+            }
+        });
+    });
+
     describe('buildEnumLookup', () => {
         it('builds enum lookup', () => {
             const sourceScope = program.getScopeByName('source');
