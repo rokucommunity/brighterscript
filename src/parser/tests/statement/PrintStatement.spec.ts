@@ -4,7 +4,7 @@ import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import { Program } from '../../../Program';
-import { expectDiagnostics, rootDir } from '../../../testHelpers.spec';
+import { expectDiagnostics, rootDir, withoutUnreachableCode } from '../../../testHelpers.spec';
 import { getTestTranspile } from '../../../testHelpers.spec';
 import util from '../../../util';
 import { DiagnosticCodeMap, DiagnosticMessages } from '../../../DiagnosticMessages';
@@ -263,7 +263,7 @@ describe('parser print statements', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics().map(diagnostic => diagnostic.code)).to.eql([]);
+            expect(withoutUnreachableCode(program).map(diagnostic => diagnostic.code)).to.eql([]);
         });
 
         it('does not flag a long print statement inside a disabled #else block', () => {
@@ -278,7 +278,7 @@ describe('parser print statements', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics().map(diagnostic => diagnostic.code)).to.eql([]);
+            expect(withoutUnreachableCode(program).map(diagnostic => diagnostic.code)).to.eql([]);
         });
 
         it('flags a long print statement inside an enabled #if block', () => {

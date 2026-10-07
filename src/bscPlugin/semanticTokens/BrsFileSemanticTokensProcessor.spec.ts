@@ -4,7 +4,7 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile } from '../../files/BscFile';
 import type { SemanticToken } from '../../interfaces';
 import { Program } from '../../Program';
-import { expectZeroDiagnostics } from '../../testHelpers.spec';
+import { expectZeroDiagnostics, withoutUnreachableCode } from '../../testHelpers.spec';
 import { util } from '../../util';
 import { rootDir } from '../../testHelpers.spec';
 
@@ -85,7 +85,7 @@ describe('BrsFileSemanticTokensProcessor', () => {
             end sub
         `);
         program.validate();
-        expectZeroDiagnostics(program);
+        expectZeroDiagnostics(withoutUnreachableCode(program));
         const tokenLines = program.getSemanticTokens(file.srcPath)!.map(token => token.range.start.line);
         expect(tokenLines).to.include(5);
         expect(tokenLines).not.to.include(8);

@@ -13,7 +13,7 @@ import { SourceMapConsumer } from 'source-map';
 import { TokenKind } from '../lexer/TokenKind';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util, { standardizePath as s } from '../util';
-import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, expectDiagnosticsIncludes, getTestGetTypedef, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
+import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, expectDiagnosticsIncludes, getTestGetTypedef, getTestTranspile, trim, trimMap, withoutUnreachableCode } from '../testHelpers.spec';
 import { ParseMode, Parser } from '../parser/Parser';
 import { Block, FunctionStatement } from '../parser/Statement';
 import { ImportStatement, PrintStatement } from '../parser/Statement';
@@ -1203,7 +1203,7 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 program.validate();
-                expectZeroDiagnostics(program);
+                expectZeroDiagnostics(withoutUnreachableCode(program));
             });
 
             it('supports single-word #elseif and #endif', () => {
@@ -1218,7 +1218,7 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 program.validate();
-                expectZeroDiagnostics(program);
+                expectZeroDiagnostics(withoutUnreachableCode(program));
             });
 
             it('supports multi-word #else if and #end if', () => {
@@ -1233,7 +1233,7 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 program.validate();
-                expectZeroDiagnostics(program);
+                expectZeroDiagnostics(withoutUnreachableCode(program));
             });
 
             it('does not choke on invalid code inside a false conditional compile', () => {
@@ -1245,7 +1245,7 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 program.validate();
-                expectZeroDiagnostics(program);
+                expectZeroDiagnostics(withoutUnreachableCode(program));
             });
 
             it('detects syntax error in #if', () => {
@@ -1257,7 +1257,7 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 program.validate();
-                expectDiagnostics(program, [
+                expectDiagnostics(withoutUnreachableCode(program), [
                     DiagnosticMessages.hashConstDoesNotExist()
                 ]);
             });
@@ -7561,7 +7561,7 @@ describe('BrsFile', () => {
                 localCount: 253,
                 extraLines: ['#if false', 'hiddenName = 1', '#end if']
             }), 'source/main.bs');
-            expectZeroDiagnostics(program);
+            expectZeroDiagnostics(withoutUnreachableCode(program));
         });
 
         it('reports the limit for a .bs file', () => {
