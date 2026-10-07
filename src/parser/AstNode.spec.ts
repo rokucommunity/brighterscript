@@ -7,7 +7,7 @@ import type { AAIndexedMemberExpression, AALiteralExpression, AAMemberExpression
 import { expectZeroDiagnostics } from '../testHelpers.spec';
 import { tempDir, rootDir, outDir } from '../testHelpers.spec';
 import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isCallfuncExpression, isCatchStatement, isClassStatement, isConstStatement, isDimStatement, isDottedGetExpression, isDottedSetStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isGroupingExpression, isIfStatement, isIncrementStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isMethodStatement, isNamespaceStatement, isNewExpression, isNullCoalescingExpression, isPrintStatement, isReturnStatement, isTaggedTemplateStringExpression, isTemplateStringExpression, isTemplateStringQuasiExpression, isTernaryExpression, isThrowStatement, isTryCatchStatement, isTypecastExpression, isUnaryExpression, isVariableExpression, isLiteralExpression, isWhileStatement, isXmlAttributeGetExpression } from '../astUtils/reflection';
-import type { ClassStatement, FunctionStatement, InterfaceFieldStatement, InterfaceMethodStatement, MethodStatement, InterfaceStatement, CatchStatement, ThrowStatement, EnumStatement, EnumMemberStatement, ConstStatement, Block, PrintStatement, DimStatement, ForStatement, WhileStatement, IndexedSetStatement, NamespaceStatement, TryCatchStatement, DottedSetStatement, ExpressionStatement } from './Statement';
+import type { ImportStatement, ClassStatement, FunctionStatement, InterfaceFieldStatement, InterfaceMethodStatement, MethodStatement, InterfaceStatement, CatchStatement, ThrowStatement, EnumStatement, EnumMemberStatement, ConstStatement, Block, PrintStatement, DimStatement, ForStatement, WhileStatement, IndexedSetStatement, NamespaceStatement, TryCatchStatement, DottedSetStatement, ExpressionStatement } from './Statement';
 import { AssignmentStatement, EmptyStatement } from './Statement';
 import { ParseMode, Parser } from './Parser';
 import type { AstNode } from './AstNode';
@@ -1203,6 +1203,15 @@ describe('AstNode', () => {
             `).ast;
 
             testClone(original);
+        });
+
+        it('does not shrink the ImportStatement path range again when cloning', () => {
+            const original = Parser.parse('import "Something.brs"').ast.statements[0] as ImportStatement;
+            //the path range excludes the quotes
+            expect(util.getLocation(original.tokens.path).range).to.eql(util.createRange(0, 8, 0, 21));
+            const clone = original.clone();
+            expect(util.getLocation(clone.tokens.path).range).to.eql(util.createRange(0, 8, 0, 21));
+            expect(util.getLocation(clone.clone().tokens.path).range).to.eql(util.createRange(0, 8, 0, 21));
         });
 
 
