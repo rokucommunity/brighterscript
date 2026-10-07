@@ -103,7 +103,7 @@ import {
 import type { Range } from 'vscode-languageserver';
 import type { Logger } from '../logging';
 import { createLogger } from '../logging';
-import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression, isConditionalCompileStatement, isLiteralBoolean, isTypecastExpression, isXmlAttributeGetExpression } from '../astUtils/reflection';
+import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isConditionalCompileStatement, isLiteralBoolean, isTypecastExpression, isXmlAttributeGetExpression } from '../astUtils/reflection';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { Expression, Statement } from './AstNode';
 import type { BsDiagnostic, DeepWriteable } from '../interfaces';
@@ -186,6 +186,17 @@ export class Parser {
     private pendingAnnotations: AnnotationExpression[];
 
     /**
+     * The `#const` values in effect at the current position in the file, seeded from `options.bsConsts`.
+     * Only declarations in active conditional compile branches are applied, in source order.
+     */
+    private fileBsConsts: Map<string, boolean>;
+
+    /**
+     * Is the current position in a branch the device would compile? False inside an inactive `#if` / `#else if` / `#else` branch.
+     */
+    private isConditionalCompileActive: boolean;
+
+    /**
      * Get the currently active global terminators
      */
     private peekGlobalTerminators() {
@@ -231,9 +242,11 @@ export class Parser {
         this.diagnostics = [];
         this.namespaceAndFunctionDepth = 0;
         this.pendingAnnotations = [];
+        this.fileBsConsts = new Map(options.bsConsts);
+        this.isConditionalCompileActive = true;
 
         this.ast = this.body();
-        this.ast.bsConsts = options.bsConsts;
+        this.ast.bsConsts = this.fileBsConsts;
         //now that we've built the AST, link every node to its parent
         this.ast.link();
         return this;
@@ -2246,14 +2259,19 @@ export class Parser {
         let hashEndIfToken: Token | undefined;
         let hashElseToken: Token | undefined;
 
-        //keep track of the current error count
-        //if this is `#if false` remove all diagnostics.
+        const isReached = this.isConditionalCompileActive;
+        const evaluation = util.evaluateConditionalCompileCondition(condition, notToken, this.fileBsConsts);
+        const isThenBranchActive = isReached && evaluation.isConditionTrue;
+        const isElseBranchActive = isReached && !evaluation.isConditionTrue;
+
+        //keep track of the current error count so diagnostics from inactive branches can be discarded
         let diagnosticsLengthBeforeBlock = this.diagnostics.length;
 
-        thenBranch = this.blockConditionalCompileBranch(hashIfToken, branchBlockParser);
-        const conditionTextLower = condition.text.toLowerCase();
-        if (!this.options.bsConsts?.get(conditionTextLower) || conditionTextLower === 'false') {
-            //throw out any new diagnostics created as a result of a false block
+        thenBranch = this.withConditionalCompileActivity(isThenBranchActive, () => {
+            return this.blockConditionalCompileBranch(hashIfToken, branchBlockParser);
+        });
+        if (!isThenBranchActive) {
+            //throw out any new diagnostics created as a result of an inactive block
             this.diagnostics.splice(diagnosticsLengthBeforeBlock, this.diagnostics.length - diagnosticsLengthBeforeBlock);
         }
 
@@ -2263,16 +2281,20 @@ export class Parser {
         //else branch
         if (this.check(TokenKind.HashElseIf)) {
             // recurse-read `#else if`
-            elseBranch = this.conditionalCompileStatement(branchBlockParser);
+            elseBranch = this.withConditionalCompileActivity(isElseBranchActive, () => {
+                return this.conditionalCompileStatement(branchBlockParser);
+            });
             this.ensureNewLine();
 
         } else if (this.check(TokenKind.HashElse)) {
             hashElseToken = this.advance();
             let diagnosticsLengthBeforeBlock = this.diagnostics.length;
-            elseBranch = this.blockConditionalCompileBranch(hashIfToken, branchBlockParser);
+            elseBranch = this.withConditionalCompileActivity(isElseBranchActive, () => {
+                return this.blockConditionalCompileBranch(hashIfToken, branchBlockParser);
+            });
 
-            if (condition.text.toLowerCase() === 'true') {
-                //throw out any new diagnostics created as a result of a false block
+            if (!isElseBranchActive) {
+                //throw out any new diagnostics created as a result of an inactive block
                 this.diagnostics.splice(diagnosticsLengthBeforeBlock, this.diagnostics.length - diagnosticsLengthBeforeBlock);
             }
             this.ensureNewLine();
@@ -2293,7 +2315,7 @@ export class Parser {
             }
         }
 
-        return new ConditionalCompileStatement({
+        const statement = new ConditionalCompileStatement({
             hashIf: hashIfToken,
             hashElse: hashElseToken,
             hashEndIf: hashEndIfToken,
@@ -2302,6 +2324,25 @@ export class Parser {
             thenBranch: thenBranch,
             elseBranch: elseBranch
         });
+        statement.resolution = {
+            isConditionTrue: evaluation.isConditionTrue,
+            isConstantDeclared: evaluation.isConstantDeclared,
+            isReached: isReached
+        };
+        return statement;
+    }
+
+    /**
+     * Run the callback with `isConditionalCompileActive` set to the given value, restoring the previous value afterwards
+     */
+    private withConditionalCompileActivity<T>(isActive: boolean, callback: () => T): T {
+        const previousIsActive = this.isConditionalCompileActive;
+        this.isConditionalCompileActive = isActive;
+        try {
+            return callback();
+        } finally {
+            this.isConditionalCompileActive = previousIsActive;
+        }
     }
 
     //consume a conditional compile branch block of an `#if` statement
@@ -2425,7 +2466,7 @@ export class Parser {
         }
         const assignment = this.assignment();
         if (assignment) {
-            // check for something other than #const <name> = <otherName|true|false>
+            // check for something other than #const <name> = <true|false>
             if (assignment.tokens.as || assignment.typeExpression) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.unexpectedToken(assignment.tokens.as?.text || assignment.typeExpression?.getName(ParseMode.BrighterScript)),
@@ -2434,10 +2475,7 @@ export class Parser {
                 this.lastDiagnosticAsError();
             }
 
-            if (isVariableExpression(assignment.value) || isLiteralBoolean(assignment.value)) {
-                //value is an identifier or a boolean
-                //check for valid identifiers will happen in program validation
-            } else {
+            if (!isLiteralBoolean(assignment.value)) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.invalidHashConstValue(),
                     location: assignment.value.location
@@ -2456,7 +2494,32 @@ export class Parser {
             throw this.lastDiagnosticAsError();
         }
 
-        return new ConditionalCompileConstStatement({ hashConst: hashConstToken, assignment: assignment });
+        const statement = new ConditionalCompileConstStatement({ hashConst: hashConstToken, assignment: assignment });
+        if (this.isConditionalCompileActive) {
+            this.declareHashConst(statement);
+        }
+        return statement;
+    }
+
+    /**
+     * Apply an active `#const` to the file's constants. Redeclaring a constant that is already in effect is an error and keeps the original value.
+     * A `#const` with an invalid value declares nothing, so it can not be a redeclaration.
+     */
+    private declareHashConst(statement: ConditionalCompileConstStatement) {
+        const assignment = statement.assignment;
+        if (!isLiteralBoolean(assignment.value)) {
+            return;
+        }
+        const constName = assignment.tokens.name;
+        const constNameLower = constName.text.toLowerCase();
+        if (this.fileBsConsts.has(constNameLower)) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.duplicateConstDeclaration(constName.text),
+                location: constName.location
+            });
+        } else {
+            this.fileBsConsts.set(constNameLower, assignment.value.tokens.value.text.toLowerCase() === 'true');
+        }
     }
 
     private conditionalCompileErrorStatement() {

@@ -2563,7 +2563,10 @@ describe('parser', () => {
                     end sub
                     #    const spaces = false
                 `, ParseMode.BrighterScript);
-                expectZeroDiagnostics(diagnostics);
+                //the alias value still parses, but is reported as an invalid #const value
+                expectDiagnostics(diagnostics, [
+                    DiagnosticMessages.invalidHashConstValue().message
+                ]);
                 //#const test = true
                 let ccc = ast.statements[0] as ConditionalCompileConstStatement;
                 expect(isConditionalCompileConstStatement(ccc)).to.be.true;
@@ -2599,6 +2602,18 @@ describe('parser', () => {
                 `, ParseMode.BrighterScript);
                 expectDiagnostics(diagnostics, [
                     DiagnosticMessages.expectedOperator([TokenKind.Equal], 'test').message
+                ]);
+            });
+
+            it('has diagnostic if the value is a #const name', () => {
+                let { diagnostics } = parse(`
+                    #const test = true
+                    #const other = test
+                    #const missing = NOPE
+                `, ParseMode.BrighterScript);
+                expectDiagnostics(diagnostics, [
+                    DiagnosticMessages.invalidHashConstValue().message,
+                    DiagnosticMessages.invalidHashConstValue().message
                 ]);
             });
 

@@ -1454,6 +1454,55 @@ describe('astUtils visitors', () => {
             expect(functionsFound.has('notFalse')).to.be.true;
         });
 
+        it('evaluates literals and `not` correctly when explicit bsConsts are passed', () => {
+            const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                #if true
+                sub ifTrue()
+                end sub
+                #end if
+                #if not true
+                sub ifNotTrue()
+                end sub
+                #end if
+                #if not false
+                sub ifNotFalse()
+                end sub
+                #end if
+            `);
+            const functionsFound = new Set<string>();
+            ast.walk(createVisitor({
+                FunctionStatement: (func) => {
+                    functionsFound.add(func.getName(ParseMode.BrighterScript));
+                }
+            }), {
+                walkMode: WalkMode.visitStatements,
+                bsConsts: new Map<string, boolean>()
+            });
+            expect([...functionsFound]).to.eql(['ifTrue', 'ifNotFalse']);
+        });
+
+        it('uses the file-level #const values when no explicit bsConsts are passed', () => {
+            const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                #const DEBUG = true
+                #if DEBUG
+                sub active()
+                end sub
+                #else
+                sub inactive()
+                end sub
+                #end if
+            `);
+            const functionsFound = new Set<string>();
+            ast.walk(createVisitor({
+                FunctionStatement: (func) => {
+                    functionsFound.add(func.getName(ParseMode.BrighterScript));
+                }
+            }), {
+                walkMode: WalkMode.visitStatements
+            });
+            expect([...functionsFound]).to.eql(['active']);
+        });
+
         it('walks a new child when returned from a visitor and using an AstEditor', () => {
             let walkedLiterals: string[] = [];
 

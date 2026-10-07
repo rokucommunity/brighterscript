@@ -176,6 +176,11 @@ export class HoverProcessor {
                     exprType = expression.getType({ flags: typeFlag, typeChain: typeChain, data: extraData, ignoreCall: isCallfuncExpression(expression) });
                 }
 
+                //nodes in an inactive conditional compile branch are never added to a symbol table
+                if (!exprType) {
+                    continue;
+                }
+
                 const processedTypeChain = util.processTypeChain(typeChain);
                 const fullName = processedTypeChain.fullNameOfItem || token.text;
                 // if the type chain has dynamic in it, then just say the token text

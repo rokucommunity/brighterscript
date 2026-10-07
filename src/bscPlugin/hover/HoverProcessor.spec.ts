@@ -50,6 +50,29 @@ describe('HoverProcessor', () => {
             ).to.eql(undefined);
         });
 
+        it('does not crash when hovering an assignment in an inactive conditional compile branch', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', `
+                #const LOGGING = true
+                sub main()
+                #if LOGGING
+                    activeVar = 1
+                    print activeVar
+                #else
+                    inactiveVar = 2
+                    print inactiveVar
+                #end if
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(
+                program.getHover(file.srcPath, util.createPosition(7, 22))[0]?.contents
+            ).to.eql([fence('inactiveVar as dynamic')]);
+            expect(
+                program.getHover(file.srcPath, util.createPosition(4, 22))[0]?.contents
+            ).to.eql([fence('activeVar as integer')]);
+        });
+
         it('works for param types', () => {
             const file = program.setFile('source/main.brs', `
                 sub DoSomething(name as string)

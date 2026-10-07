@@ -5,6 +5,7 @@ import type { DottedGetExpression, LiteralExpression, TypecastExpression } from 
 import { FunctionExpression, FunctionParameterExpression, TypeExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
+import type { ConditionalCompileEvaluation } from '../util';
 import type { Location } from 'vscode-languageserver';
 import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
@@ -4768,14 +4769,32 @@ export class ConditionalCompileStatement extends Statement {
         return results;
     }
 
+    /**
+     * How the parser resolved this statement's condition against the constants in effect at its position in the file.
+     * Undefined for statements that were not created by the parser.
+     */
+    public resolution?: ConditionalCompileResolution;
+
+    /**
+     * Is the condition true? An explicit `bsConsts` map overrides the parser's resolution.
+     */
+    public isConditionTrue(explicitBsConsts?: Map<string, boolean>): boolean {
+        if (!explicitBsConsts && this.resolution) {
+            return this.resolution.isConditionTrue;
+        }
+        return util.evaluateConditionalCompileCondition(this.tokens.condition, this.tokens.not, explicitBsConsts ?? this.getBsConsts()).isConditionTrue;
+    }
+
+    /**
+     * Is the given branch (the `thenBranch` or the `elseBranch`) the one that is compiled?
+     */
+    public isBranchActive(branch: AstNode): boolean {
+        return branch === this.thenBranch ? this.isConditionTrue() : !this.isConditionTrue();
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkStatements) {
-            const bsConsts = options.bsConsts ?? this.getBsConsts();
-            let conditionTrue = bsConsts?.get(this.tokens.condition.text.toLowerCase());
-            if (this.tokens.not) {
-                // flips the boolean value
-                conditionTrue = !conditionTrue;
-            }
+            const conditionTrue = this.isConditionTrue(options.bsConsts);
             const walkFalseBlocks = options.walkMode & InternalWalkMode.visitFalseConditionalCompilationBlocks;
             if (conditionTrue || walkFalseBlocks) {
                 walk(this, 'thenBranch', visitor, options);
@@ -4791,7 +4810,7 @@ export class ConditionalCompileStatement extends Statement {
     }
 
     public clone() {
-        return this.finalizeClone(
+        const clonedStatement = this.finalizeClone(
             new ConditionalCompileStatement({
                 hashIf: util.cloneToken(this.tokens.hashIf),
                 not: util.cloneToken(this.tokens.not),
@@ -4803,6 +4822,8 @@ export class ConditionalCompileStatement extends Statement {
             }),
             ['thenBranch', 'elseBranch']
         );
+        clonedStatement.resolution = this.resolution ? { ...this.resolution } : undefined;
+        return clonedStatement;
     }
 
     public getBranchStatementIndex(stmt: Statement) {
@@ -4959,4 +4980,15 @@ export class TypeStatement extends Statement implements TypedefProvider {
             ['value']
         );
     }
+}
+
+/**
+ * How the parser resolved a `#if` / `#else if` condition
+ */
+export interface ConditionalCompileResolution extends ConditionalCompileEvaluation {
+    /**
+     * Whether the device would evaluate this condition, meaning every enclosing branch is active
+     * and, for an `#else if`, every earlier condition in the chain is false.
+     */
+    isReached: boolean;
 }

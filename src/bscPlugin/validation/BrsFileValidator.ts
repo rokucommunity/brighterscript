@@ -40,9 +40,6 @@ export class BrsFileValidator {
         // eslint-disable-next-line @typescript-eslint/dot-notation
         this.event.file['_cachedLookups'].invalidate();
 
-        // make a copy of the bsConsts, because they might be added to
-        const bsConstsBackup = new Map<string, boolean>(this.event.file.ast.getBsConsts());
-
         this.walk();
         this.flagTopLevelStatements();
         //only validate the file if it was actually parsed (skip files containing typedefs)
@@ -51,7 +48,6 @@ export class BrsFileValidator {
             this.validateTypecastStatements();
         }
 
-        this.event.file.ast.bsConsts = bsConstsBackup;
         unlinkGlobalSymbolTable();
     }
 
@@ -347,20 +343,10 @@ export class BrsFileValidator {
             PrintStatement: (node) => {
                 this.validatePrintStatementItemCount(node);
             },
-            ConditionalCompileConstStatement: (node) => {
-                const assign = node.assignment;
-                const constNameLower = assign.tokens.name?.text.toLowerCase();
-                const astBsConsts = this.event.file.ast.bsConsts;
-                if (isLiteralExpression(assign.value)) {
-                    astBsConsts.set(constNameLower, assign.value.tokens.value.text.toLowerCase() === 'true');
-                } else if (isVariableExpression(assign.value)) {
-                    if (this.validateConditionalCompileConst(assign.value.tokens.name)) {
-                        astBsConsts.set(constNameLower, astBsConsts.get(assign.value.tokens.name.text.toLowerCase()));
-                    }
-                }
-            },
             ConditionalCompileStatement: (node) => {
-                this.validateConditionalCompileConst(node.tokens.condition);
+                if (node.resolution?.isReached && !node.resolution.isConstantDeclared) {
+                    this.validateHashConstIsDeclared(node.tokens.condition);
+                }
             },
             ConditionalCompileErrorStatement: (node) => {
                 this.event.program.diagnostics.register({
@@ -501,9 +487,20 @@ export class BrsFileValidator {
             return;
         }
 
-        // is this in a top levelconditional compile?
-        if (isConditionalCompileStatement(statement.parent?.parent)) {
-            if (isOkDeclarationLocation(statement.parent.parent.parent)) {
+        // is this in a conditional compile whose outermost statement is at an ok location? Climbs `#else if` chains and nested `#if` statements
+        let conditionalCompile = statement.parent?.parent;
+        if (isConditionalCompileStatement(conditionalCompile)) {
+            while (true) {
+                const parentNode = conditionalCompile.parent;
+                if (isConditionalCompileStatement(parentNode)) {
+                    conditionalCompile = parentNode;
+                } else if (isBlock(parentNode) && isConditionalCompileStatement(parentNode.parent)) {
+                    conditionalCompile = parentNode.parent;
+                } else {
+                    break;
+                }
+            }
+            if (isOkDeclarationLocation(conditionalCompile.parent)) {
                 return;
             }
         }
@@ -704,16 +701,16 @@ export class BrsFileValidator {
     }
 
 
-    private validateConditionalCompileConst(ccConst: Token) {
-        const isBool = ccConst.kind === TokenKind.True || ccConst.kind === TokenKind.False;
-        if (!isBool && !this.event.file.ast.bsConsts.has(ccConst.text.toLowerCase())) {
+    /**
+     * Flag a reference to an undeclared `#const`, unless the target firmware evaluates it as false
+     */
+    private validateHashConstIsDeclared(constToken: Token) {
+        if (!this.event.program.firmwareCapabilities.undeclaredHashConstIsFalse) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.hashConstDoesNotExist(),
-                location: ccConst.location
+                location: constToken.location
             });
-            return false;
         }
-        return true;
     }
 
     /**

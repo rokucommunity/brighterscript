@@ -44,11 +44,6 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
     parent = parent ?? owner as unknown as AstNode;
     element.parent = parent;
 
-    //get current bsConsts
-    if (!options.bsConsts) {
-        options.bsConsts = element.getBsConsts();
-    }
-
     //notify the visitor of this element
     if (element.visitMode & options.walkMode) {
         returnValue = visitor?.(element, element.parent, owner, key);

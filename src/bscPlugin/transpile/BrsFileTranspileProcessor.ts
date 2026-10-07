@@ -1,7 +1,7 @@
 import { createAssignmentStatement, createBlock, createDottedSetStatement, createIfStatement, createIndexedSetStatement, createToken } from '../../astUtils/creators';
 import type { Editor } from '../../astUtils/Editor';
 import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression, isAliasStatement, isCallExpression, isCallfuncExpression, isEnumType, isAssignmentStatement, isBlock, isBody, isDottedSetStatement, isGroupingExpression, isIndexedSetStatement, isAugmentedAssignmentStatement, isNamespaceStatement } from '../../astUtils/reflection';
-import { createVisitor, WalkMode } from '../../astUtils/visitors';
+import { createVisitor, InternalWalkMode, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, OnPrepareFileEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
@@ -53,7 +53,9 @@ export class BrsFilePreTranspileProcessor {
                 }
             }
         }
-        const walkMode = WalkMode.visitExpressionsRecursive;
+        //inactive conditional compile branches still ship in the output, so lower their ternaries too
+        // eslint-disable-next-line no-bitwise
+        const walkMode = WalkMode.visitExpressionsRecursive | InternalWalkMode.visitFalseConditionalCompilationBlocks;
         const visitor = createVisitor({
             TernaryExpression: (ternaryExpression) => {
                 this.processTernaryExpression(ternaryExpression, visitor, walkMode);

@@ -1127,6 +1127,970 @@ describe('BrsFileValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        describe('evaluation', () => {
+            let evaluationProgram: Program;
+            afterEach(() => {
+                evaluationProgram?.dispose();
+                fsExtra.removeSync(`${rootDir}/manifest`);
+            });
+
+            /**
+             * Load a file into a new program and return `code@line` (zero-based) for every diagnostic
+             */
+            function validate(source: string, options?: { bsConsts?: Record<string, boolean>; minFirmwareVersion?: string; destPath?: string }) {
+                evaluationProgram?.dispose();
+                fsExtra.removeSync(`${rootDir}/manifest`);
+                if (options?.bsConsts) {
+                    const bsConstText = Object.entries(options.bsConsts).map(([name, value]) => `${name}=${value}`).join(';');
+                    fsExtra.outputFileSync(`${rootDir}/manifest`, `title=test\nbs_const=${bsConstText}\n`);
+                }
+                evaluationProgram = new Program({
+                    rootDir: rootDir,
+                    minFirmwareVersion: options?.minFirmwareVersion
+                });
+                const file = evaluationProgram.setFile<BrsFile>(options?.destPath ?? 'source/main.brs', source);
+                evaluationProgram.validate();
+                return {
+                    file: file,
+                    diagnostics: evaluationProgram.getDiagnostics().map(diagnostic => `${diagnostic.code}@${diagnostic.location.range.start.line}`)
+                };
+            }
+
+            function collectPrintedText(file: BrsFile) {
+                const printed: string[] = [];
+                file.ast.walk(createVisitor({
+                    PrintStatement: (statement) => {
+                        printed.push(statement.expressions.map(expression => (expression as any).tokens?.value?.text).join(''));
+                    }
+                }), { walkMode: WalkMode.visitAllRecursive });
+                return printed;
+            }
+
+            it('uses a file-level #const when walking the active branch', () => {
+                const { diagnostics } = validate(`
+                    #const LOGGING = true
+                    sub main()
+                    #if LOGGING
+                        activeVar = 1
+                        print activeVar
+                    #else
+                        inactiveVar = 2
+                        print inactiveVar
+                    #end if
+                    end sub
+                `);
+                expect(diagnostics).to.eql([]);
+            });
+
+            it('lets plugins walk the active branch and not the inactive branch', () => {
+                const { file, diagnostics } = validate(`
+                    #const LOGGING = true
+                    sub main()
+                        print "start"
+                    #if LOGGING
+                        print "active"
+                        notAFunctionActive()
+                    #else
+                        print "inactive"
+                        notAFunctionInactive()
+                    #end if
+                    end sub
+                `);
+                expect(diagnostics).to.eql(['cannot-find-function@6']);
+                expect(collectPrintedText(file)).to.eql(['"start"', '"active"']);
+            });
+
+            it('treats #if true as true', () => {
+                const { diagnostics } = validate(`
+                    #if true
+                    #error active-true-error
+                    #else
+                    #error inactive-else-error
+                    #end if
+                    sub main()
+                    end sub
+                `);
+                expect(diagnostics).to.eql(['hash-error@2']);
+            });
+
+            it('treats #if not true as false', () => {
+                const { diagnostics } = validate(`
+                    #if not true
+                    #error inactive-error
+                    #else
+                    #error active-error
+                    #end if
+                    sub main()
+                    end sub
+                `);
+                expect(diagnostics).to.eql(['hash-error@4']);
+            });
+
+            it('treats #if false as false and #if not false as true', () => {
+                const { diagnostics } = validate(`
+                    #if false
+                    #error inactive-error
+                    #end if
+                    #if not false
+                    #error active-error
+                    #end if
+                `);
+                expect(diagnostics).to.eql(['hash-error@5']);
+            });
+
+            it('validates the active branch of a literal #if inside a function', () => {
+                const { file, diagnostics } = validate(`
+                    sub main()
+                    #if true
+                        print "active"
+                        notAFunctionActive()
+                    #else
+                        print "inactive"
+                        notAFunctionInactive()
+                    #end if
+                    end sub
+                `);
+                expect(diagnostics).to.eql(['cannot-find-function@4']);
+                expect(collectPrintedText(file)).to.eql(['"active"']);
+            });
+
+            describe('parse diagnostics', () => {
+                it('keeps syntax errors in a literal true branch', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if true
+                            x = = 1
+                        #end if
+                        end sub
+                    `);
+                    expect(diagnostics).to.eql(['unexpected-token@3']);
+                });
+
+                it('drops syntax errors in the inactive else of an active #if DEBUG', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if DEBUG
+                            print "active"
+                        #else
+                            y = = 2
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expect(diagnostics).to.eql([]);
+                });
+
+                it('keeps syntax errors in an active #if not DEBUG', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if not DEBUG
+                            z = = 3
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: false } });
+                    expect(diagnostics).to.eql(['unexpected-token@3']);
+                });
+
+                it('keeps syntax errors in a branch enabled by a file-level #const', () => {
+                    const { diagnostics } = validate(`
+                        #const LOGGING = true
+                        sub main()
+                        #if LOGGING
+                            w = = 4
+                        #end if
+                        end sub
+                    `);
+                    expect(diagnostics).to.eql(['unexpected-token@4']);
+                });
+
+                it('drops syntax errors in an inactive #if not DEBUG', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if not DEBUG
+                            v = = 5
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expect(diagnostics).to.eql([]);
+                });
+
+                it('drops syntax errors in the inactive tail of an #else if chain', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if true
+                            print "active"
+                        #else if DEBUG
+                            a = = 1
+                        #else
+                            b = = 2
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expect(diagnostics).to.eql([]);
+                });
+
+                it('drops syntax errors in an inactive #if false / #else if DEBUG / #else chain', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if false
+                            a = = 1
+                        #else if DEBUG
+                            print "active"
+                        #else
+                            b = = 2
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expect(diagnostics).to.eql([]);
+                });
+
+                it('keeps syntax errors in the final #else when every earlier condition is false', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if false
+                            a = = 1
+                        #else if DEBUG
+                            print "inactive"
+                        #else
+                            b = = 2
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: false } });
+                    expect(diagnostics).to.eql(['unexpected-token@7']);
+                });
+            });
+
+            describe('duplicate #const', () => {
+                it('flags an active #const that redeclares an active #const', () => {
+                    const { diagnostics } = validate(`
+                        #const A = true
+                        #const A = false
+                        sub main()
+                        end sub
+                    `);
+                    expect(diagnostics).to.eql(['duplicate-const-declaration@2']);
+                });
+
+                it('flags a #const that redeclares a bs_const', () => {
+                    const { diagnostics } = validate(`
+                        #const DEBUG = false
+                        sub main()
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expect(diagnostics).to.eql(['duplicate-const-declaration@1']);
+                });
+
+                it('allows a duplicate #const inside an inactive branch', () => {
+                    const { diagnostics } = validate(`
+                        #const A = true
+                        #if false
+                        #const A = false
+                        #end if
+                        sub main()
+                        end sub
+                    `);
+                    expect(diagnostics).to.eql([]);
+                });
+
+                it('reports only the invalid value when a #const alias reuses a declared name', () => {
+                    const { diagnostics } = validate(`
+                        #const A = true
+                        #const A = B
+                    `);
+                    expect(diagnostics).to.eql(['invalid-hash-const-value@2']);
+                });
+
+                it('reports only the invalid value when an invalid #const reuses a bs_const name', () => {
+                    const { diagnostics } = validate(`
+                        #const DEBUG = NOPE
+                    `, { bsConsts: { DEBUG: true } });
+                    expect(diagnostics).to.eql(['invalid-hash-const-value@1']);
+                });
+
+                it('does not apply a #const declared in an inactive branch', () => {
+                    const { diagnostics } = validate(`
+                        #if false
+                        #const A = true
+                        #end if
+                        #if A
+                        #error inactive-error
+                        #end if
+                        #const A = true
+                    `, { minFirmwareVersion: '16.0.0' });
+                    expect(diagnostics).to.eql([]);
+                });
+
+                it('applies a #const declared in the active branch in source order', () => {
+                    const { diagnostics } = validate(`
+                        #const DEBUG = false
+                        #if DEBUG
+                        #const LOGGING = true
+                        #else
+                        #const LOGGING = false
+                        #end if
+                        #if LOGGING
+                        #error logging-on
+                        #end if
+                    `);
+                    expect(diagnostics).to.eql([]);
+                });
+            });
+
+            describe('undeclared #const', () => {
+                const source = `
+                    sub main()
+                    #if NOPE
+                        print "a"
+                    #end if
+                    #if LATER
+                        print "b"
+                    #end if
+                    #if INACTIVEONLY
+                        print "c"
+                    #end if
+                    end sub
+                    #const LATER = true
+                    #if false
+                    #const INACTIVEONLY = true
+                    #end if
+                `;
+
+                it('reports undeclared constants before firmware 16', () => {
+                    const { diagnostics } = validate(source, { minFirmwareVersion: '15.3.0' });
+                    expect(diagnostics).to.eql([
+                        'hash-const-does-not-exist@2',
+                        'hash-const-does-not-exist@5',
+                        'hash-const-does-not-exist@8'
+                    ]);
+                });
+
+                it('reports undeclared constants with the default firmware', () => {
+                    const { diagnostics } = validate(source);
+                    expect(diagnostics).to.eql([
+                        'hash-const-does-not-exist@2',
+                        'hash-const-does-not-exist@5',
+                        'hash-const-does-not-exist@8'
+                    ]);
+                });
+
+                it('evaluates undeclared constants as false on firmware 16 and up', () => {
+                    const { diagnostics } = validate(source, { minFirmwareVersion: '16.0.0' });
+                    expect(diagnostics).to.eql([]);
+                });
+
+                it('reports an undeclared constant in an evaluated #else if before firmware 16', () => {
+                    const { diagnostics } = validate(`
+                        #if false
+                        #else if NOPE
+                        #end if
+                    `, { minFirmwareVersion: '15.3.0' });
+                    expect(diagnostics).to.eql(['hash-const-does-not-exist@2']);
+                });
+
+                it('does not report an undeclared constant in an #else if that is never reached', () => {
+                    const { diagnostics } = validate(`
+                        #if true
+                        #else if NOPE
+                        #end if
+                    `, { minFirmwareVersion: '15.3.0' });
+                    expect(diagnostics).to.eql([]);
+                });
+
+                it('does not report an undeclared constant inside an inactive branch', () => {
+                    const { diagnostics } = validate(`
+                        #if false
+                        #if NOPE
+                        #end if
+                        #end if
+                    `, { minFirmwareVersion: '15.3.0' });
+                    expect(diagnostics).to.eql([]);
+                });
+            });
+
+            describe('duplicate functions', () => {
+                it('allows the same function in mutually exclusive branches', () => {
+                    const { diagnostics } = validate(`
+                        #if DEBUG
+                        sub logit()
+                            print "active"
+                        end sub
+                        #else
+                        sub logit()
+                            print "inactive"
+                        end sub
+                        #end if
+                        sub main()
+                            logit()
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expect(diagnostics).to.eql([]);
+                });
+
+                it('allows the same function in branches chosen by a file-level #const', () => {
+                    const { diagnostics } = validate(`
+                        #const DEBUG = false
+                        #if DEBUG
+                        #const LOGGING = true
+                        #else
+                        #const LOGGING = false
+                        #end if
+                        #if LOGGING
+                        sub logit()
+                            print "log-on"
+                        end sub
+                        #else
+                        sub logit()
+                            print "log-off"
+                        end sub
+                        #end if
+                        sub Main()
+                            logit()
+                        end sub
+                    `);
+                    expect(diagnostics).to.eql([]);
+                });
+
+                it('still reports a function duplicated within the active branch', () => {
+                    const { diagnostics } = validate(`
+                        #if true
+                        sub logit()
+                        end sub
+                        sub logit()
+                        end sub
+                        #end if
+                    `);
+                    expect(diagnostics).to.eql(['duplicate-function@2', 'duplicate-function@4']);
+                });
+            });
+
+            describe('invalid #const value', () => {
+                it('rejects an alias of a declared constant at every firmware level', () => {
+                    for (const minFirmwareVersion of ['15.3.0', '16.0.0']) {
+                        const { diagnostics } = validate(`
+                            #const A = true
+                            #const B = A
+                        `, { minFirmwareVersion: minFirmwareVersion });
+                        expect(diagnostics, minFirmwareVersion).to.eql(['invalid-hash-const-value@2']);
+                    }
+                });
+
+                it('rejects an alias of an undeclared name', () => {
+                    const { diagnostics } = validate(`
+                        #const B = NOPE
+                    `, { minFirmwareVersion: '16.0.0' });
+                    expect(diagnostics).to.eql(['invalid-hash-const-value@1']);
+                });
+
+                it('treats a later #if on the alias as undeclared before firmware 16', () => {
+                    const { diagnostics } = validate(`
+                        #const A = true
+                        #const B = A
+                        #if B
+                        #error alias-resolved
+                        #end if
+                    `, { minFirmwareVersion: '15.3.0' });
+                    expect(diagnostics).to.eql(['invalid-hash-const-value@2', 'hash-const-does-not-exist@3']);
+                });
+
+                it('treats a later #if on the alias as false on firmware 16 and up', () => {
+                    const { diagnostics } = validate(`
+                        #const A = true
+                        #const B = A
+                        #if B
+                        #error alias-resolved
+                        #end if
+                    `, { minFirmwareVersion: '16.0.0' });
+                    expect(diagnostics).to.eql(['invalid-hash-const-value@2']);
+                });
+
+                it('does not report an alias inside an inactive branch', () => {
+                    const { diagnostics } = validate(`
+                        #const A = true
+                        #if false
+                        #const B = A
+                        #end if
+                    `);
+                    expect(diagnostics).to.eql([]);
+                });
+            });
+
+            describe('declarations in inactive branches', () => {
+                async function transpile(source: string, options?: { bsConsts?: Record<string, boolean> }) {
+                    const { file, diagnostics } = validate(source, { ...options, destPath: 'source/main.bs' });
+                    const { code } = await evaluationProgram.getTranspiledFileContents(file.srcPath);
+                    return { code: code, diagnostics: diagnostics };
+                }
+
+                it('uses the active const when the inactive #else declares the same name', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if DEBUG
+                        const LEVEL = 1
+                        #else
+                        const LEVEL = 2
+                        #end if
+                        sub main()
+                            print LEVEL
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expect(diagnostics).to.eql([]);
+                    expect(code).to.include('print 1');
+                    expect(code).not.to.include('print 2');
+                });
+
+                it('uses the active enum member when the inactive #else declares the same enum', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if DEBUG
+                        enum Color
+                            red = "active-red"
+                        end enum
+                        #else
+                        enum Color
+                            red = "inactive-red"
+                        end enum
+                        #end if
+                        sub main()
+                            print Color.red
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expect(diagnostics).to.eql([]);
+                    expect(code).to.include('active-red');
+                    expect(code).not.to.include('inactive-red');
+                });
+
+                it('uses the active class and interface without duplicate-name diagnostics', () => {
+                    const { file, diagnostics } = validate(`
+                        #if DEBUG
+                        class Widget
+                            activeField = 1
+                        end class
+                        interface Shape
+                            activeMember as integer
+                        end interface
+                        #else
+                        class Widget
+                            inactiveField = 2
+                        end class
+                        interface Shape
+                            inactiveMember as integer
+                        end interface
+                        #end if
+                        sub main()
+                            w = new Widget()
+                            print w.activeField
+                        end sub
+                        function describeShape(item as Shape) as integer
+                            return item.activeMember
+                        end function
+                    `, { bsConsts: { DEBUG: true }, destPath: 'source/main.bs' });
+                    expect(diagnostics).to.eql([]);
+                    const scope = evaluationProgram.getScopesForFile(file)[0];
+                    const widget = scope.getClassMap().get('widget').item;
+                    expect(widget.fields.map(field => field.tokens.name.text)).to.eql(['activeField']);
+                    const shape = scope.getInterfaceMap().get('shape').item;
+                    expect(shape.fields.map(field => field.tokens.name.text)).to.eql(['activeMember']);
+                });
+
+                it('inlines an inactive enum and const used in the inactive branch that declares them', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if not DEBUG
+                        enum Color
+                            red = "r"
+                        end enum
+                        const LEVEL = 3
+                        sub debugOnly()
+                            print Color.red
+                            print LEVEL
+                        end sub
+                        #end if
+                        sub main()
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expect(diagnostics).to.eql([]);
+                    expect(code).to.include('print "r"');
+                    expect(code).to.include('print 3');
+                    expect(code).not.to.include('Color.red');
+                    expect(code).not.to.include('print LEVEL');
+                });
+
+                it('inlines an active enum and const used in an inactive branch', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        enum Color
+                            red = "r"
+                        end enum
+                        const LEVEL = 3
+                        sub main()
+                        #if not DEBUG
+                            print Color.red
+                            print LEVEL
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expect(diagnostics).to.eql([]);
+                    expect(code).to.include('print "r"');
+                    expect(code).to.include('print 3');
+                });
+
+                it('inlines a namespaced inactive enum and const used in an inactive branch', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        namespace alpha
+                        #if not DEBUG
+                            enum Color
+                                red = "r"
+                            end enum
+                            const LEVEL = 3
+                            sub inside()
+                                print Color.red
+                                print LEVEL
+                            end sub
+                        #end if
+                        end namespace
+                        sub main()
+                        #if not DEBUG
+                            print alpha.Color.red
+                            print alpha.LEVEL
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expect(diagnostics).to.eql([]);
+                    expect(code).to.include('print "r"');
+                    expect(code).to.include('print 3');
+                    expect(code).not.to.include('alpha_Color_red');
+                    expect(code).not.to.include('alpha_LEVEL');
+                });
+
+                it('links an inactive class to its inactive parent when transpiling', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if not DEBUG
+                        class Parent
+                            sub new()
+                            end sub
+                        end class
+                        class Child extends Parent
+                            sub new()
+                                super()
+                            end sub
+                        end class
+                        #end if
+                        sub main()
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expect(diagnostics).to.eql([]);
+                    expect(code).to.include('instance = __Parent_builder()');
+                    expect(code).to.include('instance.super0_new = instance.new');
+                    expect(code).to.include('m.super0_new()');
+                });
+
+                it('qualifies an inactive class instantiated by a namespace-relative name', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        namespace alpha
+                        #if not DEBUG
+                            class Widget
+                            end class
+                            sub make()
+                                widget = new Widget()
+                            end sub
+                        #end if
+                        end namespace
+                    `, { bsConsts: { DEBUG: true } });
+                    expect(diagnostics).to.eql([]);
+                    expect(code).to.include('widget = alpha_Widget()');
+                });
+
+                it('does not capture an inactive enum or const as a ternary closure parameter', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if not DEBUG
+                        enum Color
+                            red = "r"
+                        end enum
+                        const LEVEL = 3
+                        sub debugOnly(flag)
+                            print {k: flag ? Color.red : LEVEL}
+                        end sub
+                        #end if
+                    `, { bsConsts: { DEBUG: true } });
+                    expect(diagnostics).to.eql([]);
+                    expect(code).to.include('(function(__bsCondition)');
+                    expect(code).to.include('return "r"');
+                    expect(code).to.include('return 3');
+                });
+
+                it('resolves a namespace-relative name to the active global declaration over an inactive namespaced one', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        class Foo
+                        end class
+                        enum Color
+                            red = "active-global"
+                        end enum
+                        const LEVEL = 1
+                        namespace NS
+                            sub main()
+                                f = new Foo()
+                                print Color.red
+                                print LEVEL
+                            end sub
+                        end namespace
+                        #if false
+                        namespace NS
+                            class Foo
+                            end class
+                            enum Color
+                                red = "inactive-ns"
+                            end enum
+                            const LEVEL = 2
+                        end namespace
+                        #end if
+                    `);
+                    expect(diagnostics).to.eql([]);
+                    expect(code).to.include('f = Foo()');
+                    expect(code).not.to.include('f = NS_Foo()');
+                    expect(code).to.include('print "active-global"');
+                    expect(code).not.to.include('inactive-ns');
+                    expect(code).to.include('print 1');
+                });
+
+                it('keeps resolving to the inactive namespaced declaration when no active global one exists', async () => {
+                    const { code } = await transpile(`
+                        #if false
+                        namespace NS
+                            enum Color
+                                red = "inactive-ns"
+                            end enum
+                            sub inside()
+                                print Color.red
+                            end sub
+                        end namespace
+                        #end if
+                        sub main()
+                        end sub
+                    `);
+                    expect(code).to.include('print "inactive-ns"');
+                });
+
+                it('does not report a local variable shadowed by an inactive class', () => {
+                    const { diagnostics } = validate(`
+                        #if false
+                        class Foo
+                        end class
+                        #end if
+                        sub main()
+                            foo = 1
+                            print foo
+                        end sub
+                    `, { destPath: 'source/main.bs' });
+                    expect(diagnostics).to.eql([]);
+                });
+
+                it('still reports a local variable shadowed by an active class', () => {
+                    const { diagnostics } = validate(`
+                        class Foo
+                        end class
+                        sub main()
+                            foo = 1
+                            print foo
+                        end sub
+                    `, { destPath: 'source/main.bs' });
+                    expect(diagnostics).to.have.lengthOf(1);
+                });
+
+                it('inlines the active enum in both branches when both branches declare it', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if DEBUG
+                        enum Color
+                            red = "active-red"
+                        end enum
+                        #else
+                        enum Color
+                            red = "inactive-red"
+                        end enum
+                        #end if
+                        sub main()
+                        #if DEBUG
+                            print Color.red
+                        #else
+                            print Color.red
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expect(diagnostics).to.eql([]);
+                    expect(code.match(/print "active-red"/g)).to.have.lengthOf(2);
+                    expect(code).not.to.include('inactive-red');
+                });
+
+                it('inlines the active const in both branches when both branches declare it', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if DEBUG
+                        const LEVEL = 1
+                        #else
+                        const LEVEL = 2
+                        #end if
+                        sub main()
+                        #if DEBUG
+                            print LEVEL
+                        #else
+                            print LEVEL
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expect(diagnostics).to.eql([]);
+                    expect(code.match(/print 1/g)).to.have.lengthOf(2);
+                    expect(code).not.to.include('print 2');
+                });
+
+                it('does not report circular consts declared in an inactive branch', () => {
+                    const { diagnostics } = validate(`
+                        #if not DEBUG
+                        const A = B
+                        const B = A
+                        #end if
+                    `, { bsConsts: { DEBUG: true }, destPath: 'source/main.bs' });
+                    expect(diagnostics).to.eql([]);
+                });
+
+                it('picks the declaration using a file-level #const', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #const LOGGING = false
+                        #if LOGGING
+                        const LEVEL = 1
+                        #else
+                        const LEVEL = 2
+                        #end if
+                        sub main()
+                            print LEVEL
+                        end sub
+                    `);
+                    expect(diagnostics).to.eql([]);
+                    expect(code).to.include('print 2');
+                    expect(code).not.to.include('print 1');
+                });
+
+                it('picks the declaration from an #else if chain', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if A
+                        const LEVEL = 1
+                        #else if B
+                        const LEVEL = 2
+                        #else
+                        const LEVEL = 3
+                        #end if
+                        sub main()
+                            print LEVEL
+                        end sub
+                    `, { bsConsts: { A: false, B: true } });
+                    expect(diagnostics).to.eql([]);
+                    expect(code).to.include('print 2');
+                    expect(code).not.to.include('print 1');
+                    expect(code).not.to.include('print 3');
+                });
+
+                it('picks the final #else declaration when every earlier condition is false', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if A
+                        const LEVEL = 1
+                        #else if B
+                        const LEVEL = 2
+                        #else
+                        const LEVEL = 3
+                        #end if
+                        sub main()
+                            print LEVEL
+                        end sub
+                    `, { bsConsts: { A: false, B: false } });
+                    expect(diagnostics).to.eql([]);
+                    expect(code).to.include('print 3');
+                });
+            });
+
+            describe('declaration location', () => {
+                const chainBranchCases: Array<{ description: string; bsConsts: Record<string, boolean> }> = [
+                    { description: 'the #if branch is active', bsConsts: { A: true, B: false } },
+                    { description: 'the #else if branch is active', bsConsts: { A: false, B: true } },
+                    { description: 'the #else branch is active', bsConsts: { A: false, B: false } }
+                ];
+                for (const chainBranchCase of chainBranchCases) {
+                    it(`allows a function in every branch of a top-level #else if chain when ${chainBranchCase.description}`, () => {
+                        const { diagnostics } = validate(`
+                            #if A
+                            sub one()
+                            end sub
+                            #else if B
+                            sub two()
+                            end sub
+                            #else
+                            sub three()
+                            end sub
+                            #end if
+                        `, { bsConsts: chainBranchCase.bsConsts });
+                        expect(diagnostics).to.eql([]);
+                    });
+                }
+
+                it('allows a function in a nested #if at the top level', () => {
+                    const { diagnostics } = validate(`
+                        #if true
+                        #if true
+                        sub inner()
+                        end sub
+                        #end if
+                        #end if
+                    `);
+                    expect(diagnostics).to.eql([]);
+                });
+
+                it('allows a function in the #else of a nested #if at the top level', () => {
+                    const { diagnostics } = validate(`
+                        #if true
+                        #if false
+                        #else
+                        sub inner()
+                        end sub
+                        #end if
+                        #end if
+                    `);
+                    expect(diagnostics).to.eql([]);
+                });
+
+                it('allows a function in a nested #if inside a namespace', () => {
+                    const { diagnostics } = validate(`
+                        namespace alpha
+                            #if true
+                            #if true
+                            sub inner()
+                            end sub
+                            #end if
+                            #end if
+                        end namespace
+                    `, { destPath: 'source/main.bs' });
+                    expect(diagnostics).to.eql([]);
+                });
+
+                it('still rejects a namespace in a nested #if inside a function', () => {
+                    const { diagnostics } = validate(`
+                        function f()
+                        #if true
+                        #if true
+                            namespace alpha
+                            end namespace
+                        #end if
+                        #end if
+                        end function
+                    `, { destPath: 'source/main.bs' });
+                    expect(diagnostics).to.eql(['invalid-declaration-location@4']);
+                });
+
+                it('still rejects a namespace inside an #else if chain within a function', () => {
+                    const { diagnostics } = validate(`
+                        function f()
+                        #if A
+                        #else if B
+                            namespace alpha
+                            end namespace
+                        #end if
+                        end function
+                    `, { bsConsts: { A: false, B: true }, destPath: 'source/main.bs' });
+                    expect(diagnostics).to.eql(['invalid-declaration-location@4']);
+                });
+            });
+        });
     });
 
     describe('types', () => {
