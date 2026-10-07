@@ -1218,10 +1218,10 @@ export let DiagnosticMessages = {
     }),
     /**
      * Code the device will never run. Reported as a hint with the `Unnecessary` tag so editors fade it instead of underlining it.
-     * @param reason why the code is unreachable, shown after the message prefix
+     * @param message the complete message. Defaults to the one for an inactive conditional compile branch.
      */
-    unreachableCode: (reason = 'inactive conditional compile branch') => ({
-        message: `Unreachable code: ${reason}`,
+    unreachableCode: (message = 'Unreachable code: inactive conditional compile branch') => ({
+        message: message,
         severity: DiagnosticSeverity.Hint,
         tags: [DiagnosticTag.Unnecessary],
         code: 'unreachable-code'
