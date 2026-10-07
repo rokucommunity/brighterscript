@@ -1,4 +1,5 @@
 import { expect } from '../../chai-config.spec';
+import { DiagnosticSeverity } from 'vscode-languageserver';
 import type { CodeAction, Range } from 'vscode-languageserver';
 import { Program } from '../../Program';
 import { expectCodeActions, trim } from '../../testHelpers.spec';
@@ -1180,6 +1181,46 @@ describe('CodeActionsProcessor', () => {
             //"                    doSomething()" — 20 spaces of indent on line 2
             expect(edits[0].newText).to.equal(`                    ' bs:disable-next-line: cannot-find-function\n`);
             expect(edits[0].range).to.eql(util.createRange(2, 0, 2, 0));
+        });
+
+        it('does not offer to disable unreachable-code', () => {
+            const file = program.setFile('source/main.bs', `
+                sub init()
+                    #if false
+                        print "inactive"
+                    #end if
+                end sub
+            `);
+            program.validate();
+            expect(program.getDiagnostics().map(diagnostic => diagnostic.code)).to.eql(['unreachable-code']);
+            const actions = program.getCodeActions(file.srcPath, util.createRange(3, 0, 3, 30));
+            expect(findLineAction(actions, 'unreachable-code')).to.be.undefined;
+            expect(findFileAction(actions, 'unreachable-code')).to.be.undefined;
+            expect(actions.filter(action => action.title.includes('unreachable'))).to.eql([]);
+        });
+
+        it('still offers to disable a plugin diagnostic that shares the unreachable-code code', () => {
+            const file = program.setFile('source/main.bs', `
+                sub init()
+                    return
+                    print "after return"
+                end sub
+            `);
+            program.plugins.add({
+                name: 'unreachable-code-rule',
+                afterValidateFile: () => {
+                    program.diagnostics.register({
+                        message: 'Code after return will never run',
+                        code: 'unreachable-code',
+                        severity: DiagnosticSeverity.Warning,
+                        location: util.createLocationFromRange(file.srcPath, util.createRange(3, 20, 3, 40))
+                    });
+                }
+            });
+            program.validate();
+            const actions = program.getCodeActions(file.srcPath, util.createRange(3, 20, 3, 40));
+            expect(findLineAction(actions, 'unreachable-code')).to.exist;
+            expect(findFileAction(actions, 'unreachable-code')).to.exist;
         });
 
         it('inserts a bs:disable directive at line 0 in a brs/bs file', () => {

@@ -2,7 +2,7 @@ import { CodeActionKind } from 'vscode-languageserver';
 import { codeActionUtil } from '../../CodeActionUtil';
 import type { DeleteChange, InsertChange, ReplaceChange } from '../../CodeActionUtil';
 import type { DiagnosticMessageType } from '../../DiagnosticMessages';
-import { DiagnosticCodeMap, isDiagnosticOfType } from '../../DiagnosticMessages';
+import { DiagnosticCodeMap, DiagnosticMessages, isDiagnosticOfType } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile } from '../../files/BscFile';
 import type { XmlFile } from '../../files/XmlFile';
@@ -104,6 +104,14 @@ export class CodeActionsProcessor {
     }
 
     /**
+     * Is this bsc's own diagnostic for an inactive conditional compile branch? Matches the message from the shared
+     * factory, so same-code diagnostics from plugins are not caught.
+     */
+    private isInactiveBranchDiagnostic(diagnostic: BsDiagnostic) {
+        return diagnostic.code === DiagnosticCodeMap.unreachableCode && diagnostic.message === DiagnosticMessages.unreachableCode().message;
+    }
+
+    /**
      * For any diagnostic with a code, offers two quick-fix actions:
      *   - "Disable {code} for this line": adds the code to an existing `bs:disable-line` or
      *     `bs:disable-next-line` directive on/above the diagnostic if present, otherwise inserts
@@ -111,12 +119,14 @@ export class CodeActionsProcessor {
      *   - "Disable {code} for this file": adds the code to an existing header-level `bs:disable`
      *     directive if present, otherwise inserts a new `bs:disable: {code}` at the top of the file.
      *
+     * bsc's own inactive-branch `unreachable-code` diagnostic only fades code, so it is skipped. Other diagnostics sharing that code (such as plugin rules) are not.
+     *
      * Comment placement and the line-vs-next-line preference are centralized here so they can be
      * revisited without touching the directive parser.
      */
     private suggestDisableDiagnosticQuickFixes(diagnostic: BsDiagnostic) {
         const code = diagnostic.code;
-        if (code === undefined || code === null) {
+        if (code === undefined || code === null || this.isInactiveBranchDiagnostic(diagnostic)) {
             return;
         }
         const file = this.event.file;

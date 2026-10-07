@@ -1,7 +1,7 @@
 import * as sinonImport from 'sinon';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { Program } from '../../Program';
-import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim } from '../../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim, withoutUnreachableCode } from '../../testHelpers.spec';
 import { expect } from 'chai';
 import type { TypeCompatibilityData } from '../../interfaces';
 import { IntegerType } from '../../types/IntegerType';
@@ -5979,7 +5979,7 @@ describe('ScopeValidator', () => {
                 #end if
             `);
             program.validate();
-            expectZeroDiagnostics(program);
+            expectZeroDiagnostics(withoutUnreachableCode(program));
         });
     });
 

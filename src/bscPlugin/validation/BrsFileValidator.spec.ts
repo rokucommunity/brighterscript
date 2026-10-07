@@ -2,8 +2,8 @@ import { expect } from '../../chai-config.spec';
 import type { BrsFile } from '../../files/BrsFile';
 import type { AALiteralExpression, DottedGetExpression, FunctionExpression } from '../../parser/Expression';
 import type { AssignmentStatement, ClassStatement, ForEachStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';
-import { DiagnosticMessages } from '../../DiagnosticMessages';
-import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, rootDir, tempDir, trim } from '../../testHelpers.spec';
+import { DiagnosticCodeMap, DiagnosticMessages } from '../../DiagnosticMessages';
+import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, rootDir, tempDir, trim, withoutUnreachableCode } from '../../testHelpers.spec';
 import { Program } from '../../Program';
 import { isAssignmentStatement, isClassStatement, isForEachStatement, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isNamespaceStatement, isPrintStatement, isReturnStatement } from '../../astUtils/reflection';
 import { util, standardizePath as s } from '../../util';
@@ -18,7 +18,8 @@ import { ArrayType } from '../../types/ArrayType';
 import { DynamicType } from '../../types/DynamicType';
 import { TypedFunctionType } from '../../types/TypedFunctionType';
 import { ParseMode } from '../../parser/Parser';
-import type { ExtraSymbolData } from '../../interfaces';
+import type { BsDiagnostic, ExtraSymbolData } from '../../interfaces';
+import { DiagnosticSeverity, DiagnosticTag } from 'vscode-languageserver';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { EnumType } from '../../types';
 import { TypeStatementType } from '../../types/TypeStatementType';
@@ -1125,7 +1126,7 @@ describe('BrsFileValidator', () => {
                 end function
             `);
             program.validate();
-            expectZeroDiagnostics(program);
+            expectZeroDiagnostics(withoutUnreachableCode(program));
         });
 
         describe('evaluation', () => {
@@ -1153,7 +1154,7 @@ describe('BrsFileValidator', () => {
                 evaluationProgram.validate();
                 return {
                     file: file,
-                    diagnostics: evaluationProgram.getDiagnostics().map(diagnostic => `${diagnostic.code}@${diagnostic.location.range.start.line}`)
+                    diagnostics: withoutUnreachableCode(evaluationProgram).map(diagnostic => `${diagnostic.code}@${diagnostic.location.range.start.line}`)
                 };
             }
 
@@ -2090,6 +2091,361 @@ describe('BrsFileValidator', () => {
                     expect(diagnostics).to.eql(['invalid-declaration-location@4']);
                 });
             });
+        });
+    });
+
+    describe('unreachable code', () => {
+        afterEach(() => {
+            fsExtra.removeSync(`${rootDir}/manifest`);
+        });
+
+        /**
+         * Validate the given lines in a fresh program and return the `unreachable-code` diagnostics plus every diagnostic code that was found
+         */
+        function validateLines(lines: string[], options?: { destPath?: string; bsConsts?: Record<string, boolean>; programOptions?: Partial<ConstructorParameters<typeof Program>[0]> }) {
+            fsExtra.removeSync(`${rootDir}/manifest`);
+            if (options?.bsConsts) {
+                const bsConstText = Object.entries(options.bsConsts).map(([name, value]) => `${name}=${value}`).join(';');
+                fsExtra.outputFileSync(`${rootDir}/manifest`, `title=test\nbs_const=${bsConstText}\n`);
+            }
+            const unreachableProgram = new Program({ rootDir: rootDir, ...options?.programOptions });
+            unreachableProgram.setFile(options?.destPath ?? 'source/main.bs', lines.join('\n'));
+            unreachableProgram.validate();
+            const diagnostics = unreachableProgram.getDiagnostics();
+            return {
+                program: unreachableProgram,
+                allCodes: diagnostics.map(diagnostic => diagnostic.code),
+                unreachable: diagnostics.filter(diagnostic => diagnostic.code === DiagnosticCodeMap.unreachableCode)
+            };
+        }
+
+        function getRanges(diagnostics: BsDiagnostic[]) {
+            return diagnostics.map(diagnostic => diagnostic.location.range);
+        }
+
+        it('defines the diagnostic as a hint tagged unnecessary', () => {
+            const { unreachable } = validateLines([
+                '#if false',
+                'print "a"',
+                '#end if'
+            ]);
+            expect(unreachable).to.have.lengthOf(1);
+            expect(unreachable[0].severity).to.eql(DiagnosticSeverity.Hint);
+            expect(unreachable[0].tags).to.eql([DiagnosticTag.Unnecessary]);
+            expect(unreachable[0].message).to.eql(DiagnosticMessages.unreachableCode().message);
+        });
+
+        it('carries the tags through to the LSP diagnostic', () => {
+            const { unreachable } = validateLines([
+                '#if false',
+                'print "a"',
+                '#end if'
+            ]);
+            expect(util.toDiagnostic(unreachable[0], 'file:///source/main.bs').tags).to.eql([DiagnosticTag.Unnecessary]);
+        });
+
+        it('covers exactly the body lines of an inactive #if', () => {
+            const { unreachable, allCodes } = validateLines([
+                'sub main()',
+                'end sub',
+                '#if false',
+                '    print "a"',
+                '    print "bb"',
+                '#end if'
+            ]);
+            expect(getRanges(unreachable)).to.eql([util.createRange(3, 0, 5, 0)]);
+            expect(allCodes).to.eql(['unreachable-code']);
+        });
+
+        it('covers only the #else body when the #if is active', () => {
+            const { unreachable } = validateLines([
+                '#if true',
+                'print "a"',
+                '#else',
+                'print "b"',
+                '#end if'
+            ]);
+            expect(getRanges(unreachable)).to.eql([util.createRange(3, 0, 4, 0)]);
+        });
+
+        it('covers only the #if body when the #else is active', () => {
+            const { unreachable } = validateLines([
+                '#if not true',
+                'print "a"',
+                '#else',
+                'print "b"',
+                '#end if'
+            ]);
+            expect(getRanges(unreachable)).to.eql([util.createRange(1, 0, 2, 0)]);
+        });
+
+        it('covers the first and last bodies of an #else if chain when the middle branch is active', () => {
+            const { unreachable } = validateLines([
+                '#const A = false',
+                '#const B = true',
+                '#if A',
+                'print "a"',
+                '#else if B',
+                'print "b"',
+                '#else',
+                'print "c"',
+                '#end if'
+            ]);
+            expect(getRanges(unreachable)).to.eql([
+                util.createRange(3, 0, 4, 0),
+                util.createRange(7, 0, 8, 0)
+            ]);
+        });
+
+        it('covers every later body of an #else if chain once an earlier branch is active', () => {
+            const { unreachable } = validateLines([
+                '#if true',
+                'print "a"',
+                '#else if true',
+                'print "b"',
+                '#else',
+                'print "c"',
+                '#end if'
+            ]);
+            expect(getRanges(unreachable)).to.eql([
+                util.createRange(3, 0, 4, 0),
+                util.createRange(5, 0, 6, 0)
+            ]);
+        });
+
+        it('covers the last body of an #else if chain when every condition is false', () => {
+            const { unreachable } = validateLines([
+                '#if false',
+                'print "a"',
+                '#else if false',
+                'print "b"',
+                '#else',
+                'print "c"',
+                '#end if'
+            ]);
+            expect(getRanges(unreachable)).to.eql([
+                util.createRange(1, 0, 2, 0),
+                util.createRange(3, 0, 4, 0)
+            ]);
+        });
+
+        it('ignores a comment on the directive line when the body is empty', () => {
+            const { unreachable } = validateLines([
+                '#if false \' note',
+                '#end if'
+            ]);
+            expect(unreachable).to.eql([]);
+        });
+
+        it('ignores a comment on the directive line when the body is blank', () => {
+            const { unreachable } = validateLines([
+                '#if false \' note',
+                '',
+                '    ',
+                '#end if'
+            ]);
+            expect(unreachable).to.eql([]);
+        });
+
+        it('reports the normal range when a directive line comment is followed by real content', () => {
+            const { unreachable } = validateLines([
+                '#if false \' note',
+                'print "a"',
+                '#end if'
+            ]);
+            expect(getRanges(unreachable)).to.eql([util.createRange(1, 0, 2, 0)]);
+        });
+
+        it('ignores a comment on an #else line when the body is empty', () => {
+            const { unreachable } = validateLines([
+                '#if true',
+                'print "a"',
+                '#else \' note',
+                '#end if'
+            ]);
+            expect(unreachable).to.eql([]);
+        });
+
+        it('supports single-word #elseif and #endif directives', () => {
+            const { unreachable } = validateLines([
+                '#if false',
+                'print "a"',
+                '#elseif true',
+                'print "b"',
+                '#endif'
+            ]);
+            expect(getRanges(unreachable)).to.eql([util.createRange(1, 0, 2, 0)]);
+        });
+
+        it('does not report nested conditional compile statements inside an inactive branch', () => {
+            const { unreachable } = validateLines([
+                '#if false',
+                '#if true',
+                'print "a"',
+                '#else',
+                'print "b"',
+                '#end if',
+                '#end if'
+            ]);
+            expect(getRanges(unreachable)).to.eql([util.createRange(1, 0, 6, 0)]);
+        });
+
+        it('reports an inactive branch nested inside an active branch', () => {
+            const { unreachable } = validateLines([
+                '#if true',
+                '#if false',
+                'print "a"',
+                '#end if',
+                '#end if'
+            ]);
+            expect(getRanges(unreachable)).to.eql([util.createRange(2, 0, 3, 0)]);
+        });
+
+        it('reports one range for an inactive body that does not parse', () => {
+            const { unreachable, allCodes } = validateLines([
+                '#if false',
+                'x = = 1',
+                'if then',
+                'print "a" +',
+                'y = (',
+                '#end if'
+            ]);
+            expect(getRanges(unreachable)).to.eql([util.createRange(1, 0, 5, 0)]);
+            expect(allCodes).to.eql(['unreachable-code']);
+        });
+
+        it('covers an inactive branch inside a function', () => {
+            const { unreachable, allCodes } = validateLines([
+                'sub main()',
+                '    #if false',
+                '        print "a"',
+                '    #end if',
+                'end sub'
+            ]);
+            expect(getRanges(unreachable)).to.eql([util.createRange(2, 0, 3, 0)]);
+            expect(allCodes).to.eql(['unreachable-code']);
+        });
+
+        it('covers an inactive branch in a class body', () => {
+            const { unreachable, allCodes } = validateLines([
+                'class Foo',
+                '    #if false',
+                '        sub hidden()',
+                '        end sub',
+                '    #else',
+                '        sub shown()',
+                '        end sub',
+                '    #end if',
+                'end class'
+            ]);
+            expect(getRanges(unreachable)).to.eql([util.createRange(2, 0, 4, 0)]);
+            expect(allCodes).to.eql(['unreachable-code']);
+        });
+
+        it('covers an inactive branch in a namespace body', () => {
+            const { unreachable, allCodes } = validateLines([
+                'namespace alpha',
+                '    #if false',
+                '        sub hidden()',
+                '        end sub',
+                '    #end if',
+                'end namespace'
+            ]);
+            expect(getRanges(unreachable)).to.eql([util.createRange(2, 0, 4, 0)]);
+            expect(allCodes).to.eql(['unreachable-code']);
+        });
+
+        it('does not report empty inactive bodies', () => {
+            const { unreachable } = validateLines([
+                '#if false',
+                '#end if',
+                '#if true',
+                'print "a"',
+                '#else',
+                '#end if',
+                '#if false',
+                '',
+                '    ',
+                '#end if'
+            ]);
+            expect(unreachable).to.eql([]);
+        });
+
+        it('covers a body that only contains a comment', () => {
+            const { unreachable } = validateLines([
+                '#if false',
+                '\' just a comment',
+                '#end if'
+            ]);
+            expect(getRanges(unreachable)).to.eql([util.createRange(1, 0, 2, 0)]);
+        });
+
+        it('handles windows line endings', () => {
+            const { unreachable } = validateLines(['#if false\r\nprint "a"\r\nprint "bb"\r\n#end if']);
+            expect(getRanges(unreachable)).to.eql([util.createRange(1, 0, 3, 0)]);
+        });
+
+        it('uses a manifest bs_const to decide the branch', () => {
+            const source = [
+                '#if FLAG',
+                'print "a"',
+                '#else',
+                'print "b"',
+                '#end if'
+            ];
+            expect(getRanges(validateLines(source, { bsConsts: { FLAG: true } }).unreachable)).to.eql([util.createRange(3, 0, 4, 0)]);
+            expect(getRanges(validateLines(source, { bsConsts: { FLAG: false } }).unreachable)).to.eql([util.createRange(1, 0, 2, 0)]);
+        });
+
+        it('uses a file #const to decide the branch', () => {
+            const { unreachable } = validateLines([
+                '#const FLAG = false',
+                '#if FLAG',
+                'print "a"',
+                '#else',
+                'print "b"',
+                '#end if'
+            ]);
+            expect(getRanges(unreachable)).to.eql([util.createRange(2, 0, 3, 0)]);
+        });
+
+        it('honors diagnosticSeverityOverrides', () => {
+            const { program: overrideProgram } = validateLines([
+                '#if false',
+                'print "a"',
+                '#end if'
+            ], { programOptions: { diagnosticSeverityOverrides: { 'unreachable-code': 'error' } } });
+            const diagnostics = overrideProgram.getDiagnostics();
+            expect(diagnostics.map(diagnostic => diagnostic.severity)).to.eql([DiagnosticSeverity.Error]);
+            expect(diagnostics[0].tags).to.eql([DiagnosticTag.Unnecessary]);
+        });
+
+        it('honors diagnosticFilters', () => {
+            const { program: filteredProgram } = validateLines([
+                '#if false',
+                'print "a"',
+                '#end if'
+            ], { programOptions: { diagnosticFilters: ['unreachable-code'] } });
+            expect(filteredProgram.getDiagnostics()).to.eql([]);
+        });
+
+        it('honors bs:disable-line on the first line of the body', () => {
+            const { unreachable } = validateLines([
+                '#if false',
+                'print "a" \' bs:disable-line: unreachable-code',
+                '#end if'
+            ]);
+            expect(unreachable).to.eql([]);
+        });
+
+        it('honors a file-level bs:disable', () => {
+            const { unreachable } = validateLines([
+                '\' bs:disable: unreachable-code',
+                '#if false',
+                'print "a"',
+                '#end if'
+            ]);
+            expect(unreachable).to.eql([]);
         });
     });
 

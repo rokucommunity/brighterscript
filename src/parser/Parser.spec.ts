@@ -2530,6 +2530,21 @@ describe('parser', () => {
             expectZeroDiagnostics(diagnostics);
         });
 
+        it('allows a chain with #else if to end at end of file without a trailing newline', () => {
+            const { diagnostics } = parse('#if A\nx = 1\n#else if B\ny = 2\n#end if', ParseMode.BrighterScript, { A: true, B: false });
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows a chain with #elseif and #endif to end at end of file without a trailing newline', () => {
+            const { diagnostics } = parse('#if A\nx = 1\n#elseif B\ny = 2\n#endif', ParseMode.BrighterScript, { A: true, B: false });
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('reports junk after the #end if of a chain', () => {
+            const { diagnostics } = parse('#if A\nx = 1\n#else if B\ny = 2\n#end if x\n', ParseMode.BrighterScript, { A: true, B: false });
+            expect(diagnostics).to.not.be.empty;
+        });
+
         it('allows #if not bs_const', () => {
             let { diagnostics } = parse(`
                 sub foo()

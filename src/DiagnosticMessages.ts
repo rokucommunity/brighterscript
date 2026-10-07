@@ -1,5 +1,5 @@
 import type { Position } from 'vscode-languageserver';
-import { DiagnosticSeverity } from 'vscode-languageserver';
+import { DiagnosticSeverity, DiagnosticTag } from 'vscode-languageserver';
 import type { BsDiagnostic, DiagnosticCode, TypeCompatibilityData } from './interfaces';
 import { TokenKind } from './lexer/TokenKind';
 import util from './util';
@@ -1215,6 +1215,16 @@ export let DiagnosticMessages = {
         message: `Function has too many variables: ${actual} found, but Roku allows at most ${max} per function (parameters count toward this limit).`,
         severity: DiagnosticSeverity.Error,
         code: 'exceeds-max-variable-count'
+    }),
+    /**
+     * Code the device will never run. Reported as a hint with the `Unnecessary` tag so editors fade it instead of underlining it.
+     * @param reason why the code is unreachable, shown after the message prefix
+     */
+    unreachableCode: (reason = 'inactive conditional compile branch') => ({
+        message: `Unreachable code: ${reason}`,
+        severity: DiagnosticSeverity.Hint,
+        tags: [DiagnosticTag.Unnecessary],
+        code: 'unreachable-code'
     })
 };
 export const defaultMaximumTruncationLength = 160;

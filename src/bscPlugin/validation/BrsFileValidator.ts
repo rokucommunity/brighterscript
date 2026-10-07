@@ -29,6 +29,8 @@ export class BrsFileValidator {
     ) {
     }
 
+    private tokenIndexLookup: Map<Token, number>;
+
 
     public process() {
         const unlinkGlobalSymbolTable = this.event.file.parser.symbolTable.pushParentProvider(() => this.event.program.globalScope.symbolTable);
@@ -347,6 +349,7 @@ export class BrsFileValidator {
                 if (node.resolution?.isReached && !node.resolution.isConstantDeclared) {
                     this.validateHashConstIsDeclared(node.tokens.condition);
                 }
+                this.flagInactiveConditionalCompileBranches(node);
             },
             ConditionalCompileErrorStatement: (node) => {
                 this.event.program.diagnostics.register({
@@ -700,6 +703,90 @@ export class BrsFileValidator {
         }
     }
 
+
+    /**
+     * Report each inactive branch body of a `#if` chain as unreachable code. Only the first `#if` of a chain is handled here (it covers its `#else if` / `#else` branches).
+     * An `#if` the device never reaches sits inside an inactive branch that is already covered by its outer range.
+     * The range runs from the start of the first line after the branch's directive line to the start of the next directive's line,
+     * computed from the directive tokens so it works even when the body does not parse. Bodies without content are not reported.
+     */
+    private flagInactiveConditionalCompileBranches(chainStart: ConditionalCompileStatement) {
+        if (!chainStart.resolution?.isReached || isConditionalCompileStatement(chainStart.parent)) {
+            return;
+        }
+        let statement = chainStart;
+        while (statement) {
+            const isReached = statement.resolution.isReached;
+            const isThenBranchActive = isReached && statement.resolution.isConditionTrue;
+            const elseBranch = statement.elseBranch;
+            const nextDirective = isConditionalCompileStatement(elseBranch) ? elseBranch.tokens.hashIf : (statement.tokens.hashElse ?? statement.tokens.hashEndIf);
+            if (!isThenBranchActive) {
+                this.flagInactiveBranchBody(statement.tokens.condition, nextDirective);
+            }
+            if (isConditionalCompileStatement(elseBranch)) {
+                statement = elseBranch;
+            } else {
+                if (elseBranch && !(isReached && !statement.resolution.isConditionTrue)) {
+                    this.flagInactiveBranchBody(statement.tokens.hashElse, statement.tokens.hashEndIf);
+                }
+                break;
+            }
+        }
+    }
+
+    /**
+     * @param directiveEndToken the last token of the directive line that opens the branch
+     * @param nextDirectiveToken the directive that closes the branch
+     */
+    private flagInactiveBranchBody(directiveEndToken: Token | undefined, nextDirectiveToken: Token | undefined) {
+        if (!directiveEndToken?.location || !nextDirectiveToken?.location || !this.hasBranchBodyContent(directiveEndToken, nextDirectiveToken)) {
+            return;
+        }
+        this.event.program.diagnostics.register({
+            ...DiagnosticMessages.unreachableCode(),
+            location: util.createLocation(
+                directiveEndToken.location.range.end.line + 1,
+                0,
+                nextDirectiveToken.location.range.start.line,
+                0,
+                this.event.file.srcPath
+            )
+        });
+    }
+
+    /**
+     * Does anything other than whitespace and newlines sit between the two directives? Comments count as content,
+     * and so does any token, whether or not the parser could make a statement out of it.
+     * A comment on the opening directive's own line is not part of the body.
+     */
+    private hasBranchBodyContent(directiveEndToken: Token, nextDirectiveToken: Token) {
+        const tokens = this.event.file.parser.tokens;
+        const isInsignificant = (token: Token) => token.kind === TokenKind.Newline || token.kind === TokenKind.Whitespace;
+        const directiveLine = directiveEndToken.location.range.end.line;
+        for (let index = this.getTokenIndexLookup().get(directiveEndToken) + 1; index < tokens.length; index++) {
+            const token = tokens[index];
+            if (token.leadingTrivia?.some(trivia => !isInsignificant(trivia) && trivia.location?.range.start.line !== directiveLine)) {
+                return true;
+            }
+            if (token === nextDirectiveToken) {
+                return false;
+            }
+            if (!isInsignificant(token)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Maps each of the file's tokens to its index, built once so branch lookups stay constant time
+     */
+    private getTokenIndexLookup() {
+        if (!this.tokenIndexLookup) {
+            this.tokenIndexLookup = new Map(this.event.file.parser.tokens.map((token, index) => [token, index]));
+        }
+        return this.tokenIndexLookup;
+    }
 
     /**
      * Flag a reference to an undeclared `#const`, unless the target firmware evaluates it as false
