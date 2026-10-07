@@ -2447,6 +2447,1291 @@ describe('BrsFileValidator', () => {
             ]);
             expect(unreachable).to.eql([]);
         });
+
+        describe('control flow', () => {
+            /**
+             * Validate the lines and return each `unreachable-code` diagnostic as `startLine:startCharacter-endLine:endCharacter reason`
+             */
+            function getRegions(lines: string[], destPath?: string, bsConsts?: Record<string, boolean>) {
+                const { unreachable } = validateLines(lines, { destPath: destPath, bsConsts: bsConsts });
+                const sorted = [...unreachable].sort((a, b) => a.location.range.start.line - b.location.range.start.line || a.location.range.start.character - b.location.range.start.character);
+                return sorted.map(diagnostic => {
+                    const range = diagnostic.location.range;
+                    return `${range.start.line}:${range.start.character}-${range.end.line}:${range.end.character} ${diagnostic.message}`;
+                });
+            }
+
+            it('reports code after return with an exact range', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    return',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql(['2:4-2:13 Unreachable code after return']);
+            });
+
+            it('reports Unreachable code after throw', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    throw "error"',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql(['2:4-2:13 Unreachable code after throw']);
+            });
+
+            it('reports Unreachable code after end', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    end',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql(['2:4-2:13 Unreachable code after end']);
+            });
+
+            it('reports Unreachable code after goto', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    again:',
+                    '    goto again',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql(['3:4-3:13 Unreachable code after goto']);
+            });
+
+            it('reports code after exit for and exit while', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    for i = 0 to 1',
+                    '        exit for',
+                    '        print "a"',
+                    '    end for',
+                    '    while true',
+                    '        exit while',
+                    '        print "b"',
+                    '    end while',
+                    'end sub'
+                ])).to.eql([
+                    '3:8-3:17 Unreachable code after exit for',
+                    '7:8-7:17 Unreachable code after exit while'
+                ]);
+            });
+
+            it('reports code after continue for and continue while', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    for i = 0 to 1',
+                    '        continue for',
+                    '        print "a"',
+                    '    end for',
+                    '    while true',
+                    '        continue while',
+                    '        print "b"',
+                    '    end while',
+                    'end sub'
+                ])).to.eql([
+                    '3:8-3:17 Unreachable code after continue',
+                    '7:8-7:17 Unreachable code after continue'
+                ]);
+            });
+
+            it('reports several statements after a return as one range', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    return',
+                    '    print "a"',
+                    '    print "bb"',
+                    'end sub'
+                ])).to.eql(['2:4-3:14 Unreachable code after return']);
+            });
+
+            it('makes code reachable again at a label after a return', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    return',
+                    '    print "a"',
+                    'done:',
+                    '    print "b"',
+                    'end sub'
+                ])).to.eql(['2:4-2:13 Unreachable code after return']);
+            });
+
+            it('keeps code after a label reachable when a goto targets it', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    goto done',
+                    '    print "a"',
+                    'done:',
+                    '    print "b"',
+                    '    return',
+                    '    print "c"',
+                    'end sub'
+                ])).to.eql([
+                    '2:4-2:13 Unreachable code after goto',
+                    '6:4-6:13 Unreachable code after return'
+                ]);
+            });
+
+            it('does not treat stop as an exit', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    stop',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('reports code after an if where every branch exits', () => {
+                expect(getRegions([
+                    'sub main(x, y)',
+                    '    if x then',
+                    '        return',
+                    '    else if y then',
+                    '        throw "error"',
+                    '    else',
+                    '        end',
+                    '    end if',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql(['8:4-8:13 Unreachable code after an if statement whose branches all exit']);
+            });
+
+            it('does not treat an if without an else as exiting', () => {
+                expect(getRegions([
+                    'sub main(x, y)',
+                    '    if x then',
+                    '        return',
+                    '    else if y then',
+                    '        return',
+                    '    end if',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('does not treat an if as exiting when one branch continues', () => {
+                expect(getRegions([
+                    'sub main(x, y)',
+                    '    if x then',
+                    '        return',
+                    '    else',
+                    '        print "b"',
+                    '    end if',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('reports Unreachable code after a try/catch whose blocks both exit', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    try',
+                    '        return',
+                    '    catch e',
+                    '        throw e',
+                    '    end try',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql(['6:4-6:13 Unreachable code after a try/catch whose blocks both exit']);
+            });
+
+            it('does not treat a try/catch as exiting when only one block exits', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    try',
+                    '        return',
+                    '    catch e',
+                    '        print "b"',
+                    '    end try',
+                    '    try',
+                    '        print "c"',
+                    '    catch e',
+                    '        return',
+                    '    end try',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('reports code after a while true loop with no way out', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    while true',
+                    '        print "x"',
+                    '    end while',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql(['4:4-4:13 Unreachable code after an infinite loop']);
+            });
+
+            it('sees through parentheses around a literal true loop condition', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    while (true)',
+                    '        print "x"',
+                    '    end while',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql(['4:4-4:13 Unreachable code after an infinite loop']);
+            });
+
+            it('does not treat while true with an exit while as infinite', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    while true',
+                    '        if x then',
+                    '            exit while',
+                    '        end if',
+                    '    end while',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('still treats while true as infinite when the only exit while belongs to a nested loop', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    while true',
+                    '        while x',
+                    '            exit while',
+                    '        end while',
+                    '    end while',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql(['6:4-6:13 Unreachable code after an infinite loop']);
+            });
+
+            it('does not treat while true containing a goto as infinite', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    while true',
+                    '        goto done',
+                    '    end while',
+                    '    print "a"',
+                    'done:',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('keeps code after while true unreachable when the body returns', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    while true',
+                    '        if x then',
+                    '            return',
+                    '        end if',
+                    '    end while',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql(['6:4-6:13 Unreachable code after an infinite loop']);
+            });
+
+            it('never treats for and for each loops as infinite', () => {
+                expect(getRegions([
+                    'sub main(items)',
+                    '    for i = 0 to 10',
+                    '        print i',
+                    '    end for',
+                    '    print "a"',
+                    '    for each item in items',
+                    '        print item',
+                    '    end for',
+                    '    print "b"',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('limits exit for inside an if inside a loop to that if block', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    for i = 0 to 10',
+                    '        if x then',
+                    '            exit for',
+                    '            print "a"',
+                    '        end if',
+                    '        print "b"',
+                    '    end for',
+                    '    print "c"',
+                    'end sub'
+                ])).to.eql(['4:12-4:21 Unreachable code after exit for']);
+            });
+
+            it('limits continue for inside an if inside a loop to that if block', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    for i = 0 to 10',
+                    '        if x then',
+                    '            continue for',
+                    '            print "a"',
+                    '        end if',
+                    '        print "b"',
+                    '    end for',
+                    '    print "c"',
+                    'end sub'
+                ])).to.eql(['4:12-4:21 Unreachable code after continue']);
+            });
+
+            it('reports the then branch of if false', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    if false then',
+                    '        print "a"',
+                    '    end if',
+                    '    print "b"',
+                    'end sub'
+                ])).to.eql(['2:8-2:17 Unreachable code: condition is always false']);
+            });
+
+            it('reports the then branch of a parenthesized false', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    if (false) then',
+                    '        print "a"',
+                    '    end if',
+                    'end sub'
+                ])).to.eql(['2:8-2:17 Unreachable code: condition is always false']);
+            });
+
+            it('reports every else if and else after if true', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    if true then',
+                    '        print "a"',
+                    '    else if x then',
+                    '        print "b"',
+                    '    else',
+                    '        print "c"',
+                    '    end if',
+                    'end sub'
+                ])).to.eql([
+                    '4:8-4:17 Unreachable code: an earlier condition is always true',
+                    '6:8-6:17 Unreachable code: an earlier condition is always true'
+                ]);
+            });
+
+            it('reports the body of an else if false', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    if x then',
+                    '        print "a"',
+                    '    else if false then',
+                    '        print "b"',
+                    '    end if',
+                    'end sub'
+                ])).to.eql(['4:8-4:17 Unreachable code: condition is always false']);
+            });
+
+            it('does not fold comparisons', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    if 1 = 1 then',
+                    '        print "a"',
+                    '    else',
+                    '        print "b"',
+                    '    end if',
+                    '    while 1 = 1',
+                    '        print "c"',
+                    '    end while',
+                    '    print "d"',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('reports the body of while false', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    while false',
+                    '        print "a"',
+                    '    end while',
+                    '    print "b"',
+                    'end sub'
+                ])).to.eql(['2:8-2:17 Unreachable code: condition is always false']);
+            });
+
+            it('folds not', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    if not true then',
+                    '        print "a"',
+                    '    end if',
+                    'end sub'
+                ])).to.eql(['2:8-2:17 Unreachable code: condition is always false']);
+            });
+
+            it('folds not in an else if', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    if x then',
+                    '        print "a"',
+                    '    else if not true then',
+                    '        print "b"',
+                    '    end if',
+                    'end sub'
+                ])).to.eql(['4:8-4:17 Unreachable code: condition is always false']);
+            });
+
+            it('folds nested parentheses and not', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    if (not (true)) then',
+                    '        print "a"',
+                    '    end if',
+                    'end sub'
+                ])).to.eql(['2:8-2:17 Unreachable code: condition is always false']);
+            });
+
+            it('folds and with a known false on either side', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    if x and false then',
+                    '        print "a"',
+                    '    end if',
+                    '    if false and x then',
+                    '        print "b"',
+                    '    end if',
+                    'end sub'
+                ])).to.eql([
+                    '2:8-2:17 Unreachable code: condition is always false',
+                    '5:8-5:17 Unreachable code: condition is always false'
+                ]);
+            });
+
+            it('does not fold and when one side is unknown and the other is true', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    if x and true then',
+                    '        print "a"',
+                    '    else',
+                    '        print "b"',
+                    '    end if',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('folds or with a known true on either side', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    if x or true then',
+                    '        print "a"',
+                    '    else',
+                    '        print "b"',
+                    '    end if',
+                    'end sub'
+                ])).to.eql(['4:8-4:17 Unreachable code: an earlier condition is always true']);
+            });
+
+            it('treats while with a known true or condition as infinite', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    while true or x',
+                    '        print "a"',
+                    '    end while',
+                    '    print "b"',
+                    'end sub'
+                ])).to.eql(['4:4-4:13 Unreachable code after an infinite loop']);
+            });
+
+            it('analyzes nested anonymous functions separately', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    callback = function()',
+                    '        return 1',
+                    '        print "inner"',
+                    '    end function',
+                    '    print "after"',
+                    'end sub'
+                ])).to.eql(['3:8-3:21 Unreachable code after return']);
+            });
+
+            it('keeps code after an anonymous function that returns reachable', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    callback = function()',
+                    '        return 1',
+                    '    end function',
+                    '    print "after"',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('reports one outer range for an unreachable region containing a nested return', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    return',
+                    '    if x then',
+                    '        return',
+                    '        print "a"',
+                    '    end if',
+                    '    print "b"',
+                    'end sub'
+                ])).to.eql(['2:4-6:13 Unreachable code after return']);
+            });
+
+            it('does not report a function nested in an unreachable region separately', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    return',
+                    '    callback = function()',
+                    '        return 1',
+                    '        print "inner"',
+                    '    end function',
+                    'end sub'
+                ])).to.eql(['2:4-5:16 Unreachable code after return']);
+            });
+
+            it('ignores a return inside an inactive branch', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    #if false',
+                    '        return',
+                    '    #end if',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql(['2:0-3:0 Unreachable code: inactive conditional compile branch']);
+            });
+
+            it('does not report an inactive branch separately inside a run that began before it', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    return',
+                    '    print 1',
+                    '    #if false',
+                    '        print "a"',
+                    '    #end if',
+                    '    print 2',
+                    'end sub'
+                ])).to.eql(['2:4-6:11 Unreachable code after return']);
+            });
+
+            it('reports an inactive branch that no run covers', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    return',
+                    '    #if false',
+                    '        print "a"',
+                    '    #end if',
+                    '    print 1',
+                    'end sub'
+                ])).to.eql([
+                    '3:0-4:0 Unreachable code: inactive conditional compile branch',
+                    '5:4-5:11 Unreachable code after return'
+                ]);
+            });
+
+            it('analyzes statements inside an active conditional compile branch', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    #if true',
+                    '        return',
+                    '        print "a"',
+                    '    #end if',
+                    'end sub'
+                ])).to.eql(['3:8-3:17 Unreachable code after return']);
+            });
+
+            it('excludes trailing comments from the range', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    return',
+                    '    print "a" \' trailing',
+                    '    \' another comment',
+                    'end sub'
+                ])).to.eql(['2:4-2:13 Unreachable code after return']);
+            });
+
+            it('analyzes class methods', () => {
+                expect(getRegions([
+                    'class Foo',
+                    '    sub bar()',
+                    '        return',
+                    '        print "a"',
+                    '    end sub',
+                    'end class'
+                ])).to.eql(['3:8-3:17 Unreachable code after return']);
+            });
+
+            it('analyzes namespace functions', () => {
+                expect(getRegions([
+                    'namespace alpha',
+                    '    sub beta()',
+                    '        return',
+                    '        print "a"',
+                    '    end sub',
+                    'end namespace'
+                ])).to.eql(['3:8-3:17 Unreachable code after return']);
+            });
+
+            it('keeps one range from before an #if through an active branch up to a label', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    return',
+                    '    print 1',
+                    '    #if true',
+                    '        print 2',
+                    'skip:',
+                    '        print 3',
+                    '    #end if',
+                    '    print 4',
+                    'end sub'
+                ])).to.eql(['2:4-4:15 Unreachable code after return']);
+            });
+
+            it('keeps one range across an active #if when the run continues past #end if', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    return',
+                    '    print 1',
+                    '    #if true',
+                    '        print 2',
+                    '    #else',
+                    '        print 3',
+                    '    #end if',
+                    '    print 4',
+                    'end sub'
+                ])).to.eql(['2:4-8:11 Unreachable code after return']);
+            });
+
+            it('ends a run that begins inside an active branch at #end if', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    #if true',
+                    '        return',
+                    '        print 1',
+                    '    #else',
+                    '        print 2',
+                    '    #end if',
+                    '    print 3',
+                    'end sub'
+                ])).to.eql([
+                    '3:8-3:15 Unreachable code after return',
+                    '5:0-6:0 Unreachable code: inactive conditional compile branch',
+                    '7:4-7:11 Unreachable code after return'
+                ]);
+            });
+
+            it('reports code after #end if when the active branch returns', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    #if true',
+                    '        return',
+                    '    #end if',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql(['4:4-4:13 Unreachable code after return']);
+            });
+
+            it('reports code after #end if when an active else if branch returns', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    #if false',
+                    '        print 1',
+                    '    #else if true',
+                    '        return',
+                    '    #end if',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql([
+                    '2:0-3:0 Unreachable code: inactive conditional compile branch',
+                    '6:4-6:13 Unreachable code after return'
+                ]);
+            });
+
+            it('follows the manifest bs_const for an exit in an #if branch', () => {
+                const source = [
+                    'sub main()',
+                    '    #if DEBUG',
+                    '        return',
+                    '    #end if',
+                    '    print "a"',
+                    'end sub'
+                ];
+                expect(getRegions(source, undefined, { DEBUG: true })).to.eql(['4:4-4:13 Unreachable code after return']);
+                expect(getRegions(source, undefined, { DEBUG: false })).to.eql(['2:0-3:0 Unreachable code: inactive conditional compile branch']);
+            });
+
+            it('ignores a goto inside an inactive branch', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    #if false',
+                    '        goto done',
+                    '    #end if',
+                    '    print "a"',
+                    'done:',
+                    'end sub'
+                ])).to.eql(['2:0-3:0 Unreachable code: inactive conditional compile branch']);
+            });
+
+            it('treats while true as infinite when its only exit while is in an inactive branch', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    while true',
+                    '        #if false',
+                    '            exit while',
+                    '        #end if',
+                    '    end while',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql([
+                    '3:0-4:0 Unreachable code: inactive conditional compile branch',
+                    '6:4-6:13 Unreachable code after an infinite loop'
+                ]);
+            });
+
+            it('does not treat while true as infinite when its exit while is in an active branch', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    while true',
+                    '        #if true',
+                    '            exit while',
+                    '        #end if',
+                    '    end while',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('makes code reachable from a label nested inside an if body after a return', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    goto skip',
+                    '    print 1',
+                    '    if x then',
+                    '        print 2',
+                    'skip:',
+                    '        print 3',
+                    '    end if',
+                    '    print 4',
+                    'end sub'
+                ])).to.eql(['2:4-4:15 Unreachable code after goto']);
+            });
+
+            it('makes code reachable from a label nested inside an else branch', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    return',
+                    '    if x then',
+                    '        print 1',
+                    '    else',
+                    '        print 2',
+                    'skip:',
+                    '        print 3',
+                    '    end if',
+                    '    print 4',
+                    'end sub'
+                ])).to.eql([
+                    '3:8-3:15 Unreachable code after return',
+                    '5:8-5:15 Unreachable code after return'
+                ]);
+            });
+
+            it('reports an if false body only up to a label inside it', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    if x then',
+                    '        goto skip',
+                    '    end if',
+                    '    if false then',
+                    '        print 1',
+                    'skip:',
+                    '        print 2',
+                    '    end if',
+                    '    print 3',
+                    'end sub'
+                ])).to.eql(['5:8-5:15 Unreachable code: condition is always false']);
+            });
+
+            it('does not report an if false body when a label comes first', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    if x then',
+                    '        goto skip',
+                    '    end if',
+                    '    if false then',
+                    'skip:',
+                    '        print 1',
+                    '    end if',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('reports the branches after if true only up to a label', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    if true then',
+                    '        print 1',
+                    '    else',
+                    '        print 2',
+                    'skip:',
+                    '        print 3',
+                    '    end if',
+                    'end sub'
+                ])).to.eql(['4:8-4:15 Unreachable code: an earlier condition is always true']);
+            });
+
+            it('keeps code after while true unreachable when a label in its body resumes the body', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    goto skip',
+                    '    while true',
+                    '        print 1',
+                    'skip:',
+                    '        print 2',
+                    '    end while',
+                    '    print 3',
+                    'end sub'
+                ])).to.eql(['7:4-7:11 Unreachable code after goto']);
+            });
+
+            it('makes code after a loop reachable when a label in its body is followed by an exit while', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    goto skip',
+                    '    while true',
+                    '        print 1',
+                    'skip:',
+                    '        exit while',
+                    '    end while',
+                    '    print 3',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('makes code reachable from a label inside a for body', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    goto skip',
+                    '    for i = 0 to 1',
+                    '        print 1',
+                    'skip:',
+                    '        print 2',
+                    '    end for',
+                    '    print 3',
+                    'end sub'
+                ])).to.eql(['3:8-3:15 Unreachable code after goto']);
+            });
+
+            it('makes code reachable from a label inside a catch block', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    goto skip',
+                    '    try',
+                    '        print 1',
+                    '    catch e',
+                    '        print 2',
+                    'skip:',
+                    '        print 3',
+                    '    end try',
+                    '    print 4',
+                    'end sub'
+                ])).to.eql([
+                    '3:8-3:15 Unreachable code after goto',
+                    '5:8-5:15 Unreachable code after goto'
+                ]);
+            });
+
+            it('does not count a label inside a nested function', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    return',
+                    '    callback = sub()',
+                    'skip:',
+                    '        print 1',
+                    '    end sub',
+                    '    print 2',
+                    'end sub'
+                ])).to.eql(['2:4-6:11 Unreachable code after return']);
+            });
+
+            describe('loops entered through a label', () => {
+                it('keeps the start of a while body reachable when a goto jumps to a label in it', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    goto skip',
+                        '    while x',
+                        '        print "a"',
+                        '        skip:',
+                        '        x = x - 1',
+                        '    end while',
+                        'end sub'
+                    ])).to.eql([]);
+                });
+
+                it('keeps the start of a while body reachable when the label is inside an if', () => {
+                    expect(getRegions([
+                        'sub main(x, y)',
+                        '    goto skip',
+                        '    while x',
+                        '        print "a"',
+                        '        if y then',
+                        '            skip:',
+                        '            print "b"',
+                        '        end if',
+                        '    end while',
+                        'end sub'
+                    ])).to.eql([]);
+                });
+
+                it('keeps the start of a while body reachable when the body ends with continue while after the label', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    return',
+                        '    while x',
+                        '        print "a"',
+                        '        skip:',
+                        '        continue while',
+                        '    end while',
+                        'end sub'
+                    ])).to.eql([]);
+                });
+
+                it('keeps the start of a while true body reachable but reports the code after the loop', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    goto skip',
+                        '    while true',
+                        '        print "a"',
+                        '        skip:',
+                        '        print "b"',
+                        '    end while',
+                        '    print "after"',
+                        'end sub'
+                    ])).to.eql(['7:4-7:17 Unreachable code after goto']);
+                });
+
+                it('does not fade the headers of the statements that lead to a label deep in a while body', () => {
+                    expect(getRegions([
+                        'sub main(x, y)',
+                        '    return',
+                        '    print "dead"',
+                        '    while x',
+                        '        if y then',
+                        '            try',
+                        '                print "a"',
+                        '            catch e',
+                        '                print "b"',
+                        '                deep:',
+                        '                print "c"',
+                        '            end try',
+                        '        end if',
+                        '    end while',
+                        'end sub'
+                    ])).to.eql(['2:4-2:16 Unreachable code after return']);
+                });
+
+                it('keeps the start of a while body reachable inside a dead if false branch', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    goto skip',
+                        '    if false then',
+                        '        while x',
+                        '            print "a"',
+                        '            skip:',
+                        '            print "b"',
+                        '        end while',
+                        '    end if',
+                        'end sub'
+                    ])).to.eql([]);
+                });
+
+                it('still reports code before a label in a for loop body', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    return',
+                        '    for i = 0 to 3',
+                        '        print "pre"',
+                        '        lbl:',
+                        '        print "post"',
+                        '    end for',
+                        'end sub'
+                    ])).to.eql(['3:8-3:19 Unreachable code after return']);
+                });
+            });
+
+            describe('inactive branches next to a run', () => {
+                const bsConsts = { DEBUG: true, PROD: false };
+
+                it('reports an inactive #if branch after a run that ends before it', () => {
+                    expect(getRegions([
+                        'sub main()',
+                        '    return',
+                        '    print 1',
+                        '#if PROD',
+                        '    print "inactive"',
+                        '#end if',
+                        'end sub'
+                    ], undefined, bsConsts)).to.eql([
+                        '2:4-2:11 Unreachable code after return',
+                        '4:0-5:0 Unreachable code: inactive conditional compile branch'
+                    ]);
+                });
+
+                it('reports an inactive #if branch when a label right after #end if ends the run', () => {
+                    expect(getRegions([
+                        'sub main()',
+                        '    return',
+                        '    print 1',
+                        '#if PROD',
+                        '    print "inactive"',
+                        '#end if',
+                        'skip:',
+                        '    print 2',
+                        'end sub'
+                    ], undefined, bsConsts)).to.eql([
+                        '2:4-2:11 Unreachable code after return',
+                        '4:0-5:0 Unreachable code: inactive conditional compile branch'
+                    ]);
+                });
+
+                it('reports the inactive #else after an active #if branch that starts with a label', () => {
+                    expect(getRegions([
+                        'sub main()',
+                        '    return',
+                        '    print 1',
+                        '#if DEBUG',
+                        'skip:',
+                        '    print 2',
+                        '#else',
+                        '    print "inactive"',
+                        '#end if',
+                        'end sub'
+                    ], undefined, bsConsts)).to.eql([
+                        '2:4-2:11 Unreachable code after return',
+                        '7:0-8:0 Unreachable code: inactive conditional compile branch'
+                    ]);
+                });
+
+                it('does not report an inactive branch that lies inside a run ending within the chain', () => {
+                    expect(getRegions([
+                        'sub main()',
+                        '    return',
+                        '    print 1',
+                        '#if PROD',
+                        '    print "inactive"',
+                        '#else',
+                        '    print 2',
+                        'skip:',
+                        '    print 3',
+                        '#end if',
+                        'end sub'
+                    ], undefined, bsConsts)).to.eql(['2:4-6:11 Unreachable code after return']);
+                });
+
+                it('keeps one range and no inactive hint when the run continues past #end if', () => {
+                    expect(getRegions([
+                        'sub main()',
+                        '    return',
+                        '    print 1',
+                        '#if PROD',
+                        '    print "inactive"',
+                        '#end if',
+                        '    print 2',
+                        'end sub'
+                    ], undefined, bsConsts)).to.eql(['2:4-6:11 Unreachable code after return']);
+                });
+
+                function expectNoOverlap(lines: string[]) {
+                    const ranges = getRanges(validateLines(lines, { bsConsts: bsConsts }).unreachable);
+                    for (let firstIndex = 0; firstIndex < ranges.length; firstIndex++) {
+                        for (let secondIndex = firstIndex + 1; secondIndex < ranges.length; secondIndex++) {
+                            const first = ranges[firstIndex];
+                            const second = ranges[secondIndex];
+                            const isDisjoint = util.comparePosition(first.end, second.start) <= 0 || util.comparePosition(second.end, first.start) <= 0;
+                            expect(isDisjoint, `${JSON.stringify(first)} overlaps ${JSON.stringify(second)}`).to.be.true;
+                        }
+                    }
+                }
+
+                it('ends a run that starts after a label in an active branch at #end if', () => {
+                    const lines = [
+                        'sub main(x)',
+                        '    return',
+                        '    print 0',
+                        '#if DEBUG',
+                        '    print 1',
+                        '    lbl:',
+                        '    return',
+                        '    print 2',
+                        '#else',
+                        '    print "inactive"',
+                        '#end if',
+                        '    print 3',
+                        'end sub'
+                    ];
+                    expect(getRegions(lines, undefined, bsConsts)).to.eql([
+                        '2:4-4:11 Unreachable code after return',
+                        '7:4-7:11 Unreachable code after return',
+                        '9:0-10:0 Unreachable code: inactive conditional compile branch',
+                        '11:4-11:11 Unreachable code after return'
+                    ]);
+                    expectNoOverlap(lines);
+                });
+
+                it('ends a run that starts after a while true containing a label in an active branch at #end if', () => {
+                    const lines = [
+                        'sub main(x)',
+                        '    return',
+                        '    print 0',
+                        '#if DEBUG',
+                        '    print 1',
+                        '    while true',
+                        '        lbl:',
+                        '        print 2',
+                        '    end while',
+                        '    print 3',
+                        '    return',
+                        '    print 4',
+                        '#else',
+                        '    print "inactive"',
+                        '#end if',
+                        '    print 5',
+                        'end sub'
+                    ];
+                    expect(getRegions(lines, undefined, bsConsts)).to.eql([
+                        '2:4-4:11 Unreachable code after return',
+                        '9:4-11:11 Unreachable code after return',
+                        '13:0-14:0 Unreachable code: inactive conditional compile branch',
+                        '15:4-15:11 Unreachable code after return'
+                    ]);
+                    expectNoOverlap(lines);
+                });
+
+                it('ends a run that starts after an if containing a label in an active branch at #end if', () => {
+                    const lines = [
+                        'sub main(x)',
+                        '    return',
+                        '    print 0',
+                        '#if DEBUG',
+                        '    print 1',
+                        '    if x',
+                        '        lbl:',
+                        '    end if',
+                        '    return',
+                        '    print 2',
+                        '#else',
+                        '    print "inactive"',
+                        '#end if',
+                        '    print 3',
+                        'end sub'
+                    ];
+                    expect(getRegions(lines, undefined, bsConsts)).to.eql([
+                        '2:4-4:11 Unreachable code after return',
+                        '9:4-9:11 Unreachable code after return',
+                        '11:0-12:0 Unreachable code: inactive conditional compile branch',
+                        '13:4-13:11 Unreachable code after return'
+                    ]);
+                    expectNoOverlap(lines);
+                });
+
+                it('ends a run that starts after a label in a nested active branch at its own #end if', () => {
+                    const lines = [
+                        'sub main(x)',
+                        '    return',
+                        '    print 0',
+                        '#if DEBUG',
+                        '    print 1',
+                        '    #if DEBUG',
+                        '        print 2',
+                        '        lbl:',
+                        '        return',
+                        '        print 3',
+                        '    #else',
+                        '        print "inactive inner"',
+                        '    #end if',
+                        '    print 4',
+                        '#else',
+                        '    print "inactive"',
+                        '#end if',
+                        '    print 5',
+                        'end sub'
+                    ];
+                    expect(getRegions(lines, undefined, bsConsts)).to.eql([
+                        '2:4-6:15 Unreachable code after return',
+                        '9:8-9:15 Unreachable code after return',
+                        '11:0-12:0 Unreachable code: inactive conditional compile branch',
+                        '13:4-13:11 Unreachable code after return',
+                        '15:0-16:0 Unreachable code: inactive conditional compile branch',
+                        '17:4-17:11 Unreachable code after return'
+                    ]);
+                    expectNoOverlap(lines);
+                });
+
+                it('ends a run that starts after a label in an active branch at #end if with CRLF line endings', () => {
+                    const lines = [
+                        'sub main(x)',
+                        '    return',
+                        '    print 0',
+                        '#if DEBUG',
+                        '    print 1',
+                        '    lbl:',
+                        '    return',
+                        '    print 2',
+                        '#else',
+                        '    print "inactive"',
+                        '#end if',
+                        '    print 3',
+                        'end sub'
+                    ].map(line => `${line}\r`);
+                    expect(getRegions(lines, undefined, bsConsts)).to.eql([
+                        '2:4-4:11 Unreachable code after return',
+                        '7:4-7:11 Unreachable code after return',
+                        '9:0-10:0 Unreachable code: inactive conditional compile branch',
+                        '11:4-11:11 Unreachable code after return'
+                    ]);
+                    expectNoOverlap(lines);
+                });
+            });
+
+            it('skips control flow analysis for the outer function when a nested anonymous function has a parse error', () => {
+                const { unreachable } = validateLines([
+                    'sub main()',
+                    '    return',
+                    '    print 1',
+                    '    inner = sub()',
+                    '        print (',
+                    '    end sub',
+                    'end sub'
+                ]);
+                expect(unreachable).to.eql([]);
+            });
+
+            it('skips control flow analysis for a function with a parse error', () => {
+                const { allCodes, unreachable } = validateLines([
+                    'sub main()',
+                    '    return',
+                    '    print 1',
+                    '    if true then',
+                    '        print 2',
+                    'end sub'
+                ]);
+                expect(allCodes.filter(code => code !== DiagnosticCodeMap.unreachableCode)).to.not.eql([]);
+                expect(unreachable).to.eql([]);
+            });
+
+            it('still analyzes other functions in a file with a parse error', () => {
+                const { unreachable } = validateLines([
+                    'sub first()',
+                    '    return',
+                    '    print 1',
+                    'end sub',
+                    'sub second()',
+                    '    if true then',
+                    '        print 2',
+                    'end sub'
+                ]);
+                expect(unreachable).to.have.lengthOf(1);
+            });
+
+            it('keeps the disable quick fixes available for control flow diagnostics', () => {
+                const { program, unreachable } = validateLines([
+                    'sub main()',
+                    '    return',
+                    '    print "a"',
+                    'end sub'
+                ]);
+                const file = program.getFile('source/main.bs');
+                const actions = program.getCodeActions(file.srcPath, unreachable[0].location.range);
+                expect(actions.some(action => action.title.startsWith('Disable unreachable-code for this file'))).to.be.true;
+            });
+        });
     });
 
     describe('types', () => {

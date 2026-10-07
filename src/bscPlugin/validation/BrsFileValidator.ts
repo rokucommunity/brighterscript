@@ -13,11 +13,12 @@ import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
-import type { Location, Range } from 'vscode-languageserver';
+import type { Location, Position, Range } from 'vscode-languageserver';
 import type { Token } from '../../lexer/Token';
 import type { BrightScriptDoc } from '../../parser/BrightScriptDocParser';
 import brsDocParser from '../../parser/BrightScriptDocParser';
 import { TypeStatementType } from '../../types/TypeStatementType';
+import { findUnreachableRegions, isInsideInactiveConditionalCompileBranch } from './ControlFlowReachability';
 import * as semver from 'semver';
 import { CONTINUE_MIN_FIRMWARE_VERSION, OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION } from '../../RokuConstants';
 import type { AvailabilityAxis } from '../../DiagnosticMessages';
@@ -30,6 +31,26 @@ export class BrsFileValidator {
     }
 
     private tokenIndexLookup: Map<Token, number>;
+
+    /**
+     * Statements inside a run already reported as unreachable by control flow. Anything inside one is covered by that report.
+     */
+    private controlFlowUnreachableNodes = new Set<AstNode>();
+
+    /**
+     * Conditional compile chains whose inactive branches are covered by a run reported by control flow
+     */
+    private controlFlowCoveredChains = new Set<AstNode>();
+
+    /**
+     * Conditional compile chains that a run reported by control flow ends inside, mapped to that run's location
+     */
+    private controlFlowPartiallyCoveredChains = new Map<AstNode, Location>();
+
+    /**
+     * Parser diagnostics sorted by start position. Each entry also holds the furthest end among the entries up to and including it.
+     */
+    private parseDiagnosticIndex: Array<{ start: Position; furthestEnd: Position }> | undefined;
 
 
     public process() {
@@ -227,6 +248,7 @@ export class BrsFileValidator {
                 }
                 this.validateFunctionParameterCount(node);
                 this.validateFunctionVariableCount(node);
+                this.flagControlFlowUnreachableCode(node);
             },
             FunctionParameterExpression: (node) => {
                 if (isTypedFunctionTypeExpression(node.parent)) {
@@ -705,15 +727,95 @@ export class BrsFileValidator {
 
 
     /**
+     * Report the statements of a function that control flow can never reach, one diagnostic per run.
+     * Functions inside an inactive conditional compile branch or inside an already reported run are skipped, since the outer report covers them,
+     * and so are functions that overlap a parse error, since the AST there does not reflect what the author meant.
+     */
+    private flagControlFlowUnreachableCode(func: FunctionExpression) {
+        if (isInsideInactiveConditionalCompileBranch(func) || this.isInsideControlFlowUnreachableRun(func) || this.hasParseDiagnosticWithin(func)) {
+            return;
+        }
+        const analysis = findUnreachableRegions(func);
+        for (const node of analysis.unreachableNodes) {
+            this.controlFlowUnreachableNodes.add(node);
+        }
+        for (const chain of analysis.coveredConditionalCompileChains) {
+            this.controlFlowCoveredChains.add(chain);
+        }
+        for (const [chain, runLocation] of analysis.partiallyCoveredConditionalCompileChains) {
+            this.controlFlowPartiallyCoveredChains.set(chain, runLocation);
+        }
+        for (const region of analysis.regions) {
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.unreachableCode(region.message),
+                location: region.location
+            });
+        }
+    }
+
+    /**
+     * Is the node, or any ancestor of it, a statement inside a run that control flow already reported?
+     */
+    private isInsideControlFlowUnreachableRun(node: AstNode) {
+        for (let ancestor = node; ancestor; ancestor = ancestor.parent) {
+            if (this.controlFlowUnreachableNodes.has(ancestor)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Does any parser diagnostic intersect the function's range?
+     * The diagnostics are indexed once per validator, so each call is a binary search instead of a scan.
+     */
+    private hasParseDiagnosticWithin(func: FunctionExpression) {
+        const functionRange = func.location?.range;
+        if (!functionRange) {
+            return false;
+        }
+        const index = this.getParseDiagnosticIndex();
+        let low = 0;
+        let high = index.length;
+        while (low < high) {
+            const middle = Math.floor((low + high) / 2);
+            if (util.comparePosition(index[middle].start, functionRange.end) < 0) {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        return low > 0 && util.comparePosition(index[low - 1].furthestEnd, functionRange.start) > 0;
+    }
+
+    private getParseDiagnosticIndex() {
+        if (!this.parseDiagnosticIndex) {
+            const ranges = this.event.file.parser.diagnostics
+                .map(diagnostic => diagnostic.location?.range)
+                .filter(range => !!range)
+                .sort((rangeA, rangeB) => util.comparePosition(rangeA.start, rangeB.start));
+            let furthestEnd: Position;
+            this.parseDiagnosticIndex = ranges.map(range => {
+                if (!furthestEnd || util.comparePosition(range.end, furthestEnd) > 0) {
+                    furthestEnd = range.end;
+                }
+                return { start: range.start, furthestEnd: furthestEnd };
+            });
+        }
+        return this.parseDiagnosticIndex;
+    }
+
+    /**
      * Report each inactive branch body of a `#if` chain as unreachable code. Only the first `#if` of a chain is handled here (it covers its `#else if` / `#else` branches).
      * An `#if` the device never reaches sits inside an inactive branch that is already covered by its outer range.
      * The range runs from the start of the first line after the branch's directive line to the start of the next directive's line,
      * computed from the directive tokens so it works even when the body does not parse. Bodies without content are not reported.
      */
     private flagInactiveConditionalCompileBranches(chainStart: ConditionalCompileStatement) {
-        if (!chainStart.resolution?.isReached || isConditionalCompileStatement(chainStart.parent)) {
+        if (!chainStart.resolution?.isReached || isConditionalCompileStatement(chainStart.parent) || this.controlFlowCoveredChains.has(chainStart) || this.isInsideControlFlowUnreachableRun(chainStart)) {
             return;
         }
+        const overlappingRunLocation = this.controlFlowPartiallyCoveredChains.get(chainStart);
         let statement = chainStart;
         while (statement) {
             const isReached = statement.resolution.isReached;
@@ -721,13 +823,13 @@ export class BrsFileValidator {
             const elseBranch = statement.elseBranch;
             const nextDirective = isConditionalCompileStatement(elseBranch) ? elseBranch.tokens.hashIf : (statement.tokens.hashElse ?? statement.tokens.hashEndIf);
             if (!isThenBranchActive) {
-                this.flagInactiveBranchBody(statement.tokens.condition, nextDirective);
+                this.flagInactiveBranchBody(statement.tokens.condition, nextDirective, overlappingRunLocation);
             }
             if (isConditionalCompileStatement(elseBranch)) {
                 statement = elseBranch;
             } else {
                 if (elseBranch && !(isReached && !statement.resolution.isConditionTrue)) {
-                    this.flagInactiveBranchBody(statement.tokens.hashElse, statement.tokens.hashEndIf);
+                    this.flagInactiveBranchBody(statement.tokens.hashElse, statement.tokens.hashEndIf, overlappingRunLocation);
                 }
                 break;
             }
@@ -737,20 +839,25 @@ export class BrsFileValidator {
     /**
      * @param directiveEndToken the last token of the directive line that opens the branch
      * @param nextDirectiveToken the directive that closes the branch
+     * @param overlappingRunLocation a run reported by control flow that ends inside the chain. A branch it overlaps is already reported by it.
      */
-    private flagInactiveBranchBody(directiveEndToken: Token | undefined, nextDirectiveToken: Token | undefined) {
+    private flagInactiveBranchBody(directiveEndToken: Token | undefined, nextDirectiveToken: Token | undefined, overlappingRunLocation?: Location) {
         if (!directiveEndToken?.location || !nextDirectiveToken?.location || !this.hasBranchBodyContent(directiveEndToken, nextDirectiveToken)) {
+            return;
+        }
+        const location = util.createLocation(
+            directiveEndToken.location.range.end.line + 1,
+            0,
+            nextDirectiveToken.location.range.start.line,
+            0,
+            this.event.file.srcPath
+        );
+        if (overlappingRunLocation && util.rangesIntersect(location.range, overlappingRunLocation.range)) {
             return;
         }
         this.event.program.diagnostics.register({
             ...DiagnosticMessages.unreachableCode(),
-            location: util.createLocation(
-                directiveEndToken.location.range.end.line + 1,
-                0,
-                nextDirectiveToken.location.range.start.line,
-                0,
-                this.event.file.srcPath
-            )
+            location: location
         });
     }
 
