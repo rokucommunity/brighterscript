@@ -24,6 +24,7 @@ import { EnumType } from '../../types';
 import { TypeStatementType } from '../../types/TypeStatementType';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticSeverity } from 'vscode-languageserver';
+import type { Range } from 'vscode-languageserver';
 
 describe('BrsFileValidator', () => {
     let program: Program;
@@ -2523,7 +2524,7 @@ describe('BrsFileValidator', () => {
                 expectZeroDiagnostics(program);
             });
 
-            it('allows a label in a catch nested inside a try', () => {
+            it('flags a label in a catch nested inside a try', () => {
                 validate(trim`
                     sub main()
                         try
@@ -2536,7 +2537,10 @@ describe('BrsFileValidator', () => {
                         end try
                     end sub
                 `);
-                expectZeroDiagnostics(program);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelInTryBlock('foo'),
+                    location: { range: util.createRange(5, 12, 5, 15) }
+                }]);
             });
 
             it('flags a label in a try nested inside a catch', () => {
@@ -2552,9 +2556,10 @@ describe('BrsFileValidator', () => {
                         end try
                     end sub
                 `);
-                expectDiagnostics(program, [
-                    DiagnosticMessages.labelInTryBlock('foo')
-                ]);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelInTryBlock('foo'),
+                    location: { range: util.createRange(5, 12, 5, 15) }
+                }]);
             });
 
             it('flags a label in a try inside an active #if', () => {
@@ -2569,9 +2574,10 @@ describe('BrsFileValidator', () => {
                         #end if
                     end sub
                 `);
-                expectDiagnostics(program, [
-                    DiagnosticMessages.labelInTryBlock('foo')
-                ]);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelInTryBlock('foo'),
+                    location: { range: util.createRange(4, 12, 4, 15) }
+                }]);
             });
 
             it('does not flag a label in a try inside an inactive #if', () => {
@@ -2599,9 +2605,49 @@ describe('BrsFileValidator', () => {
                         end sub
                     end sub
                 `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelInTryBlock('foo'),
+                    location: { range: util.createRange(3, 12, 3, 15) }
+                }]);
+            });
+        });
+
+        describe('edge cases', () => {
+            it('produces no label diagnostics for a goto outside any function', () => {
+                validate('goto foo');
                 expectDiagnostics(program, [
-                    DiagnosticMessages.labelInTryBlock('foo')
+                    {
+                        ...DiagnosticMessages.unexpectedStatementOutsideFunction(),
+                        location: { range: util.createRange(0, 0, 0, 8) }
+                    }
                 ]);
+            });
+
+            it('reports only expected-label for a goto with no label', () => {
+                validate(trim`
+                    sub main()
+                        goto
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.expectedLabelIdentifierAfterGotoKeyword()
+                ]);
+            });
+
+            it('reports only label-in-try for a goto targeting a label inside a try', () => {
+                validate(trim`
+                    sub main()
+                        goto foo
+                        try
+                            foo:
+                        catch e
+                        end try
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelInTryBlock('foo'),
+                    location: { range: util.createRange(3, 8, 3, 11) }
+                }]);
             });
         });
 
@@ -2632,8 +2678,14 @@ describe('BrsFileValidator', () => {
                     end sub
                 `);
                 expectDiagnostics(program, [
-                    DiagnosticMessages.duplicateLabel('foo'),
-                    DiagnosticMessages.duplicateLabel('foo')
+                    {
+                        ...DiagnosticMessages.duplicateLabel('foo'),
+                        location: { range: util.createRange(3, 8, 3, 11) }
+                    },
+                    {
+                        ...DiagnosticMessages.duplicateLabel('foo'),
+                        location: { range: util.createRange(6, 8, 6, 11) }
+                    }
                 ]);
             });
 
@@ -2645,7 +2697,10 @@ describe('BrsFileValidator', () => {
                     end sub
                 `);
                 expectDiagnostics(program, [
-                    DiagnosticMessages.duplicateLabel('FOO')
+                    {
+                        ...DiagnosticMessages.duplicateLabel('FOO'),
+                        location: { range: util.createRange(2, 4, 2, 7) }
+                    }
                 ]);
             });
 
@@ -2658,8 +2713,14 @@ describe('BrsFileValidator', () => {
                     end sub
                 `);
                 expectDiagnostics(program, [
-                    DiagnosticMessages.duplicateLabel('foo'),
-                    DiagnosticMessages.duplicateLabel('foo')
+                    {
+                        ...DiagnosticMessages.duplicateLabel('foo'),
+                        location: { range: util.createRange(2, 4, 2, 7) }
+                    },
+                    {
+                        ...DiagnosticMessages.duplicateLabel('foo'),
+                        location: { range: util.createRange(3, 4, 3, 7) }
+                    }
                 ]);
             });
 
@@ -2734,9 +2795,10 @@ describe('BrsFileValidator', () => {
                         goto foo
                     end sub
                 `);
-                expectDiagnostics(program, [
-                    DiagnosticMessages.labelNotFound('foo')
-                ]);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelNotFound('foo'),
+                    location: { range: util.createRange(4, 9, 4, 12) }
+                }]);
             });
 
             it('flags a label that only exists in a nested anonymous function', () => {
@@ -2748,9 +2810,10 @@ describe('BrsFileValidator', () => {
                         end sub
                     end sub
                 `);
-                expectDiagnostics(program, [
-                    DiagnosticMessages.labelNotFound('foo')
-                ]);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelNotFound('foo'),
+                    location: { range: util.createRange(1, 9, 1, 12) }
+                }]);
             });
 
             it('flags a goto in an anonymous function targeting an outer label', () => {
@@ -2762,9 +2825,10 @@ describe('BrsFileValidator', () => {
                         end sub
                     end sub
                 `);
-                expectDiagnostics(program, [
-                    DiagnosticMessages.labelNotFound('foo')
-                ]);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelNotFound('foo'),
+                    location: { range: util.createRange(3, 13, 3, 16) }
+                }]);
             });
 
             it('flags a label that is only in an inactive #if', () => {
@@ -2776,9 +2840,10 @@ describe('BrsFileValidator', () => {
                         #end if
                     end sub
                 `);
-                expectDiagnostics(program, [
-                    DiagnosticMessages.labelNotFound('foo')
-                ]);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelNotFound('foo'),
+                    location: { range: util.createRange(1, 9, 1, 12) }
+                }]);
             });
 
             it('finds a label active through a file-level #const', () => {
@@ -2839,9 +2904,10 @@ describe('BrsFileValidator', () => {
                         if true then goto missing
                     end sub
                 `);
-                expectDiagnostics(program, [
-                    DiagnosticMessages.labelNotFound('missing')
-                ]);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelNotFound('missing'),
+                    location: { range: util.createRange(1, 22, 1, 29) }
+                }]);
             });
 
             it('works in brighterscript files', () => {
@@ -2850,18 +2916,20 @@ describe('BrsFileValidator', () => {
                         goto missing
                     end sub
                 `, 'source/main.bs');
-                expectDiagnostics(program, [
-                    DiagnosticMessages.labelNotFound('missing')
-                ]);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelNotFound('missing'),
+                    location: { range: util.createRange(1, 9, 1, 16) }
+                }]);
             });
         });
 
         describe('goto-into-for-loop', () => {
-            function expectIntoFor(code: string) {
+            function expectIntoFor(code: string, range: Range) {
                 validate(code);
-                expectDiagnostics(program, [
-                    DiagnosticMessages.gotoIntoForLoop('foo')
-                ]);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.gotoIntoForLoop('foo'),
+                    location: { range: range }
+                }]);
             }
 
             function expectNoDiagnostics(code: string) {
@@ -2877,7 +2945,7 @@ describe('BrsFileValidator', () => {
                             foo:
                         end for
                     end sub
-                `);
+                `, util.createRange(1, 9, 1, 12));
             });
 
             it('warns when jumping into a for each body', () => {
@@ -2888,7 +2956,20 @@ describe('BrsFileValidator', () => {
                             foo:
                         end for
                     end sub
-                `);
+                `, util.createRange(1, 9, 1, 12));
+            });
+
+            it('warns when jumping into a for each nested in a while', () => {
+                expectIntoFor(trim`
+                    sub main()
+                        goto foo
+                        while true
+                            for each i in [1]
+                                foo:
+                            end for
+                        end while
+                    end sub
+                `, util.createRange(1, 9, 1, 12));
             });
 
             it('allows a jump within the same loop', () => {
@@ -2925,7 +3006,7 @@ describe('BrsFileValidator', () => {
                             end for
                         end for
                     end sub
-                `);
+                `, util.createRange(2, 13, 2, 16));
             });
 
             it('warns when jumping from one loop into a sibling loop', () => {
@@ -2938,7 +3019,7 @@ describe('BrsFileValidator', () => {
                             foo:
                         end for
                     end sub
-                `);
+                `, util.createRange(2, 13, 2, 16));
             });
 
             it('allows jumping into if, else, while and catch bodies', () => {
@@ -2989,7 +3070,7 @@ describe('BrsFileValidator', () => {
                             end while
                         end for
                     end sub
-                `);
+                `, util.createRange(1, 9, 1, 12));
             });
 
             it('reports the diagnostic as a warning at the goto label', () => {
