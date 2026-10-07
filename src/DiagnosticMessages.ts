@@ -1215,6 +1215,15 @@ export let DiagnosticMessages = {
         message: `Function has too many variables: ${actual} found, but Roku allows at most ${max} per function (parameters count toward this limit).`,
         severity: DiagnosticSeverity.Error,
         code: 'exceeds-max-variable-count'
+    }),
+    /**
+     * @param count the number of loops found in the function
+     * @param max the maximum number of loops Roku allows in a single function
+     */
+    tooManyLoops: (count: number, max: number) => ({
+        message: `Function has ${count} loops, max is ${max}.`,
+        severity: DiagnosticSeverity.Error,
+        code: 'exceeds-max-loop-count'
     })
 };
 export const defaultMaximumTruncationLength = 160;

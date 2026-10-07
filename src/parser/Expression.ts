@@ -261,6 +261,12 @@ export class FunctionExpression extends Expression implements TypedefProvider {
      */
     static readonly MaximumVariables = 253;
 
+    /**
+     * The maximum number of loops (`for`, `for each`, `while`) a single function can contain, nested or sequential.
+     * Each function, including anonymous functions, has its own limit.
+     */
+    static readonly MaximumLoops = 127;
+
     constructor(options: {
         functionType?: Token;
         leftParen?: Token;
