@@ -30,7 +30,7 @@ export class CachedLookups {
     get functionStatements(): FunctionStatement[] {
         return this.getEvaluationDerived<Array<FunctionStatement>>('functionStatements', () => {
             const allFunctionStatements = this.getFromCache<Array<FunctionStatement>>('allFunctionStatements');
-            return this.usesConditionalCompile() ? allFunctionStatements.filter(statement => statement.isActive) : allFunctionStatements;
+            return this.usesConditionalCompile() ? allFunctionStatements.filter(statement => statement.isActive !== false) : allFunctionStatements;
         });
     }
 
@@ -171,12 +171,12 @@ export class CachedLookups {
             const inactiveDeclarations = new Set<AstNode>();
             if (this.usesConditionalCompile()) {
                 for (const declaration of this.getFromCache<Array<AstNode>>('declarations')) {
-                    if (!declaration.isActive) {
+                    if (declaration.isActive === false) {
                         inactiveDeclarations.add(declaration);
                     }
                 }
                 for (const functionStatement of this.getFromCache<Array<FunctionStatement>>('allFunctionStatements')) {
-                    if (!functionStatement.isActive) {
+                    if (functionStatement.isActive === false) {
                         inactiveDeclarations.add(functionStatement);
                     }
                 }

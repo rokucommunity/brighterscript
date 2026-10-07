@@ -43,6 +43,7 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
     //link this node to its parent
     parent = parent ?? owner as unknown as AstNode;
     element.parent = parent;
+    setIsActive(element, parent, options);
 
     //resolve `#if` and `#const` statements in source order, before the visitor sees them
     if (isConditionalCompileStatement(element) || isConditionalCompileConstStatement(element)) {
@@ -87,6 +88,7 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
 
     //set the parent of this new expression
     element.parent = parent;
+    setIsActive(element, parent, options);
 
     if (!element.walk) {
         throw new Error(`${owner.constructor.name}["${String(key)}"]${parent ? ` for ${parent.constructor.name}` : ''} does not contain a "walk" method`);
@@ -95,6 +97,16 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
     element.walk(visitor, options);
 
     return returnValue;
+}
+
+/**
+ * A node is active when its parent is active and, if the parent is an `#if`, the node is the branch the condition selects.
+ * A walk with explicit `bsConsts` does not change the stored values.
+ */
+function setIsActive(element: AstNode, parent: AstNode, options: WalkOptions) {
+    if (!options.bsConsts) {
+        element.isActive = parent.isActive !== false && (!isConditionalCompileStatement(parent) || (element === parent.thenBranch) === parent.isConditionTrue);
+    }
 }
 
 /**
@@ -259,6 +271,10 @@ export interface WalkOptions {
  * The state of a walk from the root of a tree that resolves `#if` and `#const` statements as it reaches them
  */
 export interface ConditionalCompileWalk {
+    /**
+     * Are the results stored on the AST (false for a walk with explicit `bsConsts`)
+     */
+    readonly isStored: boolean;
     resolve(node: AstNode): void;
 }
 

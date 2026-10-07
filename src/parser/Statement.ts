@@ -158,6 +158,7 @@ export class Body extends Statement implements TypedefProvider {
                 return;
             }
             this.setResolvedBsConsts(this.bsConsts);
+            this.isActive = true;
         }
         conditionalCompileWalks.set(options, new BodyConditionalCompileWalk(options.bsConsts ?? this.bsConsts, !options.bsConsts));
         try {
@@ -4931,7 +4932,7 @@ export class ConditionalCompileStatement extends Statement {
     public getInactiveBranchRanges(): Range[] {
         const ranges: Range[] = [];
         const tokens = this.tokens;
-        const isReached = this.isActive;
+        const isReached = this.isActive !== false;
         const elseStatement = isConditionalCompileStatement(this.elseBranch) ? this.elseBranch : undefined;
         const addRange = (directiveRange: Range | undefined, end: Position | undefined) => {
             if (directiveRange) {
@@ -4963,10 +4964,13 @@ export class ConditionalCompileStatement extends Statement {
             }
             const conditionalCompileWalk = conditionalCompileWalks.get(options) as BodyConditionalCompileWalk | undefined;
             const isConditionTrue = conditionalCompileWalk?.isConditionTrue(this) ?? this.isConditionTrue;
-            if (isConditionTrue) {
-                walk(this, 'thenBranch', visitor, options);
-            } else if (this.elseBranch) {
-                walk(this, 'elseBranch', visitor, options);
+            const activeKey = isConditionTrue ? 'thenBranch' : 'elseBranch';
+            walk(this, activeKey, visitor, options);
+            //the visitor never sees the inactive branch, but a walk that resolves the tree still marks its nodes inactive
+            if (conditionalCompileWalk?.isStored) {
+                walk(this, isConditionTrue ? 'elseBranch' : 'thenBranch', undefined, {
+                    walkMode: WalkMode.visitAllRecursive | InternalWalkMode.visitFalseConditionalCompilationBlocks
+                });
             }
         }
     }
@@ -5172,7 +5176,7 @@ function areBsConstsEqual(first: ReadonlyMap<string, boolean> | undefined, secon
  * When `isStored` is true, the results are stored on the `#if` and `#const` statements. Otherwise they only apply to this walk.
  */
 class BodyConditionalCompileWalk implements ConditionalCompileWalk {
-    constructor(bsConsts: Map<string, boolean> | undefined, private isStored: boolean) {
+    constructor(bsConsts: Map<string, boolean> | undefined, public readonly isStored: boolean) {
         this.bsConsts = new Map(bsConsts);
     }
 
@@ -5193,7 +5197,7 @@ class BodyConditionalCompileWalk implements ConditionalCompileWalk {
             if (!this.isStored) {
                 this.conditions.set(node, isConditionTrue);
             }
-        } else if (isConditionalCompileConstStatement(node) && node.isActiveWithin(undefined, (statement) => this.isConditionTrue(statement))) {
+        } else if (isConditionalCompileConstStatement(node) && (this.isStored ? node.isActive : node.isActiveWithin(undefined, (statement) => this.isConditionTrue(statement)))) {
             this.declare(node);
         }
     }

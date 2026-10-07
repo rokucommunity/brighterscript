@@ -211,14 +211,12 @@ export abstract class AstNode {
 
     /**
      * Is this node compiled? False when it sits in an inactive branch of any enclosing `#if` / `#else if` / `#else`.
-     * The branches are resolved by full walks from the root of the tree (such as `link()` or validation), so this reflects the most recent one.
+     * Set by every walk (like `parent`), from the parent's value and the parent's `#if` condition. Undefined until the node is walked.
      */
-    public get isActive(): boolean {
-        return this.isActiveWithin();
-    }
+    public isActive?: boolean;
 
     /**
-     * Like `isActive`, but only considers the conditional compile statements between this node and the boundary.
+     * Like `isActive`, but computed by walking up the parents, and only considers the conditional compile statements between this node and the boundary.
      * Use this to ask about a node of a declaration that is itself inside an inactive branch, such as the members of an inactive class.
      * @param boundary stop at this ancestor (defaults to the root of the tree)
      * @param isConditionTrue the value of the condition of each `#if` (defaults to the value stored on the statement)
