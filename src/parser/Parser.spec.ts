@@ -2545,6 +2545,29 @@ describe('parser', () => {
             expectZeroDiagnostics(diagnostics);
         });
 
+        it('parses a statement on the line after #end if at the top level', () => {
+            const { ast, diagnostics } = parse('#if bla\n#end if \ndoesThisStillWork()\n', ParseMode.BrighterScript, { bla: false });
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements).to.be.lengthOf(2);
+            expect(isConditionalCompileStatement(ast.statements[0])).to.be.true;
+            expect(isExpressionStatement(ast.statements[1])).to.be.true;
+        });
+
+        for (const [description, directives] of [
+            ['#if', '#if bla\n#end if '],
+            ['an #else if chain', '#if bla\n#else if foo\n#end if '],
+            ['an #else if and #else chain', '#if bla\n#else if foo\n#else\n#end if ']
+        ]) {
+            it(`parses a statement on the line after the #end if of ${description} in a function`, () => {
+                const { ast, diagnostics } = parse(`sub main()\n${directives}\ndoesThisStillWork()\nend sub\n`, ParseMode.BrighterScript, { bla: false, foo: true });
+                expectZeroDiagnostics(diagnostics);
+                const statements = (ast.statements[0] as FunctionStatement).func.body.statements;
+                expect(statements).to.be.lengthOf(2);
+                expect(isConditionalCompileStatement(statements[0])).to.be.true;
+                expect(isExpressionStatement(statements[1])).to.be.true;
+            });
+        }
+
         it('reports junk after the #end if of a chain', () => {
             const { diagnostics } = parse('#if A\nx = 1\n#else if B\ny = 2\n#end if x\n', ParseMode.BrighterScript, { A: true, B: false });
             expect(diagnostics).to.not.be.empty;
