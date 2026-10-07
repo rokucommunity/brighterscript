@@ -53,7 +53,7 @@ export class BrsFilePreTranspileProcessor {
                 }
             }
         }
-        //inactive conditional compile branches still ship in the output, so lower their ternaries too
+        //inactive conditional compile branches still ship in the output, so transpile their ternaries to if statements too
         // eslint-disable-next-line no-bitwise
         const walkMode = WalkMode.visitExpressionsRecursive | InternalWalkMode.visitFalseConditionalCompilationBlocks;
         const visitor = createVisitor({

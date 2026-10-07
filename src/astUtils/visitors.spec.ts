@@ -5,11 +5,12 @@ import { expect } from '../chai-config.spec';
 import * as sinon from 'sinon';
 import { Program } from '../Program';
 import type { BrsFile } from '../files/BrsFile';
-import type { FunctionStatement } from '../parser/Statement';
+import type { ConditionalCompileStatement, FunctionStatement } from '../parser/Statement';
 import { PrintStatement, Block, ReturnStatement, ExpressionStatement } from '../parser/Statement';
 import { TokenKind } from '../lexer/TokenKind';
+import type { WalkOptions } from './visitors';
 import { ChildrenSkipper, createVisitor, InternalWalkMode, walkArray, WalkMode, walkStatements } from './visitors';
-import { isBlock, isFunctionExpression, isLiteralExpression, isPrintStatement } from './reflection';
+import { isBlock, isConditionalCompileStatement, isFunctionExpression, isLiteralExpression, isPrintStatement } from './reflection';
 import { createCall, createIntegerLiteral, createToken, createVariableExpression } from './creators';
 import { createStackedVisitor } from './stackedVisitor';
 import { Editor } from './Editor';
@@ -1501,6 +1502,180 @@ describe('astUtils visitors', () => {
                 walkMode: WalkMode.visitStatements
             });
             expect([...functionsFound]).to.eql(['active']);
+        });
+
+        describe('conditional compile evaluation per walk', () => {
+            function collectFunctionNames(ast: AstNode, options: WalkOptions) {
+                const names: string[] = [];
+                ast.walk(createVisitor({
+                    FunctionStatement: (func) => {
+                        names.push(func.getName(ParseMode.BrighterScript));
+                    }
+                }), options);
+                return names;
+            }
+
+            function revalidate(file: BrsFile) {
+                file.isValidated = false;
+                program.validate();
+            }
+
+            it('uses different branches for two walks with different explicit bsConsts', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                    #if FEATURE
+                    sub debugOnly()
+                    end sub
+                    #else
+                    sub releaseOnly()
+                    end sub
+                    #end if
+                `);
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements, bsConsts: new Map([['feature', true]]) })).to.eql(['debugOnly']);
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements, bsConsts: new Map([['feature', false]]) })).to.eql(['releaseOnly']);
+            });
+
+            it('applies an edit to a conditional compile statement at the next validate', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    #if FEATURE
+                    sub debugOnly()
+                    end sub
+                    #else
+                    sub releaseOnly()
+                    end sub
+                    #end if
+                `);
+                const ast = file.ast;
+                const statement = ast.findChild<ConditionalCompileStatement>(isConditionalCompileStatement);
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements })).to.eql(['releaseOnly']);
+                (statement.tokens as any).condition = createToken(TokenKind.True, 'true');
+                revalidate(file);
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements })).to.eql(['debugOnly']);
+                (statement.tokens as any).not = createToken(TokenKind.Not, 'not');
+                revalidate(file);
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements })).to.eql(['releaseOnly']);
+            });
+
+            it('uses a change to ast.bsConsts on the next walk without validating again', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    #if FEATURE
+                    sub debugOnly()
+                    end sub
+                    #else
+                    sub releaseOnly()
+                    end sub
+                    #end if
+                `);
+                program.validate();
+                const ast = file.ast;
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements })).to.eql(['releaseOnly']);
+                ast.bsConsts.set('feature', true);
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements })).to.eql(['debugOnly']);
+                ast.bsConsts = new Map([['feature', false]]);
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements })).to.eql(['releaseOnly']);
+            });
+
+            it('keeps a change to ast.bsConsts across a validate of a file that did not change', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    #if FEATURE
+                    sub debugOnly()
+                    end sub
+                    #end if
+                `);
+                program.validate();
+                file.ast.bsConsts.set('feature', true);
+                program.validate();
+                expect(collectFunctionNames(file.ast, { walkMode: WalkMode.visitStatements })).to.eql(['debugOnly']);
+            });
+
+            it('uses a new bsConsts on the same options object', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                    #if FEATURE
+                    sub debugOnly()
+                    end sub
+                    #else
+                    sub releaseOnly()
+                    end sub
+                    #end if
+                `);
+                const options: WalkOptions = { walkMode: WalkMode.visitStatements, bsConsts: new Map([['feature', true]]) };
+                expect(collectFunctionNames(ast, options)).to.eql(['debugOnly']);
+                options.bsConsts = new Map([['feature', false]]);
+                expect(collectFunctionNames(ast, options)).to.eql(['releaseOnly']);
+            });
+
+            it('does not walk a literal #if true that is nested inside an inactive branch', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                    #if false
+                        #if true
+                        sub nested()
+                        end sub
+                        #end if
+                    #end if
+                    sub other()
+                    end sub
+                `);
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements })).to.eql(['other']);
+            });
+
+            it('does not fill in options.bsConsts', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                    #if true
+                    sub a()
+                    end sub
+                    #end if
+                `);
+                const options: WalkOptions = { walkMode: WalkMode.visitStatements };
+                collectFunctionNames(ast, options);
+                expect(options.bsConsts).to.be.undefined;
+            });
+
+            it('uses the evaluation of the file for every statement a walk meets', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    #if true
+                    sub a()
+                    end sub
+                    #end if
+                    #if false
+                    #else
+                    sub b()
+                    end sub
+                    #end if
+                    sub c()
+                        #if true
+                        print 1
+                        #end if
+                    end sub
+                `);
+                const fileEvaluator = file.getConditionalCompileEvaluator();
+                expect(fileEvaluator).to.exist;
+                const options: WalkOptions = { walkMode: WalkMode.visitStatementsRecursive };
+                expect(collectFunctionNames(file.ast, options)).to.eql(['a', 'b', 'c']);
+                collectFunctionNames(file.ast, { walkMode: WalkMode.visitStatementsRecursive });
+                expect(file.getConditionalCompileEvaluator()).to.equal(fileEvaluator);
+            });
+
+            it('does not evaluate anything for a file without conditional compile statements', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    sub a()
+                        print 1
+                    end sub
+                `);
+                const options: WalkOptions = { walkMode: WalkMode.visitAllRecursive };
+                collectFunctionNames(file.ast, options);
+                expect(file.getConditionalCompileEvaluator()).to.be.undefined;
+            });
+
+            it('does not evaluate anything when walking every branch', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                    #if false
+                    sub a()
+                    end sub
+                    #end if
+                `);
+                // eslint-disable-next-line no-bitwise
+                const options: WalkOptions = { walkMode: WalkMode.visitStatements | InternalWalkMode.visitFalseConditionalCompilationBlocks };
+                expect(collectFunctionNames(ast, options)).to.eql(['a']);
+            });
         });
 
         it('walks a new child when returned from a visitor and using an AstEditor', () => {

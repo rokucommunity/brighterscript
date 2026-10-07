@@ -574,6 +574,9 @@ export class CompletionsProcessor {
         return results;
     }
 
+    /**
+     * The names of the compiled members of every class in scope. Members in an inactive conditional compile branch are left out, like they are for typed member completions.
+     */
     public getAllClassMemberCompletions(scope: Scope) {
         let results = new Map<string, CompletionItem>();
         let filesSearched = new Set<BscFile>();
@@ -581,7 +584,7 @@ export class CompletionsProcessor {
             if (isBrsFile(file) && !filesSearched.has(file)) {
                 // eslint-disable-next-line @typescript-eslint/dot-notation
                 for (let cs of file['_cachedLookups'].classStatements) {
-                    for (let s of [...cs.methods, ...cs.fields]) {
+                    for (let s of cs.getActiveMembers()) {
                         if (!results.has(s.tokens.name.text) && s.tokens.name.text.toLowerCase() !== 'new') {
                             results.set(s.tokens.name.text, {
                                 label: s.tokens.name.text,

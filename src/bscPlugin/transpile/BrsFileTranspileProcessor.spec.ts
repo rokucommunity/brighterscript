@@ -32,7 +32,7 @@ describe('BrsFileTranspileProcessor', () => {
         await program.build({ outDir: s`${tempDir}/out` });
     });
 
-    it('lowers ternaries the same way in every conditional compile branch', async () => {
+    it('transpiles ternaries to if statements in every conditional compile branch', async () => {
         fsExtra.outputFileSync(`${rootDir}/manifest`, 'title=test\nbs_const=DEBUG=true\n');
         program.dispose();
         program = new Program({ rootDir: rootDir });

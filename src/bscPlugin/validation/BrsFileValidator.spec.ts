@@ -1,11 +1,11 @@
 import { expect } from '../../chai-config.spec';
 import type { BrsFile } from '../../files/BrsFile';
 import type { AALiteralExpression, DottedGetExpression, FunctionExpression } from '../../parser/Expression';
-import type { AssignmentStatement, ClassStatement, ForEachStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';
+import type { AssignmentStatement, ClassStatement, ConditionalCompileStatement, ForEachStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, rootDir, tempDir, trim } from '../../testHelpers.spec';
 import { Program } from '../../Program';
-import { isAssignmentStatement, isClassStatement, isForEachStatement, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isNamespaceStatement, isPrintStatement, isReturnStatement } from '../../astUtils/reflection';
+import { isAssignmentStatement, isClassStatement, isConditionalCompileStatement, isForEachStatement, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isNamespaceStatement, isPrintStatement, isReturnStatement } from '../../astUtils/reflection';
 import { util, standardizePath as s } from '../../util';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
@@ -23,6 +23,8 @@ import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { EnumType } from '../../types';
 import { TypeStatementType } from '../../types/TypeStatementType';
 import * as fsExtra from 'fs-extra';
+import { createToken } from '../../astUtils/creators';
+import { TokenKind } from '../../lexer/TokenKind';
 
 describe('BrsFileValidator', () => {
     let program: Program;
@@ -1136,7 +1138,7 @@ describe('BrsFileValidator', () => {
             });
 
             /**
-             * Load a file into a new program and return `code@line` (zero-based) for every diagnostic
+             * Load a file into a new program, validate it and return its diagnostics
              */
             function validate(source: string, options?: { bsConsts?: Record<string, boolean>; minFirmwareVersion?: string; destPath?: string }) {
                 evaluationProgram?.dispose();
@@ -1153,7 +1155,7 @@ describe('BrsFileValidator', () => {
                 evaluationProgram.validate();
                 return {
                     file: file,
-                    diagnostics: evaluationProgram.getDiagnostics().map(diagnostic => `${diagnostic.code}@${diagnostic.location.range.start.line}`)
+                    diagnostics: evaluationProgram.getDiagnostics()
                 };
             }
 
@@ -1180,7 +1182,7 @@ describe('BrsFileValidator', () => {
                     #end if
                     end sub
                 `);
-                expect(diagnostics).to.eql([]);
+                expectZeroDiagnostics(diagnostics);
             });
 
             it('lets plugins walk the active branch and not the inactive branch', () => {
@@ -1197,7 +1199,9 @@ describe('BrsFileValidator', () => {
                     #end if
                     end sub
                 `);
-                expect(diagnostics).to.eql(['cannot-find-function@6']);
+                expectDiagnostics(diagnostics, [
+                    { code: 'cannot-find-function', location: { range: util.createRange(6, 24, 6, 42) } }
+                ]);
                 expect(collectPrintedText(file)).to.eql(['"start"', '"active"']);
             });
 
@@ -1211,7 +1215,9 @@ describe('BrsFileValidator', () => {
                     sub main()
                     end sub
                 `);
-                expect(diagnostics).to.eql(['hash-error@2']);
+                expectDiagnostics(diagnostics, [
+                    { code: 'hash-error', location: { range: util.createRange(2, 20, 2, 26) } }
+                ]);
             });
 
             it('treats #if not true as false', () => {
@@ -1224,7 +1230,9 @@ describe('BrsFileValidator', () => {
                     sub main()
                     end sub
                 `);
-                expect(diagnostics).to.eql(['hash-error@4']);
+                expectDiagnostics(diagnostics, [
+                    { code: 'hash-error', location: { range: util.createRange(4, 20, 4, 26) } }
+                ]);
             });
 
             it('treats #if false as false and #if not false as true', () => {
@@ -1236,7 +1244,9 @@ describe('BrsFileValidator', () => {
                     #error active-error
                     #end if
                 `);
-                expect(diagnostics).to.eql(['hash-error@5']);
+                expectDiagnostics(diagnostics, [
+                    { code: 'hash-error', location: { range: util.createRange(5, 20, 5, 26) } }
+                ]);
             });
 
             it('validates the active branch of a literal #if inside a function', () => {
@@ -1251,12 +1261,14 @@ describe('BrsFileValidator', () => {
                     #end if
                     end sub
                 `);
-                expect(diagnostics).to.eql(['cannot-find-function@4']);
+                expectDiagnostics(diagnostics, [
+                    { code: 'cannot-find-function', location: { range: util.createRange(4, 24, 4, 42) } }
+                ]);
                 expect(collectPrintedText(file)).to.eql(['"active"']);
             });
 
             describe('parse diagnostics', () => {
-                it('keeps syntax errors in a literal true branch', () => {
+                it('keeps syntax errors in the active branch of a literal #if', () => {
                     const { diagnostics } = validate(`
                         sub main()
                         #if true
@@ -1264,7 +1276,9 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `);
-                    expect(diagnostics).to.eql(['unexpected-token@3']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(3, 32, 3, 33) } }
+                    ]);
                 });
 
                 it('drops syntax errors in the inactive else of an active #if DEBUG', () => {
@@ -1277,7 +1291,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('keeps syntax errors in an active #if not DEBUG', () => {
@@ -1288,7 +1302,9 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `, { bsConsts: { DEBUG: false } });
-                    expect(diagnostics).to.eql(['unexpected-token@3']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(3, 32, 3, 33) } }
+                    ]);
                 });
 
                 it('keeps syntax errors in a branch enabled by a file-level #const', () => {
@@ -1300,7 +1316,22 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `);
-                    expect(diagnostics).to.eql(['unexpected-token@4']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(4, 32, 4, 33) } }
+                    ]);
+                });
+
+                it('keeps the syntax error of text after the condition of an inactive #if', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if DEBUG +
+                            print 1
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: false } });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(2, 34, 2, 35) } }
+                    ]);
                 });
 
                 it('drops syntax errors in an inactive #if not DEBUG', () => {
@@ -1311,7 +1342,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('drops syntax errors in the inactive tail of an #else if chain', () => {
@@ -1326,7 +1357,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('drops syntax errors in an inactive #if false / #else if DEBUG / #else chain', () => {
@@ -1341,7 +1372,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('keeps syntax errors in the final #else when every earlier condition is false', () => {
@@ -1356,7 +1387,142 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `, { bsConsts: { DEBUG: false } });
-                    expect(diagnostics).to.eql(['unexpected-token@7']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(7, 32, 7, 33) } }
+                    ]);
+                });
+            });
+
+            describe('changes after parsing', () => {
+                const source = `
+                    sub main()
+                    #if DEBUG
+                        x = = 1
+                    #else
+                        y = = 2
+                    #end if
+                    end sub
+                `;
+
+                /**
+                 * Validate the source after a plugin has edited the parsed file
+                 */
+                function validateAfterEdit(edit: (file: BrsFile) => void) {
+                    evaluationProgram?.dispose();
+                    evaluationProgram = new Program({ rootDir: rootDir, minFirmwareVersion: '16.0.0' });
+                    evaluationProgram.plugins.add({
+                        name: 'edit-after-parse',
+                        beforeValidateFile: (event) => {
+                            edit(event.file as BrsFile);
+                        }
+                    });
+                    evaluationProgram.setFile('source/main.brs', source);
+                    evaluationProgram.validate();
+                    return evaluationProgram.getDiagnostics();
+                }
+
+                it('reports the diagnostics of the branch that the parsed constants select', () => {
+                    const diagnostics = validateAfterEdit(() => { });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(5, 28, 5, 29) } }
+                    ]);
+                });
+
+                it('reports the diagnostics of the branch that a plugin activates by changing the constants', () => {
+                    const diagnostics = validateAfterEdit((file) => {
+                        file.ast.bsConsts = new Map([['debug', true]]);
+                    });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(3, 28, 3, 29) } }
+                    ]);
+                });
+
+                it('reports the diagnostics of the branch that a plugin activates by editing the condition', () => {
+                    const diagnostics = validateAfterEdit((file) => {
+                        const statement = file.ast.findChild<ConditionalCompileStatement>(isConditionalCompileStatement);
+                        (statement.tokens as any).condition = createToken(TokenKind.True, 'true', statement.tokens.condition.location);
+                    });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(3, 28, 3, 29) } }
+                    ]);
+                });
+
+                it('reports the diagnostics of the else branch when a plugin negates the condition', () => {
+                    const diagnostics = validateAfterEdit((file) => {
+                        file.ast.bsConsts = new Map([['debug', true]]);
+                        const statement = file.ast.findChild<ConditionalCompileStatement>(isConditionalCompileStatement);
+                        (statement.tokens as any).not = createToken(TokenKind.Not, 'not');
+                    });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(5, 28, 5, 29) } }
+                    ]);
+                });
+
+                it('does not validate the code of a branch a plugin deactivates', () => {
+                    evaluationProgram?.dispose();
+                    evaluationProgram = new Program({ rootDir: rootDir, minFirmwareVersion: '16.0.0' });
+                    evaluationProgram.plugins.add({
+                        name: 'edit-after-parse',
+                        beforeValidateFile: (event) => {
+                            (event.file as BrsFile).ast.bsConsts = new Map([['debug', false]]);
+                        }
+                    });
+                    evaluationProgram.setFile('source/main.brs', `
+                        #if DEBUG
+                        sub main()
+                            notAFunction()
+                        end sub
+                        #end if
+                    `);
+                    evaluationProgram.validate();
+                    expectZeroDiagnostics(evaluationProgram);
+                });
+
+                it('reflects a change to ast.bsConsts in the parse diagnostics without validating again', () => {
+                    evaluationProgram?.dispose();
+                    evaluationProgram = new Program({ rootDir: rootDir });
+                    const file = evaluationProgram.setFile<BrsFile>('source/main.brs', `
+                        sub main()
+                        #if DEBUG
+                            x = = 1
+                        #end if
+                        end sub
+                    `);
+                    file.ast.bsConsts.set('debug', false);
+                    evaluationProgram.validate();
+                    expectZeroDiagnostics(evaluationProgram);
+                    file.ast.bsConsts.set('debug', true);
+                    expectDiagnostics(evaluationProgram.getDiagnostics(), [
+                        { code: 'unexpected-token', location: { range: util.createRange(3, 32, 3, 33) } }
+                    ]);
+                    file.ast.bsConsts.set('debug', false);
+                    expectZeroDiagnostics(evaluationProgram);
+                });
+
+                it('reflects a change to ast.bsConsts in scope lookups after the scope validates again, though the file did not change', () => {
+                    evaluationProgram?.dispose();
+                    evaluationProgram = new Program({ rootDir: rootDir });
+                    const file = evaluationProgram.setFile<BrsFile>('source/main.bs', `
+                        #if DEBUG
+                        class Foo
+                            sub debugMethod()
+                            end sub
+                        end class
+                        #else
+                        class Foo
+                            sub releaseMethod()
+                            end sub
+                        end class
+                        #end if
+                    `);
+                    evaluationProgram.validate();
+                    const scope = evaluationProgram.getScopeByName('source');
+                    expect(scope.getClass('Foo').memberMap['releasemethod']).to.exist;
+                    file.ast.bsConsts.set('debug', true);
+                    scope.invalidate();
+                    evaluationProgram.validate();
+                    expect(scope.getClass('Foo').memberMap['debugmethod']).to.exist;
+                    expect(file['_cachedLookups'].classStatementMap.get('foo').memberMap['debugmethod']).to.exist;
                 });
             });
 
@@ -1368,7 +1534,9 @@ describe('BrsFileValidator', () => {
                         sub main()
                         end sub
                     `);
-                    expect(diagnostics).to.eql(['duplicate-const-declaration@2']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'duplicate-const-declaration', location: { range: util.createRange(2, 31, 2, 32) } }
+                    ]);
                 });
 
                 it('flags a #const that redeclares a bs_const', () => {
@@ -1377,7 +1545,9 @@ describe('BrsFileValidator', () => {
                         sub main()
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql(['duplicate-const-declaration@1']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'duplicate-const-declaration', location: { range: util.createRange(1, 31, 1, 36) } }
+                    ]);
                 });
 
                 it('allows a duplicate #const inside an inactive branch', () => {
@@ -1389,7 +1559,7 @@ describe('BrsFileValidator', () => {
                         sub main()
                         end sub
                     `);
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('reports only the invalid value when a #const alias reuses a declared name', () => {
@@ -1397,14 +1567,18 @@ describe('BrsFileValidator', () => {
                         #const A = true
                         #const A = B
                     `);
-                    expect(diagnostics).to.eql(['invalid-hash-const-value@2']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-hash-const-value', location: { range: util.createRange(2, 35, 2, 36) } }
+                    ]);
                 });
 
                 it('reports only the invalid value when an invalid #const reuses a bs_const name', () => {
                     const { diagnostics } = validate(`
                         #const DEBUG = NOPE
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql(['invalid-hash-const-value@1']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-hash-const-value', location: { range: util.createRange(1, 39, 1, 43) } }
+                    ]);
                 });
 
                 it('does not apply a #const declared in an inactive branch', () => {
@@ -1417,7 +1591,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         #const A = true
                     `, { minFirmwareVersion: '16.0.0' });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('applies a #const declared in the active branch in source order', () => {
@@ -1432,7 +1606,7 @@ describe('BrsFileValidator', () => {
                         #error logging-on
                         #end if
                     `);
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
             });
 
@@ -1457,25 +1631,25 @@ describe('BrsFileValidator', () => {
 
                 it('reports undeclared constants before firmware 16', () => {
                     const { diagnostics } = validate(source, { minFirmwareVersion: '15.3.0' });
-                    expect(diagnostics).to.eql([
-                        'hash-const-does-not-exist@2',
-                        'hash-const-does-not-exist@5',
-                        'hash-const-does-not-exist@8'
+                    expectDiagnostics(diagnostics, [
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(2, 24, 2, 28) } },
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(5, 24, 5, 29) } },
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(8, 24, 8, 36) } }
                     ]);
                 });
 
                 it('reports undeclared constants with the default firmware', () => {
                     const { diagnostics } = validate(source);
-                    expect(diagnostics).to.eql([
-                        'hash-const-does-not-exist@2',
-                        'hash-const-does-not-exist@5',
-                        'hash-const-does-not-exist@8'
+                    expectDiagnostics(diagnostics, [
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(2, 24, 2, 28) } },
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(5, 24, 5, 29) } },
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(8, 24, 8, 36) } }
                     ]);
                 });
 
                 it('evaluates undeclared constants as false on firmware 16 and up', () => {
                     const { diagnostics } = validate(source, { minFirmwareVersion: '16.0.0' });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('reports an undeclared constant in an evaluated #else if before firmware 16', () => {
@@ -1484,7 +1658,9 @@ describe('BrsFileValidator', () => {
                         #else if NOPE
                         #end if
                     `, { minFirmwareVersion: '15.3.0' });
-                    expect(diagnostics).to.eql(['hash-const-does-not-exist@2']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(2, 33, 2, 37) } }
+                    ]);
                 });
 
                 it('does not report an undeclared constant in an #else if that is never reached', () => {
@@ -1493,7 +1669,7 @@ describe('BrsFileValidator', () => {
                         #else if NOPE
                         #end if
                     `, { minFirmwareVersion: '15.3.0' });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('does not report an undeclared constant inside an inactive branch', () => {
@@ -1503,7 +1679,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         #end if
                     `, { minFirmwareVersion: '15.3.0' });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
             });
 
@@ -1523,7 +1699,7 @@ describe('BrsFileValidator', () => {
                             logit()
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('allows the same function in branches chosen by a file-level #const', () => {
@@ -1547,7 +1723,7 @@ describe('BrsFileValidator', () => {
                             logit()
                         end sub
                     `);
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('still reports a function duplicated within the active branch', () => {
@@ -1559,7 +1735,10 @@ describe('BrsFileValidator', () => {
                         end sub
                         #end if
                     `);
-                    expect(diagnostics).to.eql(['duplicate-function@2', 'duplicate-function@4']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'duplicate-function', location: { range: util.createRange(2, 28, 2, 33) } },
+                        { code: 'duplicate-function', location: { range: util.createRange(4, 28, 4, 33) } }
+                    ]);
                 });
             });
 
@@ -1570,15 +1749,28 @@ describe('BrsFileValidator', () => {
                             #const A = true
                             #const B = A
                         `, { minFirmwareVersion: minFirmwareVersion });
-                        expect(diagnostics, minFirmwareVersion).to.eql(['invalid-hash-const-value@2']);
+                        expectDiagnostics(diagnostics, [
+                            { code: 'invalid-hash-const-value', location: { range: util.createRange(2, 39, 2, 40) } }
+                        ]);
                     }
+                });
+
+                it('rejects a value that is not a boolean', () => {
+                    const { diagnostics } = validate(`
+                        #const test = 4
+                    `);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-hash-const-value', location: { range: util.createRange(1, 38, 1, 39) } }
+                    ]);
                 });
 
                 it('rejects an alias of an undeclared name', () => {
                     const { diagnostics } = validate(`
                         #const B = NOPE
                     `, { minFirmwareVersion: '16.0.0' });
-                    expect(diagnostics).to.eql(['invalid-hash-const-value@1']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-hash-const-value', location: { range: util.createRange(1, 35, 1, 39) } }
+                    ]);
                 });
 
                 it('treats a later #if on the alias as undeclared before firmware 16', () => {
@@ -1589,7 +1781,10 @@ describe('BrsFileValidator', () => {
                         #error alias-resolved
                         #end if
                     `, { minFirmwareVersion: '15.3.0' });
-                    expect(diagnostics).to.eql(['invalid-hash-const-value@2', 'hash-const-does-not-exist@3']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-hash-const-value', location: { range: util.createRange(2, 35, 2, 36) } },
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(3, 28, 3, 29) } }
+                    ]);
                 });
 
                 it('treats a later #if on the alias as false on firmware 16 and up', () => {
@@ -1600,7 +1795,9 @@ describe('BrsFileValidator', () => {
                         #error alias-resolved
                         #end if
                     `, { minFirmwareVersion: '16.0.0' });
-                    expect(diagnostics).to.eql(['invalid-hash-const-value@2']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-hash-const-value', location: { range: util.createRange(2, 35, 2, 36) } }
+                    ]);
                 });
 
                 it('does not report an alias inside an inactive branch', () => {
@@ -1610,7 +1807,7 @@ describe('BrsFileValidator', () => {
                         #const B = A
                         #end if
                     `);
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
             });
 
@@ -1632,7 +1829,7 @@ describe('BrsFileValidator', () => {
                             print LEVEL
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code).to.include('print 1');
                     expect(code).not.to.include('print 2');
                 });
@@ -1652,7 +1849,7 @@ describe('BrsFileValidator', () => {
                             print Color.red
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code).to.include('active-red');
                     expect(code).not.to.include('inactive-red');
                 });
@@ -1682,7 +1879,7 @@ describe('BrsFileValidator', () => {
                             return item.activeMember
                         end function
                     `, { bsConsts: { DEBUG: true }, destPath: 'source/main.bs' });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     const scope = evaluationProgram.getScopesForFile(file)[0];
                     const widget = scope.getClassMap().get('widget').item;
                     expect(widget.fields.map(field => field.tokens.name.text)).to.eql(['activeField']);
@@ -1705,7 +1902,7 @@ describe('BrsFileValidator', () => {
                         sub main()
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code).to.include('print "r"');
                     expect(code).to.include('print 3');
                     expect(code).not.to.include('Color.red');
@@ -1725,7 +1922,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code).to.include('print "r"');
                     expect(code).to.include('print 3');
                 });
@@ -1751,7 +1948,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code).to.include('print "r"');
                     expect(code).to.include('print 3');
                     expect(code).not.to.include('alpha_Color_red');
@@ -1774,7 +1971,7 @@ describe('BrsFileValidator', () => {
                         sub main()
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code).to.include('instance = __Parent_builder()');
                     expect(code).to.include('instance.super0_new = instance.new');
                     expect(code).to.include('m.super0_new()');
@@ -1792,7 +1989,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         end namespace
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code).to.include('widget = alpha_Widget()');
                 });
 
@@ -1808,7 +2005,7 @@ describe('BrsFileValidator', () => {
                         end sub
                         #end if
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code).to.include('(function(__bsCondition)');
                     expect(code).to.include('return "r"');
                     expect(code).to.include('return 3');
@@ -1840,7 +2037,7 @@ describe('BrsFileValidator', () => {
                         end namespace
                         #end if
                     `);
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code).to.include('f = Foo()');
                     expect(code).not.to.include('f = NS_Foo()');
                     expect(code).to.include('print "active-global"');
@@ -1877,7 +2074,7 @@ describe('BrsFileValidator', () => {
                             print foo
                         end sub
                     `, { destPath: 'source/main.bs' });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('still reports a local variable shadowed by an active class', () => {
@@ -1889,7 +2086,7 @@ describe('BrsFileValidator', () => {
                             print foo
                         end sub
                     `, { destPath: 'source/main.bs' });
-                    expect(diagnostics).to.have.lengthOf(1);
+                    expectDiagnostics(diagnostics, ['var-shadows-function']);
                 });
 
                 it('inlines the active enum in both branches when both branches declare it', async () => {
@@ -1911,7 +2108,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code.match(/print "active-red"/g)).to.have.lengthOf(2);
                     expect(code).not.to.include('inactive-red');
                 });
@@ -1931,7 +2128,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code.match(/print 1/g)).to.have.lengthOf(2);
                     expect(code).not.to.include('print 2');
                 });
@@ -1943,7 +2140,7 @@ describe('BrsFileValidator', () => {
                         const B = A
                         #end if
                     `, { bsConsts: { DEBUG: true }, destPath: 'source/main.bs' });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('picks the declaration using a file-level #const', async () => {
@@ -1958,7 +2155,7 @@ describe('BrsFileValidator', () => {
                             print LEVEL
                         end sub
                     `);
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code).to.include('print 2');
                     expect(code).not.to.include('print 1');
                 });
@@ -1976,7 +2173,7 @@ describe('BrsFileValidator', () => {
                             print LEVEL
                         end sub
                     `, { bsConsts: { A: false, B: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code).to.include('print 2');
                     expect(code).not.to.include('print 1');
                     expect(code).not.to.include('print 3');
@@ -1995,7 +2192,7 @@ describe('BrsFileValidator', () => {
                             print LEVEL
                         end sub
                     `, { bsConsts: { A: false, B: false } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code).to.include('print 3');
                 });
             });
@@ -2020,7 +2217,7 @@ describe('BrsFileValidator', () => {
                             end sub
                             #end if
                         `, { bsConsts: chainBranchCase.bsConsts });
-                        expect(diagnostics).to.eql([]);
+                        expectZeroDiagnostics(diagnostics);
                     });
                 }
 
@@ -2033,7 +2230,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         #end if
                     `);
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('allows a function in the #else of a nested #if at the top level', () => {
@@ -2046,7 +2243,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         #end if
                     `);
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('allows a function in a nested #if inside a namespace', () => {
@@ -2060,7 +2257,7 @@ describe('BrsFileValidator', () => {
                             #end if
                         end namespace
                     `, { destPath: 'source/main.bs' });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('still rejects a namespace in a nested #if inside a function', () => {
@@ -2074,7 +2271,9 @@ describe('BrsFileValidator', () => {
                         #end if
                         end function
                     `, { destPath: 'source/main.bs' });
-                    expect(diagnostics).to.eql(['invalid-declaration-location@4']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-declaration-location', location: { range: util.createRange(4, 28, 4, 43) } }
+                    ]);
                 });
 
                 it('still rejects a namespace inside an #else if chain within a function', () => {
@@ -2087,7 +2286,9 @@ describe('BrsFileValidator', () => {
                         #end if
                         end function
                     `, { bsConsts: { A: false, B: true }, destPath: 'source/main.bs' });
-                    expect(diagnostics).to.eql(['invalid-declaration-location@4']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-declaration-location', location: { range: util.createRange(4, 28, 4, 43) } }
+                    ]);
                 });
             });
         });

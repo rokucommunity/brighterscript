@@ -41,6 +41,7 @@ export class BrsFileValidator {
         this.event.file['_cachedLookups'].invalidate();
 
         this.walk();
+        this.validateConditionalCompile();
         this.flagTopLevelStatements();
         //only validate the file if it was actually parsed (skip files containing typedefs)
         if (!this.event.file.hasTypedef) {
@@ -342,11 +343,6 @@ export class BrsFileValidator {
             },
             PrintStatement: (node) => {
                 this.validatePrintStatementItemCount(node);
-            },
-            ConditionalCompileStatement: (node) => {
-                if (node.resolution?.isReached && !node.resolution.isConstantDeclared) {
-                    this.validateHashConstIsDeclared(node.tokens.condition);
-                }
             },
             ConditionalCompileErrorStatement: (node) => {
                 this.event.program.diagnostics.register({
@@ -702,14 +698,33 @@ export class BrsFileValidator {
 
 
     /**
-     * Flag a reference to an undeclared `#const`, unless the target firmware evaluates it as false
+     * Validate the `#const` declarations and `#if` conditions against the constants in effect at their position in the file
      */
-    private validateHashConstIsDeclared(constToken: Token) {
-        if (!this.event.program.firmwareCapabilities.undeclaredHashConstIsFalse) {
+    private validateConditionalCompile() {
+        const evaluator = this.event.file.getConditionalCompileEvaluator();
+        if (!evaluator) {
+            return;
+        }
+        for (const constName of evaluator.duplicateConstNames) {
             this.event.program.diagnostics.register({
-                ...DiagnosticMessages.hashConstDoesNotExist(),
-                location: constToken.location
+                ...DiagnosticMessages.duplicateConstDeclaration(constName.text),
+                location: constName.location
             });
+        }
+        for (const constValue of evaluator.invalidConstValues) {
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.invalidHashConstValue(),
+                location: constValue.location
+            });
+        }
+        //the device evaluates an undeclared constant as false starting with some firmware versions
+        if (!this.event.program.firmwareCapabilities.undeclaredHashConstIsFalse) {
+            for (const conditionName of evaluator.undeclaredConditionNames) {
+                this.event.program.diagnostics.register({
+                    ...DiagnosticMessages.hashConstDoesNotExist(),
+                    location: conditionName.location
+                });
+            }
         }
     }
 

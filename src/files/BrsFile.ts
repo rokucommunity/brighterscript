@@ -20,6 +20,7 @@ import type { ClassStatement, NamespaceStatement, MethodStatement, FieldStatemen
 import type { Program } from '../Program';
 import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
+import { ConditionalCompileEvaluator } from '../parser/ConditionalCompileEvaluator';
 import { isClassStatement, isDottedGetExpression, isFunctionExpression, isNamespaceStatement, isVariableExpression, isImportStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType, isFunctionStatement, isEnumStatement, isConstStatement } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyChangedEvent, DependencyGraph } from '../DependencyGraph';
@@ -171,6 +172,14 @@ export class BrsFile implements BscFile {
             this.createFunctionScopes();
         }
         return this._functionScopes;
+    }
+
+    /**
+     * Which `#if` branches of this file are active, or undefined when the file has no `#if` or `#const` statements.
+     * The evaluation is replaced when `ast.bsConsts` changes. An edit to the AST applies the next time the file is validated.
+     */
+    public getConditionalCompileEvaluator(): ConditionalCompileEvaluator | undefined {
+        return this._cachedLookups?.conditionalCompileEvaluator;
     }
 
     private get cache() {
@@ -447,6 +456,7 @@ export class BrsFile implements BscFile {
 
             this.getCommentFlags(lexer.tokens);
 
+            ConditionalCompileEvaluator.unregisterFileEvaluation(this._parser?.ast);
             this.program.logger.time(LogLevel.debug, ['parser.parse', chalk.green(this.srcPath)], () => {
                 this._parser = Parser.parse(lexer.tokens, {
                     srcPath: this.srcPath,
@@ -456,6 +466,9 @@ export class BrsFile implements BscFile {
                     minFirmwareVersion: this.program.options.minFirmwareVersion
                 });
             });
+
+            this._cachedLookups.invalidate();
+            ConditionalCompileEvaluator.registerFileEvaluation(this._parser.ast, this._cachedLookups);
 
             //absorb all lexing/preprocessing/parsing diagnostics
             diagnostics.push(
@@ -471,7 +484,7 @@ export class BrsFile implements BscFile {
                 ...DiagnosticMessages.genericParserMessage('Critical error parsing file: ' + JSON.stringify(util.serializeError(e)))
             });
         }
-        this.program?.diagnostics.register(diagnostics);
+        this.program?.diagnostics.registerParseDiagnostics(diagnostics);
     }
 
     /**
@@ -1387,6 +1400,7 @@ export class BrsFile implements BscFile {
     }
 
     public dispose() {
+        ConditionalCompileEvaluator.unregisterFileEvaluation(this._parser?.ast);
         this._cachedLookups?.invalidate();
         this._parser?.dispose();
 

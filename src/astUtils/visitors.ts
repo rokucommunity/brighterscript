@@ -242,7 +242,11 @@ export interface WalkOptions {
      */
     skipChildren?: ChildrenSkipper;
     /**
-     * Map of Conditional compilation flags, with names in lowercase
+     * Map of Conditional compilation flags, with names in lowercase.
+     * When omitted, a walk uses the evaluation of the file that contains the node, which follows the constants in `ast.bsConsts`.
+     * A plugin that changes a constant should change `ast.bsConsts`, and the change applies to the next walk.
+     * An edit to the AST (such as a changed `#if` condition) applies the next time the file is validated, which happens after the file changes.
+     * When given, the walk evaluates the tree with these constants and ignores the file's evaluation.
      */
     bsConsts?: Map<string, boolean>;
 }

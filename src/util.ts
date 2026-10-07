@@ -2601,43 +2601,6 @@ export class Util {
     }
 
 
-    /**
-     * Evaluate the condition of a `#if` / `#else if`. The literals `true` and `false` are handled directly,
-     * anything else is looked up (case-insensitively) in `bsConsts`. An undeclared constant evaluates to false.
-     * @param condition the token following `#if` (and the optional `not`)
-     * @param notToken the `not` token, when the condition is negated
-     */
-    public evaluateConditionalCompileCondition(condition: Token, notToken: Token | undefined, bsConsts: Map<string, boolean> | undefined): ConditionalCompileEvaluation {
-        let isConstantDeclared = true;
-        let constantValue: boolean;
-        if (condition.kind === TokenKind.True) {
-            constantValue = true;
-        } else if (condition.kind === TokenKind.False) {
-            constantValue = false;
-        } else {
-            const constantName = condition.text.toLowerCase();
-            isConstantDeclared = !!bsConsts?.has(constantName);
-            constantValue = bsConsts?.get(constantName) === true;
-        }
-        return {
-            isConditionTrue: notToken ? !constantValue : constantValue,
-            isConstantDeclared: isConstantDeclared
-        };
-    }
-
-    /**
-     * Add a declaration to a name map where active declarations win over inactive ones. Among declarations of the same activity the last one wins.
-     * `activeKeys` tracks the keys that already hold an active declaration and is updated as active declarations are added.
-     */
-    public setActiveDeclarationWins<T>(map: Map<string, T>, activeKeys: Set<string>, key: string, value: T, isActive: boolean) {
-        if (isActive) {
-            activeKeys.add(key);
-            map.set(key, value);
-        } else if (!activeKeys.has(key)) {
-            map.set(key, value);
-        }
-    }
-
     public isInTypeExpression(expression: AstNode): boolean {
         //TODO: this is much faster than node.findAncestor(), but may need to be updated for "complicated" type expressions
         if (isTypeExpression(expression) ||
@@ -3248,20 +3211,6 @@ export function standardizePath(stringParts: TemplateStringsArray | string, ...e
  * An item that can be coerced into a `Range`
  */
 export type RangeLike = { location?: Location } | Location | { range?: Range } | Range | undefined;
-
-/**
- * The outcome of evaluating a `#if` condition
- */
-export interface ConditionalCompileEvaluation {
-    /**
-     * Whether the condition, including any `not`, is true
-     */
-    isConditionTrue: boolean;
-    /**
-     * Whether the condition is a boolean literal or names a declared constant
-     */
-    isConstantDeclared: boolean;
-}
 
 export let util = new Util();
 export default util;

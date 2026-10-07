@@ -3,8 +3,9 @@ import type { AstNode } from './parser/AstNode';
 import type { Scope } from './Scope';
 import { util } from './util';
 import { Cache } from './Cache';
-import { isBsDiagnostic, isXmlScope } from './astUtils/reflection';
+import { isBrsFile, isBsDiagnostic, isXmlScope } from './astUtils/reflection';
 import type { DiagnosticRelatedInformation, Location } from 'vscode-languageserver-protocol';
+import type { ConditionalCompileEvaluator } from './parser/ConditionalCompileEvaluator';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
 import type { FinalizedBsConfig } from './BsConfig';
@@ -60,6 +61,11 @@ export class DiagnosticManager {
 
     public program: Program;
 
+    /**
+     * The keys of the diagnostics that came from lexing and parsing
+     */
+    private parseDiagnosticKeys = new Set<string>();
+
     private fileUriMap = new Map<string, Set<string>>();
     private tagMap = new Map<string, Set<string>>();
     private scopeMap = new Map<string, Set<string>>();
@@ -73,6 +79,19 @@ export class DiagnosticManager {
     public register(diagnostics: Array<BsDiagnostic>, context?: DiagnosticContext);
     public register(diagnostics: Array<DiagnosticContextPair>);
     public register(diagnosticArg: BsDiagnostic | Array<BsDiagnostic | DiagnosticContextPair>, context?: DiagnosticContext) {
+        this.registerDiagnostics(diagnosticArg, context, false);
+    }
+
+    /**
+     * Registers the lexer and parser diagnostics of a file.
+     * Unlike other diagnostics, these are dropped while the code they describe is in an inactive `#if` / `#else if` / `#else` branch,
+     * because the device never compiles that code. The branches follow the file's most recent validation.
+     */
+    public registerParseDiagnostics(diagnostics: BsDiagnostic[]) {
+        this.registerDiagnostics(diagnostics, undefined, true);
+    }
+
+    private registerDiagnostics(diagnosticArg: BsDiagnostic | Array<BsDiagnostic | DiagnosticContextPair>, context: DiagnosticContext | undefined, isParseDiagnostic: boolean) {
         const diagnostics = Array.isArray(diagnosticArg) ? diagnosticArg : [{ diagnostic: diagnosticArg, context: context }];
         for (const diagnosticData of diagnostics) {
             const diagnostic = isBsDiagnostic(diagnosticData) ? diagnosticData : diagnosticData.diagnostic;
@@ -89,6 +108,11 @@ export class DiagnosticManager {
             });
 
             const cachedDiagnostic = cacheData.diagnostic;
+            if (isParseDiagnostic) {
+                this.parseDiagnosticKeys.add(key);
+            } else {
+                this.parseDiagnosticKeys.delete(key);
+            }
             if (!fromCache && diagnostic.relatedInformation) {
                 this.mergeRelatedInformation(cachedDiagnostic.relatedInformation, diagnostic.relatedInformation);
             }
@@ -159,7 +183,11 @@ export class DiagnosticManager {
 
     private getNonSuppressedDiagnostics() {
         const results = [] as Array<BsDiagnostic>;
+        const isInInactiveBranch = this.createInactiveBranchDetector();
         for (const cachedDiagnostic of this.diagnosticsCache.values()) {
+            if (isInInactiveBranch(cachedDiagnostic.diagnostic)) {
+                continue;
+            }
             const diagnostic = { ...cachedDiagnostic.diagnostic };
             const relatedInformation = [...cachedDiagnostic.diagnostic.relatedInformation];
             const affectedScopes = new Set<Scope>();
@@ -199,6 +227,26 @@ export class DiagnosticManager {
             return !this.isDiagnosticSuppressed(x);
         });
         return filteredResults;
+    }
+
+    /**
+     * Create a function that tells whether a diagnostic is a lexer or parser diagnostic about code the device does not compile (an inactive `#if` / `#else if` / `#else` branch).
+     * Other diagnostics are never about inactive branches because the validators skip them. Each file's evaluation is looked up at most once per call.
+     */
+    private createInactiveBranchDetector() {
+        const evaluatorsByUri = new Map<string, ConditionalCompileEvaluator | undefined>();
+        return (diagnostic: BsDiagnosticWithKey) => {
+            const uri = diagnostic.location?.uri;
+            if (!uri || !this.parseDiagnosticKeys.has(diagnostic.key)) {
+                return false;
+            }
+            const uriLower = uri.toLowerCase();
+            if (!evaluatorsByUri.has(uriLower)) {
+                const file = this.program?.getFile(uri);
+                evaluatorsByUri.set(uriLower, isBrsFile(file) ? file.getConditionalCompileEvaluator() : undefined);
+            }
+            return evaluatorsByUri.get(uriLower)?.isRangeInInactiveBranch(diagnostic.location.range) ?? false;
+        };
     }
 
     /**
@@ -253,6 +301,7 @@ export class DiagnosticManager {
 
     public clear() {
         this.diagnosticsCache.clear();
+        this.parseDiagnosticKeys.clear();
     }
 
     public clearForFile(fileSrcPath: string) {
@@ -473,6 +522,7 @@ export class DiagnosticManager {
         const cachedData = this.diagnosticsCache.get(key);
         if (cachedData.contexts.size === 0) {
             this.diagnosticsCache.delete(key);
+            this.parseDiagnosticKeys.delete(key);
             this.fileUriMap.get(diagnostic.location?.uri?.toLowerCase())?.delete(key);
         }
     }

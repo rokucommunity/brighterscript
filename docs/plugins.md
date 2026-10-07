@@ -499,6 +499,13 @@ Plugins are JavaScript modules dynamically loaded by the compiler. Their entry p
 
 To walk/modify the AST, a number of helpers are provided in `brighterscript/dist/parser/ASTUtils`.
 
+### Conditional compilation
+Walks skip the inactive branches of `#if` / `#else if` / `#else` statements, unless the walk mode includes `InternalWalkMode.visitFalseConditionalCompilationBlocks`. Which branches are active depends on the `bs_const` values from the manifest, and on the `#const` declarations that precede each `#if`.
+
+A plugin that wants to change a constant should change `file.ast.bsConsts` (a map of lowercase constant names to booleans). A change to `ast.bsConsts` applies to the next walk or lookup. An edit to the AST (such as a changed `#if` condition or an inserted `#if` statement) applies the next time the file is validated, which happens after the file changes. Walks, scope lookups, class members, and diagnostics all use the file's evaluation. To walk with different constants for a single walk, pass them as `bsConsts` in the walk options, which evaluates the file again just for that walk.
+
+Lexer and parser diagnostics inside an inactive branch are not reported, since the device never compiles that code.
+
 ### Working with TypeScript
 
 It is highly recommended to use TypeScript as intellisense helps greatly writing code against new APIs.

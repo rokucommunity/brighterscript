@@ -706,7 +706,7 @@ describe('parser class', () => {
             expect(speak.annotations ?? []).to.be.empty;
         });
 
-        it('includes conditional members in the class type', () => {
+        it('includes members of an active conditional compile branch in the class type', () => {
             let { ast, diagnostics } = Parser.parse(`
                 class Person
                     #if DEBUG
@@ -714,11 +714,31 @@ describe('parser class', () => {
                         end sub
                     #end if
                 end class
-            `, { mode: ParseMode.BrighterScript });
+            `, { mode: ParseMode.BrighterScript, bsConsts: new Map([['debug', true]]) });
             expectZeroDiagnostics(diagnostics);
             const klass = ast.statements[0] as ClassStatement;
             const klassType = klass.getType({ flags: SymbolTypeFlag.typetime });
             expect(klassType.getMemberTable().getSymbol('speak', SymbolTypeFlag.runtime)).to.exist;
+        });
+
+        it('includes every member in the class type when the class has no file evaluation', () => {
+            let { ast, diagnostics } = Parser.parse(`
+                class Person
+                    #if DEBUG
+                        sub speak()
+                        end sub
+                    #else
+                        sub whisper()
+                        end sub
+                    #end if
+                end class
+            `, { mode: ParseMode.BrighterScript, bsConsts: new Map([['debug', false]]) });
+            expectZeroDiagnostics(diagnostics);
+            const klass = ast.statements[0] as ClassStatement;
+            const memberTable = klass.getType({ flags: SymbolTypeFlag.typetime }).getMemberTable();
+            expect(memberTable.getSymbol('speak', SymbolTypeFlag.runtime)).to.exist;
+            expect(memberTable.getSymbol('whisper', SymbolTypeFlag.runtime)).to.exist;
+            expect(klass.methods.map(method => method.tokens.name.text)).to.eql(['speak', 'whisper']);
         });
 
         it('flags unterminated conditional compile blocks in class bodies', () => {
