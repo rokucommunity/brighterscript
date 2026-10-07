@@ -2264,7 +2264,6 @@ export class Parser {
         if (this.check(TokenKind.HashElseIf)) {
             // recurse-read `#else if`
             elseBranch = this.conditionalCompileStatement(branchBlockParser);
-            this.ensureNewLine();
 
         } else if (this.check(TokenKind.HashElse)) {
             hashElseToken = this.advance();
