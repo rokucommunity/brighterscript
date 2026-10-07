@@ -1669,7 +1669,7 @@ describe('astUtils visitors', () => {
                 expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements })).to.eql(['a', 'b']);
             });
 
-            it('does not store the branches of a walk with explicit bsConsts', () => {
+            it('stores the branches of a walk with explicit bsConsts until the next full walk', () => {
                 const { ast } = program.setFile<BrsFile>('source/main.brs', `
                     #if FEATURE
                     sub a()
@@ -1680,6 +1680,8 @@ describe('astUtils visitors', () => {
                 const func = ast.findChild<FunctionStatement>(isFunctionStatement, { walkMode: WalkMode.visitAllRecursive | InternalWalkMode.visitFalseConditionalCompilationBlocks });
                 expect(func.isActive).to.be.false;
                 expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatementsRecursive, bsConsts: new Map([['feature', true]]) })).to.eql(['a']);
+                expect(func.isActive).to.be.true;
+                ast.link();
                 expect(func.isActive).to.be.false;
             });
 

@@ -43,11 +43,14 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
     //link this node to its parent
     parent = parent ?? owner as unknown as AstNode;
     element.parent = parent;
-    setIsActive(element, parent, options);
+    setIsActive(element, parent);
 
     //resolve `#if` and `#const` statements in source order, before the visitor sees them
     if (isConditionalCompileStatement(element) || isConditionalCompileConstStatement(element)) {
-        conditionalCompileWalks.get(options)?.resolve(element);
+        const bsConsts = walkBsConsts.get(options);
+        if (bsConsts) {
+            element.resolve(bsConsts);
+        }
     }
 
     //notify the visitor of this element
@@ -88,7 +91,7 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
 
     //set the parent of this new expression
     element.parent = parent;
-    setIsActive(element, parent, options);
+    setIsActive(element, parent);
 
     if (!element.walk) {
         throw new Error(`${owner.constructor.name}["${String(key)}"]${parent ? ` for ${parent.constructor.name}` : ''} does not contain a "walk" method`);
@@ -102,12 +105,8 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
 /**
  * A node is active when its parent is active and, if the parent is an `#if`, the node is the branch the condition selects.
  * The root of the tree is always active. When the parent's value is unknown (undefined), so is the node's.
- * A walk with explicit `bsConsts` does not change the stored values.
  */
-function setIsActive(element: AstNode, parent: AstNode, options: WalkOptions) {
-    if (options.bsConsts) {
-        return;
-    }
+function setIsActive(element: AstNode, parent: AstNode) {
     const isParentActive = parent.parent ? parent.isActive : true;
     if (isParentActive === undefined) {
         element.isActive = undefined;
@@ -267,29 +266,19 @@ export interface WalkOptions {
     skipChildren?: ChildrenSkipper;
     /**
      * Map of Conditional compilation flags, with names in lowercase.
-     * When omitted, a walk uses the branches stored on the `#if` statements, which every full walk from the root of the tree
-     * (`walkStatements`, `walkExpressions` and `recurseChildFunctions`) resolves again from `ast.bsConsts`.
-     * When given, a walk from the root resolves the branches with these constants for this walk only, and stores nothing on the AST.
+     * Every full walk from the root of the tree (`walkStatements`, `walkExpressions` and `recurseChildFunctions`) resolves the `#if` statements
+     * from these constants, or from `ast.bsConsts` when omitted, and stores the results on the AST (including `isActive`).
+     * Other walks use the stored results.
      */
     bsConsts?: Map<string, boolean>;
 }
 
 /**
- * The state of a walk from the root of a tree that resolves `#if` and `#const` statements as it reaches them
- */
-export interface ConditionalCompileWalk {
-    /**
-     * Are the results stored on the AST (false for a walk with explicit `bsConsts`)
-     */
-    readonly isStored: boolean;
-    resolve(node: AstNode): void;
-}
-
-/**
- * The conditional compile state of every walk in progress that started at the root of a tree
+ * The `#const` values in effect at the current position of every walk in progress that resolves conditional compile statements.
+ * This has to belong to the walk rather than the tree, because a visitor can start another walk of the same tree partway through.
  * @internal
  */
-export const conditionalCompileWalks = new WeakMap<WalkOptions, ConditionalCompileWalk>();
+export const walkBsConsts = new WeakMap<WalkOptions, Map<string, boolean>>();
 
 export class ChildrenSkipper {
     private isSkipped = false;

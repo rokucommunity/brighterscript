@@ -8,9 +8,9 @@ import { util } from '../util';
 import type { Location, Position, Range } from 'vscode-languageserver';
 import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
-import type { WalkVisitor, WalkOptions, ConditionalCompileWalk } from '../astUtils/visitors';
-import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray, conditionalCompileWalks } from '../astUtils/visitors';
-import { isBlock, isCallExpression, isCatchStatement, isClassType, isConditionalCompileConstStatement, isConditionalCompileStatement, isLiteralBoolean, isEnumMemberStatement, isEnumType, isEnumStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isUninitializedType, isVoidType, isWhileStatement } from '../astUtils/reflection';
+import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
+import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray, walkBsConsts } from '../astUtils/visitors';
+import { isBlock, isCallExpression, isCatchStatement, isClassType, isConditionalCompileStatement, isLiteralBoolean, isEnumMemberStatement, isEnumType, isEnumStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isUninitializedType, isVoidType, isWhileStatement } from '../astUtils/reflection';
 import type { GetTypeOptions } from '../interfaces';
 import { TypeChainEntry, type TranspileResult, type TypedefProvider } from '../interfaces';
 import { createDottedIdentifier, createIdentifier, createInvalidLiteral, createMethodStatement, createToken, createVariableExpression } from '../astUtils/creators';
@@ -140,7 +140,7 @@ export class Body extends Statement implements TypedefProvider {
             return;
         }
         //only a walk that starts at the root of the tree resolves conditional compile statements, because `#const` applies in source order
-        if (this.parent || conditionalCompileWalks.has(options)) {
+        if (this.parent || walkBsConsts.has(options)) {
             walkArray(this.statements, visitor, options, this);
             return;
         }
@@ -151,11 +151,11 @@ export class Body extends Statement implements TypedefProvider {
             walkArray(this.statements, visitor, options, this);
             return;
         }
-        conditionalCompileWalks.set(options, new BodyConditionalCompileWalk(options.bsConsts ?? this.bsConsts, !options.bsConsts));
+        walkBsConsts.set(options, new Map(options.bsConsts ?? this.bsConsts));
         try {
             walkArray(this.statements, visitor, options, this);
         } finally {
-            conditionalCompileWalks.delete(options);
+            walkBsConsts.delete(options);
         }
     }
 
@@ -4842,14 +4842,14 @@ export class ConditionalCompileStatement extends Statement {
      * Before the first such walk, the condition is evaluated against the constants of the tree.
      */
     public get isConditionTrue(): boolean {
-        return this.resolvedIsConditionTrue ?? this.evaluateCondition(this.getBsConsts()).isConditionTrue;
+        return this.resolvedIsConditionTrue ?? this.evaluate(this.getBsConsts()).isConditionTrue;
     }
 
     /**
      * Does the condition name a declared constant (or is it `true` / `false`)? Resolved like `isConditionTrue`.
      */
     public get isConditionDeclared(): boolean {
-        return this.resolvedIsConditionDeclared ?? this.evaluateCondition(this.getBsConsts()).isConditionDeclared;
+        return this.resolvedIsConditionDeclared ?? this.evaluate(this.getBsConsts()).isConditionDeclared;
     }
 
     private resolvedIsConditionTrue: boolean | undefined;
@@ -4857,9 +4857,16 @@ export class ConditionalCompileStatement extends Statement {
     private resolvedIsConditionDeclared: boolean | undefined;
 
     /**
+     * Evaluate the condition against the constants in effect at this statement and store the result. Called by the walk as it reaches this statement.
      * @internal
      */
-    public evaluateCondition(bsConsts: Map<string, boolean> | undefined, shouldStore = false) {
+    public resolve(bsConsts: Map<string, boolean>) {
+        const result = this.evaluate(bsConsts);
+        this.resolvedIsConditionTrue = result.isConditionTrue;
+        this.resolvedIsConditionDeclared = result.isConditionDeclared;
+    }
+
+    private evaluate(bsConsts: Map<string, boolean> | undefined) {
         const condition = this.tokens.condition;
         let value: boolean;
         let isConditionDeclared = true;
@@ -4873,12 +4880,7 @@ export class ConditionalCompileStatement extends Statement {
             //an undeclared constant is false
             value = bsConsts?.get(constNameLower) === true;
         }
-        const isConditionTrue = this.tokens.not ? !value : value;
-        if (shouldStore) {
-            this.resolvedIsConditionTrue = isConditionTrue;
-            this.resolvedIsConditionDeclared = isConditionDeclared;
-        }
-        return { isConditionTrue: isConditionTrue, isConditionDeclared: isConditionDeclared };
+        return { isConditionTrue: this.tokens.not ? !value : value, isConditionDeclared: isConditionDeclared };
     }
 
     /**
@@ -4921,13 +4923,10 @@ export class ConditionalCompileStatement extends Statement {
                 }
                 return;
             }
-            const conditionalCompileWalk = conditionalCompileWalks.get(options) as BodyConditionalCompileWalk | undefined;
-            const isConditionTrue = conditionalCompileWalk?.isConditionTrue(this) ?? this.isConditionTrue;
-            const activeKey = isConditionTrue ? 'thenBranch' : 'elseBranch';
-            walk(this, activeKey, visitor, options);
+            walk(this, this.isConditionTrue ? 'thenBranch' : 'elseBranch', visitor, options);
             //the visitor never sees the inactive branch, but a walk that resolves the tree still marks its nodes inactive
-            if (conditionalCompileWalk?.isStored) {
-                walk(this, isConditionTrue ? 'elseBranch' : 'thenBranch', undefined, {
+            if (walkBsConsts.has(options)) {
+                walk(this, this.isConditionTrue ? 'elseBranch' : 'thenBranch', undefined, {
                     walkMode: WalkMode.visitAllRecursive | InternalWalkMode.visitFalseConditionalCompilationBlocks
                 });
             }
@@ -5005,6 +5004,24 @@ export class ConditionalCompileConstStatement extends Statement {
      * Resolved by full walks from the root of the tree, and only meaningful while this statement is active.
      */
     public isDuplicate = false;
+
+    /**
+     * Declare this constant in the constants in effect, when this statement is active. Called by the walk as it reaches this statement.
+     * An invalid value declares nothing, and a redeclaration keeps the first value.
+     * @internal
+     */
+    public resolve(bsConsts: Map<string, boolean>) {
+        this.isDuplicate = false;
+        const value = this.assignment.value;
+        if (!this.isActive || !isLiteralBoolean(value)) {
+            return;
+        }
+        const constNameLower = this.assignment.tokens.name.text.toLowerCase();
+        this.isDuplicate = bsConsts.has(constNameLower);
+        if (!this.isDuplicate) {
+            bsConsts.set(constNameLower, value.tokens.value.text.toLowerCase() === 'true');
+        }
+    }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         // nothing to walk
@@ -5112,53 +5129,5 @@ export class TypeStatement extends Statement implements TypedefProvider {
             }),
             ['value']
         );
-    }
-}
-
-/**
- * Tracks the `#const` values in effect as a walk from the root of a tree moves through it in source order.
- * When `isStored` is true, the results are stored on the `#if` and `#const` statements. Otherwise they only apply to this walk.
- */
-class BodyConditionalCompileWalk implements ConditionalCompileWalk {
-    constructor(bsConsts: Map<string, boolean> | undefined, public readonly isStored: boolean) {
-        this.bsConsts = new Map(bsConsts);
-    }
-
-    private bsConsts: Map<string, boolean>;
-
-    /**
-     * The condition values of this walk, when they are not stored on the statements
-     */
-    private conditions = new Map<ConditionalCompileStatement, boolean>();
-
-    public isConditionTrue(statement: ConditionalCompileStatement) {
-        return this.isStored ? statement.isConditionTrue : this.conditions.get(statement) ?? statement.isConditionTrue;
-    }
-
-    public resolve(node: AstNode) {
-        if (isConditionalCompileStatement(node)) {
-            const { isConditionTrue } = node.evaluateCondition(this.bsConsts, this.isStored);
-            if (!this.isStored) {
-                this.conditions.set(node, isConditionTrue);
-            }
-        } else if (isConditionalCompileConstStatement(node) && (this.isStored ? node.isActive : node.isActiveWithin(undefined, (statement) => this.isConditionTrue(statement)))) {
-            this.declare(node);
-        }
-    }
-
-    private declare(statement: ConditionalCompileConstStatement) {
-        const assignment = statement.assignment;
-        let isDuplicate = false;
-        //an invalid value declares nothing
-        if (isLiteralBoolean(assignment.value)) {
-            const constNameLower = assignment.tokens.name.text.toLowerCase();
-            isDuplicate = this.bsConsts.has(constNameLower);
-            if (!isDuplicate) {
-                this.bsConsts.set(constNameLower, assignment.value.tokens.value.text.toLowerCase() === 'true');
-            }
-        }
-        if (this.isStored) {
-            statement.isDuplicate = isDuplicate;
-        }
     }
 }

@@ -12,7 +12,6 @@ import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import type { Token } from '../lexer/Token';
 import { isBlock, isBody, isConditionalCompileStatement, isFunctionParameterExpression } from '../astUtils/reflection';
-import type { ConditionalCompileStatement } from './Statement';
 
 /**
  * A BrightScript AST node
@@ -219,13 +218,12 @@ export abstract class AstNode {
      * Like `isActive`, but computed by walking up the parents, and only considers the conditional compile statements between this node and the boundary.
      * Use this to ask about a node of a declaration that is itself inside an inactive branch, such as the members of an inactive class.
      * @param boundary stop at this ancestor (defaults to the root of the tree)
-     * @param isConditionTrue the value of the condition of each `#if` (defaults to the value stored on the statement)
      */
-    public isActiveWithin(boundary?: AstNode, isConditionTrue = (statement: ConditionalCompileStatement) => statement.isConditionTrue): boolean {
+    public isActiveWithin(boundary?: AstNode): boolean {
         let child: AstNode = this;
         let ancestor = this.parent;
         while (ancestor && ancestor !== boundary) {
-            if (isConditionalCompileStatement(ancestor) && (child === ancestor.thenBranch) !== isConditionTrue(ancestor)) {
+            if (isConditionalCompileStatement(ancestor) && (child === ancestor.thenBranch) !== ancestor.isConditionTrue) {
                 return false;
             }
             child = ancestor;
