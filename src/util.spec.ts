@@ -10,6 +10,7 @@ import { tempDir, rootDir } from './testHelpers.spec';
 import { Program } from './Program';
 import type { BsDiagnostic } from '.';
 import { SourceNode } from 'source-map';
+import { DEFAULT_MIN_FIRMWARE_VERSION } from './RokuConstants';
 
 const sinon = createSandbox();
 
@@ -227,6 +228,65 @@ describe('util', () => {
             } finally {
                 process.chdir(cwd);
             }
+        });
+    });
+
+    describe('createConfigFile', () => {
+        beforeEach(() => {
+            fsExtra.ensureDirSync(rootDir);
+        });
+
+        it('creates a bsconfig.json file', () => {
+            const configPath = util.createConfigFile(rootDir);
+            expect(configPath).to.equal(s`${rootDir}/bsconfig.json`);
+            expect(fsExtra.pathExistsSync(configPath!)).to.be.true;
+        });
+
+        it('uses cwd when not provided', () => {
+            process.chdir(rootDir);
+            try {
+                util.createConfigFile();
+            } finally {
+                process.chdir(cwd);
+            }
+            expect(fsExtra.pathExistsSync(s`${rootDir}/bsconfig.json`)).to.be.true;
+        });
+
+        it('includes the recommended defaults, and nothing else uncommented', () => {
+            const config = util.loadConfigFile(util.createConfigFile(rootDir))!;
+            delete config._ancestors;
+            expect(config).to.eql({
+                minFirmwareVersion: DEFAULT_MIN_FIRMWARE_VERSION,
+                deploy: false,
+                copyToStaging: true,
+                createPackage: false,
+                //loadConfigFile resolves paths relative to the config file
+                stagingDir: s`${rootDir}/dist`,
+                retainStagingDir: false,
+                autoImportComponentScript: true,
+                sourceMap: true,
+                relativeSourceMaps: true
+            });
+        });
+
+        it('includes the other supported options as comments', () => {
+            const contents = fsExtra.readFileSync(util.createConfigFile(rootDir)!).toString();
+            for (const key of [
+                'allowBrighterScriptInBrightScript', 'bslibDestinationDir', 'cwd', 'diagnosticFilters', 'diagnosticLevel',
+                'diagnosticReporters', 'diagnosticSeverityOverrides', 'emitDefinitions', 'emitFullPaths', 'extends', 'files',
+                'host', 'logLevel', 'outFile', 'password', 'plugins', 'pruneEmptyCodeFiles', 'removeParameterTypes', 'require',
+                'resolveSourceRoot', 'rootDir', 'sourceRoot', 'username', 'validate', 'watch'
+            ]) {
+                expect(contents).to.include(`// "${key}":`);
+            }
+        });
+
+        it('does not overwrite an existing bsconfig.json file', () => {
+            const configPath = s`${rootDir}/bsconfig.json`;
+            fsExtra.outputFileSync(configPath, '{ "rootDir": "custom" }');
+
+            expect(util.createConfigFile(rootDir)).to.be.undefined;
+            expect(fsExtra.readFileSync(configPath).toString()).to.equal('{ "rootDir": "custom" }');
         });
     });
 

@@ -37,6 +37,7 @@ import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import type { AstNode, Expression, Statement } from './parser/AstNode';
 import { components, events, interfaces } from './roku-types';
+import { DEFAULT_MIN_FIRMWARE_VERSION } from './RokuConstants';
 
 export class Util {
     public clearConsole() {
@@ -166,6 +167,97 @@ export class Util {
                 configPath = path.join(parentDirPath, 'bsconfig.json');
             }
         }
+    }
+
+    /**
+     * Create a new `bsconfig.json` file in the given directory (this powers `bsc --init`).
+     * The file contains recommended defaults, followed by the rest of the supported options commented out.
+     * An existing `bsconfig.json` file is never overwritten.
+     * @param cwd the directory where the `bsconfig.json` file should be created
+     * @returns the path to the new file, or `undefined` if a `bsconfig.json` file already exists in that directory
+     */
+    public createConfigFile(cwd = process.cwd()): string | undefined {
+        const configPath = path.join(cwd, 'bsconfig.json');
+        if (fsExtra.pathExistsSync(configPath)) {
+            return undefined;
+        }
+        const contents = [
+            '{',
+            '    // The minimum Roku firmware version required to run this project',
+            `    "minFirmwareVersion": "${DEFAULT_MIN_FIRMWARE_VERSION}",`,
+            '    // Deploy to a Roku device after a successful build (requires `host` and `password`)',
+            '    "deploy": false,',
+            '    // Copy the project files into the staging directory',
+            '    "copyToStaging": true,',
+            '    // Create a zip package. Ignored when `deploy` is enabled',
+            '    "createPackage": false,',
+            '    // The directory where the transpiled files are placed',
+            '    "stagingDir": "dist",',
+            '    // Prevent the staging directory from being deleted after creating the package',
+            '    "retainStagingDir": false,',
+            '    // For every xml component, automatically import a .bs or .brs file with the same name (if it exists)',
+            '    "autoImportComponentScript": true,',
+            '    // Generate sourcemap files so debuggers can show the original source code',
+            '    "sourceMap": true,',
+            '    // Write sourcemap `sources` as relative paths instead of absolute paths',
+            '    "relativeSourceMaps": true,',
+            '',
+            '    // Allow BrighterScript features (classes, interfaces, etc...) in BrightScript (`.brs`) files, and force those files to be transpiled',
+            '    // "allowBrighterScriptInBrightScript": false,',
+            '    // Override the staging directory location of the bslib.brs file. Using a location outside of `source` will break scripts that depend on it',
+            '    // "bslibDestinationDir": "source",',
+            '    // Override the current working directory',
+            '    // "cwd": "./",',
+            '    // A list of filters used to hide diagnostics',
+            '    // "diagnosticFilters": [],',
+            '    // Which diagnostic levels are printed to the console: "hint", "info", "warn", or "error"',
+            '    // "diagnosticLevel": "warn",',
+            '    // How diagnostics are reported to the console: "detailed", "github-actions", or a custom template string',
+            '    // "diagnosticReporters": "detailed",',
+            '    // A map of diagnostic codes to severity overrides ("hint", "info", "warn", or "error")',
+            '    // "diagnosticSeverityOverrides": {},',
+            '    // Emit type definition files (`d.bs`) during transpile',
+            '    // "emitDefinitions": false,',
+            '    // Emit full paths to files when printing diagnostics to the console',
+            '    // "emitFullPaths": false,',
+            '    // Path to another bsconfig.json file that this file should import and then override',
+            '    // "extends": "",',
+            '    // The list of files (or globs) to include in your project',
+            `    // "files": ${JSON.stringify(DefaultFiles).replace(/,/g, ', ')},`,
+            '    // The host of the Roku device to deploy to',
+            '    // "host": "",',
+            '    // The log level: "error", "warn", "log", "info", "debug", "trace", or "off"',
+            '    // "logLevel": "log",',
+            '    // The path (including filename) where the output zip package should be placed',
+            '    // "outFile": "./out/package.zip",',
+            '    // The password used to deploy to the Roku device',
+            '    // "password": "",',
+            '    // A list of node scripts or npm modules to load as compiler plugins',
+            '    // "plugins": [],',
+            '    // Remove files that are empty (or only contain comments) after transpilation',
+            '    // "pruneEmptyCodeFiles": false,',
+            '    // Remove explicit parameter and return types (the `as type` syntax) from functions',
+            '    // "removeParameterTypes": false,',
+            '    // A list of node scripts or npm modules to `require()` on startup',
+            '    // "require": [],',
+            '    // Resolve `sourceRoot` to an absolute path (relative to this bsconfig.json file)',
+            '    // "resolveSourceRoot": false,',
+            '    // The root directory of your Roku project (where the manifest lives)',
+            '    // "rootDir": "./",',
+            '    // Override where source files appear to live in sourcemaps and source literals',
+            '    // "sourceRoot": "",',
+            '    // The username used to deploy to the Roku device',
+            '    // "username": "rokudev",',
+            '    // Set to false to skip validation (diagnostics) entirely, which can speed up builds',
+            '    // "validate": true,',
+            '    // Keep running, and recompile on every file change',
+            '    // "watch": false',
+            '}',
+            ''
+        ].join('\n');
+        //the `wx` flag guarantees we never overwrite an existing file
+        fsExtra.writeFileSync(configPath, contents, { flag: 'wx' });
+        return configPath;
     }
 
     public getRangeFromOffsetLength(text: string, offset: number, length: number) {
