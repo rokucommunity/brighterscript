@@ -1,8 +1,6 @@
 import type { AALiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, VariableExpression } from '../parser/Expression';
 import type { AliasStatement, AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConditionalCompileStatement, ConstStatement, EnumStatement, FunctionStatement, ImportStatement, InterfaceStatement, LibraryStatement, NamespaceStatement, TypecastStatement } from '../parser/Statement';
 import { Cache } from '../Cache';
-import { ConditionalCompileEvaluator } from '../parser/ConditionalCompileEvaluator';
-import type { ConditionalCompileEvaluatorSource } from '../parser/ConditionalCompileEvaluator';
 import { InternalWalkMode, WalkMode, createVisitor } from './visitors';
 import type { AstNode, Expression } from '../parser/AstNode';
 import { isAAMemberExpression, isBinaryExpression, isCallExpression, isDottedGetExpression, isFunctionExpression, isGroupingExpression, isIndexedGetExpression, isLiteralExpression, isMethodStatement, isNamespaceStatement, isNewExpression, isVariableExpression } from './reflection';
@@ -19,7 +17,7 @@ export interface BscFileLike {
     _parser: Parser;
 }
 
-export class CachedLookups implements ConditionalCompileEvaluatorSource {
+export class CachedLookups {
 
     private cache = new Cache();
 
@@ -31,9 +29,8 @@ export class CachedLookups implements ConditionalCompileEvaluatorSource {
 
     get functionStatements(): FunctionStatement[] {
         return this.getEvaluationDerived<Array<FunctionStatement>>('functionStatements', () => {
-            const evaluator = this.conditionalCompileEvaluator;
             const allFunctionStatements = this.getFromCache<Array<FunctionStatement>>('allFunctionStatements');
-            return evaluator ? allFunctionStatements.filter(statement => evaluator.isNodeActive(statement)) : allFunctionStatements;
+            return this.usesConditionalCompile() ? allFunctionStatements.filter(statement => statement.isActive) : allFunctionStatements;
         });
     }
 
@@ -82,15 +79,6 @@ export class CachedLookups implements ConditionalCompileEvaluatorSource {
      */
     get expressions(): Set<Expression> {
         return this.getFromCache<Set<Expression>>('expressions');
-    }
-
-    /**
-     * Which `#if` branches of the file are active. Undefined when the file has no `#if` or `#const` statements.
-     * The evaluation is replaced whenever `ast.bsConsts` differs from the constants it started from, so a constant change applies to the next lookup or walk.
-     * An edit to the AST (such as a changed condition) applies after `invalidate()`, which happens when the file is validated after it changed.
-     */
-    get conditionalCompileEvaluator(): ConditionalCompileEvaluator | undefined {
-        return this.getEvaluation();
     }
 
     /**
@@ -180,16 +168,15 @@ export class CachedLookups implements ConditionalCompileEvaluatorSource {
      */
     public isActiveDeclaration(statement: AstNode): boolean {
         return !this.getEvaluationDerived<Set<AstNode>>('inactiveDeclarations', () => {
-            const evaluator = this.conditionalCompileEvaluator;
             const inactiveDeclarations = new Set<AstNode>();
-            if (evaluator) {
+            if (this.usesConditionalCompile()) {
                 for (const declaration of this.getFromCache<Array<AstNode>>('declarations')) {
-                    if (!evaluator.isNodeActive(declaration)) {
+                    if (!declaration.isActive) {
                         inactiveDeclarations.add(declaration);
                     }
                 }
                 for (const functionStatement of this.getFromCache<Array<FunctionStatement>>('allFunctionStatements')) {
-                    if (!evaluator.isNodeActive(functionStatement)) {
+                    if (!functionStatement.isActive) {
                         inactiveDeclarations.add(functionStatement);
                     }
                 }
@@ -218,27 +205,26 @@ export class CachedLookups implements ConditionalCompileEvaluatorSource {
 
 
     /**
-     * The evaluation of the file, replaced when `ast.bsConsts` differs from the constants it started from.
-     * Everything derived from the evaluation is dropped when it is replaced.
+     * Does the file have any `#if` or `#const` statements? Brings the branches of the file up to date with `ast.bsConsts` when it does,
+     * and drops everything derived from the branches when a walk resolved them with different constants.
      */
-    private getEvaluation(): ConditionalCompileEvaluator | undefined {
+    private usesConditionalCompile(): boolean {
         if (!this.getFromCache<boolean>('usesConditionalCompile')) {
-            return undefined;
+            return false;
         }
         const ast = this.file._parser?.ast;
-        let evaluator = this.cache.get('conditionalCompileEvaluator') as ConditionalCompileEvaluator | undefined;
-        if (ast && (!evaluator || !ConditionalCompileEvaluator.areBsConstsEqual(evaluator.startingBsConsts, ast.getBsConsts()))) {
-            evaluator = new ConditionalCompileEvaluator(ast);
-            this.cache.set('conditionalCompileEvaluator', evaluator);
+        ast?.resolveConditionalCompile();
+        if (this.cache.get('conditionalCompileVersion') !== ast?.conditionalCompileVersion) {
             for (const derivedKey of CachedLookups.evaluationDerivedKeys) {
                 this.cache.delete(derivedKey);
             }
+            this.cache.set('conditionalCompileVersion', ast?.conditionalCompileVersion);
         }
-        return evaluator;
+        return true;
     }
 
     private getEvaluationDerived<T>(cacheKey: string, factory: () => T): T {
-        this.getEvaluation();
+        this.usesConditionalCompile();
         return this.cache.getOrAdd(cacheKey, factory);
     }
 

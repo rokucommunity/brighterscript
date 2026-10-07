@@ -4,8 +4,7 @@ import type { Scope } from './Scope';
 import { util } from './util';
 import { Cache } from './Cache';
 import { isBrsFile, isBsDiagnostic, isXmlScope } from './astUtils/reflection';
-import type { DiagnosticRelatedInformation, Location } from 'vscode-languageserver-protocol';
-import type { ConditionalCompileEvaluator } from './parser/ConditionalCompileEvaluator';
+import type { DiagnosticRelatedInformation, Location, Range } from 'vscode-languageserver-protocol';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
 import type { FinalizedBsConfig } from './BsConfig';
@@ -231,21 +230,32 @@ export class DiagnosticManager {
 
     /**
      * Create a function that tells whether a diagnostic is a lexer or parser diagnostic about code the device does not compile (an inactive `#if` / `#else if` / `#else` branch).
-     * Other diagnostics are never about inactive branches because the validators skip them. Each file's evaluation is looked up at most once per call.
+     * Other diagnostics are never about inactive branches because the validators skip them. Each file's inactive ranges are computed at most once per call.
      */
     private createInactiveBranchDetector() {
-        const evaluatorsByUri = new Map<string, ConditionalCompileEvaluator | undefined>();
+        const inactiveRangesByUri = new Map<string, Range[]>();
         return (diagnostic: BsDiagnosticWithKey) => {
             const uri = diagnostic.location?.uri;
-            if (!uri || !this.parseDiagnosticKeys.has(diagnostic.key)) {
+            const start = diagnostic.location?.range?.start;
+            if (!uri || !start || !this.parseDiagnosticKeys.has(diagnostic.key)) {
                 return false;
             }
             const uriLower = uri.toLowerCase();
-            if (!evaluatorsByUri.has(uriLower)) {
+            let inactiveRanges = inactiveRangesByUri.get(uriLower);
+            if (!inactiveRanges) {
                 const file = this.program?.getFile(uri);
-                evaluatorsByUri.set(uriLower, isBrsFile(file) ? file.getConditionalCompileEvaluator() : undefined);
+                inactiveRanges = [];
+                if (isBrsFile(file)) {
+                    // eslint-disable-next-line @typescript-eslint/dot-notation
+                    const statements = file['_cachedLookups'].conditionalCompileStatements;
+                    if (statements.length > 0) {
+                        file.ast.resolveConditionalCompile();
+                        inactiveRanges = statements.flatMap(statement => statement.getInactiveBranchRanges());
+                    }
+                }
+                inactiveRangesByUri.set(uriLower, inactiveRanges);
             }
-            return evaluatorsByUri.get(uriLower)?.isRangeInInactiveBranch(diagnostic.location.range) ?? false;
+            return inactiveRanges.some(range => util.comparePosition(range.start, start) <= 0 && util.comparePosition(start, range.end) < 0);
         };
     }
 

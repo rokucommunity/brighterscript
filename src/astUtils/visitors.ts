@@ -2,7 +2,7 @@
 import type { CancellationToken } from 'vscode-languageserver';
 import type { Body, AssignmentStatement, Block, ExpressionStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, EnumStatement, EnumMemberStatement, DimStatement, TryCatchStatement, CatchStatement, ThrowStatement, InterfaceStatement, InterfaceFieldStatement, InterfaceMethodStatement, FieldStatement, MethodStatement, ConstStatement, ContinueStatement, TypecastStatement, AliasStatement, ConditionalCompileStatement, ConditionalCompileErrorStatement, ConditionalCompileConstStatement, AugmentedAssignmentStatement, ExitStatement, TypeStatement } from '../parser/Statement';
 import type { AAIndexedMemberExpression, AALiteralExpression, AAMemberExpression, AnnotationExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, EscapedCharCodeLiteralExpression, FunctionExpression, FunctionParameterExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NewExpression, NullCoalescingExpression, RegexLiteralExpression, SourceLiteralExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, TypecastExpression, TypeExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression } from '../parser/Expression';
-import { isExpression, isStatement } from './reflection';
+import { isConditionalCompileConstStatement, isConditionalCompileStatement, isExpression, isStatement } from './reflection';
 import type { Editor } from './Editor';
 import type { Statement, Expression, AstNode } from '../parser/AstNode';
 
@@ -43,6 +43,11 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
     //link this node to its parent
     parent = parent ?? owner as unknown as AstNode;
     element.parent = parent;
+
+    //resolve `#if` and `#const` statements in source order, before the visitor sees them
+    if (isConditionalCompileStatement(element) || isConditionalCompileConstStatement(element)) {
+        conditionalCompileWalks.get(options)?.resolve(element);
+    }
 
     //notify the visitor of this element
     if (element.visitMode & options.walkMode) {
@@ -243,13 +248,25 @@ export interface WalkOptions {
     skipChildren?: ChildrenSkipper;
     /**
      * Map of Conditional compilation flags, with names in lowercase.
-     * When omitted, a walk uses the evaluation of the file that contains the node, which follows the constants in `ast.bsConsts`.
-     * A plugin that changes a constant should change `ast.bsConsts`, and the change applies to the next walk.
-     * An edit to the AST (such as a changed `#if` condition) applies the next time the file is validated, which happens after the file changes.
-     * When given, the walk evaluates the tree with these constants and ignores the file's evaluation.
+     * When omitted, a walk uses the branches stored on the `#if` statements, which every full walk from the root of the tree
+     * (`walkStatements`, `walkExpressions` and `recurseChildFunctions`) resolves again from `ast.bsConsts`.
+     * When given, a walk from the root resolves the branches with these constants for this walk only, and stores nothing on the AST.
      */
     bsConsts?: Map<string, boolean>;
 }
+
+/**
+ * The state of a walk from the root of a tree that resolves `#if` and `#const` statements as it reaches them
+ */
+export interface ConditionalCompileWalk {
+    resolve(node: AstNode): void;
+}
+
+/**
+ * The conditional compile state of every walk in progress that started at the root of a tree
+ * @internal
+ */
+export const conditionalCompileWalks = new WeakMap<WalkOptions, ConditionalCompileWalk>();
 
 export class ChildrenSkipper {
     private isSkipped = false;

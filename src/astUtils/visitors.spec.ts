@@ -10,7 +10,7 @@ import { PrintStatement, Block, ReturnStatement, ExpressionStatement } from '../
 import { TokenKind } from '../lexer/TokenKind';
 import type { WalkOptions } from './visitors';
 import { ChildrenSkipper, createVisitor, InternalWalkMode, walkArray, WalkMode, walkStatements } from './visitors';
-import { isBlock, isConditionalCompileStatement, isFunctionExpression, isLiteralExpression, isPrintStatement } from './reflection';
+import { isBlock, isConditionalCompileStatement, isFunctionExpression, isFunctionStatement, isLiteralExpression, isPrintStatement } from './reflection';
 import { createCall, createIntegerLiteral, createToken, createVariableExpression } from './creators';
 import { createStackedVisitor } from './stackedVisitor';
 import { Editor } from './Editor';
@@ -1629,7 +1629,7 @@ describe('astUtils visitors', () => {
                 expect(options.bsConsts).to.be.undefined;
             });
 
-            it('uses the evaluation of the file for every statement a walk meets', () => {
+            it('walks the active branches of every statement a walk meets', () => {
                 const file = program.setFile<BrsFile>('source/main.brs', `
                     #if true
                     sub a()
@@ -1646,23 +1646,36 @@ describe('astUtils visitors', () => {
                         #end if
                     end sub
                 `);
-                const fileEvaluator = file.getConditionalCompileEvaluator();
-                expect(fileEvaluator).to.exist;
-                const options: WalkOptions = { walkMode: WalkMode.visitStatementsRecursive };
-                expect(collectFunctionNames(file.ast, options)).to.eql(['a', 'b', 'c']);
-                collectFunctionNames(file.ast, { walkMode: WalkMode.visitStatementsRecursive });
-                expect(file.getConditionalCompileEvaluator()).to.equal(fileEvaluator);
+                expect(collectFunctionNames(file.ast, { walkMode: WalkMode.visitStatementsRecursive })).to.eql(['a', 'b', 'c']);
             });
 
-            it('does not evaluate anything for a file without conditional compile statements', () => {
-                const file = program.setFile<BrsFile>('source/main.brs', `
+            it('applies a #const declared inside a function to a later #if, even in a walk that does not step into functions', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.brs', `
                     sub a()
-                        print 1
+                        #const LATE = true
                     end sub
+                    #if LATE
+                    sub b()
+                    end sub
+                    #end if
                 `);
-                const options: WalkOptions = { walkMode: WalkMode.visitAllRecursive };
-                collectFunctionNames(file.ast, options);
-                expect(file.getConditionalCompileEvaluator()).to.be.undefined;
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements })).to.eql(['a', 'b']);
+                ast.bsConsts.set('other', true);
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements })).to.eql(['a', 'b']);
+            });
+
+            it('does not store the branches of a walk with explicit bsConsts', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                    #if FEATURE
+                    sub a()
+                    end sub
+                    #end if
+                `);
+                // eslint-disable-next-line no-bitwise
+                const func = ast.findChild<FunctionStatement>(isFunctionStatement, { walkMode: WalkMode.visitAllRecursive | InternalWalkMode.visitFalseConditionalCompilationBlocks });
+                expect(func.isActive).to.be.false;
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatementsRecursive, bsConsts: new Map([['feature', true]]) })).to.eql(['a']);
+                expect(func.isActive).to.be.false;
             });
 
             it('does not evaluate anything when walking every branch', () => {

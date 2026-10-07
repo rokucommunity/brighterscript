@@ -5,13 +5,12 @@ import type { DottedGetExpression, LiteralExpression, TypecastExpression } from 
 import { FunctionExpression, FunctionParameterExpression, TypeExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
-import { ConditionalCompileEvaluator } from './ConditionalCompileEvaluator';
-import type { Location } from 'vscode-languageserver';
+import type { Location, Position, Range } from 'vscode-languageserver';
 import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
-import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
-import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isBlock, isCallExpression, isCatchStatement, isClassType, isConditionalCompileStatement, isEnumMemberStatement, isEnumType, isEnumStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isUninitializedType, isVoidType, isWhileStatement } from '../astUtils/reflection';
+import type { WalkVisitor, WalkOptions, ConditionalCompileWalk } from '../astUtils/visitors';
+import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray, conditionalCompileWalks } from '../astUtils/visitors';
+import { isBlock, isCallExpression, isCatchStatement, isClassType, isConditionalCompileConstStatement, isConditionalCompileStatement, isLiteralBoolean, isEnumMemberStatement, isEnumType, isEnumStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isUninitializedType, isVoidType, isWhileStatement } from '../astUtils/reflection';
 import type { GetTypeOptions } from '../interfaces';
 import { TypeChainEntry, type TranspileResult, type TypedefProvider } from '../interfaces';
 import { createDottedIdentifier, createIdentifier, createInvalidLiteral, createMethodStatement, createToken, createVariableExpression } from '../astUtils/creators';
@@ -137,8 +136,69 @@ export class Body extends Statement implements TypedefProvider {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkMode & InternalWalkMode.walkStatements) {
+        if (!(options.walkMode & InternalWalkMode.walkStatements)) {
+            return;
+        }
+        //only a walk that starts at the root of the tree resolves conditional compile statements, because `#const` applies in source order
+        if (this.parent || conditionalCompileWalks.has(options)) {
             walkArray(this.statements, visitor, options, this);
+            return;
+        }
+        const fullWalkMode = InternalWalkMode.walkStatements | InternalWalkMode.walkExpressions | InternalWalkMode.recurseChildFunctions;
+        //a walk that skips part of the tree would miss the `#const` statements there, so it uses the branches of the last full walk instead
+        const isFullWalk = (options.walkMode & fullWalkMode) === fullWalkMode && !options.skipChildren;
+        if (!options.bsConsts) {
+            //a visitor can ask about descendants the walk has not reached yet (such as the members of a class), so changed constants are resolved before the walk starts
+            //(the very first full walk, such as the parser's `link()`, resolves everything itself)
+            if (!isFullWalk || this.resolvedBsConsts) {
+                this.resolveConditionalCompile();
+            }
+            if (!isFullWalk) {
+                walkArray(this.statements, visitor, options, this);
+                return;
+            }
+            this.setResolvedBsConsts(this.bsConsts);
+        }
+        conditionalCompileWalks.set(options, new BodyConditionalCompileWalk(options.bsConsts ?? this.bsConsts, !options.bsConsts));
+        try {
+            walkArray(this.statements, visitor, options, this);
+        } finally {
+            conditionalCompileWalks.delete(options);
+        }
+    }
+
+    /**
+     * The constants of the last full walk, which resolved the conditional compile statements of the tree
+     */
+    private resolvedBsConsts: Map<string, boolean> | undefined;
+
+    private isResolvingConditionalCompile = false;
+
+    /**
+     * Changes whenever a full walk resolves the conditional compile statements with different constants than the one before
+     */
+    public conditionalCompileVersion = 0;
+
+    private setResolvedBsConsts(bsConsts: Map<string, boolean> | undefined) {
+        if (!this.resolvedBsConsts || !areBsConstsEqual(this.resolvedBsConsts, bsConsts)) {
+            this.conditionalCompileVersion++;
+        }
+        this.resolvedBsConsts = new Map(bsConsts);
+    }
+
+    /**
+     * Walk the whole tree when `bsConsts` changed since the last full walk, so every `#if` statement and `isActive` reflects the current constants.
+     * An edit to the AST (such as a changed `#if` condition) applies at the next full walk, such as the one when the file is validated.
+     */
+    public resolveConditionalCompile() {
+        if (this.isResolvingConditionalCompile || (this.resolvedBsConsts && areBsConstsEqual(this.resolvedBsConsts, this.bsConsts))) {
+            return;
+        }
+        this.isResolvingConditionalCompile = true;
+        try {
+            this.link();
+        } finally {
+            this.isResolvingConditionalCompile = false;
         }
     }
 
@@ -2783,20 +2843,14 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
     /**
      * The methods and fields that are compiled, in source order. Members in an inactive conditional compile branch of this class are left out.
-     * The branches are those of the file's evaluation, so a change to `ast.bsConsts` applies immediately and an edit to the AST applies at the next validate of the file.
-     * When the class does not belong to a file with an evaluation, every member is active.
-     * @param evaluator an evaluation to use instead of the one of the file that contains this class
+     * The branches are those of the most recent full walk of the tree (see `isActive`).
      */
-    public getActiveMembers(evaluator?: ConditionalCompileEvaluator): MemberStatement[] {
+    public getActiveMembers(): MemberStatement[] {
         const members = this.getMembersInSourceOrder(this.body);
         if (!this.body.some(isConditionalCompileStatement)) {
             return members;
         }
-        evaluator ??= ConditionalCompileEvaluator.findFileEvaluation(this);
-        if (!evaluator) {
-            return members;
-        }
-        return members.filter(member => evaluator.isNodeActive(member, this));
+        return members.filter(member => member.isActiveWithin(this));
     }
 
     /**
@@ -2819,9 +2873,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
      * The compiled members by lowercase name. Members in an inactive conditional compile branch of this class are left out,
      * so an active member always wins over an inactive member of the same name.
      */
-    public getActiveMemberMap(evaluator?: ConditionalCompileEvaluator): Record<string, MemberStatement> {
+    public getActiveMemberMap(): Record<string, MemberStatement> {
         const activeMemberMap = {} as Record<string, MemberStatement>;
-        for (const member of this.getActiveMembers(evaluator)) {
+        for (const member of this.getActiveMembers()) {
             activeMemberMap[member?.tokens.name?.text.toLowerCase()] = member;
         }
         return activeMemberMap;
@@ -4826,6 +4880,78 @@ export class ConditionalCompileStatement extends Statement {
         return results;
     }
 
+    /**
+     * Is the condition (including `not`) true? This is resolved by full walks from the root of the tree, using the constants in effect at this statement.
+     * Before the first such walk, the condition is evaluated against the constants of the tree.
+     */
+    public get isConditionTrue(): boolean {
+        return this.resolvedIsConditionTrue ?? this.evaluateCondition(this.getBsConsts()).isConditionTrue;
+    }
+
+    /**
+     * Does the condition name a declared constant (or is it `true` / `false`)? Resolved like `isConditionTrue`.
+     */
+    public get isConditionDeclared(): boolean {
+        return this.resolvedIsConditionDeclared ?? this.evaluateCondition(this.getBsConsts()).isConditionDeclared;
+    }
+
+    private resolvedIsConditionTrue: boolean | undefined;
+
+    private resolvedIsConditionDeclared: boolean | undefined;
+
+    /**
+     * @internal
+     */
+    public evaluateCondition(bsConsts: Map<string, boolean> | undefined, shouldStore = false) {
+        const condition = this.tokens.condition;
+        let value: boolean;
+        let isConditionDeclared = true;
+        if (condition?.kind === TokenKind.True) {
+            value = true;
+        } else if (condition?.kind === TokenKind.False) {
+            value = false;
+        } else {
+            const constNameLower = condition?.text.toLowerCase();
+            isConditionDeclared = !!bsConsts?.has(constNameLower);
+            //an undeclared constant is false
+            value = bsConsts?.get(constNameLower) === true;
+        }
+        const isConditionTrue = this.tokens.not ? !value : value;
+        if (shouldStore) {
+            this.resolvedIsConditionTrue = isConditionTrue;
+            this.resolvedIsConditionDeclared = isConditionDeclared;
+        }
+        return { isConditionTrue: isConditionTrue, isConditionDeclared: isConditionDeclared };
+    }
+
+    /**
+     * The ranges of the code in this statement's branches that is not compiled. The `#if` / `#else if` / `#else` / `#end if` lines themselves are never inside a branch.
+     * An `#else if` statement describes its own branches.
+     */
+    public getInactiveBranchRanges(): Range[] {
+        const ranges: Range[] = [];
+        const tokens = this.tokens;
+        const isReached = this.isActive;
+        const elseStatement = isConditionalCompileStatement(this.elseBranch) ? this.elseBranch : undefined;
+        const addRange = (directiveRange: Range | undefined, end: Position | undefined) => {
+            if (directiveRange) {
+                ranges.push({
+                    //the branch starts on the line after the directive
+                    start: { line: directiveRange.end.line + 1, character: 0 },
+                    //a missing terminator means the branch runs to the end of the file
+                    end: end ?? { line: Number.MAX_SAFE_INTEGER, character: Number.MAX_SAFE_INTEGER }
+                });
+            }
+        };
+        if (!isReached || !this.isConditionTrue) {
+            addRange(tokens.condition?.location?.range ?? tokens.hashIf?.location?.range, (tokens.hashElse ?? elseStatement?.tokens.hashIf ?? tokens.hashEndIf)?.location?.range?.start);
+        }
+        if ((!isReached || this.isConditionTrue) && tokens.hashElse) {
+            addRange(tokens.hashElse.location?.range, tokens.hashEndIf?.location?.range?.start);
+        }
+        return ranges;
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkStatements) {
             if (options.walkMode & InternalWalkMode.visitFalseConditionalCompilationBlocks) {
@@ -4835,11 +4961,11 @@ export class ConditionalCompileStatement extends Statement {
                 }
                 return;
             }
-            const evaluator = ConditionalCompileEvaluator.forWalk(this, options);
-            if (evaluator.isThenBranchActive(this)) {
+            const conditionalCompileWalk = conditionalCompileWalks.get(options) as BodyConditionalCompileWalk | undefined;
+            const isConditionTrue = conditionalCompileWalk?.isConditionTrue(this) ?? this.isConditionTrue;
+            if (isConditionTrue) {
                 walk(this, 'thenBranch', visitor, options);
-            }
-            if (this.elseBranch && evaluator.isElseBranchActive(this)) {
+            } else if (this.elseBranch) {
                 walk(this, 'elseBranch', visitor, options);
             }
         }
@@ -4910,6 +5036,12 @@ export class ConditionalCompileConstStatement extends Statement {
         ];
 
     }
+
+    /**
+     * Does this `#const` redeclare a constant that is already in effect? The first declaration keeps its value.
+     * Resolved by full walks from the root of the tree, and only meaningful while this statement is active.
+     */
+    public isDuplicate = false;
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         // nothing to walk
@@ -5017,5 +5149,68 @@ export class TypeStatement extends Statement implements TypedefProvider {
             }),
             ['value']
         );
+    }
+}
+
+/**
+ * Do the two sets of constants hold the same names and values? A missing set is the same as an empty one.
+ */
+function areBsConstsEqual(first: ReadonlyMap<string, boolean> | undefined, second: ReadonlyMap<string, boolean> | undefined) {
+    if ((first?.size ?? 0) !== (second?.size ?? 0)) {
+        return false;
+    }
+    for (const [name, value] of first ?? []) {
+        if (second.get(name) !== value) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * Tracks the `#const` values in effect as a walk from the root of a tree moves through it in source order.
+ * When `isStored` is true, the results are stored on the `#if` and `#const` statements. Otherwise they only apply to this walk.
+ */
+class BodyConditionalCompileWalk implements ConditionalCompileWalk {
+    constructor(bsConsts: Map<string, boolean> | undefined, private isStored: boolean) {
+        this.bsConsts = new Map(bsConsts);
+    }
+
+    private bsConsts: Map<string, boolean>;
+
+    /**
+     * The condition values of this walk, when they are not stored on the statements
+     */
+    private conditions = new Map<ConditionalCompileStatement, boolean>();
+
+    public isConditionTrue(statement: ConditionalCompileStatement) {
+        return this.isStored ? statement.isConditionTrue : this.conditions.get(statement) ?? statement.isConditionTrue;
+    }
+
+    public resolve(node: AstNode) {
+        if (isConditionalCompileStatement(node)) {
+            const { isConditionTrue } = node.evaluateCondition(this.bsConsts, this.isStored);
+            if (!this.isStored) {
+                this.conditions.set(node, isConditionTrue);
+            }
+        } else if (isConditionalCompileConstStatement(node) && node.isActiveWithin(undefined, (statement) => this.isConditionTrue(statement))) {
+            this.declare(node);
+        }
+    }
+
+    private declare(statement: ConditionalCompileConstStatement) {
+        const assignment = statement.assignment;
+        let isDuplicate = false;
+        //an invalid value declares nothing
+        if (isLiteralBoolean(assignment.value)) {
+            const constNameLower = assignment.tokens.name.text.toLowerCase();
+            isDuplicate = this.bsConsts.has(constNameLower);
+            if (!isDuplicate) {
+                this.bsConsts.set(constNameLower, assignment.value.tokens.value.text.toLowerCase() === 'true');
+            }
+        }
+        if (this.isStored) {
+            statement.isDuplicate = isDuplicate;
+        }
     }
 }
