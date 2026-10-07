@@ -147,59 +147,15 @@ export class Body extends Statement implements TypedefProvider {
         const fullWalkMode = InternalWalkMode.walkStatements | InternalWalkMode.walkExpressions | InternalWalkMode.recurseChildFunctions;
         //a walk that skips part of the tree would miss the `#const` statements there, so it uses the branches of the last full walk instead
         const isFullWalk = (options.walkMode & fullWalkMode) === fullWalkMode && !options.skipChildren;
-        if (!options.bsConsts) {
-            //a visitor can ask about descendants the walk has not reached yet (such as the members of a class), so changed constants are resolved before the walk starts
-            //(the very first full walk, such as the parser's `link()`, resolves everything itself)
-            if (!isFullWalk || this.resolvedBsConsts) {
-                this.resolveConditionalCompile();
-            }
-            if (!isFullWalk) {
-                walkArray(this.statements, visitor, options, this);
-                return;
-            }
-            this.setResolvedBsConsts(this.bsConsts);
-            this.isActive = true;
+        if (!options.bsConsts && !isFullWalk) {
+            walkArray(this.statements, visitor, options, this);
+            return;
         }
         conditionalCompileWalks.set(options, new BodyConditionalCompileWalk(options.bsConsts ?? this.bsConsts, !options.bsConsts));
         try {
             walkArray(this.statements, visitor, options, this);
         } finally {
             conditionalCompileWalks.delete(options);
-        }
-    }
-
-    /**
-     * The constants of the last full walk, which resolved the conditional compile statements of the tree
-     */
-    private resolvedBsConsts: Map<string, boolean> | undefined;
-
-    private isResolvingConditionalCompile = false;
-
-    /**
-     * Changes whenever a full walk resolves the conditional compile statements with different constants than the one before
-     */
-    public conditionalCompileVersion = 0;
-
-    private setResolvedBsConsts(bsConsts: Map<string, boolean> | undefined) {
-        if (!this.resolvedBsConsts || !areBsConstsEqual(this.resolvedBsConsts, bsConsts)) {
-            this.conditionalCompileVersion++;
-        }
-        this.resolvedBsConsts = new Map(bsConsts);
-    }
-
-    /**
-     * Walk the whole tree when `bsConsts` changed since the last full walk, so every `#if` statement and `isActive` reflects the current constants.
-     * An edit to the AST (such as a changed `#if` condition) applies at the next full walk, such as the one when the file is validated.
-     */
-    public resolveConditionalCompile() {
-        if (this.isResolvingConditionalCompile || (this.resolvedBsConsts && areBsConstsEqual(this.resolvedBsConsts, this.bsConsts))) {
-            return;
-        }
-        this.isResolvingConditionalCompile = true;
-        try {
-            this.link();
-        } finally {
-            this.isResolvingConditionalCompile = false;
         }
     }
 
@@ -4927,12 +4883,15 @@ export class ConditionalCompileStatement extends Statement {
 
     /**
      * The ranges of the code in this statement's branches that is not compiled. The `#if` / `#else if` / `#else` / `#end if` lines themselves are never inside a branch.
-     * An `#else if` statement describes its own branches.
+     * An `#else if` statement describes its own branches. Empty when the statement has not been walked yet, since its activity is unknown.
      */
     public getInactiveBranchRanges(): Range[] {
         const ranges: Range[] = [];
+        if (this.isActive === undefined) {
+            return ranges;
+        }
         const tokens = this.tokens;
-        const isReached = this.isActive !== false;
+        const isReached = this.isActive;
         const elseStatement = isConditionalCompileStatement(this.elseBranch) ? this.elseBranch : undefined;
         const addRange = (directiveRange: Range | undefined, end: Position | undefined) => {
             if (directiveRange) {
@@ -5154,21 +5113,6 @@ export class TypeStatement extends Statement implements TypedefProvider {
             ['value']
         );
     }
-}
-
-/**
- * Do the two sets of constants hold the same names and values? A missing set is the same as an empty one.
- */
-function areBsConstsEqual(first: ReadonlyMap<string, boolean> | undefined, second: ReadonlyMap<string, boolean> | undefined) {
-    if ((first?.size ?? 0) !== (second?.size ?? 0)) {
-        return false;
-    }
-    for (const [name, value] of first ?? []) {
-        if (second.get(name) !== value) {
-            return false;
-        }
-    }
-    return true;
 }
 
 /**

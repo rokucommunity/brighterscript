@@ -248,10 +248,7 @@ export class DiagnosticManager {
                 if (isBrsFile(file)) {
                     // eslint-disable-next-line @typescript-eslint/dot-notation
                     const statements = file['_cachedLookups'].conditionalCompileStatements;
-                    if (statements.length > 0) {
-                        file.ast.resolveConditionalCompile();
-                        inactiveRanges = statements.flatMap(statement => statement.getInactiveBranchRanges());
-                    }
+                    inactiveRanges = statements.flatMap(statement => statement.getInactiveBranchRanges());
                 }
                 inactiveRangesByUri.set(uriLower, inactiveRanges);
             }

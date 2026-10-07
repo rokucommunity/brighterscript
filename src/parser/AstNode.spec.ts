@@ -389,7 +389,7 @@ describe('AstNode', () => {
                     if (
                         ['parent', 'symbolTable', 'range'].includes(key) ||
                         //conditional compile state is filled in by walks of the tree, and a clone has not been walked yet
-                        ['isActive', 'resolvedBsConsts', 'conditionalCompileVersion', 'isResolvingConditionalCompile', 'resolvedIsConditionTrue', 'resolvedIsConditionDeclared'].includes(key) ||
+                        ['isActive', 'resolvedIsConditionTrue', 'resolvedIsConditionDeclared'].includes(key) ||
                         //this is a circular reference property or the `returnType` prop, skip it
                         (isFunctionExpression(original) && (key === 'functionStatement' || key === 'returnType')) ||
                         //circular reference property for annotations

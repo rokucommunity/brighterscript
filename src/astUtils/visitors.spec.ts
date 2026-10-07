@@ -1555,7 +1555,11 @@ describe('astUtils visitors', () => {
                 expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements })).to.eql(['releaseOnly']);
             });
 
-            it('uses a change to ast.bsConsts on the next walk without validating again', () => {
+            function createHashConst(name: string, value: boolean) {
+                return Parser.parse(`#const ${name} = ${value}\n`).ast.statements[0];
+            }
+
+            it('uses a #const injected into the AST on the next full walk', () => {
                 const file = program.setFile<BrsFile>('source/main.brs', `
                     #if FEATURE
                     sub debugOnly()
@@ -1567,14 +1571,14 @@ describe('astUtils visitors', () => {
                 `);
                 program.validate();
                 const ast = file.ast;
-                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements })).to.eql(['releaseOnly']);
-                ast.bsConsts.set('feature', true);
-                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements })).to.eql(['debugOnly']);
-                ast.bsConsts = new Map([['feature', false]]);
-                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements })).to.eql(['releaseOnly']);
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatementsRecursive })).to.eql(['releaseOnly']);
+                ast.statements.unshift(createHashConst('FEATURE', true));
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatementsRecursive })).to.eql(['debugOnly']);
+                ast.statements[0] = createHashConst('FEATURE', false);
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatementsRecursive })).to.eql(['releaseOnly']);
             });
 
-            it('keeps a change to ast.bsConsts across a validate of a file that did not change', () => {
+            it('keeps an injected #const across a validate of a file that did not change', () => {
                 const file = program.setFile<BrsFile>('source/main.brs', `
                     #if FEATURE
                     sub debugOnly()
@@ -1582,7 +1586,8 @@ describe('astUtils visitors', () => {
                     #end if
                 `);
                 program.validate();
-                file.ast.bsConsts.set('feature', true);
+                file.ast.statements.unshift(createHashConst('FEATURE', true));
+                file.ast.link();
                 program.validate();
                 expect(collectFunctionNames(file.ast, { walkMode: WalkMode.visitStatements })).to.eql(['debugOnly']);
             });

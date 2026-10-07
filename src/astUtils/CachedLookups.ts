@@ -28,14 +28,11 @@ export class CachedLookups {
     }
 
     get functionStatements(): FunctionStatement[] {
-        return this.getEvaluationDerived<Array<FunctionStatement>>('functionStatements', () => {
-            const allFunctionStatements = this.getFromCache<Array<FunctionStatement>>('allFunctionStatements');
-            return this.usesConditionalCompile() ? allFunctionStatements.filter(statement => statement.isActive !== false) : allFunctionStatements;
-        });
+        return this.getFromCache<Array<FunctionStatement>>('functionStatements');
     }
 
     get functionStatementMap() {
-        return this.getEvaluationDerived('functionStatementMap', () => {
+        return this.cache.getOrAdd('functionStatementMap', () => {
             const funcMap = new Map<string, FunctionStatement>();
             for (const stmt of this.functionStatements) {
                 funcMap.set(stmt.getName(ParseMode.BrighterScript).toLowerCase(), stmt);
@@ -93,7 +90,7 @@ export class CachedLookups {
     }
 
     get classStatementMap() {
-        return this.getEvaluationDerived('classStatementMap', () => {
+        return this.cache.getOrAdd('classStatementMap', () => {
             const activeKeys = new Set<string>();
             const classMap = new Map<string, ClassStatement>();
             for (const stmt of this.classStatements) {
@@ -116,7 +113,7 @@ export class CachedLookups {
     }
 
     get enumStatementMap() {
-        return this.getEvaluationDerived('enumStatementMap', () => {
+        return this.cache.getOrAdd('enumStatementMap', () => {
             const activeKeys = new Set<string>();
             const enumMap = new Map<string, EnumStatement>();
             for (const stmt of this.enumStatements) {
@@ -131,7 +128,7 @@ export class CachedLookups {
     }
 
     get constStatementMap() {
-        return this.getEvaluationDerived('constStatementMap', () => {
+        return this.cache.getOrAdd('constStatementMap', () => {
             const activeKeys = new Set<string>();
             const constMap = new Map<string, ConstStatement>();
             for (const stmt of this.constStatements) {
@@ -146,7 +143,7 @@ export class CachedLookups {
     }
 
     get interfaceStatementMap() {
-        return this.getEvaluationDerived('interfaceStatementMap', () => {
+        return this.cache.getOrAdd('interfaceStatementMap', () => {
             const activeKeys = new Set<string>();
             const ifaceMap = new Map<string, InterfaceStatement>();
             for (const stmt of this.interfaceStatements) {
@@ -167,22 +164,7 @@ export class CachedLookups {
      * and are not checked for duplicates or circular references.
      */
     public isActiveDeclaration(statement: AstNode): boolean {
-        return !this.getEvaluationDerived<Set<AstNode>>('inactiveDeclarations', () => {
-            const inactiveDeclarations = new Set<AstNode>();
-            if (this.usesConditionalCompile()) {
-                for (const declaration of this.getFromCache<Array<AstNode>>('declarations')) {
-                    if (declaration.isActive === false) {
-                        inactiveDeclarations.add(declaration);
-                    }
-                }
-                for (const functionStatement of this.getFromCache<Array<FunctionStatement>>('allFunctionStatements')) {
-                    if (functionStatement.isActive === false) {
-                        inactiveDeclarations.add(functionStatement);
-                    }
-                }
-            }
-            return inactiveDeclarations;
-        }).has(statement);
+        return statement.isActive === true;
     }
 
     /**
@@ -203,41 +185,6 @@ export class CachedLookups {
         this.cache.clear();
     }
 
-
-    /**
-     * Does the file have any `#if` or `#const` statements? Brings the branches of the file up to date with `ast.bsConsts` when it does,
-     * and drops everything derived from the branches when a walk resolved them with different constants.
-     */
-    private usesConditionalCompile(): boolean {
-        if (!this.getFromCache<boolean>('usesConditionalCompile')) {
-            return false;
-        }
-        const ast = this.file._parser?.ast;
-        ast?.resolveConditionalCompile();
-        if (this.cache.get('conditionalCompileVersion') !== ast?.conditionalCompileVersion) {
-            for (const derivedKey of CachedLookups.evaluationDerivedKeys) {
-                this.cache.delete(derivedKey);
-            }
-            this.cache.set('conditionalCompileVersion', ast?.conditionalCompileVersion);
-        }
-        return true;
-    }
-
-    private getEvaluationDerived<T>(cacheKey: string, factory: () => T): T {
-        this.usesConditionalCompile();
-        return this.cache.getOrAdd(cacheKey, factory);
-    }
-
-    private static evaluationDerivedKeys = [
-        'inactiveDeclarations',
-        'functionStatements',
-        'functionStatementMap',
-        'classStatementMap',
-        'enumStatementMap',
-        'constStatementMap',
-        'interfaceStatementMap'
-    ];
-
     private getFromCache<T>(cacheKey: string): T {
         if (!this.cache.has(cacheKey)) {
             this.rehydrate();
@@ -248,7 +195,10 @@ export class CachedLookups {
         return this.cache.get(cacheKey);
     }
 
-    private rehydrate() {
+    /**
+     * Walk the file and rebuild every lookup
+     */
+    public rehydrate() {
         const expressions = new Set<Expression>();
         const classStatements: ClassStatement[] = [];
         const namespaceStatements: NamespaceStatement[] = [];
@@ -285,9 +235,7 @@ export class CachedLookups {
 
         //inactive branches are walked and still transpiled, so their declarations stay in the lookups. Callables are active-only.
         const conditionalCompileStatements: ConditionalCompileStatement[] = [];
-        let usesConditionalCompile = false;
-        const declarations: AstNode[] = [];
-        const allFunctionStatements: FunctionStatement[] = [];
+        const functionStatements: FunctionStatement[] = [];
 
         const excludedExpressions = new Set<Expression>();
 
@@ -356,18 +304,12 @@ export class CachedLookups {
             },
             ClassStatement: s => {
                 classStatements.push(s);
-                declarations.push(s);
             },
             InterfaceStatement: s => {
                 interfaceStatements.push(s);
-                declarations.push(s);
             },
             ConditionalCompileStatement: s => {
                 conditionalCompileStatements.push(s);
-                usesConditionalCompile = true;
-            },
-            ConditionalCompileConstStatement: () => {
-                usesConditionalCompile = true;
             },
             FieldStatement: s => {
                 if (s.initialValue) {
@@ -378,7 +320,9 @@ export class CachedLookups {
                 namespaceStatements.push(s);
             },
             FunctionStatement: s => {
-                allFunctionStatements.push(s);
+                if (s.isActive) {
+                    functionStatements.push(s);
+                }
             },
             ImportStatement: s => {
                 importStatements.push(s);
@@ -433,11 +377,9 @@ export class CachedLookups {
             },
             EnumStatement: e => {
                 enumStatements.push(e);
-                declarations.push(e);
             },
             ConstStatement: s => {
                 constStatements.push(s);
-                declarations.push(s);
             },
             UnaryExpression: e => {
                 expressions.add(e);
@@ -457,9 +399,7 @@ export class CachedLookups {
         });
 
         this.cache.set('expressions', expressions);
-        this.cache.set('declarations', declarations);
-        this.cache.set('allFunctionStatements', allFunctionStatements);
-        this.cache.set('usesConditionalCompile', usesConditionalCompile);
+        this.cache.set('functionStatements', functionStatements);
         this.cache.set('conditionalCompileStatements', conditionalCompileStatements);
         this.cache.set('classStatements', classStatements);
         this.cache.set('namespaceStatements', namespaceStatements);

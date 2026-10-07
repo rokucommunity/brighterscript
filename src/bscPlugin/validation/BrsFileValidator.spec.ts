@@ -17,7 +17,7 @@ import { StringType } from '../../types/StringType';
 import { ArrayType } from '../../types/ArrayType';
 import { DynamicType } from '../../types/DynamicType';
 import { TypedFunctionType } from '../../types/TypedFunctionType';
-import { ParseMode } from '../../parser/Parser';
+import { ParseMode, Parser } from '../../parser/Parser';
 import type { ExtraSymbolData } from '../../interfaces';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { EnumType } from '../../types';
@@ -1404,6 +1404,10 @@ describe('BrsFileValidator', () => {
                     end sub
                 `;
 
+                function createHashConst(name: string, value: boolean) {
+                    return Parser.parse(`#const ${name} = ${value}\n`).ast.statements[0];
+                }
+
                 /**
                  * Validate the source after a plugin has edited the parsed file
                  */
@@ -1478,7 +1482,7 @@ describe('BrsFileValidator', () => {
                     expectZeroDiagnostics(evaluationProgram);
                 });
 
-                it('reflects a change to ast.bsConsts in the parse diagnostics without validating again', () => {
+                it('reflects an injected #const in the parse diagnostics after the next full walk, without validating again', () => {
                     evaluationProgram?.dispose();
                     evaluationProgram = new Program({ rootDir: rootDir });
                     const file = evaluationProgram.setFile<BrsFile>('source/main.brs', `
@@ -1488,18 +1492,20 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `);
-                    file.ast.bsConsts.set('debug', false);
+                    file.ast.statements.unshift(createHashConst('DEBUG', false));
                     evaluationProgram.validate();
                     expectZeroDiagnostics(evaluationProgram);
-                    file.ast.bsConsts.set('debug', true);
+                    file.ast.statements[0] = createHashConst('DEBUG', true);
+                    file.ast.link();
                     expectDiagnostics(evaluationProgram.getDiagnostics(), [
                         { code: 'unexpected-token', location: { range: util.createRange(3, 32, 3, 33) } }
                     ]);
-                    file.ast.bsConsts.set('debug', false);
+                    file.ast.statements[0] = createHashConst('DEBUG', false);
+                    file.ast.link();
                     expectZeroDiagnostics(evaluationProgram);
                 });
 
-                it('reflects a change to ast.bsConsts in scope lookups after the scope validates again, though the file did not change', () => {
+                it('reflects an injected #const in scope lookups after the file validates again', () => {
                     evaluationProgram?.dispose();
                     evaluationProgram = new Program({ rootDir: rootDir });
                     const file = evaluationProgram.setFile<BrsFile>('source/main.bs', `
@@ -1518,7 +1524,8 @@ describe('BrsFileValidator', () => {
                     evaluationProgram.validate();
                     const scope = evaluationProgram.getScopeByName('source');
                     expect(scope.getClass('Foo').memberMap['releasemethod']).to.exist;
-                    file.ast.bsConsts.set('debug', true);
+                    file.ast.statements.unshift(createHashConst('DEBUG', true));
+                    file.isValidated = false;
                     scope.invalidate();
                     evaluationProgram.validate();
                     expect(scope.getClass('Foo').memberMap['debugmethod']).to.exist;

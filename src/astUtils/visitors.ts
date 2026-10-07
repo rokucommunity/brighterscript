@@ -101,11 +101,18 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
 
 /**
  * A node is active when its parent is active and, if the parent is an `#if`, the node is the branch the condition selects.
+ * The root of the tree is always active. When the parent's value is unknown (undefined), so is the node's.
  * A walk with explicit `bsConsts` does not change the stored values.
  */
 function setIsActive(element: AstNode, parent: AstNode, options: WalkOptions) {
-    if (!options.bsConsts) {
-        element.isActive = parent.isActive !== false && (!isConditionalCompileStatement(parent) || (element === parent.thenBranch) === parent.isConditionTrue);
+    if (options.bsConsts) {
+        return;
+    }
+    const isParentActive = parent.parent ? parent.isActive : true;
+    if (isParentActive === undefined) {
+        element.isActive = undefined;
+    } else {
+        element.isActive = isParentActive && (!isConditionalCompileStatement(parent) || (element === parent.thenBranch) === parent.isConditionTrue);
     }
 }
 

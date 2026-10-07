@@ -39,6 +39,10 @@ export class BrsFileValidator {
         // It could have potentially changed before this from plugins, after this, it will not change
         // eslint-disable-next-line @typescript-eslint/dot-notation
         this.event.file['_cachedLookups'].invalidate();
+        //rebuild the lookups now, because that full walk resolves every `#if` and `#const` (and sets `isActive`) before the walk below,
+        //whose visitors can ask about nodes it has not reached yet (such as the members of a class)
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        this.event.file['_cachedLookups'].rehydrate();
 
         this.walk();
         this.flagTopLevelStatements();
