@@ -1215,6 +1215,26 @@ export let DiagnosticMessages = {
         message: `Function has too many variables: ${actual} found, but Roku allows at most ${max} per function (parameters count toward this limit).`,
         severity: DiagnosticSeverity.Error,
         code: 'exceeds-max-variable-count'
+    }),
+    labelInTryBlock: (name = '') => ({
+        message: `Label '${name}' cannot be declared inside a 'try' block`,
+        severity: DiagnosticSeverity.Error,
+        code: 'label-in-try'
+    }),
+    duplicateLabel: (name = '') => ({
+        message: `Label '${name}' is already declared in this function`,
+        severity: DiagnosticSeverity.Error,
+        code: 'duplicate-label'
+    }),
+    labelNotFound: (name = '') => ({
+        message: `Cannot find label '${name}' in this function`,
+        severity: DiagnosticSeverity.Error,
+        code: 'label-not-found'
+    }),
+    gotoIntoForLoop: (name = '') => ({
+        message: `'goto ${name}' jumps into a 'for' loop from outside it, which skips the loop setup`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'goto-into-for-loop'
     })
 };
 export const defaultMaximumTruncationLength = 160;

@@ -23,6 +23,7 @@ import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { EnumType } from '../../types';
 import { TypeStatementType } from '../../types/TypeStatementType';
 import * as fsExtra from 'fs-extra';
+import { DiagnosticSeverity } from 'vscode-languageserver';
 
 describe('BrsFileValidator', () => {
     let program: Program;
@@ -2476,6 +2477,535 @@ describe('BrsFileValidator', () => {
             program.setFile('source/main.brs', `sub a()\neval("print 1")\nend sub`);
             program.validate();
             expectNotFlagged();
+        });
+    });
+
+    describe('goto and labels', () => {
+        beforeEach(() => {
+            fsExtra.ensureDirSync(tempDir);
+            fsExtra.emptyDirSync(tempDir);
+        });
+        afterEach(() => {
+            fsExtra.emptyDirSync(tempDir);
+        });
+
+        function validate(code: string, fileName = 'source/main.brs') {
+            program.setFile(fileName, code);
+            program.validate();
+        }
+
+        describe('label-in-try', () => {
+            it('flags a label inside a try block', () => {
+                validate(trim`
+                    sub main()
+                        try
+                            foo:
+                        catch e
+                        end try
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelInTryBlock('foo'),
+                    location: { range: util.createRange(2, 8, 2, 11) }
+                }]);
+            });
+
+            it('allows a label inside a catch block', () => {
+                validate(trim`
+                    sub main()
+                        try
+                            print 1
+                        catch e
+                            foo:
+                        end try
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows a label in a catch nested inside a try', () => {
+                validate(trim`
+                    sub main()
+                        try
+                            try
+                                print 2
+                            catch e2
+                                foo:
+                            end try
+                        catch e
+                        end try
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('flags a label in a try nested inside a catch', () => {
+                validate(trim`
+                    sub main()
+                        try
+                            print 1
+                        catch e
+                            try
+                                foo:
+                            catch e2
+                            end try
+                        end try
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.labelInTryBlock('foo')
+                ]);
+            });
+
+            it('flags a label in a try inside an active #if', () => {
+                validate(trim`
+                    #const flag = true
+                    sub main()
+                        #if flag
+                            try
+                                foo:
+                            catch e
+                            end try
+                        #end if
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.labelInTryBlock('foo')
+                ]);
+            });
+
+            it('does not flag a label in a try inside an inactive #if', () => {
+                validate(trim`
+                    sub main()
+                        #if false
+                            try
+                                foo:
+                            catch e
+                            end try
+                        #end if
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('flags a label in a try inside an anonymous function', () => {
+                validate(trim`
+                    sub main()
+                        cb = sub()
+                            try
+                                foo:
+                            catch e
+                            end try
+                        end sub
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.labelInTryBlock('foo')
+                ]);
+            });
+        });
+
+        describe('duplicate-label', () => {
+            it('flags two labels at the top level of a function', () => {
+                validate(trim`
+                    sub main()
+                        foo:
+                        foo:
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.duplicateLabel('foo'),
+                    location: { range: util.createRange(2, 4, 2, 7) }
+                }]);
+            });
+
+            it('flags nested labels that duplicate a top-level one', () => {
+                validate(trim`
+                    sub main()
+                        foo:
+                        if true then
+                            foo:
+                        end if
+                        for i = 0 to 1
+                            foo:
+                        end for
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.duplicateLabel('foo'),
+                    DiagnosticMessages.duplicateLabel('foo')
+                ]);
+            });
+
+            it('is case insensitive', () => {
+                validate(trim`
+                    sub main()
+                        Foo:
+                        FOO:
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.duplicateLabel('FOO')
+                ]);
+            });
+
+            it('reports each later occurrence', () => {
+                validate(trim`
+                    sub main()
+                        foo:
+                        foo:
+                        foo:
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.duplicateLabel('foo'),
+                    DiagnosticMessages.duplicateLabel('foo')
+                ]);
+            });
+
+            it('allows the same name in different functions', () => {
+                validate(trim`
+                    sub a()
+                        foo:
+                    end sub
+                    sub b()
+                        foo:
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows the same name in an outer and an anonymous function', () => {
+                validate(trim`
+                    sub main()
+                        foo:
+                        cb = sub()
+                            foo:
+                        end sub
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows the same name in #if and #else branches', () => {
+                validate(trim`
+                    #const flag = true
+                    sub main()
+                        #if flag
+                            foo:
+                        #else
+                            foo:
+                        #end if
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+        });
+
+        describe('label-not-found', () => {
+            it('flags a goto with no matching label', () => {
+                validate(trim`
+                    sub main()
+                        goto missing
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelNotFound('missing'),
+                    location: { range: util.createRange(1, 9, 1, 16) }
+                }]);
+            });
+
+            it('matches labels case insensitively', () => {
+                validate(trim`
+                    sub main()
+                        goto Done
+                        done:
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('flags a label that only exists in another function', () => {
+                validate(trim`
+                    sub a()
+                        foo:
+                    end sub
+                    sub b()
+                        goto foo
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.labelNotFound('foo')
+                ]);
+            });
+
+            it('flags a label that only exists in a nested anonymous function', () => {
+                validate(trim`
+                    sub main()
+                        goto foo
+                        cb = sub()
+                            foo:
+                        end sub
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.labelNotFound('foo')
+                ]);
+            });
+
+            it('flags a goto in an anonymous function targeting an outer label', () => {
+                validate(trim`
+                    sub main()
+                        foo:
+                        cb = sub()
+                            goto foo
+                        end sub
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.labelNotFound('foo')
+                ]);
+            });
+
+            it('flags a label that is only in an inactive #if', () => {
+                validate(trim`
+                    sub main()
+                        goto foo
+                        #if false
+                            foo:
+                        #end if
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.labelNotFound('foo')
+                ]);
+            });
+
+            it('finds a label active through a file-level #const', () => {
+                validate(trim`
+                    #const flag = true
+                    sub main()
+                        goto foo
+                        #if flag
+                            foo:
+                        #end if
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds a label active through a #const inside the function', () => {
+                validate(trim`
+                    sub main()
+                        #const flag = true
+                        goto foo
+                        #if flag
+                            foo:
+                        #end if
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds a label active through a manifest bs_const', () => {
+                fsExtra.outputFileSync(`${rootDir}/manifest`, 'title=t\nbs_const=FLAG=true');
+                program.dispose();
+                program = new Program({ rootDir: rootDir });
+                validate(trim`
+                    sub main()
+                        goto foo
+                        #if FLAG
+                            foo:
+                        #end if
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('does not flag a goto inside an inactive #if', () => {
+                validate(trim`
+                    sub main()
+                        #if false
+                            goto missing
+                        #end if
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('flags a single-line if with goto to a missing label', () => {
+                validate(trim`
+                    sub main()
+                        if true then goto missing
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.labelNotFound('missing')
+                ]);
+            });
+
+            it('works in brighterscript files', () => {
+                validate(trim`
+                    sub main()
+                        goto missing
+                    end sub
+                `, 'source/main.bs');
+                expectDiagnostics(program, [
+                    DiagnosticMessages.labelNotFound('missing')
+                ]);
+            });
+        });
+
+        describe('goto-into-for-loop', () => {
+            function expectIntoFor(code: string) {
+                validate(code);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.gotoIntoForLoop('foo')
+                ]);
+            }
+
+            function expectNoDiagnostics(code: string) {
+                validate(code);
+                expectZeroDiagnostics(program);
+            }
+
+            it('warns when jumping from before a for loop into its body', () => {
+                expectIntoFor(trim`
+                    sub main()
+                        goto foo
+                        for i = 0 to 1
+                            foo:
+                        end for
+                    end sub
+                `);
+            });
+
+            it('warns when jumping into a for each body', () => {
+                expectIntoFor(trim`
+                    sub main()
+                        goto foo
+                        for each i in [1]
+                            foo:
+                        end for
+                    end sub
+                `);
+            });
+
+            it('allows a jump within the same loop', () => {
+                expectNoDiagnostics(trim`
+                    sub main()
+                        for i = 0 to 1
+                            goto foo
+                            foo:
+                        end for
+                    end sub
+                `);
+            });
+
+            it('allows a jump from an inner loop to the outer loop body', () => {
+                expectNoDiagnostics(trim`
+                    sub main()
+                        for i = 0 to 1
+                            foo:
+                            for j = 0 to 1
+                                goto foo
+                            end for
+                        end for
+                    end sub
+                `);
+            });
+
+            it('warns when jumping from an outer loop body into a nested inner loop', () => {
+                expectIntoFor(trim`
+                    sub main()
+                        for i = 0 to 1
+                            goto foo
+                            for j = 0 to 1
+                                foo:
+                            end for
+                        end for
+                    end sub
+                `);
+            });
+
+            it('warns when jumping from one loop into a sibling loop', () => {
+                expectIntoFor(trim`
+                    sub main()
+                        for i = 0 to 1
+                            goto foo
+                        end for
+                        for j = 0 to 1
+                            foo:
+                        end for
+                    end sub
+                `);
+            });
+
+            it('allows jumping into if, else, while and catch bodies', () => {
+                expectNoDiagnostics(trim`
+                    sub main()
+                        goto foo
+                        if true then
+                            foo:
+                        end if
+                        goto bar
+                        if false then
+                            print 1
+                        else
+                            bar:
+                        end if
+                        goto baz
+                        while false
+                            baz:
+                        end while
+                        goto qux
+                        try
+                            print 1
+                        catch e
+                            qux:
+                        end try
+                    end sub
+                `);
+            });
+
+            it('allows jumping out of a loop', () => {
+                expectNoDiagnostics(trim`
+                    sub main()
+                        for i = 0 to 1
+                            goto foo
+                        end for
+                        foo:
+                    end sub
+                `);
+            });
+
+            it('warns for a label in a while inside a for when the goto is outside the for', () => {
+                expectIntoFor(trim`
+                    sub main()
+                        goto foo
+                        for i = 0 to 1
+                            while true
+                                foo:
+                            end while
+                        end for
+                    end sub
+                `);
+            });
+
+            it('reports the diagnostic as a warning at the goto label', () => {
+                validate(trim`
+                    sub main()
+                        goto foo
+                        for i = 0 to 1
+                            foo:
+                        end for
+                    end sub
+                `);
+                const diagnostics = program.getDiagnostics().filter(x => x.code === 'goto-into-for-loop');
+                expect(diagnostics).to.have.lengthOf(1);
+                expect(diagnostics[0].severity).to.equal(DiagnosticSeverity.Warning);
+                expect(diagnostics[0].location.range).to.eql(util.createRange(1, 9, 1, 12));
+            });
         });
     });
 });
