@@ -178,7 +178,7 @@ export class CompletionsProcessor {
     public getBrsFileCompletions(position: Position, file: BrsFile, scopesToProcess: Scope[]): { global: CompletionItem[]; scoped: CompletionItem[] } {
         let result = [] as CompletionItem[];
         const currentTokenByFilePosition = file.getTokenAt(position);
-        const currentToken = currentTokenByFilePosition ?? file.getTokenAt(file.getClosestExpression(position)?.location?.range.start);
+        const currentToken = currentTokenByFilePosition ?? file.getTokenAt(util.getLocation(file.getClosestExpression(position))?.range.start);
 
         const emptyResult = { global: [], scoped: [] };
 
@@ -206,12 +206,12 @@ export class CompletionsProcessor {
         if (this.isTokenAdjacentTo(file, currentToken, TokenKind.Dot)) {
             const dotToken = this.getAdjacentToken(file, currentToken, TokenKind.Dot);
             beforeDotToken = file.getTokenBefore(dotToken);
-            expression = file.getClosestExpression(beforeDotToken?.location?.range.end);
+            expression = file.getClosestExpression(util.getLocation(beforeDotToken)?.range.end);
             shouldLookForMembers = true;
         } else if (this.isTokenAdjacentTo(file, currentToken, TokenKind.Callfunc)) {
             const dotToken = this.getAdjacentToken(file, currentToken, TokenKind.Callfunc);
             beforeDotToken = file.getTokenBefore(dotToken);
-            expression = file.getClosestExpression(beforeDotToken?.location?.range.end);
+            expression = file.getClosestExpression(util.getLocation(beforeDotToken)?.range.end);
             shouldLookForCallFuncMembers = true;
         } else if (this.isTokenAdjacentTo(file, currentToken, TokenKind.As)) {
             if (file.parseMode === ParseMode.BrightScript) {
@@ -239,7 +239,7 @@ export class CompletionsProcessor {
             return emptyResult;
         }
 
-        const tokenBefore = file.getTokenBefore(file.getClosestToken(expression.location?.range?.start));
+        const tokenBefore = file.getTokenBefore(file.getClosestToken(util.getLocation(expression)?.range?.start));
 
         // helper to check get correct symbol tables for look ups
         function getSymbolTableForLookups() {
@@ -543,12 +543,12 @@ export class CompletionsProcessor {
                     label: pkgPath,
                     textEdit: TextEdit.replace(
                         util.createRange(
-                            currentToken.location?.range.start.line,
+                            util.getLocation(currentToken)?.range.start.line,
                             //+1 to step past the opening quote
-                            currentToken.location?.range.start.character + (openingQuote ? 1 : 0),
-                            currentToken.location?.range.end.line,
+                            util.getLocation(currentToken)?.range.start.character + (openingQuote ? 1 : 0),
+                            util.getLocation(currentToken)?.range.end.line,
                             //-1 to exclude the closing quotemark (or the end character if there is no closing quotemark)
-                            currentToken.location?.range.end.character + (currentToken.text.endsWith('"') ? -1 : 0)
+                            util.getLocation(currentToken)?.range.end.character + (currentToken.text.endsWith('"') ? -1 : 0)
                         ),
                         pkgPath
                     ),
@@ -655,7 +655,7 @@ export class CompletionsProcessor {
 
         const nextNonComment = file.getNextTokenByPredicate(currentToken, (t: Token) => !AllowedTriviaTokens.includes(t.kind), 1);
         const firstComment = nextNonComment?.leadingTrivia?.find(t => t.kind === TokenKind.Comment);
-        if (firstComment && util.comparePosition(position, firstComment?.location?.range.start) >= 0) {
+        if (firstComment && util.comparePosition(position, util.getLocation(firstComment)?.range.start) >= 0) {
             return true;
         }
         return false;

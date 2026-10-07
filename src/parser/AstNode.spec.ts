@@ -217,6 +217,46 @@ describe('AstNode', () => {
             const foxtrot = file.ast.findChildAtPosition<DottedGetExpression>(util.createPosition(3, 71))!;
             expect(foxtrot.tokens.name.text).to.eql('foxtrot');
         });
+
+        function testPositionBoundaries(newline: string) {
+            const file = program.setFile<BrsFile>('source/main.brs', [
+                'sub main()',
+                '    alpha = 1',
+                '    s = "😀" + alpha',
+                'end sub'
+            ].join(newline));
+            //start of the literal
+            expect(file.ast.findChildAtPosition<LiteralExpression>(util.createPosition(1, 12)).tokens.value.text).to.eql('1');
+            //just after the end of the literal (range end is inclusive)
+            expect(file.ast.findChildAtPosition<LiteralExpression>(util.createPosition(1, 13)).tokens.value.text).to.eql('1');
+            //column 0 of the next line is not inside the previous statement
+            expect(isBlock(file.ast.findChildAtPosition(util.createPosition(2, 0)))).to.be.true;
+            //after a surrogate pair on the same line
+            expect(file.ast.findChildAtPosition<VariableExpression>(util.createPosition(2, 15)).tokens.name.text).to.eql('alpha');
+            expect(file.ast.findChildAtPosition<VariableExpression>(util.createPosition(2, 20)).tokens.name.text).to.eql('alpha');
+            //past the end of the last line
+            expect(file.ast.findChildAtPosition(util.createPosition(9, 0))).to.be.undefined;
+        }
+
+        it('handles position boundaries with LF line endings', () => {
+            testPositionBoundaries('\n');
+        });
+
+        it('handles position boundaries with CRLF line endings', () => {
+            testPositionBoundaries('\r\n');
+        });
+
+        it('does not let a character past the end of a line spill onto the next line', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', [
+                'sub main()',
+                '    a = 1',
+                '    bb = 2',
+                'end sub'
+            ].join('\n'));
+            //line 1 is only 9 characters long, so this must not land on `bb` in line 2
+            const node = file.ast.findChildAtPosition(util.createPosition(1, 12));
+            expect(isVariableExpression(node) && node.tokens.name.text === 'bb').to.be.false;
+        });
     });
 
     describe('findChild', () => {
@@ -387,7 +427,7 @@ describe('AstNode', () => {
 
                     //skip these properties
                     if (
-                        ['parent', 'symbolTable', 'range'].includes(key) ||
+                        ['parent', 'symbolTable', 'pos', 'end', 'source'].includes(key) ||
                         //this is a circular reference property or the `returnType` prop, skip it
                         (isFunctionExpression(original) && (key === 'functionStatement' || key === 'returnType')) ||
                         //circular reference property for annotations
@@ -1165,6 +1205,7 @@ describe('AstNode', () => {
             testClone(original);
         });
 
+
         it('clones BinaryExpression', () => {
             const original = Parser.parse(`
                 sub test()
@@ -1912,7 +1953,7 @@ describe('AstNode', () => {
          */
         function getText(code: string, node: AstNode) {
             const lines = code.split(/\r?\n/);
-            const { start, end } = node.range;
+            const { start, end } = util.getLocation(node).range;
             if (start.line === end.line) {
                 return lines[start.line].slice(start.character, end.character);
             }

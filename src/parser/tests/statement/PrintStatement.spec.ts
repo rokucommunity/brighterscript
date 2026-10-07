@@ -4,7 +4,7 @@ import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import { Program } from '../../../Program';
-import { expectDiagnostics, rootDir } from '../../../testHelpers.spec';
+import { expectDiagnostics, rootDir, testLocatable } from '../../../testHelpers.spec';
 import { getTestTranspile } from '../../../testHelpers.spec';
 import util from '../../../util';
 import { DiagnosticCodeMap, DiagnosticMessages } from '../../../DiagnosticMessages';
@@ -398,28 +398,28 @@ describe('parser print statements', () => {
                 kind: TokenKind.Print,
                 text: 'print',
                 isReserved: true,
-                location: util.createLocation(0, 0, 0, 5),
+                ...testLocatable(0, 0, 0, 5),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.StringLiteral,
                 text: `"foo"`,
                 isReserved: false,
-                location: util.createLocation(0, 6, 0, 11),
+                ...testLocatable(0, 6, 0, 11),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 isReserved: false,
-                location: util.createLocation(0, 11, 0, 12),
+                ...testLocatable(0, 11, 0, 12),
                 leadingTrivia: []
             }
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(ast.statements).to.be.lengthOf(1);
-        expect(ast.statements[0].location?.range).to.deep.include(Range.create(0, 0, 0, 11));
+        expect(util.getLocation(ast.statements[0])?.range).to.deep.include(Range.create(0, 0, 0, 11));
     });
 
     describe('transpile', () => {
@@ -451,6 +451,29 @@ describe('parser print statements', () => {
                     print getText() getText() getText()
                 end function
             `);
+        });
+
+        it('keeps a comment on the line after an empty print on its own line', async () => {
+            await testTranspile(`
+                sub main()
+                    print
+                    ' comment
+                    x = 1
+                end sub
+            `, `
+                sub main()
+                    print ""
+                    ' comment
+                    x = 1
+                end sub
+            `);
+        });
+
+        it('keeps a comment on the line after an empty print on its own line with CRLF line endings', async () => {
+            await testTranspile(
+                'sub main()\r\n    print\r\n    \' comment\r\n    x = 1\r\nend sub',
+                'sub main()\n    print ""\n    \' comment\n    x = 1\nend sub'
+            );
         });
 
         it('supports print in loop', async () => {

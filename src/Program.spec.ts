@@ -3527,6 +3527,266 @@ describe('Program', () => {
             // We don't necessarily expect specific results, just that it doesn't crash
             expect(signatureHelp).to.be.an('array');
         });
+
+        describe('location boundaries', () => {
+            //every test in this block builds its source from an explicit list of lines (no indentation stripping)
+            //so that the line/character values below can be counted by hand
+            const greetLabel = 'sub greet(name as string, age as integer)';
+
+            function expectSignature(srcPath: string, line: number, character: number, label: string, index: number) {
+                const signatureHelp = program.getSignatureHelp(srcPath, util.createPosition(line, character));
+                expect(
+                    signatureHelp.map(x => ({ label: x.signature?.label, index: x.index })),
+                    `wrong signature help at ${line},${character}`
+                ).to.eql([{ label: label, index: index }]);
+            }
+
+            function expectNoSignature(srcPath: string, line: number, character: number) {
+                const signatureHelp = program.getSignatureHelp(srcPath, util.createPosition(line, character));
+                expect(signatureHelp, `expected no signature help at ${line},${character}`).to.eql([]);
+            }
+
+            function testSingleLineCall(srcPath: string, eol: string) {
+                program.setFile(srcPath, [
+                    'sub main()', //0
+                    '    greet("bob", 42)', //1
+                    'end sub', //2
+                    'sub greet(name as string, age as integer)', //3
+                    'end sub' //4
+                ].join(eol));
+                program.validate();
+                expectZeroDiagnostics(program);
+                //    greet|("bob", 42)
+                expectNoSignature(srcPath, 1, 9);
+                //    greet(|"bob", 42)
+                expectSignature(srcPath, 1, 10, greetLabel, 0);
+                //    greet("bob"|, 42)
+                expectSignature(srcPath, 1, 15, greetLabel, 0);
+                //    greet("bob",| 42)
+                expectSignature(srcPath, 1, 16, greetLabel, 1);
+                //    greet("bob", |42)
+                expectSignature(srcPath, 1, 17, greetLabel, 1);
+                //    greet("bob", 42|)
+                expectSignature(srcPath, 1, 19, greetLabel, 1);
+                //    greet("bob", 42)|
+                expectSignature(srcPath, 1, 20, greetLabel, 2);
+                //the lines before and after the call
+                expectNoSignature(srcPath, 0, 10);
+                expectNoSignature(srcPath, 2, 0);
+            }
+
+            it('handles every boundary of a single-line call in a .bs file', () => {
+                testSingleLineCall('source/main.bs', '\n');
+            });
+
+            it('handles every boundary of a single-line call in a .brs file', () => {
+                testSingleLineCall('source/main.brs', '\n');
+            });
+
+            it('handles every boundary of a single-line call in a file with CRLF line endings', () => {
+                testSingleLineCall('source/main.bs', '\r\n');
+            });
+
+            it('handles every boundary of a single-line call in a .brs file with CRLF line endings', () => {
+                testSingleLineCall('source/main.brs', '\r\n');
+            });
+
+            it('handles nested calls', () => {
+                program.setFile('source/main.bs', [
+                    'sub main()', //0
+                    '    outer(inner(1, 2), 3)', //1
+                    'end sub', //2
+                    'sub outer(a as dynamic, b as integer)', //3
+                    'end sub', //4
+                    'function inner(x as integer, y as integer)', //5
+                    '    return x + y', //6
+                    'end function' //7
+                ].join('\n'));
+                program.validate();
+                const outerLabel = 'sub outer(a as dynamic, b as integer)';
+                const innerLabel = 'function inner(x as integer, y as integer)';
+                //    outer(|inner(1, 2), 3)
+                expectSignature('source/main.bs', 1, 10, outerLabel, 0);
+                //    outer(inner(|1, 2), 3)
+                expectSignature('source/main.bs', 1, 16, innerLabel, 0);
+                //    outer(inner(1,| 2), 3) (the space after a nested comma isn't inside any argument, so this resolves to the outer call, same as v1)
+                expectSignature('source/main.bs', 1, 18, outerLabel, 0);
+                //    outer(inner(1, |2), 3)
+                expectSignature('source/main.bs', 1, 19, innerLabel, 1);
+                //    outer(inner(1, 2|), 3)
+                expectSignature('source/main.bs', 1, 20, innerLabel, 1);
+                //    outer(inner(1, 2)|, 3)
+                expectSignature('source/main.bs', 1, 21, outerLabel, 0);
+                //    outer(inner(1, 2),| 3)
+                expectSignature('source/main.bs', 1, 22, outerLabel, 1);
+                //    outer(inner(1, 2), 3|)
+                expectSignature('source/main.bs', 1, 24, outerLabel, 1);
+            });
+
+            it('handles a call that spans multiple lines', () => {
+                program.setFile('source/main.bs', [
+                    'sub main()', //0
+                    '    greet(', //1
+                    '        "bob",', //2
+                    '        42', //3
+                    '    )', //4
+                    'end sub', //5
+                    'sub greet(name as string, age as integer)', //6
+                    'end sub' //7
+                ].join('\n'));
+                program.validate();
+                expectZeroDiagnostics(program);
+                //    greet|(
+                expectNoSignature('source/main.bs', 1, 9);
+                //    greet(|
+                expectSignature('source/main.bs', 1, 10, greetLabel, 0);
+                //|        "bob",
+                expectSignature('source/main.bs', 2, 0, greetLabel, 0);
+                //        |"bob",
+                expectSignature('source/main.bs', 2, 8, greetLabel, 0);
+                //        "bob",|
+                expectSignature('source/main.bs', 2, 14, greetLabel, 1);
+                //|        42
+                expectSignature('source/main.bs', 3, 0, greetLabel, 1);
+                //        42|
+                expectSignature('source/main.bs', 3, 10, greetLabel, 1);
+                //the cursor is past the end of the last argument, so the index is one past it (same as for a single-line call)
+                //    |)
+                expectSignature('source/main.bs', 4, 4, greetLabel, 2);
+                expectNoSignature('source/main.bs', 5, 0);
+            });
+
+            it('handles a call that spans multiple lines in a file with CRLF line endings', () => {
+                program.setFile('source/main.bs', [
+                    'sub main()', //0
+                    '    greet(', //1
+                    '        "bob",', //2
+                    '        42', //3
+                    '    )', //4
+                    'end sub', //5
+                    'sub greet(name as string, age as integer)', //6
+                    'end sub' //7
+                ].join('\r\n'));
+                program.validate();
+                expectZeroDiagnostics(program);
+                //    greet(|
+                expectSignature('source/main.bs', 1, 10, greetLabel, 0);
+                //|        "bob",
+                expectSignature('source/main.bs', 2, 0, greetLabel, 0);
+                //        "bob",|
+                expectSignature('source/main.bs', 2, 14, greetLabel, 1);
+                //|        42
+                expectSignature('source/main.bs', 3, 0, greetLabel, 1);
+                //        42|
+                expectSignature('source/main.bs', 3, 10, greetLabel, 1);
+                expectNoSignature('source/main.bs', 5, 0);
+            });
+
+            it('handles a surrogate-pair emoji before the target on the same line', () => {
+                program.setFile('source/main.bs', [
+                    'sub main()', //0
+                    //each emoji is 2 UTF-16 code units
+                    '    greet("😀😀", 42)', //1
+                    '    x = "😀" : greet("bob", 42)', //2
+                    'end sub', //3
+                    'sub greet(name as string, age as integer)', //4
+                    'end sub' //5
+                ].join('\n'));
+                program.validate();
+                //    greet(|"😀😀", 42)
+                expectSignature('source/main.bs', 1, 10, greetLabel, 0);
+                //    greet("😀😀"|, 42)
+                expectSignature('source/main.bs', 1, 16, greetLabel, 0);
+                //    greet("😀😀",| 42)
+                expectSignature('source/main.bs', 1, 17, greetLabel, 1);
+                //    greet("😀😀", 42|)
+                expectSignature('source/main.bs', 1, 20, greetLabel, 1);
+
+                //    x = "😀" : greet|("bob", 42)
+                expectNoSignature('source/main.bs', 2, 20);
+                //    x = "😀" : greet(|"bob", 42)
+                expectSignature('source/main.bs', 2, 21, greetLabel, 0);
+                //    x = "😀" : greet("bob",| 42)
+                expectSignature('source/main.bs', 2, 27, greetLabel, 1);
+                //    x = "😀" : greet("bob", 42|)
+                expectSignature('source/main.bs', 2, 30, greetLabel, 1);
+            });
+
+            it('handles calls inside and after a multi-line template string', () => {
+                program.setFile('source/main.bs', [
+                    'sub main()', //0
+                    // eslint-disable-next-line no-template-curly-in-string
+                    '    msg = `first ${greet("a", 1)}', //1
+                    // eslint-disable-next-line no-template-curly-in-string
+                    'second ${greet("b", 2)} third`', //2
+                    '    greet("c", 3)', //3
+                    'end sub', //4
+                    'function greet(name as string, age as integer)', //5
+                    '    return name', //6
+                    'end function' //7
+                ].join('\n'));
+                program.validate();
+                const label = 'function greet(name as string, age as integer)';
+                //    msg = `first ${greet("a",| 1)}
+                expectSignature('source/main.bs', 1, 29, label, 1);
+                //second ${greet(|"b", 2)} third`
+                expectSignature('source/main.bs', 2, 15, label, 0);
+                //second ${greet("b",| 2)} third`
+                expectSignature('source/main.bs', 2, 19, label, 1);
+                //second ${greet("b", 2|)} third`
+                expectSignature('source/main.bs', 2, 21, label, 1);
+                //second ${greet("b", 2)} th|ird`
+                expectNoSignature('source/main.bs', 2, 26);
+                //    greet("c",| 3)
+                expectSignature('source/main.bs', 3, 14, label, 1);
+            });
+
+            it('handles a call on the last line of a file with no trailing newline', () => {
+                program.setFile('source/main.bs', [
+                    //signature help crashes when the declaration is the very first token of the file (it has no leading trivia), so start with an empty line
+                    '', //0
+                    'sub greet(name as string, age as integer)', //1
+                    'end sub', //2
+                    'sub main() : greet("bob", 42) : end sub' //3
+                ].join('\n'));
+                program.validate();
+                expectZeroDiagnostics(program);
+                //sub main() : greet(|"bob", 42) : end sub
+                expectSignature('source/main.bs', 3, 19, greetLabel, 0);
+                //sub main() : greet("bob",| 42) : end sub
+                expectSignature('source/main.bs', 3, 25, greetLabel, 1);
+                //sub main() : greet("bob", 42|) : end sub
+                expectSignature('source/main.bs', 3, 28, greetLabel, 1);
+                //sub main() : greet("bob", 42) : end sub|
+                expectNoSignature('source/main.bs', 3, 39);
+            });
+
+            it('computes the exact signature label when the declaration contains an emoji and uses CRLF line endings', () => {
+                program.setFile('source/main.bs', [
+                    'sub main()', //0
+                    '    greet("bob", 42)', //1
+                    'end sub', //2
+                    'sub greet(name = "😀" as string, age = 1 as integer)', //3
+                    '    print name', //4
+                    'end sub' //5
+                ].join('\r\n'));
+                program.validate();
+                //    greet("bob",| 42)
+                expectSignature('source/main.bs', 1, 16, 'sub greet(name = "😀" as string, age = 1 as integer)', 1);
+            });
+
+            it('computes the exact signature label for a declaration with an empty body on the last line of a file', () => {
+                program.setFile('source/main.bs', [
+                    'sub main()', //0
+                    '    greet("bob", 42)', //1
+                    'end sub', //2
+                    'sub greet(name as string, age as integer) : end sub' //3
+                ].join('\n'));
+                program.validate();
+                //    greet("bob",| 42)
+                expectSignature('source/main.bs', 1, 16, greetLabel, 1);
+            });
+        });
     });
 
     describe('plugins', () => {

@@ -1,8 +1,8 @@
 /* eslint-disable func-names */
 import { TokenKind, ReservedTokenKinds, Keywords, PreceedingRegexTypes, AllowedTriviaTokens, FixedTokenText, LexerTextCache, LEXER_TEXT_CACHE_MAX_ENTRIES } from './TokenKind';
-import type { Token } from './Token';
+import type { SourceInfo, Token } from './Token';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
-import type { Location, Position } from 'vscode-languageserver';
+import type { Location } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util from '../util';
 import type { BsDiagnostic } from '../interfaces';
@@ -22,26 +22,6 @@ export class Lexer {
      * The zero-indexed position being examined for the token under consideration.
      */
     private current: number;
-
-    /**
-     * The zero-indexed begin line number being parsed.
-     */
-    private lineBegin: number;
-
-    /**
-     * The zero-indexed end line number being parsed
-     */
-    private lineEnd: number;
-
-    /**
-     * The zero-indexed begin column number being parsed.
-     */
-    private columnBegin: number;
-
-    /**
-     * The zero-indexed end column number being parsed
-     */
-    private columnEnd: number;
 
     /**
      * The BrightScript code being converted to an array of `Token`s.
@@ -69,9 +49,9 @@ export class Lexer {
     private leadingTrivia: Token[] = [];
 
     /**
-     * URI of the file being scanned (if available)
+     * Info about the source being scanned, shared by every token produced by this scan. `undefined` when locations aren't being tracked
      */
-    private uri?: string;
+    private sourceInfo: SourceInfo | undefined;
 
     /**
      * A convenience function, equivalent to `new Lexer().scan(toScan)`, that converts a string
@@ -99,14 +79,11 @@ export class Lexer {
         this.options = this.sanitizeOptions(options);
         this.start = 0;
         this.current = 0;
-        this.lineBegin = 0;
-        this.lineEnd = 0;
-        this.columnBegin = 0;
-        this.columnEnd = 0;
         this.tokens = [];
         this.diagnostics = [];
-        this.previousEndPosition = undefined;
-        this.uri = util.pathToUri(options?.srcPath);
+        this.sourceInfo = this.options.trackLocations
+            ? { uri: util.pathToUri(options?.srcPath), lineStarts: [0] }
+            : undefined;
         while (!this.isAtEnd()) {
             this.scanToken();
         }
@@ -115,9 +92,9 @@ export class Lexer {
             kind: TokenKind.Eof,
             text: '',
             isReserved: false,
-            location: this.options.trackLocations
-                ? util.createLocation(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1, this.uri)
-                : undefined,
+            pos: this.current,
+            end: this.current + 1,
+            source: this.sourceInfo,
             leadingTrivia: this.leadingTrivia.length > 0 ? this.leadingTrivia : undefined
         });
         return this;
@@ -430,12 +407,7 @@ export class Lexer {
 
         this.addToken(TokenKind.Newline);
         this.start = this.current;
-        // advance the line counter
-        this.lineBegin++;
-        this.lineEnd = this.lineBegin;
-        // and always reset the column counter
-        this.columnBegin = 0;
-        this.columnEnd = 0;
+        this.sourceInfo?.lineStarts.push(this.current);
     }
 
     /**
@@ -443,20 +415,14 @@ export class Lexer {
      */
     private advance(): void {
         this.current++;
-        this.columnEnd++;
     }
 
-    private lookaheadStack = [] as Array<{ current: number; columnEnd: number }>;
+    private lookaheadStack = [] as number[];
     private pushLookahead() {
-        this.lookaheadStack.push({
-            current: this.current,
-            columnEnd: this.columnEnd
-        });
+        this.lookaheadStack.push(this.current);
     }
     private popLookahead() {
-        const { current, columnEnd } = this.lookaheadStack.pop();
-        this.current = current;
-        this.columnEnd = columnEnd;
+        this.current = this.lookaheadStack.pop();
     }
 
     /**
@@ -556,11 +522,8 @@ export class Lexer {
                 //store the char code
                 token.charCode = 10;
 
-                //move the location tracking to the next line
-                this.lineEnd++;
-                this.lineBegin = this.lineEnd;
-                this.columnEnd = 0;
-                this.columnBegin = this.columnEnd;
+                //track the start of the next line
+                this.sourceInfo?.lineStarts.push(this.current);
                 continue;
             } else if (this.check('\r') && this.peekNext() === '\n') {
                 this.templateQuasiString();
@@ -573,11 +536,8 @@ export class Lexer {
                 token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
                 token.charCode = 10;
 
-                //move the location tracking to the next line
-                this.lineEnd++;
-                this.lineBegin = this.lineEnd;
-                this.columnEnd = 0;
-                this.columnBegin = this.columnEnd;
+                //track the start of the next line
+                this.sourceInfo?.lineStarts.push(this.current);
                 continue;
 
                 //escaped chars
@@ -838,7 +798,6 @@ export class Lexer {
             (this.peek() === ' ' || this.peek() === '\t')
         ) {
             let savedCurrent = this.current;
-            let savedColumnEnd = this.columnEnd;
 
             // skip past any whitespace
             let whitespace = '';
@@ -861,22 +820,17 @@ export class Lexer {
             } else {
                 // reset if the last word and the current word didn't form a multi-word TokenKind
                 this.current = savedCurrent;
-                this.columnEnd = savedColumnEnd;
             }
         }
 
         // split `elseif` into `else` and `if` tokens
         if (lowerText === 'elseif' && !this.checkPreviousToken(TokenKind.Dot)) {
             let savedCurrent = this.current;
-            let savedColumnEnd = this.columnEnd;
             this.current -= 2;
-            this.columnEnd -= 2;
             this.addToken(TokenKind.Else);
 
             this.start = savedCurrent - 2;
             this.current = savedCurrent;
-            this.columnBegin = savedColumnEnd - 2;
-            this.columnEnd = savedColumnEnd;
             this.addToken(TokenKind.If);
             return;
         }
@@ -1199,7 +1153,9 @@ export class Lexer {
             kind: kind,
             text: text,
             isReserved: ReservedTokenKinds.has(kind),
-            location: this.locationOf(),
+            pos: this.start,
+            end: this.current,
+            source: this.sourceInfo,
             leadingTrivia: undefined
         };
 
@@ -1217,12 +1173,10 @@ export class Lexer {
     }
 
     /**
-     * Move all location and char pointers to current position. Normally called after adding a token.
+     * Move the start pointer to the current position. Normally called after adding a token.
      */
     private sync() {
         this.start = this.current;
-        this.lineBegin = this.lineEnd;
-        this.columnBegin = this.columnEnd;
     }
 
     /**
@@ -1230,25 +1184,8 @@ export class Lexer {
      * @returns the location of `text`
      */
     private locationOf(): Location {
-        if (this.options.trackLocations) {
-            //tokens (including trivia) are almost always back to back, so share the previous token's end position
-            //as this token's start instead of making a new one. Positions are never mutated in place
-            let start = this.previousEndPosition;
-            if (start?.line !== this.lineBegin || start?.character !== this.columnBegin) {
-                start = { line: this.lineBegin, character: this.columnBegin };
-            }
-            const end = { line: this.lineEnd, character: this.columnEnd };
-            this.previousEndPosition = end;
-            return {
-                uri: this.uri,
-                range: { start: start, end: end }
-            };
-        } else {
-            return undefined;
-        }
+        return util.getLocation({ pos: this.start, end: this.current, source: this.sourceInfo });
     }
-
-    private previousEndPosition: Position;
 }
 
 export interface ScanOptions {

@@ -70,7 +70,7 @@ export class HoverProcessor {
     }
 
     private getConstHover(token: Token, file: BrsFile, scope: Scope, expression: Expression) {
-        let containingNamespace = file.getNamespaceStatementForPosition(expression?.location?.range?.start)?.getName(ParseMode.BrighterScript);
+        let containingNamespace = file.getNamespaceStatementForPosition(util.getLocation(expression)?.range?.start)?.getName(ParseMode.BrighterScript);
         const fullName = util.getAllDottedGetParts(expression)?.map(x => x.text).join('.');
 
         //find a constant with this name
@@ -237,7 +237,7 @@ export class HoverProcessor {
             }
         }
         return {
-            range: token?.location.range,
+            range: util.getLocation(token).range,
             contents: hoverContents
         };
     }

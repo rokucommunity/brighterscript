@@ -1,10 +1,9 @@
 import { TokenKind } from './TokenKind';
-import type { Location } from 'vscode-languageserver';
 
 /**
  * Represents a chunk of BrightScript scanned by the lexer.
  */
-export interface Token {
+export interface Token extends Locatable {
     /**
      * The type of token this represents.
      */
@@ -19,20 +18,44 @@ export interface Token {
      */
     isReserved?: boolean;
     /**
-     * Where the token was found.
-     */
-    location: Location;
-    /**
      * Any tokens starting on the next line of the previous token, up to the start of this token
      */
     leadingTrivia?: Token[];
 }
 
 /**
- * Any object that has a range
+ * Any object that has a location in a source file. Use `util.getLocation()` to get the line/character `Location`
  */
 export interface Locatable {
-    location: Location;
+    /**
+     * Where this item starts, counted from the start of the source.
+     *
+     * Positions are the gaps between characters, like an editor cursor. For the source `print`, `pos` is `0` (before the `p`) and `end` is `5` (after the `t`).
+     * Counted in UTF-16 code units, the same as an LSP `Position.character`
+     */
+    pos: number;
+    /**
+     * Where this item ends: the gap just after its last character (see `pos`). `end - pos` is the item's length
+     */
+    end: number;
+    /**
+     * Info about the source this item was parsed from. Shared by every item from the same parse. `undefined` for synthetic items
+     */
+    source: SourceInfo | undefined;
+}
+
+/**
+ * Info about a parsed source, shared by every `Locatable` produced from the same parse
+ */
+export interface SourceInfo {
+    /**
+     * The uri of the file
+     */
+    uri: string;
+    /**
+     * Where each line starts (the gap before its first character), counted the same way as `Locatable.pos`
+     */
+    lineStarts: number[];
 }
 
 /**

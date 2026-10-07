@@ -6,7 +6,7 @@ import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import { tempDir, rootDir, expectTypeToBe } from './testHelpers.spec';
+import { tempDir, rootDir, expectTypeToBe, testLocatable } from './testHelpers.spec';
 import { TypeChainEntry } from './interfaces';
 import { NamespaceType } from './types/NamespaceType';
 import { ClassType } from './types/ClassType';
@@ -16,8 +16,11 @@ import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, Interface
 import { TokenKind } from './lexer/TokenKind';
 import { createToken } from './astUtils/creators';
 import { createDottedIdentifier, createVariableExpression } from './astUtils/creators';
-import { Parser } from './parser/Parser';
-import type { FunctionStatement } from './parser/Statement';
+import { Parser, ParseMode } from './parser/Parser';
+import type { ExitStatement, FunctionStatement } from './parser/Statement';
+import { Lexer } from './lexer/Lexer';
+import type { Locatable } from './lexer/Token';
+import { isExitStatement } from './astUtils/reflection';
 import { ComponentType } from './types/ComponentType';
 
 const sinon = createSandbox();
@@ -1028,6 +1031,196 @@ describe('util', () => {
         });
     });
 
+    describe('getLocation', () => {
+        function getRanges(code: string) {
+            return Lexer.scan(code).tokens.map(x => [x.kind, util.getLocation(x)?.range]);
+        }
+
+        it('returns undefined for synthetic items', () => {
+            expect(util.getLocation(createToken(TokenKind.Identifier, 'a'))).to.be.undefined;
+            expect(util.getLocation(undefined)).to.be.undefined;
+        });
+
+        it('uses the uri from the source', () => {
+            const token = Lexer.scan('a', { srcPath: s`${rootDir}/source/main.brs` }).tokens[0];
+            expect(util.getLocation(token).uri).to.eql(util.pathToUri(s`${rootDir}/source/main.brs`));
+        });
+
+        it('keeps a LF newline token on its own line', () => {
+            expect(getRanges('a\nb')).to.eql([
+                [TokenKind.Identifier, util.createRange(0, 0, 0, 1)],
+                [TokenKind.Newline, util.createRange(0, 1, 0, 2)],
+                [TokenKind.Identifier, util.createRange(1, 0, 1, 1)],
+                [TokenKind.Eof, util.createRange(1, 1, 1, 2)]
+            ]);
+        });
+
+        it('keeps a CRLF newline token on its own line', () => {
+            expect(getRanges('a\r\nb')).to.eql([
+                [TokenKind.Identifier, util.createRange(0, 0, 0, 1)],
+                [TokenKind.Newline, util.createRange(0, 1, 0, 3)],
+                [TokenKind.Identifier, util.createRange(1, 0, 1, 1)],
+                [TokenKind.Eof, util.createRange(1, 1, 1, 2)]
+            ]);
+        });
+
+        it('handles a trailing newline at the end of the file', () => {
+            expect(getRanges('a\n')).to.eql([
+                [TokenKind.Identifier, util.createRange(0, 0, 0, 1)],
+                [TokenKind.Newline, util.createRange(0, 1, 0, 2)],
+                [TokenKind.Eof, util.createRange(1, 0, 1, 1)]
+            ]);
+        });
+
+        it('counts surrogate pairs as two characters', () => {
+            const tokens = Lexer.scan('x = "😀" + y').tokens;
+            expect(util.getLocation(tokens.find(x => x.text === 'y')).range).to.eql(util.createRange(0, 11, 0, 12));
+        });
+
+        it('tracks lines through multi-line template strings', () => {
+            // eslint-disable-next-line no-template-curly-in-string
+            const tokens = Lexer.scan('x = `one\ntwo ${y}\r\nthree`\nz').tokens;
+            expect(util.getLocation(tokens.find(x => x.text === 'y')).range).to.eql(util.createRange(1, 6, 1, 7));
+            expect(util.getLocation(tokens.find(x => x.text === 'z')).range).to.eql(util.createRange(3, 0, 3, 1));
+        });
+
+        it('handles the split `elseif` tokens', () => {
+            const tokens = Lexer.scan('if a then\nelseif b then\nend if').tokens;
+            expect(util.getLocation(tokens.find(x => x.kind === TokenKind.Else)).range).to.eql(util.createRange(1, 0, 1, 4));
+            expect(util.getLocation(tokens.filter(x => x.kind === TokenKind.If)[1]).range).to.eql(util.createRange(1, 4, 1, 6));
+        });
+
+        it('handles the split `exitwhile` tokens', () => {
+            const { ast } = Parser.parse('sub main()\n    while true\n        exitwhile\n    end while\nend sub');
+            const exitStatement = ast.findChild<ExitStatement>(isExitStatement);
+            expect(util.getLocation(exitStatement.tokens.exit).range).to.eql(util.createRange(2, 8, 2, 12));
+            expect(util.getLocation(exitStatement.tokens.loopType).range).to.eql(util.createRange(2, 12, 2, 17));
+        });
+
+        it('builds locations for multi-line nodes', () => {
+            const { ast } = Parser.parse('sub main()\r\n    print 1\r\nend sub');
+            expect(util.getLocation(ast.statements[0]).range).to.eql(util.createRange(0, 0, 2, 7));
+        });
+
+        it('ends an empty print statement on its own line', () => {
+            const { ast } = Parser.parse('sub main()\n    print\n    x = 1\nend sub');
+            const print = (ast.statements[0] as FunctionStatement).func.body.statements[0];
+            expect(util.getLocation(print).range).to.eql(util.createRange(1, 4, 1, 9));
+        });
+
+        it('ends a `new` without a class name on its own line', () => {
+            const { ast } = Parser.parse('sub main()\n    new\n    x = 1\nend sub', { mode: ParseMode.BrighterScript });
+            const statement = (ast.statements[0] as FunctionStatement).func.body.statements[0];
+            expect(util.getLocation(statement).range.end.line).to.eql(1);
+        });
+    });
+
+    describe('setBounds', () => {
+        it('uses the min start and max end of the locatables', () => {
+            const result = util.setBounds({} as Locatable, testLocatable(1, 5, 1, 8), undefined, testLocatable(0, 2, 0, 4), createToken(TokenKind.Identifier, 'synthetic'));
+            expect(util.getLocation(result).range).to.eql(util.createRange(0, 2, 1, 8));
+        });
+
+        it('ignores locatables from a different source', () => {
+            const other = Lexer.scan('\n\nabcdef').tokens[2];
+            const result = util.setBounds({} as Locatable, testLocatable(0, 2, 0, 4), other);
+            expect(util.getLocation(result).range).to.eql(util.createRange(0, 2, 0, 4));
+        });
+
+        it('clears the bounds when nothing has a source', () => {
+            const result = util.setBounds({ pos: 1, end: 2, source: testLocatable(0, 0, 0, 0).source }, createToken(TokenKind.Identifier, 'a'));
+            expect(result).to.eql({ pos: undefined, end: undefined, source: undefined });
+        });
+
+        it('does not end at the start of the next line when the last locatable is a LF newline', () => {
+            const tokens = Lexer.scan('print\nx').tokens;
+            const result = util.setBounds({} as Locatable, tokens[0], tokens[1]);
+            expect(util.getLocation(result).range).to.eql(util.createRange(0, 0, 0, 5));
+        });
+
+        it('does not end at the start of the next line when the last locatable is a CRLF newline', () => {
+            const tokens = Lexer.scan('print\r\nx').tokens;
+            const result = util.setBounds({} as Locatable, tokens[0], tokens[1]);
+            expect(util.getLocation(result).range).to.eql(util.createRange(0, 0, 0, 5));
+        });
+    });
+
+    describe('getContentEnd', () => {
+        it('excludes trailing newlines', () => {
+            const tokens = Lexer.scan('a\nb\r\nc').tokens;
+            expect(tokens.map(x => [x.text, util.getContentEnd(x)])).to.eql([
+                ['a', 1],
+                ['\n', 1],
+                ['b', 3],
+                ['\r\n', 3],
+                ['c', 6],
+                ['', 7]
+            ]);
+        });
+
+        it('uses the end for nodes', () => {
+            expect(util.getContentEnd(testLocatable(0, 2, 0, 4))).to.eql(4);
+        });
+    });
+
+    describe('getStartPosition', () => {
+        it('matches the start of getLocation', () => {
+            const tokens = Lexer.scan('a\n  bb\r\n    ccc').tokens;
+            for (const token of tokens) {
+                expect(util.getStartPosition(token)).to.eql(util.getLocation(token).range.start);
+            }
+        });
+
+        it('returns undefined for synthetic items', () => {
+            expect(util.getStartPosition(createToken(TokenKind.Identifier, 'a'))).to.be.undefined;
+            expect(util.getStartPosition(undefined)).to.be.undefined;
+        });
+    });
+
+    describe('getOffset', () => {
+        const source = Lexer.scan('ab\ncd\nef').tokens[0].source;
+
+        it('converts positions to offsets', () => {
+            expect(util.getOffset(source, util.createPosition(0, 0))).to.eql(0);
+            expect(util.getOffset(source, util.createPosition(1, 1))).to.eql(4);
+            expect(util.getOffset(source, util.createPosition(2, 2))).to.eql(8);
+        });
+
+        it('clamps characters past the end of the line to that line', () => {
+            expect(util.getOffset(source, util.createPosition(0, 99))).to.eql(2);
+        });
+
+        it('returns undefined for a missing source or line', () => {
+            expect(util.getOffset(undefined, util.createPosition(0, 0))).to.be.undefined;
+            expect(util.getOffset(source, util.createPosition(99, 0))).to.be.undefined;
+            expect(util.getOffset(source, undefined)).to.be.undefined;
+        });
+    });
+
+    describe('setLocation', () => {
+        it('round-trips through getLocation', () => {
+            const location = util.createLocation(3, 4, 5, 6, 'file:///a.brs');
+            expect(util.getLocation(util.setLocation({} as Locatable, location))).to.eql(location);
+        });
+
+        it('round-trips a range that ends at the end of the last line it has seen', () => {
+            const location = util.createLocation(7, 0, 7, 50, 'file:///b.brs');
+            expect(util.getLocation(util.setLocation({} as Locatable, location))).to.eql(location);
+        });
+
+        it('shares one source per uri, so the results can be combined with setBounds', () => {
+            const first = util.setLocation({} as Locatable, util.createLocation(1, 2, 1, 4, 'file:///c.brs'));
+            const second = util.setLocation({} as Locatable, util.createLocation(3, 0, 3, 8, 'file:///c.brs'));
+            expect(first.source).to.equal(second.source);
+            expect(util.getLocation(util.setBounds({} as Locatable, first, second)).range).to.eql(util.createRange(1, 2, 3, 8));
+        });
+
+        it('clears the position when given undefined', () => {
+            const result = util.setLocation(testLocatable(0, 0, 0, 1), undefined);
+            expect(result).to.eql({ pos: undefined, end: undefined, source: undefined });
+        });
+    });
+
     describe('range creation', () => {
         it('createRangeFromPositions', () => {
             const pos11 = { line: 1, character: 1 };
@@ -1390,9 +1583,9 @@ describe('util', () => {
     describe('processTypeChain', () => {
         it('should  find the correct details in a list of type resolutions', () => {
             const nodes = [
-                createVariableExpression('Alpha', util.createLocation(1, 1, 2, 2)),
-                createVariableExpression('Beta', util.createLocation(2, 2, 3, 3)),
-                createVariableExpression('CharlieProp', util.createLocation(3, 3, 4, 4))
+                createVariableExpression('Alpha', testLocatable(1, 1, 2, 2)),
+                createVariableExpression('Beta', testLocatable(2, 2, 3, 3)),
+                createVariableExpression('CharlieProp', testLocatable(3, 3, 4, 4))
             ];
 
             const chain = [
@@ -1411,8 +1604,8 @@ describe('util', () => {
 
         it('respects the separatorToken', () => {
             const nodes = [
-                createVariableExpression('Custom', util.createLocation(1, 1, 2, 2)),
-                createVariableExpression('someCallFunc', util.createLocation(2, 2, 3, 3))
+                createVariableExpression('Custom', testLocatable(1, 1, 2, 2)),
+                createVariableExpression('someCallFunc', testLocatable(2, 2, 3, 3))
             ];
             const chain = [
                 new TypeChainEntry({ name: 'roSGNodeCustom', type: new ComponentType('Custom'), data: { flags: SymbolTypeFlag.runtime }, astNode: nodes[0] }),

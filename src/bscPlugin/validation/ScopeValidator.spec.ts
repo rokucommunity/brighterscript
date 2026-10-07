@@ -18,6 +18,8 @@ import { ScopeValidator } from './ScopeValidator';
 import type { FunctionStatement, ReturnStatement } from '../../parser/Statement';
 import { Logger } from '@rokucommunity/logger';
 import { ParseMode } from '../..';
+import { Range } from 'vscode-languageserver';
+import { util, standardizePath as s } from '../../util';
 
 describe('ScopeValidator', () => {
 
@@ -7410,4 +7412,325 @@ describe('ScopeValidator', () => {
             expect((unvalidatedSegments[0] as FunctionStatement).getName(ParseMode.BrighterScript)).to.equal('doStuff');
         });
     });
+
+    /* eslint-disable no-template-curly-in-string */
+    describe('location boundaries', () => {
+        function uriOf(pkgPath: string) {
+            return util.pathToUri(s`${rootDir}/${pkgPath}`);
+        }
+
+        function range(startLine: number, startChar: number, endLine: number, endChar: number) {
+            return Range.create(startLine, startChar, endLine, endChar);
+        }
+
+        it('flags an identifier in a .brs file', () => {
+            program.setFile('source/main.brs', 'sub main()\n    print notDefined\nend sub\n');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(1, 10, 1, 20)
+                }
+            }]);
+        });
+
+        it('flags an identifier in a .bs file', () => {
+            program.setFile('source/main.bs', 'sub main()\n    print notDefined\nend sub\n');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(1, 10, 1, 20)
+                }
+            }]);
+        });
+
+        it('flags a token at column 0 right after a newline', () => {
+            program.setFile('source/main.brs', 'sub main()\nnotDefined()\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindFunction('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(1, 0, 1, 10)
+                }
+            }]);
+        });
+
+        it('flags a token at the end of a line and at the end of a file with no trailing newline', () => {
+            program.setFile('source/main.brs', 'sub main()\nend sub\nprint notDefined');
+            program.validate();
+            expectDiagnostics(program, [{
+                //the whole statement (starting at column 0)
+                code: DiagnosticMessages.unexpectedStatementOutsideFunction().code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(2, 0, 2, 16)
+                }
+            }, {
+                //the very last token in the file
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(2, 6, 2, 16)
+                }
+            }]);
+        });
+
+        it('flags a multi-line statement in a .brs file', () => {
+            program.setFile('source/main.brs', 'sub main()\n    return {\n        a: 1\n    }\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                //the whole return statement
+                code: DiagnosticMessages.voidFunctionMayNotReturnValue('sub').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(1, 4, 3, 5)
+                }
+            }, {
+                //just the returned expression
+                code: DiagnosticMessages.returnTypeMismatch('roAssociativeArray', 'void').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(1, 11, 3, 5)
+                }
+            }]);
+        });
+
+        it('flags a multi-line statement in a .bs file', () => {
+            program.setFile('source/main.bs', 'sub main()\n    x as integer = {\n        a: 1\n    }\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.assignmentTypeMismatch('roAssociativeArray', 'integer').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(1, 4, 3, 5)
+                }
+            }]);
+        });
+
+        it('flags a multi-line statement in a file with CRLF line endings', () => {
+            program.setFile('source/main.brs', 'sub main()\r\n    return {\r\n        a: 1\r\n    }\r\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.voidFunctionMayNotReturnValue('sub').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(1, 4, 3, 5)
+                }
+            }, {
+                code: DiagnosticMessages.returnTypeMismatch('roAssociativeArray', 'void').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(1, 11, 3, 5)
+                }
+            }]);
+        });
+
+        it('flags identifiers in a file with CRLF line endings', () => {
+            program.setFile('source/main.bs', 'sub main()\r\n    a = 1\r\n    print notDefined\r\nnotDefined2()\r\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(2, 10, 2, 20)
+                }
+            }, {
+                code: DiagnosticMessages.cannotFindFunction('notDefined2').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(3, 0, 3, 11)
+                }
+            }]);
+        });
+
+        it('flags identifiers in a file mixing LF and CRLF line endings', () => {
+            program.setFile('source/main.brs', 'sub main()\r\n    a = 1\n    print notDefined\r\n\n\r\n    print a + notDefined2\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(2, 10, 2, 20)
+                }
+            }, {
+                code: DiagnosticMessages.cannotFindName('notDefined2').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(5, 14, 5, 25)
+                }
+            }]);
+        });
+
+        it('counts a surrogate-pair emoji before the flagged token as two characters', () => {
+            program.setFile('source/main.brs', 'sub main()\n    print "😀" + notDefined\n    print "😀😀" + notDefined2\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(1, 17, 1, 27)
+                }
+            }, {
+                code: DiagnosticMessages.cannotFindName('notDefined2').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(2, 19, 2, 30)
+                }
+            }]);
+        });
+
+        it('counts a surrogate-pair emoji before the flagged token on a CRLF line', () => {
+            program.setFile('source/main.bs', 'sub main()\r\n    print "😀" + notDefined\r\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(1, 17, 1, 27)
+                }
+            }]);
+        });
+
+        it('flags a token after a multi-line template string', () => {
+            program.setFile('source/main.bs', 'sub main()\n    x = `a\n${1}\n`: print notDefined\n    print notDefined2\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(3, 9, 3, 19)
+                }
+            }, {
+                code: DiagnosticMessages.cannotFindName('notDefined2').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(4, 10, 4, 21)
+                }
+            }]);
+        });
+
+        it('flags a token after a multi-line template string with CRLF line endings', () => {
+            program.setFile('source/main.bs', 'sub main()\r\n    x = `a\r\n${1}\r\n`: print notDefined\r\n    print notDefined2\r\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(3, 9, 3, 19)
+                }
+            }, {
+                code: DiagnosticMessages.cannotFindName('notDefined2').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(4, 10, 4, 21)
+                }
+            }]);
+        });
+
+        it('flags a token inside a template string expression on a later line of the template', () => {
+            program.setFile('source/main.bs', 'sub main()\n    x = `😀 ${1}\n  and ${notDefined}\n`\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(2, 8, 2, 18)
+                }
+            }]);
+        });
+
+        it('flags a token inside a template string expression on a later CRLF line of the template', () => {
+            program.setFile('source/main.bs', 'sub main()\r\n    x = `😀 ${1}\r\n  and ${notDefined}\r\n`\r\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(2, 8, 2, 18)
+                }
+            }]);
+        });
+
+        it('includes correct related information uris and ranges across files', () => {
+            program.setFile('source/a.brs', 'sub main()\nend sub\n\nsub doIt()\nend sub');
+            program.setFile('source/b.brs', 'sub doIt()\r\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.duplicateFunctionImplementation('doIt').code,
+                location: {
+                    uri: uriOf('source/a.brs'),
+                    range: range(3, 4, 3, 8)
+                },
+                relatedInformation: [{
+                    location: {
+                        uri: uriOf('source/b.brs'),
+                        range: range(0, 4, 0, 8)
+                    },
+                    message: 'Function declared here'
+                }, {
+                    location: {
+                        uri: uriOf('source/a.brs'),
+                        range: range(3, 4, 3, 8)
+                    },
+                    message: `In scope 'source'`
+                }]
+            }, {
+                code: DiagnosticMessages.duplicateFunctionImplementation('doIt').code,
+                location: {
+                    uri: uriOf('source/b.brs'),
+                    range: range(0, 4, 0, 8)
+                },
+                relatedInformation: [{
+                    location: {
+                        uri: uriOf('source/a.brs'),
+                        range: range(3, 4, 3, 8)
+                    },
+                    message: 'Function declared here'
+                }, {
+                    location: {
+                        uri: uriOf('source/b.brs'),
+                        range: range(0, 4, 0, 8)
+                    },
+                    message: `In scope 'source'`
+                }]
+            }]);
+        });
+
+        it('includes correct locations for xml diagnostics in a CRLF file', () => {
+            program.setFile('components/Comp.xml', '<?xml version="1.0" encoding="utf-8" ?>\r\n<component name="Comp" extends="Group">\r\n    <script uri="missing.brs" />\r\n</component>');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.referencedFileDoesNotExist().code,
+                location: {
+                    uri: uriOf('components/Comp.xml'),
+                    range: range(2, 17, 2, 28)
+                },
+                relatedInformation: [{
+                    location: {
+                        uri: uriOf('components/Comp.xml'),
+                        range: range(1, 17, 1, 21)
+                    },
+                    message: `In component scope 'Comp'`
+                }]
+            }]);
+        });
+
+        it('flags a token in a component script and relates it to the xml file', () => {
+            program.setFile('components/Comp.xml', '<?xml version="1.0" encoding="utf-8" ?>\n<component name="Comp" extends="Group">\n    <script uri="Comp.brs" />\n</component>');
+            program.setFile('components/Comp.brs', 'sub init()\r\n    print "😀" : print notDefined\r\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('components/Comp.brs'),
+                    range: range(1, 23, 1, 33)
+                }
+            }]);
+        });
+    });
+    /* eslint-enable no-template-curly-in-string */
 });

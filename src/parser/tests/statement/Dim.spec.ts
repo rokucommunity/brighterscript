@@ -3,6 +3,7 @@ import type { DimStatement } from '../../Statement';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { Parser } from '../../Parser';
 import { expectDiagnostics } from '../../../testHelpers.spec';
+import { util } from '../../../util';
 
 describe('parser DimStatement', () => {
     it('parses properly', () => {
@@ -80,5 +81,5 @@ function validatePass(text: string, dimStatementIndex: number, identifierText: s
     expect(dimStatement.dimensions).to.exist;
     expect(dimStatement.dimensions!.length).to.equal(dimensionsCount);
     expect(dimStatement.tokens.closingSquare).to.exist;
-    expect(dimStatement.location).to.exist;
+    expect(util.getLocation(dimStatement)).to.exist;
 }

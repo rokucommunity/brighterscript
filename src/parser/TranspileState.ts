@@ -1,13 +1,19 @@
 import { SourceNode } from 'source-map';
-import type { Location } from 'vscode-languageserver';
+import type { Location, Position } from 'vscode-languageserver';
 import type { BsConfig } from '../BsConfig';
 import { TokenKind } from '../lexer/TokenKind';
-import { type Token } from '../lexer/Token';
+import type { Locatable, SourceInfo, Token } from '../lexer/Token';
 import type { RangeLike } from '../util';
 import { util } from '../util';
 import type { TranspileResult } from '../interfaces';
 
 interface TranspileToken {
+    pos?: number;
+    end?: number;
+    source?: SourceInfo;
+    /**
+     * Location for tokens that aren't `Locatable` (i.e. SGTokens)
+     */
     location?: Location;
     text: string;
     kind?: TokenKind;
@@ -63,7 +69,7 @@ export class TranspileState {
     public newline = '\n';
 
     private getSource(locatable: RangeLike) {
-        let srcPath = (locatable as { location: Location })?.location?.uri ?? (locatable as Location).uri;
+        let srcPath = (locatable as Locatable)?.source?.uri ?? (locatable as { location: Location })?.location?.uri ?? (locatable as Location).uri;
         if (srcPath) {
             srcPath = util.uriToPath(srcPath);
             //if a sourceRoot is specified, use that instead of the rootDir
@@ -83,12 +89,15 @@ export class TranspileState {
      * Shorthand for creating a new source node
      */
     public sourceNode(locatable: RangeLike, code: string | SourceNode | TranspileResult): SourceNode {
-        let range = util.extractRange(locatable);
+        //source maps only need the start, so skip building a whole `Location` for locatables
+        const start = (locatable && 'source' in locatable)
+            ? util.getStartPosition(locatable)
+            : util.extractRange(locatable)?.start;
         return util.sourceNodeFromTranspileResult(
             //convert 0-based range line to 1-based SourceNode line
-            range ? range.start.line + 1 : null,
+            start ? start.line + 1 : null,
             //range and SourceNode character are both 0-based, so no conversion necessary
-            range ? range.start.character : null,
+            start ? start.character : null,
             this.getSource(locatable),
             code
         );
@@ -99,15 +108,35 @@ export class TranspileState {
      * because the entire token is passed by reference, instead of the raw string being copied to the parameter,
      * only to then be copied again for the SourceNode constructor
      */
-    public tokenToSourceNode(token: TranspileToken) {
+    public tokenToSourceNode(token: TranspileToken, start = this.getTokenStart(token)) {
         return new SourceNode(
             //convert 0-based range line to 1-based SourceNode line
-            token.location?.range ? token.location.range.start.line + 1 : null,
+            start ? start.line + 1 : null,
             //range and SourceNode character are both 0-based, so no conversion necessary
-            token.location?.range ? token.location.range.start.character : null,
+            start ? start.character : null,
             this.getSource(token),
             token.text
         );
+    }
+
+    /**
+     * Get the start position of a token. Source maps only need the start, so this skips building a whole `Location`
+     */
+    private getTokenStart(token: TranspileToken): Position | undefined {
+        return token?.source
+            ? util.getStartPosition(token as Locatable)
+            : token?.location?.range?.start;
+    }
+
+    /**
+     * Does this token span more than one line? (a trailing newline doesn't count)
+     */
+    private isMultiLine(token: TranspileToken, start: Position) {
+        if (token.source) {
+            const nextLineStart = token.source.lineStarts[start.line + 1];
+            return nextLineStart !== undefined && nextLineStart <= util.getContentEnd(token as Locatable);
+        }
+        return token.location?.range?.end?.line > start.line;
     }
 
     public transpileLeadingCommentsForAstNode(node: { leadingTrivia?: Token[] }) {
@@ -186,11 +215,12 @@ export class TranspileState {
             return [new SourceNode(null, null, null, [...leadingCommentsSourceNodes, commentIfCommentedOut, defaultValue])];
         }
 
-        if (!token?.location?.range) {
+        const start = this.getTokenStart(token);
+        if (!start) {
             return [new SourceNode(null, null, null, [...leadingCommentsSourceNodes, commentIfCommentedOut, token.text])];
         }
         //split multi-line text
-        if (token.location.range.end.line > token.location.range.start.line) {
+        if (this.isMultiLine(token, start)) {
             const lines = token.text.split(/\r?\n/g);
             const code = [
                 this.sourceNode(token, [...leadingCommentsSourceNodes, commentIfCommentedOut, lines[0]])
@@ -201,7 +231,7 @@ export class TranspileState {
                     commentIfCommentedOut,
                     new SourceNode(
                         //convert 0-based range line to 1-based SourceNode line
-                        token.location.range.start.line + i + 1,
+                        start.line + i + 1,
                         //SourceNode column is 0-based, and this starts at the beginning of the line
                         0,
                         this.getSource(token),
@@ -211,16 +241,16 @@ export class TranspileState {
             }
             return [new SourceNode(null, null, null, code)];
         } else {
-            return [...leadingCommentsSourceNodes, commentIfCommentedOut, this.tokenToSourceNode(token)];
+            return [...leadingCommentsSourceNodes, commentIfCommentedOut, this.tokenToSourceNode(token, start)];
         }
     }
 
-    public transpileEndBlockToken(previousLocatable: { location?: Location }, endToken: Token, defaultValue: string, alwaysAddNewlineBeforeEndToken = true): TranspileResult {
+    public transpileEndBlockToken(previousLocatable: RangeLike, endToken: Token, defaultValue: string, alwaysAddNewlineBeforeEndToken = true): TranspileResult {
         const result: TranspileResult = [];
 
         if (util.hasLeadingComments(endToken)) {
             // add comments before `end token` - they should be indented
-            if (util.isLeadingCommentOnSameLine(previousLocatable?.location, endToken)) {
+            if (util.isLeadingCommentOnSameLine(previousLocatable, endToken)) {
                 this.blockDepth++;
                 result.push(' ');
             } else {
