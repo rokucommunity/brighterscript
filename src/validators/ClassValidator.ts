@@ -2,7 +2,7 @@ import type { Scope } from '../Scope';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { CallExpression } from '../parser/Expression';
 import { ParseMode } from '../parser/Parser';
-import type { ClassStatement, MethodStatement, NamespaceStatement } from '../parser/Statement';
+import type { ClassStatement, MemberStatement, MethodStatement, NamespaceStatement } from '../parser/Statement';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { isCallExpression, isFieldStatement, isMethodStatement, isNamespaceStatement } from '../astUtils/reflection';
 import type { BsDiagnostic } from '../interfaces';
@@ -21,6 +21,8 @@ export class BsClassValidator {
      * The key is the namespace-prefixed class name. (i.e. `NameA.NameB.SomeClass` or `CoolClass`)
      */
     private classes: Map<string, AugmentedClassStatement> = new Map();
+
+    private activeMemberMapsByClass = new Map<AugmentedClassStatement, Record<string, MemberStatement>>();
 
     public constructor(scope: Scope) {
         this.scope = scope;
@@ -115,7 +117,7 @@ export class BsClassValidator {
             let methods = {};
             let fields = {};
 
-            for (let statement of classStatement.body) {
+            for (let statement of classStatement.getActiveMembers()) {
                 if (isMethodStatement(statement) || isFieldStatement(statement)) {
                     let member = statement;
                     let memberName = member.tokens.name;
@@ -237,6 +239,15 @@ export class BsClassValidator {
         }
     }
 
+    private getActiveMemberMap(classStatement: AugmentedClassStatement) {
+        let activeMemberMap = this.activeMemberMapsByClass.get(classStatement);
+        if (!activeMemberMap) {
+            activeMemberMap = classStatement.getActiveMemberMap();
+            this.activeMemberMapsByClass.set(classStatement, activeMemberMap);
+        }
+        return activeMemberMap;
+    }
+
     /**
      * Get the closest member with the specified name (case-insensitive)
      */
@@ -244,7 +255,7 @@ export class BsClassValidator {
         let lowerMemberName = memberName.toLowerCase();
         let ancestor = classStatement.parentClass;
         while (ancestor) {
-            let member = ancestor.memberMap[lowerMemberName];
+            let member = this.getActiveMemberMap(ancestor)[lowerMemberName];
             if (member) {
                 return {
                     member: member,
@@ -269,6 +280,11 @@ export class BsClassValidator {
 
             // eslint-disable-next-line @typescript-eslint/dot-notation
             for (let x of file['_cachedLookups'].classStatements ?? []) {
+                //inactive classes are not compiled, so they are neither validated nor registered as duplicates of an active class
+                // eslint-disable-next-line @typescript-eslint/dot-notation
+                if (!file['_cachedLookups'].isActiveDeclaration(x)) {
+                    continue;
+                }
                 let classStatement = x as AugmentedClassStatement;
                 let name = classStatement.getName(ParseMode.BrighterScript);
                 //skip this class if it doesn't have a name

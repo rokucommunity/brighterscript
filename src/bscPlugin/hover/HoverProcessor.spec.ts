@@ -50,6 +50,57 @@ describe('HoverProcessor', () => {
             ).to.eql(undefined);
         });
 
+        it('does not crash when hovering an assignment in an inactive conditional compile branch', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', `
+                #const LOGGING = true
+                sub main()
+                #if LOGGING
+                    activeVar = 1
+                    print activeVar
+                #else
+                    inactiveVar = 2
+                    print inactiveVar
+                #end if
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(
+                program.getHover(file.srcPath, util.createPosition(7, 22))[0]?.contents
+            ).to.eql([fence('inactiveVar as dynamic')]);
+            expect(
+                program.getHover(file.srcPath, util.createPosition(4, 22))[0]?.contents
+            ).to.eql([fence('activeVar as integer')]);
+        });
+
+        it('shows the member of the active branch and not a member that only an inactive branch declares', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                #const DEBUG = true
+                class Foo
+                    #if DEBUG
+                        name as string
+                    #else
+                        name as integer
+                        releaseOnly as integer
+                    #end if
+                end class
+                sub main()
+                    f = new Foo()
+                    print f.name
+                    print f.releaseOnly
+                end sub
+            `);
+            program.validate();
+            //print f.na|me
+            expect(
+                program.getHover(file.srcPath, util.createPosition(12, 30))[0]?.contents
+            ).to.eql([fence('Foo.name as string')]);
+            //print f.release|Only
+            expect(
+                program.getHover(file.srcPath, util.createPosition(13, 34))[0]?.contents
+            ).to.eql([fence('Foo.releaseOnly as invalid')]);
+        });
+
         it('works for param types', () => {
             const file = program.setFile('source/main.brs', `
                 sub DoSomething(name as string)

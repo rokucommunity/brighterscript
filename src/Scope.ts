@@ -7,6 +7,7 @@ import type { Program } from './Program';
 import type { NamespaceStatement, FunctionStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement, ConstStatement, TypeStatement } from './parser/Statement';
 import { ParseMode } from './parser/Parser';
 import { util } from './util';
+import { CachedLookups } from './astUtils/CachedLookups';
 import { Cache } from './Cache';
 import type { BrsFile } from './files/BrsFile';
 import type { Identifier } from './lexer/Token';
@@ -177,29 +178,57 @@ export class Scope {
 
     private useFileCachesForFileLinkLookups = false;
 
-    private getFileLinkFromFileMap<T>(cachedMapName: string, itemName: string, containingNamespace?: string): FileLink<T> {
+    private getFileLinkFromFileMap<T extends Statement>(cachedMapName: string, itemName: string, containingNamespace?: string): FileLink<T> {
         let result: FileLink<T>;
         const fullNameLower = util.getFullyQualifiedClassName(itemName, containingNamespace)?.toLowerCase();
         const itemNameLower = itemName?.toLowerCase();
         if (fullNameLower) {
-            this.enumerateBrsFilesWithBreak((file) => {
-                let stmt = file['_cachedLookups'][cachedMapName].get(fullNameLower);
-                if (stmt) {
-                    result = { item: stmt, file: file };
-                }
-                return !!stmt;
-            });
+            result = this.findTopCandidateFileLink<T>(cachedMapName, fullNameLower);
         }
-        if (!result && itemNameLower && fullNameLower !== itemNameLower) {
-            this.enumerateBrsFilesWithBreak((file) => {
-                let stmt = file['_cachedLookups'][cachedMapName].get(itemNameLower);
-                if (stmt) {
-                    result = { item: stmt, file: file };
-                }
-                return !!stmt;
-            });
+        if (itemNameLower && fullNameLower !== itemNameLower) {
+            result = this.preferActiveGlobalLink(result, () => this.findTopCandidateFileLink<T>(cachedMapName, itemNameLower));
         }
         return result;
+    }
+
+    /**
+     * Find the first file with an active declaration of the name, falling back to the first inactive declaration
+     */
+    private findTopCandidateFileLink<T extends Statement>(cachedMapName: string, nameLower: string): FileLink<T> {
+        let activeLink: FileLink<T>;
+        let inactiveLink: FileLink<T>;
+        this.enumerateBrsFilesWithBreak((file) => {
+            const lookups = file['_cachedLookups'];
+            const stmt: T = lookups[cachedMapName].get(nameLower);
+            if (stmt) {
+                if (lookups.isActiveDeclaration(stmt)) {
+                    activeLink = { item: stmt, file: file };
+                    return true;
+                }
+                inactiveLink ??= { item: stmt, file: file };
+            }
+            return false;
+        });
+        return activeLink ?? inactiveLink;
+    }
+
+    private isActiveFileLink(link: FileLink<Statement>): boolean {
+        return link.file['_cachedLookups'].isActiveDeclaration(link.item);
+    }
+
+    /**
+     * Choose between a namespace-qualified match and the global match of the same name.
+     * The qualified match wins unless it is inactive and the global match is active, so an inactive namespaced declaration never hides an active global one.
+     */
+    private preferActiveGlobalLink<T extends Statement>(qualifiedLink: FileLink<T>, getGlobalLink: () => FileLink<T>): FileLink<T> {
+        if (qualifiedLink && this.isActiveFileLink(qualifiedLink)) {
+            return qualifiedLink;
+        }
+        const globalLink = getGlobalLink();
+        if (!qualifiedLink || (globalLink && this.isActiveFileLink(globalLink))) {
+            return globalLink;
+        }
+        return qualifiedLink;
     }
 
     public getTypeStatement(typeName: string, containingNamespace?: string): Statement {
@@ -220,9 +249,9 @@ export class Scope {
         const classMap = this.getClassMap();
 
         let cls = classMap.get(fullNameLower);
-        //if we couldn't find the class by its full namespaced name, look for a global class with that name
-        if (!cls && lowerName && lowerName !== fullNameLower) {
-            cls = classMap.get(lowerName);
+        //if we couldn't find an active class by its full namespaced name, look for a global class with that name
+        if (lowerName && lowerName !== fullNameLower) {
+            cls = this.preferActiveGlobalLink(cls, () => classMap.get(lowerName));
         }
         return cls;
     }
@@ -241,9 +270,9 @@ export class Scope {
         const ifaceMap = this.getInterfaceMap();
 
         let iface = ifaceMap.get(fullNameLower);
-        //if we couldn't find the iface by its full namespaced name, look for a global class with that name
-        if (!iface && lowerName && lowerName !== fullNameLower) {
-            iface = ifaceMap.get(lowerName);
+        //if we couldn't find an active iface by its full namespaced name, look for a global iface with that name
+        if (lowerName && lowerName !== fullNameLower) {
+            iface = this.preferActiveGlobalLink(iface, () => ifaceMap.get(lowerName));
         }
         return iface;
     }
@@ -262,9 +291,9 @@ export class Scope {
         const enumMap = this.getEnumMap();
 
         let enumeration = enumMap.get(fullNameLower);
-        //if we couldn't find the enum by its full namespaced name, look for a global enum with that name
-        if (!enumeration && lowerName && lowerName !== fullNameLower) {
-            enumeration = enumMap.get(lowerName);
+        //if we couldn't find an active enum by its full namespaced name, look for a global enum with that name
+        if (lowerName && lowerName !== fullNameLower) {
+            enumeration = this.preferActiveGlobalLink(enumeration, () => enumMap.get(lowerName));
         }
         return enumeration;
     }
@@ -283,10 +312,8 @@ export class Scope {
         let enumeration = enumMap.get(
             util.getFullyQualifiedClassName(lowerName, containingNamespace?.toLowerCase())
         );
-        //if we couldn't find the enum by its full namespaced name, look for a global enum with that name
-        if (!enumeration) {
-            enumeration = enumMap.get(lowerName);
-        }
+        //if we couldn't find an active enum by its full namespaced name, look for a global enum with that name
+        enumeration = this.preferActiveGlobalLink(enumeration, () => enumMap.get(lowerName));
         if (enumeration) {
             let member = enumeration.item.findChild<EnumMemberStatement>((child) => isEnumMemberStatement(child) && child.name?.toLowerCase() === memberName);
             return member ? { item: member, file: enumeration.file } : undefined;
@@ -308,9 +335,9 @@ export class Scope {
         const constMap = this.getConstMap();
 
         let result = constMap.get(fullNameLower);
-        //if we couldn't find the constant by its full namespaced name, look for a global constant with that name
-        if (!result && lowerName !== fullNameLower) {
-            result = constMap.get(lowerName);
+        //if we couldn't find an active constant by its full namespaced name, look for a global constant with that name
+        if (lowerName !== fullNameLower) {
+            result = this.preferActiveGlobalLink(result, () => constMap.get(lowerName));
         }
         return result;
     }
@@ -421,13 +448,14 @@ export class Scope {
     public getClassMap(): Map<string, FileLink<ClassStatement>> {
         return this.cache.getOrAdd('classMap', () => {
             const map = new Map<string, FileLink<ClassStatement>>();
+            const activeKeys = new Set<string>();
             this.enumerateBrsFiles((file) => {
                 if (isBrsFile(file)) {
                     for (let cls of file['_cachedLookups'].classStatements) {
                         const className = cls.getName(ParseMode.BrighterScript);
                         //only track classes with a defined name (i.e. exclude nameless malformed classes)
                         if (className) {
-                            map.set(className.toLowerCase(), { item: cls, file: file });
+                            CachedLookups.setTopCandidate(map, activeKeys, className.toLowerCase(), { item: cls, file: file }, file['_cachedLookups'].isActiveDeclaration(cls));
                         }
                     }
                 }
@@ -443,13 +471,14 @@ export class Scope {
     public getInterfaceMap(): Map<string, FileLink<InterfaceStatement>> {
         return this.cache.getOrAdd('interfaceMap', () => {
             const map = new Map<string, FileLink<InterfaceStatement>>();
+            const activeKeys = new Set<string>();
             this.enumerateBrsFiles((file) => {
                 if (isBrsFile(file)) {
                     for (let iface of file['_cachedLookups'].interfaceStatements) {
                         const ifaceName = iface.getName(ParseMode.BrighterScript);
                         //only track classes with a defined name (i.e. exclude nameless malformed classes)
                         if (ifaceName) {
-                            map.set(ifaceName.toLowerCase(), { item: iface, file: file });
+                            CachedLookups.setTopCandidate(map, activeKeys, ifaceName.toLowerCase(), { item: iface, file: file }, file['_cachedLookups'].isActiveDeclaration(iface));
                         }
                     }
                 }
@@ -465,11 +494,12 @@ export class Scope {
     public getEnumMap(): Map<string, FileLink<EnumStatement>> {
         return this.cache.getOrAdd('enumMap', () => {
             const map = new Map<string, FileLink<EnumStatement>>();
+            const activeKeys = new Set<string>();
             this.enumerateBrsFiles((file) => {
                 for (let enumStmt of file['_cachedLookups'].enumStatements) {
                     //only track enums with a defined name (i.e. exclude nameless malformed enums)
                     if (enumStmt.fullName) {
-                        map.set(enumStmt.fullName.toLowerCase(), { item: enumStmt, file: file });
+                        CachedLookups.setTopCandidate(map, activeKeys, enumStmt.fullName.toLowerCase(), { item: enumStmt, file: file }, file['_cachedLookups'].isActiveDeclaration(enumStmt));
                     }
                 }
             });
@@ -484,11 +514,12 @@ export class Scope {
     public getConstMap(): Map<string, FileLink<ConstStatement>> {
         return this.cache.getOrAdd('constMap', () => {
             const map = new Map<string, FileLink<ConstStatement>>();
+            const activeKeys = new Set<string>();
             this.enumerateBrsFiles((file) => {
                 for (let stmt of file['_cachedLookups'].constStatements) {
                     //only track enums with a defined name (i.e. exclude nameless malformed enums)
                     if (stmt.fullName) {
-                        map.set(stmt.fullName.toLowerCase(), { item: stmt, file: file });
+                        CachedLookups.setTopCandidate(map, activeKeys, stmt.fullName.toLowerCase(), { item: stmt, file: file }, file['_cachedLookups'].isActiveDeclaration(stmt));
                     }
                 }
             });

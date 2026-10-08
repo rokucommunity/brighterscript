@@ -105,7 +105,7 @@ import {
 import type { Range } from 'vscode-languageserver';
 import type { Logger } from '../logging';
 import { createLogger } from '../logging';
-import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression, isConditionalCompileStatement, isLiteralBoolean, isTypecastExpression, isXmlAttributeGetExpression } from '../astUtils/reflection';
+import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isConditionalCompileStatement, isTypecastExpression, isXmlAttributeGetExpression } from '../astUtils/reflection';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { Expression, Statement } from './AstNode';
 import type { BsDiagnostic, DeepWriteable } from '../interfaces';
@@ -2512,16 +2512,7 @@ export class Parser {
         let hashEndIfToken: Token | undefined;
         let hashElseToken: Token | undefined;
 
-        //keep track of the current error count
-        //if this is `#if false` remove all diagnostics.
-        let diagnosticsLengthBeforeBlock = this.diagnostics.length;
-
         thenBranch = this.blockConditionalCompileBranch(hashIfToken, branchBlockParser);
-        const conditionTextLower = condition.text.toLowerCase();
-        if (!this.options.bsConsts?.get(conditionTextLower) || conditionTextLower === 'false') {
-            //throw out any new diagnostics created as a result of a false block
-            this.diagnostics.splice(diagnosticsLengthBeforeBlock, this.diagnostics.length - diagnosticsLengthBeforeBlock);
-        }
 
         this.ensureNewLine();
         this.advance();
@@ -2533,13 +2524,7 @@ export class Parser {
 
         } else if (this.check(TokenKind.HashElse)) {
             hashElseToken = this.advance();
-            let diagnosticsLengthBeforeBlock = this.diagnostics.length;
             elseBranch = this.blockConditionalCompileBranch(hashIfToken, branchBlockParser);
-
-            if (condition.text.toLowerCase() === 'true') {
-                //throw out any new diagnostics created as a result of a false block
-                this.diagnostics.splice(diagnosticsLengthBeforeBlock, this.diagnostics.length - diagnosticsLengthBeforeBlock);
-            }
             this.ensureNewLine();
             this.advance();
         }
@@ -2690,22 +2675,11 @@ export class Parser {
         }
         const assignment = this.assignment();
         if (assignment) {
-            // check for something other than #const <name> = <otherName|true|false>
+            // check for something other than #const <name> = <true|false>
             if (assignment.tokens.as || assignment.typeExpression) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.unexpectedToken(assignment.tokens.as?.text || assignment.typeExpression?.getName(ParseMode.BrighterScript)),
                     location: assignment.tokens.as?.location ?? assignment.typeExpression?.location
-                });
-                this.lastDiagnosticAsError();
-            }
-
-            if (isVariableExpression(assignment.value) || isLiteralBoolean(assignment.value)) {
-                //value is an identifier or a boolean
-                //check for valid identifiers will happen in program validation
-            } else {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.invalidHashConstValue(),
-                    location: assignment.value.location
                 });
                 this.lastDiagnosticAsError();
             }

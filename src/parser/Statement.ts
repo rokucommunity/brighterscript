@@ -5,6 +5,7 @@ import type { DottedGetExpression, LiteralExpression, TypecastExpression } from 
 import { FunctionExpression, FunctionParameterExpression, TypeExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
+import { ConditionalCompileEvaluator } from './ConditionalCompileEvaluator';
 import type { Location } from 'vscode-languageserver';
 import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
@@ -2762,8 +2763,18 @@ export class ClassStatement extends Statement implements TypedefProvider {
         return this.tokens.endClass?.leadingTrivia ?? [];
     }
 
+    /**
+     * Every member by lowercase name, including members in inactive conditional compile branches.
+     * Use `getActiveMemberMap()` to find what is visible to the type system.
+     */
     public readonly memberMap = {} as Record<string, MemberStatement>;
+    /**
+     * Every method in source order, including methods in inactive conditional compile branches
+     */
     public readonly methods = [] as MethodStatement[];
+    /**
+     * Every field in source order, including fields in inactive conditional compile branches
+     */
     public readonly fields = [] as FieldStatement[];
 
     public readonly location: Location | undefined;
@@ -2786,6 +2797,52 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 });
             }
         }
+    }
+
+    /**
+     * The methods and fields that are compiled, in source order. Members in an inactive conditional compile branch of this class are left out.
+     * The branches are those of the file's evaluation, so a change to `ast.bsConsts` applies immediately and an edit to the AST applies at the next validate of the file.
+     * When the class does not belong to a file with an evaluation, every member is active.
+     * @param evaluator an evaluation to use instead of the one of the file that contains this class
+     */
+    public getActiveMembers(evaluator?: ConditionalCompileEvaluator): MemberStatement[] {
+        const members = this.getMembersInSourceOrder(this.body);
+        if (!this.body.some(isConditionalCompileStatement)) {
+            return members;
+        }
+        evaluator ??= ConditionalCompileEvaluator.findFileEvaluation(this);
+        if (!evaluator) {
+            return members;
+        }
+        return members.filter(member => evaluator.isNodeActive(member, this));
+    }
+
+    /**
+     * Every method and field found in the given statements, descending into conditional compile blocks
+     */
+    private getMembersInSourceOrder(statements: Statement[], members: MemberStatement[] = []) {
+        for (const statement of statements) {
+            if (isMethodStatement(statement) || isFieldStatement(statement)) {
+                members.push(statement);
+            } else if (isConditionalCompileStatement(statement)) {
+                forEachConditionalCompileBranch(statement, (branchStatements) => {
+                    this.getMembersInSourceOrder(branchStatements, members);
+                });
+            }
+        }
+        return members;
+    }
+
+    /**
+     * The compiled members by lowercase name. Members in an inactive conditional compile branch of this class are left out,
+     * so an active member always wins over an inactive member of the same name.
+     */
+    public getActiveMemberMap(evaluator?: ConditionalCompileEvaluator): Record<string, MemberStatement> {
+        const activeMemberMap = {} as Record<string, MemberStatement>;
+        for (const member of this.getActiveMembers(evaluator)) {
+            activeMemberMap[member?.tokens.name?.text.toLowerCase()] = member;
+        }
+        return activeMemberMap;
     }
 
     transpile(state: BrsTranspileState) {
@@ -3319,7 +3376,8 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
         const resultType = new ClassType(this.getName(ParseMode.BrighterScript), superClass);
 
-        for (const statement of this.methods) {
+        const activeMembers = this.getActiveMembers();
+        for (const statement of activeMembers.filter(isMethodStatement)) {
             const funcType = statement?.func.getType({ ...options, typeChain: undefined }); //no typechain needed
             let flag = SymbolTypeFlag.runtime;
             if (statement.accessModifier?.kind === TokenKind.Private) {
@@ -3330,7 +3388,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
             }
             resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, funcType, flag);
         }
-        for (const statement of this.fields) {
+        for (const statement of activeMembers.filter(isFieldStatement)) {
             const fieldType = statement.getType({ ...options, typeChain: undefined }); //no typechain needed
             let flag = SymbolTypeFlag.runtime;
             if (statement.isOptional) {
@@ -4788,17 +4846,18 @@ export class ConditionalCompileStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkStatements) {
-            const bsConsts = options.bsConsts ?? this.getBsConsts();
-            let conditionTrue = bsConsts?.get(this.tokens.condition.text.toLowerCase());
-            if (this.tokens.not) {
-                // flips the boolean value
-                conditionTrue = !conditionTrue;
+            if (options.walkMode & InternalWalkMode.visitFalseConditionalCompilationBlocks) {
+                walk(this, 'thenBranch', visitor, options);
+                if (this.elseBranch) {
+                    walk(this, 'elseBranch', visitor, options);
+                }
+                return;
             }
-            const walkFalseBlocks = options.walkMode & InternalWalkMode.visitFalseConditionalCompilationBlocks;
-            if (conditionTrue || walkFalseBlocks) {
+            const evaluator = ConditionalCompileEvaluator.forWalk(this, options);
+            if (evaluator.isThenBranchActive(this)) {
                 walk(this, 'thenBranch', visitor, options);
             }
-            if (this.elseBranch && (!conditionTrue || walkFalseBlocks)) {
+            if (this.elseBranch && evaluator.isElseBranchActive(this)) {
                 walk(this, 'elseBranch', visitor, options);
             }
         }
