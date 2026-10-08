@@ -281,8 +281,7 @@ export class BsClassValidator {
             // eslint-disable-next-line @typescript-eslint/dot-notation
             for (let x of file['_cachedLookups'].classStatements ?? []) {
                 //inactive classes are not compiled, so they are neither validated nor registered as duplicates of an active class
-                // eslint-disable-next-line @typescript-eslint/dot-notation
-                if (!file['_cachedLookups'].isActiveDeclaration(x)) {
+                if (x.isActive !== true) {
                     continue;
                 }
                 let classStatement = x as AugmentedClassStatement;

@@ -2,7 +2,7 @@ import type { AALiteralExpression, BinaryExpression, CallExpression, CallfuncExp
 import type { AliasStatement, AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConditionalCompileStatement, ConstStatement, EnumStatement, FunctionStatement, ImportStatement, InterfaceStatement, LibraryStatement, NamespaceStatement, TypecastStatement } from '../parser/Statement';
 import { Cache } from '../Cache';
 import { InternalWalkMode, WalkMode, createVisitor } from './visitors';
-import type { AstNode, Expression } from '../parser/AstNode';
+import type { Expression } from '../parser/AstNode';
 import { isAAMemberExpression, isBinaryExpression, isCallExpression, isDottedGetExpression, isFunctionExpression, isGroupingExpression, isIndexedGetExpression, isLiteralExpression, isMethodStatement, isNamespaceStatement, isNewExpression, isVariableExpression } from './reflection';
 import type { Parser } from '../parser/Parser';
 import { ParseMode } from '../parser/Parser';
@@ -94,7 +94,7 @@ export class CachedLookups {
             const activeKeys = new Set<string>();
             const classMap = new Map<string, ClassStatement>();
             for (const stmt of this.classStatements) {
-                CachedLookups.setTopCandidate(classMap, activeKeys, stmt.getName(ParseMode.BrighterScript).toLowerCase(), stmt, this.isActiveDeclaration(stmt));
+                CachedLookups.setTopCandidate(classMap, activeKeys, stmt.getName(ParseMode.BrighterScript).toLowerCase(), stmt, stmt.isActive === true);
             }
             return classMap;
         });
@@ -117,7 +117,7 @@ export class CachedLookups {
             const activeKeys = new Set<string>();
             const enumMap = new Map<string, EnumStatement>();
             for (const stmt of this.enumStatements) {
-                CachedLookups.setTopCandidate(enumMap, activeKeys, stmt.fullName.toLowerCase(), stmt, this.isActiveDeclaration(stmt));
+                CachedLookups.setTopCandidate(enumMap, activeKeys, stmt.fullName.toLowerCase(), stmt, stmt.isActive === true);
             }
             return enumMap;
         });
@@ -132,7 +132,7 @@ export class CachedLookups {
             const activeKeys = new Set<string>();
             const constMap = new Map<string, ConstStatement>();
             for (const stmt of this.constStatements) {
-                CachedLookups.setTopCandidate(constMap, activeKeys, stmt.fullName.toLowerCase(), stmt, this.isActiveDeclaration(stmt));
+                CachedLookups.setTopCandidate(constMap, activeKeys, stmt.fullName.toLowerCase(), stmt, stmt.isActive === true);
             }
             return constMap;
         });
@@ -147,7 +147,7 @@ export class CachedLookups {
             const activeKeys = new Set<string>();
             const ifaceMap = new Map<string, InterfaceStatement>();
             for (const stmt of this.interfaceStatements) {
-                CachedLookups.setTopCandidate(ifaceMap, activeKeys, stmt.fullName.toLowerCase(), stmt, this.isActiveDeclaration(stmt));
+                CachedLookups.setTopCandidate(ifaceMap, activeKeys, stmt.fullName.toLowerCase(), stmt, stmt.isActive === true);
             }
             return ifaceMap;
         });
@@ -155,16 +155,6 @@ export class CachedLookups {
 
     get propertyHints(): Record<string, string> {
         return this.getFromCache<Record<string, string>>('propertyHints');
-    }
-
-
-    /**
-     * Is this class, interface, enum, const or function declared outside every inactive conditional compile branch?
-     * Inactive declarations stay in the lookups because they are still transpiled, but they never shadow an active declaration
-     * and are not checked for duplicates or circular references.
-     */
-    public isActiveDeclaration(statement: AstNode): boolean {
-        return statement.isActive === true;
     }
 
     /**

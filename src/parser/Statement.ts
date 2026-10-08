@@ -2803,24 +2803,19 @@ export class ClassStatement extends Statement implements TypedefProvider {
      * The branches are those of the most recent full walk of the tree (see `isActive`).
      */
     public getActiveMembers(): MemberStatement[] {
-        const members = this.getMembersInSourceOrder(this.body);
-        if (!this.body.some(isConditionalCompileStatement)) {
-            return members;
-        }
-        return members.filter(member => member.isActiveWithin(this));
+        return this.collectActiveMembers(this.body);
     }
 
     /**
-     * Every method and field found in the given statements, descending into conditional compile blocks
+     * Every method and field found in the given statements, descending only into the branch that each `#if` selects
      */
-    private getMembersInSourceOrder(statements: Statement[], members: MemberStatement[] = []) {
+    private collectActiveMembers(statements: Statement[], members: MemberStatement[] = []) {
         for (const statement of statements) {
             if (isMethodStatement(statement) || isFieldStatement(statement)) {
                 members.push(statement);
             } else if (isConditionalCompileStatement(statement)) {
-                forEachConditionalCompileBranch(statement, (branchStatements) => {
-                    this.getMembersInSourceOrder(branchStatements, members);
-                });
+                const branch = statement.isConditionTrue ? statement.thenBranch : statement.elseBranch;
+                this.collectActiveMembers(isConditionalCompileStatement(branch) ? [branch] : branch?.statements ?? [], members);
             }
         }
         return members;
