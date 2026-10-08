@@ -2764,7 +2764,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
     /**
      * Every member by lowercase name, including members in inactive conditional compile branches.
-     * Use `getActiveMemberMap()` to find what is visible to the type system.
+     * Use `isMemberActive()` to find what is visible to the type system.
      */
     public readonly memberMap = {} as Record<string, MemberStatement>;
     /**
@@ -2775,6 +2775,10 @@ export class ClassStatement extends Statement implements TypedefProvider {
      * Every field in source order, including fields in inactive conditional compile branches
      */
     public readonly fields = [] as FieldStatement[];
+    /**
+     * Every method and field in source order, including members in inactive conditional compile branches. Use `isMemberActive()` to skip those.
+     */
+    public readonly members = [] as MemberStatement[];
 
     public readonly location: Location | undefined;
 
@@ -2786,9 +2790,11 @@ export class ClassStatement extends Statement implements TypedefProvider {
         for (let statement of statements) {
             if (isMethodStatement(statement)) {
                 this.methods.push(statement);
+                this.members.push(statement);
                 this.memberMap[statement?.tokens.name?.text.toLowerCase()] = statement;
             } else if (isFieldStatement(statement)) {
                 this.fields.push(statement);
+                this.members.push(statement);
                 this.memberMap[statement?.tokens.name?.text.toLowerCase()] = statement;
             } else if (isConditionalCompileStatement(statement)) {
                 forEachConditionalCompileBranch(statement, (branchStatements) => {
@@ -2799,39 +2805,22 @@ export class ClassStatement extends Statement implements TypedefProvider {
     }
 
     /**
-     * The methods and fields that are compiled, in source order. Members in an inactive conditional compile branch of this class are left out.
-     * The branches are those of the most recent full walk of the tree (see `isActive`).
+     * Is this member compiled as part of the class? False when it sits in an inactive conditional compile branch inside the class.
+     * Only the `#if` statements inside the class count, so the members of a class that is itself in an inactive branch still have an answer.
      */
-    public getActiveMembers(): MemberStatement[] {
-        return this.collectActiveMembers(this.body);
-    }
-
-    /**
-     * Every method and field found in the given statements, descending only into the branch that each `#if` selects
-     */
-    private collectActiveMembers(statements: Statement[], members: MemberStatement[] = []) {
-        for (const statement of statements) {
-            if (isMethodStatement(statement) || isFieldStatement(statement)) {
-                members.push(statement);
-            } else if (isConditionalCompileStatement(statement)) {
-                const branch = statement.isConditionTrue ? statement.thenBranch : statement.elseBranch;
-                this.collectActiveMembers(isConditionalCompileStatement(branch) ? [branch] : branch?.statements ?? [], members);
+    public isMemberActive(member: MemberStatement): boolean {
+        let child: AstNode = member;
+        let ancestor = member.parent;
+        while (ancestor && ancestor !== this) {
+            if (isConditionalCompileStatement(ancestor) && (child === ancestor.thenBranch) !== ancestor.isConditionTrue) {
+                return false;
             }
+            child = ancestor;
+            ancestor = ancestor.parent;
         }
-        return members;
+        return true;
     }
 
-    /**
-     * The compiled members by lowercase name. Members in an inactive conditional compile branch of this class are left out,
-     * so an active member always wins over an inactive member of the same name.
-     */
-    public getActiveMemberMap(): Record<string, MemberStatement> {
-        const activeMemberMap = {} as Record<string, MemberStatement>;
-        for (const member of this.getActiveMembers()) {
-            activeMemberMap[member?.tokens.name?.text.toLowerCase()] = member;
-        }
-        return activeMemberMap;
-    }
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -3364,8 +3353,10 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
         const resultType = new ClassType(this.getName(ParseMode.BrighterScript), superClass);
 
-        const activeMembers = this.getActiveMembers();
-        for (const statement of activeMembers.filter(isMethodStatement)) {
+        for (const statement of this.methods) {
+            if (!this.isMemberActive(statement)) {
+                continue;
+            }
             const funcType = statement?.func.getType({ ...options, typeChain: undefined }); //no typechain needed
             let flag = SymbolTypeFlag.runtime;
             if (statement.accessModifier?.kind === TokenKind.Private) {
@@ -3376,7 +3367,10 @@ export class ClassStatement extends Statement implements TypedefProvider {
             }
             resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, funcType, flag);
         }
-        for (const statement of activeMembers.filter(isFieldStatement)) {
+        for (const statement of this.fields) {
+            if (!this.isMemberActive(statement)) {
+                continue;
+            }
             const fieldType = statement.getType({ ...options, typeChain: undefined }); //no typechain needed
             let flag = SymbolTypeFlag.runtime;
             if (statement.isOptional) {

@@ -117,8 +117,8 @@ export class BsClassValidator {
             let methods = {};
             let fields = {};
 
-            for (let statement of classStatement.getActiveMembers()) {
-                if (isMethodStatement(statement) || isFieldStatement(statement)) {
+            for (let statement of classStatement.members) {
+                if (classStatement.isMemberActive(statement)) {
                     let member = statement;
                     let memberName = member.tokens.name;
 
@@ -239,10 +239,18 @@ export class BsClassValidator {
         }
     }
 
+    /**
+     * The compiled members of the class by lowercase name, so an active member always wins over an inactive member of the same name
+     */
     private getActiveMemberMap(classStatement: AugmentedClassStatement) {
         let activeMemberMap = this.activeMemberMapsByClass.get(classStatement);
         if (!activeMemberMap) {
-            activeMemberMap = classStatement.getActiveMemberMap();
+            activeMemberMap = {};
+            for (const member of classStatement.members) {
+                if (classStatement.isMemberActive(member)) {
+                    activeMemberMap[member.tokens.name?.text.toLowerCase()] = member;
+                }
+            }
             this.activeMemberMapsByClass.set(classStatement, activeMemberMap);
         }
         return activeMemberMap;
