@@ -118,7 +118,7 @@ export class BsClassValidator {
             let fields = {};
 
             for (let statement of classStatement.members) {
-                if (classStatement.isMemberActive(statement)) {
+                if (statement.isActive === true) {
                     let member = statement;
                     let memberName = member.tokens.name;
 
@@ -247,7 +247,7 @@ export class BsClassValidator {
         if (!activeMemberMap) {
             activeMemberMap = {};
             for (const member of classStatement.members) {
-                if (classStatement.isMemberActive(member)) {
+                if (member.isActive === true) {
                     activeMemberMap[member.tokens.name?.text.toLowerCase()] = member;
                 }
             }

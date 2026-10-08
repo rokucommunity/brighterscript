@@ -585,7 +585,7 @@ export class CompletionsProcessor {
                 // eslint-disable-next-line @typescript-eslint/dot-notation
                 for (let cs of file['_cachedLookups'].classStatements) {
                     for (let s of cs.members) {
-                        if (cs.isMemberActive(s) && !results.has(s.tokens.name.text) && s.tokens.name.text.toLowerCase() !== 'new') {
+                        if (s.isActive === true &&!results.has(s.tokens.name.text) && s.tokens.name.text.toLowerCase() !== 'new') {
                             results.set(s.tokens.name.text, {
                                 label: s.tokens.name.text,
                                 kind: isMethodStatement(s) ? CompletionItemKind.Method : CompletionItemKind.Field

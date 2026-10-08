@@ -2764,7 +2764,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
 
     /**
      * Every member by lowercase name, including members in inactive conditional compile branches.
-     * Use `isMemberActive()` to find what is visible to the type system.
+     * Check `isActive` on a member to find what is visible to the type system.
      */
     public readonly memberMap = {} as Record<string, MemberStatement>;
     /**
@@ -2776,7 +2776,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
      */
     public readonly fields = [] as FieldStatement[];
     /**
-     * Every method and field in source order, including members in inactive conditional compile branches. Use `isMemberActive()` to skip those.
+     * Every method and field in source order, including members in inactive conditional compile branches
      */
     public readonly members = [] as MemberStatement[];
 
@@ -2802,23 +2802,6 @@ export class ClassStatement extends Statement implements TypedefProvider {
                 });
             }
         }
-    }
-
-    /**
-     * Is this member compiled as part of the class? False when it sits in an inactive conditional compile branch inside the class.
-     * Only the `#if` statements inside the class count, so the members of a class that is itself in an inactive branch still have an answer.
-     */
-    public isMemberActive(member: MemberStatement): boolean {
-        let child: AstNode = member;
-        let ancestor = member.parent;
-        while (ancestor && ancestor !== this) {
-            if (isConditionalCompileStatement(ancestor) && (child === ancestor.thenBranch) !== ancestor.isConditionTrue) {
-                return false;
-            }
-            child = ancestor;
-            ancestor = ancestor.parent;
-        }
-        return true;
     }
 
 
@@ -3354,7 +3337,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         const resultType = new ClassType(this.getName(ParseMode.BrighterScript), superClass);
 
         for (const statement of this.methods) {
-            if (!this.isMemberActive(statement)) {
+            if (statement.isActive !== true) {
                 continue;
             }
             const funcType = statement?.func.getType({ ...options, typeChain: undefined }); //no typechain needed
@@ -3368,7 +3351,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
             resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, funcType, flag);
         }
         for (const statement of this.fields) {
-            if (!this.isMemberActive(statement)) {
+            if (statement.isActive !== true) {
                 continue;
             }
             const fieldType = statement.getType({ ...options, typeChain: undefined }); //no typechain needed
