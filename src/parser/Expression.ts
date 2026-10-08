@@ -261,6 +261,13 @@ export class FunctionExpression extends Expression implements TypedefProvider {
      */
     static readonly MaximumVariables = 253;
 
+    /**
+     * The deepest nesting of `if` statements, inside each other, that compiles in a single function. Single-line `if` statements count like block ones. An `else if` chain is one level.
+     * Nesting 306 levels deep always fails. Each function, including anonymous functions, starts again at depth 1.
+     * Roku can fail at a lower depth when the function is large, because it has a 255-entry jump table.
+     */
+    static readonly MaximumIfDepth = 305;
+
     constructor(options: {
         functionType?: Token;
         leftParen?: Token;

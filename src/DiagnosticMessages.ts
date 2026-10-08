@@ -1215,6 +1215,15 @@ export let DiagnosticMessages = {
         message: `Function has too many variables: ${actual} found, but Roku allows at most ${max} per function (parameters count toward this limit).`,
         severity: DiagnosticSeverity.Error,
         code: 'exceeds-max-variable-count'
+    }),
+    /**
+     * @param depth the deepest level of nested `if` statements found in the function
+     * @param max the maximum `if` nesting depth Roku allows in a single function
+     */
+    ifNestedTooDeep: (depth: number, max: number) => ({
+        message: `If statement is nested ${depth} levels deep, max is ${max}.`,
+        severity: DiagnosticSeverity.Error,
+        code: 'exceeds-max-if-depth'
     })
 };
 export const defaultMaximumTruncationLength = 160;
