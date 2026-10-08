@@ -4,7 +4,7 @@ import type { BrsFile } from '../files/BrsFile';
 import type { FirmwareCapabilities } from '../RokuConstants';
 import type { ClassStatement, ConditionalCompileStatement } from './Statement';
 import { TranspileState } from './TranspileState';
-import type { Statement } from './AstNode';
+import type { AstNode, Statement } from './AstNode';
 
 export class BrsTranspileState extends TranspileState {
     public constructor(
@@ -71,6 +71,33 @@ export class BrsTranspileState extends TranspileState {
     private loopLabels = [] as Array<{ label: string; wasAccessed: boolean; blockDepth: number }>;
 
     private loopLabelSequence = 0;
+
+    /**
+     * Labels for the end of each `select case` that has an `exit select` which must be rewritten as a `goto`
+     */
+    private exitSelectLabels = new Map<AstNode, string>();
+
+    private exitSelectLabelSequence = 0;
+
+    /**
+     * Get the label that marks the end of the given `select case` (allocating it on first request). The `select case` emits
+     * the label after its generated `end if` whenever one was requested while transpiling its cases
+     */
+    public getExitSelectLabel(selectCase: AstNode) {
+        let label = this.exitSelectLabels.get(selectCase);
+        if (!label) {
+            label = `BRIGHTERSCRIPT_EXIT_SELECT_${this.exitSelectLabelSequence++}`;
+            this.exitSelectLabels.set(selectCase, label);
+        }
+        return label;
+    }
+
+    /**
+     * Get the end label for the given `select case`, but only if something already asked for it
+     */
+    public peekExitSelectLabel(selectCase: AstNode) {
+        return this.exitSelectLabels.get(selectCase);
+    }
 
     /**
      * Begin tracking a loop label for the loop about to be transpiled. The label is allocated
