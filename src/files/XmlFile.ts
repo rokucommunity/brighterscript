@@ -334,7 +334,9 @@ export class XmlFile implements BscFile {
         });
 
         this.program?.diagnostics.register(this.parser.diagnostics);
-        this.getCommentFlags(this.parser.tokens as any[]);
+        //SGParser's `IToken` comes from @xml-tools/parser, which is structurally the same as chevrotain's
+        //but a distinct nominal type; the same cast is used elsewhere in this file for the same reason
+        this.getCommentFlags(this.parser.tokens as unknown as Array<IToken & { tokenType: TokenType }>);
     }
 
     /**

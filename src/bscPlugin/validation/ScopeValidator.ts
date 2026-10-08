@@ -18,6 +18,7 @@ import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryEx
 import { CallExpression } from '../../parser/Expression';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BscType } from '../../types/BscType';
+import type { ClassType } from '../../types/ClassType';
 import type { BscFile } from '../../files/BscFile';
 import { InsideSegmentWalkMode } from '../../AstValidationSegmenter';
 import { TokenKind } from '../../lexer/TokenKind';
@@ -1165,7 +1166,7 @@ export class ScopeValidator {
 
         if (!this.isTypeKnown(exprType) && !hasValidDeclaration) {
             if (this.getNodeTypeWrapper(file, expression, { flags: oppositeSymbolType, isExistenceTest: true })?.isResolvable()) {
-                const oppoSiteTypeChain = [];
+                const oppoSiteTypeChain: TypeChainEntry[] = [];
                 const invalidlyUsedResolvedType = this.getNodeTypeWrapper(file, expression, { flags: oppositeSymbolType, typeChain: oppoSiteTypeChain, isExistenceTest: true });
                 const typeChainScan = util.processTypeChain(oppoSiteTypeChain);
                 if (isUsedAsType) {
@@ -1283,7 +1284,7 @@ export class ScopeValidator {
     private checkTypeChainForClassUsedAsVar(typeChain: TypeChainEntry[], containingNamespaceName: string) {
         const ignoreKinds = [AstNodeKind.TypecastExpression, AstNodeKind.NewExpression];
         let lowerNameSoFar = '';
-        let classUsedAsVar;
+        let classUsedAsVar: ClassType | undefined;
         let isFirst = true;
         for (let i = 0; i < typeChain.length - 1; i++) { // do not look at final entry - we CAN use the constructor as a variable
             const tce = typeChain[i];
@@ -1459,7 +1460,8 @@ export class ScopeValidator {
                     const related = [];
                     for (const ownCallable of ownCallables) {
                         const thatNameRange = ownCallable.callable.nameRange;
-                        if (ownCallable.callable.nameRange !== callable.nameRange) {
+                        //skip the callable itself. Compare the callables rather than their ranges, which aren't guaranteed to be the same object
+                        if (ownCallable.callable !== callable) {
                             related.push({
                                 message: `Function declared here`,
                                 location: util.createLocationFromRange(

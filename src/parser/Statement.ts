@@ -431,7 +431,7 @@ export class Block extends Statement {
     }
     private _location: Location;
 
-    transpile(state: BrsTranspileState) {
+    transpile(state: BrsTranspileState): TranspileResult {
         state.blockDepth++;
         let results = [] as TranspileResult;
         for (let i = 0; i < this.statements.length; i++) {
@@ -923,6 +923,13 @@ export class IncrementStatement extends Statement {
  */
 export class PrintStatement extends Statement {
     /**
+     * The maximum combined count of printed values and `,` separators in a single print statement.
+     * The device fails to compile a print statement that exceeds it. `;` separators and whitespace
+     * between values do not count.
+     */
+    public static readonly MaximumPrintCount = 20;
+
+    /**
      * Creates a new internal representation of a BrightScript `print` statement.
      * @param options the options for this statement
      * @param options.print a print token
@@ -950,6 +957,22 @@ export class PrintStatement extends Statement {
     public readonly expressions: Array<Expression>;
 
     public readonly kind = AstNodeKind.PrintStatement;
+
+    /**
+     * Counts the printed values and the `,` separators in this statement
+     */
+    public getPrintCounts() {
+        let valueCount = 0;
+        let commaCount = 0;
+        for (const expression of this.expressions) {
+            if (!isPrintSeparatorExpression(expression)) {
+                valueCount++;
+            } else if (expression.tokens.separator.kind === TokenKind.Comma) {
+                commaCount++;
+            }
+        }
+        return { valueCount: valueCount, commaCount: commaCount };
+    }
 
     public readonly location: Location | undefined;
 
@@ -997,7 +1020,7 @@ export class PrintStatement extends Statement {
                 print: util.cloneToken(this.tokens.print),
                 expressions: this.expressions?.map(e => e?.clone())
             }),
-            ['expressions' as any]
+            ['expressions']
         );
     }
 }
@@ -2929,7 +2952,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
     public getConditionalCompileConstructors(): MethodStatement[] {
         return this.methods.filter((method) => {
             return method.tokens.name?.text?.toLowerCase() === 'new' &&
-                !!method.findAncestor((node, cancellationToken) => {
+                !!method.findAncestor((node: AstNode, cancellationToken) => {
                     if (node === this) {
                         cancellationToken.cancel();
                         return false;

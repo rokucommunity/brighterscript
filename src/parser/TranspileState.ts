@@ -215,8 +215,8 @@ export class TranspileState {
         }
     }
 
-    public transpileEndBlockToken(previousLocatable: { location?: Location }, endToken: Token, defaultValue: string, alwaysAddNewlineBeforeEndToken = true) {
-        const result = [];
+    public transpileEndBlockToken(previousLocatable: { location?: Location }, endToken: Token, defaultValue: string, alwaysAddNewlineBeforeEndToken = true): TranspileResult {
+        const result: TranspileResult = [];
 
         if (util.hasLeadingComments(endToken)) {
             // add comments before `end token` - they should be indented

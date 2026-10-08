@@ -23,7 +23,7 @@ export function findTypeIntersection(typesArr1: BscType[], typesArr2: BscType[])
 }
 
 export function findTypeUnion(...typesArr: BscType[][]) {
-    return getUniqueTypesFromArray([].concat(...typesArr));
+    return getUniqueTypesFromArray(([] as BscType[]).concat(...typesArr));
 }
 
 /**
@@ -31,7 +31,7 @@ export function findTypeUnion(...typesArr: BscType[][]) {
  * Useful for checking types between callfuncs, as the parameter types may have the same name, but mean different things
  */
 export function findTypeUnionDeepCheck(...typesArr: BscType[][]) {
-    return getUniqueTypesFromArray([].concat(...typesArr), false);
+    return getUniqueTypesFromArray(([] as BscType[]).concat(...typesArr), false);
 }
 
 export function getUniqueTypesFromArray(types: BscType[], allowNameEquality = true) {

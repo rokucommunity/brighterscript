@@ -812,6 +812,8 @@ export class Scope {
     }
 
     protected logDebug(...args: any[]) {
+        //variadic passthrough to the logger; `args` is intentionally `any[]`
+        //eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         this.program.logger.debug(this._debugLogComponentName, ...args);
     }
     private _debugLogComponentName: string;
@@ -945,6 +947,10 @@ export class Scope {
     public linkSymbolTable() {
         SymbolTable.cacheVerifier.generateToken();
         this._allNamespaceTypeTable = new SymbolTable(`Scope NamespaceTypes ${this.name}`);
+        // `namespaceLookup` is rebuilt on every access while any file in the scope is unvalidated
+        // (e.g. files added by plugins during build). Linking doesn't change files or namespaces,
+        // so get it once per link instead of once per namespace statement.
+        const namespaceLookup = this.namespaceLookup;
         for (const file of this.getAllFiles()) {
             if (isBrsFile(file)) {
                 this.linkSymbolTableDisposables.push(
@@ -956,7 +962,7 @@ export class Scope {
                 //guard tolerates edge cases like a namespace that failed to register.
                 for (const namespace of file['_cachedLookups'].namespaceStatements) {
                     const namespaceNameLower = namespace.getName(ParseMode.BrighterScript).toLowerCase();
-                    const aggregate = this.namespaceLookup.get(namespaceNameLower)?.symbolTable;
+                    const aggregate = namespaceLookup.get(namespaceNameLower)?.symbolTable;
                     if (aggregate) {
                         this.linkSymbolTableDisposables.push(
                             namespace.getSymbolTable().addSibling(aggregate)
