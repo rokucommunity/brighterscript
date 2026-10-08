@@ -728,7 +728,7 @@ export class BrsFileValidator {
      * Flag a reached `#if` / `#else if` condition that names an undeclared constant, unless the target firmware evaluates it as false
      */
     private validateHashIfCondition(statement: ConditionalCompileStatement) {
-        if (!statement.isConditionDeclared && statement.tokens.condition && !this.event.program.firmwareCapabilities.undeclaredHashConstIsFalse) {
+        if (statement.isConditionDeclared === false && statement.tokens.condition && !this.event.program.firmwareCapabilities.undeclaredHashConstIsFalse) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.hashConstDoesNotExist(),
                 location: statement.tokens.condition.location

@@ -4810,49 +4810,34 @@ export class ConditionalCompileStatement extends Statement {
     }
 
     /**
-     * Is the condition (including `not`) true? This is resolved by full walks from the root of the tree, using the constants in effect at this statement.
-     * Before the first such walk, the condition is evaluated against the constants of the tree.
+     * Is the condition (including `not`) true, using the constants in effect at this statement? Set by full walks from the root of the tree. Undefined until walked.
      */
-    public get isConditionTrue(): boolean {
-        return this.resolvedIsConditionTrue ?? this.evaluate(this.getBsConsts()).isConditionTrue;
-    }
+    public isConditionTrue?: boolean;
 
     /**
-     * Does the condition name a declared constant (or is it `true` / `false`)? Resolved like `isConditionTrue`.
+     * Does the condition name a declared constant (or is it `true` / `false`)? Set like `isConditionTrue`.
      */
-    public get isConditionDeclared(): boolean {
-        return this.resolvedIsConditionDeclared ?? this.evaluate(this.getBsConsts()).isConditionDeclared;
-    }
-
-    private resolvedIsConditionTrue: boolean | undefined;
-
-    private resolvedIsConditionDeclared: boolean | undefined;
+    public isConditionDeclared?: boolean;
 
     /**
-     * Evaluate the condition against the constants in effect at this statement and store the result. Called by the walk as it reaches this statement.
+     * Evaluate the condition against the constants in effect at this statement. Called by the walk as it reaches this statement.
      * @internal
      */
     public resolve(bsConsts: Map<string, boolean>) {
-        const result = this.evaluate(bsConsts);
-        this.resolvedIsConditionTrue = result.isConditionTrue;
-        this.resolvedIsConditionDeclared = result.isConditionDeclared;
-    }
-
-    private evaluate(bsConsts: Map<string, boolean> | undefined) {
         const condition = this.tokens.condition;
         let value: boolean;
-        let isConditionDeclared = true;
+        this.isConditionDeclared = true;
         if (condition?.kind === TokenKind.True) {
             value = true;
         } else if (condition?.kind === TokenKind.False) {
             value = false;
         } else {
             const constNameLower = condition?.text.toLowerCase();
-            isConditionDeclared = !!bsConsts?.has(constNameLower);
+            this.isConditionDeclared = bsConsts.has(constNameLower);
             //an undeclared constant is false
-            value = bsConsts?.get(constNameLower) === true;
+            value = bsConsts.get(constNameLower) === true;
         }
-        return { isConditionTrue: this.tokens.not ? !value : value, isConditionDeclared: isConditionDeclared };
+        this.isConditionTrue = this.tokens.not ? !value : value;
     }
 
     /**
