@@ -46,11 +46,8 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
     setIsActive(element, parent);
 
     //resolve `#if` and `#const` statements in source order, before the visitor sees them
-    if (isConditionalCompileStatement(element) || isConditionalCompileConstStatement(element)) {
-        const bsConsts = walkBsConsts.get(options);
-        if (bsConsts) {
-            element.resolve(bsConsts);
-        }
+    if (options.bsConsts && (isConditionalCompileStatement(element) || isConditionalCompileConstStatement(element))) {
+        element.resolve(options.bsConsts);
     }
 
     //notify the visitor of this element
@@ -265,20 +262,14 @@ export interface WalkOptions {
      */
     skipChildren?: ChildrenSkipper;
     /**
-     * Map of Conditional compilation flags, with names in lowercase.
-     * Every full walk from the root of the tree (`walkStatements`, `walkExpressions` and `recurseChildFunctions`) resolves the `#if` statements
-     * from these constants, or from `ast.bsConsts` when omitted, and stores the results on the AST (including `isActive`).
+     * Map of conditional compilation constants, with names in lowercase. The walk carries these down the tree as the `#const` values in effect.
+     * Every full walk from the root of the tree (`walkStatements`, `walkExpressions` and `recurseChildFunctions`) starts from `ast.bsConsts`
+     * (the manifest `bs_const` values), adds each active `#const` as it reaches it, and stores the results on the AST (including `isActive`).
      * Other walks use the stored results.
+     * Pass your own map to resolve the tree with different constants instead (even in a partial walk). The map is copied, never changed.
      */
     bsConsts?: Map<string, boolean>;
 }
-
-/**
- * The `#const` values in effect at the current position of every walk in progress that resolves conditional compile statements.
- * This has to belong to the walk rather than the tree, because a visitor can start another walk of the same tree partway through.
- * @internal
- */
-export const walkBsConsts = new WeakMap<WalkOptions, Map<string, boolean>>();
 
 export class ChildrenSkipper {
     private isSkipped = false;

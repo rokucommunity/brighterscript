@@ -9,7 +9,7 @@ import type { Location, Position, Range } from 'vscode-languageserver';
 import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
-import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray, walkBsConsts } from '../astUtils/visitors';
+import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
 import { isBlock, isCallExpression, isCatchStatement, isClassType, isConditionalCompileStatement, isLiteralBoolean, isEnumMemberStatement, isEnumType, isEnumStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isUninitializedType, isVoidType, isWhileStatement } from '../astUtils/reflection';
 import type { GetTypeOptions } from '../interfaces';
 import { TypeChainEntry, type TranspileResult, type TypedefProvider } from '../interfaces';
@@ -139,24 +139,18 @@ export class Body extends Statement implements TypedefProvider {
         if (!(options.walkMode & InternalWalkMode.walkStatements)) {
             return;
         }
-        //only a walk that starts at the root of the tree resolves conditional compile statements, because `#const` applies in source order
-        if (this.parent || walkBsConsts.has(options)) {
-            walkArray(this.statements, visitor, options, this);
-            return;
-        }
         const fullWalkMode = InternalWalkMode.walkStatements | InternalWalkMode.walkExpressions | InternalWalkMode.recurseChildFunctions;
-        //a walk that skips part of the tree would miss the `#const` statements there, so it uses the branches of the last full walk instead
+        //only a full walk from the root of the tree resolves conditional compile statements, because `#const` applies in source order.
+        //a walk that skips part of the tree would miss the `#const` statements there, so it uses the results of the last full walk instead
         const isFullWalk = (options.walkMode & fullWalkMode) === fullWalkMode && !options.skipChildren;
-        if (!options.bsConsts && !isFullWalk) {
+        //a caller that passes its own constants asked for them to be used, so resolve with them even in a partial walk
+        if (this.parent || (!isFullWalk && !options.bsConsts)) {
             walkArray(this.statements, visitor, options, this);
             return;
         }
-        walkBsConsts.set(options, new Map(options.bsConsts ?? this.bsConsts));
-        try {
-            walkArray(this.statements, visitor, options, this);
-        } finally {
-            walkBsConsts.delete(options);
-        }
+        //carry the constants down the walk: start from the given constants (normally the manifest `bs_const` values), and let each `#const` add to them as the walk reaches it.
+        //this copies the options and the constants, so the caller's objects are untouched and every walk has its own constants
+        walkArray(this.statements, visitor, { ...options, bsConsts: new Map(options.bsConsts ?? this.bsConsts) }, this);
     }
 
     public clone() {
@@ -4882,7 +4876,7 @@ export class ConditionalCompileStatement extends Statement {
             }
             walk(this, this.isConditionTrue ? 'thenBranch' : 'elseBranch', visitor, options);
             //the visitor never sees the inactive branch, but a walk that resolves the tree still marks its nodes inactive
-            if (walkBsConsts.has(options)) {
+            if (options.bsConsts) {
                 walk(this, this.isConditionTrue ? 'elseBranch' : 'thenBranch', undefined, {
                     walkMode: WalkMode.visitAllRecursive | InternalWalkMode.visitFalseConditionalCompilationBlocks
                 });
