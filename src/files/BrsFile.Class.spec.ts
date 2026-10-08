@@ -2971,13 +2971,14 @@ describe('BrsFile BrighterScript classes', () => {
                 expect(code).to.include('__Foo_method_onlyRelease');
             });
 
-            it('follows a plugin that changes the constants after parsing', () => {
+            it('follows a plugin that injects a #const after parsing', () => {
                 let debug = true;
                 program.plugins.add({
-                    name: 'change-bs-consts',
+                    name: 'inject-hash-const',
                     beforeValidateFile: (event) => {
                         if (isBrsFile(event.file)) {
-                            event.file.ast.bsConsts = new Map([['debug', debug]]);
+                            const injected = Parser.parse(`#const DEBUG = ${debug}\n`).ast.statements[0];
+                            event.file.ast.statements.unshift(injected);
                         }
                     }
                 });

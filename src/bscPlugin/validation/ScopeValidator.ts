@@ -575,8 +575,7 @@ export class ScopeValidator {
 
         for (const [, link] of scope.getConstMap()) {
             //an inactive const is not compiled, so it can not take part in a cycle
-            // eslint-disable-next-line @typescript-eslint/dot-notation
-            if (link.file['_cachedLookups'].isActiveDeclaration(link.item)) {
+            if (link.item.isActive === true) {
                 walkConst(link.item, link.file, []);
             }
         }
@@ -1618,8 +1617,7 @@ export class ScopeValidator {
         } else if (!localVarIsInNamespace) {
             const classStmtLink = this.event.scope.getClassFileLink(lowerVarName);
             //an inactive class is not compiled, so it can not be shadowed
-            // eslint-disable-next-line @typescript-eslint/dot-notation
-            if (classStmtLink?.file['_cachedLookups'].isActiveDeclaration(classStmtLink.item)) {
+            if (classStmtLink?.item.isActive === true) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.localVarShadowedByScopedFunction(),
                     location: util.createLocationFromFileRange(file, varDeclaration.nameRange),

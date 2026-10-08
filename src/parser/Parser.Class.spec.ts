@@ -721,7 +721,7 @@ describe('parser class', () => {
             expect(klassType.getMemberTable().getSymbol('speak', SymbolTypeFlag.runtime)).to.exist;
         });
 
-        it('includes every member in the class type when the class has no file evaluation', () => {
+        it('leaves members of an inactive branch out of the class type of a parsed tree that does not belong to a file', () => {
             let { ast, diagnostics } = Parser.parse(`
                 class Person
                     #if DEBUG
@@ -736,7 +736,7 @@ describe('parser class', () => {
             expectZeroDiagnostics(diagnostics);
             const klass = ast.statements[0] as ClassStatement;
             const memberTable = klass.getType({ flags: SymbolTypeFlag.typetime }).getMemberTable();
-            expect(memberTable.getSymbol('speak', SymbolTypeFlag.runtime)).to.exist;
+            expect(memberTable.getSymbol('speak', SymbolTypeFlag.runtime)).not.to.exist;
             expect(memberTable.getSymbol('whisper', SymbolTypeFlag.runtime)).to.exist;
             expect(klass.methods.map(method => method.tokens.name.text)).to.eql(['speak', 'whisper']);
         });

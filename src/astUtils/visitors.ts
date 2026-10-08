@@ -2,7 +2,7 @@
 import type { CancellationToken } from 'vscode-languageserver';
 import type { Body, AssignmentStatement, Block, ExpressionStatement, FunctionStatement, IfStatement, IncrementStatement, PrintStatement, GotoStatement, LabelStatement, ReturnStatement, EndStatement, StopStatement, ForStatement, ForEachStatement, WhileStatement, DottedSetStatement, IndexedSetStatement, LibraryStatement, NamespaceStatement, ImportStatement, ClassStatement, EnumStatement, EnumMemberStatement, DimStatement, TryCatchStatement, CatchStatement, ThrowStatement, InterfaceStatement, InterfaceFieldStatement, InterfaceMethodStatement, FieldStatement, MethodStatement, ConstStatement, ContinueStatement, TypecastStatement, AliasStatement, ConditionalCompileStatement, ConditionalCompileErrorStatement, ConditionalCompileConstStatement, AugmentedAssignmentStatement, ExitStatement, TypeStatement } from '../parser/Statement';
 import type { AAIndexedMemberExpression, AALiteralExpression, AAMemberExpression, AnnotationExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, EscapedCharCodeLiteralExpression, FunctionExpression, FunctionParameterExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NewExpression, NullCoalescingExpression, RegexLiteralExpression, SourceLiteralExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, TypecastExpression, TypeExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression } from '../parser/Expression';
-import { isExpression, isStatement } from './reflection';
+import { isConditionalCompileConstStatement, isConditionalCompileStatement, isExpression, isStatement } from './reflection';
 import type { Editor } from './Editor';
 import type { Statement, Expression, AstNode } from '../parser/AstNode';
 
@@ -43,6 +43,12 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
     //link this node to its parent
     parent = parent ?? owner as unknown as AstNode;
     element.parent = parent;
+    setIsActive(element, parent);
+
+    //resolve `#if` and `#const` statements in source order, before the visitor sees them
+    if (options.bsConsts && (isConditionalCompileStatement(element) || isConditionalCompileConstStatement(element))) {
+        element.resolve(options.bsConsts);
+    }
 
     //notify the visitor of this element
     if (element.visitMode & options.walkMode) {
@@ -82,6 +88,7 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
 
     //set the parent of this new expression
     element.parent = parent;
+    setIsActive(element, parent);
 
     if (!element.walk) {
         throw new Error(`${owner.constructor.name}["${String(key)}"]${parent ? ` for ${parent.constructor.name}` : ''} does not contain a "walk" method`);
@@ -90,6 +97,19 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
     element.walk(visitor, options);
 
     return returnValue;
+}
+
+/**
+ * A node is active when its parent is active and, if the parent is an `#if`, the node is the branch the condition selects.
+ * The root of the tree is always active. When the parent's value is unknown (undefined), so is the node's.
+ */
+function setIsActive(element: AstNode, parent: AstNode) {
+    const isParentActive = parent.parent ? parent.isActive : true;
+    if (isParentActive === undefined) {
+        element.isActive = undefined;
+    } else {
+        element.isActive = isParentActive && (!isConditionalCompileStatement(parent) || (element === parent.thenBranch) === parent.isConditionTrue);
+    }
 }
 
 /**
@@ -242,11 +262,13 @@ export interface WalkOptions {
      */
     skipChildren?: ChildrenSkipper;
     /**
-     * Map of Conditional compilation flags, with names in lowercase.
-     * When omitted, a walk uses the evaluation of the file that contains the node, which follows the constants in `ast.bsConsts`.
-     * A plugin that changes a constant should change `ast.bsConsts`, and the change applies to the next walk.
-     * An edit to the AST (such as a changed `#if` condition) applies the next time the file is validated, which happens after the file changes.
-     * When given, the walk evaluates the tree with these constants and ignores the file's evaluation.
+     * Map of conditional compilation constants, with names in lowercase. The walk carries these down the tree as the `#const` values in effect.
+     * Every full walk from the root of the tree (`walkStatements`, `walkExpressions` and `recurseChildFunctions`) starts from `ast.bsConsts`
+     * (the manifest `bs_const` values), adds each active `#const` as it reaches it, and stores the results on the AST (including `isActive`).
+     * Other walks (one that starts below the root, or skips part of the tree) compute nothing and follow the results of the last full walk.
+     * Pass your own map to resolve with different constants instead, from wherever the walk starts. Only `#const` statements the walk reaches are applied,
+     * so start from the root if every `#const` in the file must count. The walk adds each active `#const` to that map as it reaches it,
+     * so pass a copy if you need the original unchanged.
      */
     bsConsts?: Map<string, boolean>;
 }

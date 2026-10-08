@@ -208,6 +208,12 @@ export abstract class AstNode {
         return [];
     }
 
+    /**
+     * Is this node compiled? False when it sits in an inactive branch of any enclosing `#if` / `#else if` / `#else`.
+     * Set by every walk (like `parent`), from the parent's value and the parent's `#if` condition. Undefined until the node is walked.
+     */
+    public isActive?: boolean;
+
     public getBsConsts(): Map<string, boolean> | undefined {
         return this.bsConsts ?? this.parent?.getBsConsts?.();
     }

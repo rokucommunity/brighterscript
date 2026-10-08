@@ -1,4 +1,4 @@
-import { isAliasStatement, isBlock, isBody, isCallExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypecastExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isBlock, isBody, isCallExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTypecastExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -8,7 +8,7 @@ import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import { CallExpression, FunctionExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import { PrintStatement } from '../../parser/Statement';
-import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement } from '../../parser/Statement';
+import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement, ConditionalCompileConstStatement } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { DynamicType } from '../../types/DynamicType';
@@ -39,9 +39,12 @@ export class BrsFileValidator {
         // It could have potentially changed before this from plugins, after this, it will not change
         // eslint-disable-next-line @typescript-eslint/dot-notation
         this.event.file['_cachedLookups'].invalidate();
+        //rebuild the lookups now, because that full walk resolves every `#if` and `#const` (and sets `isActive`) before the walk below,
+        //whose visitors can ask about nodes it has not reached yet (such as the members of a class)
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        this.event.file['_cachedLookups'].rehydrate();
 
         this.walk();
-        this.validateConditionalCompile();
         this.flagTopLevelStatements();
         //only validate the file if it was actually parsed (skip files containing typedefs)
         if (!this.event.file.hasTypedef) {
@@ -343,6 +346,12 @@ export class BrsFileValidator {
             },
             PrintStatement: (node) => {
                 this.validatePrintStatementItemCount(node);
+            },
+            ConditionalCompileStatement: (node) => {
+                this.validateHashIfCondition(node);
+            },
+            ConditionalCompileConstStatement: (node) => {
+                this.validateHashConst(node);
             },
             ConditionalCompileErrorStatement: (node) => {
                 this.event.program.diagnostics.register({
@@ -698,33 +707,32 @@ export class BrsFileValidator {
 
 
     /**
-     * Validate the `#const` declarations and `#if` conditions against the constants in effect at their position in the file
+     * Validate an active `#const` against the constants in effect at its position in the file (the walk resolved it just before visiting it)
      */
-    private validateConditionalCompile() {
-        const evaluator = this.event.file.getConditionalCompileEvaluator();
-        if (!evaluator) {
-            return;
-        }
-        for (const constName of evaluator.duplicateConstNames) {
-            this.event.program.diagnostics.register({
-                ...DiagnosticMessages.duplicateConstDeclaration(constName.text),
-                location: constName.location
-            });
-        }
-        for (const constValue of evaluator.invalidConstValues) {
+    private validateHashConst(statement: ConditionalCompileConstStatement) {
+        const assignment = statement.assignment;
+        if (!isLiteralBoolean(assignment.value)) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.invalidHashConstValue(),
-                location: constValue.location
+                location: assignment.value.location
+            });
+        } else if (statement.isDuplicate) {
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.duplicateConstDeclaration(assignment.tokens.name.text),
+                location: assignment.tokens.name.location
             });
         }
-        //the device evaluates an undeclared constant as false starting with some firmware versions
-        if (!this.event.program.firmwareCapabilities.undeclaredHashConstIsFalse) {
-            for (const conditionName of evaluator.undeclaredConditionNames) {
-                this.event.program.diagnostics.register({
-                    ...DiagnosticMessages.hashConstDoesNotExist(),
-                    location: conditionName.location
-                });
-            }
+    }
+
+    /**
+     * Flag a reached `#if` / `#else if` condition that names an undeclared constant, unless the target firmware evaluates it as false
+     */
+    private validateHashIfCondition(statement: ConditionalCompileStatement) {
+        if (statement.isConditionDeclared === false && statement.tokens.condition && !this.event.program.firmwareCapabilities.undeclaredHashConstIsFalse) {
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.hashConstDoesNotExist(),
+                location: statement.tokens.condition.location
+            });
         }
     }
 

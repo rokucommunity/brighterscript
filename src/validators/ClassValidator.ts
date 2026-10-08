@@ -117,8 +117,8 @@ export class BsClassValidator {
             let methods = {};
             let fields = {};
 
-            for (let statement of classStatement.getActiveMembers()) {
-                if (isMethodStatement(statement) || isFieldStatement(statement)) {
+            for (let statement of classStatement.members) {
+                if (statement.isActive === true) {
                     let member = statement;
                     let memberName = member.tokens.name;
 
@@ -239,10 +239,18 @@ export class BsClassValidator {
         }
     }
 
+    /**
+     * The compiled members of the class by lowercase name, so an active member always wins over an inactive member of the same name
+     */
     private getActiveMemberMap(classStatement: AugmentedClassStatement) {
         let activeMemberMap = this.activeMemberMapsByClass.get(classStatement);
         if (!activeMemberMap) {
-            activeMemberMap = classStatement.getActiveMemberMap();
+            activeMemberMap = {};
+            for (const member of classStatement.members) {
+                if (member.isActive === true) {
+                    activeMemberMap[member.tokens.name?.text.toLowerCase()] = member;
+                }
+            }
             this.activeMemberMapsByClass.set(classStatement, activeMemberMap);
         }
         return activeMemberMap;
@@ -281,8 +289,7 @@ export class BsClassValidator {
             // eslint-disable-next-line @typescript-eslint/dot-notation
             for (let x of file['_cachedLookups'].classStatements ?? []) {
                 //inactive classes are not compiled, so they are neither validated nor registered as duplicates of an active class
-                // eslint-disable-next-line @typescript-eslint/dot-notation
-                if (!file['_cachedLookups'].isActiveDeclaration(x)) {
+                if (x.isActive !== true) {
                     continue;
                 }
                 let classStatement = x as AugmentedClassStatement;
