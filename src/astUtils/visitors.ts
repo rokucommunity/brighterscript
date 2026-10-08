@@ -265,9 +265,10 @@ export interface WalkOptions {
      * Map of conditional compilation constants, with names in lowercase. The walk carries these down the tree as the `#const` values in effect.
      * Every full walk from the root of the tree (`walkStatements`, `walkExpressions` and `recurseChildFunctions`) starts from `ast.bsConsts`
      * (the manifest `bs_const` values), adds each active `#const` as it reaches it, and stores the results on the AST (including `isActive`).
-     * Other walks use the stored results.
-     * Pass your own map to resolve with different constants instead, from wherever the walk starts. The walk adds each active `#const` to that map
-     * as it reaches it, so pass a copy if you need the original unchanged.
+     * Other walks (one that starts below the root, or skips part of the tree) compute nothing and follow the results of the last full walk.
+     * Pass your own map to resolve with different constants instead, from wherever the walk starts. Only `#const` statements the walk reaches are applied,
+     * so start from the root if every `#const` in the file must count. The walk adds each active `#const` to that map as it reaches it,
+     * so pass a copy if you need the original unchanged.
      */
     bsConsts?: Map<string, boolean>;
 }
