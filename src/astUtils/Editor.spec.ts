@@ -2,7 +2,7 @@ import { expect } from '../chai-config.spec';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Editor } from './Editor';
 import { util } from '../util';
-import { createToken } from './creators';
+import { bscFactory } from '../factory/BscFactory';
 import { TokenKind } from '../lexer/TokenKind';
 import { Program } from '../Program';
 import { BrsFile } from '../files/BrsFile';
@@ -182,7 +182,7 @@ describe('Editor', () => {
             }
         }
         it('overrides existing transpile method', () => {
-            const expression = new LiteralExpression({ value: createToken(TokenKind.IntegerLiteral, 'original') });
+            const expression = new LiteralExpression({ value: bscFactory.ast.brs.createToken(TokenKind.IntegerLiteral, 'original') });
 
             expect(transpileToString(expression)).to.eql('original');
 

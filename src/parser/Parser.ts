@@ -104,7 +104,7 @@ import type { Range } from 'vscode-languageserver';
 import type { Logger } from '../logging';
 import { createLogger } from '../logging';
 import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression, isConditionalCompileStatement, isLiteralBoolean, isTypecastExpression, isXmlAttributeGetExpression } from '../astUtils/reflection';
-import { createStringLiteral, createToken } from '../astUtils/creators';
+import { bscFactory } from '../factory/BscFactory';
 import type { Expression, Statement } from './AstNode';
 import type { BsDiagnostic, DeepWriteable } from '../interfaces';
 import { getFirmwareCapabilities } from '../RokuConstants';
@@ -1390,9 +1390,9 @@ export class Parser {
                 originalStart.line,
                 originalStart.character + exitToken.text.length);
 
-            exitToken = createToken(TokenKind.Exit, exitText, util.createLocationFromRange(exitToken.location.uri, exitRange));
+            exitToken = bscFactory.ast.brs.createToken(TokenKind.Exit, exitText, util.createLocationFromRange(exitToken.location.uri, exitRange));
             this.tokens[this.current - 1] = exitToken;
-            const newLoopToken = createToken(TokenKind.While, whileText, util.createLocationFromRange(exitToken.location.uri, whileRange));
+            const newLoopToken = bscFactory.ast.brs.createToken(TokenKind.While, whileText, util.createLocationFromRange(exitToken.location.uri, whileRange));
             this.tokens.splice(this.current, 0, newLoopToken);
         }
 
@@ -2461,7 +2461,7 @@ export class Parser {
     private conditionalCompileErrorStatement() {
         const hashErrorToken = this.advance();
         const tokensUntilEndOfLine = this.consumeUntil(TokenKind.Newline);
-        const message = createToken(TokenKind.HashErrorMessage, tokensUntilEndOfLine.map(t => t.text).join(' '));
+        const message = bscFactory.ast.brs.createToken(TokenKind.HashErrorMessage, tokensUntilEndOfLine.map(t => t.text).join(' '));
         return new ConditionalCompileErrorStatement({ hashError: hashErrorToken, message: message });
     }
 
@@ -2672,7 +2672,7 @@ export class Parser {
         //print statements can be empty, so look for empty print conditions
         if (!values.length) {
             const endOfStatementLocation = util.createBoundingLocation(printKeyword, this.peek());
-            let emptyStringLiteral = createStringLiteral('', endOfStatementLocation);
+            let emptyStringLiteral = bscFactory.ast.brs.createStringLiteral('', endOfStatementLocation);
             values.push(emptyStringLiteral);
         }
 
@@ -3061,7 +3061,7 @@ export class Parser {
             // new expression without a following call expression
             // wrap the name in an expression
             const endOfStatementLocation = util.createBoundingLocation(newToken, this.peek());
-            const exprStmt = nameExpr ?? createStringLiteral('', endOfStatementLocation);
+            const exprStmt = nameExpr ?? bscFactory.ast.brs.createStringLiteral('', endOfStatementLocation);
             return new ExpressionStatement({ expression: exprStmt });
         }
 

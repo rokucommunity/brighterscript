@@ -12,7 +12,7 @@ import { ClassType } from './ClassType';
 import { isTypePropertyReferenceType, isReferenceType } from '../astUtils/reflection';
 import { TypedFunctionType } from './TypedFunctionType';
 import { NamespaceType } from './NamespaceType';
-import { createToken } from '../astUtils/creators';
+import { bscFactory } from '../factory/BscFactory';
 import { TokenKind } from '../lexer/TokenKind';
 import { util } from '../util';
 import { ArrayType } from './ArrayType';
@@ -159,10 +159,10 @@ describe('ReferenceType', () => {
         it('catches circular references in a binary expression', () => {
             const table = new SymbolTable('test');
             const ref = new ReferenceType('notHere', 'notHere', runtimeFlag, () => table);
-            const binRef = new BinaryOperatorReferenceType(ref, createToken(TokenKind.Plus), StringType.instance, (l, o, r) => {
+            const binRef = new BinaryOperatorReferenceType(ref, bscFactory.ast.brs.createToken(TokenKind.Plus), StringType.instance, (l, o, r) => {
                 return util.binaryOperatorResultType(l, o, r);
             });
-            const binRef2 = new BinaryOperatorReferenceType(ref, createToken(TokenKind.Plus), binRef, (l, o, r) => {
+            const binRef2 = new BinaryOperatorReferenceType(ref, bscFactory.ast.brs.createToken(TokenKind.Plus), binRef, (l, o, r) => {
                 return util.binaryOperatorResultType(l, o, r);
             });
             table.addSymbol('notHere', null, binRef2, SymbolTypeFlag.runtime);
