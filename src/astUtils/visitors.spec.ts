@@ -1585,7 +1585,7 @@ describe('astUtils visitors', () => {
                 expect(collectFunctionNames(file.ast, { walkMode: WalkMode.visitStatements })).to.eql(['debugOnly']);
             });
 
-            it('resolves with constants passed in the walk options, even in a partial walk, without changing them', () => {
+            it('resolves with constants passed in the walk options, even in a partial walk, and adds each active #const to them', () => {
                 const { ast } = program.setFile<BrsFile>('source/main.brs', `
                     #const LATE = true
                     #if FEATURE
@@ -1598,7 +1598,7 @@ describe('astUtils visitors', () => {
                 `);
                 const bsConsts = new Map([['feature', true]]);
                 expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements, bsConsts: bsConsts })).to.eql(['debugOnly']);
-                expect([...bsConsts]).to.eql([['feature', true]]);
+                expect([...bsConsts]).to.eql([['feature', true], ['late', true]]);
                 expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements, bsConsts: new Map([['feature', false]]) })).to.eql(['releaseOnly']);
             });
 

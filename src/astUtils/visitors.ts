@@ -266,7 +266,8 @@ export interface WalkOptions {
      * Every full walk from the root of the tree (`walkStatements`, `walkExpressions` and `recurseChildFunctions`) starts from `ast.bsConsts`
      * (the manifest `bs_const` values), adds each active `#const` as it reaches it, and stores the results on the AST (including `isActive`).
      * Other walks use the stored results.
-     * Pass your own map to resolve the tree with different constants instead (even in a partial walk). The map is copied, never changed.
+     * Pass your own map to resolve with different constants instead, from wherever the walk starts. The walk adds each active `#const` to that map
+     * as it reaches it, so pass a copy if you need the original unchanged.
      */
     bsConsts?: Map<string, boolean>;
 }

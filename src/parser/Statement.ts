@@ -143,14 +143,14 @@ export class Body extends Statement implements TypedefProvider {
         //only a full walk from the root of the tree resolves conditional compile statements, because `#const` applies in source order.
         //a walk that skips part of the tree would miss the `#const` statements there, so it uses the results of the last full walk instead
         const isFullWalk = (options.walkMode & fullWalkMode) === fullWalkMode && !options.skipChildren;
-        //a caller that passes its own constants asked for them to be used, so resolve with them even in a partial walk
-        if (this.parent || (!isFullWalk && !options.bsConsts)) {
+        //constants passed by the caller already flow down the walk as they are
+        if (this.parent || options.bsConsts || !isFullWalk) {
             walkArray(this.statements, visitor, options, this);
             return;
         }
-        //carry the constants down the walk: start from the given constants (normally the manifest `bs_const` values), and let each `#const` add to them as the walk reaches it.
-        //this copies the options and the constants, so the caller's objects are untouched and every walk has its own constants
-        walkArray(this.statements, visitor, { ...options, bsConsts: new Map(options.bsConsts ?? this.bsConsts) }, this);
+        //carry the manifest `bs_const` values down the walk, and let each `#const` add to them as the walk reaches it.
+        //copy them so the walk never changes `ast.bsConsts`, and copy the options so the caller's object is untouched
+        walkArray(this.statements, visitor, { ...options, bsConsts: new Map(this.bsConsts) }, this);
     }
 
     public clone() {
