@@ -1,7 +1,8 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import type { DottedGetExpression, LiteralExpression, TypecastExpression } from './Expression';
+import { SourceNode } from 'source-map';
+import type { DottedGetExpression, LiteralExpression, TypecastExpression, DestructuringPattern, DestructuringTarget, ObjectPatternExpression, ArrayPatternExpression } from './Expression';
 import { FunctionExpression, FunctionParameterExpression, TypeExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
@@ -10,7 +11,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isBinaryExpression, isBlock, isCallExpression, isCaseStatement, isCatchStatement, isClassType, isConditionalCompileStatement, isEnumMemberStatement, isEnumType, isEnumStatement, isExitStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isSelectCaseStatement, isTryCatchStatement, isTypecastExpression, isTypedefProvider, isUnaryExpression, isUninitializedType, isVariableExpression, isVoidType, isWhileStatement } from '../astUtils/reflection';
+import { isBinaryExpression, isBlock, isCallExpression, isCaseStatement, isCatchStatement, isClassType, isConditionalCompileStatement, isEnumMemberStatement, isEnumType, isEnumStatement, isExitStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isSelectCaseStatement, isTryCatchStatement, isTypecastExpression, isTypedefProvider, isUnaryExpression, isUninitializedType, isVariableExpression, isVoidType, isWhileStatement, isObjectPatternExpression } from '../astUtils/reflection';
 import type { GetTypeOptions } from '../interfaces';
 import { TypeChainEntry, type TranspileResult, type TypedefProvider } from '../interfaces';
 import { createDottedIdentifier, createIdentifier, createInvalidLiteral, createMethodStatement, createToken, createVariableExpression } from '../astUtils/creators';
@@ -229,6 +230,241 @@ export class AssignmentStatement extends Statement {
             ['value', 'typeExpression']
         );
     }
+}
+
+/**
+ * A destructuring assignment, i.e. `{ name, age } = person` or `[first, second] = items`.
+ * Transpiles to a series of plain BrightScript assignments (evaluating the right-hand side exactly once).
+ */
+export class DestructuringAssignmentStatement extends Statement {
+    constructor(options: {
+        pattern: DestructuringPattern;
+        equals?: Token;
+        value: Expression;
+    }) {
+        super();
+        this.pattern = options.pattern;
+        this.tokens = {
+            equals: options.equals
+        };
+        this.value = options.value;
+        this.location = util.createBoundingLocation(this.pattern, util.createBoundingLocationFromTokens(this.tokens), this.value);
+    }
+
+    public readonly tokens: {
+        readonly equals?: Token;
+    };
+
+    /**
+     * The object or array pattern on the left-hand side of the `=`
+     */
+    public readonly pattern: DestructuringPattern;
+
+    /**
+     * The expression on the right-hand side of the `=` whose value is destructured
+     */
+    public readonly value: Expression;
+
+    public readonly kind = AstNodeKind.DestructuringAssignmentStatement;
+
+    public readonly location: Location | undefined;
+
+    /**
+     * Get every variable assigned by this statement, along with the type it receives
+     */
+    public getTargets(options: GetTypeOptions): DestructuringTarget[] {
+        const valueType = this.value?.getType({ ...options, typeChain: undefined });
+        return this.pattern?.getTargets(valueType, options) ?? [];
+    }
+
+    /**
+     * Get the identifier tokens of every variable assigned by this statement
+     */
+    public getTargetNames(): Identifier[] {
+        return this.getTargets({ flags: SymbolTypeFlag.runtime }).map(x => x.name);
+    }
+
+    transpile(state: BrsTranspileState) {
+        const result: TranspileResult = [
+            ...state.transpileLeadingComments(this.pattern.tokens.open)
+        ];
+        let tempIndex = 0;
+        let isFirstLine = true;
+        const context: DestructuringTranspileContext = {
+            state: state,
+            result: result,
+            nextTempName: () => `__bsDestructure${tempIndex++}`,
+            startLine: () => {
+                if (isFirstLine) {
+                    isFirstLine = false;
+                } else {
+                    result.push(state.newline, state.indent());
+                }
+            }
+        };
+
+        //when the right-hand side is a plain local variable that is not reassigned by this pattern, read from it directly.
+        //Otherwise evaluate it exactly once into a temp variable. Names that transpile to something else
+        //(consts, namespace-relative references, etc.) are not plain locals, so they also go through the temp
+        const valueResult = this.value.transpile(state);
+        let sourceName: string;
+        if (
+            isVariableExpression(this.value) &&
+            new SourceNode(null, null, null, valueResult as Array<string | SourceNode>).toString() === this.value.tokens.name.text &&
+            !this.assignsVariable(this.value.tokens.name.text)
+        ) {
+            sourceName = this.value.tokens.name.text;
+        } else {
+            sourceName = context.nextTempName();
+            context.startLine();
+            result.push(
+                state.sourceNode(this.pattern.tokens.open, sourceName),
+                ' ',
+                state.transpileToken(this.tokens.equals ?? createToken(TokenKind.Equal), '='),
+                ' ',
+                ...valueResult
+            );
+        }
+        this.transpilePattern(this.pattern, sourceName, context);
+        return result;
+    }
+
+    /**
+     * Does this statement assign to a variable with the given name?
+     */
+    private assignsVariable(name: string) {
+        const lowerName = name?.toLowerCase();
+        return this.getTargetNames().some(x => x.text?.toLowerCase() === lowerName);
+    }
+
+    private transpilePattern(pattern: DestructuringPattern, sourceName: string, context: DestructuringTranspileContext) {
+        if (isObjectPatternExpression(pattern)) {
+            this.transpileObjectPattern(pattern, sourceName, context);
+        } else {
+            this.transpileArrayPattern(pattern, sourceName, context);
+        }
+    }
+
+    private transpileObjectPattern(pattern: ObjectPatternExpression, sourceName: string, context: DestructuringTranspileContext) {
+        const { state, result } = context;
+        for (const property of pattern.properties) {
+            const key = property.tokens.key;
+            if (!key) {
+                continue;
+            }
+            const accessor = key.kind === TokenKind.StringLiteral
+                ? `${sourceName}[${key.text}]`
+                : `${sourceName}.${key.text}`;
+            if (property.pattern) {
+                const tempName = context.nextTempName();
+                this.transpileTargetAssignment(tempName, key, accessor, property.defaultValue, context);
+                this.transpilePattern(property.pattern, tempName, context);
+            } else if (property.targetName) {
+                this.transpileTargetAssignment(property.targetName.text, property.targetName, accessor, property.defaultValue, context);
+            }
+        }
+        if (pattern.rest?.tokens.name) {
+            //`rest = {}` + `rest.append(source)` + one `rest.delete("key")` per named property
+            const restName = pattern.rest.tokens.name;
+            context.startLine();
+            result.push(state.sourceNode(restName, restName.text), ' = {}');
+            context.startLine();
+            result.push(state.sourceNode(restName, restName.text), `.append(${sourceName})`);
+            for (const property of pattern.properties) {
+                const key = property.tokens.key;
+                if (!key) {
+                    continue;
+                }
+                const keyString = key.kind === TokenKind.StringLiteral ? key.text : `"${key.text}"`;
+                context.startLine();
+                result.push(state.sourceNode(restName, restName.text), `.delete(${keyString})`);
+            }
+        }
+    }
+
+    private transpileArrayPattern(pattern: ArrayPatternExpression, sourceName: string, context: DestructuringTranspileContext) {
+        const { state, result } = context;
+        let index = 0;
+        for (const element of pattern.elements) {
+            if (element.isHole) {
+                index++;
+                continue;
+            }
+            const accessor = `${sourceName}[${index}]`;
+            if (element.pattern) {
+                const tempName = context.nextTempName();
+                this.transpileTargetAssignment(tempName, element.pattern.tokens.open, accessor, element.defaultValue, context);
+                this.transpilePattern(element.pattern, tempName, context);
+            } else if (element.tokens.name) {
+                this.transpileTargetAssignment(element.tokens.name.text, element.tokens.name, accessor, element.defaultValue, context);
+            }
+            index++;
+        }
+        if (pattern.rest?.tokens.name) {
+            //`rest = []` + a loop that pushes every remaining item. (roArray.slice() is not available on older firmware)
+            const restName = pattern.rest.tokens.name;
+            const loopVar = context.nextTempName();
+            context.startLine();
+            result.push(state.sourceNode(restName, restName.text), ' = []');
+            context.startLine();
+            result.push(state.sourceNode(pattern.rest.tokens.dotDotDot, `for ${loopVar} = ${index} to ${sourceName}.count() - 1`));
+            result.push(state.newline, state.indent(1));
+            result.push(state.sourceNode(restName, restName.text), `.push(${sourceName}[${loopVar}])`);
+            result.push(state.newline, state.indent(-1));
+            result.push(state.sourceNode(pattern.rest.tokens.dotDotDot, 'end for'));
+        }
+    }
+
+    /**
+     * Emit `target = accessor`, followed by `if target = invalid then target = <default>` when a default value is present
+     */
+    private transpileTargetAssignment(targetName: string, locatable: Token, accessor: string, defaultValue: Expression | undefined, context: DestructuringTranspileContext) {
+        const { state, result } = context;
+        context.startLine();
+        result.push(state.sourceNode(locatable, targetName), ' = ', accessor);
+        if (defaultValue) {
+            context.startLine();
+            result.push(
+                state.sourceNode(defaultValue, `if ${targetName} = invalid then ${targetName} = `),
+                ...defaultValue.transpile(state)
+            );
+        }
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'pattern', visitor, options);
+            walk(this, 'value', visitor, options);
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.pattern?.tokens.open?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new DestructuringAssignmentStatement({
+                pattern: this.pattern?.clone(),
+                equals: util.cloneToken(this.tokens.equals),
+                value: this.value?.clone()
+            }),
+            ['pattern', 'value']
+        );
+    }
+}
+
+interface DestructuringTranspileContext {
+    state: BrsTranspileState;
+    result: TranspileResult;
+    /**
+     * Get the name for the next temporary variable
+     */
+    nextTempName: () => string;
+    /**
+     * Prepare `result` for a new line of output (adds a newline and indent for every line except the first)
+     */
+    startLine: () => void;
 }
 
 export class AugmentedAssignmentStatement extends Statement {

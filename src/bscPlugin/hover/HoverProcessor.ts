@@ -1,4 +1,4 @@
-import { isAssignmentStatement, isBrsFile, isCallfuncExpression, isClassStatement, isDottedGetExpression, isEnumMemberStatement, isEnumStatement, isEnumType, isForStatement, isFunctionStatement, isInheritableType, isInterfaceStatement, isMemberField, isMethodStatement, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isTypeStatement, isTypeStatementType, isXmlFile } from '../../astUtils/reflection';
+import { isAssignmentStatement, isArrayPatternElementExpression, isDestructuringAssignmentStatement, isObjectPatternPropertyExpression, isRestElementExpression, isBrsFile, isCallfuncExpression, isClassStatement, isDottedGetExpression, isEnumMemberStatement, isEnumStatement, isEnumType, isForStatement, isFunctionStatement, isInheritableType, isInterfaceStatement, isMemberField, isMethodStatement, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isTypeStatement, isTypeStatementType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { ExtraSymbolData, Hover, ProvideHoverEvent, TypeChainEntry } from '../../interfaces';
@@ -172,6 +172,10 @@ export class HoverProcessor {
                         // if this is an assignment, but we're really interested in the value AFTER the assignment
                         exprType = expression.getSymbolTable().getSymbolType(expression.tokens.name.text, { flags: typeFlag, typeChain: typeChain, data: extraData, statementIndex: expression.statementIndex + 1 });
                     }
+                } else if ((isObjectPatternPropertyExpression(expression) || isArrayPatternElementExpression(expression) || isRestElementExpression(expression)) && token === expression.targetName) {
+                    // this is a variable declared by a destructuring assignment. We're interested in the value AFTER the assignment
+                    const statement = expression.findAncestor(isDestructuringAssignmentStatement);
+                    exprType = expression.getSymbolTable().getSymbolType(token.text, { flags: typeFlag, typeChain: typeChain, data: extraData, statementIndex: (statement?.statementIndex ?? -1) + 1 });
                 } else {
                     exprType = expression.getType({ flags: typeFlag, typeChain: typeChain, data: extraData, ignoreCall: isCallfuncExpression(expression) });
                 }

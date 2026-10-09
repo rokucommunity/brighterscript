@@ -5,6 +5,8 @@ import type { AAIndexedMemberExpression, AALiteralExpression, AAMemberExpression
 import { isExpression, isStatement } from './reflection';
 import type { Editor } from './Editor';
 import type { Statement, Expression, AstNode } from '../parser/AstNode';
+import type { ObjectPatternExpression, ObjectPatternPropertyExpression, ArrayPatternExpression, ArrayPatternElementExpression, RestElementExpression } from '../parser/Expression';
+import type { DestructuringAssignmentStatement } from '../parser/Statement';
 
 /**
  * Walks the statements of a block and descendent sub-blocks, and allow replacing statements
@@ -189,6 +191,7 @@ export function createVisitor(
         ConditionalCompileErrorStatement?: (statement: ConditionalCompileErrorStatement, parent?: Statement, owner?: any, key?: any) => Statement | void;
         AliasStatement?: (statement: AliasStatement, parent?: AstNode, owner?: any, key?: any) => Statement | void;
         AugmentedAssignmentStatement?: (statement: AugmentedAssignmentStatement, parent?: AstNode, owner?: any, key?: any) => Statement | void;
+        DestructuringAssignmentStatement?: (statement: DestructuringAssignmentStatement, parent?: AstNode, owner?: any, key?: any) => Statement | void;
         //expressions
         BinaryExpression?: (expression: BinaryExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
         CallExpression?: (expression: CallExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
@@ -216,6 +219,11 @@ export function createVisitor(
         AnnotationExpression?: (expression: AnnotationExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
         TernaryExpression?: (expression: TernaryExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
         NullCoalescingExpression?: (expression: NullCoalescingExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        ObjectPatternExpression?: (expression: ObjectPatternExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        ObjectPatternPropertyExpression?: (expression: ObjectPatternPropertyExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        ArrayPatternExpression?: (expression: ArrayPatternExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        ArrayPatternElementExpression?: (expression: ArrayPatternElementExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
+        RestElementExpression?: (expression: RestElementExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
         RegexLiteralExpression?: (expression: RegexLiteralExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
         TypeExpression?: (expression: TypeExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;
         TypecastExpression?: (expression: TypecastExpression, parent?: AstNode, owner?: any, key?: any) => Expression | void;

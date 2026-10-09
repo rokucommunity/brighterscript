@@ -157,6 +157,20 @@ export class BrsFileValidator {
                 }
                 node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, { definingNode: node, isInstance: true, isFromDocComment: data.isFromDocComment, isFromCallFunc: data.isFromCallFunc }, nodeType, SymbolTypeFlag.runtime);
             },
+            DestructuringAssignmentStatement: (node) => {
+                const symbolTable = node.parent?.getSymbolTable();
+                if (!symbolTable) {
+                    return;
+                }
+                //register every variable declared by the pattern
+                for (const target of node.getTargets({ flags: SymbolTypeFlag.runtime })) {
+                    let targetType = target.type;
+                    if (!targetType || isInvalidType(targetType) || isVoidType(targetType)) {
+                        targetType = DynamicType.instance;
+                    }
+                    symbolTable.addSymbol(target.name.text, { definingNode: node, isInstance: true }, targetType, SymbolTypeFlag.runtime);
+                }
+            },
             DottedSetStatement: (node) => {
                 this.validateNoOptionalChainingInVarSet(node, [node.obj]);
             },
@@ -631,6 +645,11 @@ export class BrsFileValidator {
             },
             DimStatement: (statement) => {
                 addVariable(statement.tokens.name, statement.location);
+            },
+            DestructuringAssignmentStatement: (statement) => {
+                for (const name of statement.getTargetNames()) {
+                    addVariable(name, statement.location);
+                }
             },
             IncrementStatement: (statement) => {
                 if (isVariableExpression(statement.value)) {

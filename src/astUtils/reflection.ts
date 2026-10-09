@@ -43,6 +43,8 @@ import type { IntersectionType } from '../types/IntersectionType';
 import type { TypeStatementType } from '../types/TypeStatementType';
 import type { BscType } from '../types/BscType';
 import type { SymbolTable } from '../SymbolTable';
+import type { ObjectPatternExpression, ObjectPatternPropertyExpression, ArrayPatternExpression, ArrayPatternElementExpression, RestElementExpression } from '../parser/Expression';
+import type { DestructuringAssignmentStatement } from '../parser/Statement';
 
 
 // File reflection
@@ -235,6 +237,9 @@ export function isConditionalCompileConstStatement(element: AstNode | undefined)
 export function isConditionalCompileErrorStatement(element: AstNode | undefined): element is ConditionalCompileErrorStatement {
     return element?.kind === AstNodeKind.ConditionalCompileErrorStatement;
 }
+export function isDestructuringAssignmentStatement(element: AstNode | undefined): element is DestructuringAssignmentStatement {
+    return element?.kind === AstNodeKind.DestructuringAssignmentStatement;
+}
 export function isAugmentedAssignmentStatement(element: AstNode | undefined): element is AugmentedAssignmentStatement {
     return element?.kind === AstNodeKind.AugmentedAssignmentStatement;
 }
@@ -356,6 +361,21 @@ export function isInlineInterfaceMemberExpression(element: any): element is Inli
 }
 export function isTypedFunctionTypeExpression(element: any): element is TypedFunctionTypeExpression {
     return element?.kind === AstNodeKind.TypedFunctionTypeExpression;
+}
+export function isObjectPatternExpression(element: AstNode | undefined): element is ObjectPatternExpression {
+    return element?.kind === AstNodeKind.ObjectPatternExpression;
+}
+export function isObjectPatternPropertyExpression(element: AstNode | undefined): element is ObjectPatternPropertyExpression {
+    return element?.kind === AstNodeKind.ObjectPatternPropertyExpression;
+}
+export function isArrayPatternExpression(element: AstNode | undefined): element is ArrayPatternExpression {
+    return element?.kind === AstNodeKind.ArrayPatternExpression;
+}
+export function isArrayPatternElementExpression(element: AstNode | undefined): element is ArrayPatternElementExpression {
+    return element?.kind === AstNodeKind.ArrayPatternElementExpression;
+}
+export function isRestElementExpression(element: AstNode | undefined): element is RestElementExpression {
+    return element?.kind === AstNodeKind.RestElementExpression;
 }
 
 // BscType reflection

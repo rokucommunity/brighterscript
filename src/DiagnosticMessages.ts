@@ -586,6 +586,21 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'unexpected-token'
     }),
+    expectedDestructuringTarget: () => ({
+        message: `Expected an identifier or a nested destructuring pattern`,
+        severity: DiagnosticSeverity.Error,
+        code: 'expected-destructuring-target'
+    }),
+    restElementMustBeLast: () => ({
+        message: `A rest element must be the last element in a destructuring pattern`,
+        severity: DiagnosticSeverity.Error,
+        code: 'rest-element-must-be-last'
+    }),
+    destructuringTypeNotAllowed: (location: 'rest element' | 'nested pattern') => ({
+        message: `A ${location} cannot have a type annotation. Only the variables in a destructuring pattern can be typed`,
+        severity: DiagnosticSeverity.Error,
+        code: 'destructuring-type-not-allowed'
+    }),
     /**
      * Used in the lexer anytime we encounter an unsupported character
      */

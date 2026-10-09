@@ -1,12 +1,12 @@
 import * as path from 'path';
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
-import { isAALiteralExpression, isAliasStatement, isArrayLiteralExpression, isArrayType, isArrayTypeLike, isAssignmentStatement, isAssociativeArrayType, isAssociativeArrayTypeLike, isBinaryExpression, isBooleanTypeLike, isBrsFile, isBuiltInType, isCallableType, isCallExpression, isCallFuncableTypeLike, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberStatement, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isInterfaceType, isIterableType, isLiteralExpression, isLiteralString, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isTypeStatementType, isUnaryExpression, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
+import { isAALiteralExpression, isAliasStatement, isDestructuringAssignmentStatement, isObjectPatternExpression, isArrayLiteralExpression, isArrayType, isArrayTypeLike, isAssignmentStatement, isAssociativeArrayType, isAssociativeArrayTypeLike, isBinaryExpression, isBooleanTypeLike, isBrsFile, isBuiltInType, isCallableType, isCallExpression, isCallFuncableTypeLike, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberStatement, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isInterfaceType, isIterableType, isLiteralExpression, isLiteralString, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isTypeStatementType, isUnaryExpression, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BsDiagnostic, CallableContainer, ExtraSymbolData, FileReference, GetTypeOptions, ValidateScopeEvent, TypeChainEntry, TypeChainProcessResult, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
-import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConstStatement, DottedSetStatement, ForEachStatement, ForStatement, IncrementStatement, NamespaceStatement, ReturnStatement, SelectCaseStatement, EnumMemberStatement, EnumStatement } from '../../parser/Statement';
+import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConstStatement, DestructuringAssignmentStatement, DottedSetStatement, ForEachStatement, ForStatement, IncrementStatement, NamespaceStatement, ReturnStatement, SelectCaseStatement, EnumMemberStatement, EnumStatement } from '../../parser/Statement';
 import { util } from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
@@ -14,7 +14,7 @@ import type { Token } from '../../lexer/Token';
 import { AstNodeKind } from '../../parser/AstNode';
 import type { AstNode } from '../../parser/AstNode';
 import type { Expression } from '../../parser/AstNode';
-import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallfuncExpression, AAIndexedMemberExpression, SpreadExpression } from '../../parser/Expression';
+import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallfuncExpression, AAIndexedMemberExpression, SpreadExpression, DestructuringPattern } from '../../parser/Expression';
 import { CallExpression } from '../../parser/Expression';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BscType } from '../../types/BscType';
@@ -250,6 +250,11 @@ export class ScopeValidator {
                                 type: this.getNodeTypeWrapper(file, assignStmt, { flags: SymbolTypeFlag.runtime }),
                                 nameRange: assignStmt.tokens.name.location?.range
                             });
+                        });
+                    },
+                    DestructuringAssignmentStatement: (destructuringStmt) => {
+                        this.addValidationKindMetric('DestructuringAssignmentStatement', () => {
+                            this.validateDestructuringAssignmentStatement(file, destructuringStmt);
                         });
                     },
                     AugmentedAssignmentStatement: (binaryExpr) => {
@@ -505,6 +510,10 @@ export class ScopeValidator {
         } else if (isFunctionParameterExpression(definingNode)) {
             // this symbol was defined in a function param
             return true;
+        } else if (isDestructuringAssignmentStatement(definingNode)) {
+            // this symbol is one of the targets of a destructuring assignment (an unknown key is flagged at the key itself)
+            const lowerName = expression.tokens.name?.text.toLowerCase();
+            return definingNode.getTargetNames().some(x => x.text?.toLowerCase() === lowerName);
         } else {
             assignmentAncestor = expression?.findAncestor(isAssignmentStatement);
         }
@@ -962,6 +971,76 @@ export class ScopeValidator {
     /**
      * Detect when declared type does not match rhs type
      */
+    private validateDestructuringAssignmentStatement(file: BrsFile, destructuringStmt: DestructuringAssignmentStatement) {
+        const sourceType = this.getNodeTypeWrapper(file, destructuringStmt.value, { flags: SymbolTypeFlag.runtime });
+        const sourceName = isVariableExpression(destructuringStmt.value) || isDottedGetExpression(destructuringStmt.value)
+            ? util.getAllDottedGetPartsAsString(destructuringStmt.value)
+            : undefined;
+        this.validateDestructuringPatternKeys(file, destructuringStmt.pattern, sourceType, sourceName);
+
+        for (const target of destructuringStmt.getTargets({ flags: SymbolTypeFlag.runtime })) {
+            //a typed target (`{ name as string }`) is checked the same as `name as string = source.name`
+            if (target.typeExpression) {
+                const declaredType = this.getNodeTypeWrapper(file, target.typeExpression, { flags: SymbolTypeFlag.runtime, data: {} });
+                const compatibilityData: TypeCompatibilityData = {};
+                if (!declaredType?.isResolvable()) {
+                    // the declared type is not resolvable... handled elsewhere
+                } else if (!declaredType.isTypeCompatible(target.valueType, compatibilityData)) {
+                    this.addMultiScopeDiagnostic({
+                        ...DiagnosticMessages.assignmentTypeMismatch(target.valueType.toString(), declaredType.toString(), compatibilityData),
+                        location: target.node.location
+                    });
+                }
+            }
+            //each target is a local variable declaration, same as `name = source.key`
+            this.detectShadowedLocalVar(file, {
+                expr: destructuringStmt,
+                name: target.name.text,
+                type: target.type,
+                nameRange: target.name.location?.range
+            });
+        }
+    }
+
+    /**
+     * Flag object pattern keys that do not exist on a known source type, the same way `source.key` would be flagged
+     */
+    private validateDestructuringPatternKeys(file: BrsFile, pattern: DestructuringPattern, sourceType: BscType, sourceName: string | undefined) {
+        if (!this.isTypeKnown(sourceType) || isDynamicType(sourceType)) {
+            return;
+        }
+        if (isObjectPatternExpression(pattern)) {
+            for (const property of pattern.properties) {
+                const keyName = property.getKeyName();
+                if (!keyName) {
+                    continue;
+                }
+                const fullName = sourceName ? `${sourceName}.${keyName}` : keyName;
+                const memberType = sourceType.getMemberType(keyName, {
+                    flags: SymbolTypeFlag.runtime,
+                    changeUnknownNodeMemberToDynamic: file.parseMode === ParseMode.BrightScript || !this.event.program.options.strictNodeMembers
+                });
+                if (!this.isTypeKnown(memberType)) {
+                    this.addMultiScopeDiagnostic({
+                        ...DiagnosticMessages.cannotFindName(keyName, fullName, sourceType.toString(), isNamespaceType(sourceType) ? 'namespace' : 'type'),
+                        location: property.tokens.key.location
+                    });
+                } else if (property.pattern) {
+                    this.validateDestructuringPatternKeys(file, property.pattern, memberType, fullName);
+                }
+            }
+        } else {
+            const itemType = isArrayType(sourceType) ? sourceType.defaultType : DynamicType.instance;
+            let index = 0;
+            for (const element of pattern.elements) {
+                if (element.pattern) {
+                    this.validateDestructuringPatternKeys(file, element.pattern, itemType, sourceName ? `${sourceName}[${index}]` : undefined);
+                }
+                index++;
+            }
+        }
+    }
+
     private validateAssignmentStatement(file: BrsFile, assignStmt: AssignmentStatement) {
         if (!assignStmt?.typeExpression) {
             // nothing to check

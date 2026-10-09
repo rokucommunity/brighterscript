@@ -435,5 +435,11 @@ export enum AstNodeKind {
     InlineInterfaceExpression = 'InlineInterfaceExpression',
     InlineInterfaceMemberExpression = 'InlineInterfaceMemberExpression',
     TypeStatement = 'TypeStatement',
-    TypedFunctionTypeExpression = 'TypedFunctionTypeExpression'
+    TypedFunctionTypeExpression = 'TypedFunctionTypeExpression',
+    DestructuringAssignmentStatement = 'DestructuringAssignmentStatement',
+    ObjectPatternExpression = 'ObjectPatternExpression',
+    ObjectPatternPropertyExpression = 'ObjectPatternPropertyExpression',
+    ArrayPatternExpression = 'ArrayPatternExpression',
+    ArrayPatternElementExpression = 'ArrayPatternElementExpression',
+    RestElementExpression = 'RestElementExpression'
 }

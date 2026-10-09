@@ -7363,6 +7363,21 @@ describe('BrsFile', () => {
             ]);
         });
 
+        it('counts destructuring targets toward the limit', () => {
+            const destructuringLines = [
+                '{ a: x, nested: { y } } = p0',
+                '[z, ...rest] = p0'
+            ];
+            //1 parameter + 248 locals + 4 destructuring targets
+            validateSource(buildFunction({ parameterCount: 1, localCount: 248, extraLines: destructuringLines }), 'source/main.bs');
+            expectZeroDiagnostics(program);
+
+            validateSource(buildFunction({ parameterCount: 1, localCount: 249, extraLines: destructuringLines }), 'source/main.bs');
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)
+            ]);
+        });
+
         it('counts parameters toward the limit', () => {
             validateSource(buildFunction({ parameterCount: 63, localCount: 190 }));
             expectZeroDiagnostics(program);
