@@ -27,6 +27,42 @@ describe('lexer', () => {
         ]);
     });
 
+    it('recognizes the `...` token', () => {
+        expectKinds('... a...b ...[1] ...{} .5...', [
+            TokenKind.DotDotDot,
+            TokenKind.Identifier,
+            TokenKind.DotDotDot,
+            TokenKind.Identifier,
+            TokenKind.DotDotDot,
+            TokenKind.LeftSquareBracket,
+            TokenKind.IntegerLiteral,
+            TokenKind.RightSquareBracket,
+            TokenKind.DotDotDot,
+            TokenKind.LeftCurlyBrace,
+            TokenKind.RightCurlyBrace,
+            TokenKind.FloatLiteral,
+            TokenKind.DotDotDot
+        ]);
+    });
+
+    it('splits more than three dots into `...` followed by `.`', () => {
+        expectKinds('.... .....', [
+            TokenKind.DotDotDot,
+            TokenKind.Dot,
+            TokenKind.DotDotDot,
+            TokenKind.Dot,
+            TokenKind.Dot
+        ]);
+    });
+
+    it('does not produce `...` when dots belong to number literals', () => {
+        expectKinds('1...2', [
+            TokenKind.FloatLiteral,
+            TokenKind.Dot,
+            TokenKind.FloatLiteral
+        ]);
+    });
+
     it('recognizes the question mark operator in various contexts', () => {
         expectKinds('? ?? ?. ?[ ?.[ ?( ?@', [
             TokenKind.Question,

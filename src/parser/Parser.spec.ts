@@ -205,6 +205,30 @@ describe('parser', () => {
         });
     });
 
+    describe('`...` token', () => {
+        //the `...` token is lexed, but the parser does not support spread/rest syntax yet
+        it('produces an unexpected token diagnostic in array literals', () => {
+            let parser = parse(`
+                sub main()
+                    x = [...a]
+                end sub
+            `, ParseMode.BrighterScript);
+            expectDiagnosticsIncludes(parser, [
+                DiagnosticMessages.unexpectedToken('...')
+            ]);
+        });
+
+        it('produces a diagnostic in function parameters', () => {
+            let parser = parse(`
+                sub main(...args)
+                end sub
+            `, ParseMode.BrighterScript);
+            expectDiagnosticsIncludes(parser, [
+                DiagnosticMessages.expectedParameterNameButFound('...')
+            ]);
+        });
+    });
+
     describe('optional chaining operator', () => {
         function getExpression<T>(text: string, options?: { matcher?: any; parseMode?: ParseMode }) {
             const parser = parse(text, options?.parseMode);
