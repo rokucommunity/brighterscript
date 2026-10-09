@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.73.6](https://github.com/rokucommunity/brighterscript/compare/0.73.5...v0.73.6) - 2026-10-09
+### Added
+ - Add `...` (DotDotDot) token to the lexer ([#1896](https://github.com/rokucommunity/brighterscript/pull/1896))
+### Changed
+ - Security enhancements ([#1854](https://github.com/rokucommunity/brighterscript/pull/1854), [#1873](https://github.com/rokucommunity/brighterscript/pull/1873), [#1875](https://github.com/rokucommunity/brighterscript/pull/1875), [#1882](https://github.com/rokucommunity/brighterscript/pull/1882))
+
+
+
 ## [0.73.5](https://github.com/rokucommunity/brighterscript/compare/0.73.4...v0.73.5) - 2026-09-15
 ### Fixed
  - Fix crash stripping sourceMappingURL comment from non-transpiled files ([#1821](https://github.com/rokucommunity/brighterscript/pull/1821))
