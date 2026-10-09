@@ -1,11 +1,11 @@
-import { isAliasStatement, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isTypecastExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isSpreadExpression, isTypecastExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, ValidateFileEvent } from '../../interfaces';
 import { TokenKind, UnreferencableBuiltins } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
-import { CallExpression, FunctionExpression, type LiteralExpression } from '../../parser/Expression';
+import { CallExpression, FunctionExpression, type AALiteralExpression, type ArrayLiteralExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement, SelectCaseStatement } from '../../parser/Statement';
 import { getExitSelectTarget, isExitSelectStatement, PrintStatement } from '../../parser/Statement';
@@ -162,6 +162,12 @@ export class BrsFileValidator {
             },
             IndexedSetStatement: (node) => {
                 this.validateNoOptionalChainingInVarSet(node, [node.obj]);
+            },
+            ArrayLiteralExpression: (node) => {
+                this.validateSpreadPosition(node);
+            },
+            AALiteralExpression: (node) => {
+                this.validateSpreadPosition(node);
             },
             ForEachStatement: (node) => {
                 //registering the for loop variable happens in the visitor for Block, since the loop variable is scoped to the loop body
@@ -1073,6 +1079,20 @@ export class BrsFileValidator {
     /**
      * Validate that there are no optional chaining operators on the left-hand-side of an assignment, indexed set, or dotted get
      */
+    private validateSpreadPosition(node: ArrayLiteralExpression | AALiteralExpression) {
+        if (util.getSpreadLiteralOwnerStatement(node)) {
+            return;
+        }
+        for (const element of node.elements) {
+            if (isSpreadExpression(element)) {
+                this.event.program.diagnostics.register({
+                    ...DiagnosticMessages.spreadOperatorNotAllowedHere(),
+                    location: element.tokens.dotDotDot.location
+                });
+            }
+        }
+    }
+
     private validateNoOptionalChainingInVarSet(parent: AstNode, children: AstNode[]) {
         const nodes = [...children, parent];
         //flag optional chaining anywhere in the left of this statement

@@ -149,6 +149,13 @@ Plugins can be used to manipulate code at any point during the program lifecycle
 print /hello world/ig
 ```
 
+## [Spread Operator](spread-operator.md)
+
+```brighterscript
+merged = [1, ...otherArray, 2]
+combined = {name: "default", ...overrides}
+```
+
 ## [Select Case Statement](select-case.md)
 ```brighterscript
 select case numericValue
