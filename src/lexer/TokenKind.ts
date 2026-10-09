@@ -168,6 +168,9 @@ export enum TokenKind {
     Continue = 'Continue',
     Typecast = 'Typecast',
     Alias = 'Alias',
+    Select = 'Select',
+    Case = 'Case',
+    EndSelect = 'EndSelect',
 
     //brighterscript source literals
     LineNumLiteral = 'LineNumLiteral',
@@ -332,7 +335,11 @@ export const Keywords: Record<string, TokenKind> = {
     const: TokenKind.Const,
     typecast: TokenKind.Typecast,
     alias: TokenKind.Alias,
-    type: TokenKind.Type
+    type: TokenKind.Type,
+    select: TokenKind.Select,
+    case: TokenKind.Case,
+    endselect: TokenKind.EndSelect,
+    'end select': TokenKind.EndSelect
 };
 //hide the constructor prototype method because it causes issues
 Keywords.constructor = undefined;
@@ -360,7 +367,8 @@ export type BlockTerminator =
     | TokenKind.EndNamespace
     | TokenKind.EndInterface
     | TokenKind.Catch
-    | TokenKind.EndTry;
+    | TokenKind.EndTry
+    | TokenKind.EndSelect;
 
 /** Set of keywords that end non-conditional compilation blocks. */
 export const BlockTerminators = [
@@ -374,7 +382,8 @@ export const BlockTerminators = [
     TokenKind.EndNamespace,
     TokenKind.EndInterface,
     TokenKind.Catch,
-    TokenKind.EndTry
+    TokenKind.EndTry,
+    TokenKind.EndSelect
 ];
 
 /** The set of operators valid for use in assignment statements. */
@@ -488,7 +497,10 @@ export const AllowedProperties = [
     TokenKind.Continue,
     TokenKind.Typecast,
     TokenKind.Alias,
-    TokenKind.Type
+    TokenKind.Type,
+    TokenKind.Select,
+    TokenKind.Case,
+    TokenKind.EndSelect
 ];
 
 /** List of TokenKind that are allowed as local var identifiers. */
@@ -526,7 +538,10 @@ export const AllowedLocalIdentifiers = [
     TokenKind.In,
     TokenKind.Typecast,
     TokenKind.Alias,
-    TokenKind.Type
+    TokenKind.Type,
+    TokenKind.Select,
+    TokenKind.Case,
+    TokenKind.EndSelect
 ];
 
 export const BrighterScriptSourceLiterals = [
