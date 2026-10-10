@@ -52,6 +52,7 @@ let options = yargs
     .option('validate', { type: 'boolean', defaultDescription: 'true', description: 'Whether to run validation during the build. Setting to false skips all validation (diagnostics), which can speed up builds when diagnostics are already surfaced elsewhere (e.g. a running language server).' })
     .option('profile', { type: 'boolean', defaultDescription: 'false', description: 'Generate a cpuprofile report during this run' })
     .option('lsp', { type: 'boolean', defaultDescription: 'false', description: 'Run brighterscript as a language server.' })
+    .option('init', { type: 'boolean', defaultDescription: 'false', description: 'Create a new bsconfig.json file with recommended defaults in the current directory. An existing bsconfig.json file will not be overwritten.' })
     .check(argv => {
         const diagnosticLevel = argv.diagnosticLevel as string;
         //if we have the diagnostic level and it's not a known value, then fail
@@ -80,6 +81,16 @@ async function main() {
         if (options.lsp) {
             const server = new LanguageServer();
             server.run();
+        } else if (options.init) {
+            const cwd = path.resolve(process.cwd(), options.cwd ?? process.cwd());
+            const configPath = util.createConfigFile(cwd);
+            if (configPath) {
+                console.log(`Created a new bsconfig.json file at`, chalk.green(configPath));
+                await finalize(0);
+            } else {
+                console.error(chalk.red(`A bsconfig.json file already exists at "${path.join(cwd, 'bsconfig.json')}". No changes were made.`));
+                await finalize(1);
+            }
         } else {
             let builder = new ProgramBuilder();
             await builder.run(options as unknown as BsConfig);
