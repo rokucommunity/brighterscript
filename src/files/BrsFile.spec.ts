@@ -7572,6 +7572,193 @@ describe('BrsFile', () => {
         });
     });
 
+    describe('function loop limit', () => {
+        const loopKinds = [
+            ['for i = 0 to 1', 'end for'],
+            ['for each item in []', 'end for'],
+            ['while false', 'end while']
+        ];
+
+        function buildSequentialLoops(count: number, indent = '') {
+            const lines = [] as string[];
+            for (let index = 0; index < count; index++) {
+                const [opening, closing] = loopKinds[index % loopKinds.length];
+                lines.push(`${indent}${opening}`, `${indent}${closing}`);
+            }
+            return lines;
+        }
+
+        function buildNestedLoops(depth: number) {
+            const lines = [] as string[];
+            for (let index = 0; index < depth; index++) {
+                lines.push(`for i${index} = 0 to 1`);
+            }
+            for (let index = 0; index < depth; index++) {
+                lines.push('end for');
+            }
+            return lines;
+        }
+
+        function buildFunction(name: string, bodyLines: string[]) {
+            return [`function ${name}()`, ...bodyLines, 'end function'].join('\n');
+        }
+
+        function validateSource(source: string, fileName = 'source/main.brs') {
+            program.setFile(fileName, source);
+            program.validate();
+        }
+
+        it('allows 127 sequential loops of mixed kinds', () => {
+            validateSource(buildFunction('main', buildSequentialLoops(127)));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags 128 sequential loops', () => {
+            validateSource(buildFunction('main', buildSequentialLoops(128)));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLoops(128, FunctionExpression.MaximumLoops)
+            ]);
+        });
+
+        it('reports the actual loop count in the message', () => {
+            validateSource(buildFunction('main', buildSequentialLoops(130)));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLoops(130, FunctionExpression.MaximumLoops)
+            ]);
+        });
+
+        it('allows 127 nested for loops', () => {
+            validateSource(buildFunction('main', buildNestedLoops(127)));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags 128 nested for loops', () => {
+            validateSource(buildFunction('main', buildNestedLoops(128)));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLoops(128, FunctionExpression.MaximumLoops)
+            ]);
+        });
+
+        it('does not count loops in a nested anonymous function toward the parent', () => {
+            validateSource(buildFunction('main', [
+                ...buildSequentialLoops(127),
+                'callback = function()',
+                ...buildSequentialLoops(127),
+                'end function'
+            ]));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags a nested anonymous function with 128 loops and reports inside it', () => {
+            validateSource(buildFunction('main', [
+                'callback = function()',
+                ...buildSequentialLoops(128),
+                'end function'
+            ]));
+            //the anonymous function body starts on line 2, so its 128th loop, a `for each`, opens on line 2 + 127 * 2
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.tooManyLoops(128, FunctionExpression.MaximumLoops),
+                location: { range: util.createRange(256, 0, 256, 8) }
+            }]);
+        });
+
+        it('allows many functions with 127 loops each', () => {
+            const functions = [] as string[];
+            for (let index = 0; index < 5; index++) {
+                functions.push(buildFunction(`func${index}`, buildSequentialLoops(127)));
+            }
+            validateSource(functions.join('\n'));
+            expectZeroDiagnostics(program);
+        });
+
+        it('reports the limit for a .bs file', () => {
+            validateSource(buildFunction('main', buildSequentialLoops(128)), 'source/main.bs');
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLoops(128, FunctionExpression.MaximumLoops)
+            ]);
+        });
+
+        it('does not count loops in a false conditional compile branch', () => {
+            validateSource(buildFunction('main', [
+                ...buildSequentialLoops(127),
+                '#if false',
+                ...buildSequentialLoops(5),
+                '#end if'
+            ]), 'source/main.bs');
+            expectZeroDiagnostics(program);
+        });
+
+        it('counts loops inside if and else blocks', () => {
+            validateSource(buildFunction('main', [
+                'if true then',
+                ...buildSequentialLoops(64),
+                'else',
+                ...buildSequentialLoops(64),
+                'end if'
+            ]));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLoops(128, FunctionExpression.MaximumLoops)
+            ]);
+        });
+
+        it('counts loops inside try and catch blocks', () => {
+            validateSource(buildFunction('main', [
+                'try',
+                ...buildSequentialLoops(64),
+                'catch error',
+                ...buildSequentialLoops(64),
+                'end try'
+            ]));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLoops(128, FunctionExpression.MaximumLoops)
+            ]);
+        });
+
+        it('counts loops inside an active conditional compile branch', () => {
+            validateSource([
+                '#const enableLoops = true',
+                buildFunction('main', [
+                    ...buildSequentialLoops(64),
+                    '#if enableLoops',
+                    ...buildSequentialLoops(64),
+                    '#end if'
+                ])
+            ].join('\n'), 'source/main.bs');
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLoops(128, FunctionExpression.MaximumLoops)
+            ]);
+        });
+
+        it('gives each class method its own limit', () => {
+            validateSource([
+                'class Widget',
+                'sub first()',
+                ...buildSequentialLoops(127),
+                'end sub',
+                'sub second()',
+                ...buildSequentialLoops(128),
+                'end sub',
+                'end class'
+            ].join('\n'), 'source/main.bs');
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLoops(128, FunctionExpression.MaximumLoops)
+            ]);
+        });
+
+        it('reports the range of the 128th loop keyword', () => {
+            validateSource(buildFunction('main', [
+                ...buildSequentialLoops(127),
+                'while false',
+                'end while'
+            ]));
+            //the first loop opens on line 1, so the 128th opens on line 1 + 127 * 2
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.tooManyLoops(128, FunctionExpression.MaximumLoops),
+                location: { range: util.createRange(255, 0, 255, 5) }
+            }]);
+        });
+    });
+
     it('handles deprecated .setPort() on rourltransfer', () => {
         program.setFile('source/main.bs', `
             function main()
