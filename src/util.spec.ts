@@ -262,7 +262,7 @@ describe('util', () => {
                 createPackage: false,
                 //loadConfigFile resolves paths relative to the config file
                 stagingDir: s`${rootDir}/dist`,
-                retainStagingDir: false,
+                retainStagingDir: true,
                 autoImportComponentScript: true,
                 sourceMap: true,
                 relativeSourceMaps: true
@@ -278,6 +278,15 @@ describe('util', () => {
                 'resolveSourceRoot', 'rootDir', 'showDiagnosticsInConsole', 'sourceRoot', 'username', 'validate', 'watch'
             ]) {
                 expect(contents).to.include(`// "${key}":`);
+            }
+        });
+
+        it('puts each description on the same line as its setting', () => {
+            const contents = fsExtra.readFileSync(util.createConfigFile(rootDir)!).toString();
+            const settingLines = contents.split('\n').filter(line => line.includes('": '));
+            expect(settingLines.length).to.be.greaterThan(0);
+            for (const line of settingLines) {
+                expect(line).to.match(/\/\* .+ \*\/$/);
             }
         });
 
