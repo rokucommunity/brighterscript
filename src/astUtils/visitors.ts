@@ -262,13 +262,16 @@ export interface WalkOptions {
      */
     skipChildren?: ChildrenSkipper;
     /**
-     * Map of conditional compilation constants, with names in lowercase. The walk carries these down the tree as the `#const` values in effect.
-     * Every full walk from the root of the tree (`walkStatements`, `walkExpressions` and `recurseChildFunctions`) starts from `ast.bsConsts`
-     * (the manifest `bs_const` values), adds each active `#const` as it reaches it, and stores the results on the AST (including `isActive`).
-     * Other walks (one that starts below the root, or skips part of the tree) compute nothing and follow the results of the last full walk.
-     * Pass your own map to resolve with different constants instead, from wherever the walk starts. Only `#const` statements the walk reaches are applied,
-     * so start from the root if every `#const` in the file must count. The walk adds each active `#const` to that map as it reaches it,
-     * so pass a copy if you need the original unchanged.
+     * The conditional compilation constants in effect as the walk moves through the tree, with names in lowercase. **Plugins should not set this.**
+     *
+     * A full walk from the root of the tree (`walkStatements`, `walkExpressions` and `recurseChildFunctions`, without `skipChildren`) fills it in itself:
+     * it starts from a copy of `ast.bsConsts` (the manifest `bs_const` values), adds each active `#const` as it reaches it in source order,
+     * and stores each `#if` result on its statement (`isConditionTrue`, `isConditionDeclared`). Every other walk leaves it unset and follows those stored results.
+     *
+     * When it is set, the walk re-resolves every `#if` and `#const` it reaches against this map and overwrites the stored results,
+     * which the rest of the program (validation, transpile, editor features) relies on until the next full walk.
+     * A walk that starts below the root also misses any `#const` above its starting node. To change the constants, set `ast.bsConsts`
+     * or insert a `#const` statement, and let the next full walk apply it.
      */
     bsConsts?: Map<string, boolean>;
 }
