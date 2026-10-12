@@ -523,25 +523,6 @@ export class Scope {
     }
 
     /**
-     * The full names of the functions in this scope that are declared in inactive conditional compile branches (namespaced functions use their dotted name).
-     * These are not callables, but they are still transpiled. The names are stored in lower case
-     */
-    public getInactiveFunctionNames(): Set<string> {
-        return this.cache.getOrAdd('inactiveFunctionNames', () => {
-            const names = new Set<string>();
-            this.enumerateBrsFiles((file) => {
-                for (let stmt of file['_cachedLookups'].inactiveFunctionStatements) {
-                    const name = stmt.getName(ParseMode.BrighterScript);
-                    if (name) {
-                        names.add(name.toLowerCase());
-                    }
-                }
-            });
-            return names;
-        });
-    }
-
-    /**
      * A dictionary of all TypeStatements in this scope. This includes namespaced types always with their full name.
      * The key is stored in lower case
      */
