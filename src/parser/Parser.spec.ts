@@ -2515,7 +2515,7 @@ describe('parser', () => {
             ]);
         });
 
-        it('has no diagnostics from false blocks', () => {
+        it('keeps the diagnostics from inactive blocks, because validation decides which branches are inactive', () => {
             let { diagnostics } = parse(`
                 sub foo()
                 #if DEBUG
@@ -2527,7 +2527,7 @@ describe('parser', () => {
                 #end if
                 end sub
             `, ParseMode.BrighterScript, { debug: false });
-            expectZeroDiagnostics(diagnostics);
+            expect(diagnostics.map(diagnostic => diagnostic.location.range.start.line)).to.include.members([3, 7]);
         });
 
         it('allows a chain with #else if to end at end of file without a trailing newline', () => {
@@ -2535,10 +2535,38 @@ describe('parser', () => {
             expectZeroDiagnostics(diagnostics);
         });
 
+        it('allows a chain with #else if and #else to end at end of file without a trailing newline', () => {
+            const { diagnostics } = parse('#if A\nx = 1\n#else if B\ny = 2\n#else\nz = 3\n#end if', ParseMode.BrighterScript, { A: true, B: false });
+            expectZeroDiagnostics(diagnostics);
+        });
+
         it('allows a chain with #elseif and #endif to end at end of file without a trailing newline', () => {
             const { diagnostics } = parse('#if A\nx = 1\n#elseif B\ny = 2\n#endif', ParseMode.BrighterScript, { A: true, B: false });
             expectZeroDiagnostics(diagnostics);
         });
+
+        it('parses a statement on the line after #end if at the top level', () => {
+            const { ast, diagnostics } = parse('#if bla\n#end if \ndoesThisStillWork()\n', ParseMode.BrighterScript, { bla: false });
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements).to.be.lengthOf(2);
+            expect(isConditionalCompileStatement(ast.statements[0])).to.be.true;
+            expect(isExpressionStatement(ast.statements[1])).to.be.true;
+        });
+
+        for (const [description, directives] of [
+            ['#if', '#if bla\n#end if '],
+            ['an #else if chain', '#if bla\n#else if foo\n#end if '],
+            ['an #else if and #else chain', '#if bla\n#else if foo\n#else\n#end if ']
+        ]) {
+            it(`parses a statement on the line after the #end if of ${description} in a function`, () => {
+                const { ast, diagnostics } = parse(`sub main()\n${directives}\ndoesThisStillWork()\nend sub\n`, ParseMode.BrighterScript, { bla: false, foo: true });
+                expectZeroDiagnostics(diagnostics);
+                const statements = (ast.statements[0] as FunctionStatement).func.body.statements;
+                expect(statements).to.be.lengthOf(2);
+                expect(isConditionalCompileStatement(statements[0])).to.be.true;
+                expect(isExpressionStatement(statements[1])).to.be.true;
+            });
+        }
 
         it('reports junk after the #end if of a chain', () => {
             const { diagnostics } = parse('#if A\nx = 1\n#else if B\ny = 2\n#end if x\n', ParseMode.BrighterScript, { A: true, B: false });
@@ -2578,10 +2606,7 @@ describe('parser', () => {
                     end sub
                     #    const spaces = false
                 `, ParseMode.BrighterScript);
-                //the alias value still parses, but is reported as an invalid #const value
-                expectDiagnostics(diagnostics, [
-                    DiagnosticMessages.invalidHashConstValue().message
-                ]);
+                expectZeroDiagnostics(diagnostics);
                 //#const test = true
                 let ccc = ast.statements[0] as ConditionalCompileConstStatement;
                 expect(isConditionalCompileConstStatement(ccc)).to.be.true;
@@ -2620,25 +2645,12 @@ describe('parser', () => {
                 ]);
             });
 
-            it('has diagnostic if the value is a #const name', () => {
-                let { diagnostics } = parse(`
-                    #const test = true
-                    #const other = test
-                    #const missing = NOPE
-                `, ParseMode.BrighterScript);
-                expectDiagnostics(diagnostics, [
-                    DiagnosticMessages.invalidHashConstValue().message,
-                    DiagnosticMessages.invalidHashConstValue().message
-                ]);
-            });
-
-            it('has diagnostic if invalid lhs', () => {
-                let { diagnostics } = parse(`
+            it('parses a value that is not true or false without a diagnostic, because the value is validated later', () => {
+                let { ast, diagnostics } = parse(`
                     #const test = 4
                 `, ParseMode.BrighterScript);
-                expectDiagnostics(diagnostics, [
-                    DiagnosticMessages.invalidHashConstValue().message
-                ]);
+                expectZeroDiagnostics(diagnostics);
+                expect(isConditionalCompileConstStatement(ast.statements[0])).to.be.true;
             });
         });
 

@@ -6,14 +6,14 @@ import { expect } from '../chai-config.spec';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { Range } from 'vscode-languageserver';
 import { ParseMode, Parser } from '../parser/Parser';
-import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile, trim, withoutUnreachableCode } from '../testHelpers.spec';
 import { standardizePath as s } from '../util';
 import * as fsExtra from 'fs-extra';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { doesNotThrow } from 'assert';
 import type { ClassStatement, MethodStatement } from '../parser/Statement';
 import { tempDir, rootDir, outDir } from '../testHelpers.spec';
-import { isClassStatement } from '../astUtils/reflection';
+import { isBrsFile, isClassStatement } from '../astUtils/reflection';
 import { WalkMode } from '../astUtils/visitors';
 
 let sinon = sinonImport.createSandbox();
@@ -2717,6 +2717,22 @@ describe('BrsFile BrighterScript classes', () => {
             ]);
         });
 
+        it('flags a constructor declared inside an inactive conditional compile block', () => {
+            program.setFile('source/main.bs', `
+                #const DEBUG = false
+                class Animal
+                    #if DEBUG
+                        sub new(name)
+                        end sub
+                    #end if
+                end class
+            `);
+            program.validate();
+            expectDiagnostics(withoutUnreachableCode(program), [
+                DiagnosticMessages.classConstructorNotAllowedInConditionalCompile()
+            ]);
+        });
+
         it('does not produce diagnostics for conditional members used within the class', () => {
             program.setFile('source/main.bs', `
                 #const DEBUG = true
@@ -2734,6 +2750,266 @@ describe('BrsFile BrighterScript classes', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
+        });
+
+        describe('members', () => {
+            it('does not see a method that is only declared in an inactive branch', () => {
+                program.setFile('source/main.bs', `
+                    #const DEBUG = true
+                    class Foo
+                        #if DEBUG
+                            function onlyDebug() as string
+                                return "debug"
+                            end function
+                        #else
+                            function onlyRelease() as string
+                                return "release"
+                            end function
+                        #end if
+                    end class
+                    sub main()
+                        f = new Foo()
+                        print f.onlyDebug()
+                        print f.onlyRelease()
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(withoutUnreachableCode(program), [
+                    DiagnosticMessages.cannotFindFunction('onlyRelease', 'Foo.onlyRelease', 'Foo')
+                ]);
+            });
+
+            it('sees the method of the other branch when the constant changes', () => {
+                program.setFile('source/main.bs', `
+                    #const DEBUG = false
+                    class Foo
+                        #if DEBUG
+                            function onlyDebug() as string
+                                return "debug"
+                            end function
+                        #else
+                            function onlyRelease() as string
+                                return "release"
+                            end function
+                        #end if
+                    end class
+                    sub main()
+                        f = new Foo()
+                        print f.onlyDebug()
+                        print f.onlyRelease()
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(withoutUnreachableCode(program), [
+                    DiagnosticMessages.cannotFindFunction('onlyDebug', 'Foo.onlyDebug', 'Foo')
+                ]);
+            });
+
+            it('uses the type of the field in the active branch', () => {
+                program.setFile('source/main.bs', `
+                    #const DEBUG = true
+                    class Foo
+                        #if DEBUG
+                            name as string
+                        #else
+                            name as integer
+                        #end if
+                    end class
+                    sub main()
+                        f = new Foo()
+                        text as string = f.name
+                        number as integer = f.name
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(withoutUnreachableCode(program), [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
+            });
+
+            it('does not report a missing override keyword for a method the ancestor only declares in an inactive branch', () => {
+                program.setFile('source/main.bs', `
+                    #const DEBUG = true
+                    class Base
+                        #if DEBUG
+                            function debugOnly() as string
+                                return "debug"
+                            end function
+                        #else
+                            function releaseOnly() as string
+                                return "release"
+                            end function
+                        #end if
+                    end class
+                    class Child extends Base
+                        function releaseOnly() as string
+                            return "child"
+                        end function
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(withoutUnreachableCode(program));
+            });
+
+            it('reports a missing override keyword for a method the ancestor declares in an active branch', () => {
+                program.setFile('source/main.bs', `
+                    #const DEBUG = true
+                    class Base
+                        #if DEBUG
+                            function hello() as string
+                                return "base"
+                            end function
+                        #end if
+                    end class
+                    class Child extends Base
+                        function hello() as string
+                            return "child"
+                        end function
+                    end class
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.missingOverrideKeyword('Base')
+                ]);
+            });
+
+            it('validates overrides and field collisions of members inside an active branch', () => {
+                program.setFile('source/main.bs', `
+                    #const DEBUG = true
+                    class Base
+                        function hello() as string
+                            return "base"
+                        end function
+                        count as string
+                        function greet() as string
+                            return "base"
+                        end function
+                    end class
+                    class Child extends Base
+                        #if DEBUG
+                            function hello() as string
+                                return "child"
+                            end function
+                            count as integer
+                            private override function greet() as string
+                                return "child"
+                            end function
+                            tag = 1
+                            tag = 2
+                        #end if
+                    end class
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.missingOverrideKeyword('Base'),
+                    DiagnosticMessages.childFieldTypeNotAssignableToBaseProperty('Child', 'Base', 'count', 'integer', 'string'),
+                    DiagnosticMessages.mismatchedOverriddenMemberVisibility('Child', 'greet', 'private', 'public', 'Base'),
+                    DiagnosticMessages.duplicateIdentifier('tag')
+                ]);
+            });
+
+            it('does not validate members inside an inactive branch', () => {
+                program.setFile('source/main.bs', `
+                    #const DEBUG = false
+                    class Base
+                        function hello() as string
+                            return "base"
+                        end function
+                        count as string
+                    end class
+                    class Child extends Base
+                        #if DEBUG
+                            function hello() as string
+                                return "child"
+                            end function
+                            count as integer
+                            tag = 1
+                            tag = 2
+                        #end if
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(withoutUnreachableCode(program));
+            });
+
+            it('lets an active member win over an inactive member with the same name', () => {
+                program.setFile('source/main.bs', `
+                    #const DEBUG = true
+                    class Base
+                        name as string
+                    end class
+                    class Child extends Base
+                        #if DEBUG
+                            name as string
+                        #else
+                            name as integer
+                        #end if
+                    end class
+                `);
+                program.validate();
+                expectZeroDiagnostics(withoutUnreachableCode(program));
+            });
+
+            it('keeps inactive members in the transpiled class', async () => {
+                program.setFile('source/main.bs', `
+                    #const DEBUG = true
+                    class Foo
+                        #if DEBUG
+                            function onlyDebug() as string
+                                return "debug"
+                            end function
+                        #else
+                            function onlyRelease() as string
+                                return "release"
+                            end function
+                        #end if
+                    end class
+                `);
+                program.validate();
+                const { code } = await program.getTranspiledFileContents(s`${rootDir}/source/main.bs`);
+                expect(code).to.include('__Foo_method_onlyDebug');
+                expect(code).to.include('__Foo_method_onlyRelease');
+            });
+
+            it('follows a plugin that injects a #const after parsing', () => {
+                let debug = true;
+                program.plugins.add({
+                    name: 'inject-hash-const',
+                    beforeValidateFile: (event) => {
+                        if (isBrsFile(event.file)) {
+                            const injected = Parser.parse(`#const DEBUG = ${debug}\n`).ast.statements[0];
+                            event.file.ast.statements.unshift(injected);
+                        }
+                    }
+                });
+                const source = `
+                    class Foo
+                        #if DEBUG
+                            function onlyDebug() as string
+                                return "debug"
+                            end function
+                        #else
+                            function onlyRelease() as string
+                                return "release"
+                            end function
+                        #end if
+                    end class
+                    sub main()
+                        f = new Foo()
+                        print f.onlyDebug()
+                    end sub
+                `;
+                program.setFile('source/main.bs', source);
+                program.validate();
+                expectZeroDiagnostics(withoutUnreachableCode(program));
+
+                debug = false;
+                program.setFile('source/main.bs', source + ' ');
+                program.validate();
+                expectDiagnostics(withoutUnreachableCode(program), [
+                    DiagnosticMessages.cannotFindFunction('onlyDebug', 'Foo.onlyDebug', 'Foo')
+                ]);
+            });
         });
     });
 });

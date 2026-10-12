@@ -7,6 +7,7 @@ import type { Program } from './Program';
 import type { NamespaceStatement, FunctionStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement, ConstStatement, TypeStatement } from './parser/Statement';
 import { ParseMode } from './parser/Parser';
 import { util } from './util';
+import { CachedLookups } from './astUtils/CachedLookups';
 import { Cache } from './Cache';
 import type { BrsFile } from './files/BrsFile';
 import type { Identifier } from './lexer/Token';
@@ -182,10 +183,10 @@ export class Scope {
         const fullNameLower = util.getFullyQualifiedClassName(itemName, containingNamespace)?.toLowerCase();
         const itemNameLower = itemName?.toLowerCase();
         if (fullNameLower) {
-            result = this.findActiveWinsFileLink<T>(cachedMapName, fullNameLower);
+            result = this.findTopCandidateFileLink<T>(cachedMapName, fullNameLower);
         }
         if (itemNameLower && fullNameLower !== itemNameLower) {
-            result = this.preferActiveGlobalLink(result, () => this.findActiveWinsFileLink<T>(cachedMapName, itemNameLower));
+            result = this.preferActiveGlobalLink(result, () => this.findTopCandidateFileLink<T>(cachedMapName, itemNameLower));
         }
         return result;
     }
@@ -193,14 +194,13 @@ export class Scope {
     /**
      * Find the first file with an active declaration of the name, falling back to the first inactive declaration
      */
-    private findActiveWinsFileLink<T extends Statement>(cachedMapName: string, nameLower: string): FileLink<T> {
+    private findTopCandidateFileLink<T extends Statement>(cachedMapName: string, nameLower: string): FileLink<T> {
         let activeLink: FileLink<T>;
         let inactiveLink: FileLink<T>;
         this.enumerateBrsFilesWithBreak((file) => {
-            const lookups = file['_cachedLookups'];
-            const stmt: T = lookups[cachedMapName].get(nameLower);
+            const stmt: T = file['_cachedLookups'][cachedMapName].get(nameLower);
             if (stmt) {
-                if (lookups.isActiveDeclaration(stmt)) {
+                if (stmt.isActive !== false) {
                     activeLink = { item: stmt, file: file };
                     return true;
                 }
@@ -211,20 +211,16 @@ export class Scope {
         return activeLink ?? inactiveLink;
     }
 
-    private isActiveFileLink(link: FileLink<Statement>): boolean {
-        return link.file['_cachedLookups'].isActiveDeclaration(link.item);
-    }
-
     /**
      * Choose between a namespace-qualified match and the global match of the same name.
      * The qualified match wins unless it is inactive and the global match is active, so an inactive namespaced declaration never hides an active global one.
      */
     private preferActiveGlobalLink<T extends Statement>(qualifiedLink: FileLink<T>, getGlobalLink: () => FileLink<T>): FileLink<T> {
-        if (qualifiedLink && this.isActiveFileLink(qualifiedLink)) {
+        if (qualifiedLink && qualifiedLink.item.isActive !== false) {
             return qualifiedLink;
         }
         const globalLink = getGlobalLink();
-        if (!qualifiedLink || (globalLink && this.isActiveFileLink(globalLink))) {
+        if (!qualifiedLink || (globalLink && globalLink.item.isActive !== false)) {
             return globalLink;
         }
         return qualifiedLink;
@@ -454,7 +450,7 @@ export class Scope {
                         const className = cls.getName(ParseMode.BrighterScript);
                         //only track classes with a defined name (i.e. exclude nameless malformed classes)
                         if (className) {
-                            util.setActiveDeclarationWins(map, activeKeys, className.toLowerCase(), { item: cls, file: file }, file['_cachedLookups'].isActiveDeclaration(cls));
+                            CachedLookups.setTopCandidate(map, activeKeys, className.toLowerCase(), { item: cls, file: file }, cls.isActive !== false);
                         }
                     }
                 }
@@ -477,7 +473,7 @@ export class Scope {
                         const ifaceName = iface.getName(ParseMode.BrighterScript);
                         //only track classes with a defined name (i.e. exclude nameless malformed classes)
                         if (ifaceName) {
-                            util.setActiveDeclarationWins(map, activeKeys, ifaceName.toLowerCase(), { item: iface, file: file }, file['_cachedLookups'].isActiveDeclaration(iface));
+                            CachedLookups.setTopCandidate(map, activeKeys, ifaceName.toLowerCase(), { item: iface, file: file }, iface.isActive !== false);
                         }
                     }
                 }
@@ -498,7 +494,7 @@ export class Scope {
                 for (let enumStmt of file['_cachedLookups'].enumStatements) {
                     //only track enums with a defined name (i.e. exclude nameless malformed enums)
                     if (enumStmt.fullName) {
-                        util.setActiveDeclarationWins(map, activeKeys, enumStmt.fullName.toLowerCase(), { item: enumStmt, file: file }, file['_cachedLookups'].isActiveDeclaration(enumStmt));
+                        CachedLookups.setTopCandidate(map, activeKeys, enumStmt.fullName.toLowerCase(), { item: enumStmt, file: file }, enumStmt.isActive !== false);
                     }
                 }
             });
@@ -518,7 +514,7 @@ export class Scope {
                 for (let stmt of file['_cachedLookups'].constStatements) {
                     //only track enums with a defined name (i.e. exclude nameless malformed enums)
                     if (stmt.fullName) {
-                        util.setActiveDeclarationWins(map, activeKeys, stmt.fullName.toLowerCase(), { item: stmt, file: file }, file['_cachedLookups'].isActiveDeclaration(stmt));
+                        CachedLookups.setTopCandidate(map, activeKeys, stmt.fullName.toLowerCase(), { item: stmt, file: file }, stmt.isActive !== false);
                     }
                 }
             });

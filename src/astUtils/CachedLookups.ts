@@ -1,9 +1,9 @@
 import type { AALiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, VariableExpression } from '../parser/Expression';
-import type { AliasStatement, AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConstStatement, EnumStatement, FunctionStatement, ImportStatement, InterfaceStatement, LibraryStatement, NamespaceStatement, TypecastStatement } from '../parser/Statement';
+import type { AliasStatement, AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConditionalCompileStatement, ConstStatement, EnumStatement, FunctionStatement, ImportStatement, InterfaceStatement, LibraryStatement, NamespaceStatement, TypecastStatement } from '../parser/Statement';
 import { Cache } from '../Cache';
 import { InternalWalkMode, WalkMode, createVisitor } from './visitors';
-import type { AstNode, Expression } from '../parser/AstNode';
-import { isAAMemberExpression, isBinaryExpression, isCallExpression, isConditionalCompileStatement, isDottedGetExpression, isFunctionExpression, isGroupingExpression, isIndexedGetExpression, isLiteralExpression, isMethodStatement, isNamespaceStatement, isNewExpression, isVariableExpression } from './reflection';
+import type { Expression } from '../parser/AstNode';
+import { isAAMemberExpression, isBinaryExpression, isCallExpression, isDottedGetExpression, isFunctionExpression, isGroupingExpression, isIndexedGetExpression, isLiteralExpression, isMethodStatement, isNamespaceStatement, isNewExpression, isVariableExpression } from './reflection';
 import type { Parser } from '../parser/Parser';
 import { ParseMode } from '../parser/Parser';
 import type { Token } from '../lexer/Token';
@@ -78,6 +78,13 @@ export class CachedLookups {
         return this.getFromCache<Set<Expression>>('expressions');
     }
 
+    /**
+     * Every `#if` statement in the file, including those in inactive branches
+     */
+    get conditionalCompileStatements(): ConditionalCompileStatement[] {
+        return this.getFromCache<Array<ConditionalCompileStatement>>('conditionalCompileStatements');
+    }
+
     get classStatements(): ClassStatement[] {
         return this.getFromCache<Array<ClassStatement>>('classStatements');
     }
@@ -87,7 +94,7 @@ export class CachedLookups {
             const activeKeys = new Set<string>();
             const classMap = new Map<string, ClassStatement>();
             for (const stmt of this.classStatements) {
-                util.setActiveDeclarationWins(classMap, activeKeys, stmt.getName(ParseMode.BrighterScript).toLowerCase(), stmt, this.isActiveDeclaration(stmt));
+                CachedLookups.setTopCandidate(classMap, activeKeys, stmt.getName(ParseMode.BrighterScript).toLowerCase(), stmt, stmt.isActive !== false);
             }
             return classMap;
         });
@@ -110,7 +117,7 @@ export class CachedLookups {
             const activeKeys = new Set<string>();
             const enumMap = new Map<string, EnumStatement>();
             for (const stmt of this.enumStatements) {
-                util.setActiveDeclarationWins(enumMap, activeKeys, stmt.fullName.toLowerCase(), stmt, this.isActiveDeclaration(stmt));
+                CachedLookups.setTopCandidate(enumMap, activeKeys, stmt.fullName.toLowerCase(), stmt, stmt.isActive !== false);
             }
             return enumMap;
         });
@@ -125,7 +132,7 @@ export class CachedLookups {
             const activeKeys = new Set<string>();
             const constMap = new Map<string, ConstStatement>();
             for (const stmt of this.constStatements) {
-                util.setActiveDeclarationWins(constMap, activeKeys, stmt.fullName.toLowerCase(), stmt, this.isActiveDeclaration(stmt));
+                CachedLookups.setTopCandidate(constMap, activeKeys, stmt.fullName.toLowerCase(), stmt, stmt.isActive !== false);
             }
             return constMap;
         });
@@ -140,7 +147,7 @@ export class CachedLookups {
             const activeKeys = new Set<string>();
             const ifaceMap = new Map<string, InterfaceStatement>();
             for (const stmt of this.interfaceStatements) {
-                util.setActiveDeclarationWins(ifaceMap, activeKeys, stmt.fullName.toLowerCase(), stmt, this.isActiveDeclaration(stmt));
+                CachedLookups.setTopCandidate(ifaceMap, activeKeys, stmt.fullName.toLowerCase(), stmt, stmt.isActive !== false);
             }
             return ifaceMap;
         });
@@ -150,20 +157,23 @@ export class CachedLookups {
         return this.getFromCache<Record<string, string>>('propertyHints');
     }
 
-
     /**
-     * Is this class, interface, enum, const or function declared outside every inactive conditional compile branch?
-     * Inactive declarations stay in the lookups because they are still transpiled, but they never shadow an active declaration
-     * and are not checked for duplicates or circular references.
+     * Add a candidate to a name map where an active candidate always replaces an inactive one and is never replaced by an inactive one.
+     * Among candidates of the same activity the last one wins.
+     * `activeKeys` tracks the keys that already hold an active candidate and is updated as active candidates are added.
      */
-    public isActiveDeclaration(statement: AstNode): boolean {
-        return !this.getFromCache<Set<AstNode>>('inactiveDeclarations').has(statement);
+    public static setTopCandidate<T>(map: Map<string, T>, activeKeys: Set<string>, key: string, value: T, isActive: boolean) {
+        if (isActive) {
+            activeKeys.add(key);
+            map.set(key, value);
+        } else if (!activeKeys.has(key)) {
+            map.set(key, value);
+        }
     }
 
     invalidate() {
         this.cache.clear();
     }
-
 
     private getFromCache<T>(cacheKey: string): T {
         if (!this.cache.has(cacheKey)) {
@@ -175,7 +185,10 @@ export class CachedLookups {
         return this.cache.get(cacheKey);
     }
 
-    private rehydrate() {
+    /**
+     * Walk the file and rebuild every lookup
+     */
+    public rehydrate() {
         const expressions = new Set<Expression>();
         const classStatements: ClassStatement[] = [];
         const namespaceStatements: NamespaceStatement[] = [];
@@ -187,7 +200,6 @@ export class CachedLookups {
         const importStatements: ImportStatement[] = [];
         const typecastStatements: TypecastStatement[] = [];
         const aliasStatements: AliasStatement[] = [];
-        const functionStatements: FunctionStatement[] = [];
         const functionExpressions: FunctionExpression[] = [];
 
         const augmentedAssignmentStatements: AugmentedAssignmentStatement[] = [];
@@ -212,25 +224,8 @@ export class CachedLookups {
         };
 
         //inactive branches are walked and still transpiled, so their declarations stay in the lookups. Callables are active-only.
-        const isNodeActive = (node: AstNode) => {
-            let child = node;
-            let ancestor = node.parent;
-            while (ancestor) {
-                if (isConditionalCompileStatement(ancestor) && !ancestor.isBranchActive(child)) {
-                    return false;
-                }
-                child = ancestor;
-                ancestor = ancestor.parent;
-            }
-            return true;
-        };
-
-        const inactiveDeclarations = new Set<AstNode>();
-        const trackIfInactive = (node: AstNode) => {
-            if (!isNodeActive(node)) {
-                inactiveDeclarations.add(node);
-            }
-        };
+        const conditionalCompileStatements: ConditionalCompileStatement[] = [];
+        const functionStatements: FunctionStatement[] = [];
 
         const excludedExpressions = new Set<Expression>();
 
@@ -299,11 +294,12 @@ export class CachedLookups {
             },
             ClassStatement: s => {
                 classStatements.push(s);
-                trackIfInactive(s);
             },
             InterfaceStatement: s => {
                 interfaceStatements.push(s);
-                trackIfInactive(s);
+            },
+            ConditionalCompileStatement: s => {
+                conditionalCompileStatements.push(s);
             },
             FieldStatement: s => {
                 if (s.initialValue) {
@@ -314,10 +310,8 @@ export class CachedLookups {
                 namespaceStatements.push(s);
             },
             FunctionStatement: s => {
-                if (isNodeActive(s)) {
+                if (s.isActive !== false) {
                     functionStatements.push(s);
-                } else {
-                    inactiveDeclarations.add(s);
                 }
             },
             ImportStatement: s => {
@@ -373,11 +367,9 @@ export class CachedLookups {
             },
             EnumStatement: e => {
                 enumStatements.push(e);
-                trackIfInactive(e);
             },
             ConstStatement: s => {
                 constStatements.push(s);
-                trackIfInactive(s);
             },
             UnaryExpression: e => {
                 expressions.add(e);
@@ -397,7 +389,8 @@ export class CachedLookups {
         });
 
         this.cache.set('expressions', expressions);
-        this.cache.set('inactiveDeclarations', inactiveDeclarations);
+        this.cache.set('functionStatements', functionStatements);
+        this.cache.set('conditionalCompileStatements', conditionalCompileStatements);
         this.cache.set('classStatements', classStatements);
         this.cache.set('namespaceStatements', namespaceStatements);
         this.cache.set('enumStatements', enumStatements);
@@ -408,7 +401,6 @@ export class CachedLookups {
         this.cache.set('importStatements', importStatements);
         this.cache.set('typecastStatements', typecastStatements);
         this.cache.set('aliasStatements', aliasStatements);
-        this.cache.set('functionStatements', functionStatements);
         this.cache.set('functionExpressions', functionExpressions);
         this.cache.set('propertyHints', propertyHints);
         this.cache.set('augmentedAssignmentStatements', augmentedAssignmentStatements);

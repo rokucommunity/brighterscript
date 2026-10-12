@@ -73,6 +73,34 @@ describe('HoverProcessor', () => {
             ).to.eql([fence('activeVar as integer')]);
         });
 
+        it('shows the member of the active branch and not a member that only an inactive branch declares', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                #const DEBUG = true
+                class Foo
+                    #if DEBUG
+                        name as string
+                    #else
+                        name as integer
+                        releaseOnly as integer
+                    #end if
+                end class
+                sub main()
+                    f = new Foo()
+                    print f.name
+                    print f.releaseOnly
+                end sub
+            `);
+            program.validate();
+            //print f.na|me
+            expect(
+                program.getHover(file.srcPath, util.createPosition(12, 30))[0]?.contents
+            ).to.eql([fence('Foo.name as string')]);
+            //print f.release|Only
+            expect(
+                program.getHover(file.srcPath, util.createPosition(13, 34))[0]?.contents
+            ).to.eql([fence('Foo.releaseOnly as invalid')]);
+        });
+
         it('works for param types', () => {
             const file = program.setFile('source/main.brs', `
                 sub DoSomething(name as string)

@@ -5,11 +5,12 @@ import { expect } from '../chai-config.spec';
 import * as sinon from 'sinon';
 import { Program } from '../Program';
 import type { BrsFile } from '../files/BrsFile';
-import type { FunctionStatement } from '../parser/Statement';
+import type { ConditionalCompileStatement, FieldStatement, FunctionStatement } from '../parser/Statement';
 import { PrintStatement, Block, ReturnStatement, ExpressionStatement } from '../parser/Statement';
 import { TokenKind } from '../lexer/TokenKind';
+import type { WalkOptions } from './visitors';
 import { ChildrenSkipper, createVisitor, InternalWalkMode, walkArray, WalkMode, walkStatements } from './visitors';
-import { isBlock, isFunctionExpression, isLiteralExpression, isPrintStatement } from './reflection';
+import { isBlock, isConditionalCompileStatement, isFieldStatement, isFunctionExpression, isFunctionStatement, isLiteralExpression, isPrintStatement } from './reflection';
 import { createCall, createIntegerLiteral, createToken, createVariableExpression } from './creators';
 import { createStackedVisitor } from './stackedVisitor';
 import { Editor } from './Editor';
@@ -1368,14 +1369,13 @@ describe('astUtils visitors', () => {
             expect(walkedLiterals).to.eql(['3', '4']);
         });
 
-        it('can set bsConst in walk', () => {
+        it('uses ast.bsConsts at the next full walk', () => {
             const { ast } = program.setFile<BrsFile>('source/main.brs', `
-                #if DEBUG
+                #if FEATURE
                 sub main()
                 end sub
                 #end if
             `);
-            const bsConsts = new Map<string, boolean>();
             let foundMainFunc = false;
             const visitor = createVisitor({
                 FunctionStatement: (func) => {
@@ -1383,17 +1383,15 @@ describe('astUtils visitors', () => {
                 }
             });
             ast.walk(visitor, {
-                walkMode: WalkMode.visitStatements,
-                bsConsts: bsConsts
+                walkMode: WalkMode.visitStatementsRecursive
             });
             // did not walk false block
             expect(foundMainFunc).to.be.false;
-            bsConsts.set('debug', true);
+            ast.bsConsts = new Map([['feature', true]]);
             ast.walk(visitor, {
-                walkMode: WalkMode.visitStatements,
-                bsConsts: bsConsts
+                walkMode: WalkMode.visitStatementsRecursive
             });
-            // debug is true, so it did walk block
+            // feature is true, so it did walk block
             expect(foundMainFunc).to.be.true;
         });
 
@@ -1404,7 +1402,6 @@ describe('astUtils visitors', () => {
                 end sub
                 #end if
             `);
-            const bsConsts = new Map<string, boolean>();
             let foundMainFunc = false;
             const visitor = createVisitor({
                 FunctionStatement: (func) => {
@@ -1412,15 +1409,13 @@ describe('astUtils visitors', () => {
                 }
             });
             ast.walk(visitor, {
-                walkMode: WalkMode.visitStatements,
-                bsConsts: bsConsts
+                walkMode: WalkMode.visitStatements
             });
             // did not walk false block
             expect(foundMainFunc).to.be.false;
             ast.walk(visitor, {
                 // eslint-disable-next-line no-bitwise
-                walkMode: WalkMode.visitStatements | InternalWalkMode.visitFalseConditionalCompilationBlocks,
-                bsConsts: bsConsts
+                walkMode: WalkMode.visitStatements | InternalWalkMode.visitFalseConditionalCompilationBlocks
             });
             // did walk false block
             expect(foundMainFunc).to.be.true;
@@ -1428,8 +1423,8 @@ describe('astUtils visitors', () => {
 
         it('will correctly walk `not condition` cc blocks', () => {
             const { ast } = program.setFile<BrsFile>('source/main.brs', `
-                #const DEBUG = false
-                #if not DEBUG
+                #const LOGGING = false
+                #if not LOGGING
                 sub notDebug()
                 end sub
                 #end if
@@ -1438,7 +1433,6 @@ describe('astUtils visitors', () => {
                 end sub
                 #end if
             `);
-            const bsConsts = new Map<string, boolean>();
             let functionsFound = new Set<string>();
             const visitor = createVisitor({
                 FunctionStatement: (func) => {
@@ -1446,15 +1440,14 @@ describe('astUtils visitors', () => {
                 }
             });
             ast.walk(visitor, {
-                walkMode: WalkMode.visitStatements,
-                bsConsts: bsConsts
+                walkMode: WalkMode.visitStatements
             });
             // did walk 'not' block
             expect(functionsFound.has('notDebug')).to.be.true;
             expect(functionsFound.has('notFalse')).to.be.true;
         });
 
-        it('evaluates literals and `not` correctly when explicit bsConsts are passed', () => {
+        it('evaluates literals and `not` correctly', () => {
             const { ast } = program.setFile<BrsFile>('source/main.brs', `
                 #if true
                 sub ifTrue()
@@ -1475,13 +1468,12 @@ describe('astUtils visitors', () => {
                     functionsFound.add(func.getName(ParseMode.BrighterScript));
                 }
             }), {
-                walkMode: WalkMode.visitStatements,
-                bsConsts: new Map<string, boolean>()
+                walkMode: WalkMode.visitStatements
             });
             expect([...functionsFound]).to.eql(['ifTrue', 'ifNotFalse']);
         });
 
-        it('uses the file-level #const values when no explicit bsConsts are passed', () => {
+        it('uses the file-level #const values', () => {
             const { ast } = program.setFile<BrsFile>('source/main.brs', `
                 #const DEBUG = true
                 #if DEBUG
@@ -1501,6 +1493,575 @@ describe('astUtils visitors', () => {
                 walkMode: WalkMode.visitStatements
             });
             expect([...functionsFound]).to.eql(['active']);
+        });
+
+        describe('conditional compile evaluation per walk', () => {
+            function collectFunctionNames(ast: AstNode, options: WalkOptions) {
+                const names: string[] = [];
+                ast.walk(createVisitor({
+                    FunctionStatement: (func) => {
+                        names.push(func.getName(ParseMode.BrighterScript));
+                    }
+                }), options);
+                return names;
+            }
+
+            function revalidate(file: BrsFile) {
+                file.isValidated = false;
+                program.validate();
+            }
+
+            it('uses different branches for two full walks with different ast.bsConsts', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                    #if FEATURE
+                    sub debugOnly()
+                    end sub
+                    #else
+                    sub releaseOnly()
+                    end sub
+                    #end if
+                `);
+                ast.bsConsts = new Map([['feature', true]]);
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatementsRecursive })).to.eql(['debugOnly']);
+                ast.bsConsts = new Map([['feature', false]]);
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatementsRecursive })).to.eql(['releaseOnly']);
+            });
+
+            it('applies an edit to a conditional compile statement at the next validate', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    #if FEATURE
+                    sub debugOnly()
+                    end sub
+                    #else
+                    sub releaseOnly()
+                    end sub
+                    #end if
+                `);
+                const ast = file.ast;
+                const statement = ast.findChild<ConditionalCompileStatement>(isConditionalCompileStatement);
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements })).to.eql(['releaseOnly']);
+                (statement.tokens as any).condition = createToken(TokenKind.True, 'true');
+                revalidate(file);
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements })).to.eql(['debugOnly']);
+                (statement.tokens as any).not = createToken(TokenKind.Not, 'not');
+                revalidate(file);
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements })).to.eql(['releaseOnly']);
+            });
+
+            function createHashConst(name: string, value: boolean) {
+                return Parser.parse(`#const ${name} = ${value}\n`).ast.statements[0];
+            }
+
+            it('uses a #const injected into the AST on the next full walk', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    #if FEATURE
+                    sub debugOnly()
+                    end sub
+                    #else
+                    sub releaseOnly()
+                    end sub
+                    #end if
+                `);
+                program.validate();
+                const ast = file.ast;
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatementsRecursive })).to.eql(['releaseOnly']);
+                ast.statements.unshift(createHashConst('FEATURE', true));
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatementsRecursive })).to.eql(['debugOnly']);
+                ast.statements[0] = createHashConst('FEATURE', false);
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatementsRecursive })).to.eql(['releaseOnly']);
+            });
+
+            it('keeps an injected #const across a validate of a file that did not change', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    #if FEATURE
+                    sub debugOnly()
+                    end sub
+                    #end if
+                `);
+                program.validate();
+                file.ast.statements.unshift(createHashConst('FEATURE', true));
+                file.ast.link();
+                program.validate();
+                expect(collectFunctionNames(file.ast, { walkMode: WalkMode.visitStatements })).to.eql(['debugOnly']);
+            });
+
+            it('resolves with constants passed in the walk options, even in a partial walk, and adds each active #const to them', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                    #const LATE = true
+                    #if FEATURE
+                    sub debugOnly()
+                    end sub
+                    #else
+                    sub releaseOnly()
+                    end sub
+                    #end if
+                `);
+                const bsConsts = new Map([['feature', true]]);
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements, bsConsts: bsConsts })).to.eql(['debugOnly']);
+                expect([...bsConsts]).to.eql([['feature', true], ['late', true]]);
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements, bsConsts: new Map([['feature', false]]) })).to.eql(['releaseOnly']);
+            });
+
+            it('resolves again when the same options object is used for another full walk', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                    #if FEATURE
+                    sub debugOnly()
+                    end sub
+                    #else
+                    sub releaseOnly()
+                    end sub
+                    #end if
+                `);
+                const options: WalkOptions = { walkMode: WalkMode.visitStatementsRecursive };
+                ast.bsConsts = new Map([['feature', true]]);
+                expect(collectFunctionNames(ast, options)).to.eql(['debugOnly']);
+                ast.bsConsts = new Map([['feature', false]]);
+                expect(collectFunctionNames(ast, options)).to.eql(['releaseOnly']);
+            });
+
+            it('does not walk a literal #if true that is nested inside an inactive branch', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                    #if false
+                        #if true
+                        sub nested()
+                        end sub
+                        #end if
+                    #end if
+                    sub other()
+                    end sub
+                `);
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements })).to.eql(['other']);
+            });
+
+            it('does not add anything to the walk options', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                    #if true
+                    sub a()
+                    end sub
+                    #end if
+                `);
+                const options: WalkOptions = { walkMode: WalkMode.visitStatementsRecursive };
+                collectFunctionNames(ast, options);
+                expect(Object.keys(options)).to.eql(['walkMode']);
+            });
+
+            it('walks the active branches of every statement a walk meets', () => {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    #if true
+                    sub a()
+                    end sub
+                    #end if
+                    #if false
+                    #else
+                    sub b()
+                    end sub
+                    #end if
+                    sub c()
+                        #if true
+                        print 1
+                        #end if
+                    end sub
+                `);
+                expect(collectFunctionNames(file.ast, { walkMode: WalkMode.visitStatementsRecursive })).to.eql(['a', 'b', 'c']);
+            });
+
+            it('applies a #const declared inside a function to a later #if, even in a walk that does not step into functions', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                    sub a()
+                        #const LATE = true
+                    end sub
+                    #if LATE
+                    sub b()
+                    end sub
+                    #end if
+                `);
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements })).to.eql(['a', 'b']);
+                ast.bsConsts.set('other', true);
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements })).to.eql(['a', 'b']);
+            });
+
+            it('sets isActive on the nodes of a branch that a full walk does not visit', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                    #if FEATURE
+                    sub a()
+                    end sub
+                    #end if
+                `);
+                // eslint-disable-next-line no-bitwise
+                const func = ast.findChild<FunctionStatement>(isFunctionStatement, { walkMode: WalkMode.visitAllRecursive | InternalWalkMode.visitFalseConditionalCompilationBlocks });
+                expect(func.isActive).to.be.false;
+                ast.bsConsts = new Map([['feature', true]]);
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatementsRecursive })).to.eql(['a']);
+                expect(func.isActive).to.be.true;
+                ast.bsConsts = new Map([['feature', false]]);
+                expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatementsRecursive })).to.eql([]);
+                expect(func.isActive).to.be.false;
+            });
+
+            it('does not evaluate anything when walking every branch', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                    #if false
+                    sub a()
+                    end sub
+                    #end if
+                `);
+                // eslint-disable-next-line no-bitwise
+                const options: WalkOptions = { walkMode: WalkMode.visitStatements | InternalWalkMode.visitFalseConditionalCompilationBlocks };
+                expect(collectFunctionNames(ast, options)).to.eql(['a']);
+            });
+        });
+
+        describe('isActive across walks', () => {
+            // eslint-disable-next-line no-bitwise
+            const everyBranchRecursive = WalkMode.visitAllRecursive | InternalWalkMode.visitFalseConditionalCompilationBlocks;
+
+            const source = `
+                #const FEATURE = true
+                #const OTHER = false
+                sub main()
+                    #if FEATURE
+                        print "a"
+                    #else if OTHER
+                        print "b"
+                    #else
+                        print "c"
+                    #end if
+                    callIt(sub()
+                        #if OTHER
+                            print "d"
+                        #end if
+                        print "d2"
+                    end sub)
+                end sub
+                #if OTHER
+                    sub inactive()
+                        #if FEATURE
+                            print "e"
+                        #end if
+                    end sub
+                #end if
+                class Foo
+                    #if FEATURE
+                        a = 1
+                    #else
+                        b = 2
+                    #end if
+                end class
+                namespace alpha
+                    #if not FEATURE
+                        sub beta()
+                            print "f"
+                        end sub
+                    #end if
+                    sub gamma()
+                        print "g"
+                    end sub
+                end namespace
+            `;
+
+            /**
+             * Every node in the tree, including the nodes of inactive branches
+             */
+            function getAllNodes(root: AstNode) {
+                const nodes: AstNode[] = [];
+                root.walk((node) => {
+                    nodes.push(node);
+                }, { walkMode: everyBranchRecursive });
+                return nodes;
+            }
+
+            function getIsActive(nodes: AstNode[]) {
+                return nodes.map(x => x.isActive);
+            }
+
+            /**
+             * Find the print statement whose first item is the given string
+             */
+            function findPrint(root: AstNode, text: string) {
+                return root.findChild<PrintStatement>((x) => {
+                    return isPrintStatement(x) && (x.expressions[0] as LiteralExpression)?.tokens?.value.text === `"${text}"`;
+                }, { walkMode: everyBranchRecursive });
+            }
+
+            function findFunction(root: AstNode, name: string) {
+                return root.findChild<FunctionStatement>((x) => {
+                    return isFunctionStatement(x) && x.tokens.name.text === name;
+                }, { walkMode: everyBranchRecursive });
+            }
+
+            function findConditionalCompiles(root: AstNode) {
+                return root.findChildren<ConditionalCompileStatement>(isConditionalCompileStatement, { walkMode: everyBranchRecursive });
+            }
+
+            it('marks the nodes of every inactive branch inactive, at any depth', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.bs', source);
+                expect(findPrint(ast, 'a').isActive).to.be.true;
+                expect(findPrint(ast, 'b').isActive).to.be.false;
+                expect(findPrint(ast, 'c').isActive).to.be.false;
+                expect(findPrint(ast, 'd').isActive).to.be.false;
+                expect(findPrint(ast, 'd2').isActive).to.be.true;
+                expect(findFunction(ast, 'inactive').isActive).to.be.false;
+                //an `#if` that is true but sits in an inactive branch is still inactive
+                expect(findPrint(ast, 'e').isActive).to.be.false;
+                expect(findPrint(ast, 'e').expressions[0].isActive).to.be.false;
+                expect(findFunction(ast, 'beta').isActive).to.be.false;
+                expect(findPrint(ast, 'f').isActive).to.be.false;
+                expect(findPrint(ast, 'g').isActive).to.be.true;
+                const members = ast.findChildren<FieldStatement>(isFieldStatement, { walkMode: everyBranchRecursive });
+                expect(members.map(x => [x.tokens.name.text, x.isActive])).to.eql([['a', true], ['b', false]]);
+            });
+
+            it('does not change any isActive value when walking any subtree with any walk mode', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.bs', source);
+                const nodes = getAllNodes(ast);
+                const expected = getIsActive(nodes);
+                expect(expected).not.to.include(undefined);
+
+                /* eslint-disable no-bitwise */
+                const walkModes = [
+                    WalkMode.walkStatements,
+                    WalkMode.visitStatements,
+                    WalkMode.walkExpressions,
+                    WalkMode.visitLocalExpressions,
+                    WalkMode.visitExpressions,
+                    WalkMode.visitAll,
+                    WalkMode.recurseChildFunctions,
+                    WalkMode.visitStatementsRecursive,
+                    WalkMode.visitExpressionsRecursive,
+                    WalkMode.visitAllRecursive
+                ].flatMap(mode => [mode, mode | InternalWalkMode.visitFalseConditionalCompilationBlocks]);
+                /* eslint-enable no-bitwise */
+
+                for (const node of [ast, ...nodes]) {
+                    for (const walkMode of walkModes) {
+                        const optionsList: WalkOptions[] = [
+                            { walkMode: walkMode },
+                            { walkMode: walkMode, skipChildren: new ChildrenSkipper() },
+                            { walkMode: walkMode, cancel: new CancellationTokenSource().token },
+                            { walkMode: walkMode, editor: new Editor() }
+                        ];
+                        for (const options of optionsList) {
+                            node.walk(() => { }, options);
+                            expect(getIsActive(nodes), `${node.kind}.walk() with walkMode ${walkMode} and options ${Object.keys(options).join(',')}`).to.eql(expected);
+                        }
+                    }
+                }
+            });
+
+            it('does not change the stored #if results when walking any subtree', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.bs', source);
+                const statements = findConditionalCompiles(ast);
+                const expected = statements.map(x => [x.isConditionTrue, x.isConditionDeclared]);
+                for (const node of getAllNodes(ast)) {
+                    node.walk(() => { }, { walkMode: everyBranchRecursive });
+                    node.walk(() => { }, { walkMode: WalkMode.visitAllRecursive });
+                }
+                expect(statements.map(x => [x.isConditionTrue, x.isConditionDeclared])).to.eql(expected);
+            });
+
+            it('follows the stored branch when the walk starts at an #if statement', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.bs', source);
+                const [statement] = findConditionalCompiles(findFunction(ast, 'main'));
+                const printed: string[] = [];
+                statement.walk(createVisitor({
+                    PrintStatement: (node) => {
+                        printed.push((node.expressions[0] as LiteralExpression).tokens.value.text);
+                    }
+                }), { walkMode: WalkMode.visitAllRecursive });
+                expect(printed).to.eql(['"a"']);
+            });
+
+            it('does not apply changed ast.bsConsts in a subtree walk, only at the next full walk', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                    sub main()
+                        #if MANIFEST
+                            print "a"
+                        #else
+                            print "b"
+                        #end if
+                    end sub
+                `);
+                const a = findPrint(ast, 'a');
+                const b = findPrint(ast, 'b');
+                const main = findFunction(ast, 'main');
+                expect([a.isActive, b.isActive]).to.eql([false, true]);
+
+                ast.bsConsts = new Map([['manifest', true]]);
+                main.walk(() => { }, { walkMode: everyBranchRecursive });
+                main.func.body.walk(() => { }, { walkMode: WalkMode.visitAllRecursive });
+                expect([a.isActive, b.isActive]).to.eql([false, true]);
+
+                ast.walk(() => { }, { walkMode: WalkMode.visitAllRecursive });
+                expect([a.isActive, b.isActive]).to.eql([true, false]);
+            });
+
+            it('sets isActive on a node inserted into an active branch when a subtree walk reaches it', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.bs', source);
+                const main = findFunction(ast, 'main');
+                const [statement] = findConditionalCompiles(main);
+                const inserted = findPrint(ast, 'g').clone();
+                expect(inserted.isActive).to.be.undefined;
+                (statement.thenBranch.statements as Statement[]).push(inserted);
+                main.func.body.walk(() => { }, { walkMode: WalkMode.visitStatements });
+                expect(inserted.isActive).to.be.true;
+                expect(inserted.expressions[0].isActive).to.be.undefined;
+                main.func.body.walk(() => { }, { walkMode: WalkMode.visitAll });
+                expect(inserted.expressions[0].isActive).to.be.true;
+            });
+
+            it('sets isActive on a node inserted into an inactive branch once a walk reaches that branch', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.bs', source);
+                const main = findFunction(ast, 'main');
+                const [statement] = findConditionalCompiles(main);
+                //a node copied from active code carries its old value until a walk reaches it
+                const inserted = findPrint(ast, 'g');
+                const elseBlock = (statement.elseBranch as ConditionalCompileStatement).elseBranch as Block;
+                (findFunction(ast, 'gamma').func.body.statements as Statement[]).splice(0, 1);
+                (elseBlock.statements as Statement[]).push(inserted);
+                expect(inserted.isActive).to.be.true;
+
+                //a walk that skips the inactive branch does not reach it
+                main.func.body.walk(() => { }, { walkMode: WalkMode.visitAllRecursive });
+                expect(inserted.isActive).to.be.true;
+
+                main.func.body.walk(() => { }, { walkMode: everyBranchRecursive });
+                expect([inserted.isActive, inserted.expressions[0].isActive]).to.eql([false, false]);
+
+                inserted.isActive = true;
+                ast.walk(() => { }, { walkMode: WalkMode.visitStatementsRecursive });
+                expect(inserted.isActive).to.be.false;
+            });
+
+            it('updates isActive when a node moves from an inactive branch to an active one', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.bs', source);
+                const main = findFunction(ast, 'main');
+                const [statement] = findConditionalCompiles(main);
+                const elseBlock = (statement.elseBranch as ConditionalCompileStatement).elseBranch as Block;
+                const moved = elseBlock.statements[0] as PrintStatement;
+                expect(moved.isActive).to.be.false;
+                (elseBlock.statements as Statement[]).splice(0, 1);
+                (statement.thenBranch.statements as Statement[]).push(moved);
+                main.func.body.walk(() => { }, { walkMode: WalkMode.visitAll });
+                expect([moved.isActive, moved.expressions[0].isActive]).to.eql([true, true]);
+            });
+
+            it('sets isActive on a node a visitor returns as a replacement in a subtree walk', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.bs', source);
+                const main = findFunction(ast, 'main');
+                const replacements = new Map<string, PrintStatement>();
+                main.func.body.walk(createVisitor({
+                    PrintStatement: (node) => {
+                        const text = (node.expressions[0] as LiteralExpression).tokens.value.text;
+                        if (!replacements.has(text)) {
+                            const replacement = node.clone();
+                            replacements.set(text, replacement);
+                            return replacement;
+                        }
+                    }
+                }), { walkMode: everyBranchRecursive });
+                expect(
+                    [...replacements].map(([text, x]) => [text, x.isActive, x.expressions[0].isActive])
+                ).to.eql([
+                    ['"a"', true, true],
+                    ['"b"', false, false],
+                    ['"c"', false, false],
+                    ['"d"', false, false],
+                    ['"d2"', true, true]
+                ]);
+            });
+
+            it('treats the start of a walk on a detached subtree as the root', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.bs', source);
+                const clone = findFunction(ast, 'inactive').clone();
+                clone.walk(() => { }, { walkMode: WalkMode.visitAllRecursive });
+                expect(clone.func.isActive).to.be.true;
+                //the cloned `#if` has no stored result yet, so it is walked as if its condition were false
+                expect(findPrint(clone, 'e').isActive).to.be.false;
+            });
+
+            it('resolves a cloned file ast with the original manifest constants', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                    #if MANIFEST
+                        sub a()
+                        end sub
+                    #else
+                        sub b()
+                        end sub
+                    #end if
+                `);
+                ast.bsConsts = new Map([['manifest', true]]);
+                ast.link();
+                expect(findFunction(ast, 'a').isActive).to.be.true;
+
+                const clone = ast.clone();
+                clone.link();
+                expect([findFunction(clone, 'a').isActive, findFunction(clone, 'b').isActive]).to.eql([true, false]);
+            });
+
+            function testReplacedHashIf(editor?: Editor) {
+                const { ast } = program.setFile<BrsFile>('source/main.bs', source);
+                let replacement: ConditionalCompileStatement;
+                ast.walk(createVisitor({
+                    ConditionalCompileStatement: (node) => {
+                        if (!replacement) {
+                            replacement = node.clone();
+                            return replacement;
+                        }
+                    }
+                }), { walkMode: WalkMode.visitAllRecursive, editor: editor });
+                expect(replacement.isConditionTrue).to.be.true;
+                expect(findPrint(replacement, 'a').isActive).to.be.true;
+                expect(findPrint(replacement, 'c').isActive).to.be.false;
+            }
+
+            it('resolves an #if a visitor returns as a replacement during a full walk', () => {
+                testReplacedHashIf();
+            });
+
+            it('resolves an #if a visitor returns as a replacement during a full walk with an editor', () => {
+                testReplacedHashIf(new Editor());
+            });
+
+            it('applies a #const a visitor returns as a replacement during a full walk', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                    #const FEATURE = true
+                    #if FEATURE
+                        sub a()
+                        end sub
+                    #end if
+                `);
+                ast.walk(createVisitor({
+                    ConditionalCompileConstStatement: (node) => {
+                        return node.clone();
+                    }
+                }), { walkMode: WalkMode.visitAllRecursive });
+                expect(findFunction(ast, 'a').isActive).to.be.true;
+            });
+
+            it('only resolves the statements a full walk reaches before it is cancelled', () => {
+                const { ast } = program.setFile<BrsFile>('source/main.brs', `
+                    #if FIRST
+                        sub first()
+                        end sub
+                    #end if
+                    #if SECOND
+                        sub second()
+                        end sub
+                    #end if
+                `);
+                const first = findFunction(ast, 'first');
+                const second = findFunction(ast, 'second');
+                expect([first.isActive, second.isActive]).to.eql([false, false]);
+
+                ast.bsConsts = new Map([['first', true], ['second', true]]);
+                //findChild walks from the root and stops at the first match
+                expect(ast.findChild(isFunctionStatement)).to.equal(first);
+                //like `parent`, the walk stopped before it reached the second statement, so that keeps its previous answer
+                expect([first.isActive, second.isActive]).to.eql([true, false]);
+
+                ast.walk(() => { }, { walkMode: WalkMode.visitAllRecursive });
+                expect([first.isActive, second.isActive]).to.eql([true, true]);
+            });
         });
 
         it('walks a new child when returned from a visitor and using an AstEditor', () => {

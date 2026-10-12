@@ -38,7 +38,7 @@ describe('BrsFileSemanticTokensProcessor', () => {
     function getSemanticTokenResults(file: BscFile, expected: Array<SemanticToken | [SemanticTokenTypes, number, number, number, number, SemanticTokenModifiers[]?]>, validateDiagnostics = true) {
         program.validate();
         if (validateDiagnostics) {
-            expectZeroDiagnostics(program);
+            expectZeroDiagnostics(withoutUnreachableCode(program));
         }
         const result = util.sortByRange(
             program.getSemanticTokens(file.srcPath)!
@@ -71,7 +71,7 @@ describe('BrsFileSemanticTokensProcessor', () => {
         };
     }
 
-    it('emits tokens for the active branch of a conditional compile block and not the inactive branch', () => {
+    it('emits tokens for the active branch and for what can be resolved in the inactive branch of a conditional compile block', () => {
         const file = program.setFile<BrsFile>('source/main.brs', `
             #const LOGGING = true
             sub main()
@@ -88,7 +88,25 @@ describe('BrsFileSemanticTokensProcessor', () => {
         expectZeroDiagnostics(withoutUnreachableCode(program));
         const tokenLines = program.getSemanticTokens(file.srcPath)!.map(token => token.range.start.line);
         expect(tokenLines).to.include(5);
-        expect(tokenLines).not.to.include(8);
+        //the assignment in the inactive branch
+        expect(tokenLines).to.include(7);
+    });
+
+    it('colors a class in an inactive branch like a class', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            #const LOGGING = false
+            class Widget
+            end class
+            sub main()
+            #if LOGGING
+                widget = new Widget()
+            #end if
+            end sub
+        `);
+        expectSemanticTokensIncludes(file, [
+            //widget = new |Widget|()
+            [SemanticTokenTypes.class, 6, 29, 6, 35]
+        ]);
     });
 
     it('matches each namespace section for class', () => {
