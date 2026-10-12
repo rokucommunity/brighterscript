@@ -154,12 +154,17 @@ export class Body extends Statement implements TypedefProvider {
     }
 
     public clone() {
-        return this.finalizeClone(
+        const clone = this.finalizeClone(
             new Body({
                 statements: this.statements?.map(s => s?.clone())
             }),
             ['statements']
         );
+        //keep the manifest `bs_const` values, so a full walk of the clone resolves `#if` statements the same way
+        if (this.bsConsts) {
+            clone.bsConsts = new Map(this.bsConsts);
+        }
+        return clone;
     }
 }
 

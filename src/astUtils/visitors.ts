@@ -90,6 +90,12 @@ export function walk<T>(owner: T, key: keyof T, visitor: WalkVisitor, options: W
     element.parent = parent;
     setIsActive(element, parent);
 
+    //resolve an `#if` the visitor returned in place of the one resolved above. A replacement `#const` is not resolved again,
+    //since the original already declared its constant and resolving the replacement would flag it as a duplicate
+    if (options.bsConsts && returnValue === element && isConditionalCompileStatement(element)) {
+        element.resolve(options.bsConsts);
+    }
+
     if (!element.walk) {
         throw new Error(`${owner.constructor.name}["${String(key)}"]${parent ? ` for ${parent.constructor.name}` : ''} does not contain a "walk" method`);
     }
