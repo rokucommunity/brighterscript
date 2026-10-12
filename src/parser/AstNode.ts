@@ -208,6 +208,14 @@ export abstract class AstNode {
         return [];
     }
 
+    /**
+     * False when this node is inside an `#if` / `#else if` / `#else` branch that was not selected. The device discards that code before compiling.
+     * Undefined until a walk reaches the node.
+     *
+     * Every walk sets this from the parent, but only a full walk from the root re-evaluates the `#if` conditions.
+     */
+    public isActive?: boolean;
+
     public getBsConsts(): Map<string, boolean> | undefined {
         return this.bsConsts ?? this.parent?.getBsConsts?.();
     }

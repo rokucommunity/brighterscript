@@ -1,10 +1,8 @@
 import type { AALiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, VariableExpression } from '../parser/Expression';
 import type { AliasStatement, AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConditionalCompileStatement, ConstStatement, EnumStatement, FunctionStatement, ImportStatement, InterfaceStatement, LibraryStatement, NamespaceStatement, TypecastStatement } from '../parser/Statement';
 import { Cache } from '../Cache';
-import { ConditionalCompileEvaluator } from '../parser/ConditionalCompileEvaluator';
-import type { ConditionalCompileEvaluatorSource } from '../parser/ConditionalCompileEvaluator';
 import { InternalWalkMode, WalkMode, createVisitor } from './visitors';
-import type { AstNode, Expression } from '../parser/AstNode';
+import type { Expression } from '../parser/AstNode';
 import { isAAMemberExpression, isBinaryExpression, isCallExpression, isDottedGetExpression, isFunctionExpression, isGroupingExpression, isIndexedGetExpression, isLiteralExpression, isMethodStatement, isNamespaceStatement, isNewExpression, isVariableExpression } from './reflection';
 import type { Parser } from '../parser/Parser';
 import { ParseMode } from '../parser/Parser';
@@ -19,7 +17,7 @@ export interface BscFileLike {
     _parser: Parser;
 }
 
-export class CachedLookups implements ConditionalCompileEvaluatorSource {
+export class CachedLookups {
 
     private cache = new Cache();
 
@@ -30,15 +28,11 @@ export class CachedLookups implements ConditionalCompileEvaluatorSource {
     }
 
     get functionStatements(): FunctionStatement[] {
-        return this.getEvaluationDerived<Array<FunctionStatement>>('functionStatements', () => {
-            const evaluator = this.conditionalCompileEvaluator;
-            const allFunctionStatements = this.getFromCache<Array<FunctionStatement>>('allFunctionStatements');
-            return evaluator ? allFunctionStatements.filter(statement => evaluator.isNodeActive(statement)) : allFunctionStatements;
-        });
+        return this.getFromCache<Array<FunctionStatement>>('functionStatements');
     }
 
     get functionStatementMap() {
-        return this.getEvaluationDerived('functionStatementMap', () => {
+        return this.cache.getOrAdd('functionStatementMap', () => {
             const funcMap = new Map<string, FunctionStatement>();
             for (const stmt of this.functionStatements) {
                 funcMap.set(stmt.getName(ParseMode.BrighterScript).toLowerCase(), stmt);
@@ -85,15 +79,6 @@ export class CachedLookups implements ConditionalCompileEvaluatorSource {
     }
 
     /**
-     * Which `#if` branches of the file are active. Undefined when the file has no `#if` or `#const` statements.
-     * The evaluation is replaced whenever `ast.bsConsts` differs from the constants it started from, so a constant change applies to the next lookup or walk.
-     * An edit to the AST (such as a changed condition) applies after `invalidate()`, which happens when the file is validated after it changed.
-     */
-    get conditionalCompileEvaluator(): ConditionalCompileEvaluator | undefined {
-        return this.getEvaluation();
-    }
-
-    /**
      * Every `#if` statement in the file, including those in inactive branches
      */
     get conditionalCompileStatements(): ConditionalCompileStatement[] {
@@ -105,11 +90,11 @@ export class CachedLookups implements ConditionalCompileEvaluatorSource {
     }
 
     get classStatementMap() {
-        return this.getEvaluationDerived('classStatementMap', () => {
+        return this.cache.getOrAdd('classStatementMap', () => {
             const activeKeys = new Set<string>();
             const classMap = new Map<string, ClassStatement>();
             for (const stmt of this.classStatements) {
-                CachedLookups.setTopCandidate(classMap, activeKeys, stmt.getName(ParseMode.BrighterScript).toLowerCase(), stmt, this.isActiveDeclaration(stmt));
+                CachedLookups.setTopCandidate(classMap, activeKeys, stmt.getName(ParseMode.BrighterScript).toLowerCase(), stmt, stmt.isActive === true);
             }
             return classMap;
         });
@@ -128,11 +113,11 @@ export class CachedLookups implements ConditionalCompileEvaluatorSource {
     }
 
     get enumStatementMap() {
-        return this.getEvaluationDerived('enumStatementMap', () => {
+        return this.cache.getOrAdd('enumStatementMap', () => {
             const activeKeys = new Set<string>();
             const enumMap = new Map<string, EnumStatement>();
             for (const stmt of this.enumStatements) {
-                CachedLookups.setTopCandidate(enumMap, activeKeys, stmt.fullName.toLowerCase(), stmt, this.isActiveDeclaration(stmt));
+                CachedLookups.setTopCandidate(enumMap, activeKeys, stmt.fullName.toLowerCase(), stmt, stmt.isActive === true);
             }
             return enumMap;
         });
@@ -143,11 +128,11 @@ export class CachedLookups implements ConditionalCompileEvaluatorSource {
     }
 
     get constStatementMap() {
-        return this.getEvaluationDerived('constStatementMap', () => {
+        return this.cache.getOrAdd('constStatementMap', () => {
             const activeKeys = new Set<string>();
             const constMap = new Map<string, ConstStatement>();
             for (const stmt of this.constStatements) {
-                CachedLookups.setTopCandidate(constMap, activeKeys, stmt.fullName.toLowerCase(), stmt, this.isActiveDeclaration(stmt));
+                CachedLookups.setTopCandidate(constMap, activeKeys, stmt.fullName.toLowerCase(), stmt, stmt.isActive === true);
             }
             return constMap;
         });
@@ -158,11 +143,11 @@ export class CachedLookups implements ConditionalCompileEvaluatorSource {
     }
 
     get interfaceStatementMap() {
-        return this.getEvaluationDerived('interfaceStatementMap', () => {
+        return this.cache.getOrAdd('interfaceStatementMap', () => {
             const activeKeys = new Set<string>();
             const ifaceMap = new Map<string, InterfaceStatement>();
             for (const stmt of this.interfaceStatements) {
-                CachedLookups.setTopCandidate(ifaceMap, activeKeys, stmt.fullName.toLowerCase(), stmt, this.isActiveDeclaration(stmt));
+                CachedLookups.setTopCandidate(ifaceMap, activeKeys, stmt.fullName.toLowerCase(), stmt, stmt.isActive === true);
             }
             return ifaceMap;
         });
@@ -170,32 +155,6 @@ export class CachedLookups implements ConditionalCompileEvaluatorSource {
 
     get propertyHints(): Record<string, string> {
         return this.getFromCache<Record<string, string>>('propertyHints');
-    }
-
-
-    /**
-     * Is this class, interface, enum, const or function declared outside every inactive conditional compile branch?
-     * Inactive declarations stay in the lookups because they are still transpiled, but they never shadow an active declaration
-     * and are not checked for duplicates or circular references.
-     */
-    public isActiveDeclaration(statement: AstNode): boolean {
-        return !this.getEvaluationDerived<Set<AstNode>>('inactiveDeclarations', () => {
-            const evaluator = this.conditionalCompileEvaluator;
-            const inactiveDeclarations = new Set<AstNode>();
-            if (evaluator) {
-                for (const declaration of this.getFromCache<Array<AstNode>>('declarations')) {
-                    if (!evaluator.isNodeActive(declaration)) {
-                        inactiveDeclarations.add(declaration);
-                    }
-                }
-                for (const functionStatement of this.getFromCache<Array<FunctionStatement>>('allFunctionStatements')) {
-                    if (!evaluator.isNodeActive(functionStatement)) {
-                        inactiveDeclarations.add(functionStatement);
-                    }
-                }
-            }
-            return inactiveDeclarations;
-        }).has(statement);
     }
 
     /**
@@ -216,42 +175,6 @@ export class CachedLookups implements ConditionalCompileEvaluatorSource {
         this.cache.clear();
     }
 
-
-    /**
-     * The evaluation of the file, replaced when `ast.bsConsts` differs from the constants it started from.
-     * Everything derived from the evaluation is dropped when it is replaced.
-     */
-    private getEvaluation(): ConditionalCompileEvaluator | undefined {
-        if (!this.getFromCache<boolean>('usesConditionalCompile')) {
-            return undefined;
-        }
-        const ast = this.file._parser?.ast;
-        let evaluator = this.cache.get('conditionalCompileEvaluator') as ConditionalCompileEvaluator | undefined;
-        if (ast && (!evaluator || !ConditionalCompileEvaluator.areBsConstsEqual(evaluator.startingBsConsts, ast.getBsConsts()))) {
-            evaluator = new ConditionalCompileEvaluator(ast);
-            this.cache.set('conditionalCompileEvaluator', evaluator);
-            for (const derivedKey of CachedLookups.evaluationDerivedKeys) {
-                this.cache.delete(derivedKey);
-            }
-        }
-        return evaluator;
-    }
-
-    private getEvaluationDerived<T>(cacheKey: string, factory: () => T): T {
-        this.getEvaluation();
-        return this.cache.getOrAdd(cacheKey, factory);
-    }
-
-    private static evaluationDerivedKeys = [
-        'inactiveDeclarations',
-        'functionStatements',
-        'functionStatementMap',
-        'classStatementMap',
-        'enumStatementMap',
-        'constStatementMap',
-        'interfaceStatementMap'
-    ];
-
     private getFromCache<T>(cacheKey: string): T {
         if (!this.cache.has(cacheKey)) {
             this.rehydrate();
@@ -262,7 +185,10 @@ export class CachedLookups implements ConditionalCompileEvaluatorSource {
         return this.cache.get(cacheKey);
     }
 
-    private rehydrate() {
+    /**
+     * Walk the file and rebuild every lookup
+     */
+    public rehydrate() {
         const expressions = new Set<Expression>();
         const classStatements: ClassStatement[] = [];
         const namespaceStatements: NamespaceStatement[] = [];
@@ -299,9 +225,7 @@ export class CachedLookups implements ConditionalCompileEvaluatorSource {
 
         //inactive branches are walked and still transpiled, so their declarations stay in the lookups. Callables are active-only.
         const conditionalCompileStatements: ConditionalCompileStatement[] = [];
-        let usesConditionalCompile = false;
-        const declarations: AstNode[] = [];
-        const allFunctionStatements: FunctionStatement[] = [];
+        const functionStatements: FunctionStatement[] = [];
 
         const excludedExpressions = new Set<Expression>();
 
@@ -370,18 +294,12 @@ export class CachedLookups implements ConditionalCompileEvaluatorSource {
             },
             ClassStatement: s => {
                 classStatements.push(s);
-                declarations.push(s);
             },
             InterfaceStatement: s => {
                 interfaceStatements.push(s);
-                declarations.push(s);
             },
             ConditionalCompileStatement: s => {
                 conditionalCompileStatements.push(s);
-                usesConditionalCompile = true;
-            },
-            ConditionalCompileConstStatement: () => {
-                usesConditionalCompile = true;
             },
             FieldStatement: s => {
                 if (s.initialValue) {
@@ -392,7 +310,9 @@ export class CachedLookups implements ConditionalCompileEvaluatorSource {
                 namespaceStatements.push(s);
             },
             FunctionStatement: s => {
-                allFunctionStatements.push(s);
+                if (s.isActive) {
+                    functionStatements.push(s);
+                }
             },
             ImportStatement: s => {
                 importStatements.push(s);
@@ -447,11 +367,9 @@ export class CachedLookups implements ConditionalCompileEvaluatorSource {
             },
             EnumStatement: e => {
                 enumStatements.push(e);
-                declarations.push(e);
             },
             ConstStatement: s => {
                 constStatements.push(s);
-                declarations.push(s);
             },
             UnaryExpression: e => {
                 expressions.add(e);
@@ -471,9 +389,7 @@ export class CachedLookups implements ConditionalCompileEvaluatorSource {
         });
 
         this.cache.set('expressions', expressions);
-        this.cache.set('declarations', declarations);
-        this.cache.set('allFunctionStatements', allFunctionStatements);
-        this.cache.set('usesConditionalCompile', usesConditionalCompile);
+        this.cache.set('functionStatements', functionStatements);
         this.cache.set('conditionalCompileStatements', conditionalCompileStatements);
         this.cache.set('classStatements', classStatements);
         this.cache.set('namespaceStatements', namespaceStatements);

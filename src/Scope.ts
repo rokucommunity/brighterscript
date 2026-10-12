@@ -198,10 +198,9 @@ export class Scope {
         let activeLink: FileLink<T>;
         let inactiveLink: FileLink<T>;
         this.enumerateBrsFilesWithBreak((file) => {
-            const lookups = file['_cachedLookups'];
-            const stmt: T = lookups[cachedMapName].get(nameLower);
+            const stmt: T = file['_cachedLookups'][cachedMapName].get(nameLower);
             if (stmt) {
-                if (lookups.isActiveDeclaration(stmt)) {
+                if (stmt.isActive === true) {
                     activeLink = { item: stmt, file: file };
                     return true;
                 }
@@ -212,20 +211,16 @@ export class Scope {
         return activeLink ?? inactiveLink;
     }
 
-    private isActiveFileLink(link: FileLink<Statement>): boolean {
-        return link.file['_cachedLookups'].isActiveDeclaration(link.item);
-    }
-
     /**
      * Choose between a namespace-qualified match and the global match of the same name.
      * The qualified match wins unless it is inactive and the global match is active, so an inactive namespaced declaration never hides an active global one.
      */
     private preferActiveGlobalLink<T extends Statement>(qualifiedLink: FileLink<T>, getGlobalLink: () => FileLink<T>): FileLink<T> {
-        if (qualifiedLink && this.isActiveFileLink(qualifiedLink)) {
+        if (qualifiedLink?.item.isActive === true) {
             return qualifiedLink;
         }
         const globalLink = getGlobalLink();
-        if (!qualifiedLink || (globalLink && this.isActiveFileLink(globalLink))) {
+        if (!qualifiedLink || globalLink?.item.isActive === true) {
             return globalLink;
         }
         return qualifiedLink;
@@ -455,7 +450,7 @@ export class Scope {
                         const className = cls.getName(ParseMode.BrighterScript);
                         //only track classes with a defined name (i.e. exclude nameless malformed classes)
                         if (className) {
-                            CachedLookups.setTopCandidate(map, activeKeys, className.toLowerCase(), { item: cls, file: file }, file['_cachedLookups'].isActiveDeclaration(cls));
+                            CachedLookups.setTopCandidate(map, activeKeys, className.toLowerCase(), { item: cls, file: file }, cls.isActive === true);
                         }
                     }
                 }
@@ -478,7 +473,7 @@ export class Scope {
                         const ifaceName = iface.getName(ParseMode.BrighterScript);
                         //only track classes with a defined name (i.e. exclude nameless malformed classes)
                         if (ifaceName) {
-                            CachedLookups.setTopCandidate(map, activeKeys, ifaceName.toLowerCase(), { item: iface, file: file }, file['_cachedLookups'].isActiveDeclaration(iface));
+                            CachedLookups.setTopCandidate(map, activeKeys, ifaceName.toLowerCase(), { item: iface, file: file }, iface.isActive === true);
                         }
                     }
                 }
@@ -499,7 +494,7 @@ export class Scope {
                 for (let enumStmt of file['_cachedLookups'].enumStatements) {
                     //only track enums with a defined name (i.e. exclude nameless malformed enums)
                     if (enumStmt.fullName) {
-                        CachedLookups.setTopCandidate(map, activeKeys, enumStmt.fullName.toLowerCase(), { item: enumStmt, file: file }, file['_cachedLookups'].isActiveDeclaration(enumStmt));
+                        CachedLookups.setTopCandidate(map, activeKeys, enumStmt.fullName.toLowerCase(), { item: enumStmt, file: file }, enumStmt.isActive === true);
                     }
                 }
             });
@@ -519,7 +514,7 @@ export class Scope {
                 for (let stmt of file['_cachedLookups'].constStatements) {
                     //only track enums with a defined name (i.e. exclude nameless malformed enums)
                     if (stmt.fullName) {
-                        CachedLookups.setTopCandidate(map, activeKeys, stmt.fullName.toLowerCase(), { item: stmt, file: file }, file['_cachedLookups'].isActiveDeclaration(stmt));
+                        CachedLookups.setTopCandidate(map, activeKeys, stmt.fullName.toLowerCase(), { item: stmt, file: file }, stmt.isActive === true);
                     }
                 }
             });
