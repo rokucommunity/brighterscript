@@ -29,11 +29,6 @@ export class BrsFileValidator {
     ) {
     }
 
-    /**
-     * The file's lines, split once when the first inactive branch is checked for content
-     */
-    private fileLines: string[];
-
 
     public process() {
         const unlinkGlobalSymbolTable = this.event.file.parser.symbolTable.pushParentProvider(() => this.event.program.globalScope.symbolTable);
@@ -764,7 +759,8 @@ export class BrsFileValidator {
      * Report each inactive branch body of a `#if` chain as unreachable code. Only the first `#if` of a chain is handled here, and it covers the chain's `#else if` statements,
      * since the walk only visits an `#else if` when it is reached. An `#if` inside an inactive branch is never visited, and its outer branch already covers it.
      * The ranges come from `ConditionalCompileStatement.getInactiveBranchRanges()`, the same ones that hide parse diagnostics there.
-     * A branch without a closing directive (already a parse error) or with nothing but blank lines is not reported.
+     * A branch with no lines between its directives is not reported, and neither is one missing its closing directive,
+     * which is already a parse error and whose range runs to the end of the file.
      */
     private flagInactiveConditionalCompileBranches(chainStart: ConditionalCompileStatement) {
         if (isConditionalCompileStatement(chainStart.parent)) {
@@ -772,7 +768,7 @@ export class BrsFileValidator {
         }
         for (let statement = chainStart; statement; statement = isConditionalCompileStatement(statement.elseBranch) ? statement.elseBranch : undefined) {
             for (const range of statement.getInactiveBranchRanges()) {
-                if (this.hasContent(range)) {
+                if (range.start.line < range.end.line && range.end.line !== Number.MAX_SAFE_INTEGER) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.inactiveConditionalCompileBranch(),
                         location: util.createLocationFromRange(this.event.file.srcPath, range)
@@ -780,23 +776,6 @@ export class BrsFileValidator {
                 }
             }
         }
-    }
-
-    /**
-     * Does any line of the range contain more than whitespace? Comments count, and so does code that did not parse.
-     * False for a range that runs past the end of the file, which is a branch missing its closing directive.
-     */
-    private hasContent(range: Range) {
-        this.fileLines ??= this.event.file.fileContents.split(/\r?\n/);
-        if (range.end.line >= this.fileLines.length) {
-            return false;
-        }
-        for (let line = range.start.line; line < range.end.line; line++) {
-            if (this.fileLines[line].trim() !== '') {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**

@@ -2464,14 +2464,14 @@ describe('BrsFileValidator', () => {
             expect(inactive).to.eql([]);
         });
 
-        it('ignores a comment on the directive line when the body is blank', () => {
+        it('fades a blank body without the comment on the directive line', () => {
             const { inactive } = validateLines([
                 '#if false \' note',
                 '',
                 '    ',
                 '#end if'
             ]);
-            expect(inactive).to.eql([]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 3, 0)]);
         });
 
         it('reports the normal range when a directive line comment is followed by real content', () => {
@@ -2582,7 +2582,7 @@ describe('BrsFileValidator', () => {
             expect(allCodes).to.eql(['inactive-conditional-compile-branch']);
         });
 
-        it('does not report empty inactive bodies', () => {
+        it('does not report an inactive body with no lines, but fades one with only blank lines', () => {
             const { inactive } = validateLines([
                 '#if false',
                 '#end if',
@@ -2595,7 +2595,7 @@ describe('BrsFileValidator', () => {
                 '    ',
                 '#end if'
             ]);
-            expect(inactive).to.eql([]);
+            expect(getRanges(inactive)).to.eql([util.createRange(7, 0, 9, 0)]);
         });
 
         it('covers a body that only contains a comment', () => {
