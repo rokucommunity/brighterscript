@@ -4748,11 +4748,42 @@ export class ConditionalCompileStatement extends Statement {
             hashEndIf: options.hashEndIf
         };
 
+        //each branch covers its whole body, including blank lines, comments and code that did not parse
+        for (const branch of [this.thenBranch, this.elseBranch]) {
+            if (isBlock(branch)) {
+                const { opening, closing } = this.getBranchDirectives(branch);
+                if (opening?.location && closing?.location) {
+                    branch.location = util.createLocation(
+                        opening.location.range.end.line,
+                        opening.location.range.end.character,
+                        closing.location.range.start.line,
+                        closing.location.range.start.character,
+                        opening.location.uri ?? closing.location.uri
+                    );
+                }
+            }
+        }
+
         this.location = util.createBoundingLocation(
             util.createBoundingLocationFromTokens(this.tokens),
             this.thenBranch,
             this.elseBranch
         );
+    }
+
+    /**
+     * The directive tokens around one of this statement's branches. The then branch opens at its condition and closes at the `#else`,
+     * the `#else if` that continues the chain, or the `#end if`. The `#else` branch opens at `#else` and closes at `#end if`.
+     * `closing` is undefined when the closing directive is missing.
+     */
+    private getBranchDirectives(branch: Block): { opening: Token | undefined; closing: Token | undefined } {
+        if (branch === this.thenBranch) {
+            return {
+                opening: this.tokens.condition ?? this.tokens.not ?? this.tokens.hashIf,
+                closing: this.tokens.hashElse ?? (isConditionalCompileStatement(this.elseBranch) ? this.elseBranch.tokens.hashIf : undefined) ?? this.tokens.hashEndIf
+            };
+        }
+        return { opening: this.tokens.hashElse, closing: this.tokens.hashEndIf };
     }
 
     readonly tokens: {
@@ -4872,49 +4903,47 @@ export class ConditionalCompileStatement extends Statement {
     }
 
     /**
-     * The branches of this statement that are not compiled. Each one has the directive token that opens it (the condition, or `#else`),
-     * the directive token that closes it (the next `#else if` / `#else` / `#end if`, or undefined when it is missing), and the range of its body.
-     * The body runs from the start of the line after the opening directive to the start of the closing directive's line (or the end of the file),
-     * so the `#if` / `#else if` / `#else` / `#end if` lines themselves are never inside a branch.
+     * The branches of this statement that are not compiled: the then branch, and the `#else` branch when there is one.
      * An `#else if` statement describes its own branches. Empty when the statement has not been walked yet, since its activity is unknown.
      */
-    public getInactiveBranches(): Array<{ opening: Token; closing: Token | undefined; range: Range }> {
-        const branches: Array<{ opening: Token; closing: Token | undefined; range: Range }> = [];
+    public getInactiveBranches(): Block[] {
         if (this.isActive === undefined) {
-            return branches;
+            return [];
         }
-        const tokens = this.tokens;
-        const isReached = this.isActive;
-        const elseStatement = isConditionalCompileStatement(this.elseBranch) ? this.elseBranch : undefined;
-        const addBranch = (opening: Token | undefined, closing: Token | undefined) => {
-            if (opening?.location) {
-                branches.push({
-                    opening: opening,
-                    closing: closing,
-                    range: {
-                        start: { line: opening.location.range.end.line + 1, character: 0 },
-                        //a missing terminator means the branch runs to the end of the file
-                        end: closing?.location
-                            ? { line: closing.location.range.start.line, character: 0 }
-                            : { line: Number.MAX_SAFE_INTEGER, character: Number.MAX_SAFE_INTEGER }
-                    }
-                });
-            }
-        };
-        if (!isReached || !this.isConditionTrue) {
-            addBranch(tokens.condition ?? tokens.hashIf, tokens.hashElse ?? elseStatement?.tokens.hashIf ?? tokens.hashEndIf);
+        const branches: Block[] = [];
+        if (!this.isActive || !this.isConditionTrue) {
+            branches.push(this.thenBranch);
         }
-        if ((!isReached || this.isConditionTrue) && tokens.hashElse) {
-            addBranch(tokens.hashElse, tokens.hashEndIf);
+        if ((!this.isActive || this.isConditionTrue) && isBlock(this.elseBranch)) {
+            branches.push(this.elseBranch);
         }
-        return branches;
+        return branches.filter(branch => !!branch);
     }
 
     /**
-     * The ranges of the code in this statement's branches that is not compiled. See `getInactiveBranches()`
+     * The ranges of the code in this statement's inactive branches, as whole lines: from the start of the line after the opening directive
+     * to the start of the closing directive's line, so the `#if` / `#else if` / `#else` / `#end if` lines themselves are never inside one.
+     * A branch without a closing directive runs to the end of the file.
      */
     public getInactiveBranchRanges(): Range[] {
-        return this.getInactiveBranches().map(branch => branch.range);
+        const ranges: Range[] = [];
+        for (const branch of this.getInactiveBranches()) {
+            const { opening, closing } = this.getBranchDirectives(branch);
+            if (closing?.location && branch.location) {
+                //the branch's location runs from the end of its opening directive to the start of its closing directive
+                ranges.push({
+                    start: { line: branch.location.range.start.line + 1, character: 0 },
+                    end: { line: branch.location.range.end.line, character: 0 }
+                });
+            } else if (opening?.location) {
+                //without a closing directive, the branch runs to the end of the file
+                ranges.push({
+                    start: { line: opening.location.range.end.line + 1, character: 0 },
+                    end: { line: Number.MAX_SAFE_INTEGER, character: Number.MAX_SAFE_INTEGER }
+                });
+            }
+        }
+        return ranges;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {

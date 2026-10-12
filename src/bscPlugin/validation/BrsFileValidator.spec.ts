@@ -3,7 +3,7 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { AALiteralExpression, DottedGetExpression, FunctionExpression } from '../../parser/Expression';
 import type { AssignmentStatement, ClassStatement, ConditionalCompileStatement, ForEachStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';
 import { DiagnosticCodeMap, DiagnosticMessages } from '../../DiagnosticMessages';
-import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, rootDir, tempDir, trim, withoutUnreachableCode } from '../../testHelpers.spec';
+import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, rootDir, tempDir, trim } from '../../testHelpers.spec';
 import { Program } from '../../Program';
 import { isAssignmentStatement, isClassStatement, isConditionalCompileStatement, isForEachStatement, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isNamespaceStatement, isPrintStatement, isReturnStatement } from '../../astUtils/reflection';
 import { util, standardizePath as s } from '../../util';
@@ -1128,7 +1128,10 @@ describe('BrsFileValidator', () => {
                 end function
             `);
             program.validate();
-            expectZeroDiagnostics(withoutUnreachableCode(program));
+            //no #error, just the hint that fades the branch
+            expectDiagnostics(program, [
+                { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(4, 0, 5, 0) } }
+            ]);
         });
 
         describe('evaluation', () => {
@@ -1139,7 +1142,8 @@ describe('BrsFileValidator', () => {
             });
 
             /**
-             * Load a file into a new program, validate it and return its diagnostics
+             * Load a file into a new program, validate it and return its diagnostics, except the hints that fade inactive branches.
+             * These specs are about which branches are evaluated, and the `inactive conditional compile branches` specs below cover the hints
              */
             function validate(source: string, options?: { bsConsts?: Record<string, boolean>; minFirmwareVersion?: string; destPath?: string }) {
                 evaluationProgram?.dispose();
@@ -1156,7 +1160,7 @@ describe('BrsFileValidator', () => {
                 evaluationProgram.validate();
                 return {
                     file: file,
-                    diagnostics: withoutUnreachableCode(evaluationProgram)
+                    diagnostics: evaluationProgram.getDiagnostics().filter(diagnostic => diagnostic.code !== DiagnosticCodeMap.inactiveConditionalCompileBranch)
                 };
             }
 
@@ -1423,13 +1427,17 @@ describe('BrsFileValidator', () => {
                     });
                     evaluationProgram.setFile('source/main.brs', source);
                     evaluationProgram.validate();
-                    return withoutUnreachableCode(evaluationProgram);
+                    return evaluationProgram.getDiagnostics();
                 }
+
+                const inactiveThenBranch = { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(3, 0, 4, 0) } };
+                const inactiveElseBranch = { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(5, 0, 6, 0) } };
 
                 it('reports the diagnostics of the branch that the parsed constants select', () => {
                     const diagnostics = validateAfterEdit(() => { });
                     expectDiagnostics(diagnostics, [
-                        { code: 'unexpected-token', location: { range: util.createRange(5, 28, 5, 29) } }
+                        { code: 'unexpected-token', location: { range: util.createRange(5, 28, 5, 29) } },
+                        inactiveThenBranch
                     ]);
                 });
 
@@ -1438,7 +1446,8 @@ describe('BrsFileValidator', () => {
                         file.ast.bsConsts = new Map([['debug', true]]);
                     });
                     expectDiagnostics(diagnostics, [
-                        { code: 'unexpected-token', location: { range: util.createRange(3, 28, 3, 29) } }
+                        { code: 'unexpected-token', location: { range: util.createRange(3, 28, 3, 29) } },
+                        inactiveElseBranch
                     ]);
                 });
 
@@ -1448,7 +1457,8 @@ describe('BrsFileValidator', () => {
                         (statement.tokens as any).condition = createToken(TokenKind.True, 'true', statement.tokens.condition.location);
                     });
                     expectDiagnostics(diagnostics, [
-                        { code: 'unexpected-token', location: { range: util.createRange(3, 28, 3, 29) } }
+                        { code: 'unexpected-token', location: { range: util.createRange(3, 28, 3, 29) } },
+                        inactiveElseBranch
                     ]);
                 });
 
@@ -1459,7 +1469,8 @@ describe('BrsFileValidator', () => {
                         (statement.tokens as any).not = createToken(TokenKind.Not, 'not');
                     });
                     expectDiagnostics(diagnostics, [
-                        { code: 'unexpected-token', location: { range: util.createRange(5, 28, 5, 29) } }
+                        { code: 'unexpected-token', location: { range: util.createRange(5, 28, 5, 29) } },
+                        inactiveThenBranch
                     ]);
                 });
 
@@ -1480,7 +1491,10 @@ describe('BrsFileValidator', () => {
                         #end if
                     `);
                     evaluationProgram.validate();
-                    expectZeroDiagnostics(withoutUnreachableCode(evaluationProgram));
+                    //notAFunction() is not validated, and the whole function is faded
+                    expectDiagnostics(evaluationProgram, [
+                        { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(2, 0, 5, 0) } }
+                    ]);
                 });
 
                 it('reflects an injected #const in the parse diagnostics after the next full walk, without validating again', () => {
@@ -1493,18 +1507,22 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `);
+                    const inactiveBranch = { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(3, 0, 4, 0) } };
                     file.ast.statements.unshift(createHashConst('DEBUG', false));
                     evaluationProgram.validate();
-                    expectZeroDiagnostics(withoutUnreachableCode(evaluationProgram));
+                    expectDiagnostics(evaluationProgram, [inactiveBranch]);
+
                     file.ast.statements[0] = createHashConst('DEBUG', true);
                     file.ast.link();
-                    //the unreachable-code hints come from validation, so they do not follow the walk until the file validates again
-                    expectDiagnostics(withoutUnreachableCode(evaluationProgram), [
-                        { code: 'unexpected-token', location: { range: util.createRange(3, 32, 3, 33) } }
+                    //the parse error follows the walk right away. The fading hint comes from validation, so it stays until the file validates again
+                    expectDiagnostics(evaluationProgram, [
+                        { code: 'unexpected-token', location: { range: util.createRange(3, 32, 3, 33) } },
+                        inactiveBranch
                     ]);
+
                     file.ast.statements[0] = createHashConst('DEBUG', false);
                     file.ast.link();
-                    expectZeroDiagnostics(withoutUnreachableCode(evaluationProgram));
+                    expectDiagnostics(evaluationProgram, [inactiveBranch]);
                 });
 
                 it('reflects an injected #const in scope lookups after the file validates again', () => {
@@ -2303,13 +2321,13 @@ describe('BrsFileValidator', () => {
         });
     });
 
-    describe('unreachable code', () => {
+    describe('inactive conditional compile branches', () => {
         afterEach(() => {
             fsExtra.removeSync(`${rootDir}/manifest`);
         });
 
         /**
-         * Validate the given lines in a fresh program and return the `unreachable-code` diagnostics plus every diagnostic code that was found
+         * Validate the given lines in a fresh program and return the `inactive-conditional-compile-branch` diagnostics plus every diagnostic code that was found
          */
         function validateLines(lines: string[], options?: { destPath?: string; bsConsts?: Record<string, boolean>; programOptions?: Partial<ConstructorParameters<typeof Program>[0]> }) {
             fsExtra.removeSync(`${rootDir}/manifest`);
@@ -2317,14 +2335,14 @@ describe('BrsFileValidator', () => {
                 const bsConstText = Object.entries(options.bsConsts).map(([name, value]) => `${name}=${value}`).join(';');
                 fsExtra.outputFileSync(`${rootDir}/manifest`, `title=test\nbs_const=${bsConstText}\n`);
             }
-            const unreachableProgram = new Program({ rootDir: rootDir, ...options?.programOptions });
-            unreachableProgram.setFile(options?.destPath ?? 'source/main.bs', lines.join('\n'));
-            unreachableProgram.validate();
-            const diagnostics = unreachableProgram.getDiagnostics();
+            const branchProgram = new Program({ rootDir: rootDir, ...options?.programOptions });
+            branchProgram.setFile(options?.destPath ?? 'source/main.bs', lines.join('\n'));
+            branchProgram.validate();
+            const diagnostics = branchProgram.getDiagnostics();
             return {
-                program: unreachableProgram,
+                program: branchProgram,
                 allCodes: diagnostics.map(diagnostic => diagnostic.code),
-                unreachable: diagnostics.filter(diagnostic => diagnostic.code === DiagnosticCodeMap.unreachableCode)
+                inactive: diagnostics.filter(diagnostic => diagnostic.code === DiagnosticCodeMap.inactiveConditionalCompileBranch)
             };
         }
 
@@ -2333,28 +2351,28 @@ describe('BrsFileValidator', () => {
         }
 
         it('defines the diagnostic as a hint tagged unnecessary', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if false',
                 'print "a"',
                 '#end if'
             ]);
-            expect(unreachable).to.have.lengthOf(1);
-            expect(unreachable[0].severity).to.eql(DiagnosticSeverity.Hint);
-            expect(unreachable[0].tags).to.eql([DiagnosticTag.Unnecessary]);
-            expect(unreachable[0].message).to.eql(DiagnosticMessages.unreachableCode().message);
+            expect(inactive).to.have.lengthOf(1);
+            expect(inactive[0].severity).to.eql(DiagnosticSeverity.Hint);
+            expect(inactive[0].tags).to.eql([DiagnosticTag.Unnecessary]);
+            expect(inactive[0].message).to.eql(DiagnosticMessages.inactiveConditionalCompileBranch().message);
         });
 
         it('carries the tags through to the LSP diagnostic', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if false',
                 'print "a"',
                 '#end if'
             ]);
-            expect(util.toDiagnostic(unreachable[0], 'file:///source/main.bs').tags).to.eql([DiagnosticTag.Unnecessary]);
+            expect(util.toDiagnostic(inactive[0], 'file:///source/main.bs').tags).to.eql([DiagnosticTag.Unnecessary]);
         });
 
         it('covers exactly the body lines of an inactive #if', () => {
-            const { unreachable, allCodes } = validateLines([
+            const { inactive, allCodes } = validateLines([
                 'sub main()',
                 'end sub',
                 '#if false',
@@ -2362,34 +2380,34 @@ describe('BrsFileValidator', () => {
                 '    print "bb"',
                 '#end if'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(3, 0, 5, 0)]);
-            expect(allCodes).to.eql(['unreachable-code']);
+            expect(getRanges(inactive)).to.eql([util.createRange(3, 0, 5, 0)]);
+            expect(allCodes).to.eql(['inactive-conditional-compile-branch']);
         });
 
         it('covers only the #else body when the #if is active', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if true',
                 'print "a"',
                 '#else',
                 'print "b"',
                 '#end if'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(3, 0, 4, 0)]);
+            expect(getRanges(inactive)).to.eql([util.createRange(3, 0, 4, 0)]);
         });
 
         it('covers only the #if body when the #else is active', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if not true',
                 'print "a"',
                 '#else',
                 'print "b"',
                 '#end if'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(1, 0, 2, 0)]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 2, 0)]);
         });
 
         it('covers the first and last bodies of an #else if chain when the middle branch is active', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#const A = false',
                 '#const B = true',
                 '#if A',
@@ -2400,14 +2418,14 @@ describe('BrsFileValidator', () => {
                 'print "c"',
                 '#end if'
             ]);
-            expect(getRanges(unreachable)).to.eql([
+            expect(getRanges(inactive)).to.eql([
                 util.createRange(3, 0, 4, 0),
                 util.createRange(7, 0, 8, 0)
             ]);
         });
 
         it('covers every later body of an #else if chain once an earlier branch is active', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if true',
                 'print "a"',
                 '#else if true',
@@ -2416,14 +2434,14 @@ describe('BrsFileValidator', () => {
                 'print "c"',
                 '#end if'
             ]);
-            expect(getRanges(unreachable)).to.eql([
+            expect(getRanges(inactive)).to.eql([
                 util.createRange(3, 0, 4, 0),
                 util.createRange(5, 0, 6, 0)
             ]);
         });
 
         it('covers the last body of an #else if chain when every condition is false', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if false',
                 'print "a"',
                 '#else if false',
@@ -2432,62 +2450,62 @@ describe('BrsFileValidator', () => {
                 'print "c"',
                 '#end if'
             ]);
-            expect(getRanges(unreachable)).to.eql([
+            expect(getRanges(inactive)).to.eql([
                 util.createRange(1, 0, 2, 0),
                 util.createRange(3, 0, 4, 0)
             ]);
         });
 
         it('ignores a comment on the directive line when the body is empty', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if false \' note',
                 '#end if'
             ]);
-            expect(unreachable).to.eql([]);
+            expect(inactive).to.eql([]);
         });
 
         it('ignores a comment on the directive line when the body is blank', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if false \' note',
                 '',
                 '    ',
                 '#end if'
             ]);
-            expect(unreachable).to.eql([]);
+            expect(inactive).to.eql([]);
         });
 
         it('reports the normal range when a directive line comment is followed by real content', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if false \' note',
                 'print "a"',
                 '#end if'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(1, 0, 2, 0)]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 2, 0)]);
         });
 
         it('ignores a comment on an #else line when the body is empty', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if true',
                 'print "a"',
                 '#else \' note',
                 '#end if'
             ]);
-            expect(unreachable).to.eql([]);
+            expect(inactive).to.eql([]);
         });
 
         it('supports single-word #elseif and #endif directives', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if false',
                 'print "a"',
                 '#elseif true',
                 'print "b"',
                 '#endif'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(1, 0, 2, 0)]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 2, 0)]);
         });
 
         it('does not report nested conditional compile statements inside an inactive branch', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if false',
                 '#if true',
                 'print "a"',
@@ -2496,22 +2514,22 @@ describe('BrsFileValidator', () => {
                 '#end if',
                 '#end if'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(1, 0, 6, 0)]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 6, 0)]);
         });
 
         it('reports an inactive branch nested inside an active branch', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if true',
                 '#if false',
                 'print "a"',
                 '#end if',
                 '#end if'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(2, 0, 3, 0)]);
+            expect(getRanges(inactive)).to.eql([util.createRange(2, 0, 3, 0)]);
         });
 
         it('reports one range for an inactive body that does not parse', () => {
-            const { unreachable, allCodes } = validateLines([
+            const { inactive, allCodes } = validateLines([
                 '#if false',
                 'x = = 1',
                 'if then',
@@ -2519,24 +2537,24 @@ describe('BrsFileValidator', () => {
                 'y = (',
                 '#end if'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(1, 0, 5, 0)]);
-            expect(allCodes).to.eql(['unreachable-code']);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 5, 0)]);
+            expect(allCodes).to.eql(['inactive-conditional-compile-branch']);
         });
 
         it('covers an inactive branch inside a function', () => {
-            const { unreachable, allCodes } = validateLines([
+            const { inactive, allCodes } = validateLines([
                 'sub main()',
                 '    #if false',
                 '        print "a"',
                 '    #end if',
                 'end sub'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(2, 0, 3, 0)]);
-            expect(allCodes).to.eql(['unreachable-code']);
+            expect(getRanges(inactive)).to.eql([util.createRange(2, 0, 3, 0)]);
+            expect(allCodes).to.eql(['inactive-conditional-compile-branch']);
         });
 
         it('covers an inactive branch in a class body', () => {
-            const { unreachable, allCodes } = validateLines([
+            const { inactive, allCodes } = validateLines([
                 'class Foo',
                 '    #if false',
                 '        sub hidden()',
@@ -2547,12 +2565,12 @@ describe('BrsFileValidator', () => {
                 '    #end if',
                 'end class'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(2, 0, 4, 0)]);
-            expect(allCodes).to.eql(['unreachable-code']);
+            expect(getRanges(inactive)).to.eql([util.createRange(2, 0, 4, 0)]);
+            expect(allCodes).to.eql(['inactive-conditional-compile-branch']);
         });
 
         it('covers an inactive branch in a namespace body', () => {
-            const { unreachable, allCodes } = validateLines([
+            const { inactive, allCodes } = validateLines([
                 'namespace alpha',
                 '    #if false',
                 '        sub hidden()',
@@ -2560,12 +2578,12 @@ describe('BrsFileValidator', () => {
                 '    #end if',
                 'end namespace'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(2, 0, 4, 0)]);
-            expect(allCodes).to.eql(['unreachable-code']);
+            expect(getRanges(inactive)).to.eql([util.createRange(2, 0, 4, 0)]);
+            expect(allCodes).to.eql(['inactive-conditional-compile-branch']);
         });
 
         it('does not report empty inactive bodies', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if false',
                 '#end if',
                 '#if true',
@@ -2577,21 +2595,21 @@ describe('BrsFileValidator', () => {
                 '    ',
                 '#end if'
             ]);
-            expect(unreachable).to.eql([]);
+            expect(inactive).to.eql([]);
         });
 
         it('covers a body that only contains a comment', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if false',
                 '\' just a comment',
                 '#end if'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(1, 0, 2, 0)]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 2, 0)]);
         });
 
         it('handles windows line endings', () => {
-            const { unreachable } = validateLines(['#if false\r\nprint "a"\r\nprint "bb"\r\n#end if']);
-            expect(getRanges(unreachable)).to.eql([util.createRange(1, 0, 3, 0)]);
+            const { inactive } = validateLines(['#if false\r\nprint "a"\r\nprint "bb"\r\n#end if']);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 3, 0)]);
         });
 
         it('uses a manifest bs_const to decide the branch', () => {
@@ -2602,12 +2620,12 @@ describe('BrsFileValidator', () => {
                 'print "b"',
                 '#end if'
             ];
-            expect(getRanges(validateLines(source, { bsConsts: { FLAG: true } }).unreachable)).to.eql([util.createRange(3, 0, 4, 0)]);
-            expect(getRanges(validateLines(source, { bsConsts: { FLAG: false } }).unreachable)).to.eql([util.createRange(1, 0, 2, 0)]);
+            expect(getRanges(validateLines(source, { bsConsts: { FLAG: true } }).inactive)).to.eql([util.createRange(3, 0, 4, 0)]);
+            expect(getRanges(validateLines(source, { bsConsts: { FLAG: false } }).inactive)).to.eql([util.createRange(1, 0, 2, 0)]);
         });
 
         it('uses a file #const to decide the branch', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#const FLAG = false',
                 '#if FLAG',
                 'print "a"',
@@ -2615,7 +2633,7 @@ describe('BrsFileValidator', () => {
                 'print "b"',
                 '#end if'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(2, 0, 3, 0)]);
+            expect(getRanges(inactive)).to.eql([util.createRange(2, 0, 3, 0)]);
         });
 
         it('honors diagnosticSeverityOverrides', () => {
@@ -2623,7 +2641,7 @@ describe('BrsFileValidator', () => {
                 '#if false',
                 'print "a"',
                 '#end if'
-            ], { programOptions: { diagnosticSeverityOverrides: { 'unreachable-code': 'error' } } });
+            ], { programOptions: { diagnosticSeverityOverrides: { 'inactive-conditional-compile-branch': 'error' } } });
             const diagnostics = overrideProgram.getDiagnostics();
             expect(diagnostics.map(diagnostic => diagnostic.severity)).to.eql([DiagnosticSeverity.Error]);
             expect(diagnostics[0].tags).to.eql([DiagnosticTag.Unnecessary]);
@@ -2634,27 +2652,27 @@ describe('BrsFileValidator', () => {
                 '#if false',
                 'print "a"',
                 '#end if'
-            ], { programOptions: { diagnosticFilters: ['unreachable-code'] } });
+            ], { programOptions: { diagnosticFilters: ['inactive-conditional-compile-branch'] } });
             expect(filteredProgram.getDiagnostics()).to.eql([]);
         });
 
         it('honors bs:disable-line on the first line of the body', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if false',
-                'print "a" \' bs:disable-line: unreachable-code',
+                'print "a" \' bs:disable-line: inactive-conditional-compile-branch',
                 '#end if'
             ]);
-            expect(unreachable).to.eql([]);
+            expect(inactive).to.eql([]);
         });
 
         it('honors a file-level bs:disable', () => {
-            const { unreachable } = validateLines([
-                '\' bs:disable: unreachable-code',
+            const { inactive } = validateLines([
+                '\' bs:disable: inactive-conditional-compile-branch',
                 '#if false',
                 'print "a"',
                 '#end if'
             ]);
-            expect(unreachable).to.eql([]);
+            expect(inactive).to.eql([]);
         });
     });
 

@@ -29,7 +29,10 @@ export class BrsFileValidator {
     ) {
     }
 
-    private tokenIndexLookup: Map<Token, number>;
+    /**
+     * The file's lines, split once when the first inactive branch is checked for content
+     */
+    private fileLines: string[];
 
 
     public process() {
@@ -760,19 +763,19 @@ export class BrsFileValidator {
     /**
      * Report each inactive branch body of a `#if` chain as unreachable code. Only the first `#if` of a chain is handled here, and it covers the chain's `#else if` statements,
      * since the walk only visits an `#else if` when it is reached. An `#if` inside an inactive branch is never visited, and its outer branch already covers it.
-     * The branches and their ranges come from `ConditionalCompileStatement.getInactiveBranches()`, the same ones that hide parse diagnostics there.
-     * A branch without a closing directive or without any content is not reported.
+     * The ranges come from `ConditionalCompileStatement.getInactiveBranchRanges()`, the same ones that hide parse diagnostics there.
+     * A branch without a closing directive (already a parse error) or with nothing but blank lines is not reported.
      */
     private flagInactiveConditionalCompileBranches(chainStart: ConditionalCompileStatement) {
         if (isConditionalCompileStatement(chainStart.parent)) {
             return;
         }
         for (let statement = chainStart; statement; statement = isConditionalCompileStatement(statement.elseBranch) ? statement.elseBranch : undefined) {
-            for (const branch of statement.getInactiveBranches()) {
-                if (branch.closing?.location && this.hasBranchBodyContent(branch.opening, branch.closing)) {
+            for (const range of statement.getInactiveBranchRanges()) {
+                if (this.hasContent(range)) {
                     this.event.program.diagnostics.register({
-                        ...DiagnosticMessages.unreachableCode(),
-                        location: util.createLocationFromRange(this.event.file.srcPath, branch.range)
+                        ...DiagnosticMessages.inactiveConditionalCompileBranch(),
+                        location: util.createLocationFromRange(this.event.file.srcPath, range)
                     });
                 }
             }
@@ -780,37 +783,20 @@ export class BrsFileValidator {
     }
 
     /**
-     * Does anything other than whitespace and newlines sit between the two directives? Comments count as content,
-     * and so does any token, whether or not the parser could make a statement out of it.
-     * A comment on the opening directive's own line is not part of the body.
+     * Does any line of the range contain more than whitespace? Comments count, and so does code that did not parse.
+     * False for a range that runs past the end of the file, which is a branch missing its closing directive.
      */
-    private hasBranchBodyContent(directiveEndToken: Token, nextDirectiveToken: Token) {
-        const tokens = this.event.file.parser.tokens;
-        const isInsignificant = (token: Token) => token.kind === TokenKind.Newline || token.kind === TokenKind.Whitespace;
-        const directiveLine = directiveEndToken.location.range.end.line;
-        for (let index = this.getTokenIndexLookup().get(directiveEndToken) + 1; index < tokens.length; index++) {
-            const token = tokens[index];
-            if (token.leadingTrivia?.some(trivia => !isInsignificant(trivia) && trivia.location?.range.start.line !== directiveLine)) {
-                return true;
-            }
-            if (token === nextDirectiveToken) {
-                return false;
-            }
-            if (!isInsignificant(token)) {
+    private hasContent(range: Range) {
+        this.fileLines ??= this.event.file.fileContents.split(/\r?\n/);
+        if (range.end.line >= this.fileLines.length) {
+            return false;
+        }
+        for (let line = range.start.line; line < range.end.line; line++) {
+            if (this.fileLines[line].trim() !== '') {
                 return true;
             }
         }
         return false;
-    }
-
-    /**
-     * Maps each of the file's tokens to its index, built once so branch lookups stay constant time
-     */
-    private getTokenIndexLookup() {
-        if (!this.tokenIndexLookup) {
-            this.tokenIndexLookup = new Map(this.event.file.parser.tokens.map((token, index) => [token, index]));
-        }
-        return this.tokenIndexLookup;
     }
 
     /**

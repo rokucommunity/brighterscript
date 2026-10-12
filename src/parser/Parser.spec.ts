@@ -2568,6 +2568,17 @@ describe('parser', () => {
             });
         }
 
+        it('gives each branch a location from the end of its opening directive to the start of its closing directive', () => {
+            const { ast } = parse(`#if A\n    x = 1\n#else if B\n#else\n    ' only a comment\n#end if\n`, ParseMode.BrighterScript, { A: false, B: false });
+            const statement = ast.statements[0] as ConditionalCompileStatement;
+            const elseIf = statement.elseBranch as ConditionalCompileStatement;
+            expect(statement.thenBranch.location.range).to.eql({ start: { line: 0, character: 5 }, end: { line: 2, character: 0 } });
+            //an empty branch
+            expect(elseIf.thenBranch.location.range).to.eql({ start: { line: 2, character: 10 }, end: { line: 3, character: 0 } });
+            //a branch with only a comment, which is not a statement
+            expect((elseIf.elseBranch as Block).location.range).to.eql({ start: { line: 3, character: 5 }, end: { line: 5, character: 0 } });
+        });
+
         it('reports junk after the #end if of a chain', () => {
             const { diagnostics } = parse('#if A\nx = 1\n#else if B\ny = 2\n#end if x\n', ParseMode.BrighterScript, { A: true, B: false });
             expect(diagnostics).to.not.be.empty;

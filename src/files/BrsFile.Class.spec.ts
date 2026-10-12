@@ -6,8 +6,8 @@ import { expect } from '../chai-config.spec';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { Range } from 'vscode-languageserver';
 import { ParseMode, Parser } from '../parser/Parser';
-import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile, trim, withoutUnreachableCode } from '../testHelpers.spec';
-import { standardizePath as s } from '../util';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
+import { standardizePath as s, util } from '../util';
 import * as fsExtra from 'fs-extra';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { doesNotThrow } from 'assert';
@@ -2728,8 +2728,9 @@ describe('BrsFile BrighterScript classes', () => {
                 end class
             `);
             program.validate();
-            expectDiagnostics(withoutUnreachableCode(program), [
-                DiagnosticMessages.classConstructorNotAllowedInConditionalCompile()
+            expectDiagnostics(program, [
+                DiagnosticMessages.classConstructorNotAllowedInConditionalCompile(),
+                { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(4, 0, 6, 0) } }
             ]);
         });
 
@@ -2774,8 +2775,9 @@ describe('BrsFile BrighterScript classes', () => {
                     end sub
                 `);
                 program.validate();
-                expectDiagnostics(withoutUnreachableCode(program), [
-                    DiagnosticMessages.cannotFindFunction('onlyRelease', 'Foo.onlyRelease', 'Foo')
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindFunction('onlyRelease', 'Foo.onlyRelease', 'Foo'),
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(8, 0, 11, 0) } }
                 ]);
             });
 
@@ -2800,8 +2802,9 @@ describe('BrsFile BrighterScript classes', () => {
                     end sub
                 `);
                 program.validate();
-                expectDiagnostics(withoutUnreachableCode(program), [
-                    DiagnosticMessages.cannotFindFunction('onlyDebug', 'Foo.onlyDebug', 'Foo')
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindFunction('onlyDebug', 'Foo.onlyDebug', 'Foo'),
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(4, 0, 7, 0) } }
                 ]);
             });
 
@@ -2822,8 +2825,9 @@ describe('BrsFile BrighterScript classes', () => {
                     end sub
                 `);
                 program.validate();
-                expectDiagnostics(withoutUnreachableCode(program), [
-                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message,
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(6, 0, 7, 0) } }
                 ]);
             });
 
@@ -2848,7 +2852,9 @@ describe('BrsFile BrighterScript classes', () => {
                     end class
                 `);
                 program.validate();
-                expectZeroDiagnostics(withoutUnreachableCode(program));
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(8, 0, 11, 0) } }
+                ]);
             });
 
             it('reports a missing override keyword for a method the ancestor declares in an active branch', () => {
@@ -2929,7 +2935,9 @@ describe('BrsFile BrighterScript classes', () => {
                     end class
                 `);
                 program.validate();
-                expectZeroDiagnostics(withoutUnreachableCode(program));
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(10, 0, 16, 0) } }
+                ]);
             });
 
             it('lets an active member win over an inactive member with the same name', () => {
@@ -2947,7 +2955,9 @@ describe('BrsFile BrighterScript classes', () => {
                     end class
                 `);
                 program.validate();
-                expectZeroDiagnostics(withoutUnreachableCode(program));
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(9, 0, 10, 0) } }
+                ]);
             });
 
             it('keeps inactive members in the transpiled class', async () => {
@@ -3001,13 +3011,18 @@ describe('BrsFile BrighterScript classes', () => {
                 `;
                 program.setFile('source/main.bs', source);
                 program.validate();
-                expectZeroDiagnostics(withoutUnreachableCode(program));
+                expectDiagnostics(program, [
+                    //the #else
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(7, 0, 10, 0) } }
+                ]);
 
                 debug = false;
                 program.setFile('source/main.bs', source + ' ');
                 program.validate();
-                expectDiagnostics(withoutUnreachableCode(program), [
-                    DiagnosticMessages.cannotFindFunction('onlyDebug', 'Foo.onlyDebug', 'Foo')
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindFunction('onlyDebug', 'Foo.onlyDebug', 'Foo'),
+                    //the #if DEBUG branch
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(3, 0, 6, 0) } }
                 ]);
             });
         });

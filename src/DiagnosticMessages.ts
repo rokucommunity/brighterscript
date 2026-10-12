@@ -1311,14 +1311,14 @@ export let DiagnosticMessages = {
         code: 'exceeds-max-variable-count'
     }),
     /**
-     * Code the device will never run. Reported as a hint with the `Unnecessary` tag so editors fade it instead of underlining it.
-     * @param reason why the code is unreachable, shown after the message prefix
+     * The body of an `#if` / `#else if` / `#else` branch that is not compiled with the current constants.
+     * Reported as a hint with the `Unnecessary` tag so editors fade it instead of underlining it.
      */
-    unreachableCode: (reason = 'inactive conditional compile branch') => ({
-        message: `Unreachable code: ${reason}`,
+    inactiveConditionalCompileBranch: () => ({
+        message: 'Inactive conditional compile branch: this code is not compiled with the current constants',
         severity: DiagnosticSeverity.Hint,
         tags: [DiagnosticTag.Unnecessary],
-        code: 'unreachable-code'
+        code: 'inactive-conditional-compile-branch'
     })
 };
 export const defaultMaximumTruncationLength = 160;
