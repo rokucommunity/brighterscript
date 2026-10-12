@@ -71,6 +71,44 @@ describe('BrsFileSemanticTokensProcessor', () => {
         };
     }
 
+    it('emits tokens for the active branch and for what can be resolved in the inactive branch of a conditional compile block', () => {
+        const file = program.setFile<BrsFile>('source/main.brs', `
+            #const LOGGING = true
+            sub main()
+            #if LOGGING
+                activeVar = 1
+                print activeVar
+            #else
+                inactiveVar = 2
+                print inactiveVar
+            #end if
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+        const tokenLines = program.getSemanticTokens(file.srcPath)!.map(token => token.range.start.line);
+        expect(tokenLines).to.include(5);
+        //the assignment in the inactive branch
+        expect(tokenLines).to.include(7);
+    });
+
+    it('colors a class in an inactive branch like a class', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            #const LOGGING = false
+            class Widget
+            end class
+            sub main()
+            #if LOGGING
+                widget = new Widget()
+            #end if
+            end sub
+        `);
+        expectSemanticTokensIncludes(file, [
+            //widget = new |Widget|()
+            [SemanticTokenTypes.class, 6, 29, 6, 35]
+        ]);
+    });
+
     it('matches each namespace section for class', () => {
         const file = program.setFile<BrsFile>('source/main.bs', `
             class Host

@@ -632,7 +632,7 @@ export let DiagnosticMessages = {
         code: 'const-alias-does-not-exist'
     }),
     invalidHashConstValue: () => ({
-        message: '#const declarations can only have values of `true`, `false`, or other #const names',
+        message: '#const value must be `true` or `false`',
         legacyCode: 1089,
         severity: DiagnosticSeverity.Error,
         code: 'invalid-hash-const-value'
@@ -644,7 +644,7 @@ export let DiagnosticMessages = {
         code: 'hash-const-does-not-exist'
     }),
     invalidHashIfValue: () => ({
-        message: `#if conditionals can only be 'true', 'false', or other #const names`,
+        message: '#if and #else if conditions must be `true`, `false`, or a #const name, optionally preceded by `not`',
         legacyCode: 1091,
         severity: DiagnosticSeverity.Error,
         code: 'invalid-hash-if-value'

@@ -499,6 +499,20 @@ Plugins are JavaScript modules dynamically loaded by the compiler. Their entry p
 
 To walk/modify the AST, a number of helpers are provided in `brighterscript/dist/parser/ASTUtils`.
 
+### Conditional compilation
+Walks skip the inactive branches of `#if` / `#else if` / `#else` statements, unless the walk mode includes `InternalWalkMode.visitFalseConditionalCompilationBlocks`. Which branches are active depends on the `bs_const` values from the manifest, and on the `#const` declarations that precede each `#if`.
+
+The walk works out which branches are active and stores the answers on the AST, much like it sets `node.parent`:
+
+- **Only a full walk from the root computes the answers.** A full walk starts at the file's `ast` and walks statements and expressions and steps into functions (for example `ast.link()`, or the walk during validation). It starts from the manifest `bs_const` values (`ast.bsConsts`), adds each active `#const` as it reaches it in source order, and stores the result of each `#if` on the statement (`isConditionTrue`, `isConditionDeclared`). Like `parent`, a full walk that is cancelled part way (such as `findChild`, which stops at the first match) only updates the nodes it reached.
+- **Every other walk follows the stored answers.** A walk that starts below the root (such as `callExpression.walk(...)`) or skips part of the tree (such as one that does not step into functions) has not seen every `#const` before the nodes it visits, so it can't work out the conditions itself. An `#if` / `#else if` / `#else` / `#end if` chain compiles exactly one of its branches. When this walk reaches a chain, it doesn't check the conditions again: it goes into the branch the last full walk chose (from each statement's stored `isConditionTrue`), and skips the others, along with any `#if` or `#const` inside them.
+- **Every walk sets `node.isActive`** from the parent's value and the parent's `#if` result. Like `parent`, it is `undefined` until the node has been walked. A full walk also marks the nodes of the inactive branches, even though the visitor never sees them. The compiler treats `undefined` as active, so nodes a plugin creates are included until a walk says otherwise. Check `isActive === false` to find inactive code.
+- **Class members follow `isActive` too.** `ClassStatement.methods`, `fields` and `members` list the members of every branch, since every branch is transpiled. `memberMap` prefers a member that is not inactive when branches declare the same name.
+- **Edits apply at the next full walk.** A plugin that wants to change a constant should insert a `#const` statement into the AST. That, like any other edit to the AST (such as a changed `#if` condition or an inserted `#if` statement), applies at the next full walk, such as the one when the file is validated. Until then, the stored answers describe the AST as it was. An `#if` that no full walk has reached yet has no stored answer, and is walked as if its condition were false.
+- **Don't pass `bsConsts` in the walk options.** The full walk fills it in itself as it moves through the tree. If a walk is given a `bsConsts` map, it evaluates every `#if` and `#const` it reaches against that map and overwrites the stored answers. The rest of the program (validation, transpile, editor features) then uses those answers until the next full walk. A walk that starts below the root also misses any `#const` above where it starts, so its answers can be wrong even for the constants you gave it. To change the constants, set `ast.bsConsts` or insert a `#const` statement, and let the next full walk apply it.
+
+Lexer and parser diagnostics inside an inactive branch are not reported, since the device never compiles that code.
+
 ### Working with TypeScript
 
 It is highly recommended to use TypeScript as intellisense helps greatly writing code against new APIs.
