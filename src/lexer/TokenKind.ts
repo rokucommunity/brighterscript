@@ -69,6 +69,7 @@ export enum TokenKind {
 
     // other symbols
     Dot = 'Dot', // .
+    DotDotDot = 'DotDotDot', // ...
     Comma = 'Comma', // ,
     Colon = 'Colon', // :
     Semicolon = 'Semicolon', // ;
@@ -703,6 +704,7 @@ export const PreceedingRegexTypes = new Set([
     TokenKind.Colon,
     TokenKind.Semicolon,
     TokenKind.Comma,
+    TokenKind.DotDotDot,
     //a regex may open a template string expression (i.e. `${/hello/g}`)
     TokenKind.TemplateStringExpressionBegin
 ]);
@@ -746,6 +748,7 @@ export const FixedTokenText: Partial<Record<TokenKind, string>> = {
     [TokenKind.Equal]: '=',
     [TokenKind.LessGreater]: '<>',
     [TokenKind.Dot]: '.',
+    [TokenKind.DotDotDot]: '...',
     [TokenKind.Comma]: ',',
     [TokenKind.Colon]: ':',
     [TokenKind.Semicolon]: ';',
