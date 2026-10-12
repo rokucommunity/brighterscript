@@ -94,7 +94,7 @@ export class CachedLookups {
             const activeKeys = new Set<string>();
             const classMap = new Map<string, ClassStatement>();
             for (const stmt of this.classStatements) {
-                CachedLookups.setTopCandidate(classMap, activeKeys, stmt.getName(ParseMode.BrighterScript).toLowerCase(), stmt, stmt.isActive === true);
+                CachedLookups.setTopCandidate(classMap, activeKeys, stmt.getName(ParseMode.BrighterScript).toLowerCase(), stmt, stmt.isActive !== false);
             }
             return classMap;
         });
@@ -117,7 +117,7 @@ export class CachedLookups {
             const activeKeys = new Set<string>();
             const enumMap = new Map<string, EnumStatement>();
             for (const stmt of this.enumStatements) {
-                CachedLookups.setTopCandidate(enumMap, activeKeys, stmt.fullName.toLowerCase(), stmt, stmt.isActive === true);
+                CachedLookups.setTopCandidate(enumMap, activeKeys, stmt.fullName.toLowerCase(), stmt, stmt.isActive !== false);
             }
             return enumMap;
         });
@@ -132,7 +132,7 @@ export class CachedLookups {
             const activeKeys = new Set<string>();
             const constMap = new Map<string, ConstStatement>();
             for (const stmt of this.constStatements) {
-                CachedLookups.setTopCandidate(constMap, activeKeys, stmt.fullName.toLowerCase(), stmt, stmt.isActive === true);
+                CachedLookups.setTopCandidate(constMap, activeKeys, stmt.fullName.toLowerCase(), stmt, stmt.isActive !== false);
             }
             return constMap;
         });
@@ -147,7 +147,7 @@ export class CachedLookups {
             const activeKeys = new Set<string>();
             const ifaceMap = new Map<string, InterfaceStatement>();
             for (const stmt of this.interfaceStatements) {
-                CachedLookups.setTopCandidate(ifaceMap, activeKeys, stmt.fullName.toLowerCase(), stmt, stmt.isActive === true);
+                CachedLookups.setTopCandidate(ifaceMap, activeKeys, stmt.fullName.toLowerCase(), stmt, stmt.isActive !== false);
             }
             return ifaceMap;
         });
@@ -310,7 +310,7 @@ export class CachedLookups {
                 namespaceStatements.push(s);
             },
             FunctionStatement: s => {
-                if (s.isActive) {
+                if (s.isActive !== false) {
                     functionStatements.push(s);
                 }
             },

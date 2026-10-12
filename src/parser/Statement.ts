@@ -2780,10 +2780,26 @@ export class ClassStatement extends Statement implements TypedefProvider {
     }
 
     /**
-     * Every member by lowercase name, including members in inactive conditional compile branches.
-     * Check `isActive` on a member to find what is visible to the type system.
+     * Every member by lowercase name. When conditional compile branches declare the same name, a member that is not inactive wins
+     * over an inactive one, and otherwise the last one wins. A name declared only in inactive branches maps to its inactive member,
+     * since inactive code is still transpiled. Check `isActive` on a member to find what is visible to the type system.
+     *
+     * Rebuilt on every access, because `isActive` changes as the tree is walked.
      */
-    public readonly memberMap = {} as Record<string, MemberStatement>;
+    public get memberMap(): Record<string, MemberStatement> {
+        const memberMap = {} as Record<string, MemberStatement>;
+        const activeNames = new Set<string>();
+        for (const member of this.members) {
+            const nameLower = member?.tokens.name?.text.toLowerCase();
+            if (member.isActive !== false) {
+                activeNames.add(nameLower);
+                memberMap[nameLower] = member;
+            } else if (!activeNames.has(nameLower)) {
+                memberMap[nameLower] = member;
+            }
+        }
+        return memberMap;
+    }
     /**
      * Every method in source order, including methods in inactive conditional compile branches
      */
@@ -2808,11 +2824,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
             if (isMethodStatement(statement)) {
                 this.methods.push(statement);
                 this.members.push(statement);
-                this.memberMap[statement?.tokens.name?.text.toLowerCase()] = statement;
             } else if (isFieldStatement(statement)) {
                 this.fields.push(statement);
                 this.members.push(statement);
-                this.memberMap[statement?.tokens.name?.text.toLowerCase()] = statement;
             } else if (isConditionalCompileStatement(statement)) {
                 forEachConditionalCompileBranch(statement, (branchStatements) => {
                     this.registerMembers(branchStatements);
@@ -3354,7 +3368,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         const resultType = new ClassType(this.getName(ParseMode.BrighterScript), superClass);
 
         for (const statement of this.methods) {
-            if (statement.isActive !== true) {
+            if (statement.isActive === false) {
                 continue;
             }
             const funcType = statement?.func.getType({ ...options, typeChain: undefined }); //no typechain needed
@@ -3368,7 +3382,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
             resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, funcType, flag);
         }
         for (const statement of this.fields) {
-            if (statement.isActive !== true) {
+            if (statement.isActive === false) {
                 continue;
             }
             const fieldType = statement.getType({ ...options, typeChain: undefined }); //no typechain needed

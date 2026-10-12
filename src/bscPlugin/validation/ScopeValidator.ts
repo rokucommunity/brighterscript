@@ -586,7 +586,7 @@ export class ScopeValidator {
 
         for (const [, link] of scope.getConstMap()) {
             //an inactive const is not compiled, so it can not take part in a cycle
-            if (link.item.isActive === true) {
+            if (link.item.isActive !== false) {
                 walkConst(link.item, link.file, []);
             }
         }
@@ -1686,7 +1686,7 @@ export class ScopeValidator {
         } else if (!localVarIsInNamespace) {
             const classStmtLink = this.event.scope.getClassFileLink(lowerVarName);
             //an inactive class is not compiled, so it can not be shadowed
-            if (classStmtLink?.item.isActive === true) {
+            if (classStmtLink && classStmtLink.item.isActive !== false) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.localVarShadowedByScopedFunction(),
                     location: util.createLocationFromFileRange(file, varDeclaration.nameRange),

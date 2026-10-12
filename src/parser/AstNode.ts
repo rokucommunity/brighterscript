@@ -210,7 +210,8 @@ export abstract class AstNode {
 
     /**
      * False when this node is inside an `#if` / `#else if` / `#else` branch that was not selected. The device discards that code before compiling.
-     * Undefined until a walk reaches the node.
+     * Undefined until a walk reaches the node, such as a node a plugin just created. The compiler treats undefined as active,
+     * so only code known to be in an inactive branch is left out. Check `isActive === false` to find inactive code.
      *
      * Every walk sets this from the parent, but only a full walk from the root re-evaluates the `#if` conditions.
      */

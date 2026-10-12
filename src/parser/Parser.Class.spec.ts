@@ -741,6 +741,47 @@ describe('parser class', () => {
             expect(klass.methods.map(method => method.tokens.name.text)).to.eql(['speak', 'whisper']);
         });
 
+        it('includes a member that no walk has reached in the class type', () => {
+            let { ast, diagnostics } = Parser.parse(`
+                class Person
+                    sub speak()
+                    end sub
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            const klass = ast.statements[0] as ClassStatement;
+            //like a member a plugin just created
+            klass.methods[0].isActive = undefined;
+            const memberTable = klass.getType({ flags: SymbolTypeFlag.typetime }).getMemberTable();
+            expect(memberTable.getSymbol('speak', SymbolTypeFlag.runtime)).to.exist;
+        });
+
+        it('prefers the active member in memberMap when both branches declare the same name', () => {
+            let { ast, diagnostics } = Parser.parse(`
+                class Person
+                    #if DEBUG
+                        name as string
+                    #else
+                        name as integer
+                    #end if
+                    #if DEBUG
+                        sub debugOnly()
+                        end sub
+                    #end if
+                end class
+            `, { mode: ParseMode.BrighterScript, bsConsts: new Map([['debug', true]]) });
+            expectZeroDiagnostics(diagnostics);
+            const klass = ast.statements[0] as ClassStatement;
+            const conditionalCompile = klass.body[0] as ConditionalCompileStatement;
+            expect(klass.memberMap['name']).to.equal((conditionalCompile.thenBranch.statements[0]));
+
+            //flip the constant: the else branch's member wins, and a name only declared in an inactive branch still maps to its member
+            ast.bsConsts = new Map([['debug', false]]);
+            ast.link();
+            expect(klass.memberMap['name']).to.equal((conditionalCompile.elseBranch as Block).statements[0]);
+            expect(klass.memberMap['debugonly']?.isActive).to.be.false;
+        });
+
         it('flags unterminated conditional compile blocks in class bodies', () => {
             let { diagnostics } = Parser.parse(`
                 class Person

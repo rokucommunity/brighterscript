@@ -118,7 +118,7 @@ export class BsClassValidator {
             let fields = {};
 
             for (let statement of classStatement.members) {
-                if (statement.isActive === true) {
+                if (statement.isActive !== false) {
                     let member = statement;
                     let memberName = member.tokens.name;
 
@@ -247,7 +247,7 @@ export class BsClassValidator {
         if (!activeMemberMap) {
             activeMemberMap = {};
             for (const member of classStatement.members) {
-                if (member.isActive === true) {
+                if (member.isActive !== false) {
                     activeMemberMap[member.tokens.name?.text.toLowerCase()] = member;
                 }
             }
@@ -289,7 +289,7 @@ export class BsClassValidator {
             // eslint-disable-next-line @typescript-eslint/dot-notation
             for (let x of file['_cachedLookups'].classStatements ?? []) {
                 //inactive classes are not compiled, so they are neither validated nor registered as duplicates of an active class
-                if (x.isActive !== true) {
+                if (x.isActive === false) {
                     continue;
                 }
                 let classStatement = x as AugmentedClassStatement;
