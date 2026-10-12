@@ -209,8 +209,10 @@ export abstract class AstNode {
     }
 
     /**
-     * Is this node compiled? False when it sits in an inactive branch of any enclosing `#if` / `#else if` / `#else`.
-     * Set by every walk (like `parent`), from the parent's value and the parent's `#if` condition. Undefined until the node is walked.
+     * False when this node is inside an `#if` / `#else if` / `#else` branch that was not selected. The device discards that code before compiling.
+     * Undefined until a walk reaches the node.
+     *
+     * Every walk sets this from the parent, but only a full walk from the root re-evaluates the `#if` conditions.
      */
     public isActive?: boolean;
 
