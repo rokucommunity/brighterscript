@@ -176,6 +176,11 @@ If you need to configure `bsc`, you can do so in two ways:
     bsc --create-package false --copy-to-staging false
     ```
 
+6. Create a new `bsconfig.json` file with recommended defaults (an existing `bsconfig.json` is never overwritten)
+    ```bash
+    bsc --init
+    ```
+
 ## bsconfig.json
 
 ### Overview
