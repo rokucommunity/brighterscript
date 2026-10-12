@@ -31,6 +31,14 @@ export class CachedLookups {
         return this.getFromCache<Array<FunctionStatement>>('functionStatements');
     }
 
+    /**
+     * Function statements in inactive conditional compile branches. They are left out of `functionStatements` (and so out of the callables),
+     * but they are still transpiled, so references to them from other inactive code need to resolve.
+     */
+    get inactiveFunctionStatements(): FunctionStatement[] {
+        return this.getFromCache<Array<FunctionStatement>>('inactiveFunctionStatements');
+    }
+
     get functionStatementMap() {
         return this.cache.getOrAdd('functionStatementMap', () => {
             const funcMap = new Map<string, FunctionStatement>();
@@ -226,6 +234,7 @@ export class CachedLookups {
         //inactive branches are walked and still transpiled, so their declarations stay in the lookups. Callables are active-only.
         const conditionalCompileStatements: ConditionalCompileStatement[] = [];
         const functionStatements: FunctionStatement[] = [];
+        const inactiveFunctionStatements: FunctionStatement[] = [];
 
         const excludedExpressions = new Set<Expression>();
 
@@ -312,6 +321,8 @@ export class CachedLookups {
             FunctionStatement: s => {
                 if (s.isActive) {
                     functionStatements.push(s);
+                } else {
+                    inactiveFunctionStatements.push(s);
                 }
             },
             ImportStatement: s => {
@@ -390,6 +401,7 @@ export class CachedLookups {
 
         this.cache.set('expressions', expressions);
         this.cache.set('functionStatements', functionStatements);
+        this.cache.set('inactiveFunctionStatements', inactiveFunctionStatements);
         this.cache.set('conditionalCompileStatements', conditionalCompileStatements);
         this.cache.set('classStatements', classStatements);
         this.cache.set('namespaceStatements', namespaceStatements);

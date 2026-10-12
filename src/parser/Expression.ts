@@ -10,7 +10,7 @@ import { ParseMode } from './Parser';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssignmentStatement, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isForEachStatement, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider, ExtraSymbolData } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -1703,7 +1703,7 @@ export class VariableExpression extends Expression {
         let result: TranspileResult = [];
         const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
         //if the callee is the name of a known namespace function
-        if (namespace && util.isCalleeMemberOfNamespace(this.tokens.name.text, this, namespace)) {
+        if (namespace && this.isNamespaceFunction(state, namespace)) {
             result.push(
                 //transpile leading comments since the token isn't being transpiled directly
                 ...state.transpileLeadingCommentsForAstNode(this),
@@ -1720,6 +1720,47 @@ export class VariableExpression extends Expression {
             );
         }
         return result;
+    }
+
+    /**
+     * Does this name refer to a function of the containing namespace (so it transpiles to the namespaced name)?
+     */
+    private isNamespaceFunction(state: BrsTranspileState, namespace: NamespaceStatement) {
+        if (this.isActive !== false) {
+            return util.isCalleeMemberOfNamespace(this.tokens.name.text, this, namespace);
+        }
+        //inactive conditional compile code is never added to the symbol tables, so check the AST for a local variable that hides the function
+        if (this.isLocalVariableInInactiveCode()) {
+            return false;
+        }
+        if (util.isCalleeMemberOfNamespace(this.tokens.name.text, this, namespace)) {
+            return true;
+        }
+        //functions in inactive branches are not callables, but they are still transpiled with their namespaced name
+        const fullNameLower = `${namespace.getName(ParseMode.BrighterScript)}.${this.tokens.name.text}`.toLowerCase();
+        return state.file.program?.getScopesForFile(state.file).some(scope => scope.getInactiveFunctionNames().has(fullNameLower)) ?? false;
+    }
+
+    /**
+     * Is this name a parameter or a local variable of the function it is in? Only used for inactive conditional compile code, which has no symbol tables
+     */
+    private isLocalVariableInInactiveCode() {
+        const nameLower = this.tokens.name.text.toLowerCase();
+        const func = this.findAncestor<FunctionExpression>(isFunctionExpression);
+        if (!func) {
+            return false;
+        }
+        if (func.parameters.some(param => param.tokens.name?.text.toLowerCase() === nameLower)) {
+            return true;
+        }
+        return !!func.body.findChild((node) => {
+            return (isAssignmentStatement(node) && node.tokens.name?.text.toLowerCase() === nameLower) ||
+                (isForEachStatement(node) && node.tokens.item?.text.toLowerCase() === nameLower);
+        }, {
+            //every branch, since the variable's branch is decided on the device. Not nested functions, which have their own variables
+            // eslint-disable-next-line no-bitwise
+            walkMode: WalkMode.visitStatements | InternalWalkMode.visitFalseConditionalCompilationBlocks
+        });
     }
 
     getTypedef(state: BrsTranspileState) {

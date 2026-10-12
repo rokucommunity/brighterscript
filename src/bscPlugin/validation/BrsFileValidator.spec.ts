@@ -2000,6 +2000,100 @@ describe('BrsFileValidator', () => {
                     expect(code).to.include('widget = alpha_Widget()');
                 });
 
+                it('qualifies an inactive function called by a namespace-relative name', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        namespace alpha
+                        #if not DEBUG
+                            sub make()
+                            end sub
+                            sub run()
+                                make()
+                                callback = make
+                            end sub
+                        #end if
+                        end namespace
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.match(/^\s*alpha_make\(\)$/m);
+                    expect(code).to.match(/^\s*callback = alpha_make$/m);
+                });
+
+                it('qualifies an inactive function that another block of the namespace declares', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        namespace alpha
+                        #if not DEBUG
+                            sub make()
+                            end sub
+                        #end if
+                        end namespace
+                        namespace alpha
+                        #if not DEBUG
+                            sub run()
+                                make()
+                            end sub
+                        #end if
+                        end namespace
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.match(/^\s*alpha_make\(\)$/m);
+                });
+
+                it('qualifies an inactive function called by its fully qualified name', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        namespace alpha
+                        #if not DEBUG
+                            sub make()
+                            end sub
+                        #end if
+                        end namespace
+                        #if not DEBUG
+                        sub run()
+                            alpha.make()
+                        end sub
+                        #end if
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.match(/^\s*alpha_make\(\)$/m);
+                });
+
+                it('qualifies an active function called by a namespace-relative name from an inactive branch', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        namespace alpha
+                            sub make()
+                            end sub
+                        #if not DEBUG
+                            sub run()
+                                make()
+                            end sub
+                        #end if
+                        end namespace
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.match(/^\s*alpha_make\(\)$/m);
+                });
+
+                it('does not qualify a local variable in an inactive branch named like an inactive namespace function', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        namespace alpha
+                        #if not DEBUG
+                            sub make()
+                            end sub
+                            sub run()
+                                make = 1
+                                print make
+                            end sub
+                            sub runWithParam(make)
+                                print make
+                            end sub
+                        #end if
+                        end namespace
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.match(/^\s*make = 1$/m);
+                    expect(code.match(/^\s*print make$/mg)).to.have.lengthOf(2);
+                    expect(code).not.to.include('print alpha_make');
+                });
+
                 it('does not capture an inactive enum or const as a ternary closure parameter', async () => {
                     const { code, diagnostics } = await transpile(`
                         #if not DEBUG
