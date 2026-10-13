@@ -1339,6 +1339,16 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Hint,
         tags: [DiagnosticTag.Unnecessary],
         code: 'inactive-conditional-compile-branch'
+    }),
+    /**
+     * Code that control flow can never reach. Reported as a hint with the `Unnecessary` tag so editors fade it instead of underlining it.
+     * @param message the complete message, which names why the code is unreachable
+     */
+    unreachableCode: (message = 'Unreachable code') => ({
+        message: message,
+        severity: DiagnosticSeverity.Hint,
+        tags: [DiagnosticTag.Unnecessary],
+        code: 'unreachable-code'
     })
 };
 export const defaultMaximumTruncationLength = 160;
