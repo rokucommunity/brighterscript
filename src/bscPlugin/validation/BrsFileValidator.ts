@@ -355,6 +355,7 @@ export class BrsFileValidator {
             },
             ConditionalCompileStatement: (node) => {
                 this.validateHashIfCondition(node);
+                this.flagInactiveConditionalCompileBranches(node);
             },
             ConditionalCompileConstStatement: (node) => {
                 this.validateHashConst(node);
@@ -751,6 +752,31 @@ export class BrsFileValidator {
                 ...DiagnosticMessages.duplicateConstDeclaration(assignment.tokens.name.text),
                 location: assignment.tokens.name.location
             });
+        }
+    }
+
+    /**
+     * Fade each inactive branch of a reached `#if` / `#else if`: the lines between its directives, so the directive lines themselves stay unfaded.
+     * An `#if` inside an inactive branch is never visited, and the outer branch already covers it. A branch with no lines between its directives is not reported.
+     */
+    private flagInactiveConditionalCompileBranches(statement: ConditionalCompileStatement) {
+        for (const branch of [statement.thenBranch, statement.elseBranch]) {
+            if (isConditionalCompileStatement(branch)) {
+                //an `#else if` is stored as this statement's `elseBranch`. Once the chain has taken an earlier branch, the walk skips it
+                //and it is inactive, so fade its branches here. When the chain reaches it, it is active and the walk visits it on its own
+                if (branch.isActive === false) {
+                    this.flagInactiveConditionalCompileBranches(branch);
+                }
+            } else if (branch?.isActive === false && branch.location) {
+                //the branch runs from the end of its opening directive to the start of its closing directive
+                const { start, end } = branch.location.range;
+                if (end.line - start.line > 1) {
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.inactiveConditionalCompileBranch(),
+                        location: util.createLocation(start.line + 1, 0, end.line, 0, this.event.file.srcPath)
+                    });
+                }
+            }
         }
     }
 

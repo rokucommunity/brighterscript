@@ -511,7 +511,7 @@ The walk works out which branches are active and stores the answers on the AST, 
 - **Edits apply at the next full walk.** A plugin that wants to change a constant should insert a `#const` statement into the AST. That, like any other edit to the AST (such as a changed `#if` condition or an inserted `#if` statement), applies at the next full walk, such as the one when the file is validated. Until then, the stored answers describe the AST as it was. An `#if` that no full walk has reached yet has no stored answer, and is walked as if its condition were false.
 - **Don't pass `bsConsts` in the walk options.** The full walk fills it in itself as it moves through the tree. If a walk is given a `bsConsts` map, it evaluates every `#if` and `#const` it reaches against that map and overwrites the stored answers. The rest of the program (validation, transpile, editor features) then uses those answers until the next full walk. A walk that starts below the root also misses any `#const` above where it starts, so its answers can be wrong even for the constants you gave it. To change the constants, set `ast.bsConsts` or insert a `#const` statement, and let the next full walk apply it.
 
-Lexer and parser diagnostics inside an inactive branch are not reported, since the device never compiles that code.
+Lexer and parser diagnostics inside an inactive branch are not reported, since the device never compiles that code. Instead, each inactive branch body gets an `inactive-conditional-compile-branch` diagnostic with `Hint` severity and the `Unnecessary` tag, which editors show by fading the code. Plugin tests that expect zero diagnostics on code with an inactive `#if` will see these hints.
 
 ### Working with TypeScript
 

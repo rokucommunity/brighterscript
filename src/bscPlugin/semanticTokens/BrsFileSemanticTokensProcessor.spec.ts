@@ -4,7 +4,8 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile } from '../../files/BscFile';
 import type { SemanticToken } from '../../interfaces';
 import { Program } from '../../Program';
-import { expectZeroDiagnostics } from '../../testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics } from '../../testHelpers.spec';
+import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { util } from '../../util';
 import { rootDir } from '../../testHelpers.spec';
 
@@ -38,7 +39,8 @@ describe('BrsFileSemanticTokensProcessor', () => {
     function getSemanticTokenResults(file: BscFile, expected: Array<SemanticToken | [SemanticTokenTypes, number, number, number, number, SemanticTokenModifiers[]?]>, validateDiagnostics = true) {
         program.validate();
         if (validateDiagnostics) {
-            expectZeroDiagnostics(program);
+            //the hints that fade inactive `#if` branches don't affect the tokens
+            expectZeroDiagnostics(program.getDiagnostics().filter(diagnostic => diagnostic.code !== 'inactive-conditional-compile-branch'));
         }
         const result = util.sortByRange(
             program.getSemanticTokens(file.srcPath)!
@@ -85,7 +87,9 @@ describe('BrsFileSemanticTokensProcessor', () => {
             end sub
         `);
         program.validate();
-        expectZeroDiagnostics(program);
+        expectDiagnostics(program, [
+            { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(7, 0, 9, 0) } }
+        ]);
         const tokenLines = program.getSemanticTokens(file.srcPath)!.map(token => token.range.start.line);
         expect(tokenLines).to.include(5);
         //the assignment in the inactive branch

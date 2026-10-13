@@ -1,5 +1,5 @@
 import type { Position } from 'vscode-languageserver';
-import { DiagnosticSeverity } from 'vscode-languageserver';
+import { DiagnosticSeverity, DiagnosticTag } from 'vscode-languageserver';
 import type { BsDiagnostic, DiagnosticCode, TypeCompatibilityData } from './interfaces';
 import { TokenKind } from './lexer/TokenKind';
 import util from './util';
@@ -1309,6 +1309,16 @@ export let DiagnosticMessages = {
         message: `Function has too many variables: ${actual} found, but Roku allows at most ${max} per function (parameters count toward this limit).`,
         severity: DiagnosticSeverity.Error,
         code: 'exceeds-max-variable-count'
+    }),
+    /**
+     * The body of an `#if` / `#else if` / `#else` branch that is not compiled with the current constants.
+     * Reported as a hint with the `Unnecessary` tag so editors fade it instead of underlining it.
+     */
+    inactiveConditionalCompileBranch: () => ({
+        message: 'Inactive conditional compile branch: this code is not compiled with the current constants',
+        severity: DiagnosticSeverity.Hint,
+        tags: [DiagnosticTag.Unnecessary],
+        code: 'inactive-conditional-compile-branch'
     })
 };
 export const defaultMaximumTruncationLength = 160;
